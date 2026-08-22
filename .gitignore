@@ -1,0 +1,54 @@
+# Editor/IDE local configs
+.[a-z]*/
+!.git/
+!.vs/
+!.idea/
+!.fake/
+!.paket/
+!.cr/
+!.github/
+/[A-Z]*.md
+!/README.md
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+build/
+coverage/
+*.iml
+
+# Android
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/key.properties
+android/local.properties
+
+# Apple platforms
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/.symlinks/
+macos/Flutter/ephemeral/
+macos/Pods/
+macos/.symlinks/
+
+# Local secrets
+*.env
+*.env.*
+!*.env.example
+google-services.json
+GoogleService-Info.plist
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+
+# OS files
+.DS_Store
+Thumbs.db
