@@ -16,8 +16,9 @@ Aktuální stav:
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;
+- přijaté Android `applicationId` `com.nkshub.nextcloudtalk`;
 - Flutter implementace ještě nezačala, protože zbývá schválit přesnou licenci,
-  package identity, minimální platformy a rozsah prvního release.
+  iOS bundle ID, minimální platformy a rozsah prvního release.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

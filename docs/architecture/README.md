@@ -1,7 +1,8 @@
 # Architektura
 
 Stav: návrh před implementací. Dokument je licenčně neutrální a nevytváří
-Flutter scaffold ani package identity.
+Flutter scaffold. Android `applicationId` je přijaté jako
+`com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
 
 ## Výsledek návrhu
 

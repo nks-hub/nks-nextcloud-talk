@@ -76,6 +76,17 @@ stavy.
 Upstream se používá jako SHA-bound reference chování, wire kompatibility a
 testovacích scénářů. Přesný licenční text zůstává samostatnou volbou Q-001.
 
+### D-014: Android applicationId
+
+Stav: Přijato uživatelem.
+
+Veřejný Android build používá `com.nkshub.nextcloudtalk`. Identifikátor je
+stabilní součást podpisové, store a Firebase identity aplikace; nemění se podle
+připojeného Nextcloud serveru a nestahuje se za běhu ze serveru.
+
+Toto rozhodnutí nezamyká iOS bundle ID ani identitu případného samostatného
+self-hosted buildu s vlastním Firebase projektem.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient
@@ -124,8 +135,8 @@ do rozhodnutí, ne automatická volba.
 
 ### Q-003: Identita aplikace a signing
 
-Chybí finální applicationId, bundle ID, jeden Firebase projekt vydavatele,
-Android signing owner a Apple/APNs signing workflow.
+Android `applicationId` je přijaté v D-014. Zbývá iOS bundle ID, jeden Firebase
+projekt vydavatele, Android signing owner a Apple/APNs signing workflow.
 
 ### Q-004: Offline scope prvního release
 
