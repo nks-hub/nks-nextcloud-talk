@@ -2,9 +2,9 @@
 
 Datum ověření: 22. srpna 2026.
 
-Stav: OpenAPI, syntetické fixture, bezpečnostní scénáře a read-only živý smoke
-jsou spustitelně ověřené. Flutter klient, secure storage a dokončené přihlášení
-zatím neexistují.
+Stav: OpenAPI, syntetické fixture, bezpečnostní scénáře, pure Dart parser a
+read-only živý smoke jsou spustitelně ověřené. Flutter HTTP/UI vrstva, secure
+storage a dokončené přihlášení zatím neexistují.
 
 ## Rozsah
 
@@ -180,10 +180,29 @@ Aktuální výsledek: 1 OpenAPI dokument, 20 fixtures, 22 origin případů,
 snapshoty prošly. Živý smoke navíc potvrdil 5 anonymních namespace a 105 Talk
 features bez zápisu na server.
 
+Stejných 20 fixtures a 22 origin případů nyní načítají testy produkčního pure
+Dart balíku [`talk_protocol`](../../packages/talk_protocol). Implementace navíc
+ověřuje IDN/Punycode host, subpath-aware endpointy, redigované výjimky,
+duplicitní feature a zákaz domýšlet význam neznámého poll HTTP statusu.
+
+Ověření z adresáře `packages/talk_protocol`:
+
+```powershell
+dart analyze --fatal-infos
+dart test
+```
+
+Na Flutteru 3.44.4 a Dartu 3.12.2 prošla statická analýza bez nálezu a všech 54
+Dart testů. Jeden sestaví a spustí release executable, druhý spustí VM s profile
+compile-time příznakem; oba prokazují, že ani volba debug policy nepovolí HTTP.
+Další testy omezují neznámé capability JSON na 64 úrovní a 10 000 uzlů. Runtime
+závislost `punycoder` je uzamčená lockfilem a její MIT licence je zaznamenaná v
+[auditu závislostí](dependency-licenses.md).
+
 ## Co důkaz ještě nepokrývá
 
-Kontrakt není náhradou produkčního klienta. Zatím neprokazuje systémový browser
-lifecycle, secure storage, restart, dokončený reálný login, odvolání app
-passwordu, dva servery v jedné instalaci ani únik secretu v platformních
-crash logách. Tyto důkazy patří do implementačního řezu 1 po vytvoření
-platformního scaffoldingu.
+Pure Dart parser není náhradou produkčního klienta. Zatím neprokazuje HTTP
+transport, systémový browser lifecycle, secure storage, restart, dokončený
+reálný login, odvolání app passwordu, dva servery v jedné instalaci ani únik
+secretu v platformních crash logách. Tyto důkazy patří do implementačního řezu
+1 po vytvoření platformního scaffoldingu.

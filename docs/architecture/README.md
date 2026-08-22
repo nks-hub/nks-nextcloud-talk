@@ -1,13 +1,14 @@
 # Architektura
 
-Stav: návrh před implementací. Protokolové kontrakty vznikly licenčně neutrálně;
-nový mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold
-dosud nevznikl. Android `applicationId` je přijaté jako
+Stav: návrh a první pure Dart implementace. Protokolové kontrakty vznikly
+licenčně neutrálně; nový mobilní klient je licencovaný pod
+`GPL-3.0-or-later`. Flutter scaffold dosud nevznikl. Android `applicationId` je
+přijaté jako
 `com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
 
 ## Výsledek návrhu
 
-Doporučená nejmenší úplná architektura má tři deployovatelné nebo samostatně
+Přijatá nejmenší úplná architektura má tři deployovatelné nebo samostatně
 testovatelné části:
 
 1. Flutter mobilní aplikaci.
@@ -31,6 +32,8 @@ nevytváří jako prázdný stub.
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
+- [Audit závislostí a assetů](dependency-licenses.md)
+- [Pure Dart talk_protocol](../../packages/talk_protocol/README.md)
 - [Veřejný multi-server push](../plans/2026-08-22-public-multi-server-push-design.md)
 - [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
 - [Návrh klientského bootstrap kontraktu](../plans/2026-08-22-client-bootstrap-contract-design.md)

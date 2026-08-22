@@ -15,6 +15,9 @@ Aktuální stav:
 - ověřený baseline referenčního Nextcloud 34 / Talk 24 serveru;
 - spustitelný OpenAPI a fixture kontrakt pro status, Login Flow v2,
   capabilities a bezpečnou multi-server normalizaci;
+- první produkční pure Dart implementace stejného bootstrap kontraktu v
+  [`packages/talk_protocol`](packages/talk_protocol), ověřená všemi 20 wire
+  fixtures a 22 origin případy;
 - spustitelný room v4 kontrakt pro full/delta seznam, serverový cursor a
   account-scoped transakční merge;
 - spustitelný chat kontrakt pro history/future cursory, text send, read/unread,
@@ -25,8 +28,8 @@ Aktuální stav:
 - přijaté Android `applicationId` `com.nkshub.nextcloudtalk`;
 - přijatá licence mobilního klienta
   [`GPL-3.0-or-later`](LICENSE);
-- Flutter implementace ještě nezačala, protože zbývá schválit iOS bundle ID,
-  minimální platformy a rozsah prvního release.
+- Flutter mobilní scaffold ještě nezačal, protože zbývá schválit iOS bundle ID
+  a minimální platformy. Platformně nezávislý protokolový kód už vzniká.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

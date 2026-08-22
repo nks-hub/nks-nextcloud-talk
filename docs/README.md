@@ -13,13 +13,16 @@ Dokumentace je rozdělená podle stavu poznání:
   Notifications wire formát na OpenAPI, kryptografické fixture a spustitelnou
   validaci.
 - [Přidání Nextcloud účtu](architecture/client-bootstrap-api.md) popisuje
-  normalizaci serveru, Login Flow v2, capabilities a spustitelné trust fixture.
+  normalizaci serveru, Login Flow v2, capabilities, spustitelné trust fixture a
+  první pure Dart implementaci.
 - [Seznam konverzací](architecture/conversation-list-api.md) popisuje room v4,
   serverový cursor, account-scoped merge a spustitelné full/delta fixture.
 - [Chat zprávy](architecture/chat-messages-api.md) popisují history/future
   cursory, text send, reply, read/unread a executable durable outbox.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
+- [Audit závislostí a assetů](architecture/dependency-licenses.md) průběžně
+  eviduje původ, licenci a distribuční podmínky každé přidané závislosti.
 
 Výzkumné tvrzení musí být vázané na konkrétní SHA, verzi nebo skutečný runtime
 test. Architektonický návrh musí jasně rozlišovat přijaté rozhodnutí, doporučení
