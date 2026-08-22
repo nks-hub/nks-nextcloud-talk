@@ -12,6 +12,8 @@ Dokumentace je rozdělená podle stavu poznání:
 - [Push gateway API](architecture/push-gateway-api.md) váže skutečný
   Notifications wire formát na OpenAPI, kryptografické fixture a spustitelnou
   validaci.
+- [Přidání Nextcloud účtu](architecture/client-bootstrap-api.md) popisuje
+  normalizaci serveru, Login Flow v2, capabilities a spustitelné trust fixture.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 

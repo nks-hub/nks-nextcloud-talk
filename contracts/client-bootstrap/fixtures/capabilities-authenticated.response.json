@@ -1,0 +1,81 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "version": {
+        "major": 34,
+        "minor": 0,
+        "micro": 1,
+        "string": "34.0.1",
+        "edition": "",
+        "extendedSupport": false
+      },
+      "capabilities": {
+        "bruteforce": {
+          "delay": 0
+        },
+        "notifications": {
+          "ocs-endpoints": [
+            "list",
+            "get",
+            "delete",
+            "delete-all",
+            "rich-strings"
+          ],
+          "push": [
+            "devices",
+            "object-data",
+            "delete"
+          ],
+          "admin-notifications": [
+            "ocs",
+            "cli"
+          ]
+        },
+        "spreed": {
+          "features": [
+            "chat-v2",
+            "conversation-v4",
+            "chat-replies",
+            "markdown-messages",
+            "media-caption",
+            "reactions",
+            "rich-object-sharing",
+            "scheduled-messages",
+            "signaling-v3",
+            "threads",
+            "voice-message-sharing"
+          ],
+          "features-local": [
+            "favorites",
+            "scheduled-messages"
+          ],
+          "config": {
+            "attachments": {
+              "allowed": true,
+              "conversation-subfolders": true
+            },
+            "signaling": {
+              "mode": "external"
+            }
+          },
+          "version": "24.0.2"
+        },
+        "theming": {
+          "name": "Fixture Cloud",
+          "color": "#00679e"
+        },
+        "fixture-extension": {
+          "enabled": true,
+          "nested": {
+            "version": 1
+          }
+        }
+      }
+    }
+  }
+}

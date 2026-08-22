@@ -13,6 +13,8 @@ Aktuální stav:
 - úplný katalog funkčních skupin, parity rozdílů a cílových důkazů;
 - zmapované Talk/OCS, WebDAV, signaling a push protokoly;
 - ověřený baseline referenčního Nextcloud 34 / Talk 24 serveru;
+- spustitelný OpenAPI a fixture kontrakt pro status, Login Flow v2,
+  capabilities a bezpečnou multi-server normalizaci;
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;

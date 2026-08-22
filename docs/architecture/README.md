@@ -25,10 +25,12 @@ nevytváří jako prázdný stub.
 - [Systémový návrh](system-design.md)
 - [Synchronizace a lokální data](sync-storage.md)
 - [OpenAPI a fixture push gateway](push-gateway-api.md)
+- [OpenAPI a fixture klientského bootstrapu](client-bootstrap-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Veřejný multi-server push](../plans/2026-08-22-public-multi-server-push-design.md)
 - [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
+- [Návrh klientského bootstrap kontraktu](../plans/2026-08-22-client-bootstrap-contract-design.md)
 
 ## Principy
 

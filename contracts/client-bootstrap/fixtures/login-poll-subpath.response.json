@@ -1,0 +1,5 @@
+{
+  "server": "https://cloud.example.invalid/nextcloud",
+  "loginName": "fixture-user",
+  "appPassword": "fixture-app-password-never-use"
+}

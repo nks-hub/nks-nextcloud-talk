@@ -62,6 +62,16 @@ Každý primární nebo unikátní klíč synchronizačních dat začíná accou
 Raw server JSON se může uchovat jen jako diagnostická nebo forward-compatible
 část modelu s jasnou migrací. Doménová logika nesmí pokaždé číst dynamickou mapu.
 
+## Bootstrap stav účtu
+
+Account po prvním durable commitu začíná jako `capabilitiesPending`. Credentials
+už jsou bezpečně uložené, ale room sync, push registrace ani feature UI se ještě
+nesmějí spustit. Úspěšný přihlášený capability snapshot jej přepne do `ready`.
+
+Síťová nebo 5xx chyba ponechá `capabilitiesPending` a dovolí bezpečný retry.
+HTTP 401 přepne účet do `reauthRequired`; anonymní capabilities jej nikdy
+nesmějí přepnout do `ready`.
+
 ## Message identity
 
 Serverová zpráva má messageId. Lokální pending zpráva má localId a referenceId.

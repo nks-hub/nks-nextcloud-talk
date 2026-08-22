@@ -1,0 +1,7 @@
+{
+  "poll": {
+    "token": "fixture-poll-token-debug-http-00000000000000000000000000",
+    "endpoint": "http://127.0.0.1:8080/nextcloud/index.php/login/v2/poll"
+  },
+  "login": "http://127.0.0.1:8080/nextcloud/index.php/login/v2/flow/fixture-login-token-debug-http-00000000000000000000000000"
+}

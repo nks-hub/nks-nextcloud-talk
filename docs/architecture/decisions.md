@@ -87,6 +87,23 @@ připojeného Nextcloud serveru a nestahuje se za běhu ze serveru.
 Toto rozhodnutí nezamyká iOS bundle ID ani identitu případného samostatného
 self-hosted buildu s vlastním Firebase projektem.
 
+### D-015: Bezpečný klientský bootstrap
+
+Stav: Přijato jako trust a multi-account invarianta.
+
+Uživatelem zadaný server se nejprve kanonizuje a ověří přes veřejný status.
+Login Flow v2 URL i credential `server` musí zachovat stejný origin a Nextcloud
+base path; v production musí být origin HTTPS. Cross-origin, base-path escape,
+userinfo, query, fragment, encoded nejednoznačnost a production HTTP se
+odmítají před otevřením URL nebo odesláním tokenu. Explicitní debug HTTP policy
+se musí zachovat přes normalizaci, Login Flow i credential validaci.
+
+Anonymní capabilities jsou pouze onboarding data. Po jednorázovém úspěchu se
+app password uloží přímo do platformního secure storage, vytvoří se náhodné
+lokální `accountId` a teprve přihlášený capability snapshot se uloží jako
+account-scoped autorita. HTTP 404 poll nerozlišuje pending, invalid, expired ani
+consumed stav a nesmí se interpretovat přesněji.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient

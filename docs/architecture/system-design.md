@@ -199,12 +199,19 @@ Zakázané směry:
 ### Přidání účtu
 
 1. Uživatel zadá server origin.
-2. Klient jej normalizuje, provede bezpečný discovery a načte capabilities.
-3. Login Flow vrátí app password.
-4. Secret se zapíše do Keystore/Keychain.
-5. V jedné lokální transakci vznikne Account a credential reference.
-6. Spustí se initial room sync.
-7. Push registrace běží samostatně a její selhání neznefunkční chat.
+2. Klient jej normalizuje, ověří status a anonymní onboarding capabilities.
+3. Login Flow vrátí app password a klient znovu ověří credential server.
+4. Vznikne náhodné accountId a secret se zapíše do Keystore/Keychain.
+5. Lokální transakce vytvoří Account a credential reference ve stavu
+   capabilitiesPending.
+6. Přihlášený capability request uloží account-scoped snapshot a přepne účet
+   do ready.
+7. Spustí se initial room sync.
+8. Push registrace běží samostatně a její selhání neznefunkční chat.
+
+Síťová chyba v kroku 6 ponechá zabezpečený účet v capabilitiesPending a request
+lze opakovat bez nového Login Flow. Přesný wire a trust kontrakt popisuje
+[přidání Nextcloud účtu](client-bootstrap-api.md).
 
 ### Otevření místnosti
 

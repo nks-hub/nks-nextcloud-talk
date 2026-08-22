@@ -1,0 +1,115 @@
+{
+  "cases": [
+    {
+      "id": "missing-scheme",
+      "input": "cloud.example.invalid",
+      "expected": "https://cloud.example.invalid"
+    },
+    {
+      "id": "subpath-and-trailing-slash",
+      "input": " HTTPS://Cloud.Example.Invalid/nextcloud/ ",
+      "expected": "https://cloud.example.invalid/nextcloud"
+    },
+    {
+      "id": "default-https-port",
+      "input": "https://cloud.example.invalid:443",
+      "expected": "https://cloud.example.invalid"
+    },
+    {
+      "id": "explicit-https-port",
+      "input": "https://cloud.example.invalid:8443/nextcloud",
+      "expected": "https://cloud.example.invalid:8443/nextcloud"
+    },
+    {
+      "id": "debug-http",
+      "input": "http://127.0.0.1:8080/nextcloud",
+      "allowDebugHttp": true,
+      "expected": "http://127.0.0.1:8080/nextcloud"
+    },
+    {
+      "id": "ipv6-host",
+      "input": "https://[2001:0db8:0:0:0:0:0:1]/nextcloud",
+      "expected": "https://[2001:db8::1]/nextcloud"
+    },
+    {
+      "id": "production-http-rejected",
+      "input": "http://cloud.example.invalid",
+      "expectedError": true
+    },
+    {
+      "id": "userinfo-rejected",
+      "input": "https://fixture-user:fixture-password@cloud.example.invalid",
+      "expectedError": true
+    },
+    {
+      "id": "query-rejected",
+      "input": "https://cloud.example.invalid/nextcloud?tenant=fixture",
+      "expectedError": true
+    },
+    {
+      "id": "fragment-rejected",
+      "input": "https://cloud.example.invalid/nextcloud#fixture",
+      "expectedError": true
+    },
+    {
+      "id": "backslash-rejected",
+      "input": "https:\\cloud.example.invalid\\nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "control-character-rejected",
+      "input": "https://cloud.example.invalid/\nnextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "dot-segment-rejected",
+      "input": "https://cloud.example.invalid/tenant/../nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "encoded-path-rejected",
+      "input": "https://cloud.example.invalid/%2e%2e/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "double-slash-rejected",
+      "input": "https://cloud.example.invalid/nextcloud//tenant",
+      "expectedError": true
+    },
+    {
+      "id": "unsupported-scheme-rejected",
+      "input": "ftp://cloud.example.invalid/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "zero-port-rejected",
+      "input": "https://cloud.example.invalid:0/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "ambiguous-ipv4-rejected",
+      "input": "https://127.000.000.001/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "trailing-dot-host-rejected",
+      "input": "https://cloud.example.invalid./nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "malformed-ipv6-rejected",
+      "input": "https://[2001:db8::1/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "empty-port-rejected",
+      "input": "https://cloud.example.invalid:/nextcloud",
+      "expectedError": true
+    },
+    {
+      "id": "empty-input-rejected",
+      "input": "   ",
+      "expectedError": true
+    }
+  ]
+}

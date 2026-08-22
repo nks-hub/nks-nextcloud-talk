@@ -1,0 +1,282 @@
+{
+  "contract": "../openapi.json",
+  "normalizationCasesFile": "origin-normalization.cases.json",
+  "fixtures": [
+    {
+      "id": "status-ready",
+      "name": "ready server status",
+      "file": "status-ready.response.json",
+      "operationId": "getServerStatus",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "expectedStatusBlockers": []
+    },
+    {
+      "id": "status-maintenance",
+      "name": "maintenance server status",
+      "file": "status-maintenance.response.json",
+      "operationId": "getServerStatus",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "expectedStatusBlockers": [
+        "maintenance"
+      ]
+    },
+    {
+      "id": "login-init-empty-request",
+      "name": "empty Login Flow v2 initialization form",
+      "file": "login-init-empty.request.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "headers": {
+        "User-Agent": "NKS Nextcloud Talk fixture/0.1"
+      },
+      "wireEncoding": "form",
+      "valid": true
+    },
+    {
+      "id": "login-init-root",
+      "name": "root Login Flow v2 initialization",
+      "file": "login-init-root.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid",
+      "expectedTrusted": true
+    },
+    {
+      "id": "login-init-subpath",
+      "name": "subpath Login Flow v2 initialization",
+      "file": "login-init-subpath.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid/nextcloud",
+      "expectedTrusted": true
+    },
+    {
+      "id": "login-init-debug-http",
+      "name": "explicit debug HTTP Login Flow v2 initialization",
+      "file": "login-init-debug-http.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "http://127.0.0.1:8080/nextcloud",
+      "allowDebugHttp": true,
+      "expectedTrusted": true
+    },
+    {
+      "id": "login-init-cross-origin",
+      "name": "cross-origin Login Flow v2 initialization",
+      "file": "login-init-cross-origin.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid",
+      "expectedTrusted": false
+    },
+    {
+      "id": "login-init-base-path-escape",
+      "name": "same-origin Login Flow v2 login base-path escape",
+      "file": "login-init-base-path-escape.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid/nextcloud",
+      "expectedTrusted": false
+    },
+    {
+      "id": "login-init-base-path-poll-escape",
+      "name": "same-origin Login Flow v2 poll base-path escape",
+      "file": "login-init-base-path-poll-escape.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid/nextcloud",
+      "expectedTrusted": false
+    },
+    {
+      "id": "login-init-cross-origin-poll",
+      "name": "cross-origin Login Flow v2 poll endpoint",
+      "file": "login-init-cross-origin-poll.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid",
+      "expectedTrusted": false
+    },
+    {
+      "id": "login-poll-request",
+      "name": "Login Flow v2 poll form",
+      "file": "login-poll.request.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "wireEncoding": "form",
+      "valid": true
+    },
+    {
+      "id": "login-poll-pending",
+      "name": "pending or unavailable Login Flow v2 poll",
+      "file": "login-poll-pending.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "404",
+      "mediaType": "application/json",
+      "valid": true
+    },
+    {
+      "id": "login-poll-success",
+      "name": "successful single-use Login Flow v2 poll",
+      "file": "login-poll-success.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "credentialBaseUrl": "https://cloud.example.invalid",
+      "expectedTrustedCredentials": true,
+      "syntheticSecretPrefix": "fixture-"
+    },
+    {
+      "id": "login-poll-subpath",
+      "name": "successful subpath Login Flow v2 credentials",
+      "file": "login-poll-subpath.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "credentialBaseUrl": "https://cloud.example.invalid/nextcloud",
+      "expectedTrustedCredentials": true,
+      "syntheticSecretPrefix": "fixture-"
+    },
+    {
+      "id": "login-poll-base-path-escape",
+      "name": "same-origin Login Flow v2 credential base-path escape",
+      "file": "login-poll-base-path-escape.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "credentialBaseUrl": "https://cloud.example.invalid/nextcloud",
+      "expectedTrustedCredentials": false,
+      "syntheticSecretPrefix": "fixture-"
+    },
+    {
+      "id": "login-poll-cross-origin",
+      "name": "cross-origin Login Flow v2 credentials",
+      "file": "login-poll-cross-origin.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "credentialBaseUrl": "https://cloud.example.invalid",
+      "expectedTrustedCredentials": false,
+      "syntheticSecretPrefix": "fixture-"
+    },
+    {
+      "id": "login-poll-debug-http",
+      "name": "explicit debug HTTP Login Flow v2 credentials",
+      "file": "login-poll-debug-http.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "credentialBaseUrl": "http://127.0.0.1:8080/nextcloud",
+      "allowDebugHttp": true,
+      "expectedTrustedCredentials": true,
+      "syntheticSecretPrefix": "fixture-"
+    },
+    {
+      "id": "login-poll-malformed",
+      "name": "malformed Login Flow v2 credentials",
+      "file": "login-poll-malformed.response.json",
+      "operationId": "pollLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": false
+    },
+    {
+      "id": "capabilities-anonymous",
+      "name": "anonymous reduced capabilities",
+      "file": "capabilities-anonymous.response.json",
+      "operationId": "getCapabilities",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "capabilityContext": "anonymous",
+      "requiredNamespaces": [
+        "bruteforce",
+        "spreed",
+        "theming"
+      ],
+      "forbiddenNamespaces": [
+        "notifications"
+      ],
+      "requiredTalkFeatures": [
+        "chat-replies",
+        "markdown-messages",
+        "threads"
+      ]
+    },
+    {
+      "id": "capabilities-authenticated",
+      "name": "authenticated account capabilities",
+      "file": "capabilities-authenticated.response.json",
+      "operationId": "getCapabilities",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "capabilityContext": "authenticated",
+      "requiredNamespaces": [
+        "fixture-extension",
+        "notifications",
+        "spreed"
+      ],
+      "requiredTalkFeatures": [
+        "chat-replies",
+        "markdown-messages",
+        "media-caption",
+        "reactions",
+        "rich-object-sharing",
+        "scheduled-messages",
+        "signaling-v3",
+        "threads",
+        "voice-message-sharing"
+      ],
+      "requiredNotificationPush": [
+        "delete",
+        "devices",
+        "object-data"
+      ]
+    }
+  ]
+}

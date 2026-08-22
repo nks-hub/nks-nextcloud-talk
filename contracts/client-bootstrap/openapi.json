@@ -1,0 +1,480 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nextcloud Client Bootstrap Compatibility Contract",
+    "version": "0.1.0",
+    "description": "A compatibility contract for the public Nextcloud status endpoint, Login Flow v2 and OCS capabilities used to add one account to a multi-server mobile client. The contract describes upstream wire behavior; it is not a new server API."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://cloud.example.invalid",
+      "description": "Documentation-only Nextcloud origin"
+    }
+  ],
+  "tags": [
+    {
+      "name": "discovery",
+      "description": "Public server readiness discovery"
+    },
+    {
+      "name": "login-flow-v2",
+      "description": "Browser-mediated app-password login flow"
+    },
+    {
+      "name": "capabilities",
+      "description": "Anonymous or account-scoped OCS capability discovery"
+    }
+  ],
+  "paths": {
+    "/status.php": {
+      "get": {
+        "operationId": "getServerStatus",
+        "summary": "Read public Nextcloud readiness",
+        "description": "Returns installation, maintenance and database-upgrade state. Version fields are diagnostic only and must not replace capability negotiation.",
+        "tags": [
+          "discovery"
+        ],
+        "responses": {
+          "200": {
+            "description": "Server status returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Nextcloud bootstrap failed before a status document could be produced"
+          }
+        }
+      }
+    },
+    "/index.php/login/v2": {
+      "post": {
+        "operationId": "initializeLoginFlowV2",
+        "summary": "Initialize Login Flow v2",
+        "description": "Creates a short-lived login flow and returns a browser URL plus a poll token and endpoint. Current Nextcloud generates 128-character tokens with a 20-minute lifetime, but clients treat tokens as bounded opaque strings. Returned URLs must pass the client-side same-origin and base-path checks documented outside OpenAPI before use.",
+        "tags": [
+          "login-flow-v2"
+        ],
+        "parameters": [
+          {
+            "name": "User-Agent",
+            "in": "header",
+            "required": true,
+            "description": "Stable human-readable product and version identifier. A server may restrict Login Flow v2 by user-agent policy.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "maxProperties": 0,
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login flow initialized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginFlowV2Initialization"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Flow initialization was rate limited"
+          },
+          "500": {
+            "description": "Flow initialization failed"
+          }
+        }
+      }
+    },
+    "/index.php/login/v2/poll": {
+      "post": {
+        "operationId": "pollLoginFlowV2",
+        "summary": "Poll Login Flow v2",
+        "description": "Consumes the poll token as application/x-www-form-urlencoded data. HTTP 404 with an empty JSON array means that credentials are not available; it can represent pending, expired, invalid or already-consumed state. A successful credential response is single-use.",
+        "tags": [
+          "login-flow-v2"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginFlowV2PollRequest"
+              },
+              "encoding": {
+                "token": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Browser login completed and credentials returned exactly once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginFlowV2Credentials"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Flow pending, invalid, expired or already consumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyJsonArray"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Polling was rate limited"
+          },
+          "500": {
+            "description": "Polling failed"
+          }
+        }
+      }
+    },
+    "/ocs/v2.php/cloud/capabilities": {
+      "get": {
+        "operationId": "getCapabilities",
+        "summary": "Read global Nextcloud capabilities",
+        "description": "Returns an OCS envelope. Anonymous data is intentionally reduced and must not be cached as the authenticated account capability snapshot. The authenticated request uses Basic auth with the Login Flow app password. Unknown capability namespaces and fields must be preserved or ignored safely rather than rejected.",
+        "tags": [
+          "capabilities"
+        ],
+        "security": [
+          {},
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "json"
+            }
+          },
+          {
+            "name": "OCS-APIRequest",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "true"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capability snapshot returned",
+            "headers": {
+              "ETag": {
+                "description": "Hash of the account-context capability document when emitted",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcsCapabilitiesEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Supplied credentials were rejected"
+          },
+          "412": {
+            "description": "Required OCS request negotiation was missing"
+          },
+          "429": {
+            "description": "Capability request was rate limited"
+          },
+          "500": {
+            "description": "Capability aggregation failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Per-account loginName and appPassword returned by Login Flow v2"
+      }
+    },
+    "schemas": {
+      "AbsoluteUrl": {
+        "type": "string",
+        "format": "uri",
+        "minLength": 12,
+        "maxLength": 4096,
+        "description": "Absolute URL. Client-side trust checks additionally require the expected origin and Nextcloud base path. Production requires HTTPS; HTTP is accepted only by an explicit debug-build policy."
+      },
+      "OpaqueLoginToken": {
+        "type": "string",
+        "minLength": 32,
+        "maxLength": 4096,
+        "pattern": "^[A-Za-z0-9._~-]+$",
+        "description": "Opaque bounded token. The current server emits 128 alphanumeric characters; clients must not derive identity or timestamps from it."
+      },
+      "ServerStatus": {
+        "type": "object",
+        "required": [
+          "installed",
+          "maintenance",
+          "needsDbUpgrade",
+          "version",
+          "versionstring",
+          "edition",
+          "productname"
+        ],
+        "properties": {
+          "installed": {
+            "type": "boolean"
+          },
+          "maintenance": {
+            "type": "boolean"
+          },
+          "needsDbUpgrade": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "versionstring": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "edition": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "productname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "extendedSupport": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      },
+      "LoginFlowV2PollDescriptor": {
+        "type": "object",
+        "required": [
+          "token",
+          "endpoint"
+        ],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/OpaqueLoginToken"
+          },
+          "endpoint": {
+            "$ref": "#/components/schemas/AbsoluteUrl"
+          }
+        },
+        "additionalProperties": true
+      },
+      "LoginFlowV2Initialization": {
+        "type": "object",
+        "required": [
+          "poll",
+          "login"
+        ],
+        "properties": {
+          "poll": {
+            "$ref": "#/components/schemas/LoginFlowV2PollDescriptor"
+          },
+          "login": {
+            "$ref": "#/components/schemas/AbsoluteUrl"
+          }
+        },
+        "additionalProperties": true
+      },
+      "LoginFlowV2PollRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/OpaqueLoginToken"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginFlowV2Credentials": {
+        "type": "object",
+        "required": [
+          "server",
+          "loginName",
+          "appPassword"
+        ],
+        "properties": {
+          "server": {
+            "$ref": "#/components/schemas/AbsoluteUrl"
+          },
+          "loginName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "appPassword": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Opaque secret. It is moved immediately to platform secure storage and is never logged or persisted in the ordinary database."
+          }
+        },
+        "additionalProperties": true
+      },
+      "EmptyJsonArray": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "OcsMeta": {
+        "type": "object",
+        "required": [
+          "status",
+          "statuscode",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failure"
+            ]
+          },
+          "statuscode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "NextcloudVersion": {
+        "type": "object",
+        "required": [
+          "major",
+          "minor",
+          "micro",
+          "string",
+          "edition"
+        ],
+        "properties": {
+          "major": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "micro": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "string": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "edition": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "extendedSupport": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      },
+      "CapabilitiesData": {
+        "type": "object",
+        "required": [
+          "version",
+          "capabilities"
+        ],
+        "properties": {
+          "version": {
+            "$ref": "#/components/schemas/NextcloudVersion"
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "OcsCapabilitiesEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "$ref": "#/components/schemas/CapabilitiesData"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

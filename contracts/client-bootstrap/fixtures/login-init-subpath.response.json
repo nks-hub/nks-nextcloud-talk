@@ -1,0 +1,7 @@
+{
+  "poll": {
+    "token": "fixture-poll-token-subpath-00000000000000000000000000000",
+    "endpoint": "https://cloud.example.invalid/nextcloud/index.php/login/v2/poll"
+  },
+  "login": "https://cloud.example.invalid/nextcloud/index.php/login/v2/flow/fixture-login-token-subpath-00000000000000000000000000000"
+}

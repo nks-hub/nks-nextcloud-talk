@@ -1,0 +1,50 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "version": {
+        "major": 34,
+        "minor": 0,
+        "micro": 1,
+        "string": "34.0.1",
+        "edition": "",
+        "extendedSupport": false
+      },
+      "capabilities": {
+        "bruteforce": {
+          "delay": 0
+        },
+        "spreed": {
+          "features": [
+            "chat-v2",
+            "conversation-v4",
+            "chat-replies",
+            "markdown-messages",
+            "threads"
+          ],
+          "features-local": [
+            "favorites"
+          ],
+          "config": {
+            "attachments": {
+              "allowed": false,
+              "conversation-subfolders": true
+            },
+            "signaling": {
+              "mode": "external"
+            }
+          },
+          "version": "24.0.2"
+        },
+        "theming": {
+          "name": "Fixture Cloud",
+          "color": "#00679e"
+        }
+      }
+    }
+  }
+}
