@@ -20,6 +20,7 @@ nevytváří jako prázdný stub.
 ## Dokumenty
 
 - [Požadavky a důkaz dokončení](requirements.md)
+- [Audit dokončení celého cíle](completion-audit.md)
 - [Systémový návrh](system-design.md)
 - [Synchronizace a lokální data](sync-storage.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)

@@ -7,6 +7,8 @@ Dokumentace je rozdělená podle stavu poznání:
   synchronizační invarianty a implementační brány.
 - [Návrhy](plans/README.md) rozpracovávají doporučené nebo přijaté provozní
   toky a jejich hranice.
+- [Audit dokončení](architecture/completion-audit.md) odděluje doloženou
+  analýzu od dosud neexistující aplikace, gateway a runtime důkazů.
 
 Výzkumné tvrzení musí být vázané na konkrétní SHA, verzi nebo skutečný runtime
 test. Architektonický návrh musí jasně rozlišovat přijaté rozhodnutí, doporučení
