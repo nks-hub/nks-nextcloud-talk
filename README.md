@@ -23,8 +23,10 @@ Aktuální stav:
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;
 - přijaté Android `applicationId` `com.nkshub.nextcloudtalk`;
-- Flutter implementace ještě nezačala, protože zbývá schválit přesnou licenci,
-  iOS bundle ID, minimální platformy a rozsah prvního release.
+- přijatá licence mobilního klienta
+  [`GPL-3.0-or-later`](LICENSE);
+- Flutter implementace ještě nezačala, protože zbývá schválit iOS bundle ID,
+  minimální platformy a rozsah prvního release.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

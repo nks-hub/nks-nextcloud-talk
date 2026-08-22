@@ -1,7 +1,8 @@
 # Architektura
 
-Stav: návrh před implementací. Dokument je licenčně neutrální a nevytváří
-Flutter scaffold. Android `applicationId` je přijaté jako
+Stav: návrh před implementací. Protokolové kontrakty vznikly licenčně neutrálně;
+nový mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold
+dosud nevznikl. Android `applicationId` je přijaté jako
 `com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
 
 ## Výsledek návrhu

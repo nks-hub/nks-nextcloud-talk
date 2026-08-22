@@ -74,7 +74,8 @@ komponenty, vizuální variaci a doplní multi-server, offline a diagnostické
 stavy.
 
 Upstream se používá jako SHA-bound reference chování, wire kompatibility a
-testovacích scénářů. Přesný licenční text zůstává samostatnou volbou Q-001.
+testovacích scénářů. Licence je vyřešená v D-018; původní implementační proces
+zůstává zachovaný.
 
 ### D-014: Android applicationId
 
@@ -156,6 +157,19 @@ Executable harness nyní dokládá rollback chat merge a outbox confirmation
 odděleně. Společná SQLite transakce zůstává povinným, ale dosud neprokázaným
 runtime invariantem.
 
+### D-018: Licence mobilního klienta
+
+Stav: Přijato uživatelem 22. srpna 2026.
+
+Mobilní aplikace a její vlastní zdrojový kód jsou licencované pod
+`GPL-3.0-or-later`. Úplný text je v kořenovém souboru `LICENSE`. Volba umožňuje
+GPL-kompatibilní převzetí z oficiálních Talk klientů, ale žádné takové převzetí
+nesmí být skryté: musí mít dohledatelný původ, zachované copyright notices a
+samostatný licenční audit.
+
+Přijatý vlastní Talk-inspirovaný směr z D-013 se nemění. Každý asset a závislost
+musí být před distribucí kompatibilní s GPL a zaznamenaný v průběžném auditu.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient
@@ -188,14 +202,16 @@ Chatujme poskytuje ověřený lokální vzor a Riverpod umožní account-scoped
 providery. Databázový stav však zůstává zdrojem pravdy; provider nesmí duplikovat
 sync store.
 
-## Otevřené volby
+## Vyřešené volby
 
 ### Q-001: Licence
 
-Clean-room implementační cesta je přijatá v D-013. Zbývá zvolit přesný licenční
-text nového kódu a závislostí a provést audit původu assetů.
+Stav: Vyřešeno v D-018.
 
-Bez rozhodnutí se nevytváří produkční Flutter kód.
+Uživatel zvolil `GPL-3.0-or-later`. Audit původu kódu, assetů a závislostí je
+průběžná distribuční brána, nikoli otevřená volba licence.
+
+## Otevřené volby
 
 ### Q-002: Minimální platformy
 

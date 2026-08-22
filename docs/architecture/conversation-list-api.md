@@ -207,4 +207,4 @@ Kontrakt není produkční Flutter implementace. Neprokazuje SQLite migrace,
 cache-first obrazovku, skutečné odstranění room z jiného zařízení, background
 scheduler, room detail, participants, favorite/archive mutace, dva servery v
 jedné app instalaci ani měřený UI kontrast. Tyto důkazy zůstávají v řezu 2 po
-schválení licence a zbývajících platformních voleb.
+schválení zbývajících platformních voleb a vytvoření scaffoldingu.

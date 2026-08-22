@@ -185,5 +185,5 @@ features bez zápisu na server.
 Kontrakt není náhradou produkčního klienta. Zatím neprokazuje systémový browser
 lifecycle, secure storage, restart, dokončený reálný login, odvolání app
 passwordu, dva servery v jedné instalaci ani únik secretu v platformních
-crash logách. Tyto důkazy patří do implementačního řezu 1 po schválení licence
-a platformních identit.
+crash logách. Tyto důkazy patří do implementačního řezu 1 po vytvoření
+platformního scaffoldingu.
