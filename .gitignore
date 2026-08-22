@@ -1,8 +1,6 @@
 # Editor/IDE local configs
 .[a-z]*/
 !.git/
-!.vs/
-!.idea/
 !.fake/
 !.paket/
 !.cr/
