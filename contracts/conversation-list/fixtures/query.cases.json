@@ -1,0 +1,77 @@
+{
+  "expectedHeaders": {
+    "OCS-APIRequest": "true",
+    "User-Agent": "com.nkshub.nextcloudtalk conversation-list-contract/0.1"
+  },
+  "cases": [
+    {
+      "id": "full-compact",
+      "mode": "full",
+      "includeLastMessage": false,
+      "expected": {
+        "format": "json",
+        "noStatusUpdate": "1",
+        "includeStatus": "false",
+        "includeLastMessage": "false"
+      }
+    },
+    {
+      "id": "full-preview",
+      "mode": "full",
+      "includeLastMessage": true,
+      "expected": {
+        "format": "json",
+        "noStatusUpdate": "1",
+        "includeStatus": "false",
+        "includeLastMessage": "true"
+      }
+    },
+    {
+      "id": "incremental-compact",
+      "mode": "incremental",
+      "cursor": "1724300001",
+      "includeLastMessage": false,
+      "expected": {
+        "format": "json",
+        "noStatusUpdate": "1",
+        "includeStatus": "false",
+        "modifiedSince": "1724300001",
+        "includeLastMessage": "false"
+      }
+    },
+    {
+      "id": "incremental-zero",
+      "mode": "incremental",
+      "cursor": "0",
+      "includeLastMessage": true,
+      "expected": {
+        "format": "json",
+        "noStatusUpdate": "1",
+        "includeStatus": "false",
+        "modifiedSince": "0",
+        "includeLastMessage": "true"
+      }
+    },
+    {
+      "id": "incremental-leading-zero",
+      "mode": "incremental",
+      "cursor": "01724300001",
+      "includeLastMessage": false,
+      "expectedError": true
+    },
+    {
+      "id": "incremental-negative",
+      "mode": "incremental",
+      "cursor": "-1",
+      "includeLastMessage": false,
+      "expectedError": true
+    },
+    {
+      "id": "full-with-cursor",
+      "mode": "full",
+      "cursor": "1724300001",
+      "includeLastMessage": false,
+      "expectedError": true
+    }
+  ]
+}

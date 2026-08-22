@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "id": "v4-present",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "release": "24.0.2",
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "candidate"
+      }
+    },
+    {
+      "id": "v4-among-other-features",
+      "talkFeatures": [
+        "chat-v1",
+        "conversation-v4",
+        "threads"
+      ],
+      "release": "23.0.0",
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "candidate"
+      }
+    },
+    {
+      "id": "release-only-is-unsupported",
+      "talkFeatures": [],
+      "release": "99.0.0",
+      "expected": {
+        "candidatePath": null,
+        "activePath": null,
+        "profile": "unsupported"
+      }
+    },
+    {
+      "id": "v3-only-is-unsupported",
+      "talkFeatures": [
+        "conversation-v3"
+      ],
+      "release": "24.0.2",
+      "expected": {
+        "candidatePath": null,
+        "activePath": null,
+        "profile": "unsupported"
+      }
+    },
+    {
+      "id": "duplicate-feature-is-invalid",
+      "talkFeatures": [
+        "conversation-v4",
+        "conversation-v4"
+      ],
+      "release": "24.0.2",
+      "expectedError": true
+    },
+    {
+      "id": "cursor-v4-wire-profile-confirmed",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-full.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+        "X-Nextcloud-Talk-Modified-Before": "1724300001"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "profile": "cursor-v4"
+      }
+    },
+    {
+      "id": "missing-cursor-wire-profile-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-full.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Hash": "fixture-hash-a"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    },
+    {
+      "id": "missing-hash-wire-profile-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-full.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Modified-Before": "1724300001"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    },
+    {
+      "id": "malformed-cursor-wire-profile-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-full.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+        "X-Nextcloud-Talk-Modified-Before": "01724300001"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    },
+    {
+      "id": "http-error-probe-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-unauthorized.response.json",
+      "probeHeaders": {},
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    },
+    {
+      "id": "ocs-error-probe-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-ocs-failure.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+        "X-Nextcloud-Talk-Modified-Before": "1724300001"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    },
+    {
+      "id": "schema-error-probe-is-unsupported",
+      "talkFeatures": [
+        "conversation-v4"
+      ],
+      "probeFixture": "conversations-missing-token.response.json",
+      "probeHeaders": {
+        "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+        "X-Nextcloud-Talk-Modified-Before": "1724300001"
+      },
+      "expected": {
+        "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
+        "activePath": null,
+        "profile": "unsupported-wire-profile"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 998,
+      "message": "Synthetic OCS failure"
+    },
+    "data": []
+  }
+}

@@ -1,0 +1,558 @@
+{
+  "cases": [
+    {
+      "id": "full-prunes-missing",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "rooma123",
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "full-prune-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-full.response.json",
+          "headerSet": "full",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [
+              "rooma123",
+              "roomb456"
+            ],
+            "cursor": "1724300001",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "incremental-preserves-missing",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "rooma123",
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "incremental-1",
+          "accountId": "account-a",
+          "mode": "incremental",
+          "fixture": "conversations-incremental.response.json",
+          "headerSet": "incremental",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [
+              "rooma123",
+              "stale999"
+            ],
+            "cursor": "1724300101",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "empty-needs-independent-confirmation",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "empty-proof-1",
+          "observedAt": 1000,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-one",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "empty-proof-1",
+            "capabilityRefreshRequired": false
+          }
+        },
+        {
+          "requestId": "empty-proof-2",
+          "observedAt": 1010,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-two",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [],
+            "cursor": "1724300301",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "already-empty-account-accepts-full-empty",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [],
+          "cursor": null,
+          "configurationHash": null
+        }
+      },
+      "steps": [
+        {
+          "requestId": "empty-new-account-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-one",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [],
+            "cursor": "1724300300",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "duplicate-token-does-not-advance-cursor",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "duplicate-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-duplicate-token.response.json",
+          "headerSet": "malformed",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "preview-mismatch-does-not-advance-cursor",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "preview-mismatch-1",
+          "accountId": "account-a",
+          "mode": "incremental",
+          "fixture": "conversations-preview-token-mismatch.response.json",
+          "headerSet": "malformed",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "schema-error-does-not-advance-cursor",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "schema-error-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-missing-token.response.json",
+          "headerSet": "malformed",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "ocs-failure-does-not-advance-cursor",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "ocs-failure-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-ocs-failure.response.json",
+          "headerSet": "failure",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "transaction-failure-rolls-back-cursor",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "transaction-failure-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-full.response.json",
+          "headerSet": "full",
+          "transaction": "fail",
+          "expectedOutcome": "transaction-error",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "configuration-hash-change-refreshes-capabilities",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "roomc789"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "hash-change-1",
+          "accountId": "account-a",
+          "mode": "incremental",
+          "fixture": "conversations-incremental.response.json",
+          "headerSet": "hash-changed",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [
+              "rooma123",
+              "roomc789"
+            ],
+            "cursor": "1724300601",
+            "configurationHash": "fixture-hash-b",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "same-room-token-remains-account-scoped",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        },
+        "account-b": {
+          "roomTokens": [
+            "rooma123"
+          ],
+          "cursor": "200",
+          "configurationHash": "fixture-hash-b"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "account-scope-1",
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-compact.response.json",
+          "headerSet": "compact",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [
+              "roomc789"
+            ],
+            "cursor": "1724300201",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "same-empty-request-is-not-independent",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "reused-empty-proof",
+          "observedAt": 2000,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-one",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "reused-empty-proof",
+            "capabilityRefreshRequired": false
+          }
+        },
+        {
+          "requestId": "reused-empty-proof",
+          "observedAt": 2001,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-two",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "reused-empty-proof",
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "expired-empty-proof-is-replaced",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "expired-proof-1",
+          "observedAt": 3000,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-one",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "expired-proof-1",
+            "capabilityRefreshRequired": false
+          }
+        },
+        {
+          "requestId": "expired-proof-2",
+          "observedAt": 3301,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-two",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "expired-proof-2",
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "non-empty-delta-invalidates-empty-proof",
+      "initialAccounts": {
+        "account-a": {
+          "roomTokens": [
+            "stale999"
+          ],
+          "cursor": "100",
+          "configurationHash": "fixture-hash-a"
+        }
+      },
+      "steps": [
+        {
+          "requestId": "interleaved-empty-proof-1",
+          "observedAt": 4000,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-one",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "stale999"
+            ],
+            "cursor": "100",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "interleaved-empty-proof-1",
+            "capabilityRefreshRequired": false
+          }
+        },
+        {
+          "requestId": "interleaved-delta-1",
+          "accountId": "account-a",
+          "mode": "incremental",
+          "fixture": "conversations-incremental.response.json",
+          "headerSet": "incremental",
+          "transaction": "commit",
+          "expectedOutcome": "applied",
+          "expectedAccount": {
+            "roomTokens": [
+              "rooma123",
+              "stale999"
+            ],
+            "cursor": "1724300101",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": null,
+            "capabilityRefreshRequired": false
+          }
+        },
+        {
+          "requestId": "interleaved-empty-proof-2",
+          "observedAt": 4010,
+          "accountId": "account-a",
+          "mode": "full",
+          "fixture": "conversations-empty.response.json",
+          "headerSet": "empty-two",
+          "transaction": "commit",
+          "expectedOutcome": "confirmation-required",
+          "expectedAccount": {
+            "roomTokens": [
+              "rooma123",
+              "stale999"
+            ],
+            "cursor": "1724300101",
+            "configurationHash": "fixture-hash-a",
+            "emptyConfirmationRequestId": "interleaved-empty-proof-2",
+            "capabilityRefreshRequired": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -104,6 +104,28 @@ lokální `accountId` a teprve přihlášený capability snapshot se uloží jak
 account-scoped autorita. HTTP 404 poll nerozlišuje pending, invalid, expired ani
 consumed stav a nesmí se interpretovat přesněji.
 
+### D-016: Account-scoped conversation merge
+
+Stav: Přijato jako datová invarianta.
+
+`conversation-v4` v přihlášeném capability snapshotu volí pouze kandidátní
+endpoint. Aktivní profil `cursor-v4` vznikne až po schema-validní full response
+s kanonickým cursorem a neprázdným Talk hashem. Legacy wire profil bez těchto
+hlaviček zůstává unsupported, dokud nevznikne samostatný adapter.
+
+Store klíč je `(accountId, roomToken)`. Inkrementální response nikdy nemaže
+chybějící rooms; validní neprázdný full response je může odstranit. První
+full-empty response při existující cache pouze založí potvrzovací stav. Smazání
+smí potvrdit až jiný full request do 300 sekund. Starší důkaz expiruje a
+neprázdná mezilehlá delta jej okamžitě ruší.
+
+Room upsert, případné mazání, serverový cursor a Talk configuration hash se
+commitnou v jedné transakci. Chyba schema, OCS, semantiky nebo DB cursor
+neposune. Schema diagnostika smí obsahovat jen strukturální path a typ
+validatoru, nikdy hodnotu z response. Změna hash vyžádá account-scoped
+capability/settings refresh, nikoli smazání rooms. O typu merge rozhoduje
+explicitní režim requestu, ne samotná hodnota `modifiedSince`.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient

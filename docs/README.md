@@ -14,6 +14,8 @@ Dokumentace je rozdělená podle stavu poznání:
   validaci.
 - [Přidání Nextcloud účtu](architecture/client-bootstrap-api.md) popisuje
   normalizaci serveru, Login Flow v2, capabilities a spustitelné trust fixture.
+- [Seznam konverzací](architecture/conversation-list-api.md) popisuje room v4,
+  serverový cursor, account-scoped merge a spustitelné full/delta fixture.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 

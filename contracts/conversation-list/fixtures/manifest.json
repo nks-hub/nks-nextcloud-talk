@@ -1,0 +1,157 @@
+{
+  "contract": "../openapi.json",
+  "queryCasesFile": "query.cases.json",
+  "capabilityCasesFile": "capability.cases.json",
+  "mergeCasesFile": "merge.cases.json",
+  "headerSets": {
+    "full": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300001",
+      "X-Nextcloud-Talk-Federation-Invites": "0"
+    },
+    "incremental": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300101",
+      "X-Nextcloud-Talk-Federation-Invites": "1"
+    },
+    "compact": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300201"
+    },
+    "empty-one": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300300",
+      "X-Nextcloud-Talk-Federation-Invites": "0"
+    },
+    "empty-two": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300301",
+      "X-Nextcloud-Talk-Federation-Invites": "0"
+    },
+    "failure": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300401"
+    },
+    "malformed": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-a",
+      "X-Nextcloud-Talk-Modified-Before": "1724300501"
+    },
+    "hash-changed": {
+      "X-Nextcloud-Talk-Hash": "fixture-hash-b",
+      "X-Nextcloud-Talk-Modified-Before": "1724300601"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "full",
+      "name": "full conversation list",
+      "file": "conversations-full.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "full",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 2
+    },
+    {
+      "id": "incremental",
+      "name": "incremental conversation list",
+      "file": "conversations-incremental.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "incremental",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 1
+    },
+    {
+      "id": "compact",
+      "name": "compact conversation list without previews",
+      "file": "conversations-compact.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "compact",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 1,
+      "expectLastMessageAbsent": true
+    },
+    {
+      "id": "empty",
+      "name": "successful empty conversation list",
+      "file": "conversations-empty.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "empty-one",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 0
+    },
+    {
+      "id": "ocs-failure",
+      "name": "OCS failure inside HTTP 200",
+      "file": "conversations-ocs-failure.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "failure",
+      "schemaValid": true,
+      "expectedClassification": "ocs-error"
+    },
+    {
+      "id": "unauthorized",
+      "name": "revoked account credential",
+      "file": "conversations-unauthorized.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "401",
+      "mediaType": "application/json",
+      "schemaValid": true,
+      "expectedClassification": "reauth"
+    },
+    {
+      "id": "missing-token",
+      "name": "room without stable token",
+      "file": "conversations-missing-token.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "malformed",
+      "schemaValid": false
+    },
+    {
+      "id": "duplicate-token",
+      "name": "response with duplicate room token",
+      "file": "conversations-duplicate-token.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "malformed",
+      "schemaValid": true,
+      "expectedClassification": "semantic-error"
+    },
+    {
+      "id": "preview-token-mismatch",
+      "name": "room preview belonging to a different room",
+      "file": "conversations-preview-token-mismatch.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "malformed",
+      "schemaValid": true,
+      "expectedClassification": "semantic-error"
+    }
+  ]
+}
