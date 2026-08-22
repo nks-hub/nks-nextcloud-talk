@@ -82,6 +82,7 @@ REQUIRED_FIXTURE_IDS = {
     "send-invalid-reply",
     "send-null",
     "send-not-found",
+    "send-ocs-statuscode-mismatch",
     "send-rate-limited",
     "send-rate-limited-retry-after",
     "send-reference-mismatch",
@@ -735,7 +736,11 @@ def classify_send_response(
             "messages": [],
             "messageId": None,
         }
-    if status != "201" or meta.get("status") != "ok":
+    if (
+        status != "201"
+        or meta.get("status") != "ok"
+        or meta.get("statuscode") != 201
+    ):
         return {"classification": "server-error", "messages": [], "messageId": None}
     if raw_data is None:
         return {

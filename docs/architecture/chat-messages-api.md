@@ -261,7 +261,7 @@ rtk proxy python contracts\chat-messages\validate_contract.py `
 Credentials jsou v obou případech pouze v `NEXTCLOUD_TALK_USERNAME` a
 `NEXTCLOUD_TALK_APP_PASSWORD`. Mutable příkaz se nesmí spustit v cizí room.
 
-Aktuální lokální výsledek: 1 OpenAPI dokument, 43 fixtures, z toho 42
+Aktuální lokální výsledek: 1 OpenAPI dokument, 44 fixtures, z toho 43
 schema-validních a 13 přijatých syntetických messages, 21 query případů, 10
 capability případů, 23 merge případů s 25 kroky, 36 outbox případů s 60 kroky,
 4 unit testy, 1 redaction guard a 1 origin případ prošly.

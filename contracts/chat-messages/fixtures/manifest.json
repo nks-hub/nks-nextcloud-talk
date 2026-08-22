@@ -401,6 +401,22 @@
       "expectedMessageId": 120
     },
     {
+      "id": "send-ocs-statuscode-mismatch",
+      "file": "send-ocs-statuscode-mismatch.response.json",
+      "direction": "response",
+      "operationId": "sendChatMessage",
+      "status": "201",
+      "mediaType": "application/json",
+      "headerSet": "send",
+      "schemaValid": true,
+      "context": {
+        "roomToken": "rooma123",
+        "referenceId": "11111111-1111-4111-8111-111111111111"
+      },
+      "expectedClassification": "server-error",
+      "expectedMessageId": null
+    },
+    {
       "id": "send-reply-success",
       "file": "send-reply-success.response.json",
       "direction": "response",
