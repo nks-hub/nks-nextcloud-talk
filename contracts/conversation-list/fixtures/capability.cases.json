@@ -120,7 +120,7 @@
       }
     },
     {
-      "id": "http-error-probe-is-unsupported",
+      "id": "http-error-probe-requires-reauthentication",
       "talkFeatures": [
         "conversation-v4"
       ],
@@ -129,23 +129,21 @@
       "expected": {
         "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
         "activePath": null,
-        "profile": "unsupported-wire-profile"
+        "profile": "reauthentication-required"
       }
     },
     {
-      "id": "ocs-error-probe-is-unsupported",
+      "id": "ocs-error-probe-is-deferred",
       "talkFeatures": [
         "conversation-v4"
       ],
       "probeFixture": "conversations-ocs-failure.response.json",
-      "probeHeaders": {
-        "X-Nextcloud-Talk-Hash": "fixture-hash-a",
-        "X-Nextcloud-Talk-Modified-Before": "1724300001"
-      },
+      "probeHeaders": {},
       "expected": {
         "candidatePath": "/ocs/v2.php/apps/spreed/api/v4/room",
         "activePath": null,
-        "profile": "unsupported-wire-profile"
+        "profile": "deferred",
+        "deferralReason": "ocs-failure"
       }
     },
     {

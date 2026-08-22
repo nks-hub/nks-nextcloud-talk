@@ -51,11 +51,11 @@ REQUIRED_QUERY_IDS = {
 REQUIRED_CAPABILITY_IDS = {
     "cursor-v4-wire-profile-confirmed",
     "duplicate-feature-is-invalid",
-    "http-error-probe-is-unsupported",
+    "http-error-probe-requires-reauthentication",
     "malformed-cursor-wire-profile-is-unsupported",
     "missing-cursor-wire-profile-is-unsupported",
     "missing-hash-wire-profile-is-unsupported",
-    "ocs-error-probe-is-unsupported",
+    "ocs-error-probe-is-deferred",
     "release-only-is-unsupported",
     "schema-error-probe-is-unsupported",
     "v3-only-is-unsupported",
@@ -426,6 +426,8 @@ def validate_fixture(
         classification, rooms = classify_response(instance, status)
     except ResponseSemanticError:
         classification, rooms = "semantic-error", []
+    if classification == "success":
+        validate_cursor_v4_wire_profile(document, headers)
     expected_classification = require_string(
         fixture.get("expectedClassification"),
         "fixture expected classification",
@@ -700,7 +702,43 @@ def negotiate_conversation_profile(
     probe_headers = require_object(probe.get("headers"), "wire probe headers")
     if any(not isinstance(value, str) for value in probe_headers.values()):
         raise ContractValidationError("Wire probe header values must be strings")
+    if status == "401":
+        return {
+            "candidatePath": candidate_path,
+            "activePath": None,
+            "profile": "reauthentication-required",
+        }
+    if status != "200":
+        reasons = {
+            "426": "upgrade-required",
+            "429": "rate-limited",
+            "503": "service-unavailable",
+        }
+        return {
+            "candidatePath": candidate_path,
+            "activePath": None,
+            "profile": "deferred",
+            "deferralReason": reasons.get(status, "unexpected-http-status"),
+        }
     try:
+        operation = find_operation(document, "getConversationsV4")
+        errors = validate_json_schema(
+            probe.get("instance"),
+            response_schema(document, operation, "200", "application/json"),
+        )
+        if errors:
+            raise ResponseSemanticError(
+                "Cursor-v4 response violates the wire schema: "
+                + "; ".join(errors)
+            )
+        classification, _ = classify_response(probe.get("instance"), "200")
+        if classification == "ocs-error":
+            return {
+                "candidatePath": candidate_path,
+                "activePath": None,
+                "profile": "deferred",
+                "deferralReason": "ocs-failure",
+            }
         decode_cursor_v4_response(
             document,
             status,

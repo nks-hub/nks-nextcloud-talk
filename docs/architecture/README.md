@@ -1,7 +1,7 @@
 # Architektura
 
-Stav: návrh a první pure Dart implementace. Protokolové kontrakty vznikly
-licenčně neutrálně; nový mobilní klient je licencovaný pod
+Stav: návrh a produkční pure Dart bootstrap i conversation runtime. Protokolové
+kontrakty vznikly licenčně neutrálně; nový mobilní klient je licencovaný pod
 `GPL-3.0-or-later`. Flutter scaffold dosud nevznikl. Android `applicationId` je
 přijaté jako
 `com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
@@ -38,6 +38,7 @@ nevytváří jako prázdný stub.
 - [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
 - [Návrh klientského bootstrap kontraktu](../plans/2026-08-22-client-bootstrap-contract-design.md)
 - [Návrh conversation-list kontraktu](../plans/2026-08-22-conversation-list-contract-design.md)
+- [Implementace Dart conversation runtime](../plans/2026-08-22-dart-conversation-runtime-design.md)
 - [Návrh chat-messages kontraktu](../plans/2026-08-22-chat-messages-contract-design.md)
 
 ## Principy

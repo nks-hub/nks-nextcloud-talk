@@ -108,12 +108,20 @@ consumed stav a nesmí se interpretovat přesněji.
 
 ### D-016: Account-scoped conversation merge
 
-Stav: Přijato jako datová invarianta.
+Stav: Přijato a implementováno v pure Dart parseru a merge planneru; skutečný
+Drift transakční adapter zůstává součástí řezu 2.
 
 `conversation-v4` v přihlášeném capability snapshotu volí pouze kandidátní
 endpoint. Aktivní profil `cursor-v4` vznikne až po schema-validní full response
 s kanonickým cursorem a neprázdným Talk hashem. Legacy wire profil bez těchto
 hlaviček zůstává unsupported, dokud nevznikne samostatný adapter.
+HTTP 401 znamená re-auth, zatímco 426, 429, 503 a validní OCS failure pouze
+odkládají potvrzení profilu; samy nedokazují nekompatibilní wire formát.
+
+Request nese `accountId`, lokální request ID a kanonický serverový origin.
+Dekódovaná response zachová tentýž request a planner odvodí celý kontext pouze
+z ní. Uložený account stav nese očekávaný origin a odlišný server odmítne před
+výpočtem upsertů nebo mazání.
 
 Store klíč je `(accountId, roomToken)`. Inkrementální response nikdy nemaže
 chybějící rooms; validní neprázdný full response je může odstranit. První

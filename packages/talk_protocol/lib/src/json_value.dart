@@ -22,7 +22,7 @@ Map<String, Object?> requireObject(
     }
     result[key] = entry.value;
   }
-  return UnmodifiableMapView(result);
+  return RedactedMapView(result);
 }
 
 List<Object?> requireList(
@@ -33,7 +33,7 @@ List<Object?> requireList(
   if (value is! List<Object?>) {
     protocolFailure(code, path);
   }
-  return List<Object?>.unmodifiable(value);
+  return RedactedListView(value);
 }
 
 String requireString(
@@ -94,64 +94,142 @@ Set<String> requireUniqueStringSet(
       protocolFailure(code, path);
     }
   }
-  return Set<String>.unmodifiable(result);
+  return RedactedSetView(result);
 }
 
 Object? freezeJson(Object? value) {
-  return _freezeJson(value, depth: 0, budget: _JsonBudget());
+  return JsonFreezeSession().freeze(value);
 }
 
-Object? _freezeJson(
-  Object? value, {
-  required int depth,
-  required _JsonBudget budget,
-}) {
-  if (depth > _maximumJsonDepth) {
-    protocolFailure(
-      TalkProtocolErrorCode.invalidCapabilities,
-      r'$.ocs.data.capabilities',
-    );
-  }
-  budget.consume();
-
-  if (value is Map<Object?, Object?>) {
-    final result = <String, Object?>{};
-    for (final entry in value.entries) {
-      final key = entry.key;
-      if (key is! String) {
-        protocolFailure(
-          TalkProtocolErrorCode.invalidCapabilities,
-          r'$.ocs.data.capabilities',
-        );
-      }
-      result[key] = _freezeJson(entry.value, depth: depth + 1, budget: budget);
+final class JsonFreezeSession {
+  JsonFreezeSession({
+    int maximumDepth = _maximumJsonDepth,
+    int maximumNodes = _maximumJsonNodes,
+    this.errorCode = TalkProtocolErrorCode.invalidCapabilities,
+    this.errorPath = r'$.ocs.data.capabilities',
+  }) : _maximumDepth = maximumDepth,
+       _remainingNodes = maximumNodes {
+    if (maximumDepth < 0 || maximumNodes < 1) {
+      throw ArgumentError('JSON freeze limits must be positive.');
     }
-    return UnmodifiableMapView(result);
   }
-  if (value is List<Object?>) {
-    return List<Object?>.unmodifiable(
-      value.map((item) => _freezeJson(item, depth: depth + 1, budget: budget)),
-    );
-  }
-  if (value == null || value is String || value is num || value is bool) {
-    return value;
-  }
-  protocolFailure(
-    TalkProtocolErrorCode.invalidCapabilities,
-    r'$.ocs.data.capabilities',
-  );
-}
 
-final class _JsonBudget {
-  int remaining = _maximumJsonNodes;
+  final int _maximumDepth;
+  int _remainingNodes;
+  final TalkProtocolErrorCode errorCode;
+  final String errorPath;
 
-  void consume() {
-    remaining--;
-    if (remaining < 0) {
-      protocolFailure(
-        TalkProtocolErrorCode.invalidCapabilities,
-        r'$.ocs.data.capabilities',
+  Object? freeze(Object? value) => _freeze(value, depth: 0);
+
+  Object? _freeze(Object? value, {required int depth}) {
+    if (depth > _maximumDepth) {
+      protocolFailure(errorCode, errorPath);
+    }
+    _remainingNodes--;
+    if (_remainingNodes < 0) {
+      protocolFailure(errorCode, errorPath);
+    }
+
+    if (value is Map<Object?, Object?>) {
+      final result = <String, Object?>{};
+      for (final entry in value.entries) {
+        final key = entry.key;
+        if (key is! String) {
+          protocolFailure(errorCode, errorPath);
+        }
+        result[key] = _freeze(entry.value, depth: depth + 1);
+      }
+      return RedactedMapView(result);
+    }
+    if (value is List<Object?>) {
+      return RedactedListView(
+        value.map((item) => _freeze(item, depth: depth + 1)),
       );
     }
+    if (value == null || value is String || value is num || value is bool) {
+      return value;
+    }
+    protocolFailure(errorCode, errorPath);
   }
+}
+
+final class RedactedMapView<K, V> extends MapBase<K, V> {
+  RedactedMapView(Map<K, V> source) : _source = Map<K, V>.unmodifiable(source);
+
+  final Map<K, V> _source;
+
+  @override
+  V? operator [](Object? key) => _source[key];
+
+  @override
+  void operator []=(K key, V value) =>
+      throw UnsupportedError('Cannot modify an immutable map.');
+
+  @override
+  void clear() => throw UnsupportedError('Cannot modify an immutable map.');
+
+  @override
+  Iterable<K> get keys => _source.keys;
+
+  @override
+  V? remove(Object? key) =>
+      throw UnsupportedError('Cannot modify an immutable map.');
+
+  @override
+  String toString() => '{<redacted>}';
+}
+
+final class RedactedListView<E> extends ListBase<E> {
+  RedactedListView(Iterable<E> source) : _source = List<E>.unmodifiable(source);
+
+  final List<E> _source;
+
+  @override
+  E operator [](int index) => _source[index];
+
+  @override
+  void operator []=(int index, E value) =>
+      throw UnsupportedError('Cannot modify an immutable list.');
+
+  @override
+  int get length => _source.length;
+
+  @override
+  set length(int value) =>
+      throw UnsupportedError('Cannot modify an immutable list.');
+
+  @override
+  String toString() => '[<redacted>]';
+}
+
+final class RedactedSetView<E> extends SetBase<E> {
+  RedactedSetView(Iterable<E> source) : _source = Set<E>.unmodifiable(source);
+
+  final Set<E> _source;
+
+  @override
+  bool add(E value) =>
+      throw UnsupportedError('Cannot modify an immutable set.');
+
+  @override
+  bool contains(Object? element) => _source.contains(element);
+
+  @override
+  Iterator<E> get iterator => _source.iterator;
+
+  @override
+  int get length => _source.length;
+
+  @override
+  E? lookup(Object? element) => _source.lookup(element);
+
+  @override
+  bool remove(Object? value) =>
+      throw UnsupportedError('Cannot modify an immutable set.');
+
+  @override
+  Set<E> toSet() => Set<E>.of(_source);
+
+  @override
+  String toString() => '{<redacted>}';
 }

@@ -11,6 +11,13 @@ enum TalkProtocolErrorCode {
   untrustedCredentialServer,
   invalidCapabilities,
   ocsFailure,
+  invalidConversationIdentifier,
+  invalidConversationRequest,
+  invalidConversationResponse,
+  invalidConversationHeaders,
+  duplicateConversationToken,
+  previewConversationMismatch,
+  invalidConversationMerge,
   unsupportedHttpStatus,
 }
 

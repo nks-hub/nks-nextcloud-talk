@@ -20,6 +20,8 @@ Aktuální stav:
   fixtures a 22 origin případy;
 - spustitelný room v4 kontrakt pro full/delta seznam, serverový cursor a
   account-scoped transakční merge;
+- produkční pure Dart conversation runtime se striktním response parserem,
+  capability probe, neměnnými room modely a account-scoped merge plannerem;
 - spustitelný chat kontrakt pro history/future cursory, text send, read/unread,
   room/thread merge a restart-safe outbox bez blind replaye;
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
@@ -29,7 +31,8 @@ Aktuální stav:
 - přijatá licence mobilního klienta
   [`GPL-3.0-or-later`](LICENSE);
 - Flutter mobilní scaffold ještě nezačal, protože zbývá schválit iOS bundle ID
-  a minimální platformy. Platformně nezávislý protokolový kód už vzniká.
+  a minimální platformy. Platformně nezávislý bootstrap a conversation runtime
+  už jsou implementované a testované.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

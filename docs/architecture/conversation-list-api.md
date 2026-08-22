@@ -3,8 +3,9 @@
 Datum ověření: 22. srpna 2026.
 
 Stav: OpenAPI, syntetické response fixture, capability a runtime wire scénáře,
-transakční merge model, privacy guard i autentizovaný read-only live smoke jsou
-spustitelně ověřené. Flutter store a UI zatím neexistují.
+produkční pure Dart parser a merge planner, privacy guard i autentizovaný
+read-only live smoke jsou spustitelně ověřené. Flutter store a UI zatím
+neexistují.
 
 ## Rozsah
 
@@ -27,6 +28,8 @@ OpenAPI 3.1 je v
 [`contracts/conversation-list/openapi.json`](../../contracts/conversation-list/openapi.json).
 Přijaté mapování kontraktu do pure Dart runtime popisuje
 [návrh Dart conversation runtime](../plans/2026-08-22-dart-conversation-runtime-design.md).
+Implementace je v
+[`packages/talk_protocol/lib/src/conversations`](../../packages/talk_protocol/lib/src/conversations).
 
 ## Ověřený serverový kontrakt
 
@@ -105,6 +108,12 @@ Každý request používá Basic auth a origin konkrétního `accountId`, stabil
 `User-Agent` s Android identitou `com.nkshub.nextcloudtalk` a hlavičku
 `OCS-APIRequest: true`. Authorization se neloguje.
 
+Pure Dart request navíc nese neměnný `accountId`, lokální request ID a
+kanonický `ServerBase`; URI se odvozuje přímo z tohoto kontextu. Decoder připojí
+tentýž request ke každému success i failure výsledku. Merge planner proto
+nepřijímá samostatný účet, request ID ani request a nemůže je zaměnit mezi
+souběžnými servery.
+
 ## Response a typové invarianty
 
 Schema zachovává neznámá budoucí pole, ale vyžaduje stabilní room hodnoty
@@ -128,17 +137,55 @@ HTTP 401 přesune pouze dotčený účet do re-auth stavu. HTTP 426, 429, 503,
 transportní chyba nebo neplatná OCS odpověď nesmějí smazat cache ani posunout
 cursor.
 
+Při prvním profile probe HTTP 401 vrací samostatný re-auth výsledek. HTTP 426,
+429, 503 a validní OCS failure potvrzení pouze odloží. Za
+`unsupported-wire-profile` se považuje jen strukturálně nekompatibilní HTTP 200
+odpověď, například chybějící cursor/hash nebo vadné schema. Dočasná chyba tak
+nemůže podporovaný účet trvale vyřadit. HTTP/OCS stav se klasifikuje před
+kontrolou full probe režimu, takže 401 zůstává re-auth i po incremental requestu.
+
+## Pure Dart runtime
+
+Balík `talk_protocol` nyní implementuje celou platformně neutrální hranici:
+
+- `ConversationListRequest` vlastní account, request ID, server, explicitní
+  full/incremental režim, kanonický query string, OCS hlavičku, User-Agent a
+  subpath-aware URI;
+- response decoder rozlišuje success, re-auth, OCS failure a podporované
+  HTTP 426/429/503 bez domýšlení neznámého statusu a každý výsledek váže na
+  původní request;
+- hlavičky jsou case-insensitive a jejich case varianty se nesmějí opakovat;
+- `ConversationRoom` a `ConversationPreview` typují list, unread, permission,
+  call a preview hodnoty a zachovávají hluboce neměnný wire objekt;
+- jeden JSON freeze budget platí přes všechny rooms odpovědi, hloubka je
+  omezená na 64 a počet rooms na OpenAPI maximum 100 000;
+- diagnostické `toString()` nevypisují account ID, token, název ani zprávu;
+- capability resolver přijme jen přihlášený `conversation-v4` snapshot a
+  aktivuje `cursor-v4` teprve po validním full probe; re-auth, deferred a
+  strukturálně unsupported výsledky zůstávají typově odlišné.
+
+HTTP transport zůstává záměrně mimo pure Dart balík. Musí před JSON decode
+udržet již navržený limit 8 MiB, zakázat redirecty a použít credentials
+konkrétního účtu.
+
 ## Account-scoped transakční merge
 
-Primární klíč store je `(accountId, roomToken)`. Validátor vykonává stejný
-minimální algoritmus, který musí později vlastnit Flutter persistence vrstva:
+Primární klíč store je `(accountId, roomToken)`. Pure Dart
+`ConversationMergePlanner` vykonává stejný minimální algoritmus, jehož DB
+operace později atomicky provede Flutter persistence vrstva:
 
 - inkrementální response pouze upsertuje vrácené rooms;
 - validní neprázdný full response může odstranit chybějící rooms;
 - cursor a configuration hash se uloží až v téže úspěšné transakci;
 - schema, OCS nebo semantická chyba nechají room data i cursor beze změny;
-- simulované selhání transakce vrátí celý candidate stav;
+- simulované selhání transakce zahodí candidate plán a ponechá původní stav;
 - shodný room token ve dvou účtech zůstává dvěma oddělenými záznamy.
+- request účtu nebo serverového originu B nelze aplikovat do snapshotu účtu A.
+
+Planner vrací neměnné upserty, přesné tokeny k odstranění a nový account stav.
+Sám netvrdí, že persistence proběhla. Test pádu transakce zahodí celý candidate
+plán a ověří původní snapshot i cursor; budoucí Drift adapter musí stejné
+operace provést v jedné skutečné transakci.
 
 Toto pravidlo odpovídá ověřenému iOS chování na SHA
 [`2d31eda5e2acbf3cef27aa289376942bdf0de25d`](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk/Rooms/NCRoomsManager.swift#L178-L229):
@@ -171,6 +218,13 @@ Lokální validace z kořene repozitáře:
 rtk proxy python contracts\conversation-list\validate_contract.py
 ```
 
+Pure Dart ověření z `packages/talk_protocol`:
+
+```powershell
+dart analyze --fatal-infos
+dart test
+```
+
 Volitelný live smoke načítá credentials pouze z proměnných
 `NEXTCLOUD_TALK_USERNAME` a `NEXTCLOUD_TALK_APP_PASSWORD`:
 
@@ -195,7 +249,10 @@ Validátor provádí:
 
 Aktuální lokální výsledek: 1 OpenAPI dokument, 9 response fixtures, 7 query
 případů, 12 capability případů a 14 merge případů s 19 kroky prošlo. Navíc
-prošel 1 live-schema redaction guard a 1 IPv6 origin případ.
+prošel 1 live-schema redaction guard a 1 IPv6 origin případ. Stejné conversation
+fixtures přímo načítá 71 Dart testů; spolu s bootstrap testy prochází 125 testů.
+Patří mezi ně regrese pro account/origin binding i pro re-auth a deferred profile
+probe; statická analýza je bez nálezu.
 
 Autentizovaný live smoke provedl přesně dva GET requesty s
 `noStatusUpdate=1`, `includeStatus=false` a `includeLastMessage=false`. Full
@@ -205,7 +262,7 @@ credentials.
 
 ## Co důkaz ještě nepokrývá
 
-Kontrakt není produkční Flutter implementace. Neprokazuje SQLite migrace,
+Pure Dart runtime není produkční Flutter aplikace. Neprokazuje SQLite migrace,
 cache-first obrazovku, skutečné odstranění room z jiného zařízení, background
 scheduler, room detail, participants, favorite/archive mutace, dva servery v
 jedné app instalaci ani měřený UI kontrast. Tyto důkazy zůstávají v řezu 2 po

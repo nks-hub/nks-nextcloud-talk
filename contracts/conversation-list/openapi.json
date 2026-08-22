@@ -90,13 +90,15 @@
             "description": "Conversation list returned",
             "headers": {
               "X-Nextcloud-Talk-Hash": {
-                "required": true,
+                "description": "Required when the OCS envelope reports success.",
+                "required": false,
                 "schema": {
                   "$ref": "#/components/schemas/OpaqueConfigurationHash"
                 }
               },
               "X-Nextcloud-Talk-Modified-Before": {
-                "required": true,
+                "description": "Required when the OCS envelope reports success.",
+                "required": false,
                 "schema": {
                   "$ref": "#/components/schemas/DecimalCursor"
                 }

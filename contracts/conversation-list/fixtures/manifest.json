@@ -103,7 +103,6 @@
       "direction": "response",
       "status": "200",
       "mediaType": "application/json",
-      "headerSet": "failure",
       "schemaValid": true,
       "expectedClassification": "ocs-error"
     },
