@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 403,
+      "message": "Synthetic private reply rejection"
+    },
+    "data": {
+      "error": "reply-to"
+    }
+  }
+}

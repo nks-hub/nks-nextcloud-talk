@@ -1,0 +1,15 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "token": "roomempty1",
+      "lastReadMessage": -2,
+      "lastCommonReadMessage": 0,
+      "unreadMessages": 0
+    }
+  }
+}

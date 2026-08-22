@@ -16,6 +16,8 @@ Dokumentace je rozdělená podle stavu poznání:
   normalizaci serveru, Login Flow v2, capabilities a spustitelné trust fixture.
 - [Seznam konverzací](architecture/conversation-list-api.md) popisuje room v4,
   serverový cursor, account-scoped merge a spustitelné full/delta fixture.
+- [Chat zprávy](architecture/chat-messages-api.md) popisují history/future
+  cursory, text send, reply, read/unread a executable durable outbox.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 

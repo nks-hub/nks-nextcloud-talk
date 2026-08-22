@@ -1,0 +1,195 @@
+{
+  "cases": [
+    {
+      "id": "all-local-features",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply",
+        "chat-keep-notifications",
+        "threads",
+        "chat-read-marker",
+        "chat-read-last",
+        "chat-unread"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": true,
+        "reply": true,
+        "privateReply": true,
+        "backgroundCatchUp": true,
+        "threadFetch": true,
+        "setReadMarker": true,
+        "markUnread": true
+      }
+    },
+    {
+      "id": "all-federated-features",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply",
+        "chat-keep-notifications",
+        "threads",
+        "chat-read-marker",
+        "chat-read-last",
+        "chat-unread"
+      ],
+      "federated": true,
+      "expected": {
+        "read": true,
+        "sendText": true,
+        "reply": true,
+        "privateReply": false,
+        "backgroundCatchUp": true,
+        "threadFetch": false,
+        "setReadMarker": true,
+        "markUnread": true
+      }
+    },
+    {
+      "id": "chat-v2-only",
+      "talkFeatures": [
+        "chat-v2"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": false,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "missing-chat-v2",
+      "talkFeatures": [
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply",
+        "chat-keep-notifications",
+        "threads",
+        "chat-read-marker",
+        "chat-read-last",
+        "chat-unread"
+      ],
+      "federated": false,
+      "expected": {
+        "read": false,
+        "sendText": false,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "release-only-is-unsupported",
+      "talkFeatures": [],
+      "release": "99.0.0",
+      "federated": false,
+      "expected": {
+        "read": false,
+        "sendText": false,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "safe-text-send",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-reference-id"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": true,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "same-room-reply-only",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": true,
+        "reply": true,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "explicit-read-only",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-read-marker",
+        "chat-read-last"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": false,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": true,
+        "markUnread": false
+      }
+    },
+    {
+      "id": "mark-unread-only",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-read-marker",
+        "chat-unread"
+      ],
+      "federated": false,
+      "expected": {
+        "read": true,
+        "sendText": false,
+        "reply": false,
+        "privateReply": false,
+        "backgroundCatchUp": false,
+        "threadFetch": false,
+        "setReadMarker": false,
+        "markUnread": true
+      }
+    },
+    {
+      "id": "duplicate-feature-is-invalid",
+      "talkFeatures": [
+        "chat-v2",
+        "chat-v2"
+      ],
+      "federated": false,
+      "expectedError": true
+    }
+  ]
+}

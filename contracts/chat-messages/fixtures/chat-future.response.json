@@ -1,0 +1,43 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": [
+      {
+        "id": 110,
+        "token": "rooma123",
+        "actorType": "users",
+        "actorId": "user-a",
+        "actorDisplayName": "User A",
+        "timestamp": 1724300110,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic first future message",
+        "messageParameters": {},
+        "markdown": true,
+        "reactions": {}
+      },
+      {
+        "id": 112,
+        "token": "rooma123",
+        "actorType": "users",
+        "actorId": "user-b",
+        "actorDisplayName": "User B",
+        "timestamp": 1724300112,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic second future message",
+        "messageParameters": {},
+        "markdown": true,
+        "reactions": {}
+      }
+    ]
+  }
+}

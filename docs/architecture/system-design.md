@@ -221,6 +221,12 @@ lze opakovat bez nového Login Flow. Přesný wire a trust kontrakt popisuje
 4. Long poll nebo HPB relay pokračuje od potvrzeného anchoru.
 5. UI zobrazuje stale indikaci, dokud server catch-up není potvrzený.
 
+History a future mají samostatné cursory. Response se smí commitnout jen tehdy,
+když její request anchor stále odpovídá uloženému scope. Autoritativní hranici
+určuje `X-Chat-Last-Given`, nikoli poslední viditelná message; history a future
+`304` mají odlišný význam. Podrobný wire a merge model je v
+[kontraktu chat zpráv](chat-messages-api.md).
+
 ### Odeslání textu
 
 1. Databázová transakce vytvoří temporary message a OutboxOperation se
@@ -233,6 +239,14 @@ lze opakovat bez nového Login Flow. Přesný wire a trust kontrakt popisuje
 6. Ztracená odpověď přejde do awaitingConfirmation a spustí catch-up.
 7. Bez potvrzení se POST automaticky neopakuje; Talk referenceId není unikátní
    a uživatelský resend může vytvořit druhou serverovou zprávu.
+
+Outbox admission před krokem 1 ověří capability a přesnou revision replay
+kontraktu. První povolený kind je pouze `textSend`. Relay může operaci dokončit
+dřív než HTTP response; pozdější shodná response je idempotentní. Nula shod v
+jednom catch-up okně operaci nevrací do queued a více shod se neslučuje do jedné
+serverové identity. Jedna room používá FIFO a single-flight, jiné rooms mohou
+běžet souběžně. Cross-room private-reply wire payload umíme normalizovat, ale
+nový command admission zůstává bez plného eligibility snapshotu odmítnutý.
 
 ### Příchozí push
 

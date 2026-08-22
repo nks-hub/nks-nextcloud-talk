@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 413,
+      "message": "Synthetic message too large"
+    },
+    "data": {
+      "error": "message"
+    }
+  }
+}

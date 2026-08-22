@@ -1,0 +1,29 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": [
+      {
+        "id": 702,
+        "token": "rooma123",
+        "actorType": "users",
+        "actorId": "user-a",
+        "actorDisplayName": "User A",
+        "timestamp": 1724300702,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic thread message",
+        "messageParameters": {},
+        "reactions": {},
+        "threadId": 700,
+        "threadTitle": "Synthetic thread",
+        "threadReplies": 2
+      }
+    ]
+  }
+}

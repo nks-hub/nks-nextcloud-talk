@@ -1,0 +1,948 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nextcloud Talk Chat Messages Compatibility Contract",
+    "version": "0.1.0",
+    "description": "A clean-room compatibility contract for authenticated Talk chat history, forward catch-up, long polling, text send, replies and read markers. It describes an existing wire API and the invariants required by the future account-scoped mobile store."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://cloud.example.invalid",
+      "description": "Documentation-only Nextcloud origin"
+    }
+  ],
+  "paths": {
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RoomTokenPath"
+        }
+      ],
+      "get": {
+        "operationId": "getChatMessages",
+        "summary": "Read chat history or wait for newer messages",
+        "description": "lookIntoFuture=0 pages backward; lookIntoFuture=1 catches up or long-polls forward. X-Chat-Last-Given, not the visible message ids, is the response cursor. A 200 response can contain no visible messages while advancing that cursor.",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          },
+          {
+            "name": "lookIntoFuture",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "lastKnownMessageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "lastCommonReadId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 30,
+              "default": 30
+            }
+          },
+          {
+            "name": "setReadMarker",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 1
+            }
+          },
+          {
+            "name": "includeLastKnown",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          },
+          {
+            "name": "noStatusUpdate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          },
+          {
+            "name": "markNotificationsAsRead",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 1
+            }
+          },
+          {
+            "name": "threadId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages, an invisible cursor advance, or a common-read-only change",
+            "headers": {
+              "X-Chat-Last-Given": {
+                "required": false,
+                "schema": {
+                  "$ref": "#/components/schemas/DecimalCursor"
+                }
+              },
+              "X-Chat-Last-Common-Read": {
+                "required": false,
+                "schema": {
+                  "$ref": "#/components/schemas/DecimalCursor"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageListEnvelope"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "No older messages for history, or no newer messages before the future timeout"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "description": "The requested thread does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "sendChatMessage",
+        "summary": "Send a text message or reply",
+        "description": "This contract slice always supplies a stable UUID referenceId shorter than the server's 64-character truncation limit. referenceId is correlation only and is not a server idempotency key.",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/SendChatMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The server accepted a new comment. A null or mismatched body is not sufficient client confirmation.",
+            "headers": {
+              "X-Chat-Last-Common-Read": {
+                "required": false,
+                "schema": {
+                  "$ref": "#/components/schemas/DecimalCursor"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendChatMessageEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ChatMutationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ChatMutationError"
+          },
+          "404": {
+            "$ref": "#/components/responses/ChatMutationError"
+          },
+          "413": {
+            "$ref": "#/components/responses/ChatMutationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/ChatMutationError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "503": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/read": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RoomTokenPath"
+        }
+      ],
+      "post": {
+        "operationId": "setChatReadMarker",
+        "summary": "Set an explicit last-read message",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReadMarkerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ReadMarkerSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "403": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "markChatUnread",
+        "summary": "Move the read marker behind the latest relevant message",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ReadMarkerSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "403": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "The account login name and app password obtained through Login Flow v2"
+      }
+    },
+    "parameters": {
+      "RoomTokenPath": {
+        "name": "token",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ConversationToken"
+        }
+      },
+      "OcsApiRequestHeader": {
+        "name": "OCS-APIRequest",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "true"
+        }
+      },
+      "JsonFormatQuery": {
+        "name": "format",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "json"
+        }
+      }
+    },
+    "responses": {
+      "OcsError": {
+        "description": "OCS or HTTP failure",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OcsErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ChatMutationError": {
+        "description": "The chat mutation was rejected",
+        "headers": {
+          "Retry-After": {
+            "required": false,
+            "description": "Optional delta-seconds or HTTP-date supplied by the server or an intermediary. The client only parses bounded delta-seconds and otherwise uses local backoff.",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ChatMutationErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ReadMarkerSuccess": {
+        "description": "The room read marker was returned",
+        "headers": {
+          "X-Chat-Last-Common-Read": {
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DecimalCursor"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ReadMarkerRoomEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ConversationToken": {
+        "type": "string",
+        "pattern": "^[a-z0-9]{4,30}$"
+      },
+      "DecimalCursor": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$",
+        "maxLength": 20
+      },
+      "ReferenceId": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        "minLength": 36,
+        "maxLength": 36
+      },
+      "OcsMeta": {
+        "type": "object",
+        "required": [
+          "status",
+          "statuscode"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failure"
+            ]
+          },
+          "statuscode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "RichObjectParameter": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageParameters": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RichObjectParameter"
+            }
+          },
+          {
+            "type": "array",
+            "maxItems": 0
+          }
+        ]
+      },
+      "ReactionSummary": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "type": "array",
+            "maxItems": 0
+          }
+        ]
+      },
+      "ChatMessageBase": {
+        "type": "object",
+        "required": [
+          "id",
+          "token",
+          "actorType",
+          "actorId",
+          "actorDisplayName",
+          "timestamp",
+          "systemMessage",
+          "messageType",
+          "isReplyable",
+          "referenceId",
+          "message",
+          "messageParameters"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "token": {
+            "$ref": "#/components/schemas/ConversationToken"
+          },
+          "actorType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "actorId": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "actorDisplayName": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "systemMessage": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "messageType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "isReplyable": {
+            "type": "boolean"
+          },
+          "referenceId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "message": {
+            "type": "string"
+          },
+          "messageParameters": {
+            "$ref": "#/components/schemas/MessageParameters"
+          },
+          "expirationTimestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "markdown": {
+            "type": "boolean"
+          },
+          "reactions": {
+            "$ref": "#/components/schemas/ReactionSummary"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "threadTitle": {
+            "type": "string"
+          },
+          "threadReplies": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metaData": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatMessageParent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChatMessageBase"
+          }
+        ]
+      },
+      "DeletedParent": {
+        "type": "object",
+        "required": [
+          "id",
+          "deleted"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "deleted": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatMessage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ChatMessageBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "parent": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChatMessageParent"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DeletedParent"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ChatMessageListEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatMessage"
+                },
+                "maxItems": 200
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "SendChatMessageRequest": {
+        "type": "object",
+        "required": [
+          "message",
+          "referenceId"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "referenceId": {
+            "$ref": "#/components/schemas/ReferenceId"
+          },
+          "replyTo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "replyToToken": {
+            "$ref": "#/components/schemas/ConversationToken"
+          }
+        },
+        "dependentRequired": {
+          "replyToToken": [
+            "replyTo"
+          ]
+        },
+        "additionalProperties": false
+      },
+      "SendChatMessageEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChatMessage"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "SetReadMarkerRequest": {
+        "type": "object",
+        "required": [
+          "lastReadMessage"
+        ],
+        "properties": {
+          "lastReadMessage": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadMarkerRoom": {
+        "type": "object",
+        "required": [
+          "token",
+          "lastReadMessage",
+          "lastCommonReadMessage",
+          "unreadMessages"
+        ],
+        "properties": {
+          "token": {
+            "$ref": "#/components/schemas/ConversationToken"
+          },
+          "lastReadMessage": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": -2
+          },
+          "lastCommonReadMessage": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "unreadMessages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      },
+      "ReadMarkerRoomEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "$ref": "#/components/schemas/ReadMarkerRoom"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ThreadErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "type": "object",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "const": "thread"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ChatMutationErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "type": "object",
+                "required": [
+                  "error"
+                ],
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "enum": [
+                      "actor",
+                      "mentions",
+                      "message",
+                      "reply-to"
+                    ]
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "OcsErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {}
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

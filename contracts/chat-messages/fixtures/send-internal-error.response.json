@@ -1,0 +1,10 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 500,
+      "message": "Synthetic internal error"
+    },
+    "data": []
+  }
+}

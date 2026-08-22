@@ -1,0 +1,46 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 201,
+      "message": "OK"
+    },
+    "data": {
+      "id": 122,
+      "token": "direct456",
+      "actorType": "users",
+      "actorId": "user-a",
+      "actorDisplayName": "User A",
+      "timestamp": 1724300122,
+      "systemMessage": "",
+      "messageType": "comment",
+      "isReplyable": true,
+      "referenceId": "33333333-3333-4333-8333-333333333333",
+      "message": "Synthetic private reply",
+      "messageParameters": {},
+      "markdown": true,
+      "reactions": {},
+      "parent": {
+        "id": 1210,
+        "token": "source789",
+        "actorType": "users",
+        "actorId": "user-b",
+        "actorDisplayName": "User B",
+        "timestamp": 1724300033,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic source-room parent",
+        "messageParameters": {},
+        "reactions": {},
+        "metaData": {
+          "replyToMessageId": 333,
+          "replyToConversationToken": "source789",
+          "replyToConversationName": "Synthetic source room",
+          "replyToActorDisplayName": "User B"
+        }
+      }
+    }
+  }
+}

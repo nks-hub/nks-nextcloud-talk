@@ -17,6 +17,8 @@ Aktuální stav:
   capabilities a bezpečnou multi-server normalizaci;
 - spustitelný room v4 kontrakt pro full/delta seznam, serverový cursor a
   account-scoped transakční merge;
+- spustitelný chat kontrakt pro history/future cursory, text send, read/unread,
+  room/thread merge a restart-safe outbox bez blind replaye;
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;

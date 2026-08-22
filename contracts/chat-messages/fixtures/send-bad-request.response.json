@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 400,
+      "message": "Synthetic send rejection"
+    },
+    "data": {
+      "error": "message"
+    }
+  }
+}

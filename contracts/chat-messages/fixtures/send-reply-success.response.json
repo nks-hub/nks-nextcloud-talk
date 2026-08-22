@@ -1,0 +1,40 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 201,
+      "message": "OK"
+    },
+    "data": {
+      "id": 121,
+      "token": "rooma123",
+      "actorType": "users",
+      "actorId": "user-a",
+      "actorDisplayName": "User A",
+      "timestamp": 1724300121,
+      "systemMessage": "",
+      "messageType": "comment",
+      "isReplyable": true,
+      "referenceId": "22222222-2222-4222-8222-222222222222",
+      "message": "Synthetic same-room reply",
+      "messageParameters": {},
+      "markdown": true,
+      "reactions": {},
+      "parent": {
+        "id": 108,
+        "token": "rooma123",
+        "actorType": "users",
+        "actorId": "user-b",
+        "actorDisplayName": "User B",
+        "timestamp": 1724300108,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic reply parent",
+        "messageParameters": {},
+        "reactions": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 429,
+      "message": "Synthetic chat rate limit"
+    },
+    "data": []
+  }
+}

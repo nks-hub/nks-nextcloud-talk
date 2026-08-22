@@ -1,0 +1,10 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 503,
+      "message": "Synthetic chat unavailable"
+    },
+    "data": []
+  }
+}

@@ -111,6 +111,17 @@ Operace:
 
 Pouhý nejvyšší messageId není dostatečný důkaz, že mezi zprávami nic nechybí.
 
+Chat GET navíc nesmí odvozovat hranici intervalu jen z viditelných messages.
+`X-Chat-Last-Given` je autoritativní anchor i pro `200 []`, pokud server
+zpracoval neviditelnou nebo expirovanou zprávu. History `304` ukončuje starší
+historii, future `304` potvrzuje konvergenci. Samostatná změna
+`X-Chat-Last-Common-Read` neposouvá žádný message cursor.
+
+Každý HTTP request nese anchor, ze kterého vyšel. Merge jej před commitem
+porovná s aktuálním `historyCursor` nebo `futureCursor`; opožděný future výsledek
+se starým anchorem se celý odmítne. Přesný executable model je v
+[kontraktu chat zpráv](chat-messages-api.md).
+
 ## Merge transakce
 
 Každý vstup se nejdřív normalizuje na SyncEvent:
@@ -243,11 +254,12 @@ semantiky.
 | --- | --- |
 | Offline, DNS nebo connect chyba před odesláním body | retryable se stejným referenceId |
 | Timeout/reset po možném odeslání body | awaitingConfirmation a autoritativní catch-up/relay; žádný blind POST |
-| 429 | retryable podle Retry-After pouze pro serverovou řadu s contract důkazem, že mutace nevznikla |
-| 5xx | awaitingConfirmation, pokud contract důkaz neprokáže, že request nebyl commitnutý |
-| OCS 401 | pozastavit account lane a ověřit revokovaný app password |
-| OCS 403 | klasifikovat permission/lobby/read-only stav |
-| OCS business rejection | failed s bezpečnou akcí pro uživatele |
+| HTTP 400 `error=message` | awaitingConfirmation; stejný kód může vzniknout i po uložení commentu |
+| HTTP 400/403 `error=reply-to`, 404 `error=actor`, 413 `error=message` | failed; jde o doložené pre-save rejection větve |
+| HTTP 429 `error=mentions` | retryable podle Retry-After nebo lokálního bounded backoff; větev je před save |
+| HTTP 5xx | awaitingConfirmation, pokud contract důkaz neprokáže, že request nebyl commitnutý |
+| HTTP/OCS 401 | pozastavit account lane a ověřit revokovaný app password; stav operace zachovat nebo bezpečně vrátit do retryable podle zdroje eventu |
+| Jiná OCS business chyba | awaitingConfirmation, dokud není doložená pre-save větev |
 | Relay dorazí dřív než HTTP response | pending operace se koreluje přes referenceId; HTTP potvrdí konkrétní messageId |
 
 <!-- markdownlint-enable MD013 -->
@@ -256,7 +268,17 @@ Pokud catch-up zprávu najde, operace se dokončí bez dalšího POST. Pokud ji
 nenajde, samotná absence ještě nedokazuje, že server request nepřijal. Operace
 zůstane `awaitingConfirmation`. Uživatel může zvolit explicitní resend s
 upozorněním, že Talk nevynucuje unikátní referenceId a server může vytvořit
-duplicitu.
+duplicitu, ale pouze dokud není známá žádná serverová shoda.
+
+První executable registry položka je pouze `textSend` revision
+`talk-chat-text-send-f2958bb-f9b9e947-r1`. Admission, claim, chyba před body,
+ambiguous transport, restart, autoritativní nula/jedna/více shod, relay před
+HTTP response, transakční rollback, re-auth, per-room FIFO/single-flight a
+account izolace jsou vykonané ve 36 případech s 60 kroky. Merge rollback a
+outbox confirmation rollback jsou v harnessu oddělené; společnou SQLite
+transakci musí prokázat Dart runtime. Ostatní operation kinds v tabulce
+zůstávají návrhem a nesmějí se queueovat, dokud nedostanou vlastní stejně silný
+kontrakt.
 
 ## Read marker
 

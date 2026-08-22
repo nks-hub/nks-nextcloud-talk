@@ -1,0 +1,520 @@
+{
+  "cases": [
+    {
+      "id": "initial-history",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "history",
+        "cursor": "109",
+        "lastCommonRead": "100",
+        "limit": 100,
+        "includeLastKnown": true,
+        "interactive": true
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "0",
+          "limit": "100",
+          "lastKnownMessageId": "109",
+          "lastCommonReadId": "100",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "1",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "zero-anchor-history",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "history",
+        "cursor": "0",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "includeLastKnown": true,
+        "interactive": true
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "0",
+          "limit": "100",
+          "lastKnownMessageId": "0",
+          "lastCommonReadId": "0",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "1",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "backward-history",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "history",
+        "cursor": "103",
+        "lastCommonRead": "100",
+        "limit": 100,
+        "includeLastKnown": false,
+        "interactive": true
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "0",
+          "limit": "100",
+          "lastKnownMessageId": "103",
+          "lastCommonReadId": "100",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "0",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "foreground-catch-up",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "109",
+        "lastCommonRead": "100",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": true
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "1",
+          "limit": "100",
+          "lastKnownMessageId": "109",
+          "lastCommonReadId": "100",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "0",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "background-catch-up",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2",
+        "chat-keep-notifications"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "109",
+        "lastCommonRead": "100",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": false
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "1",
+          "limit": "100",
+          "lastKnownMessageId": "109",
+          "lastCommonReadId": "100",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "0",
+          "noStatusUpdate": "1",
+          "markNotificationsAsRead": "0"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "foreground-long-poll",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "114",
+        "lastCommonRead": "110",
+        "limit": 100,
+        "timeout": 30,
+        "interactive": true
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "1",
+          "limit": "100",
+          "lastKnownMessageId": "114",
+          "lastCommonReadId": "110",
+          "timeout": "30",
+          "setReadMarker": "0",
+          "includeLastKnown": "0",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "thread-catch-up",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2",
+        "threads"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "700",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": true,
+        "threadId": 700,
+        "federated": false
+      },
+      "expected": {
+        "method": "GET",
+        "query": {
+          "format": "json",
+          "lookIntoFuture": "1",
+          "limit": "100",
+          "lastKnownMessageId": "700",
+          "lastCommonReadId": "0",
+          "timeout": "0",
+          "setReadMarker": "0",
+          "includeLastKnown": "0",
+          "noStatusUpdate": "0",
+          "markNotificationsAsRead": "1",
+          "threadId": "700"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "leading-zero-cursor-rejected",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "0114",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": true
+      },
+      "expectedError": true
+    },
+    {
+      "id": "negative-cursor-rejected",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "-1",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": true
+      },
+      "expectedError": true
+    },
+    {
+      "id": "oversized-limit-rejected",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "114",
+        "lastCommonRead": "0",
+        "limit": 201,
+        "timeout": 0,
+        "interactive": true
+      },
+      "expectedError": true
+    },
+    {
+      "id": "background-without-keep-notifications-rejected",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "114",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": false
+      },
+      "expectedError": true
+    },
+    {
+      "id": "federated-thread-rejected",
+      "kind": "fetch",
+      "capabilities": [
+        "chat-v2",
+        "threads"
+      ],
+      "input": {
+        "direction": "future",
+        "cursor": "700",
+        "lastCommonRead": "0",
+        "limit": 100,
+        "timeout": 0,
+        "interactive": true,
+        "threadId": 700,
+        "federated": true
+      },
+      "expectedError": true
+    },
+    {
+      "id": "send-text",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id"
+      ],
+      "input": {
+        "message": "Synthetic text send",
+        "referenceId": "11111111-1111-4111-8111-111111111111",
+        "federated": false
+      },
+      "expected": {
+        "method": "POST",
+        "query": {
+          "format": "json"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": {
+          "message": "Synthetic text send",
+          "referenceId": "11111111-1111-4111-8111-111111111111"
+        }
+      }
+    },
+    {
+      "id": "whitespace-message-rejected",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id"
+      ],
+      "input": {
+        "message": "   ",
+        "referenceId": "55555555-5555-4555-8555-555555555555",
+        "federated": false
+      },
+      "expectedError": true
+    },
+    {
+      "id": "send-reply",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies"
+      ],
+      "input": {
+        "message": "Synthetic same-room reply",
+        "referenceId": "22222222-2222-4222-8222-222222222222",
+        "replyTo": 108,
+        "parentRoomToken": "rooma123",
+        "targetRoomToken": "rooma123",
+        "federated": false
+      },
+      "expected": {
+        "method": "POST",
+        "query": {
+          "format": "json"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": {
+          "message": "Synthetic same-room reply",
+          "referenceId": "22222222-2222-4222-8222-222222222222",
+          "replyTo": 108
+        }
+      }
+    },
+    {
+      "id": "cross-room-private-reply-outside-slice-rejected",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply"
+      ],
+      "input": {
+        "message": "Synthetic private reply",
+        "referenceId": "33333333-3333-4333-8333-333333333333",
+        "replyTo": 333,
+        "parentRoomToken": "source789",
+        "targetRoomToken": "direct456",
+        "federated": false
+      },
+      "expectedError": true
+    },
+    {
+      "id": "overlong-reference-rejected",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id"
+      ],
+      "input": {
+        "message": "Synthetic invalid reference",
+        "referenceId": "too-long-reference-too-long-reference-too-long-reference-too-long-reference",
+        "federated": false
+      },
+      "expectedError": true
+    },
+    {
+      "id": "federated-private-reply-rejected",
+      "kind": "send",
+      "capabilities": [
+        "chat-v2",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply"
+      ],
+      "input": {
+        "message": "Synthetic unsupported private reply",
+        "referenceId": "44444444-4444-4444-8444-444444444444",
+        "replyTo": 333,
+        "parentRoomToken": "source789",
+        "targetRoomToken": "direct456",
+        "federated": true
+      },
+      "expectedError": true
+    },
+    {
+      "id": "set-read-marker",
+      "kind": "read",
+      "capabilities": [
+        "chat-v2",
+        "chat-read-marker",
+        "chat-read-last"
+      ],
+      "input": {
+        "lastReadMessage": 114
+      },
+      "expected": {
+        "method": "POST",
+        "query": {
+          "format": "json"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": {
+          "lastReadMessage": 114
+        }
+      }
+    },
+    {
+      "id": "mark-unread",
+      "kind": "unread",
+      "capabilities": [
+        "chat-v2",
+        "chat-read-marker",
+        "chat-unread"
+      ],
+      "input": {},
+      "expected": {
+        "method": "DELETE",
+        "query": {
+          "format": "json"
+        },
+        "headers": {
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "read-without-explicit-capability-rejected",
+      "kind": "read",
+      "capabilities": [
+        "chat-v2",
+        "chat-read-marker"
+      ],
+      "input": {
+        "lastReadMessage": 114
+      },
+      "expectedError": true
+    }
+  ]
+}

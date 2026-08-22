@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 404,
+      "message": "Synthetic actor not found"
+    },
+    "data": {
+      "error": "actor"
+    }
+  }
+}

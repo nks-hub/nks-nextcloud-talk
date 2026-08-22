@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 400,
+      "message": "Synthetic invalid reply"
+    },
+    "data": {
+      "error": "reply-to"
+    }
+  }
+}

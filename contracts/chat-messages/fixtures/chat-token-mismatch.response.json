@@ -1,0 +1,26 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": [
+      {
+        "id": 116,
+        "token": "roomb456",
+        "actorType": "users",
+        "actorId": "user-a",
+        "actorDisplayName": "User A",
+        "timestamp": 1724300116,
+        "systemMessage": "",
+        "messageType": "comment",
+        "isReplyable": true,
+        "referenceId": "",
+        "message": "Synthetic wrong-room message",
+        "messageParameters": {},
+        "reactions": {}
+      }
+    ]
+  }
+}

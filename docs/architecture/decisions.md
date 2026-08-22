@@ -126,6 +126,36 @@ validatoru, nikdy hodnotu z response. Změna hash vyžádá account-scoped
 capability/settings refresh, nikoli smazání rooms. O typu merge rozhoduje
 explicitní režim requestu, ne samotná hodnota `modifiedSince`.
 
+### D-017: Autoritativní chat cursor a bezpečný text-send outbox
+
+Stav: Přijato jako datová a replay invarianta.
+
+Chat history a future jsou dva směry stejného account/room/thread scope.
+`X-Chat-Last-Given` je autoritativní hranice i při prázdném viditelném body;
+history `304` ukončuje starší historii a future `304` potvrzuje konvergenci.
+Response se smí commitnout jen při shodě request anchoru s aktuálním cursorem.
+Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
+se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
+
+`referenceId` je korelace, ne idempotency key. První povolený durable registry
+kind je pouze `textSend` s revision
+`talk-chat-text-send-f2958bb-f9b9e947-r1`. Request prokazatelně zastavený před
+body může být retryable. Možná odeslané body, přerušený proces, `201 null` nebo
+identity mismatch přejdou do `awaitingConfirmation` a nesmějí se automaticky
+znovu odeslat. Jedna autoritativní shoda dokončí operaci, více shod zůstane
+ambiguous a nula shod neprokazuje neprovedení. Ruční resend vyžaduje varování
+před duplicitou a nesmí pokračovat po nalezené serverové shodě. HTTP 400
+`error=message` a 5xx jsou ambiguous; pouze doložený pre-save 429
+`error=mentions` je retryable podle `Retry-After` nebo lokálního backoffu.
+V jedné room platí FIFO a single-flight, různé rooms mohou pokračovat souběžně.
+Cross-room private-reply wire formát je známý, ale command admission zůstává bez
+plného eligibility snapshotu odmítnutý. Neznámý kind nebo revision admission
+odmítne.
+
+Executable harness nyní dokládá rollback chat merge a outbox confirmation
+odděleně. Společná SQLite transakce zůstává povinným, ale dosud neprokázaným
+runtime invariantem.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient

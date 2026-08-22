@@ -1,0 +1,24 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 201,
+      "message": "OK"
+    },
+    "data": {
+      "id": 123,
+      "token": "rooma123",
+      "actorType": "users",
+      "actorId": "user-a",
+      "actorDisplayName": "User A",
+      "timestamp": 1724300123,
+      "systemMessage": "",
+      "messageType": "comment",
+      "isReplyable": true,
+      "referenceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "message": "Synthetic mismatched reference",
+      "messageParameters": {},
+      "reactions": {}
+    }
+  }
+}

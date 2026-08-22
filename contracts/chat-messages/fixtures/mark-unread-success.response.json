@@ -1,0 +1,15 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "token": "rooma123",
+      "lastReadMessage": 112,
+      "lastCommonReadMessage": 110,
+      "unreadMessages": 2
+    }
+  }
+}

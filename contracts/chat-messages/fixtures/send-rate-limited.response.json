@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 429,
+      "message": "Synthetic mention rate limit"
+    },
+    "data": {
+      "error": "mentions"
+    }
+  }
+}
