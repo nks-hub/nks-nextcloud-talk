@@ -1,0 +1,6 @@
+{
+  "pushToken": "",
+  "deviceIdentifier": "not-base64",
+  "deviceIdentifierSignature": "invalid",
+  "userPublicKey": "not-a-public-key"
+}

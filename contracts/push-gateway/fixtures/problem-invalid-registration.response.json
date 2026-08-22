@@ -1,0 +1,8 @@
+{
+  "type": "https://push.example.invalid/problems/invalid-device-identity",
+  "title": "Invalid device identity",
+  "status": 400,
+  "code": "INVALID_DEVICE_IDENTITY",
+  "detail": "Registration fields or the cryptographic signature are invalid.",
+  "requestId": "req_contract_0001"
+}

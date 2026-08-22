@@ -20,6 +20,10 @@ build/
 coverage/
 *.iml
 
+# Python contract tooling
+__pycache__/
+*.py[cod]
+
 # Android
 android/.gradle/
 android/app/debug/

@@ -1,0 +1,107 @@
+{
+  "contract": "../openapi.json",
+  "fixtures": [
+    {
+      "name": "device registration success",
+      "file": "devices-register-success.request.json",
+      "operationId": "registerDevice",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "valid": true,
+      "wireEncoding": "form",
+      "verifyDeviceIdentity": true
+    },
+    {
+      "name": "device registration 409 recovery",
+      "file": "devices-register-recovery.request.json",
+      "operationId": "registerDevice",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "valid": true,
+      "wireEncoding": "form",
+      "verifyDeviceIdentity": true
+    },
+    {
+      "name": "invalid device registration",
+      "file": "devices-register-invalid.request.json",
+      "operationId": "registerDevice",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "valid": false,
+      "wireEncoding": "form"
+    },
+    {
+      "name": "device unregistration query",
+      "file": "devices-unregister.request.json",
+      "operationId": "unregisterDevice",
+      "direction": "request",
+      "location": "query",
+      "valid": true,
+      "wireEncoding": "query",
+      "verifyDeviceIdentity": true
+    },
+    {
+      "name": "notification batch success request",
+      "file": "notifications-success.request.json",
+      "operationId": "deliverNotifications",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "valid": true,
+      "wireEncoding": "indexed-form",
+      "identityFixture": "devices-register-success.request.json",
+      "expectedResponse": "notifications-success.response.json"
+    },
+    {
+      "name": "notification batch success response",
+      "file": "notifications-success.response.json",
+      "operationId": "deliverNotifications",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true
+    },
+    {
+      "name": "notification batch partial failure request",
+      "file": "notifications-partial.request.json",
+      "operationId": "deliverNotifications",
+      "direction": "request",
+      "location": "body",
+      "mediaType": "application/x-www-form-urlencoded",
+      "valid": true,
+      "wireEncoding": "indexed-form",
+      "identityFixture": "devices-register-success.request.json",
+      "expectedResponse": "notifications-partial.response.json"
+    },
+    {
+      "name": "notification batch partial failure response",
+      "file": "notifications-partial.response.json",
+      "operationId": "deliverNotifications",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true
+    },
+    {
+      "name": "invalid registration problem",
+      "file": "problem-invalid-registration.response.json",
+      "operationId": "registerDevice",
+      "direction": "response",
+      "status": "400",
+      "mediaType": "application/problem+json",
+      "valid": true
+    },
+    {
+      "name": "registration conflict problem",
+      "file": "problem-conflict.response.json",
+      "operationId": "registerDevice",
+      "direction": "response",
+      "status": "409",
+      "mediaType": "application/problem+json",
+      "valid": true
+    }
+  ]
+}

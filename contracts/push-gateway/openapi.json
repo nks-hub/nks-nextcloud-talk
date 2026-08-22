@@ -1,0 +1,578 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NKS Nextcloud Push Gateway API",
+    "version": "0.1.0",
+    "description": "A compatibility contract for the Nextcloud Notifications push-v2 proxy boundary. Device and notification payloads are opaque to the gateway except for identity, integrity, routing and delivery metadata. A successful notification response means that accepted items were durably queued, not that FCM already delivered them."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://push.example.invalid",
+      "description": "Documentation-only origin"
+    }
+  ],
+  "tags": [
+    {
+      "name": "devices",
+      "description": "Cryptographically verified delivery endpoint registration"
+    },
+    {
+      "name": "notifications",
+      "description": "Opaque encrypted notification batch ingestion"
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/devices": {
+      "post": {
+        "operationId": "registerDevice",
+        "summary": "Register or refresh a push delivery endpoint",
+        "description": "Verifies the RSA/SHA-512 signature with userPublicKey and performs an idempotent per-device upsert. Nextcloud signs the private device-identity preimage with SHA-512 and exposes deviceIdentifier as Base64(SHA-512(preimage)); verification therefore uses the decoded deviceIdentifier as an already-computed SHA-512 digest and must not hash it again. When a physical provider token is already associated with another verified identity, the gateway returns 409. The client may retry with cloudId; that retry must pass public HTTPS identity-proof verification and must not remove another account that shares the provider token.",
+        "tags": [
+          "devices"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceRegistration"
+              },
+              "encoding": {
+                "pushToken": {
+                  "style": "form"
+                },
+                "deviceIdentifier": {
+                  "style": "form"
+                },
+                "deviceIdentifierSignature": {
+                  "style": "form"
+                },
+                "userPublicKey": {
+                  "style": "form"
+                },
+                "cloudId": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/EmptySuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/RegistrationConflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unregisterDevice",
+        "summary": "Remove one verified device registration",
+        "description": "Accepts one complete identity tuple either in the query string, as used by the official Android and iOS Talk clients, or in an application/x-www-form-urlencoded body. If both representations are supplied they must be byte-for-byte equivalent. Deletion is idempotent for an already revoked tuple and must never remove another account sharing the same provider token.",
+        "tags": [
+          "devices"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIdentifierQuery"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdentifierSignatureQuery"
+          },
+          {
+            "$ref": "#/components/parameters/UserPublicKeyQuery"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceUnregistration"
+              }
+            }
+          }
+        },
+        "x-parameter-set-required": {
+          "oneOf": [
+            "complete query tuple",
+            "complete form body"
+          ]
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/EmptySuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "post": {
+        "operationId": "deliverNotifications",
+        "summary": "Verify and queue an encrypted notification batch",
+        "description": "Nextcloud sends application/x-www-form-urlencoded data where notifications is a PHP-style indexed array and every item is a JSON-encoded NotificationEnvelope string. The gateway validates each item independently. Unknown device identifiers are returned in unknown and are not counted as failed. Malformed, hash-mismatched, signature-invalid or non-durably-queued known items increment failed. A syntactically valid batch always receives 200, including partial failure.",
+        "tags": [
+          "notifications"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationsRequest"
+              },
+              "encoding": {
+                "notifications": {
+                  "style": "form",
+                  "explode": true,
+                  "x-nextcloud-wire-field": "notifications[N]"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Every item was classified; accepted items are durably queued",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/XRequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PushToken": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "description": "Opaque FCM registration token. It is never logged or returned."
+      },
+      "DeviceIdentifier": {
+        "type": "string",
+        "minLength": 88,
+        "maxLength": 88,
+        "pattern": "^[A-Za-z0-9+/]{86}==$",
+        "description": "Base64-encoded SHA-512 digest generated by Nextcloud for one app-password session."
+      },
+      "RsaSha512Signature": {
+        "type": "string",
+        "minLength": 344,
+        "maxLength": 344,
+        "pattern": "^[A-Za-z0-9+/]{342}==$",
+        "description": "Base64-encoded 2048-bit RSA PKCS#1 v1.5 SHA-512 signature."
+      },
+      "UserPublicKey": {
+        "type": "string",
+        "minLength": 450,
+        "maxLength": 8192,
+        "pattern": "^-----BEGIN PUBLIC KEY-----\\n[\\s\\S]+\\n-----END PUBLIC KEY-----\\n?$",
+        "description": "PEM SubjectPublicKeyInfo. Runtime validation requires a 2048-bit RSA key."
+      },
+      "CloudId": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 255,
+        "pattern": "^(?![^\\s]*@http://)[^\\s]+@(?:https://)?[^\\s]+$",
+        "description": "Recovery identity in userid@server-base-url form. Nextcloud normally omits the HTTPS scheme; an explicit HTTPS scheme is accepted. The remote part is untrusted SSRF input and requires semantic validation beyond this shape."
+      },
+      "DeviceRegistration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pushToken",
+          "deviceIdentifier",
+          "deviceIdentifierSignature",
+          "userPublicKey"
+        ],
+        "properties": {
+          "pushToken": {
+            "$ref": "#/components/schemas/PushToken"
+          },
+          "deviceIdentifier": {
+            "$ref": "#/components/schemas/DeviceIdentifier"
+          },
+          "deviceIdentifierSignature": {
+            "$ref": "#/components/schemas/RsaSha512Signature"
+          },
+          "userPublicKey": {
+            "$ref": "#/components/schemas/UserPublicKey"
+          },
+          "cloudId": {
+            "$ref": "#/components/schemas/CloudId"
+          }
+        }
+      },
+      "DeviceUnregistration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceIdentifier",
+          "deviceIdentifierSignature",
+          "userPublicKey"
+        ],
+        "properties": {
+          "deviceIdentifier": {
+            "$ref": "#/components/schemas/DeviceIdentifier"
+          },
+          "deviceIdentifierSignature": {
+            "$ref": "#/components/schemas/RsaSha512Signature"
+          },
+          "userPublicKey": {
+            "$ref": "#/components/schemas/UserPublicKey"
+          }
+        }
+      },
+      "PushTokenHash": {
+        "type": "string",
+        "minLength": 128,
+        "maxLength": 128,
+        "pattern": "^[a-f0-9]{128}$",
+        "description": "Lowercase hexadecimal SHA-512 of the registered provider token."
+      },
+      "EncryptedSubject": {
+        "type": "string",
+        "minLength": 344,
+        "maxLength": 344,
+        "pattern": "^[A-Za-z0-9+/]{342}==$",
+        "description": "Base64-encoded 2048-bit RSA ciphertext. The gateway never decrypts it."
+      },
+      "NotificationEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deviceIdentifier",
+          "pushTokenHash",
+          "subject",
+          "signature",
+          "priority",
+          "type"
+        ],
+        "properties": {
+          "deviceIdentifier": {
+            "$ref": "#/components/schemas/DeviceIdentifier"
+          },
+          "pushTokenHash": {
+            "$ref": "#/components/schemas/PushTokenHash"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/EncryptedSubject"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/RsaSha512Signature"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "normal"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "alert",
+              "voip",
+              "background"
+            ]
+          }
+        }
+      },
+      "NotificationJsonString": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 8192,
+        "contentMediaType": "application/json",
+        "contentSchema": {
+          "$ref": "#/components/schemas/NotificationEnvelope"
+        },
+        "description": "One JSON-encoded NotificationEnvelope carried inside the URL-encoded notifications array."
+      },
+      "NotificationsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "notifications"
+        ],
+        "properties": {
+          "notifications": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/NotificationJsonString"
+            }
+          }
+        }
+      },
+      "NotificationsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unknown",
+          "failed"
+        ],
+        "properties": {
+          "unknown": {
+            "type": "array",
+            "maxItems": 1000,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/DeviceIdentifier"
+            },
+            "description": "Identifiers not present in the gateway registry. These items are not included in failed."
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "Known or malformed items rejected before durable queue acceptance."
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "requestId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 512
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/RequestId"
+          }
+        }
+      },
+      "RequestId": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      }
+    },
+    "parameters": {
+      "DeviceIdentifierQuery": {
+        "name": "deviceIdentifier",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/DeviceIdentifier"
+        }
+      },
+      "DeviceIdentifierSignatureQuery": {
+        "name": "deviceIdentifierSignature",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/RsaSha512Signature"
+        }
+      },
+      "UserPublicKeyQuery": {
+        "name": "userPublicKey",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "$ref": "#/components/schemas/UserPublicKey"
+        }
+      }
+    },
+    "headers": {
+      "XRequestId": {
+        "description": "Opaque support correlation identifier; never derived from a token or user id",
+        "schema": {
+          "$ref": "#/components/schemas/RequestId"
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds until the client or Nextcloud server may retry",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        }
+      }
+    },
+    "responses": {
+      "EmptySuccess": {
+        "description": "The operation completed; the response body is intentionally empty",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        }
+      },
+      "InvalidRequest": {
+        "description": "Malformed, incomplete or cryptographically invalid request",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The verified identity may not mutate the requested registration",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "RegistrationConflict": {
+        "description": "Provider token conflict; a client may retry registration with cloudId",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "The bounded request size or batch count was exceeded",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "The bounded ingress rate was exceeded",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Unexpected gateway failure without internal implementation details",
+        "headers": {
+          "X-Request-Id": {
+            "$ref": "#/components/headers/XRequestId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProblemDetails"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -63,6 +63,19 @@ capability/SHA-bound kontraktu, který popíše bezpečný retry před odeslán�
 reconciliation nejednoznačného výsledku, terminální odpovědi, compensation a
 uživatelskou akci. Neověřená operace se nesmí vydávat za offline podporovanou.
 
+### D-013: Vlastní Talk-inspirovaná implementace
+
+Stav: Přijato uživatelem.
+
+Klient nebude pixelově věrná kopie ani překlad GPL Android/iOS zdrojového
+kódu. Vznikne vlastní Flutter implementace podle veřejných protokolů a vlastních
+specifikací. Zachová známou informační architekturu Talku, ale použije vlastní
+komponenty, vizuální variaci a doplní multi-server, offline a diagnostické
+stavy.
+
+Upstream se používá jako SHA-bound reference chování, wire kompatibility a
+testovacích scénářů. Přesný licenční text zůstává samostatnou volbou Q-001.
+
 ## Doporučená rozhodnutí
 
 ### D-007: Modulární klient
@@ -99,10 +112,8 @@ sync store.
 
 ### Q-001: Licence
 
-Možnosti:
-
-1. GPL-3.0-or-later pro rychlejší věrný port s odpovídajícím zveřejněním zdroje.
-2. Skutečný clean-room protokolový vývoj pod vlastní licencí.
+Clean-room implementační cesta je přijatá v D-013. Zbývá zvolit přesný licenční
+text nového kódu a závislostí a provést audit původu assetů.
 
 Bez rozhodnutí se nevytváří produkční Flutter kód.
 

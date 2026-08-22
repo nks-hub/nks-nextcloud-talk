@@ -1,0 +1,8 @@
+{
+  "type": "https://push.example.invalid/problems/token-identity-conflict",
+  "title": "Push token identity conflict",
+  "status": 409,
+  "code": "TOKEN_IDENTITY_CONFLICT",
+  "detail": "Retry with cloudId so the gateway can verify the public identity proof.",
+  "requestId": "req_contract_0002"
+}

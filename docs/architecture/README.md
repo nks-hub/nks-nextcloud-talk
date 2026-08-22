@@ -23,9 +23,11 @@ nevytváří jako prázdný stub.
 - [Audit dokončení celého cíle](completion-audit.md)
 - [Systémový návrh](system-design.md)
 - [Synchronizace a lokální data](sync-storage.md)
+- [OpenAPI a fixture push gateway](push-gateway-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Veřejný multi-server push](../plans/2026-08-22-public-multi-server-push-design.md)
+- [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
 
 ## Principy
 
