@@ -2,7 +2,8 @@
 
 Stavy:
 
-- **Přijato**: uživatel rozhodl nebo jde o nutnou protokolovou invariantu.
+- **Přijato**: uživatel rozhodl, jde o nutnou invariantu nebo o ověřenou
+  technickou baseline pro implementaci.
 - **Doporučeno**: analýza má preferovanou variantu, čeká na potvrzení.
 - **Otevřeno**: bez volby se příslušný scaffold nebo feature nesmí uzamknout.
 - **Odloženo**: není v prvním release, ale architektura zachovává hranici.
@@ -170,37 +171,55 @@ samostatný licenční audit.
 Přijatý vlastní Talk-inspirovaný směr z D-013 se nemění. Každý asset a závislost
 musí být před distribucí kompatibilní s GPL a zaznamenaný v průběžném auditu.
 
-## Doporučená rozhodnutí
+## Přijatá technická rozhodnutí
 
 ### D-007: Modulární klient
 
-Stav: Doporučeno.
+Stav: Přijato pro první implementační baseline 22. srpna 2026.
 
 Pure Dart talk_protocol + Flutter app + samostatná push gateway. Storage a sync
 zůstávají uvnitř app, dokud další skutečná implementace neodůvodní package.
 
 ### D-008: Standardní Notifications app
 
-Stav: Doporučeno.
+Stav: Přijato jako kompatibilní serverová hranice.
 
 Vlastní gateway zachová Notifications v2 protokol. Nový Talk event listener se
 nevytváří, protože by nepokryl úplnou notification a markProcessed semantiku.
 
 ### D-009: Relační SQLite store
 
-Stav: Doporučeno.
+Stav: Přijato pro první implementační baseline 22. srpna 2026.
 
 Message, thread, parent, room a read marker vyžadují atomické transakce.
-Preferovaný Dart kandidát je Drift; verze a platformní kompatibilita se ověří
-před implementací.
+Použije se Drift. Lokální Flutter 3.44.4/Dart 3.12.2 a pub.dev metadata z
+22. srpna 2026 potvrzují kompatibilitu řad Drift 2.34 a `drift_flutter` 0.3.
+Lockfile, migration testy a skutečný Android/iOS build zůstávají povinným
+důkazem konkrétní verze.
 
 ### D-010: Riverpod pro application/UI state
 
-Stav: Doporučeno.
+Stav: Přijato pro první implementační baseline 22. srpna 2026.
 
 Chatujme poskytuje ověřený lokální vzor a Riverpod umožní account-scoped
 providery. Databázový stav však zůstává zdrojem pravdy; provider nesmí duplikovat
-sync store.
+sync store. První řez použije ručně definované providery bez code generation;
+generátor se přidá jen tehdy, když sníží skutečnou složitost.
+
+### D-019: Mobilní navigace a form factors
+
+Stav: Přijato jako mobilní implementační baseline.
+
+Telefon používá stack `onboarding → conversations → chat → thread`. Bottom
+navigation se nepřidá bez alespoň tří rovnocenných top-level cílů. Tablet a
+foldable použijí nad stejným route modelem adaptivní list-detail. Deep link
+nejprve kryptograficky nebo lokálním account mappingem vybere `accountId` a až
+potom sestaví room/thread stack; nesmí implicitně použít právě aktivní účet.
+
+iOS zachová edge-swipe back a Android systémový i predictive back. Gestures
+jsou pouze zkratky s viditelnou alternativou. Touch target má nejméně 44 pt na
+iOS a 48 dp na Androidu. Podrobný checkpoint je v
+[mobilním návrhu](../plans/2026-08-22-original-flutter-client-design.md).
 
 ## Vyřešené volby
 
