@@ -16,4 +16,4 @@ Aktuální stav:
 - Flutter implementace ještě nezačala, protože se nejdřív uzavírá licence,
   produktový rozsah a architektura.
 
-Výzkumné podklady jsou v [docs/research/README.md](docs/research/README.md).
+Dokumentace začíná v [docs/README.md](docs/README.md).
