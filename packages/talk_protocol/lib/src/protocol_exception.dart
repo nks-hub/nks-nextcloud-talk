@@ -18,6 +18,15 @@ enum TalkProtocolErrorCode {
   duplicateConversationToken,
   previewConversationMismatch,
   invalidConversationMerge,
+  invalidChatIdentifier,
+  invalidChatProfile,
+  invalidChatRequest,
+  invalidChatResponse,
+  invalidChatHeaders,
+  invalidChatState,
+  invalidChatMerge,
+  invalidChatOutbox,
+  unsupportedChatOperation,
   unsupportedHttpStatus,
 }
 

@@ -1,76 +1,10 @@
 import '../json_value.dart';
 import '../protocol_exception.dart';
 
-final RegExp _conversationTokenPattern = RegExp(r'^[a-z0-9]{4,30}$');
+export '../identifiers.dart' show AccountId, ConversationToken;
+
 final RegExp _decimalCursorPattern = RegExp(r'^(0|[1-9][0-9]*)$');
 final RegExp _configurationHashPattern = RegExp(r'^[!-~]{1,256}$');
-
-final class AccountId {
-  AccountId._(this.value);
-
-  factory AccountId.parse(Object? value) {
-    final identifier = requireString(
-      value,
-      path: r'$.accountId',
-      code: TalkProtocolErrorCode.invalidConversationIdentifier,
-      minLength: 1,
-      maxLength: 256,
-    );
-    if (identifier.trim() != identifier || _hasControlCharacter(identifier)) {
-      protocolFailure(
-        TalkProtocolErrorCode.invalidConversationIdentifier,
-        r'$.accountId',
-      );
-    }
-    return AccountId._(identifier);
-  }
-
-  final String value;
-
-  @override
-  bool operator ==(Object other) => other is AccountId && other.value == value;
-
-  @override
-  int get hashCode => value.hashCode;
-
-  @override
-  String toString() => 'AccountId(<redacted>)';
-}
-
-final class ConversationToken {
-  ConversationToken._(this.value);
-
-  factory ConversationToken.parse(
-    Object? value, {
-    required String path,
-    TalkProtocolErrorCode code =
-        TalkProtocolErrorCode.invalidConversationResponse,
-  }) {
-    final token = requireString(
-      value,
-      path: path,
-      code: code,
-      minLength: 4,
-      maxLength: 30,
-    );
-    if (!_conversationTokenPattern.hasMatch(token)) {
-      protocolFailure(code, path);
-    }
-    return ConversationToken._(token);
-  }
-
-  final String value;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ConversationToken && other.value == value;
-
-  @override
-  int get hashCode => value.hashCode;
-
-  @override
-  String toString() => 'ConversationToken(<redacted>)';
-}
 
 final class ConversationCursor {
   ConversationCursor._(this.value);

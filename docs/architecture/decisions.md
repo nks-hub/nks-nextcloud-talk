@@ -138,7 +138,8 @@ explicitní režim requestu, ne samotná hodnota `modifiedSince`.
 
 ### D-017: Autoritativní chat cursor a bezpečný text-send outbox
 
-Stav: Přijato jako datová a replay invarianta.
+Stav: Přijato a implementováno v pure Dart planneru a outboxu; skutečný
+SQLite commit zůstává neprokázaný.
 
 Chat history a future jsou dva směry stejného account/room/thread scope.
 `X-Chat-Last-Given` je autoritativní hranice i při prázdném viditelném body;
@@ -162,9 +163,9 @@ Cross-room private-reply wire formát je známý, ale command admission zůstáv
 plného eligibility snapshotu odmítnutý. Neznámý kind nebo revision admission
 odmítne.
 
-Executable harness nyní dokládá rollback chat merge a outbox confirmation
-odděleně. Společná SQLite transakce zůstává povinným, ale dosud neprokázaným
-runtime invariantem.
+Pure Dart single-use plán nyní dokládá společný candidate snapshot pro chat
+merge a outbox confirmation i úplný rollback zahozením plánu. Společná SQLite
+transakce zůstává povinným, ale dosud neprokázaným runtime invariantem.
 
 ### D-018: Licence mobilního klienta
 

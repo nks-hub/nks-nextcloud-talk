@@ -1,6 +1,14 @@
 export 'src/bootstrap/capabilities.dart';
 export 'src/bootstrap/login_flow.dart';
 export 'src/bootstrap/server_status.dart';
+export 'src/chat/identifiers.dart';
+export 'src/chat/merge.dart';
+export 'src/chat/models.dart';
+export 'src/chat/outbox.dart';
+export 'src/chat/profile.dart';
+export 'src/chat/request.dart';
+export 'src/chat/response.dart';
+export 'src/chat/state.dart';
 export 'src/conversations/identifiers.dart';
 export 'src/conversations/merge.dart';
 export 'src/conversations/models.dart'

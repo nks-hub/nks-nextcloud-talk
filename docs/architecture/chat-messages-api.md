@@ -236,7 +236,7 @@ Lokální fixture:
 
 ```powershell
 rtk proxy python contracts\chat-messages\validate_contract.py
-rtk test python -m unittest contracts\chat-messages\test_validate_contract.py -v
+rtk proxy python contracts\chat-messages\test_validate_contract.py
 ```
 
 Read-only live smoke provede právě dva GET requesty bez read/presence side
@@ -264,13 +264,15 @@ Credentials jsou v obou případech pouze v `NEXTCLOUD_TALK_USERNAME` a
 Aktuální lokální výsledek: 1 OpenAPI dokument, 44 fixtures, z toho 43
 schema-validních a 13 přijatých syntetických messages, 21 query případů, 10
 capability případů, 23 merge případů s 25 kroky, 36 outbox případů s 60 kroky,
-4 unit testy, 1 redaction guard a 1 origin případ prošly.
+4 unit testy, 1 redaction guard a 1 origin případ prošly. Stejné fixtures
+vykonává pure Dart chat doména ve 155 testech; celý `talk_protocol` prochází
+280 testy včetně skutečného release AOT executable a analyzer je bez nálezu.
 
 ## Co důkaz nepokrývá
 
 Live read/write nebyl v tomto milníku spuštěný bez potvrzených environment
-proměnných a vyhrazené mutable room. Kontrakt dále neprokazuje produkční Dart
-model, SQLite migrace a společnou merge/outbox DB transakci, restart skutečné
-mobilní aplikace, HPB relay, background scheduler, UI pending/error stavy,
-multi-server izolaci v jednom procesu ani WCAG kontrast. Tyto části zůstávají v
-implementačním řezu 3.
+proměnných a vyhrazené mutable room. Pure Dart model a společný candidate plán
+pro message merge plus outbox reconciliation existují, ale neprokazují SQLite
+migrace ani skutečný společný DB commit, restart mobilního procesu, HPB relay,
+background scheduler, UI pending/error stavy, multi-server izolaci v jednom
+procesu ani WCAG kontrast. Tyto části zůstávají v implementačním řezu 3.
