@@ -25,6 +25,8 @@ klientské invarianty, které JSON Schema neumí popsat.
 
 OpenAPI 3.1 je v
 [`contracts/conversation-list/openapi.json`](../../contracts/conversation-list/openapi.json).
+Přijaté mapování kontraktu do pure Dart runtime popisuje
+[návrh Dart conversation runtime](../plans/2026-08-22-dart-conversation-runtime-design.md).
 
 ## Ověřený serverový kontrakt
 
