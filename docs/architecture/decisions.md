@@ -297,6 +297,30 @@ Stav `signalingReady` není `mediaReady`. Řez 10 nevystaví call REST mutaci an
 uživatelské call ovládání; serverové in-call flags vzniknou až s reálným media
 enginem v řezu 11.
 
+### D-023: Per-account push key handle a společný Dart orchestrátor
+
+Stav: Přijato a implementováno v pure Dart runtime; platformní crypto adapter,
+Flutter persistence, gateway a skutečné delivery zůstávají součástí řezu 7.
+
+Jeden provider token vydaný Firebase/APNs projektem aplikace smí obsluhovat více
+účtů, ale není jejich identitou. Každý `accountId` má samostatný
+neexportovatelný RSA-2048 key handle, public key, generaci a registrační revizi.
+Private key neopouští Android Keystore nebo iOS Keychain; Dart dostává pouze
+handle a kryptograficky ověřený výsledek.
+
+Pure Dart runtime vlastní jednu deterministickou single-flight registrační
+frontu, authority/token/key binding, přesný retry, 409 recovery a revokaci.
+Příchozí obálku smí doroutovat jen právě jeden kandidát s platným podpisem a
+decryptem. Dokončení se před routováním znovu porovná s aktuálním provider
+tokenem, registered stavem, key handle/generací a registration revision. Nula,
+více nebo zastaralý kandidát nevybere účet ani nespustí OCS sync.
+
+Capability disable zachová account key pro případné znovuzapnutí. Odebrání účtu
+provede Nextcloud unregister, gateway unregister a teprve potom zničení klíče.
+Transientní vzdálený cleanup zůstává jako durable account-bound revocation
+tombstone; capability refresh nesmí změnit dříve vyžádaný logout na pouhé
+vypnutí push. Druhý účet ani společný provider token se nesmí odstranit.
+
 ## Vyřešené volby
 
 ### Q-001: Licence

@@ -34,6 +34,24 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 Nejsou runtime součástí aplikace. Jejich lokální `LICENSE` byl při přijetí
 balíku přečtený; přesné transitive verze jsou uzamčené v lockfilu.
 
+## Nástroje executable kontraktů
+
+`contracts/push-client` znovu používá stejné přesně připnuté Python nástroje
+jako existující `contracts/push-gateway`; nepřidává mobilní runtime závislost.
+Lokálně nainstalovaná metadata 23. srpna 2026 potvrzují:
+
+- `cryptography` 50.0.0: `Apache-2.0 OR BSD-3-Clause`;
+- `jsonschema` 4.26.0: `MIT`;
+- `openapi-spec-validator` 0.9.0: `Apache-2.0`.
+
+Tyto balíky slouží pouze lokálnímu a CI generování a ověření syntetických
+fixture. Nejsou součástí budoucího Android/iOS artefaktu. Jejich přesné verze
+jsou v `contracts/push-client/requirements.txt` a
+`contracts/push-gateway/requirements.txt`. Čistá instalace obou shodných sad a
+`pip-audit` 23. srpna 2026 nenašly známou zranitelnost. Release notice se bude
+tvořit z finálních distribuovaných artefaktů, nikoli z globálního Python
+prostředí.
+
 ## Assety a převzatý kód
 
 V tomto milníku nebyl přidán žádný obrázek, font, zvuk ani kód převzatý z

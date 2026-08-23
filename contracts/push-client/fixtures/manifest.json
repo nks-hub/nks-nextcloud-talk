@@ -1,0 +1,54 @@
+{
+  "contract": "../openapi.json",
+  "fixtures": [
+    {
+      "id": "registration-request",
+      "file": "registration.request.json",
+      "schema": "PushRegistrationRequest",
+      "valid": true
+    },
+    {
+      "id": "registration-response",
+      "file": "registration.response.json",
+      "schema": "OcsPushRegistrationEnvelope",
+      "valid": true,
+      "verifyDeviceIdentity": true
+    },
+    {
+      "id": "mobile-envelope",
+      "file": "mobile-envelope.json",
+      "schema": "MobilePushEnvelope",
+      "valid": true
+    },
+    {
+      "id": "wake-up-normal",
+      "file": "wake-up-normal.json",
+      "schema": "WakeUpPayload",
+      "valid": true
+    },
+    {
+      "id": "wake-up-delete-one",
+      "file": "wake-up-delete-one.json",
+      "schema": "WakeUpPayload",
+      "valid": true
+    },
+    {
+      "id": "wake-up-delete-multiple",
+      "file": "wake-up-delete-multiple.json",
+      "schema": "WakeUpPayload",
+      "valid": true
+    },
+    {
+      "id": "wake-up-delete-all",
+      "file": "wake-up-delete-all.json",
+      "schema": "WakeUpPayload",
+      "valid": true
+    },
+    {
+      "id": "wake-up-ambiguous",
+      "file": "wake-up-ambiguous.invalid.json",
+      "schema": "WakeUpPayload",
+      "valid": false
+    }
+  ]
+}

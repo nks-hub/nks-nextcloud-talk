@@ -1,8 +1,8 @@
 # Architektura
 
 Stav: návrh a produkční pure Dart bootstrap, conversation, chat, rich-chat,
-attachment i signaling preparation runtime. Protokolové kontrakty vznikly
-licenčně neutrálně; nový
+attachment, signaling preparation i push-client runtime. Protokolové kontrakty
+vznikly licenčně neutrálně; nový
 mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold dosud
 nevznikl. Android `applicationId` je
 přijaté jako
@@ -28,7 +28,7 @@ nevytváří jako prázdný stub.
 - [Audit dokončení celého cíle](completion-audit.md)
 - [Systémový návrh](system-design.md)
 - [Synchronizace a lokální data](sync-storage.md)
-- [OpenAPI a fixture push gateway](push-gateway-api.md)
+- [OpenAPI, fixture a klientský runtime push gateway](push-gateway-api.md)
 - [OpenAPI a fixture klientského bootstrapu](client-bootstrap-api.md)
 - [OpenAPI, fixture a merge kontrakt seznamu konverzací](conversation-list-api.md)
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
@@ -49,7 +49,7 @@ nevytváří jako prázdný stub.
 - [Rich chat a vlákna](../plans/2026-08-23-rich-chat-threads-design.md)
 - [Implementace attachment upload runtime](../plans/2026-08-23-attachment-upload-runtime-design.md)
 - [Návrh signaling preparation runtime](../plans/2026-08-23-signaling-preparation-runtime-design.md)
-- [Návrh Dart push-client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
+- [Implementace Dart push-client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
 
 ## Principy
 

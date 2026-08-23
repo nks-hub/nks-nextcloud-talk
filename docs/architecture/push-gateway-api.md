@@ -1,9 +1,11 @@
 # Kontrakt push gateway
 
-Datum ověření: 22. srpna 2026.
+Datum ověření: 23. srpna 2026.
 
-Stav: wire kontrakt a lokální fixture jsou spustitelně ověřené. Produkční
-gateway, datastore, FCM projekt a runtime doručení zatím neexistují.
+Stav: gateway wire kontrakt, klientský wire kontrakt a pure Dart registrační a
+směrovací runtime jsou spustitelně ověřené. Produkční gateway, datastore,
+Firebase projekt, platformní crypto adapter a runtime doručení zatím
+neexistují.
 
 ## Přímá odpověď pro veřejný multi-server klient
 
@@ -43,6 +45,8 @@ Kontrakt je vázaný na:
 
 OpenAPI 3.1 je v
 [`contracts/push-gateway/openapi.json`](../../contracts/push-gateway/openapi.json).
+Klientská OCS/envelope hranice je v
+[`contracts/push-client`](../../contracts/push-client/README.md).
 
 ## Skutečný wire formát
 
@@ -138,6 +142,29 @@ Validátor provádí:
 
 Aktuální výsledek: 1 OpenAPI dokument, 10 fixtures, 3 registrační podpisy,
 4 notification obálky a 2 batch scénáře prošly.
+
+## Klientský kontrakt a pure Dart runtime
+
+Samostatný [`push-client` kontrakt](../../contracts/push-client/README.md)
+obsahuje 1 OpenAPI dokument a 8 fixtures: OCS request/response, mobilní obálku,
+normální wake-up, tři silent-delete varianty a jeden neplatný ambiguous payload.
+Python validátor při každém běhu vygeneruje RSA-2048 klíče jen v paměti a reálně
+ověří SHA512withRSA, OAEP SHA-1/MGF1 SHA-1 i PKCS#1 v1.5. Vygenerované obálky
+přímo projdou `MobilePushEnvelope`; uložená wire fixture není vydávána za
+encrypt/decrypt důkaz. Dart contract test načítá přímo stejný manifest a fixture.
+
+`packages/talk_protocol/lib/src/push` implementuje jeden provider token pro více
+účtů, samostatný key handle pro každý `accountId`, deterministickou single-flight
+registrační frontu, přesný retry od selhané fáze, 409 recovery a exactly-one
+decrypt routing. Capability disable zachová account key. Logout provede
+Nextcloud unregister, gateway unregister a teprve potom zničení key handle;
+transientní cleanup zůstává jako retryable revocation tombstone. Starý effect
+po token nebo authority rotaci nemůže commitnout nový stav ani doroutovat push;
+crypto dokončení se znovu váže na aktuální account snapshot.
+
+Klientský řez prochází 42 Dart testy: 20 contract, 13 runtime, 8 security a 1
+skutečný release AOT test. Celý `talk_protocol` po jeho doplnění prochází 527
+testy.
 
 ## Co tento důkaz ještě nepokrývá
 

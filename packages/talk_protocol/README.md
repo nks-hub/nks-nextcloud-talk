@@ -43,16 +43,23 @@ Implementované řezy pokrývají:
   30sekundový resume, room join, reconnect/backoff a session loss;
 - account/connection/room-scoped signaling runtime, participant/federation
   snapshot, MCU/no-MCU topologie a explicitní zákaz fake media admission.
+- jeden provider-token handle pro více účtů, per-account RSA key handle,
+  deterministickou single-flight registraci, přesný retry, 409 recovery a
+  capability/logout cleanup se zachováním bezpečného pořadí revokace;
+- ephemeral push routing svázaný s ciphertextem, signature, account/key/token
+  generací, aktuálním runtime snapshotem a právě jedním validním OAEP nebo
+  PKCS#1 v1.5 decrypt výsledkem.
 
 Balík načítá přímo všechny fixtures z `contracts/client-bootstrap` a
 `contracts/conversation-list`, `contracts/chat-messages` i
 `contracts/rich-chat` a implementuje stejný attachment kontrakt jako
 `contracts/attachment-upload` a stejný settings/server-frame kontrakt jako
-`contracts/signaling`. Aktuálně prochází `dart analyze --fatal-infos` bez
-nálezu a 485 Dart testů včetně skutečných release AOT executable a signaling
+`contracts/signaling`. Push contract test navíc načítá všech 8 fixtures přímo z
+`contracts/push-client`. Aktuálně prochází `dart analyze --fatal-infos` bez
+nálezu a 527 Dart testů včetně skutečných release AOT executable a signaling
 loopback HTTP/WebSocket testů. Planner připravuje úplný candidate account
-snapshot; skutečnou SQLite transakci, platformní síťový transport a background
-scheduler bude vlastnit budoucí Flutter/Drift vrstva.
+snapshot; skutečnou SQLite transakci, platformní síťový a crypto transport a
+background scheduler bude vlastnit budoucí Flutter/Drift vrstva.
 
 Balík je součástí projektu licencovaného pod `GPL-3.0-or-later`; kanonický text
 je v kořenovém souboru `LICENSE`.
