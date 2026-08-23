@@ -1,17 +1,31 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
 import unittest
+from pathlib import Path
 
-from validate_contract import (
-    ContractValidationError,
-    decode_json_bytes,
-    normalize_hpb_endpoint,
-    normalize_nextcloud_server,
-    simulate_runtime,
-    validate_contract,
-    validate_hpb_case,
-    validate_settings_case,
+
+CONTRACT_ROOT = Path(__file__).resolve().parent
+MODULE_PATH = CONTRACT_ROOT / "validate_contract.py"
+MODULE_SPEC = importlib.util.spec_from_file_location(
+    "signaling_validate_contract",
+    MODULE_PATH,
 )
+if MODULE_SPEC is None or MODULE_SPEC.loader is None:
+    raise RuntimeError("Unable to load the signaling contract validator")
+signaling_contract = importlib.util.module_from_spec(MODULE_SPEC)
+sys.modules[MODULE_SPEC.name] = signaling_contract
+MODULE_SPEC.loader.exec_module(signaling_contract)
+
+ContractValidationError = signaling_contract.ContractValidationError
+decode_json_bytes = signaling_contract.decode_json_bytes
+normalize_hpb_endpoint = signaling_contract.normalize_hpb_endpoint
+normalize_nextcloud_server = signaling_contract.normalize_nextcloud_server
+simulate_runtime = signaling_contract.simulate_runtime
+validate_contract = signaling_contract.validate_contract
+validate_hpb_case = signaling_contract.validate_hpb_case
+validate_settings_case = signaling_contract.validate_settings_case
 
 
 class SignalingContractValidatorTest(unittest.TestCase):

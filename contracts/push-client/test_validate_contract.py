@@ -1,16 +1,29 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from validate_contract import (
-    ContractValidationError,
-    decode_canonical_base64,
-    ephemeral_crypto_proof,
-    scan_for_private_keys,
-    validate_contract,
+
+CONTRACT_ROOT = Path(__file__).resolve().parent
+MODULE_PATH = CONTRACT_ROOT / "validate_contract.py"
+MODULE_SPEC = importlib.util.spec_from_file_location(
+    "push_client_validate_contract",
+    MODULE_PATH,
 )
+if MODULE_SPEC is None or MODULE_SPEC.loader is None:
+    raise RuntimeError("Unable to load the push-client contract validator")
+push_contract = importlib.util.module_from_spec(MODULE_SPEC)
+sys.modules[MODULE_SPEC.name] = push_contract
+MODULE_SPEC.loader.exec_module(push_contract)
+
+ContractValidationError = push_contract.ContractValidationError
+decode_canonical_base64 = push_contract.decode_canonical_base64
+ephemeral_crypto_proof = push_contract.ephemeral_crypto_proof
+scan_for_private_keys = push_contract.scan_for_private_keys
+validate_contract = push_contract.validate_contract
 
 
 class PushClientContractValidatorTest(unittest.TestCase):
