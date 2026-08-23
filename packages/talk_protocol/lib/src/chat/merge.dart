@@ -1,8 +1,10 @@
 import '../identifiers.dart';
 import '../protocol_exception.dart';
+import '../server_base.dart';
 import 'identifiers.dart';
 import 'models.dart';
 import 'outbox.dart';
+import 'profile.dart';
 import 'request.dart';
 import 'response.dart';
 import 'state.dart';
@@ -262,6 +264,440 @@ ChatMergeResult _planned(
     messageUpserts: List.unmodifiable(messageUpserts),
   ),
 );
+
+enum ChatForegroundPollPhase {
+  catchUpRequired,
+  longPollRequired,
+  requestInFlight,
+  waitingToRetry,
+  reauthenticationRequired,
+  stopped,
+}
+
+enum ChatForegroundPollOutcome {
+  responseApplied,
+  retryScheduled,
+  reauthenticationRequired,
+  terminalFailure,
+}
+
+final class ChatForegroundPollSession {
+  const ChatForegroundPollSession._({
+    required this.accountId,
+    required this.server,
+    required this.scopeKey,
+    required this.profile,
+    required this.credentialGeneration,
+    required this.capabilityGeneration,
+    required this.phase,
+    required this.initialCatchUpCompleted,
+    required this.consecutiveFailures,
+    required this.nextAttemptAtMilliseconds,
+    required this.pendingRequest,
+  });
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ChatScopeKey scopeKey;
+  final ChatCapabilityProfile profile;
+  final int credentialGeneration;
+  final int capabilityGeneration;
+  final ChatForegroundPollPhase phase;
+  final bool initialCatchUpCompleted;
+  final int consecutiveFailures;
+  final int? nextAttemptAtMilliseconds;
+  final ChatFetchRequest? pendingRequest;
+
+  ChatForegroundPollSession _copyWith({
+    required ChatForegroundPollPhase phase,
+    required bool initialCatchUpCompleted,
+    required int consecutiveFailures,
+    required int? nextAttemptAtMilliseconds,
+    required ChatFetchRequest? pendingRequest,
+  }) => ChatForegroundPollSession._(
+    accountId: accountId,
+    server: server,
+    scopeKey: scopeKey,
+    profile: profile,
+    credentialGeneration: credentialGeneration,
+    capabilityGeneration: capabilityGeneration,
+    phase: phase,
+    initialCatchUpCompleted: initialCatchUpCompleted,
+    consecutiveFailures: consecutiveFailures,
+    nextAttemptAtMilliseconds: nextAttemptAtMilliseconds,
+    pendingRequest: pendingRequest,
+  );
+
+  @override
+  String toString() =>
+      'ChatForegroundPollSession(phase: ${phase.name}, '
+      'threadScoped: ${scopeKey.threadId != null}, sensitive: <redacted>)';
+}
+
+final class ChatForegroundPollRequestPlan {
+  const ChatForegroundPollRequestPlan._({
+    required this._source,
+    required this.request,
+    required this._candidate,
+  });
+
+  final ChatForegroundPollSession _source;
+  final ChatFetchRequest request;
+  final ChatForegroundPollSession _candidate;
+
+  ChatForegroundPollSession commit(ChatForegroundPollSession current) {
+    if (!identical(current, _source)) {
+      _pollFailure(r'$.foregroundPoll.requestPlan');
+    }
+    return _candidate;
+  }
+}
+
+final class ChatForegroundPollCommit {
+  const ChatForegroundPollCommit({
+    required this.snapshot,
+    required this.session,
+  });
+
+  final ChatRuntimeSnapshot snapshot;
+  final ChatForegroundPollSession session;
+}
+
+final class ChatForegroundPollCompletionPlan {
+  const ChatForegroundPollCompletionPlan._({
+    required this._sourceSnapshot,
+    required this._sourceSession,
+    required this.outcome,
+    required this._mergePlan,
+    required this._candidateSession,
+  });
+
+  final ChatRuntimeSnapshot _sourceSnapshot;
+  final ChatForegroundPollSession _sourceSession;
+  final ChatMergePlan? _mergePlan;
+  final ChatForegroundPollSession _candidateSession;
+  final ChatForegroundPollOutcome outcome;
+
+  ChatForegroundPollCommit commit(
+    ChatRuntimeSnapshot currentSnapshot,
+    ChatForegroundPollSession currentSession,
+  ) {
+    if (!identical(currentSnapshot, _sourceSnapshot) ||
+        !identical(currentSession, _sourceSession)) {
+      _pollFailure(r'$.foregroundPoll.completionPlan');
+    }
+    return ChatForegroundPollCommit(
+      snapshot: _mergePlan?.commit(currentSnapshot) ?? currentSnapshot,
+      session: _candidateSession,
+    );
+  }
+}
+
+ChatForegroundPollSession startChatForegroundPoll(
+  ChatRuntimeSnapshot snapshot, {
+  required AccountId accountId,
+  required ServerBase server,
+  required ConversationToken roomToken,
+  required int? threadId,
+  required ChatCapabilityProfile profile,
+}) {
+  final key = ChatScopeKey(roomToken: roomToken, threadId: threadId);
+  final account = snapshot.accounts[accountId];
+  if (account == null ||
+      account.server != server ||
+      account.lane != ChatAccountLane.ready ||
+      !account.scopes.containsKey(key) ||
+      !profile.read ||
+      (threadId != null && (threadId < 1 || !profile.threadFetch))) {
+    _pollFailure(r'$.foregroundPoll.binding');
+  }
+  return ChatForegroundPollSession._(
+    accountId: accountId,
+    server: server,
+    scopeKey: key,
+    profile: profile,
+    credentialGeneration: account.credentialGeneration,
+    capabilityGeneration: account.capabilityGeneration,
+    phase: ChatForegroundPollPhase.catchUpRequired,
+    initialCatchUpCompleted: false,
+    consecutiveFailures: 0,
+    nextAttemptAtMilliseconds: null,
+    pendingRequest: null,
+  );
+}
+
+ChatForegroundPollRequestPlan? planNextChatForegroundPoll(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session, {
+  required ChatRequestId requestId,
+  required int nowMilliseconds,
+}) {
+  if (nowMilliseconds < 0) {
+    _pollFailure(r'$.foregroundPoll.now');
+  }
+  if (session.phase == ChatForegroundPollPhase.requestInFlight ||
+      session.phase == ChatForegroundPollPhase.reauthenticationRequired ||
+      session.phase == ChatForegroundPollPhase.stopped) {
+    return null;
+  }
+  final binding = _requirePollBinding(snapshot, session);
+  if (session.phase == ChatForegroundPollPhase.waitingToRetry &&
+      nowMilliseconds < session.nextAttemptAtMilliseconds!) {
+    return null;
+  }
+  final isInitialCatchUp = !session.initialCatchUpCompleted;
+  final request = ChatFetchRequest(
+    accountId: session.accountId,
+    requestId: requestId,
+    server: session.server,
+    roomToken: session.scopeKey.roomToken,
+    profile: session.profile,
+    direction: ChatFetchDirection.future,
+    cursor: binding.scope.futureCursor,
+    lastCommonRead: binding.scope.lastCommonRead,
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: isInitialCatchUp ? 0 : 30,
+    interactive: true,
+    threadId: session.scopeKey.threadId,
+    futureConverged: !isInitialCatchUp,
+  );
+  return ChatForegroundPollRequestPlan._(
+    source: session,
+    request: request,
+    candidate: session._copyWith(
+      phase: ChatForegroundPollPhase.requestInFlight,
+      initialCatchUpCompleted: session.initialCatchUpCompleted,
+      consecutiveFailures: session.consecutiveFailures,
+      nextAttemptAtMilliseconds: null,
+      pendingRequest: request,
+    ),
+  );
+}
+
+ChatForegroundPollCompletionPlan completeChatForegroundPollHttp(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session, {
+  required ChatGetResponse response,
+  required int nowMilliseconds,
+  required int jitterPermille,
+}) {
+  _requirePendingPollBinding(snapshot, session, response.request);
+  final merge = planChatGetMerge(snapshot, response);
+  return switch (response.classification) {
+    ChatGetClassification.messages ||
+    ChatGetClassification.invisibleCursorAdvance ||
+    ChatGetClassification.commonReadOnly ||
+    ChatGetClassification.notModified => _successfulPollCompletion(
+      snapshot,
+      session,
+      merge,
+    ),
+    ChatGetClassification.reauthenticationRequired =>
+      _reauthenticationPollCompletion(snapshot, session, merge),
+    ChatGetClassification.transientError => _retryPollCompletion(
+      snapshot,
+      session,
+      nowMilliseconds: nowMilliseconds,
+      jitterPermille: jitterPermille,
+    ),
+    ChatGetClassification.threadNotFound || ChatGetClassification.ocsError =>
+      _terminalPollCompletion(snapshot, session),
+  };
+}
+
+ChatForegroundPollCompletionPlan completeChatForegroundPollTransportFailure(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session, {
+  required int nowMilliseconds,
+  required int jitterPermille,
+}) {
+  _requirePendingPollBinding(snapshot, session, session.pendingRequest);
+  return _retryPollCompletion(
+    snapshot,
+    session,
+    nowMilliseconds: nowMilliseconds,
+    jitterPermille: jitterPermille,
+  );
+}
+
+ChatForegroundPollSession cancelChatForegroundPoll(
+  ChatForegroundPollSession session,
+) {
+  if (session.phase == ChatForegroundPollPhase.stopped) {
+    return session;
+  }
+  return session._copyWith(
+    phase: ChatForegroundPollPhase.stopped,
+    initialCatchUpCompleted: session.initialCatchUpCompleted,
+    consecutiveFailures: 0,
+    nextAttemptAtMilliseconds: null,
+    pendingRequest: null,
+  );
+}
+
+int chatForegroundPollBackoffMilliseconds(
+  int consecutiveFailures, {
+  required int jitterPermille,
+}) {
+  if (consecutiveFailures < 1 || jitterPermille < 0 || jitterPermille > 1000) {
+    _pollFailure(r'$.foregroundPoll.backoff');
+  }
+  var base = 1000;
+  var remainingDoublings = consecutiveFailures - 1;
+  while (remainingDoublings > 0 && base < 30000) {
+    base *= 2;
+    if (base > 30000) {
+      base = 30000;
+    }
+    remainingDoublings--;
+  }
+  final factorPermille = 800 + ((jitterPermille * 400) ~/ 1000);
+  return (base * factorPermille) ~/ 1000;
+}
+
+ChatForegroundPollCompletionPlan _successfulPollCompletion(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session,
+  ChatMergeResult merge,
+) {
+  if (!merge.canCommit) {
+    _pollFailure(r'$.foregroundPoll.response');
+  }
+  return ChatForegroundPollCompletionPlan._(
+    sourceSnapshot: snapshot,
+    sourceSession: session,
+    outcome: ChatForegroundPollOutcome.responseApplied,
+    mergePlan: merge.plan,
+    candidateSession: session._copyWith(
+      phase: ChatForegroundPollPhase.longPollRequired,
+      initialCatchUpCompleted: true,
+      consecutiveFailures: 0,
+      nextAttemptAtMilliseconds: null,
+      pendingRequest: null,
+    ),
+  );
+}
+
+ChatForegroundPollCompletionPlan _reauthenticationPollCompletion(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session,
+  ChatMergeResult merge,
+) {
+  if (!merge.canCommit ||
+      merge.outcome != ChatMergeOutcome.reauthenticationRequired) {
+    _pollFailure(r'$.foregroundPoll.response');
+  }
+  return ChatForegroundPollCompletionPlan._(
+    sourceSnapshot: snapshot,
+    sourceSession: session,
+    outcome: ChatForegroundPollOutcome.reauthenticationRequired,
+    mergePlan: merge.plan,
+    candidateSession: session._copyWith(
+      phase: ChatForegroundPollPhase.reauthenticationRequired,
+      initialCatchUpCompleted: session.initialCatchUpCompleted,
+      consecutiveFailures: 0,
+      nextAttemptAtMilliseconds: null,
+      pendingRequest: null,
+    ),
+  );
+}
+
+ChatForegroundPollCompletionPlan _retryPollCompletion(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session, {
+  required int nowMilliseconds,
+  required int jitterPermille,
+}) {
+  if (nowMilliseconds < 0) {
+    _pollFailure(r'$.foregroundPoll.now');
+  }
+  final failures = session.consecutiveFailures + 1;
+  final delay = chatForegroundPollBackoffMilliseconds(
+    failures,
+    jitterPermille: jitterPermille,
+  );
+  return ChatForegroundPollCompletionPlan._(
+    sourceSnapshot: snapshot,
+    sourceSession: session,
+    outcome: ChatForegroundPollOutcome.retryScheduled,
+    mergePlan: null,
+    candidateSession: session._copyWith(
+      phase: ChatForegroundPollPhase.waitingToRetry,
+      initialCatchUpCompleted: session.initialCatchUpCompleted,
+      consecutiveFailures: failures,
+      nextAttemptAtMilliseconds: nowMilliseconds + delay,
+      pendingRequest: null,
+    ),
+  );
+}
+
+ChatForegroundPollCompletionPlan _terminalPollCompletion(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session,
+) => ChatForegroundPollCompletionPlan._(
+  sourceSnapshot: snapshot,
+  sourceSession: session,
+  outcome: ChatForegroundPollOutcome.terminalFailure,
+  mergePlan: null,
+  candidateSession: session._copyWith(
+    phase: ChatForegroundPollPhase.stopped,
+    initialCatchUpCompleted: session.initialCatchUpCompleted,
+    consecutiveFailures: 0,
+    nextAttemptAtMilliseconds: null,
+    pendingRequest: null,
+  ),
+);
+
+_ChatPollBinding _requirePollBinding(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session,
+) {
+  final account = snapshot.accounts[session.accountId];
+  final scope = account?.scopes[session.scopeKey];
+  if (account == null ||
+      scope == null ||
+      account.server != session.server ||
+      account.lane != ChatAccountLane.ready ||
+      account.credentialGeneration != session.credentialGeneration ||
+      account.capabilityGeneration != session.capabilityGeneration) {
+    _pollFailure(r'$.foregroundPoll.binding');
+  }
+  return _ChatPollBinding(account: account, scope: scope);
+}
+
+void _requirePendingPollBinding(
+  ChatRuntimeSnapshot snapshot,
+  ChatForegroundPollSession session,
+  ChatFetchRequest? request,
+) {
+  final pending = session.pendingRequest;
+  if (session.phase != ChatForegroundPollPhase.requestInFlight ||
+      pending == null ||
+      request == null ||
+      !identical(pending, request)) {
+    _pollFailure(r'$.foregroundPoll.pendingRequest');
+  }
+  final binding = _requirePollBinding(snapshot, session);
+  if (pending.accountId != session.accountId ||
+      pending.server != session.server ||
+      pending.roomToken != session.scopeKey.roomToken ||
+      pending.threadId != session.scopeKey.threadId ||
+      pending.direction != ChatFetchDirection.future ||
+      pending.cursor != binding.scope.futureCursor) {
+    _pollFailure(r'$.foregroundPoll.binding');
+  }
+}
+
+final class _ChatPollBinding {
+  const _ChatPollBinding({required this.account, required this.scope});
+
+  final ChatAccountState account;
+  final ChatScopeState scope;
+}
+
+Never _pollFailure(String path) =>
+    protocolFailure(TalkProtocolErrorCode.invalidChatMerge, path);
 
 _AccountBinding? _bind(
   ChatRuntimeSnapshot snapshot,
