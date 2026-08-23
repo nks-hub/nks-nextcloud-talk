@@ -41,8 +41,17 @@ enum TalkProtocolErrorCode {
   invalidAttachmentDavXml,
   invalidAttachmentState,
   invalidAttachmentRuntime,
+  invalidSignalingIdentifier,
+  invalidSignalingProfile,
+  invalidSignalingSettings,
+  invalidSignalingRequest,
+  invalidSignalingResponse,
+  invalidSignalingFrame,
+  invalidSignalingState,
+  invalidSignalingRuntime,
   unsupportedChatOperation,
   unsupportedAttachmentOperation,
+  unsupportedSignalingOperation,
   unsupportedHttpStatus,
 }
 

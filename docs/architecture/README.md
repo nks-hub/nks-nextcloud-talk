@@ -1,7 +1,8 @@
 # Architektura
 
-Stav: návrh a produkční pure Dart bootstrap, conversation, chat, rich-chat i
-attachment runtime. Protokolové kontrakty vznikly licenčně neutrálně; nový
+Stav: návrh a produkční pure Dart bootstrap, conversation, chat, rich-chat,
+attachment i signaling preparation runtime. Protokolové kontrakty vznikly
+licenčně neutrálně; nový
 mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold dosud
 nevznikl. Android `applicationId` je
 přijaté jako
@@ -33,6 +34,7 @@ nevytváří jako prázdný stub.
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
 - [OpenAPI, renderer a stavový kontrakt rich chatu](rich-chat-api.md)
 - [Talk OCS, WebDAV a stavový kontrakt příloh](attachment-upload-api.md)
+- [Internal/HPB signaling kontrakt a runtime](signaling-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Audit závislostí a assetů](dependency-licenses.md)

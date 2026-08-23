@@ -5,6 +5,42 @@ export '../identifiers.dart' show AccountId, ConversationToken;
 
 final RegExp _decimalCursorPattern = RegExp(r'^(0|[1-9][0-9]*)$');
 final RegExp _configurationHashPattern = RegExp(r'^[!-~]{1,256}$');
+final RegExp _sessionIdPattern = RegExp(r'^[\x21-\x7e]+$');
+
+final class ConversationSessionId {
+  ConversationSessionId._(this.value);
+
+  factory ConversationSessionId.parse(
+    Object? value, {
+    String path = r'$.sessionId',
+    TalkProtocolErrorCode code =
+        TalkProtocolErrorCode.invalidConversationIdentifier,
+  }) {
+    final sessionId = requireString(
+      value,
+      path: path,
+      code: code,
+      minLength: 1,
+      maxLength: 512,
+    );
+    if (!_sessionIdPattern.hasMatch(sessionId)) {
+      protocolFailure(code, path);
+    }
+    return ConversationSessionId._(sessionId);
+  }
+
+  final String value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ConversationSessionId && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'ConversationSessionId(<redacted>)';
+}
 
 final class ConversationCursor {
   ConversationCursor._(this.value);

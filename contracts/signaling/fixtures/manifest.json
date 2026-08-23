@@ -1,0 +1,15 @@
+{
+  "contract": "../openapi.json",
+  "talkSha": "f2958bb25be6604240c58a3faf9a2033a30d20e5",
+  "hpbSha": "e007e2ed972c7322b53926d7da24a2b3faeaeccb",
+  "httpFile": "http.cases.json",
+  "settingsFile": "settings.cases.json",
+  "hpbFile": "hpb.cases.json",
+  "runtimeFile": "runtime.cases.json",
+  "expectedCounts": {
+    "http": 15,
+    "settings": 9,
+    "hpb": 28,
+    "runtime": 21
+  }
+}

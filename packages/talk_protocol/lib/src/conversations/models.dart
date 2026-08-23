@@ -77,6 +77,7 @@ final class ConversationPreview {
 final class ConversationRoom {
   ConversationRoom._({
     required this.token,
+    required this.sessionId,
     required this.id,
     required this.type,
     required this.name,
@@ -130,6 +131,7 @@ final class ConversationRoom {
   }
 
   final ConversationToken token;
+  final ConversationSessionId sessionId;
   final int id;
   final int type;
   final String name;
@@ -249,7 +251,11 @@ ConversationRoom parseConversationRoom(
   _requireInt(room, 'recordingConsent', path);
   _optionalString(room, 'remoteServer', path);
   _optionalString(room, 'remoteToken', path);
-  _requireString(room, 'sessionId', path, maxLength: 512);
+  final sessionId = ConversationSessionId.parse(
+    room['sessionId'],
+    path: '$path.sessionId',
+    code: _responseCode,
+  );
   _requireInt(room, 'sipEnabled', path);
   _optionalString(room, 'status', path);
   _optionalNullableInt(room, 'statusClearAt', path);
@@ -288,6 +294,7 @@ ConversationRoom parseConversationRoom(
 
   return ConversationRoom._(
     token: token,
+    sessionId: sessionId,
     id: id,
     type: type,
     name: name,

@@ -30,6 +30,10 @@ Aktuální stav:
   chunk upload, XML multistatus a autoritativní chat confirmation;
 - produkční pure Dart attachment runtime s durable zdrojem, restart-safe
   resume, room FIFO/single-flight a bezpečným ambiguous-finalize stavem;
+- spustitelný signaling kontrakt pro settings/internal HTTP, HPB frames,
+  hello/resume/room, federation a session epochy;
+- produkční pure Dart signaling preparation runtime ověřený skutečným lokálním
+  HTTP/WebSocket během a release AOT bez fake WebRTC médií;
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;
@@ -37,8 +41,9 @@ Aktuální stav:
 - přijatá licence mobilního klienta
   [`GPL-3.0-or-later`](LICENSE);
 - Flutter mobilní scaffold ještě nezačal, protože zbývá schválit iOS bundle ID
-  a minimální platformy. Platformně nezávislý bootstrap, conversation a chat
-  runtime už jsou implementované a testované včetně příloh a voice wire toku.
+  a minimální platformy. Platformně nezávislý bootstrap, conversation, chat,
+  attachment a signaling preparation runtime už jsou implementované a
+  testované.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

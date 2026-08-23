@@ -1,0 +1,499 @@
+[
+  {
+    "id": "client-hello-v1",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-001",
+      "type": "hello",
+      "hello": {
+        "version": "1.0",
+        "features": [
+          "chat-relay"
+        ],
+        "auth": {
+          "url": "https://cloud.example.invalid/nextcloud/ocs/v2.php/apps/spreed/api/v3/signaling/backend",
+          "params": {
+            "userid": "synthetic-user-a",
+            "ticket": "synthetic-v1-ticket"
+          }
+        }
+      }
+    },
+    "expectedType": "hello"
+  },
+  {
+    "id": "client-hello-v2",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-002",
+      "type": "hello",
+      "hello": {
+        "version": "2.0",
+        "features": [
+          "chat-relay"
+        ],
+        "auth": {
+          "url": "https://cloud.example.invalid/nextcloud/ocs/v2.php/apps/spreed/api/v3/signaling/backend",
+          "params": {
+            "token": "synthetic-v2-token"
+          }
+        }
+      }
+    },
+    "expectedType": "hello"
+  },
+  {
+    "id": "client-hello-resume",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-003",
+      "type": "hello",
+      "hello": {
+        "version": "2.0",
+        "resumeid": "synthetic-resume-a"
+      }
+    },
+    "expectedType": "hello"
+  },
+  {
+    "id": "client-room-join",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-004",
+      "type": "room",
+      "room": {
+        "roomid": "rooma123",
+        "sessionid": "nextcloud-session-a"
+      }
+    },
+    "expectedType": "room"
+  },
+  {
+    "id": "client-room-federated",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-005",
+      "type": "room",
+      "room": {
+        "roomid": "rooma123",
+        "sessionid": "nextcloud-session-a",
+        "federation": {
+          "signaling": "wss://remote-hpb.example.invalid/spreed",
+          "url": "https://remote-cloud.example.invalid/nextcloud",
+          "roomid": "remote123",
+          "token": "synthetic-federation-token"
+        }
+      }
+    },
+    "expectedType": "room"
+  },
+  {
+    "id": "client-room-leave",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-006",
+      "type": "room",
+      "room": {
+        "roomid": ""
+      }
+    },
+    "expectedType": "room"
+  },
+  {
+    "id": "client-message",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-007",
+      "type": "message",
+      "message": {
+        "recipient": {
+          "type": "session",
+          "sessionid": "peer-b"
+        },
+        "data": {
+          "type": "offer",
+          "roomType": "video",
+          "sid": "synthetic-stream-a",
+          "payload": {
+            "sdp": "synthetic-sdp"
+          }
+        }
+      }
+    },
+    "expectedType": "message"
+  },
+  {
+    "id": "client-control",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-008",
+      "type": "control",
+      "control": {
+        "recipient": {
+          "type": "session",
+          "sessionid": "peer-b"
+        },
+        "data": {
+          "type": "mute",
+          "roomType": "video"
+        }
+      }
+    },
+    "expectedType": "control"
+  },
+  {
+    "id": "client-bye",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-009",
+      "type": "bye",
+      "bye": {}
+    },
+    "expectedType": "bye"
+  },
+  {
+    "id": "server-welcome",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "welcome",
+      "welcome": {
+        "version": "1.0",
+        "features": [
+          "hello-v2",
+          "mcu",
+          "federation"
+        ]
+      }
+    },
+    "expectedType": "welcome"
+  },
+  {
+    "id": "server-hello-full",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "id": "request-002",
+      "type": "hello",
+      "hello": {
+        "version": "2.0",
+        "sessionid": "synthetic-hpb-session-a",
+        "resumeid": "synthetic-resume-a",
+        "server": {
+          "version": "1.0",
+          "features": [
+            "mcu",
+            "chat-relay"
+          ]
+        }
+      }
+    },
+    "expectedType": "hello"
+  },
+  {
+    "id": "server-hello-resume",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "id": "request-003",
+      "type": "hello",
+      "hello": {
+        "version": "2.0",
+        "sessionid": "synthetic-hpb-session-a"
+      }
+    },
+    "expectedType": "hello"
+  },
+  {
+    "id": "server-room",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "id": "request-004",
+      "type": "room",
+      "room": {
+        "roomid": "rooma123",
+        "bandwidth": {
+          "maxstreambitrate": 1048576,
+          "maxscreenbitrate": 2097152
+        }
+      }
+    },
+    "expectedType": "room"
+  },
+  {
+    "id": "server-error-no-such-session",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "id": "request-003",
+      "type": "error",
+      "error": {
+        "code": "no_such_session",
+        "message": "Synthetic session expired"
+      }
+    },
+    "expectedType": "error"
+  },
+  {
+    "id": "server-error-rate-limit",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "id": "request-002",
+      "type": "error",
+      "error": {
+        "code": "too_many_requests",
+        "message": "Synthetic rate limit"
+      }
+    },
+    "expectedType": "error"
+  },
+  {
+    "id": "server-event-join",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "room",
+        "type": "join",
+        "join": [
+          {
+            "sessionid": "peer-a",
+            "roomsessionid": "nextcloud-session-peer-a",
+            "userid": "synthetic-user-a",
+            "inCall": 3,
+            "participantPermissions": 7,
+            "actorType": "users",
+            "actorId": "synthetic-user-a",
+            "federated": false,
+            "features": [
+              "audio-video-permissions"
+            ]
+          }
+        ]
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-change",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "room",
+        "type": "change",
+        "change": [
+          {
+            "sessionid": "peer-a",
+            "roomsessionid": "nextcloud-session-peer-a",
+            "userid": "synthetic-user-a",
+            "inCall": 1,
+            "participantPermissions": 3,
+            "actorType": "users",
+            "actorId": "synthetic-user-a",
+            "federated": false
+          }
+        ]
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-leave",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "room",
+        "type": "leave",
+        "leave": [
+          "peer-a"
+        ]
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-participants-users",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "participants",
+        "type": "update",
+        "update": {
+          "roomid": "rooma123",
+          "users": [
+            {
+              "sessionId": "peer-a",
+              "nextcloudSessionId": "nextcloud-session-peer-a",
+              "userId": "synthetic-user-a",
+              "inCall": 3,
+              "participantPermissions": 7,
+              "actorType": "users",
+              "actorId": "synthetic-user-a",
+              "federated": false
+            }
+          ]
+        }
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-participants-all",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "participants",
+        "type": "update",
+        "update": {
+          "roomid": "rooma123",
+          "all": true,
+          "incall": 1
+        }
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-federation-interrupted",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "room",
+        "type": "federation_interrupted"
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-event-federation-resumed",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "room",
+        "type": "federation_resumed",
+        "resumed": false
+      }
+    },
+    "expectedType": "event"
+  },
+  {
+    "id": "server-message",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "message",
+      "message": {
+        "sender": {
+          "type": "session",
+          "sessionid": "peer-a"
+        },
+        "data": {
+          "type": "answer",
+          "roomType": "video",
+          "sid": "synthetic-stream-a",
+          "payload": {
+            "sdp": "synthetic-answer-sdp"
+          }
+        }
+      }
+    },
+    "expectedType": "message"
+  },
+  {
+    "id": "server-control",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "control",
+      "control": {
+        "sender": {
+          "type": "session",
+          "sessionid": "peer-a"
+        },
+        "data": {
+          "type": "mute",
+          "roomType": "video"
+        }
+      }
+    },
+    "expectedType": "control"
+  },
+  {
+    "id": "server-bye",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "bye",
+      "bye": {}
+    },
+    "expectedType": "bye"
+  },
+  {
+    "id": "server-unknown",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "synthetic-future-frame",
+      "synthetic-future-frame": {
+        "bounded": true
+      }
+    },
+    "expectedType": "unsupported"
+  },
+  {
+    "id": "invalid-hello-missing-version",
+    "direction": "server",
+    "valid": false,
+    "frame": {
+      "id": "request-010",
+      "type": "hello",
+      "hello": {
+        "sessionid": "synthetic-hpb-session-a",
+        "resumeid": "synthetic-resume-a"
+      }
+    },
+    "error": "hello.version"
+  },
+  {
+    "id": "invalid-participants-all-false",
+    "direction": "server",
+    "valid": false,
+    "frame": {
+      "type": "event",
+      "event": {
+        "target": "participants",
+        "type": "update",
+        "update": {
+          "roomid": "rooma123",
+          "all": false,
+          "incall": 1
+        }
+      }
+    },
+    "error": "event.update.all"
+  }
+]

@@ -1,0 +1,484 @@
+[
+  {
+    "id": "settings-internal-success",
+    "operationId": "getSignalingSettingsV3",
+    "status": 200,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/settings",
+      "query": {
+        "token": "rooma123",
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": {
+          "signalingMode": "internal",
+          "userId": "synthetic-user-a",
+          "hideWarning": false,
+          "server": "",
+          "federation": null,
+          "stunservers": [],
+          "turnservers": [],
+          "sipDialinInfo": ""
+        }
+      }
+    }
+  },
+  {
+    "id": "settings-external-success",
+    "operationId": "getSignalingSettingsV3",
+    "status": 200,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/settings",
+      "query": {
+        "token": "rooma123",
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": {
+          "signalingMode": "external",
+          "userId": "synthetic-user-a",
+          "hideWarning": true,
+          "server": "https://hpb.example.invalid",
+          "federation": null,
+          "stunservers": [],
+          "turnservers": [],
+          "sipDialinInfo": "",
+          "helloAuthParams": {
+            "1.0": {
+              "userid": "synthetic-user-a",
+              "ticket": "synthetic-v1-ticket"
+            },
+            "2.0": {
+              "token": "synthetic-v2-token"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "settings-unauthorized",
+    "operationId": "getSignalingSettingsV3",
+    "status": 401,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/settings",
+      "query": {
+        "token": "rooma123",
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 401,
+          "message": "Synthetic unauthorized"
+        },
+        "data": null
+      }
+    }
+  },
+  {
+    "id": "settings-room-not-found",
+    "operationId": "getSignalingSettingsV3",
+    "status": 404,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/settings",
+      "query": {
+        "token": "rooma123",
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 404,
+          "message": "Synthetic room not found"
+        },
+        "data": null
+      }
+    }
+  },
+  {
+    "id": "internal-pull-message-and-snapshot",
+    "operationId": "pullInternalSignalingV3",
+    "status": 200,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": [
+          {
+            "type": "message",
+            "data": "{\"type\":\"offer\",\"roomType\":\"video\",\"sid\":\"synthetic-stream-a\",\"from\":\"peer-a\",\"payload\":{\"sdp\":\"synthetic-sdp\"}}"
+          },
+          {
+            "type": "usersInRoom",
+            "data": [
+              {
+                "sessionId": "peer-a",
+                "roomId": 42,
+                "lastPing": 100,
+                "userId": "synthetic-user-a",
+                "inCall": 3,
+                "participantPermissions": 7,
+                "actorType": "users",
+                "actorId": "synthetic-user-a"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "internal-pull-empty-snapshot",
+    "operationId": "pullInternalSignalingV3",
+    "status": 200,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": [
+          {
+            "type": "usersInRoom",
+            "data": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "internal-pull-profile-disabled",
+    "operationId": "pullInternalSignalingV3",
+    "status": 400,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 400,
+          "message": "Synthetic internal signaling disabled"
+        },
+        "data": "Synthetic internal signaling disabled"
+      }
+    }
+  },
+  {
+    "id": "internal-pull-unauthorized",
+    "operationId": "pullInternalSignalingV3",
+    "status": 401,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 401,
+          "message": "Synthetic unauthorized"
+        },
+        "data": null
+      }
+    }
+  },
+  {
+    "id": "internal-pull-room-refresh",
+    "operationId": "pullInternalSignalingV3",
+    "status": 404,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 404,
+          "message": "Synthetic room refresh required"
+        },
+        "data": [
+          {
+            "type": "usersInRoom",
+            "data": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "internal-pull-session-killed",
+    "operationId": "pullInternalSignalingV3",
+    "status": 409,
+    "valid": true,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 409,
+          "message": "Synthetic session killed"
+        },
+        "data": null
+      }
+    }
+  },
+  {
+    "id": "internal-batch-success",
+    "operationId": "sendInternalSignalingV3",
+    "status": 200,
+    "valid": true,
+    "request": {
+      "method": "POST",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"
+      },
+      "form": {
+        "messages": "[{\"ev\":\"message\",\"fn\":\"{\\\"type\\\":\\\"offer\\\",\\\"roomType\\\":\\\"video\\\",\\\"sid\\\":\\\"synthetic-stream-a\\\",\\\"to\\\":\\\"peer-b\\\",\\\"payload\\\":{\\\"sdp\\\":\\\"synthetic-sdp\\\"}}\",\"sessionId\":\"nextcloud-session-a\"}]"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": []
+      }
+    }
+  },
+  {
+    "id": "internal-batch-profile-disabled",
+    "operationId": "sendInternalSignalingV3",
+    "status": 400,
+    "valid": true,
+    "request": {
+      "method": "POST",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"
+      },
+      "form": {
+        "messages": "[{\"ev\":\"message\",\"fn\":\"{\\\"type\\\":\\\"offer\\\",\\\"roomType\\\":\\\"video\\\",\\\"to\\\":\\\"peer-b\\\",\\\"payload\\\":{}}\",\"sessionId\":\"nextcloud-session-a\"}]"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "failure",
+          "statuscode": 400,
+          "message": "Synthetic internal signaling disabled"
+        },
+        "data": "Synthetic internal signaling disabled"
+      }
+    }
+  },
+  {
+    "id": "internal-pull-missing-snapshot",
+    "operationId": "pullInternalSignalingV3",
+    "status": 200,
+    "valid": false,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": [
+          {
+            "type": "message",
+            "data": "{\"type\":\"candidate\",\"roomType\":\"video\",\"from\":\"peer-a\",\"payload\":{\"candidate\":\"synthetic-candidate\"}}"
+          }
+        ]
+      }
+    },
+    "error": "terminal usersInRoom"
+  },
+  {
+    "id": "internal-pull-snapshot-not-final",
+    "operationId": "pullInternalSignalingV3",
+    "status": 200,
+    "valid": false,
+    "request": {
+      "method": "GET",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": [
+          {
+            "type": "usersInRoom",
+            "data": []
+          },
+          {
+            "type": "message",
+            "data": "{\"type\":\"candidate\",\"roomType\":\"video\",\"from\":\"peer-a\",\"payload\":{\"candidate\":\"synthetic-candidate\"}}"
+          }
+        ]
+      }
+    },
+    "error": "terminal usersInRoom"
+  },
+  {
+    "id": "internal-batch-nonempty-success",
+    "operationId": "sendInternalSignalingV3",
+    "status": 200,
+    "valid": false,
+    "request": {
+      "method": "POST",
+      "path": "/ocs/v2.php/apps/spreed/api/v3/signaling/rooma123",
+      "query": {
+        "format": "json"
+      },
+      "headers": {
+        "OCS-APIRequest": "true",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"
+      },
+      "form": {
+        "messages": "[{\"ev\":\"message\",\"fn\":\"{\\\"type\\\":\\\"offer\\\",\\\"roomType\\\":\\\"video\\\",\\\"to\\\":\\\"peer-b\\\",\\\"payload\\\":{}}\",\"sessionId\":\"nextcloud-session-a\"}]"
+      }
+    },
+    "response": {
+      "ocs": {
+        "meta": {
+          "status": "ok",
+          "statuscode": 200,
+          "message": "OK"
+        },
+        "data": [
+          "unexpected"
+        ]
+      }
+    },
+    "error": "HTTP response schema failed"
+  }
+]

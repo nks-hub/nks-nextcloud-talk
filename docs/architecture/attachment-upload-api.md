@@ -152,7 +152,8 @@ Kontrakt obsahuje 12 OCS fixture, 15 capability případů, 20 wire případů,
 7 DAV plánů s 11 stavovými výsledky, 3 XML fixture a 20 stavových scénářů.
 Python validator má 16 unit testů. Attachment doména prochází 52 Dart testy:
 15 contract, 7 DAV, 17 runtime, 12 security a 1 skutečný release AOT
-executable. Celý `talk_protocol` prochází 427 testy a analyzer je bez nálezu.
+executable. Po doplnění signaling řezu celý `talk_protocol` prochází 485 testy
+a analyzer je bez nálezu.
 
 ## Co důkaz nepokrývá
 

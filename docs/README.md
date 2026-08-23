@@ -24,6 +24,9 @@ Dokumentace je rozdělená podle stavu poznání:
   account-scoped transakční stav.
 - [Upload příloh a voice zpráv](architecture/attachment-upload-api.md) popisuje
   Talk OCS, WebDAV normal/chunk upload, bezpečný resume a chat confirmation.
+- [Signaling preparation](architecture/signaling-api.md) popisuje internal OCS,
+  HPB WebSocket hello/resume/room, session epochy a reálné loopback testy bez
+  předstíraných WebRTC médií.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 - [Audit závislostí a assetů](architecture/dependency-licenses.md) průběžně

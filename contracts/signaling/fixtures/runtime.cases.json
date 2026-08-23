@@ -1,0 +1,773 @@
+[
+  {
+    "id": "external-full-handshake",
+    "initial": {},
+    "actions": [
+      {
+        "type": "settings",
+        "mode": "external"
+      },
+      {
+        "type": "connect"
+      },
+      {
+        "type": "welcome"
+      },
+      {
+        "type": "helloOk",
+        "sameSession": false
+      },
+      {
+        "type": "roomOk"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "signalingReady"
+    }
+  },
+  {
+    "id": "external-disconnect-resume",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1
+    },
+    "actions": [
+      {
+        "type": "disconnect",
+        "bodyPossiblySent": true
+      },
+      {
+        "type": "connect"
+      },
+      {
+        "type": "welcome"
+      },
+      {
+        "type": "helloOk",
+        "sameSession": true
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": null,
+      "outcome": "resumed"
+    }
+  },
+  {
+    "id": "external-expired-resume-full-hello",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 1
+    },
+    "actions": [
+      {
+        "type": "disconnect",
+        "bodyPossiblySent": false
+      },
+      {
+        "type": "expireResume"
+      },
+      {
+        "type": "connect"
+      },
+      {
+        "type": "welcome"
+      },
+      {
+        "type": "helloOk",
+        "sameSession": false
+      },
+      {
+        "type": "roomOk"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 3,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": null,
+      "outcome": "signalingReady"
+    }
+  },
+  {
+    "id": "settings-transport-failure-releases-retry",
+    "initial": {
+      "phase": "fetchingSettings",
+      "pending": "settingsFetch"
+    },
+    "actions": [
+      {
+        "type": "settingsTransportFailure"
+      }
+    ],
+    "expected": {
+      "mode": null,
+      "phase": "settingsRefreshRequired",
+      "connectionEpoch": 0,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "settingsRefreshRequired"
+    }
+  },
+  {
+    "id": "external-no-such-session-full-hello",
+    "initial": {
+      "mode": "external",
+      "phase": "helloPending",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": true,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "resume"
+    },
+    "actions": [
+      {
+        "type": "helloError",
+        "code": "no_such_session"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "helloPending",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": "fullV2",
+      "outcome": "helloSending"
+    }
+  },
+  {
+    "id": "external-rate-limit-backoff",
+    "initial": {
+      "mode": "external",
+      "phase": "helloPending",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": true,
+      "roomConfirmed": true,
+      "pending": "resume"
+    },
+    "actions": [
+      {
+        "type": "helloError",
+        "code": "too_many_requests"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "reconnectWaiting",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": true,
+      "roomConfirmed": true,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": "backoff",
+      "outcome": "reconnectScheduled"
+    }
+  },
+  {
+    "id": "external-token-refresh",
+    "initial": {
+      "mode": "external",
+      "phase": "helloPending",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "fullV2"
+    },
+    "actions": [
+      {
+        "type": "helloError",
+        "code": "invalid_token"
+      }
+    ],
+    "expected": {
+      "mode": null,
+      "phase": "settingsRefreshRequired",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "settingsRefreshRequired"
+    }
+  },
+  {
+    "id": "external-room-session-refresh",
+    "initial": {
+      "mode": "external",
+      "phase": "roomPending",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "pending": "roomJoin"
+    },
+    "actions": [
+      {
+        "type": "roomError",
+        "code": "no_such_room"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "roomSessionRefreshRequired",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "roomSessionRefreshRequired"
+    }
+  },
+  {
+    "id": "internal-pull-success",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalPolling",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "pending": "internalPull"
+    },
+    "actions": [
+      {
+        "type": "internalPull",
+        "status": 200,
+        "messages": 1,
+        "localPeers": 2
+      }
+    ],
+    "expected": {
+      "mode": "internal",
+      "phase": "internalReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "messagesReceived"
+    }
+  },
+  {
+    "id": "internal-profile-refresh",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalPolling",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "internalPull"
+    },
+    "actions": [
+      {
+        "type": "internalPull",
+        "status": 400
+      }
+    ],
+    "expected": {
+      "mode": null,
+      "phase": "settingsRefreshRequired",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "settingsRefreshRequired"
+    }
+  },
+  {
+    "id": "internal-reauthentication",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalPolling",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "internalPull"
+    },
+    "actions": [
+      {
+        "type": "internalPull",
+        "status": 401
+      }
+    ],
+    "expected": {
+      "mode": "internal",
+      "phase": "reauthenticationRequired",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "reauthenticationRequired"
+    }
+  },
+  {
+    "id": "internal-room-refresh",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalPolling",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "internalPull"
+    },
+    "actions": [
+      {
+        "type": "internalPull",
+        "status": 404
+      }
+    ],
+    "expected": {
+      "mode": "internal",
+      "phase": "roomSessionRefreshRequired",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "roomSessionRefreshRequired"
+    }
+  },
+  {
+    "id": "internal-session-terminated",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalPolling",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "pending": "internalPull"
+    },
+    "actions": [
+      {
+        "type": "internalPull",
+        "status": 409
+      }
+    ],
+    "expected": {
+      "mode": "internal",
+      "phase": "terminated",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "terminated"
+    }
+  },
+  {
+    "id": "internal-batch-possibly-sent",
+    "initial": {
+      "mode": "internal",
+      "phase": "internalReady",
+      "connectionEpoch": 1,
+      "roomConfirmed": true,
+      "pending": "internalBatch"
+    },
+    "actions": [
+      {
+        "type": "internalBatchTransportFailure",
+        "bodyState": "possiblySent"
+      }
+    ],
+    "expected": {
+      "mode": "internal",
+      "phase": "internalReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 1,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": null,
+      "outcome": "renegotiationRequired"
+    }
+  },
+  {
+    "id": "cross-account-frame-rejected",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1
+    },
+    "actions": [
+      {
+        "type": "crossAccountFrame"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "rejected"
+    }
+  },
+  {
+    "id": "stale-connection-frame-rejected",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1
+    },
+    "actions": [
+      {
+        "type": "staleEpochFrame"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "rejected"
+    }
+  },
+  {
+    "id": "stale-room-frame-rejected",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1
+    },
+    "actions": [
+      {
+        "type": "staleRoomEpochFrame"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "rejected"
+    }
+  },
+  {
+    "id": "process-restart-clears-transient-state",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 2,
+      "roomEpoch": 3,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 1
+    },
+    "actions": [
+      {
+        "type": "restart"
+      }
+    ],
+    "expected": {
+      "mode": null,
+      "phase": "idle",
+      "connectionEpoch": 3,
+      "roomEpoch": 4,
+      "hasSession": false,
+      "hasResume": false,
+      "resumeValid": false,
+      "roomConfirmed": false,
+      "localPeers": 0,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": null,
+      "outcome": "restartRecovered"
+    }
+  },
+  {
+    "id": "federation-interruption-pauses-admission",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 1
+    },
+    "actions": [
+      {
+        "type": "federationInterrupted"
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 1,
+      "federatedPeers": 1,
+      "allInCall": null,
+      "federationInterrupted": true,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "frameAccepted"
+    }
+  },
+  {
+    "id": "failed-federation-resume-keeps-local-peers",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 2,
+      "federationInterrupted": true
+    },
+    "actions": [
+      {
+        "type": "federationResumed",
+        "resumed": false
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 0,
+      "allInCall": null,
+      "federationInterrupted": false,
+      "renegotiationRequired": true,
+      "pending": null,
+      "outcome": "renegotiationRequired"
+    }
+  },
+  {
+    "id": "participants-update-all-applies-to-snapshot",
+    "initial": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 1
+    },
+    "actions": [
+      {
+        "type": "participantsUpdateAll",
+        "inCall": 1
+      }
+    ],
+    "expected": {
+      "mode": "external",
+      "phase": "signalingReady",
+      "connectionEpoch": 1,
+      "roomEpoch": 2,
+      "hasSession": true,
+      "hasResume": true,
+      "resumeValid": false,
+      "roomConfirmed": true,
+      "localPeers": 2,
+      "federatedPeers": 1,
+      "allInCall": 1,
+      "federationInterrupted": false,
+      "renegotiationRequired": false,
+      "pending": null,
+      "outcome": "frameAccepted"
+    }
+  }
+]

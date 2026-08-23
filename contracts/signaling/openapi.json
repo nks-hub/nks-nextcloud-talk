@@ -1,0 +1,697 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nextcloud Talk Signaling Preparation Compatibility Contract",
+    "version": "0.1.0",
+    "description": "Clean-room compatibility contract for Talk signaling-v3 settings and internal signaling HTTP transport. HPB WebSocket frames are validated by the executable fixture validator because OpenAPI does not describe WebSocket messages."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "https://cloud.example.invalid",
+      "description": "Documentation-only Nextcloud origin"
+    }
+  ],
+  "paths": {
+    "/ocs/v2.php/apps/spreed/api/v3/signaling/settings": {
+      "get": {
+        "operationId": "getSignalingSettingsV3",
+        "summary": "Read the authenticated room signaling profile",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsHeader"
+          },
+          {
+            "$ref": "#/components/parameters/FormatQuery"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ConversationToken"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Internal or external signaling settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v3/signaling/{token}": {
+      "parameters": [
+        {
+          "name": "token",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ConversationToken"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "pullInternalSignalingV3",
+        "summary": "Long-poll ephemeral internal signaling messages",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsHeader"
+          },
+          {
+            "$ref": "#/components/parameters/FormatQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Zero or more messages followed by one participant snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalPullEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "sendInternalSignalingV3",
+        "summary": "Send a bounded batch of ephemeral internal signaling messages",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsHeader"
+          },
+          {
+            "$ref": "#/components/parameters/FormatQuery"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "messages"
+                ],
+                "properties": {
+                  "messages": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 1048576,
+                    "description": "JSON-encoded array of message envelopes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server accepted processing of the ephemeral batch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalBatchEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "409": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Login Flow v2 account name and app password; credentials are sent only to the account Nextcloud origin"
+      }
+    },
+    "parameters": {
+      "OcsHeader": {
+        "name": "OCS-APIRequest",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "true"
+        }
+      },
+      "FormatQuery": {
+        "name": "format",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "json"
+        }
+      }
+    },
+    "responses": {
+      "OcsError": {
+        "description": "OCS error envelope",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OcsErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ConversationToken": {
+        "type": "string",
+        "pattern": "^[a-z0-9]{4,30}$"
+      },
+      "OcsMeta": {
+        "type": "object",
+        "required": [
+          "status",
+          "statuscode"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failure"
+            ]
+          },
+          "statuscode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "IceServer": {
+        "type": "object",
+        "required": [
+          "urls"
+        ],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "credential": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          }
+        },
+        "additionalProperties": true
+      },
+      "FederationSettings": {
+        "type": "object",
+        "required": [
+          "server",
+          "nextcloudServer",
+          "helloAuthParams",
+          "roomId"
+        ],
+        "properties": {
+          "server": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 4096
+          },
+          "nextcloudServer": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 4096
+          },
+          "helloAuthParams": {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32768
+              }
+            },
+            "additionalProperties": true
+          },
+          "roomId": {
+            "$ref": "#/components/schemas/ConversationToken"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SettingsBase": {
+        "type": "object",
+        "required": [
+          "signalingMode",
+          "userId",
+          "hideWarning",
+          "server",
+          "federation",
+          "stunservers",
+          "turnservers",
+          "sipDialinInfo"
+        ],
+        "properties": {
+          "signalingMode": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "hideWarning": {
+            "type": "boolean"
+          },
+          "server": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "federation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FederationSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stunservers": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/IceServer"
+            }
+          },
+          "turnservers": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/IceServer"
+            }
+          },
+          "sipDialinInfo": {
+            "type": "string",
+            "maxLength": 16384
+          }
+        },
+        "additionalProperties": true
+      },
+      "InternalSettings": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SettingsBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "signalingMode": {
+                "const": "internal"
+              }
+            }
+          }
+        ]
+      },
+      "HelloV1Authentication": {
+        "type": "object",
+        "required": [
+          "userid",
+          "ticket"
+        ],
+        "properties": {
+          "userid": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "ticket": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          }
+        },
+        "additionalProperties": true
+      },
+      "HelloV2Authentication": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768
+          }
+        },
+        "additionalProperties": true
+      },
+      "HelloAuthentication": {
+        "type": "object",
+        "properties": {
+          "1.0": {
+            "$ref": "#/components/schemas/HelloV1Authentication"
+          },
+          "2.0": {
+            "$ref": "#/components/schemas/HelloV2Authentication"
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "1.0"
+            ]
+          },
+          {
+            "required": [
+              "2.0"
+            ]
+          }
+        ],
+        "additionalProperties": true
+      },
+      "ExternalSettings": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SettingsBase"
+          },
+          {
+            "type": "object",
+            "required": [
+              "helloAuthParams"
+            ],
+            "properties": {
+              "signalingMode": {
+                "const": "external"
+              },
+              "server": {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "helloAuthParams": {
+                "$ref": "#/components/schemas/HelloAuthentication"
+              }
+            }
+          }
+        ]
+      },
+      "SettingsEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/InternalSettings"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExternalSettings"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "InternalMessageEvent": {
+        "type": "object",
+        "required": [
+          "type",
+          "data"
+        ],
+        "properties": {
+          "type": {
+            "const": "message"
+          },
+          "data": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 1048576
+          }
+        },
+        "additionalProperties": true
+      },
+      "InternalParticipant": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "roomId",
+          "lastPing",
+          "userId",
+          "inCall",
+          "participantPermissions",
+          "actorType",
+          "actorId"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "roomId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lastPing": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "userId": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "inCall": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "participantPermissions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "actorType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "actorId": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "UsersInRoomEvent": {
+        "type": "object",
+        "required": [
+          "type",
+          "data"
+        ],
+        "properties": {
+          "type": {
+            "const": "usersInRoom"
+          },
+          "data": {
+            "type": "array",
+            "maxItems": 4096,
+            "items": {
+              "$ref": "#/components/schemas/InternalParticipant"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "InternalPullEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4097,
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InternalMessageEvent"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UsersInRoomEvent"
+                    }
+                  ]
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "InternalBatchEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "OcsErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {}
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

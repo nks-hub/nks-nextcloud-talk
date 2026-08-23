@@ -1,0 +1,232 @@
+[
+  {
+    "id": "internal-basic",
+    "valid": true,
+    "data": {
+      "signalingMode": "internal",
+      "userId": "synthetic-user-a",
+      "hideWarning": false,
+      "server": "",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": ""
+    },
+    "expected": {
+      "mode": "internal",
+      "federated": false,
+      "helloVersions": []
+    }
+  },
+  {
+    "id": "internal-with-ice",
+    "valid": true,
+    "data": {
+      "signalingMode": "internal",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "",
+      "federation": null,
+      "stunservers": [
+        {
+          "urls": [
+            "stun:stun.example.invalid:3478"
+          ]
+        }
+      ],
+      "turnservers": [
+        {
+          "urls": [
+            "turn:turn.example.invalid:3478?transport=udp"
+          ],
+          "username": "synthetic-turn-user",
+          "credential": "synthetic-turn-credential"
+        }
+      ],
+      "sipDialinInfo": "Synthetic dial-in documentation"
+    },
+    "expected": {
+      "mode": "internal",
+      "federated": false,
+      "helloVersions": []
+    }
+  },
+  {
+    "id": "external-v1",
+    "valid": true,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "https://hpb.example.invalid/signaling",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "1.0": {
+          "userid": "synthetic-user-a",
+          "ticket": "synthetic-v1-ticket"
+        }
+      }
+    },
+    "expected": {
+      "mode": "external",
+      "socket": "wss://hpb.example.invalid/signaling/spreed",
+      "federated": false,
+      "helloVersions": [
+        "1.0"
+      ]
+    }
+  },
+  {
+    "id": "external-v2",
+    "valid": true,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "wss://hpb.example.invalid/spreed",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "2.0": {
+          "token": "synthetic-v2-token"
+        }
+      }
+    },
+    "expected": {
+      "mode": "external",
+      "socket": "wss://hpb.example.invalid/spreed",
+      "federated": false,
+      "helloVersions": [
+        "2.0"
+      ]
+    }
+  },
+  {
+    "id": "external-v1-v2",
+    "valid": true,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "https://hpb.example.invalid",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "1.0": {
+          "userid": "synthetic-user-a",
+          "ticket": "synthetic-v1-ticket"
+        },
+        "2.0": {
+          "token": "synthetic-v2-token"
+        }
+      }
+    },
+    "expected": {
+      "mode": "external",
+      "socket": "wss://hpb.example.invalid/spreed",
+      "federated": false,
+      "helloVersions": [
+        "1.0",
+        "2.0"
+      ]
+    }
+  },
+  {
+    "id": "external-federated",
+    "valid": true,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "https://hpb.example.invalid",
+      "federation": {
+        "server": "https://remote-hpb.example.invalid/signaling",
+        "nextcloudServer": "https://remote-cloud.example.invalid/nextcloud",
+        "helloAuthParams": {
+          "token": "synthetic-federation-token"
+        },
+        "roomId": "remote123"
+      },
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "2.0": {
+          "token": "synthetic-v2-token"
+        }
+      }
+    },
+    "expected": {
+      "mode": "external",
+      "socket": "wss://hpb.example.invalid/spreed",
+      "federated": true,
+      "federationSocket": "wss://remote-hpb.example.invalid/signaling/spreed",
+      "helloVersions": [
+        "2.0"
+      ]
+    }
+  },
+  {
+    "id": "external-missing-auth",
+    "valid": false,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "https://hpb.example.invalid",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {}
+    },
+    "error": "helloAuthParams"
+  },
+  {
+    "id": "external-cleartext-rejected",
+    "valid": false,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "http://hpb.example.invalid",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "2.0": {
+          "token": "synthetic-v2-token"
+        }
+      }
+    },
+    "error": "server.scheme"
+  },
+  {
+    "id": "external-query-rejected",
+    "valid": false,
+    "data": {
+      "signalingMode": "external",
+      "userId": "synthetic-user-a",
+      "hideWarning": true,
+      "server": "https://hpb.example.invalid?tenant=synthetic",
+      "federation": null,
+      "stunservers": [],
+      "turnservers": [],
+      "sipDialinInfo": "",
+      "helloAuthParams": {
+        "2.0": {
+          "token": "synthetic-v2-token"
+        }
+      }
+    },
+    "error": "server.query"
+  }
+]

@@ -1,9 +1,88 @@
 import 'dart:collection';
+import 'dart:convert';
 
 import 'protocol_exception.dart';
 
 const int _maximumJsonDepth = 64;
 const int _maximumJsonNodes = 10000;
+
+Object? decodeJsonRejectingDuplicateMembers(
+  String source, {
+  required TalkProtocolErrorCode code,
+  required String path,
+}) {
+  try {
+    _rejectDuplicateJsonMembers(source, code: code, path: path);
+    return jsonDecode(source);
+  } on FormatException {
+    protocolFailure(code, path);
+  }
+}
+
+void _rejectDuplicateJsonMembers(
+  String source, {
+  required TalkProtocolErrorCode code,
+  required String path,
+}) {
+  final objectScopes = <Set<String>?>[];
+  var index = 0;
+  while (index < source.length) {
+    final unit = source.codeUnitAt(index);
+    if (unit == 0x22) {
+      final start = index;
+      index++;
+      var closed = false;
+      while (index < source.length) {
+        final stringUnit = source.codeUnitAt(index);
+        if (stringUnit == 0x5c) {
+          index += 2;
+          continue;
+        }
+        if (stringUnit == 0x22) {
+          closed = true;
+          break;
+        }
+        index++;
+      }
+      if (!closed) {
+        return;
+      }
+      var next = index + 1;
+      while (next < source.length &&
+          _isJsonWhitespace(source.codeUnitAt(next))) {
+        next++;
+      }
+      final members = objectScopes.isEmpty ? null : objectScopes.last;
+      if (members != null &&
+          next < source.length &&
+          source.codeUnitAt(next) == 0x3a) {
+        final key = jsonDecode(source.substring(start, index + 1));
+        if (key is! String || !members.add(key)) {
+          protocolFailure(code, path);
+        }
+      }
+      index++;
+      continue;
+    }
+    if (unit == 0x7b) {
+      objectScopes.add(<String>{});
+    } else if (unit == 0x5b) {
+      objectScopes.add(null);
+    } else if (unit == 0x7d) {
+      if (objectScopes.isNotEmpty && objectScopes.last != null) {
+        objectScopes.removeLast();
+      }
+    } else if (unit == 0x5d) {
+      if (objectScopes.isNotEmpty && objectScopes.last == null) {
+        objectScopes.removeLast();
+      }
+    }
+    index++;
+  }
+}
+
+bool _isJsonWhitespace(int unit) =>
+    unit == 0x20 || unit == 0x09 || unit == 0x0a || unit == 0x0d;
 
 Map<String, Object?> requireObject(
   Object? value, {
