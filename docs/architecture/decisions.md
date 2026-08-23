@@ -280,6 +280,23 @@ V jedné room platí FIFO a single-flight pro finalizaci. Cancel před finalize
 uklízí pouze jobem vlastněnou chunk session a Draft temp soubor; po zahájení
 finalize se možný finální soubor automaticky nemaže.
 
+### D-022: Oddělené signaling transporty a ephemeral session epoch
+
+Stav: Přijato pro implementaci řezu 10.
+
+Internal OCS long poll a external HPB WebSocket mají samostatný wire profil a
+reconnect semantiku. Sdílejí account-scoped preparation coordinator,
+participant snapshot a topology model, ne společnou frontu JSON zpráv.
+
+HPB resume se používá pouze ve 30sekundovém serverovém okně a musí zachovat
+signaling session ID. Full hello vytvoří novou session epoch, zahodí staré
+participant/room potvrzení a všechny pending peer frame a vyžádá nový room
+join. Signaling frame jsou ephemeral a nikdy netvoří durable outbox.
+
+Stav `signalingReady` není `mediaReady`. Řez 10 nevystaví call REST mutaci ani
+uživatelské call ovládání; serverové in-call flags vzniknou až s reálným media
+enginem v řezu 11.
+
 ## Vyřešené volby
 
 ### Q-001: Licence

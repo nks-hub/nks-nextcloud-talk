@@ -46,6 +46,7 @@ nevytváří jako prázdný stub.
 - [Implementace Dart chat runtime](../plans/2026-08-23-dart-chat-runtime-design.md)
 - [Rich chat a vlákna](../plans/2026-08-23-rich-chat-threads-design.md)
 - [Implementace attachment upload runtime](../plans/2026-08-23-attachment-upload-runtime-design.md)
+- [Návrh signaling preparation runtime](../plans/2026-08-23-signaling-preparation-runtime-design.md)
 
 ## Principy
 
