@@ -25,10 +25,17 @@ Implementované řezy pokrývají:
   bez omezeného integer převodu a redigovanou diagnostiku;
 - atomický single-use chat merge plán, ChatBlock konvergenci a text-send outbox
   s per-room FIFO/single-flight, restartem a ambiguous-send reconciliation.
+- capability-bound mentions, threads, reactions, edit/delete, pin, reminder a
+  scheduled-message requesty pro 21 rich-chat operací;
+- bounded immutable rich-chat response parser a account-scoped single-use plán
+  pro messages, thread first/last, room preview, reactions, reminders a schedule;
+- GFM a Rich Object String renderer do bezpečného semantic tree bez
+  vykonatelného raw HTML nebo nebezpečných aktivních odkazů.
 
 Balík načítá přímo všechny fixtures z `contracts/client-bootstrap` a
-`contracts/conversation-list` i `contracts/chat-messages`. Aktuálně prochází
-`dart analyze --fatal-infos` bez nálezu a 280 Dart testů včetně skutečného
+`contracts/conversation-list`, `contracts/chat-messages` i
+`contracts/rich-chat`. Aktuálně prochází `dart analyze --fatal-infos` bez nálezu
+a 375 Dart testů včetně skutečných
 release AOT executable. Planner připravuje úplný candidate account snapshot;
 skutečnou SQLite transakci, síťový transport a background scheduler bude
 vlastnit budoucí Flutter/Drift vrstva.

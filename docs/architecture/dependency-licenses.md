@@ -1,6 +1,6 @@
 # Audit závislostí a assetů
 
-Datum poslední kontroly: 22. srpna 2026.
+Datum poslední kontroly: 23. srpna 2026.
 
 Tento dokument je průběžná distribuční brána pro projekt licencovaný pod
 `GPL-3.0-or-later`. Evidence vychází z konkrétního lockfilu a licenčního souboru
@@ -13,6 +13,7 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 | Komponenta | Verze a integrita | Licence a notice | Použití | Stav |
 | --- | --- | --- | --- | --- |
 | [`punycoder`](https://pub.dev/packages/punycoder) | 0.3.0; SHA-256 `982734df864d9588eb13e28ac1c5a46b57e22117b3696032ac58739966cec190` v `packages/talk_protocol/pubspec.lock` | MIT; Copyright 2025 dropbear-software; notice musí zůstat v distribučních materiálech | RFC 3492/IDNA převod Unicode hostname na kanonický ASCII tvar | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
+| [`markdown`](https://pub.dev/packages/markdown) | 7.3.1; archive SHA-256 `ee85086ad7698b42522c6ad42fe195f1b9898e4d974a1af4576c1a3a176cada9` v `packages/talk_protocol/pubspec.lock`; lokální LICENSE SHA-256 `0aa335b5e036b9efbb35ad7a35835cd32e4eb656c08bfe040550a9f6fa84fcc7` | BSD-3-Clause; Copyright 2012, the Dart project authors; notice a disclaimer musí zůstat ve zdrojové i binární distribuci | GFM AST pro převod zprávy do vlastního bezpečného Rich Object semantic tree | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
 
 <!-- markdownlint-enable MD013 -->
 

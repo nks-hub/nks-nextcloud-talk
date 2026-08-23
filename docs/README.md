@@ -19,6 +19,9 @@ Dokumentace je rozdělená podle stavu poznání:
   serverový cursor, account-scoped merge a spustitelné full/delta fixture.
 - [Chat zprávy](architecture/chat-messages-api.md) popisují history/future
   cursory, text send, reply, read/unread a executable durable outbox.
+- [Rich chat a vlákna](architecture/rich-chat-api.md) popisují mentions,
+  reactions, edit/delete, pin, reminders, schedule, bezpečný renderer a
+  account-scoped transakční stav.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 - [Audit závislostí a assetů](architecture/dependency-licenses.md) průběžně

@@ -265,8 +265,9 @@ Aktuální lokální výsledek: 1 OpenAPI dokument, 44 fixtures, z toho 43
 schema-validních a 13 přijatých syntetických messages, 21 query případů, 10
 capability případů, 23 merge případů s 25 kroky, 36 outbox případů s 60 kroky,
 4 unit testy, 1 redaction guard a 1 origin případ prošly. Stejné fixtures
-vykonává pure Dart chat doména ve 155 testech; celý `talk_protocol` prochází
-280 testy včetně skutečného release AOT executable a analyzer je bez nálezu.
+vykonává pure Dart chat doména ve 155 testech; celý `talk_protocol` po
+navazujícím rich-chat řezu prochází 375 testy včetně skutečných release AOT
+executable a analyzer je bez nálezu.
 
 ## Co důkaz nepokrývá
 

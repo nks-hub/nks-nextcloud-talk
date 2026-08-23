@@ -22,19 +22,19 @@ final class ChatDeletedParent extends ChatMessageParent {
 }
 
 final class ChatFullParent extends ChatMessageParent {
-  const ChatFullParent({
-    required this.messageId,
-    required this.roomToken,
-    required this.referenceId,
-    required this.metadata,
-    required this.wire,
-  });
+  const ChatFullParent({required this.message});
 
-  final int messageId;
-  final ConversationToken roomToken;
-  final String referenceId;
-  final Map<String, Object?> metadata;
-  final Map<String, Object?> wire;
+  final ChatMessage message;
+
+  int get messageId => message.messageId;
+
+  ConversationToken get roomToken => message.roomToken;
+
+  String get referenceId => message.referenceId;
+
+  Map<String, Object?> get metadata => message.metadata;
+
+  Map<String, Object?> get wire => message.wire;
 
   @override
   String toString() => 'ChatFullParent(<redacted>)';
@@ -51,8 +51,14 @@ final class ChatRichObjectParameter {
 
   factory ChatRichObjectParameter.fromJson(Object? json) {
     const code = TalkProtocolErrorCode.invalidChatResponse;
+    final frozen = JsonFreezeSession(
+      maximumDepth: chatJsonMaximumDepth,
+      maximumNodes: chatJsonMaximumNodes,
+      errorCode: code,
+      errorPath: r'$.ocs.data[].messageParameters.<member>',
+    ).freeze(json);
     final value = requireObject(
-      json,
+      frozen,
       path: r'$.ocs.data[].messageParameters.<member>',
       code: code,
     );
@@ -111,7 +117,15 @@ final class ChatMessage {
     required this.expirationTimestamp,
     required this.markdown,
     required this.reactions,
+    required this.reactionsSelf,
+    required this.deleted,
+    required this.lastEditActorDisplayName,
+    required this.lastEditActorId,
+    required this.lastEditActorType,
+    required this.lastEditTimestamp,
+    required this.silent,
     required this.threadId,
+    required this.isThread,
     required this.threadTitle,
     required this.threadReplies,
     required this.metadata,
@@ -120,7 +134,13 @@ final class ChatMessage {
   });
 
   factory ChatMessage.fromJson(Object? json) {
-    final value = _messageBase(json, path: r'$.ocs.data[]');
+    final frozen = JsonFreezeSession(
+      maximumDepth: chatJsonMaximumDepth,
+      maximumNodes: chatJsonMaximumNodes,
+      errorCode: TalkProtocolErrorCode.invalidChatResponse,
+      errorPath: r'$.ocs.data[]',
+    ).freeze(json);
+    final value = _messageBase(frozen, path: r'$.ocs.data[]');
     final rawParent = value.wire['parent'];
     ChatMessageParent? parent;
     if (rawParent != null) {
@@ -129,7 +149,8 @@ final class ChatMessage {
         path: r'$.ocs.data[].parent',
         code: TalkProtocolErrorCode.invalidChatResponse,
       );
-      if (parentValue['deleted'] == true) {
+      if (parentValue['deleted'] == true &&
+          !_hasFullMessageShape(parentValue)) {
         parent = ChatDeletedParent(
           messageId: requireInt(
             parentValue['id'],
@@ -140,39 +161,46 @@ final class ChatMessage {
         );
       } else {
         final full = _messageBase(parentValue, path: r'$.ocs.data[].parent');
-        parent = ChatFullParent(
-          messageId: full.messageId,
-          roomToken: full.roomToken,
-          referenceId: full.referenceId,
-          metadata: full.metadata,
-          wire: full.wire,
-        );
+        parent = ChatFullParent(message: ChatMessage._fromBase(full));
       }
     }
-    return ChatMessage._(
-      messageId: value.messageId,
-      roomToken: value.roomToken,
-      actorType: value.actorType,
-      actorId: value.actorId,
-      actorDisplayName: value.actorDisplayName,
-      timestamp: value.timestamp,
-      systemMessage: value.systemMessage,
-      messageType: value.messageType,
-      isReplyable: value.isReplyable,
-      referenceId: value.referenceId,
-      message: value.message,
-      messageParameters: value.messageParameters,
-      expirationTimestamp: value.expirationTimestamp,
-      markdown: value.markdown,
-      reactions: value.reactions,
-      threadId: value.threadId,
-      threadTitle: value.threadTitle,
-      threadReplies: value.threadReplies,
-      metadata: value.metadata,
-      parent: parent,
-      wire: value.wire,
-    );
+    return ChatMessage._fromBase(value, parent: parent);
   }
+
+  factory ChatMessage._fromBase(
+    _MessageBase value, {
+    ChatMessageParent? parent,
+  }) => ChatMessage._(
+    messageId: value.messageId,
+    roomToken: value.roomToken,
+    actorType: value.actorType,
+    actorId: value.actorId,
+    actorDisplayName: value.actorDisplayName,
+    timestamp: value.timestamp,
+    systemMessage: value.systemMessage,
+    messageType: value.messageType,
+    isReplyable: value.isReplyable,
+    referenceId: value.referenceId,
+    message: value.message,
+    messageParameters: value.messageParameters,
+    expirationTimestamp: value.expirationTimestamp,
+    markdown: value.markdown,
+    reactions: value.reactions,
+    reactionsSelf: value.reactionsSelf,
+    deleted: value.deleted,
+    lastEditActorDisplayName: value.lastEditActorDisplayName,
+    lastEditActorId: value.lastEditActorId,
+    lastEditActorType: value.lastEditActorType,
+    lastEditTimestamp: value.lastEditTimestamp,
+    silent: value.silent,
+    threadId: value.threadId,
+    isThread: value.isThread,
+    threadTitle: value.threadTitle,
+    threadReplies: value.threadReplies,
+    metadata: value.metadata,
+    parent: parent,
+    wire: value.wire,
+  );
 
   final int messageId;
   final ConversationToken roomToken;
@@ -189,12 +217,111 @@ final class ChatMessage {
   final int? expirationTimestamp;
   final bool? markdown;
   final Map<String, int> reactions;
+  final List<String> reactionsSelf;
+  final bool deleted;
+  final String? lastEditActorDisplayName;
+  final String? lastEditActorId;
+  final String? lastEditActorType;
+  final int? lastEditTimestamp;
+  final bool? silent;
   final int? threadId;
+  final bool? isThread;
   final String? threadTitle;
   final int? threadReplies;
   final Map<String, Object?> metadata;
   final ChatMessageParent? parent;
   final Map<String, Object?> wire;
+
+  ChatMessage withReactionAggregate({
+    required Map<String, int> reactions,
+    required Iterable<String> reactionsSelf,
+  }) {
+    final immutableReactions = UnmodifiableMapView(Map.of(reactions));
+    final immutableSelf = List<String>.unmodifiable(reactionsSelf);
+    final updatedWire = requireObject(
+      JsonFreezeSession(
+        maximumDepth: chatJsonMaximumDepth,
+        maximumNodes: chatJsonMaximumNodes,
+        errorCode: TalkProtocolErrorCode.invalidChatState,
+        errorPath: r'$.messages.reactions',
+      ).freeze(<String, Object?>{
+        ...wire,
+        'reactions': immutableReactions,
+        'reactionsSelf': immutableSelf,
+      }),
+      path: r'$.messages',
+      code: TalkProtocolErrorCode.invalidChatState,
+    );
+    return _copyWith(
+      reactions: immutableReactions,
+      reactionsSelf: immutableSelf,
+      parent: parent,
+      wire: updatedWire,
+    );
+  }
+
+  ChatMessage replaceParentMessageIfMatching(ChatMessage authoritative) {
+    final currentParent = parent;
+    if (currentParent is! ChatFullParent ||
+        currentParent.messageId != authoritative.messageId ||
+        currentParent.roomToken != authoritative.roomToken ||
+        identical(currentParent.message, authoritative)) {
+      return this;
+    }
+    final updatedWire = requireObject(
+      JsonFreezeSession(
+        maximumDepth: chatJsonMaximumDepth,
+        maximumNodes: chatJsonMaximumNodes,
+        errorCode: TalkProtocolErrorCode.invalidChatState,
+        errorPath: r'$.messages.parent',
+      ).freeze(<String, Object?>{...wire, 'parent': authoritative.wire}),
+      path: r'$.messages',
+      code: TalkProtocolErrorCode.invalidChatState,
+    );
+    return _copyWith(
+      reactions: reactions,
+      reactionsSelf: reactionsSelf,
+      parent: ChatFullParent(message: authoritative),
+      wire: updatedWire,
+    );
+  }
+
+  ChatMessage _copyWith({
+    required Map<String, int> reactions,
+    required List<String> reactionsSelf,
+    required ChatMessageParent? parent,
+    required Map<String, Object?> wire,
+  }) => ChatMessage._(
+    messageId: messageId,
+    roomToken: roomToken,
+    actorType: actorType,
+    actorId: actorId,
+    actorDisplayName: actorDisplayName,
+    timestamp: timestamp,
+    systemMessage: systemMessage,
+    messageType: messageType,
+    isReplyable: isReplyable,
+    referenceId: referenceId,
+    message: message,
+    messageParameters: messageParameters,
+    expirationTimestamp: expirationTimestamp,
+    markdown: markdown,
+    reactions: reactions,
+    reactionsSelf: reactionsSelf,
+    deleted: deleted,
+    lastEditActorDisplayName: lastEditActorDisplayName,
+    lastEditActorId: lastEditActorId,
+    lastEditActorType: lastEditActorType,
+    lastEditTimestamp: lastEditTimestamp,
+    silent: silent,
+    threadId: threadId,
+    isThread: isThread,
+    threadTitle: threadTitle,
+    threadReplies: threadReplies,
+    metadata: metadata,
+    parent: parent,
+    wire: wire,
+  );
 
   @override
   String toString() => 'ChatMessage(<redacted>)';
@@ -278,11 +405,35 @@ _MessageBase _messageBase(Object? json, {required String path}) {
     ),
     markdown: _optionalBool(value['markdown'], path: '$path.markdown'),
     reactions: reactions,
+    reactionsSelf: _reactionsSelf(value['reactionsSelf'], path: path),
+    deleted: _optionalTrue(value['deleted'], path: '$path.deleted'),
+    lastEditActorDisplayName: _optionalString(
+      value['lastEditActorDisplayName'],
+      path: '$path.lastEditActorDisplayName',
+      maximum: 4096,
+    ),
+    lastEditActorId: _optionalString(
+      value['lastEditActorId'],
+      path: '$path.lastEditActorId',
+      maximum: 4096,
+    ),
+    lastEditActorType: _optionalString(
+      value['lastEditActorType'],
+      path: '$path.lastEditActorType',
+      maximum: 128,
+    ),
+    lastEditTimestamp: _optionalInt(
+      value['lastEditTimestamp'],
+      path: '$path.lastEditTimestamp',
+      minimum: 0,
+    ),
+    silent: _optionalBool(value['silent'], path: '$path.silent'),
     threadId: _optionalInt(
       value['threadId'],
       path: '$path.threadId',
       minimum: 0,
     ),
+    isThread: _optionalBool(value['isThread'], path: '$path.isThread'),
     threadTitle: _optionalString(
       value['threadTitle'],
       path: '$path.threadTitle',
@@ -341,6 +492,62 @@ Map<String, int> _reactions(Object? raw) {
   return UnmodifiableMapView(result);
 }
 
+List<String> _reactionsSelf(Object? raw, {required String path}) {
+  if (raw == null) {
+    return const <String>[];
+  }
+  const code = TalkProtocolErrorCode.invalidChatResponse;
+  final values = requireList(raw, path: '$path.reactionsSelf', code: code);
+  final result = <String>[];
+  final unique = <String>{};
+  for (var index = 0; index < values.length; index++) {
+    final reaction = requireString(
+      values[index],
+      path: '$path.reactionsSelf[$index]',
+      code: code,
+      minLength: 1,
+      maxLength: 32,
+    );
+    if (!unique.add(reaction)) {
+      protocolFailure(code, '$path.reactionsSelf');
+    }
+    result.add(reaction);
+  }
+  return List.unmodifiable(result);
+}
+
+bool _optionalTrue(Object? value, {required String path}) {
+  if (value == null) {
+    return false;
+  }
+  final parsed = requireBool(
+    value,
+    path: path,
+    code: TalkProtocolErrorCode.invalidChatResponse,
+  );
+  if (!parsed) {
+    protocolFailure(TalkProtocolErrorCode.invalidChatResponse, path);
+  }
+  return true;
+}
+
+bool _hasFullMessageShape(Map<String, Object?> value) => const <String>{
+  'id',
+  'token',
+  'actorType',
+  'actorId',
+  'actorDisplayName',
+  'timestamp',
+  'systemMessage',
+  'messageType',
+  'isReplyable',
+  'referenceId',
+  'message',
+  'messageParameters',
+  'markdown',
+  'reactions',
+}.every(value.containsKey);
+
 bool? _optionalBool(Object? value, {required String path}) {
   return value == null
       ? null
@@ -390,7 +597,15 @@ final class _MessageBase {
     required this.expirationTimestamp,
     required this.markdown,
     required this.reactions,
+    required this.reactionsSelf,
+    required this.deleted,
+    required this.lastEditActorDisplayName,
+    required this.lastEditActorId,
+    required this.lastEditActorType,
+    required this.lastEditTimestamp,
+    required this.silent,
     required this.threadId,
+    required this.isThread,
     required this.threadTitle,
     required this.threadReplies,
     required this.metadata,
@@ -412,7 +627,15 @@ final class _MessageBase {
   final int? expirationTimestamp;
   final bool? markdown;
   final Map<String, int> reactions;
+  final List<String> reactionsSelf;
+  final bool deleted;
+  final String? lastEditActorDisplayName;
+  final String? lastEditActorId;
+  final String? lastEditActorType;
+  final int? lastEditTimestamp;
+  final bool? silent;
   final int? threadId;
+  final bool? isThread;
   final String? threadTitle;
   final int? threadReplies;
   final Map<String, Object?> metadata;

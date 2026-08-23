@@ -230,6 +230,31 @@ jsou pouze zkratky s viditelnou alternativou. Touch target má nejméně 44 pt n
 iOS a 48 dp na Androidu. Podrobný checkpoint je v
 [mobilním návrhu](../plans/2026-08-22-original-flutter-client-design.md).
 
+### D-020: Rich chat jako typovaná online mutation hranice
+
+Stav: Přijato a implementováno v pure Dart runtime; Flutter transport, Drift a
+live serverový důkaz zůstávají součástí řezu 4.
+
+Mentions, threads, reactions, edit/delete, pin, reminders a schedule se volí
+výhradně z unikátních globálních a lokálních Talk features. Každý request i
+response je svázaný s účtem, kanonickým serverem a dostupným room/message/thread
+kontextem. Rich stav je account-scoped vrstva nad existujícím chat snapshotem a
+mění se jen přes single-use candidate plán.
+
+Markdown se nepropouští přímo do Flutter widgetů. Balíček `markdown` vytvoří
+AST a vlastní renderer jej převede na bounded semantic tree s typovanými Rich
+Object Strings, neaktivním raw HTML a same-origin link policy. Plaintext i
+Markdown sdílí node budget, který se spotřebuje před konstrukcí semantic uzlu;
+pozdní kontrola již materializovaného stromu není bezpečnostní hranice.
+
+Autoritativní reaction/edit/delete odpověď se v jednom candidate plánu
+propaguje do kanonické zprávy, každé reply a scheduled parent kopie, thread
+first/last, room preview a jejich immutable wire reprezentace.
+
+Rich mutace jsou v tomto řezu pouze online. Nejednoznačný výsledek se
+automaticky neopakuje a nezapisuje se do text-send outboxu. Offline replay smí
+vzniknout až samostatným kontraktem pro každý operation kind podle D-006.
+
 ## Vyřešené volby
 
 ### Q-001: Licence

@@ -1,8 +1,9 @@
 # Architektura
 
-Stav: návrh a produkční pure Dart bootstrap i conversation runtime. Protokolové
-kontrakty vznikly licenčně neutrálně; nový mobilní klient je licencovaný pod
-`GPL-3.0-or-later`. Flutter scaffold dosud nevznikl. Android `applicationId` je
+Stav: návrh a produkční pure Dart bootstrap, conversation, chat i rich-chat
+runtime. Protokolové kontrakty vznikly licenčně neutrálně; nový mobilní klient
+je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold dosud nevznikl. Android
+`applicationId` je
 přijaté jako
 `com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
 
@@ -30,6 +31,7 @@ nevytváří jako prázdný stub.
 - [OpenAPI a fixture klientského bootstrapu](client-bootstrap-api.md)
 - [OpenAPI, fixture a merge kontrakt seznamu konverzací](conversation-list-api.md)
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
+- [OpenAPI, renderer a stavový kontrakt rich chatu](rich-chat-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Audit závislostí a assetů](dependency-licenses.md)
@@ -40,6 +42,8 @@ nevytváří jako prázdný stub.
 - [Návrh conversation-list kontraktu](../plans/2026-08-22-conversation-list-contract-design.md)
 - [Implementace Dart conversation runtime](../plans/2026-08-22-dart-conversation-runtime-design.md)
 - [Návrh chat-messages kontraktu](../plans/2026-08-22-chat-messages-contract-design.md)
+- [Implementace Dart chat runtime](../plans/2026-08-23-dart-chat-runtime-design.md)
+- [Rich chat a vlákna](../plans/2026-08-23-rich-chat-threads-design.md)
 
 ## Principy
 

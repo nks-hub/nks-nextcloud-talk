@@ -42,7 +42,7 @@ class CompleteContractTest(unittest.TestCase):
             {
                 "operations": 21,
                 "responses": 23,
-                "requests": 27,
+                "requests": 28,
                 "capabilities": 8,
                 "render": 9,
                 "state": 7,

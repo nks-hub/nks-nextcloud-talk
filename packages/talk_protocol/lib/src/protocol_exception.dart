@@ -26,6 +26,12 @@ enum TalkProtocolErrorCode {
   invalidChatState,
   invalidChatMerge,
   invalidChatOutbox,
+  invalidRichChatProfile,
+  invalidRichChatRequest,
+  invalidRichChatResponse,
+  invalidRichChatRender,
+  invalidRichChatState,
+  invalidRichChatMerge,
   unsupportedChatOperation,
   unsupportedHttpStatus,
 }

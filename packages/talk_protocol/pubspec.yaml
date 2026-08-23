@@ -7,6 +7,7 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  markdown: 7.3.1
   punycoder: ^0.3.0
 
 dev_dependencies:

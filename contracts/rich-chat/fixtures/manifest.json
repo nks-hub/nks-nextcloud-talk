@@ -7,7 +7,7 @@
   "stateFile": "state.cases.json",
   "expectedCounts": {
     "responses": 23,
-    "requests": 27,
+    "requests": 28,
     "capabilities": 8,
     "render": 9,
     "state": 7

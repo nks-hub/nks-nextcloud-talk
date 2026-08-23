@@ -31,9 +31,16 @@
     {
       "id": "get-thread",
       "kind": "getThread",
-      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
       "input": { "roomToken": "rooma123", "threadId": 120 },
       "expected": { "operationId": "getThread", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "federated-get-thread-rejected",
+      "kind": "getThread",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "threadId": 120 },
+      "expectedError": true
     },
     {
       "id": "rename-thread",

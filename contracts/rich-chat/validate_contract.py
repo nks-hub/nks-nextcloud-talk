@@ -668,7 +668,10 @@ def build_wire_request(
         )
 
     if request_kind in {"getThread", "renameThread"}:
-        require_capability(capabilities, "threadMetadata", request_kind)
+        capability = (
+            "threadMessageFetch" if request_kind == "getThread" else "threadMetadata"
+        )
+        require_capability(capabilities, capability, request_kind)
         token = room()
         thread_id = require_integer(values.get("threadId"), "threadId", minimum=1)
         path = f"/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{thread_id}"
