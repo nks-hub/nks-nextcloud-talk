@@ -321,6 +321,25 @@ Transientní vzdálený cleanup zůstává jako durable account-bound revocation
 tombstone; capability refresh nesmí změnit dříve vyžádaný logout na pouhé
 vypnutí push. Druhý účet ani společný provider token se nesmí odstranit.
 
+### D-024: At-least-once push delivery a idempotentní mobilní zpracování
+
+Stav: Přijato; gateway a platformní persistence zůstávají součástí řezu 7.
+
+Opakovaný `/notifications` batch se deduplikuje před durable enqueue podle
+registrace a digestu opaque obálky. Provider worker používá bounded lease a
+at-least-once retry. FCM neposkytuje aplikační idempotency key, takže crash po
+provider ACK a před lokálním commitem může stejnou obálku doručit znovu;
+gateway nesmí deklarovat exactly-once.
+
+Gateway uzná položku jako přijatou až po DB commitu. Notifications na ověřeném
+SHA po transportní chybě stejný batch aplikačně neopakuje, takže in-memory nebo
+předčasně potvrzený enqueue by wake-up nevratně ztratil.
+
+Mobil po kryptografickém account routingu deduplikuje podle `accountId`, akce a
+`nid` nebo kanonických `nids`; payload bez `nid` používá digest obálky s
+omezeným TTL. Opakování může bezpečně spustit OCS catch-up, ale nesmí vytvořit
+druhou lokální notifikaci ani druhou mutaci.
+
 ## Vyřešené volby
 
 ### Q-001: Licence
@@ -378,6 +397,11 @@ Volba přijde po contract prototypu. Kritéria:
 - dlouhodobá údržba.
 
 Stack se nemá vybrat podle osobní preference bez prototypu kontraktu.
+
+Aktuální [stack evaluation](../research/push-gateway-stack-evaluation.md)
+doporučuje Go jako prvního kandidáta a Node.js jako fallback. Q-007 zůstává
+otevřené, dokud Go 1.25 spike neprokáže celý wire, PostgreSQL frontu, FCM
+adapter, restart, backpressure, SSRF ochranu a container runtime.
 
 ## Odložená rozhodnutí
 
