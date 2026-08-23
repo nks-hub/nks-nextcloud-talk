@@ -1,0 +1,16 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "renames": [
+        {
+          "photo.jpg": "photo (2).jpg"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,443 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nextcloud Talk Attachment Upload Compatibility Contract",
+    "version": "0.1.0",
+    "description": "Clean-room compatibility contract for the authenticated Talk conversation-folder probe and attachment finalize endpoints. WebDAV upload planning is validated by executable fixtures because OpenAPI has no standard operations for MKCOL, PROPFIND or MOVE. referenceId is correlation only and is not a server idempotency key."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "x-upstream-talk-sha": "f2958bb25be6604240c58a3faf9a2033a30d20e5",
+  "x-upstream-core-shas": {
+    "master": "a0bf541f667e4d891e05a92254b167840066e1a0",
+    "stable34": "a599620e9b75dc3c919b39dabd82a4f98b543b74"
+  },
+  "servers": [
+    {
+      "url": "https://cloud.example.invalid",
+      "description": "Documentation-only synthetic Nextcloud origin"
+    }
+  ],
+  "paths": {
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/attachment/folder": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RoomTokenPath"
+        }
+      ],
+      "post": {
+        "operationId": "probeAttachmentFolder",
+        "summary": "Prepare a private Draft folder and predict filename conflicts",
+        "description": "Requires an authenticated participant with CHAT permission in a read-write room. The returned folder is an untrusted relative path. renames is an ordered array of one-entry maps so duplicate desired filenames remain representable.",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeAttachmentFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft folder and advisory ordered rename predictions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeAttachmentFolderEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "403": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "507": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/attachment": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RoomTokenPath"
+        }
+      ],
+      "post": {
+        "operationId": "finalizeAttachment",
+        "summary": "Move one Draft file and announce it as file_shared",
+        "description": "The server moves the direct Draft child before creating the Talk message. A dispatched request is therefore not safe to replay blindly. HTTP and OCS success enter client-side awaitingConfirmation until one authoritative file_shared message matches the account, room, referenceId and the job-bound messageType: comment for a standard attachment or voice-message for voice.",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OcsApiRequestHeader"
+          },
+          {
+            "$ref": "#/components/parameters/JsonFormatQuery"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeAttachmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The file was moved and the message creation call returned; this response has no message id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizeAttachmentEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "401": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "403": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "404": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "422": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "500": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "501": {
+            "$ref": "#/components/responses/OcsError"
+          },
+          "507": {
+            "$ref": "#/components/responses/OcsError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Nextcloud user name and app password. Credentials are account-scoped and never part of fixtures."
+      }
+    },
+    "parameters": {
+      "RoomTokenPath": {
+        "name": "token",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ConversationToken"
+        }
+      },
+      "OcsApiRequestHeader": {
+        "name": "OCS-APIRequest",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "true"
+        }
+      },
+      "JsonFormatQuery": {
+        "name": "format",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "const": "json"
+        }
+      }
+    },
+    "responses": {
+      "OcsError": {
+        "description": "Authentication, authorization, deterministic input, quota, feature or server failure",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OcsErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ConversationToken": {
+        "type": "string",
+        "pattern": "^[a-z0-9]{4,30}$"
+      },
+      "ReferenceId": {
+        "type": "string",
+        "format": "uuid",
+        "maxLength": 64
+      },
+      "SafeFilename": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255,
+        "pattern": "^[^/\\\\\\u0000-\\u001f\\u007f]+$"
+      },
+      "RelativeDavPath": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "^(?!(?:\\.{1,2})(?:/|$))(?!.*\\/(?:\\.{1,2})(?:/|$))[^/?#\\\\%\\u0000-\\u001f\\u007f]+(?:/[^/?#\\\\%\\u0000-\\u001f\\u007f]+)*$"
+      },
+      "OcsMeta": {
+        "type": "object",
+        "required": [
+          "status",
+          "statuscode",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failure"
+            ]
+          },
+          "statuscode": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "RenameEntry": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "propertyNames": {
+          "$ref": "#/components/schemas/SafeFilename"
+        },
+        "additionalProperties": {
+          "$ref": "#/components/schemas/SafeFilename"
+        }
+      },
+      "ProbeAttachmentFolderRequest": {
+        "type": "object",
+        "required": [
+          "fileNames",
+          "allowUpdate"
+        ],
+        "properties": {
+          "fileNames": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/SafeFilename"
+            }
+          },
+          "allowUpdate": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProbeAttachmentFolderData": {
+        "type": "object",
+        "required": [
+          "folder",
+          "renames"
+        ],
+        "properties": {
+          "folder": {
+            "$ref": "#/components/schemas/RelativeDavPath"
+          },
+          "renames": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/RenameEntry"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ProbeAttachmentFolderEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "$ref": "#/components/schemas/ProbeAttachmentFolderData"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "FinalizeAttachmentRequest": {
+        "type": "object",
+        "required": [
+          "filePath",
+          "referenceId",
+          "talkMetaData",
+          "fileName",
+          "allowUpdate"
+        ],
+        "properties": {
+          "filePath": {
+            "$ref": "#/components/schemas/RelativeDavPath"
+          },
+          "referenceId": {
+            "$ref": "#/components/schemas/ReferenceId"
+          },
+          "talkMetaData": {
+            "type": "string",
+            "maxLength": 16384
+          },
+          "fileName": {
+            "$ref": "#/components/schemas/SafeFilename"
+          },
+          "allowUpdate": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "FinalizeAttachmentData": {
+        "type": "object",
+        "required": [
+          "renames"
+        ],
+        "properties": {
+          "renames": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/RenameEntry"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "FinalizeAttachmentEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "$ref": "#/components/schemas/FinalizeAttachmentData"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "OcsErrorData": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "additionalProperties": true
+      },
+      "OcsErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ocs"
+        ],
+        "properties": {
+          "ocs": {
+            "type": "object",
+            "required": [
+              "meta",
+              "data"
+            ],
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/OcsMeta"
+              },
+              "data": {
+                "$ref": "#/components/schemas/OcsErrorData"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

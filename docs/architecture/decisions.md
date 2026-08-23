@@ -255,6 +255,31 @@ Rich mutace jsou v tomto řezu pouze online. Nejednoznačný výsledek se
 automaticky neopakuje a nezapisuje se do text-send outboxu. Offline replay smí
 vzniknout až samostatným kontraktem pro každý operation kind podle D-006.
 
+### D-021: Příloha jako potvrzovaný durable dvoufázový job
+
+Stav: Přijato a implementováno v pure Dart runtime; Flutter transport, Drift,
+live server a platformní UI zůstávají součástí řezu 5.
+
+Příloha používá jeden durable job pro Talk OCS Draft probe, WebDAV normal nebo
+chunk upload, Talk finalize a následné potvrzení chatem. Job smí držet pouze
+app-owned kopii nebo persistable URI grant a před každým uploadem či resume
+znovu ověří velikost a SHA-256. Source mismatch nesmí pod původním
+`referenceId` odeslat jiný obsah.
+
+Chunk v1 nepoužívá HTTP `Range`; byte rozsah je jen v názvu chunku a `MOVE`
+vždy posílá přesný `OC-Total-Length`. XML multistatus je UTF-8-only, odmítá DTD
+a entity a má průběžný byte, depth a node limit.
+
+Finalize není atomický. Úspěšná response, 5xx, ztracená response, možná
+odeslané body i restart ve `finalizing` vedou do `awaitingConfirmation`, nikdy
+k blind POSTu. Job dokončí právě jedna account/server/room/reference-bound
+`file_shared` zpráva se správným `comment` nebo `voice-message` typem a file
+rich objektem. Nula shod není důkaz neprovedení a více shod zůstává ambiguous.
+
+V jedné room platí FIFO a single-flight pro finalizaci. Cancel před finalize
+uklízí pouze jobem vlastněnou chunk session a Draft temp soubor; po zahájení
+finalize se možný finální soubor automaticky nemaže.
+
 ## Vyřešené volby
 
 ### Q-001: Licence

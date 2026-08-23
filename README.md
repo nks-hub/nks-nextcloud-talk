@@ -26,6 +26,10 @@ Aktuální stav:
   room/thread merge a restart-safe outbox bez blind replaye;
 - produkční pure Dart chat runtime s bounded immutable parserem, account-scoped
   atomickým merge plánem a durable text-send outbox lifecycle;
+- spustitelný attachment kontrakt pro Talk OCS probe/finalize, WebDAV normal a
+  chunk upload, XML multistatus a autoritativní chat confirmation;
+- produkční pure Dart attachment runtime s durable zdrojem, restart-safe
+  resume, room FIFO/single-flight a bezpečným ambiguous-finalize stavem;
 - doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;
@@ -34,7 +38,7 @@ Aktuální stav:
   [`GPL-3.0-or-later`](LICENSE);
 - Flutter mobilní scaffold ještě nezačal, protože zbývá schválit iOS bundle ID
   a minimální platformy. Platformně nezávislý bootstrap, conversation a chat
-  runtime už jsou implementované a testované.
+  runtime už jsou implementované a testované včetně příloh a voice wire toku.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

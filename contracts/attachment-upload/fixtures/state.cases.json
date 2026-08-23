@@ -1,0 +1,665 @@
+{
+  "baseOperation": {
+    "accountId": "account-a",
+    "server": "https://cloud.example.invalid/nextcloud",
+    "capabilityGeneration": 7,
+    "replayContractRevision": "talk-attachment-f2958bb-core-a0bf541-a599620-r1",
+    "jobId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    "roomToken": "rooma123",
+    "referenceId": "11111111-1111-4111-8111-111111111111",
+    "expectedMessageType": "comment",
+    "allowUpdate": false,
+    "phase": "localPrepared",
+    "resumePhase": null,
+    "lane": "ready",
+    "attemptCount": 0,
+    "remoteTempPath": null,
+    "finalizationDispatched": false,
+    "cleanupRequired": false,
+    "sourceVerified": false,
+    "messageIds": [],
+    "lastOutcome": "local-prepared",
+    "source": {
+      "handle": "app-owned-source-a",
+      "size": 2500000,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mime": "image/jpeg",
+      "displayName": "photo.jpg"
+    }
+  },
+  "defaultBinding": {
+    "accountId": "account-a",
+    "server": "https://cloud.example.invalid/nextcloud",
+    "roomToken": "rooma123"
+  },
+  "cases": [
+    {
+      "id": "happy-path-one-confirmation",
+      "steps": [
+        {
+          "action": "probeStart",
+          "allowUpdate": false,
+          "expectedOutcome": "probing"
+        },
+        {
+          "action": "probeSuccess",
+          "folder": "Talk/Synthetic room-rooma123/Draft",
+          "expectedOutcome": "draft-resolved"
+        },
+        {
+          "action": "sourceCheck",
+          "size": 2500000,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedOutcome": "source-valid"
+        },
+        {
+          "action": "uploadStart",
+          "expectedOutcome": "uploading"
+        },
+        {
+          "action": "uploadSuccess",
+          "expectedOutcome": "uploaded"
+        },
+        {
+          "action": "finalizeStart",
+          "allowUpdate": false,
+          "expectedOutcome": "finalizing"
+        },
+        {
+          "action": "finalizeHttp",
+          "status": 200,
+          "ocsStatus": 200,
+          "expectedOutcome": "awaiting-confirmation"
+        },
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "file_shared",
+              "messageType": "comment",
+              "messageId": 501
+            }
+          ],
+          "expectedOutcome": "completed"
+        }
+      ],
+      "expected": {
+        "phase": "completed",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [
+          501
+        ],
+        "lastOutcome": "completed"
+      }
+    },
+    {
+      "id": "upload-without-source-check-is-rejected",
+      "initial": {
+        "phase": "draftResolved",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "draft-resolved"
+      },
+      "steps": [
+        {
+          "action": "uploadStart",
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "draftResolved",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "draft-resolved"
+      }
+    },
+    {
+      "id": "zero-confirmations-remain-awaiting",
+      "initial": {
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [],
+          "expectedOutcome": "no-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "no-match"
+      }
+    },
+    {
+      "id": "same-reference-wrong-message-type-is-not-confirmation",
+      "initial": {
+        "expectedMessageType": "voice-message",
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation",
+        "source": {
+          "handle": "app-owned-source-voice-a",
+          "size": 2500000,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "mime": "audio/mpeg",
+          "displayName": "voice.mp3"
+        }
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "file_shared",
+              "messageType": "comment",
+              "messageId": 501
+            }
+          ],
+          "expectedOutcome": "no-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "no-match"
+      }
+    },
+    {
+      "id": "multiple-confirmations-remain-ambiguous",
+      "initial": {
+        "expectedMessageType": "voice-message",
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation",
+        "source": {
+          "handle": "app-owned-source-voice-a",
+          "size": 2500000,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "mime": "audio/mpeg",
+          "displayName": "voice.mp3"
+        }
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "file_shared",
+              "messageType": "voice-message",
+              "messageId": 501
+            },
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "file_shared",
+              "messageType": "voice-message",
+              "messageId": 502
+            }
+          ],
+          "expectedOutcome": "ambiguous-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [
+          501,
+          502
+        ],
+        "lastOutcome": "ambiguous-match"
+      }
+    },
+    {
+      "id": "lost-finalize-response-never-blind-replays",
+      "initial": {
+        "phase": "finalizing",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "finalizing"
+      },
+      "steps": [
+        {
+          "action": "finalizeTransportFailure",
+          "bodyState": "possibly-sent",
+          "expectedOutcome": "awaiting-confirmation"
+        },
+        {
+          "action": "blindFinalizeReplay",
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "awaiting-confirmation"
+      }
+    },
+    {
+      "id": "restart-during-finalize-awaits-confirmation",
+      "initial": {
+        "phase": "finalizing",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "finalizing"
+      },
+      "steps": [
+        {
+          "action": "restart",
+          "expectedOutcome": "awaiting-confirmation"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "awaiting-confirmation"
+      }
+    },
+    {
+      "id": "restart-during-upload-preserves-resume",
+      "initial": {
+        "phase": "uploading",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "attemptCount": 1,
+        "lastOutcome": "uploading"
+      },
+      "steps": [
+        {
+          "action": "restart",
+          "expectedOutcome": "retryable"
+        },
+        {
+          "action": "sourceCheck",
+          "size": 2500000,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedOutcome": "source-valid"
+        },
+        {
+          "action": "retry",
+          "authority": {
+            "accountId": "account-a",
+            "server": "https://cloud.example.invalid/nextcloud",
+            "capabilityGeneration": 7,
+            "replayContractRevision": "talk-attachment-f2958bb-core-a0bf541-a599620-r1"
+          },
+          "expectedOutcome": "uploading"
+        }
+      ],
+      "expected": {
+        "phase": "uploading",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "uploading"
+      }
+    },
+    {
+      "id": "cancel-before-finalize-cleans",
+      "initial": {
+        "phase": "uploaded",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "uploaded"
+      },
+      "steps": [
+        {
+          "action": "cancel",
+          "expectedOutcome": "cleanup-required"
+        },
+        {
+          "action": "cleanupSuccess",
+          "expectedOutcome": "cancelled"
+        }
+      ],
+      "expected": {
+        "phase": "cancelled",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "cancelled"
+      }
+    },
+    {
+      "id": "cleanup-failure-can-retry",
+      "initial": {
+        "phase": "uploaded",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "uploaded"
+      },
+      "steps": [
+        {
+          "action": "cancel",
+          "expectedOutcome": "cleanup-required"
+        },
+        {
+          "action": "cleanupFailure",
+          "expectedOutcome": "cleanup-failed"
+        },
+        {
+          "action": "cleanupRetry",
+          "expectedOutcome": "cleanup-required"
+        },
+        {
+          "action": "cleanupSuccess",
+          "expectedOutcome": "cancelled"
+        }
+      ],
+      "expected": {
+        "phase": "cancelled",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "cancelled"
+      }
+    },
+    {
+      "id": "cancel-after-finalize-is-rejected",
+      "initial": {
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "cancel",
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "awaiting-confirmation"
+      }
+    },
+    {
+      "id": "transport-before-finalize-body-is-retryable",
+      "initial": {
+        "phase": "finalizing",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "finalizing"
+      },
+      "steps": [
+        {
+          "action": "finalizeTransportFailure",
+          "bodyState": "not-sent",
+          "expectedOutcome": "retryable"
+        }
+      ],
+      "expected": {
+        "phase": "retryable",
+        "lane": "ready",
+        "resumePhase": "uploaded",
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "retryable"
+      }
+    },
+    {
+      "id": "deterministic-finalize-status-fails",
+      "initial": {
+        "phase": "finalizing",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "finalizing"
+      },
+      "steps": [
+        {
+          "action": "finalizeHttp",
+          "status": 422,
+          "ocsStatus": 422,
+          "expectedOutcome": "failed"
+        }
+      ],
+      "expected": {
+        "phase": "failed",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": true,
+        "messageIds": [],
+        "lastOutcome": "failed"
+      }
+    },
+    {
+      "id": "reauth-pauses-only-account-lane",
+      "initial": {
+        "phase": "finalizing",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "finalizing"
+      },
+      "steps": [
+        {
+          "action": "finalizeHttp",
+          "status": 401,
+          "ocsStatus": 401,
+          "expectedOutcome": "reauth-required"
+        }
+      ],
+      "expected": {
+        "phase": "retryable",
+        "lane": "reauthRequired",
+        "resumePhase": "uploaded",
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "reauth-required"
+      }
+    },
+    {
+      "id": "stale-capability-replay-rejected",
+      "initial": {
+        "phase": "retryable",
+        "resumePhase": "uploading",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "retryable"
+      },
+      "steps": [
+        {
+          "action": "retry",
+          "authority": {
+            "accountId": "account-a",
+            "server": "https://cloud.example.invalid/nextcloud",
+            "capabilityGeneration": 8,
+            "replayContractRevision": "talk-attachment-f2958bb-core-a0bf541-a599620-r1"
+          },
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "retryable",
+        "lane": "ready",
+        "resumePhase": "uploading",
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "retryable"
+      }
+    },
+    {
+      "id": "stale-revision-replay-rejected",
+      "initial": {
+        "phase": "retryable",
+        "resumePhase": "uploading",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "retryable"
+      },
+      "steps": [
+        {
+          "action": "retry",
+          "authority": {
+            "accountId": "account-a",
+            "server": "https://cloud.example.invalid/nextcloud",
+            "capabilityGeneration": 7,
+            "replayContractRevision": "stale-revision"
+          },
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "retryable",
+        "lane": "ready",
+        "resumePhase": "uploading",
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "retryable"
+      }
+    },
+    {
+      "id": "cross-account-transition-rejected",
+      "initial": {
+        "phase": "draftResolved",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "draft-resolved"
+      },
+      "steps": [
+        {
+          "action": "uploadStart",
+          "binding": {
+            "accountId": "account-b",
+            "server": "https://cloud.example.invalid/nextcloud",
+            "roomToken": "rooma123"
+          },
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "draftResolved",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "draft-resolved"
+      }
+    },
+    {
+      "id": "cross-origin-transition-rejected",
+      "initial": {
+        "phase": "draftResolved",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "draft-resolved"
+      },
+      "steps": [
+        {
+          "action": "uploadStart",
+          "binding": {
+            "accountId": "account-a",
+            "server": "https://other.example.invalid/nextcloud",
+            "roomToken": "rooma123"
+          },
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "draftResolved",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "draft-resolved"
+      }
+    },
+    {
+      "id": "allow-update-mismatch-rejected",
+      "initial": {
+        "phase": "uploaded",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "uploaded"
+      },
+      "steps": [
+        {
+          "action": "finalizeStart",
+          "allowUpdate": true,
+          "expectedOutcome": "rejected"
+        }
+      ],
+      "expected": {
+        "phase": "uploaded",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "uploaded"
+      }
+    },
+    {
+      "id": "source-checksum-mismatch-fails",
+      "initial": {
+        "phase": "draftResolved",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "lastOutcome": "draft-resolved"
+      },
+      "steps": [
+        {
+          "action": "sourceCheck",
+          "size": 2500000,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "expectedOutcome": "failed"
+        }
+      ],
+      "expected": {
+        "phase": "failed",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": false,
+        "cleanupRequired": true,
+        "messageIds": [],
+        "lastOutcome": "source-mismatch"
+      }
+    }
+  ]
+}

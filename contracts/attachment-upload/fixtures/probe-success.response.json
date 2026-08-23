@@ -1,0 +1,20 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": {
+      "folder": "Talk/Synthetic room-rooma123/Draft",
+      "renames": [
+        {
+          "photo.jpg": "photo (1).jpg"
+        },
+        {
+          "photo.jpg": "photo (2).jpg"
+        }
+      ]
+    }
+  }
+}

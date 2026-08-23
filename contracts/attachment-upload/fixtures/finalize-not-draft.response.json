@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 422,
+      "message": "Synthetic Draft boundary rejection"
+    },
+    "data": {
+      "error": "File is not inside the conversation draft folder"
+    }
+  }
+}

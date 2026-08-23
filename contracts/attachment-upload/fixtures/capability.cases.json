@@ -1,0 +1,371 @@
+{
+  "cases": [
+    {
+      "id": "baseline-supported",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": true,
+        "reason": null,
+        "profile": {
+          "caption": false,
+          "voice": false,
+          "reply": false,
+          "thread": false,
+          "silent": false
+        }
+      }
+    },
+    {
+      "id": "anonymous-rejected",
+      "snapshot": {
+        "context": "anonymous",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "authenticated-capabilities-required"
+      }
+    },
+    {
+      "id": "attachments-disabled",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": false,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "attachments-disabled"
+      }
+    },
+    {
+      "id": "subfolders-disabled",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": false
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "conversation-subfolders-required"
+      }
+    },
+    {
+      "id": "reference-id-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "chat-reference-id-required"
+      }
+    },
+    {
+      "id": "federated-rejected",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": true,
+        "canPost": true
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "federated-room-unsupported"
+      }
+    },
+    {
+      "id": "write-permission-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": false
+      },
+      "requested": {},
+      "expected": {
+        "supported": false,
+        "reason": "chat-write-permission-required"
+      }
+    },
+    {
+      "id": "optional-features-supported",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id",
+          "media-caption",
+          "voice-message-sharing",
+          "chat-replies",
+          "threads",
+          "silent-send"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "caption": true,
+        "voice": true,
+        "voiceMime": "audio/wav",
+        "reply": true,
+        "thread": true,
+        "silent": true
+      },
+      "expected": {
+        "supported": true,
+        "reason": null,
+        "profile": {
+          "caption": true,
+          "voice": true,
+          "reply": true,
+          "thread": true,
+          "silent": true
+        }
+      }
+    },
+    {
+      "id": "caption-feature-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "caption": true
+      },
+      "expected": {
+        "supported": false,
+        "reason": "media-caption-required"
+      }
+    },
+    {
+      "id": "voice-feature-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "voice": true,
+        "voiceMime": "audio/mpeg"
+      },
+      "expected": {
+        "supported": false,
+        "reason": "voice-message-sharing-required"
+      }
+    },
+    {
+      "id": "voice-mime-rejected",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id",
+          "voice-message-sharing"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "voice": true,
+        "voiceMime": "audio/ogg"
+      },
+      "expected": {
+        "supported": false,
+        "reason": "voice-mime-unsupported"
+      }
+    },
+    {
+      "id": "reply-feature-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "reply": true
+      },
+      "expected": {
+        "supported": false,
+        "reason": "chat-replies-required"
+      }
+    },
+    {
+      "id": "thread-feature-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "thread": true
+      },
+      "expected": {
+        "supported": false,
+        "reason": "threads-required"
+      }
+    },
+    {
+      "id": "silent-feature-missing",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {
+        "silent": true
+      },
+      "expected": {
+        "supported": false,
+        "reason": "silent-send-required"
+      }
+    },
+    {
+      "id": "duplicate-feature-rejected",
+      "snapshot": {
+        "context": "authenticated",
+        "talkFeatures": [
+          "chat-reference-id",
+          "chat-reference-id"
+        ],
+        "attachments": {
+          "allowed": true,
+          "conversationSubfolders": true
+        }
+      },
+      "room": {
+        "federated": false,
+        "canPost": true
+      },
+      "requested": {},
+      "expectedError": true
+    }
+  ]
+}

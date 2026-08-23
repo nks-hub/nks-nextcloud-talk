@@ -1,0 +1,170 @@
+{
+  "contract": "../openapi.json",
+  "upstreamTalkSha": "f2958bb25be6604240c58a3faf9a2033a30d20e5",
+  "upstreamCoreShas": {
+    "master": "a0bf541f667e4d891e05a92254b167840066e1a0",
+    "stable34": "a599620e9b75dc3c919b39dabd82a4f98b543b74"
+  },
+  "capabilityCasesFile": "capability.cases.json",
+  "wireCasesFile": "wire.cases.json",
+  "davCasesFile": "dav.cases.json",
+  "stateCasesFile": "state.cases.json",
+  "davXmlFixtures": [
+    {
+      "id": "propfind-resume",
+      "file": "propfind-resume.response.xml",
+      "expectedChunks": [
+        {
+          "name": "0000000000000000-0000000001023999",
+          "length": 1024000
+        }
+      ]
+    },
+    {
+      "id": "propfind-empty",
+      "file": "propfind-empty.response.xml",
+      "expectedChunks": []
+    },
+    {
+      "id": "propfind-entity-rejected",
+      "file": "propfind-entity.response.xml",
+      "expectedError": true
+    }
+  ],
+  "headerSets": {
+    "none": {}
+  },
+  "fixtures": [
+    {
+      "id": "probe-request",
+      "file": "probe.request.json",
+      "direction": "request",
+      "operationId": "probeAttachmentFolder",
+      "mediaType": "application/json",
+      "schemaValid": true,
+      "expectedClassification": "request-valid"
+    },
+    {
+      "id": "probe-success",
+      "file": "probe-success.response.json",
+      "direction": "response",
+      "operationId": "probeAttachmentFolder",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "probe-confirmed",
+      "expectedRenameCount": 2
+    },
+    {
+      "id": "probe-renames-must-be-array-of-maps",
+      "file": "probe-invalid-renames.response.json",
+      "direction": "response",
+      "operationId": "probeAttachmentFolder",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": false,
+      "expectedClassification": "schema-error"
+    },
+    {
+      "id": "probe-disabled",
+      "file": "probe-disabled.response.json",
+      "direction": "response",
+      "operationId": "probeAttachmentFolder",
+      "status": "501",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "deterministic-failure"
+    },
+    {
+      "id": "probe-quota",
+      "file": "probe-quota.response.json",
+      "direction": "response",
+      "operationId": "probeAttachmentFolder",
+      "status": "507",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "deterministic-failure"
+    },
+    {
+      "id": "finalize-request",
+      "file": "finalize.request.json",
+      "direction": "request",
+      "operationId": "finalizeAttachment",
+      "mediaType": "application/json",
+      "expectedMessageType": "comment",
+      "schemaValid": true,
+      "expectedClassification": "request-valid"
+    },
+    {
+      "id": "finalize-success",
+      "file": "finalize-success.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "finalize-accepted",
+      "expectedRenameCount": 1
+    },
+    {
+      "id": "finalize-not-found",
+      "file": "finalize-not-found.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "404",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "deterministic-failure"
+    },
+    {
+      "id": "finalize-not-draft",
+      "file": "finalize-not-draft.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "422",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "deterministic-failure"
+    },
+    {
+      "id": "finalize-unauthorized",
+      "file": "finalize-unauthorized.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "401",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "reauth"
+    },
+    {
+      "id": "finalize-internal-error",
+      "file": "finalize-internal-error.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "500",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "ambiguous-finalize"
+    },
+    {
+      "id": "finalize-ocs-mismatch",
+      "file": "finalize-ocs-mismatch.response.json",
+      "direction": "response",
+      "operationId": "finalizeAttachment",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "expectedClassification": "ambiguous-finalize"
+    }
+  ]
+}

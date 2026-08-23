@@ -22,6 +22,8 @@ Dokumentace je rozdělená podle stavu poznání:
 - [Rich chat a vlákna](architecture/rich-chat-api.md) popisují mentions,
   reactions, edit/delete, pin, reminders, schedule, bezpečný renderer a
   account-scoped transakční stav.
+- [Upload příloh a voice zpráv](architecture/attachment-upload-api.md) popisuje
+  Talk OCS, WebDAV normal/chunk upload, bezpečný resume a chat confirmation.
 - [Vlastní Flutter klient](plans/2026-08-22-original-flutter-client-design.md)
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 - [Audit závislostí a assetů](architecture/dependency-licenses.md) průběžně

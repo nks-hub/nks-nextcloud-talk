@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE multistatus [
+  <!ENTITY private "synthetic-private-marker">
+]>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>&private;</d:href>
+  </d:response>
+</d:multistatus>

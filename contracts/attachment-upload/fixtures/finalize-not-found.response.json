@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 404,
+      "message": "Synthetic missing Draft file"
+    },
+    "data": {
+      "error": "File not found"
+    }
+  }
+}

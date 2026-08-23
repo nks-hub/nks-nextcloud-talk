@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 501,
+      "message": "Synthetic feature rejection"
+    },
+    "data": {
+      "error": "Conversation subfolders are disabled"
+    }
+  }
+}

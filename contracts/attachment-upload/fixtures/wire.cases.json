@@ -1,0 +1,342 @@
+{
+  "cases": [
+    {
+      "id": "probe-wire-request",
+      "kind": "probe",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "probe-0001",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "fileNames": [
+          "photo.jpg",
+          "photo.jpg"
+        ],
+        "allowUpdate": false
+      },
+      "expected": {
+        "operationId": "probeAttachmentFolder",
+        "method": "POST",
+        "uri": "https://cloud.example.invalid/nextcloud/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/attachment/folder?format=json",
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk attachment-contract/0.1"
+        },
+        "body": {
+          "fileNames": [
+            "photo.jpg",
+            "photo.jpg"
+          ],
+          "allowUpdate": false
+        },
+        "binding": {
+          "accountId": "account-a",
+          "requestId": "probe-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      }
+    },
+    {
+      "id": "finalize-wire-request",
+      "kind": "finalize",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "finalize-0001",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "filePath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "referenceId": "11111111-1111-4111-8111-111111111111",
+        "fileName": "photo.jpg",
+        "expectedMessageType": "comment",
+        "allowUpdate": false,
+        "metadata": {
+          "caption": "Synthetic caption",
+          "silent": true,
+          "replyTo": 101,
+          "threadId": 101,
+          "threadTitle": "Synthetic thread"
+        }
+      },
+      "expected": {
+        "operationId": "finalizeAttachment",
+        "method": "POST",
+        "uri": "https://cloud.example.invalid/nextcloud/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/attachment?format=json",
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk attachment-contract/0.1"
+        },
+        "body": {
+          "filePath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+          "referenceId": "11111111-1111-4111-8111-111111111111",
+          "talkMetaData": "{\"caption\":\"Synthetic caption\",\"replyTo\":101,\"silent\":true,\"threadId\":101,\"threadTitle\":\"Synthetic thread\"}",
+          "fileName": "photo.jpg",
+          "allowUpdate": false
+        },
+        "binding": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      }
+    },
+    {
+      "id": "voice-finalize-wire-request",
+      "kind": "finalize",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "finalize-voice-0001",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "filePath": "Talk/Synthetic room-rooma123/Draft/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.upload",
+        "referenceId": "33333333-3333-4333-8333-333333333333",
+        "fileName": "voice.mp3",
+        "expectedMessageType": "voice-message",
+        "allowUpdate": false,
+        "metadata": {
+          "messageType": "voice-message"
+        }
+      },
+      "expected": {
+        "operationId": "finalizeAttachment",
+        "method": "POST",
+        "uri": "https://cloud.example.invalid/nextcloud/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/attachment?format=json",
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          "OCS-APIRequest": "true",
+          "User-Agent": "com.nkshub.nextcloudtalk attachment-contract/0.1"
+        },
+        "body": {
+          "filePath": "Talk/Synthetic room-rooma123/Draft/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.upload",
+          "referenceId": "33333333-3333-4333-8333-333333333333",
+          "talkMetaData": "{\"messageType\":\"voice-message\"}",
+          "fileName": "voice.mp3",
+          "allowUpdate": false
+        },
+        "binding": {
+          "accountId": "account-a",
+          "requestId": "finalize-voice-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      }
+    },
+    {
+      "id": "voice-job-rejects-missing-message-type",
+      "kind": "finalize",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "finalize-voice-missing-type",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "filePath": "Talk/Synthetic room-rooma123/Draft/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.upload",
+        "referenceId": "33333333-3333-4333-8333-333333333333",
+        "fileName": "voice.mp3",
+        "expectedMessageType": "voice-message",
+        "allowUpdate": false,
+        "metadata": {}
+      },
+      "expectedError": true
+    },
+    {
+      "id": "comment-job-rejects-voice-metadata",
+      "kind": "finalize",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "finalize-comment-voice-type",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "filePath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "referenceId": "11111111-1111-4111-8111-111111111111",
+        "fileName": "photo.jpg",
+        "expectedMessageType": "comment",
+        "allowUpdate": false,
+        "metadata": {
+          "messageType": "voice-message"
+        }
+      },
+      "expectedError": true
+    },
+    {
+      "id": "thread-title-requires-thread-id",
+      "kind": "finalize",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "finalize-thread-title-without-id",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "roomToken": "rooma123",
+        "filePath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "referenceId": "11111111-1111-4111-8111-111111111111",
+        "fileName": "photo.jpg",
+        "expectedMessageType": "comment",
+        "allowUpdate": false,
+        "metadata": {
+          "threadTitle": "Synthetic thread"
+        }
+      },
+      "expectedError": true
+    },
+    {
+      "id": "safe-relative-path-encoded-once",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/Synthetic room-rooma123/Draft/příloha 1.jpg"
+      },
+      "expected": {
+        "encodedPath": "Talk/Synthetic%20room-rooma123/Draft/p%C5%99%C3%ADloha%201.jpg"
+      }
+    },
+    {
+      "id": "absolute-uri-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "https://attacker.example.invalid/file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "leading-slash-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "/Talk/Draft/file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "backslash-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk\\Draft\\file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "dot-segment-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/./Draft/file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "parent-segment-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/Draft/../file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "empty-segment-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk//Draft/file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "query-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/Draft/file?replace=true"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "fragment-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/Draft/file#fragment"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "preencoded-segment-rejected",
+      "kind": "relativePath",
+      "input": {
+        "path": "Talk/Draft/%2e%2e/file"
+      },
+      "expectedError": true
+    },
+    {
+      "id": "http-origin-rejected",
+      "kind": "probe",
+      "input": {
+        "accountId": "account-a",
+        "requestId": "probe-http",
+        "server": "http://cloud.example.invalid",
+        "roomToken": "rooma123",
+        "fileNames": [
+          "photo.jpg"
+        ],
+        "allowUpdate": false
+      },
+      "expectedError": true
+    },
+    {
+      "id": "response-binding-match",
+      "kind": "responseBinding",
+      "input": {
+        "request": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        },
+        "response": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      },
+      "expected": {
+        "bound": true
+      }
+    },
+    {
+      "id": "response-account-mismatch-rejected",
+      "kind": "responseBinding",
+      "input": {
+        "request": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        },
+        "response": {
+          "accountId": "account-b",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      },
+      "expectedError": true
+    },
+    {
+      "id": "response-origin-mismatch-rejected",
+      "kind": "responseBinding",
+      "input": {
+        "request": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://cloud.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        },
+        "response": {
+          "accountId": "account-a",
+          "requestId": "finalize-0001",
+          "server": "https://other.example.invalid/nextcloud",
+          "roomToken": "rooma123"
+        }
+      },
+      "expectedError": true
+    }
+  ]
+}

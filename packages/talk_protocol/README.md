@@ -30,15 +30,22 @@ Implementované řezy pokrývají:
 - bounded immutable rich-chat response parser a account-scoped single-use plán
   pro messages, thread first/last, room preview, reactions, reminders a schedule;
 - GFM a Rich Object String renderer do bezpečného semantic tree bez
-  vykonatelného raw HTML nebo nebezpečných aktivních odkazů.
+  vykonatelného raw HTML nebo nebezpečných aktivních odkazů;
+- capability-bound attachment probe a finalize requesty se stabilním
+  `referenceId`, pevným `allowUpdate: false` a typovaným file/voice kontraktem;
+- normální WebDAV PUT i resumable chunked MKCOL/PROPFIND/PUT/MOVE s přesnými
+  délkami, bezpečnými relativními cestami a bounded DAV XML parserem;
+- neměnný account-scoped attachment runtime s kontrolou zdroje, FIFO
+  finalizací, re-auth, cancel/cleanup a bez slepého opakování nejasného finalize.
 
 Balík načítá přímo všechny fixtures z `contracts/client-bootstrap` a
 `contracts/conversation-list`, `contracts/chat-messages` i
-`contracts/rich-chat`. Aktuálně prochází `dart analyze --fatal-infos` bez nálezu
-a 375 Dart testů včetně skutečných
-release AOT executable. Planner připravuje úplný candidate account snapshot;
-skutečnou SQLite transakci, síťový transport a background scheduler bude
-vlastnit budoucí Flutter/Drift vrstva.
+`contracts/rich-chat` a implementuje stejný attachment kontrakt jako
+`contracts/attachment-upload`. Aktuálně prochází `dart analyze --fatal-infos`
+bez nálezu a 427 Dart testů včetně skutečných release AOT executable. Planner
+připravuje úplný candidate account snapshot; skutečnou SQLite transakci,
+síťový transport a background scheduler bude vlastnit budoucí Flutter/Drift
+vrstva.
 
 Balík je součástí projektu licencovaného pod `GPL-3.0-or-later`; kanonický text
 je v kořenovém souboru `LICENSE`.

@@ -1,0 +1,429 @@
+{
+  "upstreamCoreShas": {
+    "master": "a0bf541f667e4d891e05a92254b167840066e1a0",
+    "stable34": "a599620e9b75dc3c919b39dabd82a4f98b543b74"
+  },
+  "plans": [
+    {
+      "id": "normal-small-upload",
+      "kind": "upload",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "userId": "user-a",
+        "draftPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "uploadId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "fileSize": 1024,
+        "chunkThreshold": 1048576,
+        "chunkSize": 1024000,
+        "existingChunks": []
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid/nextcloud"
+        },
+        "mode": "normal",
+        "steps": [
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/files/user-a/Talk/Synthetic%20room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+            "headers": {
+              "Content-Length": "1024",
+              "Content-Type": "application/octet-stream"
+            },
+            "contentStart": 0,
+            "contentLength": 1024,
+            "successStatuses": [
+              201,
+              204
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "chunked-upload",
+      "kind": "upload",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "userId": "user-a",
+        "draftPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "uploadId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "fileSize": 2500000,
+        "chunkThreshold": 1048576,
+        "chunkSize": 1024000,
+        "existingChunks": []
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid/nextcloud"
+        },
+        "mode": "chunked",
+        "steps": [
+          {
+            "method": "MKCOL",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "headers": {},
+            "successStatuses": [
+              201,
+              405
+            ]
+          },
+          {
+            "method": "PROPFIND",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "headers": {
+              "Depth": "1"
+            },
+            "successStatuses": [
+              207
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/0000000000000000-0000000001023999",
+            "headers": {
+              "Content-Length": "1024000"
+            },
+            "contentStart": 0,
+            "contentLength": 1024000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/0000000001024000-0000000002047999",
+            "headers": {
+              "Content-Length": "1024000"
+            },
+            "contentStart": 1024000,
+            "contentLength": 1024000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/0000000002048000-0000000002499999",
+            "headers": {
+              "Content-Length": "452000"
+            },
+            "contentStart": 2048000,
+            "contentLength": 452000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "MOVE",
+            "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/.file",
+            "headers": {
+              "Destination": "https://cloud.example.invalid/nextcloud/remote.php/dav/files/user-a/Talk/Synthetic%20room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+              "OC-Total-Length": "2500000"
+            },
+            "successStatuses": [
+              201,
+              204
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "chunk-exact-multiple",
+      "kind": "upload",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid",
+        "userId": "user-a",
+        "draftPath": "Talk/Room-rooma123/Draft/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.upload",
+        "uploadId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "fileSize": 2048000,
+        "chunkThreshold": 1048576,
+        "chunkSize": 1024000,
+        "existingChunks": []
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid"
+        },
+        "mode": "chunked",
+        "steps": [
+          {
+            "method": "MKCOL",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "headers": {},
+            "successStatuses": [
+              201,
+              405
+            ]
+          },
+          {
+            "method": "PROPFIND",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "headers": {
+              "Depth": "1"
+            },
+            "successStatuses": [
+              207
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/0000000000000000-0000000001023999",
+            "headers": {
+              "Content-Length": "1024000"
+            },
+            "contentStart": 0,
+            "contentLength": 1024000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/0000000001024000-0000000002047999",
+            "headers": {
+              "Content-Length": "1024000"
+            },
+            "contentStart": 1024000,
+            "contentLength": 1024000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "MOVE",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/.file",
+            "headers": {
+              "Destination": "https://cloud.example.invalid/remote.php/dav/files/user-a/Talk/Room-rooma123/Draft/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.upload",
+              "OC-Total-Length": "2048000"
+            },
+            "successStatuses": [
+              201,
+              204
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "chunk-resume-missing-only",
+      "kind": "upload",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid",
+        "userId": "user-a",
+        "draftPath": "Talk/Room-rooma123/Draft/cccccccc-cccc-4ccc-8ccc-cccccccccccc.upload",
+        "uploadId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "fileSize": 2048000,
+        "chunkThreshold": 1048576,
+        "chunkSize": 1024000,
+        "existingChunks": [
+          {
+            "name": "0000000000000000-0000000001023999",
+            "length": 1024000
+          }
+        ]
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid"
+        },
+        "mode": "chunked",
+        "steps": [
+          {
+            "method": "MKCOL",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "headers": {},
+            "successStatuses": [
+              201,
+              405
+            ]
+          },
+          {
+            "method": "PROPFIND",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "headers": {
+              "Depth": "1"
+            },
+            "successStatuses": [
+              207
+            ]
+          },
+          {
+            "method": "PUT",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/cccccccc-cccc-4ccc-8ccc-cccccccccccc/0000000001024000-0000000002047999",
+            "headers": {
+              "Content-Length": "1024000"
+            },
+            "contentStart": 1024000,
+            "contentLength": 1024000,
+            "successStatuses": [
+              201,
+              204
+            ]
+          },
+          {
+            "method": "MOVE",
+            "uri": "https://cloud.example.invalid/remote.php/dav/uploads/user-a/cccccccc-cccc-4ccc-8ccc-cccccccccccc/.file",
+            "headers": {
+              "Destination": "https://cloud.example.invalid/remote.php/dav/files/user-a/Talk/Room-rooma123/Draft/cccccccc-cccc-4ccc-8ccc-cccccccccccc.upload",
+              "OC-Total-Length": "2048000"
+            },
+            "successStatuses": [
+              201,
+              204
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "chunk-corrupt-server-state",
+      "kind": "upload",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid",
+        "userId": "user-a",
+        "draftPath": "Talk/Room-rooma123/Draft/dddddddd-dddd-4ddd-8ddd-dddddddddddd.upload",
+        "uploadId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "fileSize": 2048000,
+        "chunkThreshold": 1048576,
+        "chunkSize": 1024000,
+        "existingChunks": [
+          {
+            "name": "0000000000000000-0000000001023999",
+            "length": 100
+          }
+        ]
+      },
+      "expectedError": true
+    },
+    {
+      "id": "cleanup-chunk-session",
+      "kind": "cleanupChunk",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "userId": "user-a",
+        "uploadId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid/nextcloud"
+        },
+        "method": "DELETE",
+        "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/uploads/user-a/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "headers": {},
+        "successStatuses": [
+          204,
+          404
+        ]
+      }
+    },
+    {
+      "id": "cleanup-draft-temp",
+      "kind": "cleanupDraft",
+      "input": {
+        "accountId": "account-a",
+        "server": "https://cloud.example.invalid/nextcloud",
+        "userId": "user-a",
+        "draftPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload"
+      },
+      "expected": {
+        "binding": {
+          "accountId": "account-a",
+          "server": "https://cloud.example.invalid/nextcloud"
+        },
+        "method": "DELETE",
+        "uri": "https://cloud.example.invalid/nextcloud/remote.php/dav/files/user-a/Talk/Synthetic%20room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "headers": {},
+        "successStatuses": [
+          204,
+          404
+        ]
+      }
+    }
+  ],
+  "statusCases": [
+    {
+      "id": "mkcol-created",
+      "method": "MKCOL",
+      "status": 201,
+      "expected": "success"
+    },
+    {
+      "id": "mkcol-already-exists",
+      "method": "MKCOL",
+      "status": 405,
+      "expected": "success"
+    },
+    {
+      "id": "propfind-multistatus",
+      "method": "PROPFIND",
+      "status": 207,
+      "expected": "success"
+    },
+    {
+      "id": "put-created",
+      "method": "PUT",
+      "status": 201,
+      "expected": "success"
+    },
+    {
+      "id": "put-replaced",
+      "method": "PUT",
+      "status": 204,
+      "expected": "success"
+    },
+    {
+      "id": "move-created",
+      "method": "MOVE",
+      "status": 201,
+      "expected": "success"
+    },
+    {
+      "id": "move-replaced",
+      "method": "MOVE",
+      "status": 204,
+      "expected": "success"
+    },
+    {
+      "id": "move-length-mismatch",
+      "method": "MOVE",
+      "status": 400,
+      "expected": "deterministic-failure"
+    },
+    {
+      "id": "delete-removed",
+      "method": "DELETE",
+      "status": 204,
+      "expected": "success"
+    },
+    {
+      "id": "delete-already-absent",
+      "method": "DELETE",
+      "status": 404,
+      "expected": "success"
+    },
+    {
+      "id": "unexpected-dav-status",
+      "method": "PUT",
+      "status": 500,
+      "expected": "transient-failure"
+    }
+  ]
+}

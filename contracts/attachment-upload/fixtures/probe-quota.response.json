@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 507,
+      "message": "Synthetic quota rejection"
+    },
+    "data": {
+      "error": "Storage quota exceeded"
+    }
+  }
+}

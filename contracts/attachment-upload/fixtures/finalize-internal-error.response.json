@@ -1,0 +1,12 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 500,
+      "message": "Synthetic server failure"
+    },
+    "data": {
+      "error": "Could not prepare conversation folder"
+    }
+  }
+}

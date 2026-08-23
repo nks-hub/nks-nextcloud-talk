@@ -32,7 +32,17 @@ enum TalkProtocolErrorCode {
   invalidRichChatRender,
   invalidRichChatState,
   invalidRichChatMerge,
+  invalidAttachmentIdentifier,
+  invalidAttachmentProfile,
+  invalidAttachmentModel,
+  invalidAttachmentRequest,
+  invalidAttachmentResponse,
+  invalidAttachmentDavPath,
+  invalidAttachmentDavXml,
+  invalidAttachmentState,
+  invalidAttachmentRuntime,
   unsupportedChatOperation,
+  unsupportedAttachmentOperation,
   unsupportedHttpStatus,
 }
 

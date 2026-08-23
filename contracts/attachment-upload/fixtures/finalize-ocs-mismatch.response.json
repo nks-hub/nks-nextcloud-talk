@@ -1,0 +1,16 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 500,
+      "message": "Synthetic OCS mismatch"
+    },
+    "data": {
+      "renames": [
+        {
+          "photo.jpg": "photo.jpg"
+        }
+      ]
+    }
+  }
+}
