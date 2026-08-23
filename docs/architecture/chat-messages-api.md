@@ -115,6 +115,48 @@ hlavičce, ne jen k nejvyššímu viditelnému ID.
 
 Samostatná změna `X-Chat-Last-Common-Read` nesmí posunout history/future cursor.
 
+## Foreground long-poll runtime
+
+Pure Dart runtime je od 23. srpna 2026 implementovaný v commitu
+`d90a66f5ed9bd79eb6585ccbff903e48d3da580f`. Jde o protokolový a stavový
+kontrakt, ne o hotovou Flutter lifecycle integraci.
+
+Poll session je neměnně svázaná s `accountId`, server originem,
+`(roomToken, threadId|null)`, credential generation a capability generation.
+Pro každý scope smí běžet nejvýše jeden request. Completion se přijme pouze pro
+přesně pending request, nezměněnou session, aktuální future cursor a stejné
+generace účtu. Stale completion se nesmí promítnout do cache.
+
+Stavový tok dodržuje tyto invarianty:
+
+- první foreground future catch-up použije `timeout=0` a aktuální commitnutý
+  future cursor;
+- po validní response, včetně `304`, další request použije `timeout=30` a znovu
+  načtený commitnutý future cursor stejného room/thread scope;
+- `304` potvrzuje catch-up, ale samo neposune cursor;
+- `401` atomicky přepne účet i poll session do re-auth stavu bez retry;
+- HTTP transientní chyba a transportní selhání zachovají režim catch-up nebo
+  long poll a použijí exponenciální backoff s jitterem 0,8 až 1,2, základním
+  stropem 30 sekund a absolutním stropem 36 sekund;
+- lifecycle cancellation přepne session do `stopped`, odstraní pending request
+  a nevytvoří chybu ani retry.
+
+Pozorované chování je porovnané s Talk Android SHA
+[`5428960f9d1eca708df1b39a0831141dcbba4729`](https://github.com/nextcloud/talk-android/tree/5428960f9d1eca708df1b39a0831141dcbba4729):
+
+- [`OfflineFirstChatRepository.kt` řádky 285 až 324](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/chat/data/network/OfflineFirstChatRepository.kt#L285-L324)
+  načítají newest message pro room/thread, první request posílají s
+  `timeout=0` a další s `timeout=30` z nově načteného newest ID;
+- [`OfflineFirstChatRepository.kt` řádky 554 až 559](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/chat/data/network/OfflineFirstChatRepository.kt#L554-L559)
+  zastavují plánování dalších requestů při pause a obnovují je při resume;
+- [`ChatMessageSyncer.kt` řádky 117 až 149](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/chat/data/network/ChatMessageSyncer.kt#L117-L149)
+  skládají future, timeout, last-known, thread, limit a nulový read marker;
+- [`ChatMessageSyncer.kt` řádky 577 až 659](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/chat/data/network/ChatMessageSyncer.kt#L577-L659)
+  rozlišují `200`, `304`, `412` a chybu. Dart kontrakt záměrně nepřebírá
+  obecný `runCatching` retry: cancellation je terminální lifecycle přechod;
+- [`NcApiCoroutines.kt` řádky 497 až 502](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/api/NcApiCoroutines.kt#L497-L502)
+  potvrzují account credential v `Authorization` a typovaný query map GET.
+
 ## ChatBlock a atomický merge
 
 Scope klíč je `(accountId, roomToken, threadId|null)`. Interval znamená serverem
@@ -261,19 +303,22 @@ rtk proxy python contracts\chat-messages\validate_contract.py `
 Credentials jsou v obou případech pouze v `NEXTCLOUD_TALK_USERNAME` a
 `NEXTCLOUD_TALK_APP_PASSWORD`. Mutable příkaz se nesmí spustit v cizí room.
 
-Aktuální lokální výsledek: 1 OpenAPI dokument, 44 fixtures, z toho 43
-schema-validních a 13 přijatých syntetických messages, 21 query případů, 10
-capability případů, 23 merge případů s 25 kroky, 36 outbox případů s 60 kroky,
+Aktuální lokální výsledek 23. srpna 2026: 1 OpenAPI dokument, 44 fixtures, z
+toho 43 schema-validních a 13 přijatých syntetických messages, 21 query
+případů, 10 capability případů, 23 merge případů s 25 kroky, 36 outbox případů
+s 60 kroky,
 4 unit testy, 1 redaction guard a 1 origin případ prošly. Stejné fixtures
-vykonává pure Dart chat doména ve 155 testech; celý `talk_protocol` po
-navazujícím rich-chat řezu prochází 375 testy včetně skutečných release AOT
-executable a analyzer je bez nálezu.
+vykonává pure Dart chat doména. Samostatný foreground polling soubor prošel
+10 testy, všech 165 chat testů prošlo, celý `talk_protocol` prošel 540 testy a
+`dart analyze` skončil bez nálezu.
 
 ## Co důkaz nepokrývá
 
 Live read/write nebyl v tomto milníku spuštěný bez potvrzených environment
 proměnných a vyhrazené mutable room. Pure Dart model a společný candidate plán
 pro message merge plus outbox reconciliation existují, ale neprokazují SQLite
-migrace ani skutečný společný DB commit, restart mobilního procesu, HPB relay,
-background scheduler, UI pending/error stavy, multi-server izolaci v jednom
-procesu ani WCAG kontrast. Tyto části zůstávají v implementačním řezu 3.
+migrace ani skutečný společný DB commit. Foreground poll session neprokazuje
+Flutter app lifecycle, skutečný HTTP transport, restart mobilního procesu, HPB
+relay, background scheduler, UI pending/error stavy, `chatujmePixel` E2E,
+multi-server izolaci v jednom procesu ani WCAG kontrast. Tyto části zůstávají v
+implementačním řezu 3.
