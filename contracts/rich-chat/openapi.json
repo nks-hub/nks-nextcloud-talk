@@ -1,0 +1,677 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NKS Nextcloud Talk rich chat contract",
+    "version": "0.1.0",
+    "description": "Capability-bound mentions, threads, reactions, message mutations, pins, reminders and scheduled messages."
+  },
+  "servers": [
+    {
+      "url": "https://nextcloud.example.invalid"
+    }
+  ],
+  "paths": {
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/mentions": {
+      "get": {
+        "operationId": "getMentionSuggestions",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" },
+          { "name": "search", "in": "query", "required": true, "schema": { "type": "string", "maxLength": 4096 } },
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+          { "name": "includeStatus", "in": "query", "required": true, "schema": { "type": "integer", "enum": [0, 1] } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Mentions" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/recent": {
+      "get": {
+        "operationId": "getRecentThreads",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" },
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "maximum": 50 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ThreadList" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/subscribed-threads": {
+      "get": {
+        "operationId": "getSubscribedThreads",
+        "parameters": [
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" },
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+          { "name": "offset", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 0 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ThreadList" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{threadId}": {
+      "get": {
+        "operationId": "getThread",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/ThreadId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Thread" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "put": {
+        "operationId": "renameThread",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/ThreadId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/RenameThreadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Thread" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{messageId}/notify": {
+      "post": {
+        "operationId": "setThreadNotificationLevel",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/ThreadNotificationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Thread" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/reaction/{token}/{messageId}": {
+      "get": {
+        "operationId": "getMessageReactions",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" },
+          { "name": "reaction", "in": "query", "required": false, "schema": { "type": "string", "minLength": 1, "maxLength": 32 } }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Reactions" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "addMessageReaction",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/ReactionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Reactions" },
+          "201": { "$ref": "#/components/responses/Reactions" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMessageReaction",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/ReactionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Reactions" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}": {
+      "put": {
+        "operationId": "editChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/EditMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/MessageMutation" },
+          "202": { "$ref": "#/components/responses/MessageMutation" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "405": { "$ref": "#/components/responses/Error" },
+          "412": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/MessageMutation" },
+          "202": { "$ref": "#/components/responses/MessageMutation" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "405": { "$ref": "#/components/responses/Error" },
+          "412": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/pin": {
+      "post": {
+        "operationId": "pinChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/PinMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/MessageMutation" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "unpinChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/MessageMutation" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/pin/self": {
+      "delete": {
+        "operationId": "hidePinnedChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Empty" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/reminder": {
+      "get": {
+        "operationId": "getChatReminder",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Reminder" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "setChatReminder",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/SetReminderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/Reminder" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChatReminder",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Empty" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule": {
+      "get": {
+        "operationId": "getScheduledChatMessages",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ScheduleList" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "scheduleChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/ScheduleMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/Schedule" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "413": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule/{scheduleId}": {
+      "post": {
+        "operationId": "editScheduledChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/ScheduleId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "$ref": "#/components/schemas/EditScheduledMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": { "$ref": "#/components/responses/Schedule" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" },
+          "413": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteScheduledChatMessage",
+        "parameters": [
+          { "$ref": "#/components/parameters/RoomToken" },
+          { "$ref": "#/components/parameters/ScheduleId" },
+          { "$ref": "#/components/parameters/OcsHeader" },
+          { "$ref": "#/components/parameters/FormatQuery" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Empty" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "RoomToken": { "name": "token", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/ConversationToken" } },
+      "MessageId": { "name": "messageId", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } },
+      "ThreadId": { "name": "threadId", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } },
+      "ScheduleId": { "name": "scheduleId", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/SnowflakeId" } },
+      "OcsHeader": { "name": "OCS-APIRequest", "in": "header", "required": true, "schema": { "type": "string", "const": "true" } },
+      "FormatQuery": { "name": "format", "in": "query", "required": true, "schema": { "type": "string", "const": "json" } }
+    },
+    "responses": {
+      "Mentions": { "description": "Mention suggestions", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MentionListEnvelope" } } } },
+      "ThreadList": { "description": "Thread list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThreadListEnvelope" } } } },
+      "Thread": { "description": "Thread details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThreadEnvelope" } } } },
+      "Reactions": { "description": "Full reaction actor aggregate", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReactionEnvelope" } } } },
+      "MessageMutation": { "description": "System update with authoritative parent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageMutationEnvelope" } } } },
+      "Reminder": { "description": "Reminder details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReminderEnvelope" } } } },
+      "Schedule": { "description": "Scheduled message", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleEnvelope" } } } },
+      "ScheduleList": { "description": "Scheduled messages", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ScheduleListEnvelope" } } } },
+      "Empty": { "description": "Successful empty result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmptyEnvelope" } } } },
+      "Error": { "description": "OCS failure", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } }
+    },
+    "schemas": {
+      "ConversationToken": { "type": "string", "pattern": "^[a-z0-9]{4,30}$" },
+      "SnowflakeId": { "type": "string", "pattern": "^[1-9][0-9]{0,39}$" },
+      "OcsMeta": {
+        "type": "object",
+        "required": ["status", "statuscode"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok", "failure"] },
+          "statuscode": { "type": "integer", "minimum": 0, "maximum": 999 },
+          "message": { "type": "string", "maxLength": 4096 }
+        },
+        "additionalProperties": true
+      },
+      "RichObjectParameter": {
+        "type": "object",
+        "required": ["type", "id", "name"],
+        "properties": {
+          "type": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "id": { "type": "string", "maxLength": 4096 },
+          "name": { "type": "string", "maxLength": 4096 },
+          "link": { "type": "string", "maxLength": 8192 },
+          "server": { "type": "string", "maxLength": 8192 }
+        },
+        "additionalProperties": true
+      },
+      "MessageParameters": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": { "$ref": "#/components/schemas/RichObjectParameter" } },
+          { "type": "array", "maxItems": 0 }
+        ]
+      },
+      "ReactionSummary": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+          { "type": "array", "maxItems": 0 }
+        ]
+      },
+      "ChatMessageBase": {
+        "type": "object",
+        "required": ["id", "token", "actorType", "actorId", "actorDisplayName", "timestamp", "systemMessage", "messageType", "isReplyable", "referenceId", "message", "messageParameters", "markdown", "reactions"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "token": { "$ref": "#/components/schemas/ConversationToken" },
+          "actorType": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "actorId": { "type": "string", "maxLength": 4096 },
+          "actorDisplayName": { "type": "string", "maxLength": 4096 },
+          "timestamp": { "type": "integer", "minimum": 0 },
+          "systemMessage": { "type": "string", "maxLength": 256 },
+          "messageType": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "isReplyable": { "type": "boolean" },
+          "referenceId": { "type": "string", "maxLength": 64 },
+          "message": { "type": "string" },
+          "messageParameters": { "$ref": "#/components/schemas/MessageParameters" },
+          "expirationTimestamp": { "type": "integer", "minimum": 0 },
+          "markdown": { "type": "boolean" },
+          "reactions": { "$ref": "#/components/schemas/ReactionSummary" },
+          "reactionsSelf": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 32 }, "uniqueItems": true },
+          "deleted": { "type": "boolean", "const": true },
+          "lastEditActorDisplayName": { "type": "string", "maxLength": 4096 },
+          "lastEditActorId": { "type": "string", "maxLength": 4096 },
+          "lastEditActorType": { "type": "string", "maxLength": 128 },
+          "lastEditTimestamp": { "type": "integer", "minimum": 0 },
+          "silent": { "type": "boolean" },
+          "threadId": { "type": "integer", "minimum": 0 },
+          "isThread": { "type": "boolean" },
+          "threadTitle": { "type": "string", "maxLength": 4096 },
+          "threadReplies": { "type": "integer", "minimum": 0 },
+          "metaData": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": true
+      },
+      "ChatMessage": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ChatMessageBase" },
+          {
+            "type": "object",
+            "properties": {
+              "parent": {
+                "anyOf": [
+                  { "$ref": "#/components/schemas/ChatMessageBase" },
+                  { "$ref": "#/components/schemas/DeletedParent" },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "DeletedParent": {
+        "type": "object",
+        "required": ["id", "deleted"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "deleted": { "type": "boolean", "const": true }
+        },
+        "additionalProperties": true
+      },
+      "MentionSuggestion": {
+        "type": "object",
+        "required": ["id", "label", "source", "mentionId"],
+        "properties": {
+          "id": { "type": "string", "maxLength": 4096 },
+          "label": { "type": "string", "maxLength": 4096 },
+          "source": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "mentionId": { "type": "string", "maxLength": 4096 },
+          "details": { "type": "string", "maxLength": 4096 },
+          "status": { "type": "string", "maxLength": 128 },
+          "statusClearAt": { "type": ["integer", "null"], "minimum": 0 },
+          "statusIcon": { "type": ["string", "null"], "maxLength": 256 },
+          "statusMessage": { "type": ["string", "null"], "maxLength": 4096 }
+        },
+        "additionalProperties": true
+      },
+      "Thread": {
+        "type": "object",
+        "required": ["id", "roomToken", "title", "lastMessageId", "lastActivity", "numReplies"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "roomToken": { "$ref": "#/components/schemas/ConversationToken" },
+          "title": { "type": "string", "maxLength": 4096 },
+          "lastMessageId": { "type": "integer", "minimum": 0 },
+          "lastActivity": { "type": "integer", "minimum": 0 },
+          "numReplies": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      },
+      "ThreadInfo": {
+        "type": "object",
+        "required": ["thread", "attendee", "first", "last"],
+        "properties": {
+          "thread": { "$ref": "#/components/schemas/Thread" },
+          "attendee": {
+            "type": "object",
+            "required": ["notificationLevel"],
+            "properties": { "notificationLevel": { "type": "integer", "minimum": 0, "maximum": 3 } },
+            "additionalProperties": true
+          },
+          "first": { "oneOf": [{ "$ref": "#/components/schemas/ChatMessageBase" }, { "type": "null" }] },
+          "last": { "oneOf": [{ "$ref": "#/components/schemas/ChatMessageBase" }, { "type": "null" }] }
+        },
+        "additionalProperties": true
+      },
+      "Reaction": {
+        "type": "object",
+        "required": ["actorDisplayName", "actorId", "actorType", "timestamp"],
+        "properties": {
+          "actorDisplayName": { "type": "string", "maxLength": 4096 },
+          "actorId": { "type": "string", "maxLength": 4096 },
+          "actorType": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "timestamp": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      },
+      "ReactionMap": { "type": "object", "additionalProperties": { "type": "array", "items": { "$ref": "#/components/schemas/Reaction" }, "maxItems": 10000 } },
+      "Reminder": {
+        "type": "object",
+        "required": ["messageId", "timestamp", "token", "userId"],
+        "properties": {
+          "messageId": { "type": "integer", "minimum": 1 },
+          "timestamp": { "type": "integer", "minimum": 0 },
+          "token": { "$ref": "#/components/schemas/ConversationToken" },
+          "userId": { "type": "string", "maxLength": 4096 }
+        },
+        "additionalProperties": true
+      },
+      "ScheduledMessage": {
+        "type": "object",
+        "required": ["id", "actorId", "actorType", "threadId", "message", "messageType", "createdAt", "sendAt", "silent"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/SnowflakeId" },
+          "actorId": { "type": "string", "maxLength": 4096 },
+          "actorType": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "threadId": { "type": "integer" },
+          "threadTitle": { "type": "string", "maxLength": 4096 },
+          "parent": { "$ref": "#/components/schemas/ChatMessageBase" },
+          "message": { "type": "string" },
+          "messageType": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "createdAt": { "type": "integer", "minimum": 0 },
+          "sendAt": { "type": "integer", "minimum": 0 },
+          "silent": { "type": "boolean" },
+          "originalSendAt": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": true
+      },
+      "RenameThreadRequest": { "type": "object", "required": ["threadTitle"], "properties": { "threadTitle": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S" } }, "additionalProperties": false },
+      "ThreadNotificationRequest": { "type": "object", "required": ["level"], "properties": { "level": { "type": "integer", "minimum": 0, "maximum": 3 } }, "additionalProperties": false },
+      "ReactionRequest": { "type": "object", "required": ["reaction"], "properties": { "reaction": { "type": "string", "minLength": 1, "maxLength": 32 } }, "additionalProperties": false },
+      "EditMessageRequest": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string", "minLength": 1, "pattern": "\\S" } }, "additionalProperties": false },
+      "PinMessageRequest": { "type": "object", "required": ["pinUntil"], "properties": { "pinUntil": { "type": "integer", "minimum": 0 } }, "additionalProperties": false },
+      "SetReminderRequest": { "type": "object", "required": ["timestamp"], "properties": { "timestamp": { "type": "integer", "minimum": 1 } }, "additionalProperties": false },
+      "ScheduleMessageRequest": {
+        "type": "object",
+        "required": ["message", "sendAt", "silent"],
+        "properties": {
+          "message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+          "sendAt": { "type": "integer", "minimum": 1 },
+          "replyTo": { "type": "integer", "minimum": 1 },
+          "silent": { "type": "boolean" },
+          "threadTitle": { "type": "string", "maxLength": 4096 },
+          "threadId": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "EditScheduledMessageRequest": {
+        "type": "object",
+        "required": ["message", "sendAt", "silent", "threadTitle"],
+        "properties": {
+          "message": { "type": "string", "minLength": 1, "pattern": "\\S" },
+          "sendAt": { "type": "integer", "minimum": 1 },
+          "silent": { "type": "boolean" },
+          "threadTitle": { "type": "string", "maxLength": 4096 }
+        },
+        "additionalProperties": false
+      },
+      "MentionListEnvelope": { "$ref": "#/components/schemas/_MentionListEnvelope" },
+      "_MentionListEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/MentionSuggestion" }, "maxItems": 100 } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ThreadListEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/ThreadInfo" }, "maxItems": 100 } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ThreadEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "$ref": "#/components/schemas/ThreadInfo" } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ReactionEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "$ref": "#/components/schemas/ReactionMap" } }, "additionalProperties": true } }, "additionalProperties": true },
+      "MessageMutationEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "$ref": "#/components/schemas/ChatMessage" } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ReminderEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "$ref": "#/components/schemas/Reminder" } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ScheduleEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "$ref": "#/components/schemas/ScheduledMessage" } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ScheduleListEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "type": "array", "items": { "$ref": "#/components/schemas/ScheduledMessage" }, "maxItems": 10000 } }, "additionalProperties": true } }, "additionalProperties": true },
+      "EmptyEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": { "oneOf": [{ "type": "array", "maxItems": 0 }, { "type": "null" }] } }, "additionalProperties": true } }, "additionalProperties": true },
+      "ErrorEnvelope": { "type": "object", "required": ["ocs"], "properties": { "ocs": { "type": "object", "required": ["meta", "data"], "properties": { "meta": { "$ref": "#/components/schemas/OcsMeta" }, "data": {} }, "additionalProperties": true } }, "additionalProperties": true }
+    }
+  }
+}

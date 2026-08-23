@@ -1,0 +1,75 @@
+{
+  "cases": [
+    {
+      "id": "reaction-aggregate-is-idempotent",
+      "kind": "reaction",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "reaction-created",
+      "repeat": 2,
+      "transaction": "commit",
+      "expected": { "reactionCounts": { "👍": 1 }, "reactionsSelf": ["👍"] }
+    },
+    {
+      "id": "edit-updates-message-thread-and-preview",
+      "kind": "messageMutation",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "edit-message-success",
+      "transaction": "commit",
+      "expected": { "message": "Edited **text**", "threadFirstMessage": "Edited **text**", "roomPreviewMessage": "Edited **text**", "deleted": false }
+    },
+    {
+      "id": "delete-updates-message-thread-and-preview",
+      "kind": "messageMutation",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "delete-message-accepted",
+      "transaction": "commit",
+      "expected": { "message": "Message deleted by you", "threadFirstMessage": "Message deleted by you", "roomPreviewMessage": "Message deleted by you", "deleted": true }
+    },
+    {
+      "id": "transaction-failure-rolls-back-all-copies",
+      "kind": "messageMutation",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "edit-message-success",
+      "transaction": "fail",
+      "expected": { "message": "Original text", "threadFirstMessage": "Original text", "roomPreviewMessage": "Original text", "deleted": false }
+    },
+    {
+      "id": "reminder-is-account-isolated",
+      "kind": "reminder",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "reminder-created",
+      "transaction": "commit",
+      "expected": { "targetReminderTimestamp": 1787529600, "otherAccountReminderTimestamp": null }
+    },
+    {
+      "id": "schedule-ambiguous-response-keeps-state",
+      "kind": "schedule",
+      "accountId": "account-a",
+      "roomToken": "rooma123",
+      "responseFixture": "schedule-unavailable",
+      "transaction": "commit",
+      "expected": { "scheduleIds": [], "automaticReplay": false }
+    },
+    {
+      "id": "cross-account-response-is-rejected",
+      "kind": "messageMutation",
+      "accountId": "account-b",
+      "requestAccountId": "account-a",
+      "roomToken": "rooma123",
+      "messageId": 120,
+      "responseFixture": "edit-message-success",
+      "transaction": "commit",
+      "expectedRejected": true
+    }
+  ]
+}

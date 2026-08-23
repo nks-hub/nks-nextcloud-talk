@@ -1,0 +1,73 @@
+{
+  "cases": [
+    {
+      "id": "known-placeholder-becomes-rich-object",
+      "message": "Hello {user}",
+      "markdown": true,
+      "parameters": { "user": { "type": "user", "id": "user-a", "name": "User A" } },
+      "expectedRichObjects": 1,
+      "expectedLiteralKnownPlaceholders": 0
+    },
+    {
+      "id": "inline-code-does-not-expand-placeholder",
+      "message": "Use `{user}` then {user}",
+      "markdown": true,
+      "parameters": { "user": { "type": "user", "id": "user-a", "name": "User A" } },
+      "expectedRichObjects": 1,
+      "expectedCodeLiteral": "{user}"
+    },
+    {
+      "id": "fenced-code-does-not-expand-placeholder",
+      "message": "```text\n{user}\n```\n\nOutside {user}",
+      "markdown": true,
+      "parameters": { "user": { "type": "user", "id": "user-a", "name": "User A" } },
+      "expectedRichObjects": 1,
+      "expectedCodeLiteral": "{user}\n"
+    },
+    {
+      "id": "unknown-placeholder-stays-text",
+      "message": "Unknown {missing}",
+      "markdown": true,
+      "parameters": {},
+      "expectedRichObjects": 0,
+      "expectedText": "Unknown {missing}"
+    },
+    {
+      "id": "raw-html-is-not-executable",
+      "message": "<script>alert(1)</script><b>bold</b>",
+      "markdown": true,
+      "parameters": {},
+      "expectedRichObjects": 0,
+      "forbiddenElementKinds": ["script", "html"]
+    },
+    {
+      "id": "unsafe-link-is-not-active",
+      "message": "[bad](javascript:alert(1)) and [good](https://example.org/path)",
+      "markdown": true,
+      "parameters": {},
+      "expectedActiveLinks": ["https://example.org/path"]
+    },
+    {
+      "id": "relative-link-resolves-same-origin",
+      "message": "[room](/index.php/call/rooma123)",
+      "markdown": true,
+      "parameters": {},
+      "expectedActiveLinks": ["https://cloud.example.org/index.php/call/rooma123"]
+    },
+    {
+      "id": "gfm-extensions",
+      "message": "~~done~~\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n- [x] task",
+      "markdown": true,
+      "parameters": {},
+      "expectedElementKinds": ["strikethrough", "table", "taskList"]
+    },
+    {
+      "id": "plain-text-bypasses-markdown",
+      "message": "**literal** {user}",
+      "markdown": false,
+      "parameters": { "user": { "type": "user", "id": "user-a", "name": "User A" } },
+      "expectedRichObjects": 1,
+      "forbiddenElementKinds": ["strong"]
+    }
+  ]
+}

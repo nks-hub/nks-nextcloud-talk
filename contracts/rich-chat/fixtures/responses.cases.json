@@ -1,0 +1,317 @@
+{
+  "cases": [
+    {
+      "id": "mentions-success",
+      "operationId": "getMentionSuggestions",
+      "status": 200,
+      "context": { "roomToken": "rooma123" },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": [
+            { "id": "user-a", "label": "User A", "source": "users", "mentionId": "user-a", "status": "online", "statusIcon": null, "statusMessage": null, "statusClearAt": null },
+            { "id": "team-a", "label": "Team A", "source": "groups", "mentionId": "team-a", "details": "Demo team" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "recent-threads-success",
+      "operationId": "getRecentThreads",
+      "status": 200,
+      "context": { "roomToken": "rooma123" },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": [
+            {
+              "thread": { "id": 120, "roomToken": "rooma123", "title": "Design", "lastMessageId": 122, "lastActivity": 1787443000, "numReplies": 2 },
+              "attendee": { "notificationLevel": 2 },
+              "first": null,
+              "last": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "subscribed-threads-success",
+      "operationId": "getSubscribedThreads",
+      "status": 200,
+      "context": {},
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": [
+            {
+              "thread": { "id": 220, "roomToken": "roomb456", "title": "Release", "lastMessageId": 221, "lastActivity": 1787443100, "numReplies": 1 },
+              "attendee": { "notificationLevel": 1 },
+              "first": null,
+              "last": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thread-detail-success",
+      "operationId": "getThread",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "threadId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": {
+            "thread": { "id": 120, "roomToken": "rooma123", "title": "Design", "lastMessageId": 122, "lastActivity": 1787443000, "numReplies": 2 },
+            "attendee": { "notificationLevel": 2 },
+            "first": {
+              "id": 120, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787442800,
+              "systemMessage": "", "messageType": "comment", "isReplyable": true, "referenceId": "root-120", "message": "Root {user}",
+              "messageParameters": { "user": { "type": "user", "id": "user-b", "name": "User B" } }, "markdown": true, "reactions": {},
+              "reactionsSelf": [], "threadId": 120, "isThread": true, "threadTitle": "Design", "threadReplies": 2
+            },
+            "last": {
+              "id": 122, "token": "rooma123", "actorType": "users", "actorId": "user-b", "actorDisplayName": "User B", "timestamp": 1787443000,
+              "systemMessage": "", "messageType": "comment", "isReplyable": true, "referenceId": "reply-122", "message": "Reply",
+              "messageParameters": {}, "markdown": true, "reactions": { "👍": 1 }, "reactionsSelf": ["👍"], "threadId": 120, "isThread": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "thread-rename-success",
+      "operationId": "renameThread",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "threadId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": {
+            "thread": { "id": 120, "roomToken": "rooma123", "title": "Updated design", "lastMessageId": 122, "lastActivity": 1787443000, "numReplies": 2 },
+            "attendee": { "notificationLevel": 2 }, "first": null, "last": null
+          }
+        }
+      }
+    },
+    {
+      "id": "thread-notify-success",
+      "operationId": "setThreadNotificationLevel",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": {
+            "thread": { "id": 120, "roomToken": "rooma123", "title": "Design", "lastMessageId": 122, "lastActivity": 1787443000, "numReplies": 2 },
+            "attendee": { "notificationLevel": 3 }, "first": null, "last": null
+          }
+        }
+      }
+    },
+    {
+      "id": "reaction-created",
+      "operationId": "addMessageReaction",
+      "status": 201,
+      "context": { "roomToken": "rooma123", "messageId": 120, "actorType": "users", "actorId": "user-a" },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 201, "message": "OK" },
+          "data": { "👍": [{ "actorDisplayName": "User A", "actorId": "user-a", "actorType": "users", "timestamp": 1787443200 }] }
+        }
+      }
+    },
+    {
+      "id": "reaction-already-existed",
+      "operationId": "addMessageReaction",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120, "actorType": "users", "actorId": "user-a" },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": { "👍": [{ "actorDisplayName": "User A", "actorId": "user-a", "actorType": "users", "timestamp": 1787443200 }] }
+        }
+      }
+    },
+    {
+      "id": "reaction-deleted",
+      "operationId": "deleteMessageReaction",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120, "actorType": "users", "actorId": "user-a" },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 200, "message": "OK" }, "data": {} } }
+    },
+    {
+      "id": "edit-message-success",
+      "operationId": "editChatMessage",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": {
+            "id": 150, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787443300,
+            "systemMessage": "message_edited", "messageType": "system", "isReplyable": false, "referenceId": "", "message": "You edited a message",
+            "messageParameters": {}, "markdown": false, "reactions": {},
+            "parent": {
+              "id": 120, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787442800,
+              "systemMessage": "", "messageType": "comment", "isReplyable": true, "referenceId": "root-120", "message": "Edited **text**",
+              "messageParameters": {}, "markdown": true, "reactions": { "👍": 1 }, "reactionsSelf": ["👍"],
+              "lastEditActorDisplayName": "User A", "lastEditActorId": "user-a", "lastEditActorType": "users", "lastEditTimestamp": 1787443300,
+              "threadId": 120, "isThread": true, "threadTitle": "Design", "threadReplies": 2
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "delete-message-accepted",
+      "operationId": "deleteChatMessage",
+      "status": 202,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 202, "message": "OK" },
+          "data": {
+            "id": 151, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787443400,
+            "systemMessage": "message_deleted", "messageType": "system", "isReplyable": false, "referenceId": "", "message": "You deleted a message",
+            "messageParameters": {}, "markdown": false, "reactions": {},
+            "parent": {
+              "id": 120, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787442800,
+              "systemMessage": "", "messageType": "comment_deleted", "isReplyable": false, "referenceId": "root-120", "message": "Message deleted by you",
+              "messageParameters": {}, "markdown": false, "reactions": {}, "reactionsSelf": [], "deleted": true,
+              "threadId": 120, "isThread": true, "threadTitle": "Design", "threadReplies": 2
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "pin-message-success",
+      "operationId": "pinChatMessage",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": {
+            "id": 152, "token": "rooma123", "actorType": "users", "actorId": "moderator-a", "actorDisplayName": "Moderator A", "timestamp": 1787443500,
+            "systemMessage": "message_pinned", "messageType": "system", "isReplyable": false, "referenceId": "", "message": "A message was pinned",
+            "messageParameters": {}, "markdown": false, "reactions": {},
+            "parent": {
+              "id": 120, "token": "rooma123", "actorType": "users", "actorId": "user-a", "actorDisplayName": "User A", "timestamp": 1787442800,
+              "systemMessage": "", "messageType": "comment", "isReplyable": true, "referenceId": "root-120", "message": "Root text",
+              "messageParameters": {}, "markdown": true, "reactions": {}, "reactionsSelf": [],
+              "metaData": { "pinnedActorType": "users", "pinnedActorId": "moderator-a", "pinnedActorDisplayName": "Moderator A", "pinnedAt": 1787443500, "pinnedUntil": 1787529600 },
+              "threadId": 120, "isThread": true, "threadTitle": "Design", "threadReplies": 2
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hide-pin-success",
+      "operationId": "hidePinnedChatMessage",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 200, "message": "OK" }, "data": null } }
+    },
+    {
+      "id": "reminder-created",
+      "operationId": "setChatReminder",
+      "status": 201,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 201, "message": "OK" }, "data": { "messageId": 120, "timestamp": 1787529600, "token": "rooma123", "userId": "user-a" } } }
+    },
+    {
+      "id": "reminder-get-success",
+      "operationId": "getChatReminder",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 200, "message": "OK" }, "data": { "messageId": 120, "timestamp": 1787529600, "token": "rooma123", "userId": "user-a" } } }
+    },
+    {
+      "id": "reminder-deleted",
+      "operationId": "deleteChatReminder",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 200, "message": "OK" }, "data": [] } }
+    },
+    {
+      "id": "schedule-list-success",
+      "operationId": "getScheduledChatMessages",
+      "status": 200,
+      "context": { "roomToken": "rooma123" },
+      "expectedClassification": "success",
+      "body": {
+        "ocs": {
+          "meta": { "status": "ok", "statuscode": 200, "message": "OK" },
+          "data": [{ "id": "18446744073709551616", "actorId": "user-a", "actorType": "users", "threadId": 0, "message": "Later", "messageType": "comment", "createdAt": 1787443600, "sendAt": 1787529600, "silent": false }]
+        }
+      }
+    },
+    {
+      "id": "schedule-created",
+      "operationId": "scheduleChatMessage",
+      "status": 201,
+      "context": { "roomToken": "rooma123" },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 201, "message": "OK" }, "data": { "id": "18446744073709551616", "actorId": "user-a", "actorType": "users", "threadId": 0, "message": "Later", "messageType": "comment", "createdAt": 1787443600, "sendAt": 1787529600, "silent": false } } }
+    },
+    {
+      "id": "schedule-edited",
+      "operationId": "editScheduledChatMessage",
+      "status": 202,
+      "context": { "roomToken": "rooma123", "scheduleId": "18446744073709551616" },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 202, "message": "OK" }, "data": { "id": "18446744073709551616", "actorId": "user-a", "actorType": "users", "threadId": 0, "message": "Updated later", "messageType": "comment", "createdAt": 1787443600, "sendAt": 1787533200, "silent": true } } }
+    },
+    {
+      "id": "schedule-deleted",
+      "operationId": "deleteScheduledChatMessage",
+      "status": 200,
+      "context": { "roomToken": "rooma123", "scheduleId": "18446744073709551616" },
+      "expectedClassification": "success",
+      "body": { "ocs": { "meta": { "status": "ok", "statuscode": 200, "message": "OK" }, "data": [] } }
+    },
+    {
+      "id": "edit-unauthorized",
+      "operationId": "editChatMessage",
+      "status": 401,
+      "context": { "roomToken": "rooma123", "messageId": 120 },
+      "expectedClassification": "reauth",
+      "body": { "ocs": { "meta": { "status": "failure", "statuscode": 401, "message": "Unauthorized" }, "data": { "error": "authentication" } } }
+    },
+    {
+      "id": "thread-not-found",
+      "operationId": "getThread",
+      "status": 404,
+      "context": { "roomToken": "rooma123", "threadId": 999 },
+      "expectedClassification": "deterministic-failure",
+      "body": { "ocs": { "meta": { "status": "failure", "statuscode": 404, "message": "Not found" }, "data": { "error": "thread" } } }
+    },
+    {
+      "id": "schedule-unavailable",
+      "operationId": "scheduleChatMessage",
+      "status": 503,
+      "context": { "roomToken": "rooma123" },
+      "expectedClassification": "ambiguous",
+      "body": { "ocs": { "meta": { "status": "failure", "statuscode": 503, "message": "Unavailable" }, "data": { "error": "service" } } }
+    }
+  ]
+}

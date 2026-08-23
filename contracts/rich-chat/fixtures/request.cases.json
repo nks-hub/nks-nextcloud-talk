@@ -1,0 +1,193 @@
+{
+  "cases": [
+    {
+      "id": "mention-search",
+      "kind": "mentions",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "search": "user", "limit": 20, "includeStatus": true },
+      "expected": { "operationId": "getMentionSuggestions", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/mentions", "query": { "format": "json", "search": "user", "limit": "20", "includeStatus": "1" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "mention-limit-rejected",
+      "kind": "mentions",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "search": "user", "limit": 101, "includeStatus": false },
+      "expectedError": true
+    },
+    {
+      "id": "recent-threads",
+      "kind": "recentThreads",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "limit": 50 },
+      "expected": { "operationId": "getRecentThreads", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/recent", "query": { "format": "json", "limit": "50" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "subscribed-threads",
+      "kind": "subscribedThreads",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "limit": 100, "offset": 200 },
+      "expected": { "operationId": "getSubscribedThreads", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/subscribed-threads", "query": { "format": "json", "limit": "100", "offset": "200" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "get-thread",
+      "kind": "getThread",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "threadId": 120 },
+      "expected": { "operationId": "getThread", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "rename-thread",
+      "kind": "renameThread",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": false, "moderator": true, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "threadId": 120, "threadTitle": "Updated design" },
+      "expected": { "operationId": "renameThread", "method": "PUT", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "threadTitle": "Updated design" } }
+    },
+    {
+      "id": "notify-thread",
+      "kind": "notifyThread",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "level": 3 },
+      "expected": { "operationId": "setThreadNotificationLevel", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120/notify", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "level": 3 } }
+    },
+    {
+      "id": "get-reactions",
+      "kind": "getReactions",
+      "profile": { "talkFeatures": ["chat-v2", "reactions"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "reaction": "👍" },
+      "expected": { "operationId": "getMessageReactions", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/reaction/rooma123/120", "query": { "format": "json", "reaction": "👍" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "add-reaction",
+      "kind": "addReaction",
+      "profile": { "talkFeatures": ["chat-v2", "reactions", "react-permission"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 256 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "reaction": "👍" },
+      "expected": { "operationId": "addMessageReaction", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/reaction/rooma123/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "reaction": "👍" } }
+    },
+    {
+      "id": "reaction-permission-rejected",
+      "kind": "addReaction",
+      "profile": { "talkFeatures": ["chat-v2", "reactions", "react-permission"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "reaction": "👍" },
+      "expectedError": true
+    },
+    {
+      "id": "delete-reaction",
+      "kind": "deleteReaction",
+      "profile": { "talkFeatures": ["chat-v2", "reactions"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "reaction": "👍" },
+      "expected": { "operationId": "deleteMessageReaction", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/reaction/rooma123/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "reaction": "👍" } }
+    },
+    {
+      "id": "edit-message",
+      "kind": "editMessage",
+      "profile": { "talkFeatures": ["chat-v2", "edit-messages"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "message": "Edited text" },
+      "expected": { "operationId": "editChatMessage", "method": "PUT", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "message": "Edited text" } }
+    },
+    {
+      "id": "whitespace-edit-rejected",
+      "kind": "editMessage",
+      "profile": { "talkFeatures": ["chat-v2", "edit-messages"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "message": "   " },
+      "expectedError": true
+    },
+    {
+      "id": "delete-message",
+      "kind": "deleteMessage",
+      "profile": { "talkFeatures": ["chat-v2", "delete-messages"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120 },
+      "expected": { "operationId": "deleteChatMessage", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "pin-message",
+      "kind": "pinMessage",
+      "profile": { "talkFeatures": ["chat-v2", "pinned-messages"], "talkLocalFeatures": [], "federated": false, "moderator": true, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "pinUntil": 1787529600, "now": 1787440000 },
+      "expected": { "operationId": "pinChatMessage", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/pin", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "pinUntil": 1787529600 } }
+    },
+    {
+      "id": "past-pin-rejected",
+      "kind": "pinMessage",
+      "profile": { "talkFeatures": ["chat-v2", "pinned-messages"], "talkLocalFeatures": [], "federated": false, "moderator": true, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "pinUntil": 1787430000, "now": 1787440000 },
+      "expectedError": true
+    },
+    {
+      "id": "unpin-message",
+      "kind": "unpinMessage",
+      "profile": { "talkFeatures": ["chat-v2", "pinned-messages"], "talkLocalFeatures": [], "federated": true, "moderator": true, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120 },
+      "expected": { "operationId": "unpinChatMessage", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/pin", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "hide-pinned-message",
+      "kind": "hidePinnedMessage",
+      "profile": { "talkFeatures": ["chat-v2", "pinned-messages"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120 },
+      "expected": { "operationId": "hidePinnedChatMessage", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/pin/self", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "set-reminder",
+      "kind": "setReminder",
+      "profile": { "talkFeatures": ["chat-v2", "remind-me-later"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120, "timestamp": 1787529600 },
+      "expected": { "operationId": "setChatReminder", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/reminder", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "timestamp": 1787529600 } }
+    },
+    {
+      "id": "get-reminder",
+      "kind": "getReminder",
+      "profile": { "talkFeatures": ["chat-v2", "remind-me-later"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120 },
+      "expected": { "operationId": "getChatReminder", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/reminder", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "delete-reminder",
+      "kind": "deleteReminder",
+      "profile": { "talkFeatures": ["chat-v2", "remind-me-later"], "talkLocalFeatures": [], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "messageId": 120 },
+      "expected": { "operationId": "deleteChatReminder", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/120/reminder", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "get-scheduled",
+      "kind": "getScheduled",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": ["scheduled-messages"], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123" },
+      "expected": { "operationId": "getScheduledChatMessages", "method": "GET", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "create-scheduled",
+      "kind": "createScheduled",
+      "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": ["scheduled-messages"], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "message": "Later", "sendAt": 1787529600, "silent": false, "threadId": 0, "threadTitle": "", "now": 1787440000 },
+      "expected": { "operationId": "scheduleChatMessage", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "message": "Later", "sendAt": 1787529600, "silent": false, "threadTitle": "", "threadId": 0 } }
+    },
+    {
+      "id": "create-scheduled-past-rejected",
+      "kind": "createScheduled",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": ["scheduled-messages"], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "message": "Later", "sendAt": 1787430000, "silent": false, "threadId": 0, "threadTitle": "", "now": 1787440000 },
+      "expectedError": true
+    },
+    {
+      "id": "edit-scheduled",
+      "kind": "editScheduled",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": ["scheduled-messages"], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "scheduleId": "18446744073709551616", "message": "Updated later", "sendAt": 1787533200, "silent": true, "threadTitle": "", "now": 1787440000 },
+      "expected": { "operationId": "editScheduledChatMessage", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule/18446744073709551616", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "message": "Updated later", "sendAt": 1787533200, "silent": true, "threadTitle": "" } }
+    },
+    {
+      "id": "delete-scheduled",
+      "kind": "deleteScheduled",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": ["scheduled-messages"], "federated": false, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123", "scheduleId": "18446744073709551616" },
+      "expected": { "operationId": "deleteScheduledChatMessage", "method": "DELETE", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule/18446744073709551616", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": null }
+    },
+    {
+      "id": "federated-scheduled-rejected",
+      "kind": "getScheduled",
+      "profile": { "talkFeatures": ["chat-v2"], "talkLocalFeatures": ["scheduled-messages"], "federated": true, "moderator": false, "participantPermissions": 0 },
+      "input": { "roomToken": "rooma123" },
+      "expectedError": true
+    }
+  ]
+}

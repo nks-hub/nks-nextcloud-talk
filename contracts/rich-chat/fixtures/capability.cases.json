@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "id": "all-local-features",
+      "talkFeatures": ["chat-v2", "threads", "reactions", "edit-messages", "delete-messages", "pinned-messages", "remind-me-later"],
+      "talkLocalFeatures": ["scheduled-messages"],
+      "federated": false,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": { "mentions": true, "threadMetadata": true, "threadMessageFetch": true, "reactions": true, "canReact": true, "edit": true, "delete": true, "pin": true, "hidePinned": true, "reminders": true, "scheduled": true }
+    },
+    {
+      "id": "federated-metadata-without-local-schedule",
+      "talkFeatures": ["chat-v2", "threads", "reactions", "edit-messages", "delete-messages", "pinned-messages", "remind-me-later"],
+      "talkLocalFeatures": ["scheduled-messages"],
+      "federated": true,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": { "mentions": true, "threadMetadata": true, "threadMessageFetch": false, "reactions": true, "canReact": true, "edit": true, "delete": true, "pin": true, "hidePinned": true, "reminders": true, "scheduled": false }
+    },
+    {
+      "id": "react-permission-granted",
+      "talkFeatures": ["chat-v2", "reactions", "react-permission"],
+      "talkLocalFeatures": [],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 256,
+      "expected": { "mentions": true, "threadMetadata": false, "threadMessageFetch": false, "reactions": true, "canReact": true, "edit": false, "delete": false, "pin": false, "hidePinned": false, "reminders": false, "scheduled": false }
+    },
+    {
+      "id": "react-permission-denied",
+      "talkFeatures": ["chat-v2", "reactions", "react-permission"],
+      "talkLocalFeatures": [],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 0,
+      "expected": { "mentions": true, "threadMetadata": false, "threadMessageFetch": false, "reactions": true, "canReact": false, "edit": false, "delete": false, "pin": false, "hidePinned": false, "reminders": false, "scheduled": false }
+    },
+    {
+      "id": "scheduled-must-be-local",
+      "talkFeatures": ["chat-v2", "scheduled-messages"],
+      "talkLocalFeatures": [],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 0,
+      "expected": { "mentions": true, "threadMetadata": false, "threadMessageFetch": false, "reactions": false, "canReact": false, "edit": false, "delete": false, "pin": false, "hidePinned": false, "reminders": false, "scheduled": false }
+    },
+    {
+      "id": "missing-chat-v2-disables-rich-chat",
+      "talkFeatures": ["threads", "reactions", "edit-messages", "delete-messages", "pinned-messages", "remind-me-later"],
+      "talkLocalFeatures": ["scheduled-messages"],
+      "federated": false,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": { "mentions": false, "threadMetadata": false, "threadMessageFetch": false, "reactions": false, "canReact": false, "edit": false, "delete": false, "pin": false, "hidePinned": false, "reminders": false, "scheduled": false }
+    },
+    {
+      "id": "duplicate-global-feature-is-invalid",
+      "talkFeatures": ["chat-v2", "threads", "threads"],
+      "talkLocalFeatures": [],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 0,
+      "expectedError": true
+    },
+    {
+      "id": "duplicate-local-feature-is-invalid",
+      "talkFeatures": ["chat-v2"],
+      "talkLocalFeatures": ["scheduled-messages", "scheduled-messages"],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 0,
+      "expectedError": true
+    }
+  ]
+}

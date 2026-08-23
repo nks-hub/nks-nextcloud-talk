@@ -1,0 +1,15 @@
+{
+  "contract": "../openapi.json",
+  "responsesFile": "responses.cases.json",
+  "requestsFile": "request.cases.json",
+  "capabilitiesFile": "capability.cases.json",
+  "renderFile": "render.cases.json",
+  "stateFile": "state.cases.json",
+  "expectedCounts": {
+    "responses": 23,
+    "requests": 27,
+    "capabilities": 8,
+    "render": 9,
+    "state": 7
+  }
+}
