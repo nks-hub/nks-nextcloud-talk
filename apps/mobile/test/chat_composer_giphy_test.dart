@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -18,29 +23,207 @@ void main() {
   );
 
   group('GiphyAvailability', () {
-    test('requires enabled and configured booleans', () {
+    test('distinguishes available, unavailable and unknown states', () {
       expect(
         GiphyAvailability.fromCapabilities(
           _capabilities(<String, Object?>{'enabled': true, 'configured': true}),
-        ).isAvailable,
-        isTrue,
+        ).state,
+        GiphyAvailabilityState.available,
       );
 
-      for (final malformed in <Object?>[
-        null,
+      for (final unavailable in <Object?>[
         <String, Object?>{'enabled': true},
         <String, Object?>{'enabled': true, 'configured': false},
+        <String, Object?>{'enabled': false, 'configured': true},
         <String, Object?>{'enabled': 1, 'configured': true},
         'enabled',
       ]) {
         expect(
-          GiphyAvailability.fromCapabilities(
-            _capabilities(malformed, includeIntegration: malformed != null),
-          ).isAvailable,
-          isFalse,
+          GiphyAvailability.fromCapabilities(_capabilities(unavailable)).state,
+          GiphyAvailabilityState.unavailable,
         );
       }
+
+      expect(
+        GiphyAvailability.fromCapabilities(
+          _capabilities(null, includeIntegration: false),
+        ).state,
+        GiphyAvailabilityState.unknown,
+      );
     });
+  });
+
+  group('giphyRepositoryProvider', () {
+    test(
+      'probes a missing capability and reuses the valid first page once',
+      () async {
+        var endpointRequests = 0;
+        final harness = await _GiphyProviderHarness.create(
+          integration: null,
+          includeIntegration: false,
+          giphyClient: MockClient((_) async {
+            endpointRequests++;
+            return http.Response(_validResponse(), 200);
+          }),
+        );
+        addTearDown(harness.close);
+
+        final repository = await harness.readRepository();
+
+        expect(repository, isNotNull);
+        expect(endpointRequests, 1);
+        final page = await repository!.trending(cursor: 0, limit: 20);
+        expect(page.entries, hasLength(1));
+        expect(endpointRequests, 1);
+        await repository.trending(cursor: 0, limit: 20);
+        expect(endpointRequests, 2);
+      },
+    );
+
+    test('does not probe an explicitly unavailable integration', () async {
+      var endpointRequests = 0;
+      final harness = await _GiphyProviderHarness.create(
+        integration: <String, Object?>{'enabled': true, 'configured': false},
+        giphyClient: MockClient((_) async {
+          endpointRequests++;
+          return http.Response(_validResponse(), 200);
+        }),
+      );
+      addTearDown(harness.close);
+
+      expect(await harness.readRepository(), isNull);
+      expect(endpointRequests, 0);
+    });
+
+    test('does not probe a present malformed capability', () async {
+      var endpointRequests = 0;
+      final harness = await _GiphyProviderHarness.create(
+        integration: <String, Object?>{'enabled': 'yes', 'configured': true},
+        giphyClient: MockClient((_) async {
+          endpointRequests++;
+          return http.Response(_validResponse(), 200);
+        }),
+      );
+      addTearDown(harness.close);
+
+      expect(await harness.readRepository(), isNull);
+      expect(endpointRequests, 0);
+    });
+
+    for (final statusCode in <int>[401, 404]) {
+      test(
+        'maps an unknown integration HTTP $statusCode to unavailable',
+        () async {
+          final harness = await _GiphyProviderHarness.create(
+            integration: null,
+            includeIntegration: false,
+            giphyClient: MockClient(
+              (_) async => http.Response('unavailable', statusCode),
+            ),
+          );
+          addTearDown(harness.close);
+
+          expect(await harness.readRepository(), isNull);
+        },
+      );
+    }
+
+    test('keeps an unknown integration rate limit retryable', () async {
+      final harness = await _GiphyProviderHarness.create(
+        integration: null,
+        includeIntegration: false,
+        giphyClient: MockClient((_) async => http.Response('limited', 429)),
+      );
+      addTearDown(harness.close);
+
+      await expectLater(
+        harness.readRepository(),
+        throwsA(_giphyError(GiphyError.rateLimited)),
+      );
+    });
+
+    test('keeps an unknown integration network failure retryable', () async {
+      final harness = await _GiphyProviderHarness.create(
+        integration: null,
+        includeIntegration: false,
+        giphyClient: MockClient((request) async {
+          throw http.ClientException('fixture network failure', request.url);
+        }),
+      );
+      addTearDown(harness.close);
+
+      await expectLater(
+        harness.readRepository(),
+        throwsA(_giphyError(GiphyError.network)),
+      );
+    });
+
+    test('keeps an unknown integration timeout retryable', () async {
+      final harness = await _GiphyProviderHarness.create(
+        integration: null,
+        includeIntegration: false,
+        giphyClient: MockClient((_) async {
+          await Completer<void>().future;
+          return http.Response('', 200);
+        }),
+        requestTimeout: const Duration(milliseconds: 10),
+      );
+      addTearDown(harness.close);
+
+      await expectLater(
+        harness.readRepository(),
+        throwsA(_giphyError(GiphyError.timeout)),
+      );
+    });
+
+    test('requires a valid OCS envelope for a successful probe', () async {
+      final harness = await _GiphyProviderHarness.create(
+        integration: null,
+        includeIntegration: false,
+        giphyClient: MockClient(
+          (_) async => http.Response('{"entries":[]}', 200),
+        ),
+      );
+      addTearDown(harness.close);
+
+      await expectLater(
+        harness.readRepository(),
+        throwsA(_giphyError(GiphyError.invalidResponse)),
+      );
+    });
+
+    test(
+      'does not create a repository after disposal during capabilities',
+      () async {
+        final requestStarted = Completer<void>();
+        final capabilitiesResponse = Completer<http.Response>();
+        final harness = await _GiphyProviderHarness.create(
+          integration: null,
+          includeIntegration: false,
+          capabilitiesClient: MockClient((_) {
+            requestStarted.complete();
+            return capabilitiesResponse.future;
+          }),
+          giphyClient: MockClient((_) async {
+            return http.Response(_validResponse(), 200);
+          }),
+        );
+        addTearDown(harness.close);
+
+        final pending = harness.readRepository();
+        await requestStarted.future;
+        harness.disposeProviders();
+        capabilitiesResponse.complete(
+          http.Response(
+            jsonEncode(_capabilitiesPayload(null, includeIntegration: false)),
+            200,
+          ),
+        );
+
+        await expectLater(pending, throwsA(_giphyError(GiphyError.cancelled)));
+        expect(harness.factoryInvocations, 0);
+      },
+    );
   });
 
   group('HttpGiphyRepository', () {
@@ -193,6 +376,30 @@ void main() {
       );
     });
 
+    test(
+      'bounds cancellation of a stalled error response body',
+      () async {
+        final client = _StalledBodyClient(
+          statusCode: 503,
+          stallCancellation: true,
+        );
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
+
+        await expectLater(
+          repository.trending(cursor: 0, limit: 10),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.wasCancelled, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
+
     test('maps an explicit abort trigger to cancellation', () async {
       final abort = Completer<void>();
       final repository = HttpGiphyRepository(
@@ -279,6 +486,14 @@ void main() {
 CapabilitySnapshot _capabilities(
   Object? integration, {
   bool includeIntegration = true,
+}) => CapabilitySnapshot.fromJson(
+  _capabilitiesPayload(integration, includeIntegration: includeIntegration),
+  context: CapabilityContext.authenticated,
+);
+
+Map<String, Object?> _capabilitiesPayload(
+  Object? integration, {
+  bool includeIntegration = true,
 }) {
   final payload = capabilitiesJson();
   final ocs = payload['ocs']! as Map<String, Object?>;
@@ -287,10 +502,7 @@ CapabilitySnapshot _capabilities(
   if (includeIntegration) {
     capabilities['integration_giphy'] = integration;
   }
-  return CapabilitySnapshot.fromJson(
-    payload,
-    context: CapabilityContext.authenticated,
-  );
+  return payload;
 }
 
 Map<String, Object?> _entry({
@@ -345,6 +557,144 @@ final class _OversizedClient extends http.BaseClient {
       contentLength: 65,
     );
   }
+}
+
+final class _StalledBodyClient extends http.BaseClient {
+  _StalledBodyClient({
+    required this.statusCode,
+    this.stallCancellation = false,
+  });
+
+  final int statusCode;
+  final bool stallCancellation;
+  bool wasCancelled = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    late StreamController<List<int>> controller;
+    controller = StreamController<List<int>>(
+      onCancel: () {
+        wasCancelled = true;
+        if (stallCancellation) {
+          return Completer<void>().future;
+        }
+        return controller.close();
+      },
+    );
+    return http.StreamedResponse(controller.stream, statusCode);
+  }
+}
+
+final class _GiphyProviderHarness {
+  _GiphyProviderHarness._({
+    required this.accountId,
+    required this.container,
+    required this.api,
+    required this.database,
+    required this.factoryCounter,
+  });
+
+  final String accountId;
+  final ProviderContainer container;
+  final HttpNextcloudApi api;
+  final AppDatabase database;
+  final _Counter factoryCounter;
+  bool _containerDisposed = false;
+  ProviderSubscription<AsyncValue<HttpGiphyRepository?>>? _subscription;
+
+  int get factoryInvocations => factoryCounter.value;
+
+  static Future<_GiphyProviderHarness> create({
+    required Object? integration,
+    required http.Client giphyClient,
+    bool includeIntegration = true,
+    Duration requestTimeout = const Duration(seconds: 20),
+    http.Client? capabilitiesClient,
+  }) async {
+    const accountId = 'account-giphy';
+    final database = openTestDatabase();
+    final accounts = AccountRepository(database);
+    await accounts.upsertAccount(
+      accountId: accountId,
+      serverUrl: 'https://cloud.example.invalid/nextcloud',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 8, 24),
+    );
+    final vault = MemoryCredentialVault();
+    await vault.writeAppPassword(accountId, 'fixture-password');
+    final api = HttpNextcloudApi(
+      client:
+          capabilitiesClient ??
+          MockClient((_) async {
+            return http.Response(
+              jsonEncode(
+                _capabilitiesPayload(
+                  integration,
+                  includeIntegration: includeIntegration,
+                ),
+              ),
+              200,
+            );
+          }),
+    );
+    final factoryCounter = _Counter();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(vault),
+        nextcloudApiProvider.overrideWithValue(api),
+        giphyRepositoryFactoryProvider.overrideWithValue(({
+          required ServerBase server,
+          required GiphyAuthorization authorization,
+        }) {
+          factoryCounter.value++;
+          return HttpGiphyRepository(
+            server: server,
+            authorization: authorization,
+            client: giphyClient,
+            requestTimeout: requestTimeout,
+          );
+        }),
+      ],
+    );
+    return _GiphyProviderHarness._(
+      accountId: accountId,
+      container: container,
+      api: api,
+      database: database,
+      factoryCounter: factoryCounter,
+    );
+  }
+
+  Future<HttpGiphyRepository?> readRepository() {
+    _subscription ??= container.listen<AsyncValue<HttpGiphyRepository?>>(
+      giphyRepositoryProvider(accountId),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    return container.read(giphyRepositoryProvider(accountId).future);
+  }
+
+  void disposeProviders() {
+    if (_containerDisposed) {
+      return;
+    }
+    _containerDisposed = true;
+    _subscription?.close();
+    _subscription = null;
+    container.dispose();
+  }
+
+  Future<void> close() async {
+    disposeProviders();
+    api.close();
+    await database.close();
+  }
+}
+
+final class _Counter {
+  int value = 0;
 }
 
 final class _ControlledRepository implements GiphyRepository {
