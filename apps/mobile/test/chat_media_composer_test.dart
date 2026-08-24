@@ -76,10 +76,20 @@ void main() {
         ..add(_progress(AttachmentJobPhase.completed, progress: 1));
       await tester.pump();
 
-      expect(find.text('Image sent'), findsOneWidget);
+      expect(
+        find.byKey(const Key('image-attachment-upload-panel')),
+        findsNothing,
+      );
+      expect(find.text('Image sent'), findsNothing);
       expect(
         find.byKey(const Key('image-attachment-upload-progress')),
         findsNothing,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('pick-image-attachment')))
+            .onPressed,
+        isNotNull,
       );
     },
   );
