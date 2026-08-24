@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -284,6 +284,154 @@ void main() {
       expect(observed.url.host, server.uri.host);
     });
 
+    test(
+      'loads attribution from the exact authenticated server path',
+      () async {
+        late http.Request observed;
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: MockClient((request) async {
+            observed = request;
+            return http.Response.bytes(
+              _validGif,
+              200,
+              headers: const <String, String>{'content-type': 'image/gif'},
+            );
+          }),
+        );
+        addTearDown(repository.close);
+
+        final asset = await repository.loadAttributionAsset();
+
+        expect(asset.body, _validGif);
+        expect(asset.contentType, 'image/gif');
+        expect(observed.method, 'GET');
+        expect(
+          observed.url,
+          Uri.parse(
+            'https://cloud.example.invalid/nextcloud/apps/'
+            'integration_giphy/img/powered-by-giphy.gif',
+          ),
+        );
+        expect(observed.headers['Authorization'], startsWith('Basic '));
+        expect(observed.headers['Accept'], 'image/gif');
+        expect(observed.followRedirects, isFalse);
+        expect(observed.maxRedirects, 0);
+      },
+    );
+
+    test('rejects attribution redirects and non-success statuses', () async {
+      for (final expectation in <int, GiphyError>{
+        302: GiphyError.unexpectedStatus,
+        404: GiphyError.integrationUnavailable,
+        503: GiphyError.unexpectedStatus,
+      }.entries) {
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: MockClient((_) async => http.Response('', expectation.key)),
+        );
+
+        await expectLater(
+          repository.loadAttributionAsset(),
+          throwsA(_giphyError(expectation.value)),
+        );
+        repository.close();
+      }
+    });
+
+    test('rejects oversized attribution and cancels its body', () async {
+      final client = _AbortAwareBodyClient(
+        statusCode: 200,
+        contentLength: 65,
+        headers: const <String, String>{'content-type': 'image/gif'},
+      );
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: client,
+        maximumAttributionBytes: 64,
+      );
+      addTearDown(repository.close);
+
+      await expectLater(
+        repository.loadAttributionAsset(),
+        throwsA(_giphyError(GiphyError.responseTooLarge)),
+      );
+      expect(client.requestAborted, isFalse);
+      expect(client.subscriptionCancelled, isTrue);
+    });
+
+    test('requires a GIF content type and signature for attribution', () async {
+      for (final response in <http.Response>[
+        http.Response.bytes(
+          _validGif,
+          200,
+          headers: const <String, String>{'content-type': 'image/png'},
+        ),
+        http.Response.bytes(
+          utf8.encode('not-a-gif'),
+          200,
+          headers: const <String, String>{'content-type': 'image/gif'},
+        ),
+      ]) {
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: MockClient((_) async => response),
+        );
+
+        await expectLater(
+          repository.loadAttributionAsset(),
+          throwsA(_giphyError(GiphyError.invalidResponse)),
+        );
+        repository.close();
+      }
+    });
+
+    test(
+      'attribution deadline physically aborts a stalled send',
+      () async {
+        final client = _DeadlineSendClient();
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
+
+        await expectLater(
+          repository.loadAttributionAsset(),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.wasAborted, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
+
+    test('maps an explicit attribution abort to cancellation', () async {
+      final abort = Completer<void>();
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient.streaming((request, _) async {
+          final abortable = request as http.AbortableRequest;
+          await abortable.abortTrigger;
+          throw http.RequestAbortedException(request.url);
+        }),
+      );
+      addTearDown(repository.close);
+
+      final pending = repository.loadAttributionAsset(
+        abortTrigger: abort.future,
+      );
+      abort.complete();
+
+      await expectLater(pending, throwsA(_giphyError(GiphyError.cancelled)));
+    });
+
     test('rejects foreign thumbnails and unsafe resource links', () async {
       for (final entry in <Map<String, Object?>>[
         _entry(thumbnailUrl: 'https://images.example.invalid/a.gif'),
@@ -550,7 +698,90 @@ void main() {
       expect(draft.text, 'hello https://giphy.com/gifs/new ');
     },
   );
+
+  group('GiphyPicker attribution', () {
+    testWidgets('shows the server mark and opens Giphy', (tester) async {
+      final repository = _PickerRepository(
+        attributionLoader: () => Future<GiphyAttributionAsset>.value(
+          GiphyAttributionAsset(body: _validGif, contentType: 'image/gif'),
+        ),
+      );
+      final controller = GiphyController(repository: repository);
+      addTearDown(controller.dispose);
+      Uri? opened;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 600,
+              child: GiphyPicker(
+                controller: controller,
+                labels: _pickerLabels,
+                thumbnailBuilder: (_, _) => const SizedBox.shrink(),
+                onSelected: (_) {},
+                onAttributionPressed: (uri) async => opened = uri,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('giphy-attribution-image')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('giphy-attribution-link')));
+      await tester.pump();
+      expect(opened, giphyAttributionUri);
+    });
+
+    testWidgets('keeps a visible text link when the server mark fails', (
+      tester,
+    ) async {
+      final repository = _PickerRepository(
+        attributionLoader: () => Future<GiphyAttributionAsset>.error(
+          const GiphyException(GiphyError.network),
+        ),
+      );
+      final controller = GiphyController(repository: repository);
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 600,
+              child: GiphyPicker(
+                controller: controller,
+                labels: _pickerLabels,
+                thumbnailBuilder: (_, _) => const SizedBox.shrink(),
+                onSelected: (_) {},
+                onAttributionPressed: (_) async {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Powered by GIPHY'), findsOneWidget);
+      expect(find.byKey(const Key('giphy-attribution-link')), findsOneWidget);
+      expect(find.byKey(const Key('giphy-attribution-image')), findsNothing);
+    });
+  });
 }
+
+const _pickerLabels = GiphyPickerLabels(
+  searchHint: 'Search GIFs',
+  noResults: 'No GIFs found',
+  retry: 'Retry',
+  loadMore: 'Load more',
+  poweredByGiphy: 'Powered by GIPHY',
+);
+
+final _validGif = base64Decode(
+  'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+);
 
 CapabilitySnapshot _capabilities(
   Object? integration, {
@@ -825,6 +1056,13 @@ final class _ControlledRepository implements GiphyRepository {
   final Map<String, Completer<GiphyPage>> _searches = {};
 
   @override
+  Future<GiphyAttributionAsset> loadAttributionAsset({
+    Future<void>? abortTrigger,
+  }) => Future<GiphyAttributionAsset>.error(
+    const GiphyException(GiphyError.network),
+  );
+
+  @override
   Future<GiphyPage> search({
     required String term,
     required int cursor,
@@ -842,4 +1080,30 @@ final class _ControlledRepository implements GiphyRepository {
   }) async => GiphyPage(entries: const <GiphyEntry>[], cursor: 0);
 
   void complete(String term, GiphyPage page) => _searches[term]!.complete(page);
+}
+
+final class _PickerRepository implements GiphyRepository {
+  _PickerRepository({required this.attributionLoader});
+
+  final Future<GiphyAttributionAsset> Function() attributionLoader;
+
+  @override
+  Future<GiphyAttributionAsset> loadAttributionAsset({
+    Future<void>? abortTrigger,
+  }) => attributionLoader();
+
+  @override
+  Future<GiphyPage> search({
+    required String term,
+    required int cursor,
+    required int limit,
+    Future<void>? abortTrigger,
+  }) async => GiphyPage(entries: const <GiphyEntry>[], cursor: 0);
+
+  @override
+  Future<GiphyPage> trending({
+    required int cursor,
+    required int limit,
+    Future<void>? abortTrigger,
+  }) async => GiphyPage(entries: const <GiphyEntry>[], cursor: 0);
 }

@@ -317,6 +317,14 @@ HttpGiphyRepository _giphyRepository() {
           headers: const <String, String>{'content-type': 'image/gif'},
         );
       }
+      if (request.url.path ==
+          '/apps/integration_giphy/img/powered-by-giphy.gif') {
+        return http.Response.bytes(
+          base64Decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='),
+          200,
+          headers: const <String, String>{'content-type': 'image/gif'},
+        );
+      }
       return http.Response('', 404);
     }),
   );

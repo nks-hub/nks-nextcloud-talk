@@ -560,6 +560,12 @@ abstract class AppLocalizations {
   /// **'Load more'**
   String get giphyLoadMore;
 
+  /// No description provided for @giphyPoweredBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Powered by GIPHY'**
+  String get giphyPoweredBy;
+
   /// No description provided for @messageTooLong.
   ///
   /// In en, this message translates to:

@@ -268,6 +268,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get giphyLoadMore => 'Load more';
 
   @override
+  String get giphyPoweredBy => 'Powered by GIPHY';
+
+  @override
   String get messageTooLong => 'The message is too long.';
 
   @override

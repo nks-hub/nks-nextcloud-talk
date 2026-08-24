@@ -85,6 +85,16 @@ final class GiphyThumbnail {
   final String contentType;
 }
 
+final class GiphyAttributionAsset {
+  GiphyAttributionAsset({required Uint8List body, required this.contentType})
+    : body = Uint8List.fromList(body);
+
+  final Uint8List body;
+  final String contentType;
+}
+
+final Uri giphyAttributionUri = Uri.parse('https://giphy.com');
+
 enum GiphyError {
   integrationUnavailable,
   cancelled,
@@ -107,6 +117,10 @@ final class GiphyException implements Exception {
 }
 
 abstract interface class GiphyRepository {
+  Future<GiphyAttributionAsset> loadAttributionAsset({
+    Future<void>? abortTrigger,
+  });
+
   Future<GiphyPage> trending({
     required int cursor,
     required int limit,
@@ -129,16 +143,11 @@ final class HttpGiphyRepository implements GiphyRepository {
     this.requestTimeout = const Duration(seconds: 20),
     this.maximumResponseBytes = 2 * 1024 * 1024,
     this.maximumThumbnailBytes = 8 * 1024 * 1024,
+    this.maximumAttributionBytes = 256 * 1024,
   }) : _client = client ?? http.Client() {
-    if (maximumResponseBytes < 1 || maximumThumbnailBytes < 1) {
-      throw ArgumentError.value(
-        maximumResponseBytes < 1 ? maximumResponseBytes : maximumThumbnailBytes,
-        maximumResponseBytes < 1
-            ? 'maximumResponseBytes'
-            : 'maximumThumbnailBytes',
-        'must be positive',
-      );
-    }
+    _requirePositive(maximumResponseBytes, 'maximumResponseBytes');
+    _requirePositive(maximumThumbnailBytes, 'maximumThumbnailBytes');
+    _requirePositive(maximumAttributionBytes, 'maximumAttributionBytes');
   }
 
   final ServerBase server;
@@ -146,6 +155,7 @@ final class HttpGiphyRepository implements GiphyRepository {
   final Duration requestTimeout;
   final int maximumResponseBytes;
   final int maximumThumbnailBytes;
+  final int maximumAttributionBytes;
   final http.Client _client;
   ({int cursor, int limit, GiphyPage page})? _prefetchedTrending;
   bool _closed = false;
@@ -183,6 +193,99 @@ final class HttpGiphyRepository implements GiphyRepository {
       limit: limit,
     );
     _prefetchedTrending = (cursor: cursor, limit: limit, page: page);
+  }
+
+  @override
+  Future<GiphyAttributionAsset> loadAttributionAsset({
+    Future<void>? abortTrigger,
+  }) async {
+    if (_closed) {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final uri = server.uri.replace(
+      path:
+          '${server.basePath}/apps/integration_giphy/img/'
+          'powered-by-giphy.gif',
+    );
+    final deadline = DateTime.now().add(requestTimeout);
+    final requestAbort = _RequestAbortSignal(
+      deadline: deadline,
+      callerTrigger: abortTrigger,
+    );
+    _ResponseBodyReader? bodyReader;
+    try {
+      final request =
+          http.AbortableRequest('GET', uri, abortTrigger: requestAbort.trigger)
+            ..headers.addAll(<String, String>{
+              ...authorization.requestHeaders,
+              'Accept': 'image/gif',
+            })
+            ..followRedirects = false
+            ..maxRedirects = 0;
+      final response = await _sendWithDeadline(
+        _client.send(request),
+        deadline: deadline,
+        requestAbort: requestAbort,
+      );
+      bodyReader = _ResponseBodyReader(response.stream);
+      if (response.statusCode != 200) {
+        var discarded = 0;
+        while (await bodyReader.moveNext(deadline)) {
+          discarded += bodyReader.current.length;
+          if (discarded > maximumAttributionBytes) {
+            break;
+          }
+        }
+        throw switch (response.statusCode) {
+          401 || 404 => const GiphyException(GiphyError.integrationUnavailable),
+          429 => const GiphyException(GiphyError.rateLimited, statusCode: 429),
+          _ => GiphyException(
+            GiphyError.unexpectedStatus,
+            statusCode: response.statusCode,
+          ),
+        };
+      }
+      final contentLength = response.contentLength;
+      if (contentLength != null && contentLength > maximumAttributionBytes) {
+        throw const GiphyException(GiphyError.responseTooLarge);
+      }
+      final bytes = BytesBuilder(copy: false);
+      var received = 0;
+      while (await bodyReader.moveNext(deadline)) {
+        final chunk = bodyReader.current;
+        received += chunk.length;
+        if (received > maximumAttributionBytes) {
+          throw const GiphyException(GiphyError.responseTooLarge);
+        }
+        bytes.add(chunk);
+      }
+      final body = bytes.takeBytes();
+      final contentType = response.headers['content-type']
+          ?.split(';')
+          .first
+          .trim()
+          .toLowerCase();
+      if (contentType != 'image/gif' ||
+          body.isEmpty ||
+          !_matchesThumbnailSignature(contentType!, body)) {
+        throw const GiphyException(GiphyError.invalidResponse);
+      }
+      return GiphyAttributionAsset(body: body, contentType: contentType);
+    } on GiphyException {
+      rethrow;
+    } on http.RequestAbortedException {
+      throw GiphyException(requestAbort.error);
+    } on TimeoutException {
+      requestAbort.abortForDeadline();
+      throw GiphyException(requestAbort.error);
+    } on http.ClientException {
+      throw const GiphyException(GiphyError.network);
+    } finally {
+      if (bodyReader != null) {
+        await bodyReader.cancel(deadline);
+      }
+      requestAbort.dispose();
+    }
   }
 
   @override
@@ -564,16 +667,19 @@ final class GiphyPickerLabels {
     required this.noResults,
     required this.retry,
     required this.loadMore,
+    required this.poweredByGiphy,
   });
 
   final String searchHint;
   final String noResults;
   final String retry;
   final String loadMore;
+  final String poweredByGiphy;
 }
 
 typedef GiphyThumbnailBuilder =
     Widget Function(BuildContext context, GiphyEntry entry);
+typedef GiphyAttributionOpener = Future<void> Function(Uri uri);
 
 final class GiphyPicker extends StatelessWidget {
   const GiphyPicker({
@@ -581,6 +687,7 @@ final class GiphyPicker extends StatelessWidget {
     required this.labels,
     required this.thumbnailBuilder,
     required this.onSelected,
+    required this.onAttributionPressed,
     super.key,
   });
 
@@ -588,6 +695,7 @@ final class GiphyPicker extends StatelessWidget {
   final GiphyPickerLabels labels;
   final GiphyThumbnailBuilder thumbnailBuilder;
   final ValueChanged<GiphyEntry> onSelected;
+  final GiphyAttributionOpener onAttributionPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -609,6 +717,11 @@ final class GiphyPicker extends StatelessWidget {
             ),
           ),
           Expanded(child: _buildResults(context)),
+          _GiphyAttributionLink(
+            repository: controller.repository,
+            label: labels.poweredByGiphy,
+            onPressed: onAttributionPressed,
+          ),
         ],
       ),
     );
@@ -672,11 +785,125 @@ final class GiphyPicker extends StatelessWidget {
   }
 }
 
+final class _GiphyAttributionLink extends StatefulWidget {
+  const _GiphyAttributionLink({
+    required this.repository,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final GiphyRepository repository;
+  final String label;
+  final GiphyAttributionOpener onPressed;
+
+  @override
+  State<_GiphyAttributionLink> createState() => _GiphyAttributionLinkState();
+}
+
+final class _GiphyAttributionLinkState extends State<_GiphyAttributionLink> {
+  late Future<GiphyAttributionAsset> _asset;
+  Completer<void>? _abort;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _GiphyAttributionLink oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.repository, widget.repository)) {
+      _load();
+    }
+  }
+
+  void _load() {
+    final previousAbort = _abort;
+    if (previousAbort != null && !previousAbort.isCompleted) {
+      previousAbort.complete();
+    }
+    final abort = _abort = Completer<void>();
+    _asset = widget.repository.loadAttributionAsset(abortTrigger: abort.future);
+  }
+
+  Future<void> _open() async {
+    try {
+      await widget.onPressed(giphyAttributionUri);
+    } on Object {
+      // Failure to open a third-party website must not break the picker.
+    }
+  }
+
+  @override
+  void dispose() {
+    final abort = _abort;
+    if (abort != null && !abort.isCompleted) {
+      abort.complete();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fallback = Text(
+      widget.label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: scheme.primary,
+        decoration: TextDecoration.underline,
+        decorationColor: scheme.primary,
+      ),
+    );
+    return Tooltip(
+      message: widget.label,
+      child: Material(
+        color: scheme.surface,
+        child: InkWell(
+          key: const Key('giphy-attribution-link'),
+          onTap: () => unawaited(_open()),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48, minWidth: 160),
+            child: Center(
+              child: FutureBuilder<GiphyAttributionAsset>(
+                future: _asset,
+                builder: (context, snapshot) {
+                  final asset = snapshot.data;
+                  if (snapshot.connectionState != ConnectionState.done ||
+                      snapshot.hasError ||
+                      asset == null) {
+                    return fallback;
+                  }
+                  return Image.memory(
+                    asset.body,
+                    key: const Key('giphy-attribution-image'),
+                    height: 30,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
+                    errorBuilder: (_, _, _) => fallback,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Map<String, Object?> _object(Object? value) {
   if (value is! Map<String, Object?>) {
     throw const GiphyException(GiphyError.invalidResponse);
   }
   return value;
+}
+
+void _requirePositive(int value, String name) {
+  if (value < 1) {
+    throw ArgumentError.value(value, name, 'must be positive');
+  }
 }
 
 String _boundedString(Object? value, {required int maximumLength}) {

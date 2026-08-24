@@ -269,6 +269,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get giphyLoadMore => 'Načíst další';
 
   @override
+  String get giphyPoweredBy => 'Powered by GIPHY';
+
+  @override
   String get messageTooLong => 'Zpráva je příliš dlouhá.';
 
   @override

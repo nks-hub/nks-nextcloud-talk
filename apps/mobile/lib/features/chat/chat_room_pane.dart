@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_providers.dart';
 import '../../core/foreground_sync_loop.dart';
@@ -475,10 +476,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   noResults: strings.giphyNoResults,
                   retry: strings.retry,
                   loadMore: strings.giphyLoadMore,
+                  poweredByGiphy: strings.giphyPoweredBy,
                 ),
                 thumbnailBuilder: (_, entry) => ExcludeSemantics(
                   child: _GiphyThumbnail(repository: repository, entry: entry),
                 ),
+                onAttributionPressed: _openGiphyAttribution,
                 onSelected: (entry) {
                   if (!controller.insertSelection(_composer, entry)) {
                     _showComposerLimitError();
@@ -493,6 +496,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       );
     } finally {
       controller.dispose();
+    }
+  }
+
+  Future<void> _openGiphyAttribution(Uri uri) async {
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on Object {
+      // The picker remains usable when no external browser is available.
     }
   }
 
