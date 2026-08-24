@@ -7,6 +7,8 @@
 !.github/
 /[A-Z]*.md
 !/README.md
+**/AGENTS.md
+**/CLAUDE.md
 
 # Flutter/Dart
 .dart_tool/
@@ -46,10 +48,24 @@ macos/.symlinks/
 !*.env.example
 google-services.json
 GoogleService-Info.plist
+*-firebase-adminsdk-*.json
+firebase-service-account*.json
+service-account*.json
 *.jks
 *.keystore
 *.p12
+*.p8
+*.pem
+*.key
 *.mobileprovision
+
+# Local app state and runtime evidence
+*.db
+*.sqlite
+*.sqlite3
+/apps/mobile/evidence/
+/apps/mobile/e2e/
+/apps/mobile/e2e-artifacts/
 
 # OS files
 .DS_Store
