@@ -20,6 +20,7 @@
       "messageParameters": {},
       "markdown": true,
       "reactions": {},
+      "threadId": 108,
       "parent": {
         "id": 108,
         "token": "rooma123",
@@ -33,7 +34,8 @@
         "referenceId": "",
         "message": "Synthetic reply parent",
         "messageParameters": {},
-        "reactions": {}
+        "reactions": {},
+        "threadId": 108
       }
     }
   }

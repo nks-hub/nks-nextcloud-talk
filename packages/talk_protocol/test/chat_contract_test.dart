@@ -269,6 +269,7 @@ Object _requestManifestBody(
   Map<String, Object?> fixture,
   Map<String, Object?> json,
 ) {
+  final threadId = json['threadId'] as int?;
   final profile = _profile(<Object?>[
     'chat-v2',
     'chat-reference-id',
@@ -276,6 +277,7 @@ Object _requestManifestBody(
     'private-reply',
     'chat-read-marker',
     'chat-read-last',
+    if (threadId != null) 'threads',
   ]);
   if (fixture['operationId'] == 'setChatReadMarker') {
     return ChatSetReadMarkerRequest(
@@ -312,6 +314,7 @@ Object _requestManifestBody(
           message: json['message']! as String,
           referenceId: ChatReferenceId.parse(json['referenceId']),
           replyTo: json['replyTo'] as int?,
+          threadId: threadId,
           parentRoomToken: json['replyTo'] == null ? null : _token('rooma123'),
         );
   return request.formBody;
@@ -376,6 +379,7 @@ ChatRequest _readRequest(
 
 ChatSendRequest _sendRequest(String id, Map<String, Object?> context) {
   final replyTo = context['replyTo'] as int?;
+  final threadId = context['threadId'] as int?;
   final parentToken = context['parentRoomToken'] == null
       ? null
       : _token(context['parentRoomToken']);
@@ -387,6 +391,7 @@ ChatSendRequest _sendRequest(String id, Map<String, Object?> context) {
     'chat-reference-id',
     'chat-replies',
     'private-reply',
+    if (threadId != null) 'threads',
   ]);
   return ChatSendRequest.restored(
     accountId: AccountId.parse('fixture-account'),
@@ -398,6 +403,7 @@ ChatSendRequest _sendRequest(String id, Map<String, Object?> context) {
     message: 'Fixture message',
     referenceId: ChatReferenceId.parse(context['referenceId']),
     replyTo: replyTo,
+    threadId: threadId,
     parentRoomToken: parentToken,
     replyToToken: replyToken,
   );
@@ -491,6 +497,7 @@ ChatRequest _requestFromCase(String id, Map<String, Object?> testCase) {
       message: input['message']! as String,
       referenceId: ChatReferenceId.parse(input['referenceId']),
       replyTo: input['replyTo'] as int?,
+      threadId: input['threadId'] as int?,
       parentRoomToken: input['parentRoomToken'] == null
           ? null
           : _token(input['parentRoomToken']),

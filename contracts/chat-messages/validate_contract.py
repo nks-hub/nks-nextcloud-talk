@@ -23,7 +23,7 @@ FIXTURE_ROOT = CONTRACT_ROOT / "fixtures"
 MANIFEST_PATH = FIXTURE_ROOT / "manifest.json"
 CHAT_PATH = "/ocs/v2.php/apps/spreed/api/v1/chat"
 USER_AGENT = "com.nkshub.nextcloudtalk chat-messages-contract/0.1"
-TEXT_SEND_REVISION = "talk-chat-text-send-f2958bb-f9b9e947-r1"
+TEXT_SEND_REVISION = "talk-chat-text-send-f2958bb-f9b9e947-r2"
 MAX_LIVE_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60
 BASE_RATE_LIMIT_RETRY_SECONDS = 5
@@ -32,6 +32,7 @@ SEND_CONTEXT_FIELDS = (
     "roomToken",
     "referenceId",
     "replyTo",
+    "threadId",
     "replyToToken",
     "parentRoomToken",
 )
@@ -43,6 +44,7 @@ OUTBOX_SUMMARY_FIELDS = (
     "errorClass",
     "nextAttemptAt",
     "replyTo",
+    "threadId",
     "replyToToken",
     "parentRoomToken",
 )
@@ -80,6 +82,9 @@ REQUIRED_FIXTURE_IDS = {
     "send-forbidden",
     "send-internal-error",
     "send-invalid-reply",
+    "send-named-thread-request",
+    "send-named-thread-success",
+    "send-plain-thread-mismatch",
     "send-null",
     "send-not-found",
     "send-ocs-statuscode-mismatch",
@@ -118,6 +123,9 @@ REQUIRED_QUERY_IDS = {
     "oversized-limit-rejected",
     "read-without-explicit-capability-rejected",
     "send-reply",
+    "send-mixed-reply-thread-rejected",
+    "send-named-thread",
+    "send-named-thread-without-capability-rejected",
     "send-text",
     "set-read-marker",
     "thread-catch-up",
@@ -178,9 +186,16 @@ REQUIRED_OUTBOX_IDS = {
     "manual-resend-with-server-matches-is-rejected",
     "missing-capability-rejects-admission",
     "missing-reply-token-rejects-admission",
+    "named-thread-admission-and-claim",
+    "named-thread-admission-guards",
+    "named-thread-manual-resend-quarantine-is-atomic",
+    "named-thread-r1-replay-rejected",
+    "named-thread-reconciliation-is-thread-bound",
+    "named-thread-survives-restart",
     "null-response-enters-awaiting-confirmation",
     "per-room-ordering-and-single-flight",
     "possible-send-never-auto-replays",
+    "plain-operation-does-not-match-thread-message",
     "pre-body-failure-is-retryable",
     "queued-claim-and-http-confirmation",
     "rate-limit-local-backoff-is-retryable",
@@ -736,11 +751,7 @@ def classify_send_response(
             "messages": [],
             "messageId": None,
         }
-    if (
-        status != "201"
-        or meta.get("status") != "ok"
-        or meta.get("statuscode") != 201
-    ):
+    if status != "201" or meta.get("status") != "ok" or meta.get("statuscode") != 201:
         return {"classification": "server-error", "messages": [], "messageId": None}
     if raw_data is None:
         return {
@@ -766,7 +777,15 @@ def classify_send_response(
     message_id = require_integer(message.get("id"), "send message id", 1)
 
     reply_to = context.get("replyTo")
-    if reply_to is not None:
+    thread_id = context.get("threadId")
+    if thread_id is not None:
+        thread_id = require_integer(thread_id, "send threadId", 1)
+        if reply_to is not None:
+            raise ResponseSemanticError("Send context mixes replyTo and threadId")
+    if thread_id is not None:
+        if message.get("parent") is not None:
+            raise ResponseSemanticError("Named-thread response does not match context")
+    elif reply_to is not None:
         reply_to = require_integer(reply_to, "send replyTo", 1)
         parent = require_object(message.get("parent"), "send reply parent")
         parent_token = conversation_token(
@@ -787,6 +806,15 @@ def classify_send_response(
                 or metadata.get("replyToConversationToken") != reply_to_token
             ):
                 raise ResponseSemanticError("Private reply metadata is incomplete")
+    elif message.get("parent") is not None:
+        raise ResponseSemanticError("Plain send unexpectedly returned a reply parent")
+    if not direct_send_message_has_expected_thread_semantics(
+        message,
+        requested_thread_id=thread_id,
+        reply_to=reply_to,
+        private_reply=context.get("replyToToken") is not None,
+    ):
+        raise ResponseSemanticError("Send response thread does not match context")
     return {
         "classification": "send-confirmed",
         "messages": [message],
@@ -1090,6 +1118,16 @@ def build_wire_request(
         )
         body = {"message": message, "referenceId": send_reference}
         reply_to = input_value.get("replyTo")
+        thread_id = input_value.get("threadId")
+        if thread_id is not None:
+            thread_id = require_integer(thread_id, "send threadId", 1)
+            if reply_to is not None:
+                raise ContractValidationError("Send cannot mix replyTo and threadId")
+            if federated or "threads" not in features:
+                raise ContractValidationError(
+                    "Named-thread send requires local threads capability"
+                )
+            body["threadId"] = thread_id
         if reply_to is not None:
             reply_to = require_integer(reply_to, "send replyTo", 1)
             if "chat-replies" not in features:
@@ -1770,6 +1808,14 @@ def normalize_outbox_operation(
         ),
     }
     reply_to = raw_operation.get("replyTo")
+    thread_id = raw_operation.get("threadId")
+    normalized["threadId"] = (
+        require_integer(thread_id, f"{label} threadId", 1)
+        if thread_id is not None
+        else None
+    )
+    if reply_to is not None and normalized["threadId"] is not None:
+        raise ContractValidationError(f"{label} cannot mix replyTo and threadId")
     parent_token = raw_operation.get("parentRoomToken")
     reply_token = raw_operation.get("replyToToken")
     if reply_to is None:
@@ -1919,6 +1965,7 @@ def outbox_operation_summary(operation: dict[str, Any]) -> dict[str, Any]:
         "errorClass": operation["errorClass"],
         "nextAttemptAt": operation["nextAttemptAt"],
         "replyTo": operation["replyTo"],
+        "threadId": operation["threadId"],
         "replyToToken": operation["replyToToken"],
         "parentRoomToken": operation["parentRoomToken"],
     }
@@ -1960,6 +2007,13 @@ def admit_outbox_operation(
             return "rejected", None
         if operation["parentRoomToken"] != operation["roomToken"]:
             return "rejected", None
+    if operation["threadId"] is not None:
+        federated = require_boolean(
+            step.get("federated", False),
+            "outbox federated flag",
+        )
+        if federated or "threads" not in features:
+            return "rejected", None
     operation.update(
         {
             "state": "queued",
@@ -1994,8 +2048,7 @@ def apply_authoritative_messages(
     matches = sorted(
         message["id"]
         for message in messages
-        if message.get("token") == operation["roomToken"]
-        and message.get("referenceId") == operation["referenceId"]
+        if authoritative_message_matches_operation(message, operation)
     )
     if operation["state"] == "completed":
         if not matches or operation["messageIds"] == matches:
@@ -2016,9 +2069,103 @@ def apply_authoritative_messages(
     return "completed"
 
 
+def authoritative_message_matches_operation(
+    message: dict[str, Any],
+    operation: dict[str, Any],
+) -> bool:
+    if (
+        message.get("token") != operation["roomToken"]
+        or message.get("referenceId") != operation["referenceId"]
+    ):
+        return False
+    if operation["threadId"] is not None:
+        return authoritative_named_message_matches_operation(
+            message,
+            operation,
+        )
+    if operation["replyTo"] is None:
+        return (
+            message.get("threadId") == message.get("id")
+            and message.get("parent") is None
+        )
+
+    parent = message.get("parent")
+    if not isinstance(parent, dict):
+        return False
+    if operation["replyToToken"] is None:
+        return (
+            parent.get("id") == operation["replyTo"]
+            and parent.get("token") == operation["parentRoomToken"]
+            and isinstance(parent.get("threadId"), int)
+            and not isinstance(parent.get("threadId"), bool)
+            and parent["threadId"] > 0
+            and message.get("threadId") == parent["threadId"]
+        )
+    metadata = parent.get("metaData")
+    return (
+        isinstance(metadata, dict)
+        and metadata.get("replyToMessageId") == operation["replyTo"]
+        and metadata.get("replyToConversationToken") == operation["replyToToken"]
+        and parent.get("token") == operation["parentRoomToken"]
+        and parent.get("threadId") == 0
+        and message.get("threadId") == parent.get("id")
+    )
+
+
+def authoritative_named_message_matches_operation(
+    message: dict[str, Any],
+    operation: dict[str, Any],
+) -> bool:
+    thread_id = operation["threadId"]
+    if message.get("threadId") != thread_id:
+        return False
+    parent = message.get("parent")
+    if parent is None:
+        return False
+    if not isinstance(parent, dict) or parent.get("id") != thread_id:
+        return False
+    if parent.get("deleted") is True:
+        compact = parent.get("token") is None and parent.get("threadId") is None
+        full = (
+            parent.get("token") == operation["roomToken"]
+            and parent.get("threadId") == thread_id
+        )
+        return compact or full
+    return (
+        parent.get("token") == operation["roomToken"]
+        and parent.get("threadId") == thread_id
+    )
+
+
+def direct_send_message_has_expected_thread_semantics(
+    message: dict[str, Any],
+    *,
+    requested_thread_id: int | None,
+    reply_to: int | None,
+    private_reply: bool,
+) -> bool:
+    thread_id = message.get("threadId")
+    parent = message.get("parent")
+    if requested_thread_id is not None:
+        return thread_id == requested_thread_id and parent is None
+    if reply_to is None:
+        return thread_id == message.get("id") and parent is None
+    if not isinstance(parent, dict):
+        return False
+    if private_reply:
+        return thread_id == parent.get("id") and parent.get("threadId") == 0
+    parent_thread_id = parent.get("threadId")
+    return (
+        isinstance(parent_thread_id, int)
+        and not isinstance(parent_thread_id, bool)
+        and parent_thread_id > 0
+        and thread_id == parent_thread_id
+    )
+
+
 def authoritative_get_messages(
     record: dict[str, Any],
-    room_token: str,
+    operation: dict[str, Any],
 ) -> list[dict[str, Any]]:
     metadata = record["metadata"]
     result = record["result"]
@@ -2029,7 +2176,8 @@ def authoritative_get_messages(
         metadata.get("direction") != "response"
         or metadata.get("operationId") != "getChatMessages"
         or context.get("direction") != "future"
-        or context.get("roomToken") != room_token
+        or context.get("roomToken") != operation["roomToken"]
+        or context.get("threadId") != operation["threadId"]
     ):
         raise ContractValidationError(
             "Authoritative catch-up requires a future GET for the operation room"
@@ -2062,7 +2210,37 @@ def authoritative_relay_messages(step: dict[str, Any]) -> list[dict[str, Any]]:
         message.get("referenceId"),
         "authoritative relay referenceId",
     )
+    if message.get("threadId") is not None:
+        require_integer(
+            message.get("threadId"),
+            "authoritative relay threadId",
+            1,
+        )
     return [message]
+
+
+def outbox_replay_is_allowed(
+    operation: dict[str, Any],
+    step: dict[str, Any],
+) -> bool:
+    if operation["replayContractRevision"] != TEXT_SEND_REVISION:
+        return False
+    if operation["threadId"] is None:
+        return True
+    try:
+        features = normalize_features(
+            step.get("capabilities"),
+            "outbox replay capabilities",
+        )
+        federated = require_boolean(
+            step.get("federated", False),
+            "outbox replay federated flag",
+        )
+    except ContractValidationError:
+        return False
+    return {"chat-v2", "chat-reference-id", "threads"}.issubset(
+        features
+    ) and not federated
 
 
 def rate_limit_retry_delay(
@@ -2086,12 +2264,15 @@ def send_start_is_blocked(
     account: dict[str, Any],
     operation_id_value: str,
     operation: dict[str, Any],
+    ignored_operation_ids: set[str] | None = None,
 ) -> bool:
+    ignored_operation_ids = ignored_operation_ids or set()
     if account["laneState"] != "ready":
         return True
     for other_id, other in account["operations"].items():
         if (
             other_id == operation_id_value
+            or other_id in ignored_operation_ids
             or other["roomToken"] != operation["roomToken"]
         ):
             continue
@@ -2102,6 +2283,35 @@ def send_start_is_blocked(
         ] in {"queued", "retryable", "awaitingConfirmation"}:
             return True
     return False
+
+
+def obsolete_replay_predecessors(
+    account: dict[str, Any],
+    operation_id_value: str,
+    operation: dict[str, Any],
+) -> set[str]:
+    return {
+        other_id
+        for other_id, other in account["operations"].items()
+        if (
+            other_id != operation_id_value
+            and other["roomToken"] == operation["roomToken"]
+            and other["enqueueSequence"] < operation["enqueueSequence"]
+            and other["replayContractRevision"] != TEXT_SEND_REVISION
+            and other["state"] in {"queued", "retryable", "awaitingConfirmation"}
+        )
+    }
+
+
+def quarantine_obsolete_replay_predecessors(
+    account: dict[str, Any],
+    operation_ids: set[str],
+) -> None:
+    for operation_id_value in operation_ids:
+        operation = account["operations"][operation_id_value]
+        operation["state"] = "failed"
+        operation["errorClass"] = "obsolete-replay-contract"
+        operation["nextAttemptAt"] = None
 
 
 def send_response_matches_operation(
@@ -2154,8 +2364,21 @@ def apply_outbox_action(
             return "rejected", operation_id_value
         if operation["nextAttemptAt"] is not None and now < operation["nextAttemptAt"]:
             return "rejected", operation_id_value
-        if send_start_is_blocked(account, operation_id_value, operation):
+        if not outbox_replay_is_allowed(operation, step):
             return "rejected", operation_id_value
+        obsolete = obsolete_replay_predecessors(
+            account,
+            operation_id_value,
+            operation,
+        )
+        if send_start_is_blocked(
+            account,
+            operation_id_value,
+            operation,
+            obsolete,
+        ):
+            return "rejected", operation_id_value
+        quarantine_obsolete_replay_predecessors(account, obsolete)
         operation["state"] = "sending"
         operation["attemptCount"] += 1
         operation["errorClass"] = None
@@ -2249,7 +2472,7 @@ def apply_outbox_action(
             step.get("fixture"),
             "authoritative message fixture",
         )
-        messages = authoritative_get_messages(record, operation["roomToken"])
+        messages = authoritative_get_messages(record, operation)
         return apply_authoritative_messages(operation, messages), operation_id_value
 
     if action == "authoritativeRelay":
@@ -2265,9 +2488,22 @@ def apply_outbox_action(
             operation["state"] != "awaitingConfirmation"
             or operation["messageIds"]
             or not acknowledged
-            or send_start_is_blocked(account, operation_id_value, operation)
+            or not outbox_replay_is_allowed(operation, step)
         ):
             return "rejected", operation_id_value
+        obsolete = obsolete_replay_predecessors(
+            account,
+            operation_id_value,
+            operation,
+        )
+        if send_start_is_blocked(
+            account,
+            operation_id_value,
+            operation,
+            obsolete,
+        ):
+            return "rejected", operation_id_value
+        quarantine_obsolete_replay_predecessors(account, obsolete)
         operation["state"] = "sending"
         operation["attemptCount"] += 1
         operation["duplicateRiskAcknowledged"] = True

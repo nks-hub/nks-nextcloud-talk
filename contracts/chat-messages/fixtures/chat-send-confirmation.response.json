@@ -20,7 +20,8 @@
         "message": "Synthetic text send",
         "messageParameters": {},
         "markdown": true,
-        "reactions": {}
+        "reactions": {},
+        "threadId": 120
       }
     ]
   }

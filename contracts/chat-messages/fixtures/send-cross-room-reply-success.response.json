@@ -20,6 +20,7 @@
       "messageParameters": {},
       "markdown": true,
       "reactions": {},
+      "threadId": 1210,
       "parent": {
         "id": 1210,
         "token": "source789",
@@ -34,6 +35,7 @@
         "message": "Synthetic source-room parent",
         "messageParameters": {},
         "reactions": {},
+        "threadId": 0,
         "metaData": {
           "replyToMessageId": 333,
           "replyToConversationToken": "source789",

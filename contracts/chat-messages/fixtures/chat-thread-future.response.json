@@ -16,13 +16,36 @@
         "systemMessage": "",
         "messageType": "comment",
         "isReplyable": true,
-        "referenceId": "",
+        "referenceId": "66666666-6666-4666-8666-666666666666",
         "message": "Synthetic thread message",
         "messageParameters": {},
+        "expirationTimestamp": 0,
+        "markdown": true,
         "reactions": {},
         "threadId": 700,
         "threadTitle": "Synthetic thread",
-        "threadReplies": 2
+        "threadReplies": 2,
+        "parent": {
+          "id": 700,
+          "token": "rooma123",
+          "actorType": "users",
+          "actorId": "user-b",
+          "actorDisplayName": "User B",
+          "timestamp": 1724300700,
+          "systemMessage": "",
+          "messageType": "comment",
+          "isReplyable": true,
+          "referenceId": "77777777-7777-4777-8777-777777777777",
+          "message": "Synthetic named-thread root",
+          "messageParameters": {},
+          "expirationTimestamp": 0,
+          "markdown": true,
+          "reactions": {},
+          "threadId": 700,
+          "isThread": true,
+          "threadTitle": "Synthetic thread",
+          "threadReplies": 2
+        }
       }
     ]
   }

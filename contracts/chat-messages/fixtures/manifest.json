@@ -367,6 +367,15 @@
       "expectedClassification": "request-valid"
     },
     {
+      "id": "send-named-thread-request",
+      "file": "send-named-thread.request.json",
+      "direction": "request",
+      "operationId": "sendChatMessage",
+      "mediaType": "application/x-www-form-urlencoded",
+      "schemaValid": true,
+      "expectedClassification": "request-valid"
+    },
+    {
       "id": "send-cross-room-reply-request",
       "file": "send-cross-room-reply.request.json",
       "direction": "request",
@@ -433,6 +442,39 @@
       },
       "expectedClassification": "send-confirmed",
       "expectedMessageId": 121
+    },
+    {
+      "id": "send-named-thread-success",
+      "file": "send-named-thread-success.response.json",
+      "direction": "response",
+      "operationId": "sendChatMessage",
+      "status": "201",
+      "mediaType": "application/json",
+      "headerSet": "send",
+      "schemaValid": true,
+      "context": {
+        "roomToken": "rooma123",
+        "referenceId": "66666666-6666-4666-8666-666666666666",
+        "threadId": 700
+      },
+      "expectedClassification": "send-confirmed",
+      "expectedMessageId": 123
+    },
+    {
+      "id": "send-plain-thread-mismatch",
+      "file": "send-named-thread-success.response.json",
+      "direction": "response",
+      "operationId": "sendChatMessage",
+      "status": "201",
+      "mediaType": "application/json",
+      "headerSet": "send",
+      "schemaValid": true,
+      "context": {
+        "roomToken": "rooma123",
+        "referenceId": "66666666-6666-4666-8666-666666666666"
+      },
+      "expectedClassification": "semantic-error",
+      "expectedMessageId": null
     },
     {
       "id": "send-cross-room-reply-success",

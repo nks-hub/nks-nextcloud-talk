@@ -24,10 +24,10 @@ void main() {
           .toList(growable: false);
 
   test('covers all executable outbox scenarios', () {
-    expect(cases.length, 36);
+    expect(cases.length, 43);
     expect(
       cases.expand((testCase) => testCase['steps']! as List<Object?>).length,
-      60,
+      83,
     );
   });
 
@@ -261,10 +261,12 @@ ChatSendResponse _sendResponse(
       'chat-reference-id',
       'chat-replies',
       'private-reply',
+      'threads',
     ], federated: false),
     message: 'Fixture response binding',
     referenceId: ChatReferenceId.parse(context['referenceId']),
     replyTo: context['replyTo'] as int?,
+    threadId: context['threadId'] as int?,
     parentRoomToken: parentToken,
     replyToToken: replyToken,
   );
@@ -292,6 +294,7 @@ List<ChatMessageConfirmation> _authoritativeConfirmations(
     roomToken: operation.roomToken,
     profile: ChatCapabilityProfile.fromTalkFeatures(<Object?>[
       'chat-v2',
+      if (operation.threadId != null) 'threads',
     ], federated: false),
     direction: ChatFetchDirection.future,
     cursor: ChatCursor.parse('0'),
@@ -300,6 +303,7 @@ List<ChatMessageConfirmation> _authoritativeConfirmations(
     includeLastKnown: false,
     timeoutSeconds: 0,
     interactive: true,
+    threadId: operation.threadId,
   );
   final response = decodeChatGetResponse(
     request: request,
@@ -330,16 +334,20 @@ ChatMessageConfirmation _relayConfirmation(
   ChatAccountState account,
   Map<String, Object?> value,
 ) {
+  final parent = value['parent'] == null ? null : _object(value['parent']);
   return ChatMessageConfirmation(
     accountId: account.accountId,
     server: account.server,
     messageId: value['id']! as int,
     roomToken: _token(value['token']),
     referenceId: value['referenceId']! as String,
-    parentMessageId: null,
-    parentRoomToken: null,
+    parentMessageId: parent?['id'] as int?,
+    parentRoomToken: parent?['token'] == null ? null : _token(parent!['token']),
+    parentThreadId: parent?['threadId'] as int?,
+    parentDeleted: parent?['deleted'] == true,
     replyToMessageId: null,
     replyToRoomToken: null,
+    threadId: value['threadId'] as int?,
   );
 }
 
@@ -351,6 +359,7 @@ ChatCapabilityProfile _replayProfile(Map<String, Object?> step) =>
             'chat-reference-id',
             'chat-replies',
             'private-reply',
+            'threads',
           ],
       federated: step['federated'] as bool? ?? false,
     );
@@ -376,6 +385,7 @@ TextSendOutboxDraft _draft(Map<String, Object?> value) {
     replayContractRevision: value['replayContractRevision']! as String,
     enqueueSequence: value['enqueueSequence']! as int,
     replyTo: value['replyTo'] as int?,
+    threadId: value['threadId'] as int?,
     replyToToken: value['replyToToken'] == null
         ? null
         : _token(value['replyToToken']),
@@ -431,6 +441,7 @@ TextSendOutboxOperation _operationFromJson(Map<String, Object?> value) {
     errorClass: value['errorClass'] as String?,
     nextAttemptAt: value['nextAttemptAt'] as int?,
     replyTo: value['replyTo'] as int?,
+    threadId: value['threadId'] as int?,
     replyToToken: value['replyToToken'] == null
         ? null
         : _token(value['replyToToken']),
@@ -454,6 +465,7 @@ void _expectOperation(
   expect(actual.errorClass, expected['errorClass']);
   expect(actual.nextAttemptAt, expected['nextAttemptAt']);
   expect(actual.replyTo, expected['replyTo']);
+  expect(actual.threadId, expected['threadId']);
   expect(actual.replyToToken?.value, expected['replyToToken']);
   expect(actual.parentRoomToken?.value, expected['parentRoomToken']);
 }

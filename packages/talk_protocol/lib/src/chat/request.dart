@@ -185,6 +185,7 @@ final class ChatSendRequest extends ChatRequest {
     required String message,
     required ChatReferenceId referenceId,
     int? replyTo,
+    int? threadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
     String userAgent = chatContractUserAgent,
@@ -198,6 +199,7 @@ final class ChatSendRequest extends ChatRequest {
     message: message,
     referenceId: referenceId,
     replyTo: replyTo,
+    threadId: threadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
     userAgent: userAgent,
@@ -215,6 +217,7 @@ final class ChatSendRequest extends ChatRequest {
     required String message,
     required ChatReferenceId referenceId,
     int? replyTo,
+    int? threadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
     String userAgent = chatContractUserAgent,
@@ -228,6 +231,7 @@ final class ChatSendRequest extends ChatRequest {
     message: message,
     referenceId: referenceId,
     replyTo: replyTo,
+    threadId: threadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
     userAgent: userAgent,
@@ -244,6 +248,7 @@ final class ChatSendRequest extends ChatRequest {
     required this.message,
     required this.referenceId,
     required this.replyTo,
+    required this.threadId,
     required this.parentRoomToken,
     required this.replyToToken,
     required bool restored,
@@ -254,6 +259,10 @@ final class ChatSendRequest extends ChatRequest {
     }
     if (message.trim().isEmpty) {
       _requestFailure(r'$.body.message');
+    }
+    if (threadId != null &&
+        (threadId! < 1 || !profile.threadFetch || replyTo != null)) {
+      _requestFailure(r'$.body.threadId');
     }
     if (replyTo == null) {
       if (parentRoomToken != null || replyToToken != null) {
@@ -285,6 +294,7 @@ final class ChatSendRequest extends ChatRequest {
   final String message;
   final ChatReferenceId referenceId;
   final int? replyTo;
+  final int? threadId;
   final ConversationToken? parentRoomToken;
   final ConversationToken? replyToToken;
 
@@ -293,6 +303,7 @@ final class ChatSendRequest extends ChatRequest {
     'message': message,
     'referenceId': referenceId.value,
     'replyTo': ?replyTo,
+    'threadId': ?threadId,
     'replyToToken': ?replyToToken?.value,
   });
 
@@ -308,7 +319,8 @@ final class ChatSendRequest extends ChatRequest {
 
   @override
   String toString() =>
-      'ChatSendRequest(reply: ${replyTo != null}, message: <redacted>, '
+      'ChatSendRequest(reply: ${replyTo != null}, '
+      'namedThread: ${threadId != null}, message: <redacted>, '
       'referenceId: <redacted>)';
 }
 

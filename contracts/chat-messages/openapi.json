@@ -734,6 +734,11 @@
             "format": "int64",
             "minimum": 1
           },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
           "replyToToken": {
             "$ref": "#/components/schemas/ConversationToken"
           }
@@ -741,6 +746,12 @@
         "dependentRequired": {
           "replyToToken": [
             "replyTo"
+          ]
+        },
+        "not": {
+          "required": [
+            "replyTo",
+            "threadId"
           ]
         },
         "additionalProperties": false

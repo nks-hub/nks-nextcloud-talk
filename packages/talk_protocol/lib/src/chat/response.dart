@@ -404,7 +404,7 @@ ChatSendResponse decodeChatSendResponse({
       message: message,
     );
   }
-  if (!_matchesReplyContext(request, message)) {
+  if (!_matchesDirectSendContext(request, message)) {
     _responseFailure(r'$.ocs.data.parent');
   }
   return _sendResult(
@@ -471,9 +471,12 @@ _OcsEnvelope _decodeOcsEnvelope(Uint8List body) {
   );
 }
 
-bool _matchesReplyContext(ChatSendRequest request, ChatMessage message) {
+bool _matchesDirectSendContext(ChatSendRequest request, ChatMessage message) {
+  if (request.threadId != null) {
+    return message.threadId == request.threadId && message.parent == null;
+  }
   if (request.replyTo == null) {
-    return message.parent == null;
+    return message.threadId == message.messageId && message.parent == null;
   }
   final parent = message.parent;
   if (parent is! ChatFullParent ||
@@ -481,11 +484,17 @@ bool _matchesReplyContext(ChatSendRequest request, ChatMessage message) {
     return false;
   }
   if (request.replyToToken == null) {
-    return parent.messageId == request.replyTo;
+    final parentThreadId = parent.message.threadId;
+    return parent.messageId == request.replyTo &&
+        parentThreadId != null &&
+        parentThreadId > 0 &&
+        message.threadId == parentThreadId;
   }
   return parent.metadata['replyToMessageId'] == request.replyTo &&
       parent.metadata['replyToConversationToken'] ==
-          request.replyToToken!.value;
+          request.replyToToken!.value &&
+      parent.message.threadId == 0 &&
+      message.threadId == parent.messageId;
 }
 
 ChatSendResponse _sendResult(

@@ -386,6 +386,7 @@ void main() {
         replayContractRevision: textSendReplayContractRevision,
         enqueueSequence: 1,
         replyTo: null,
+        threadId: null,
         replyToToken: null,
         parentRoomToken: null,
       ),
@@ -474,6 +475,7 @@ void main() {
         errorClass: 'ambiguous-transport',
         nextAttemptAt: null,
         replyTo: null,
+        threadId: null,
         replyToToken: null,
         parentRoomToken: null,
       ),
@@ -631,6 +633,7 @@ TextSendOutboxOperation _textSendOperation(
       : null,
   nextAttemptAt: null,
   replyTo: null,
+  threadId: null,
   replyToToken: null,
   parentRoomToken: null,
 );
@@ -665,8 +668,11 @@ ChatMessageConfirmation _confirmation({
   referenceId: '11111111-1111-4111-8111-111111111111',
   parentMessageId: null,
   parentRoomToken: null,
+  parentThreadId: null,
+  parentDeleted: false,
   replyToMessageId: null,
   replyToRoomToken: null,
+  threadId: 120,
 );
 
 Uint8List _ocsBody(Object? data) => Uint8List.fromList(

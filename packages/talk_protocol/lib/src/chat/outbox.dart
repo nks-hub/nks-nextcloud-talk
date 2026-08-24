@@ -60,8 +60,11 @@ final class ChatMessageConfirmation {
     required this.referenceId,
     required this.parentMessageId,
     required this.parentRoomToken,
+    required this.parentThreadId,
+    required this.parentDeleted,
     required this.replyToMessageId,
     required this.replyToRoomToken,
+    required this.threadId,
   });
 
   factory ChatMessageConfirmation.fromMessage(
@@ -82,10 +85,17 @@ final class ChatMessageConfirmation {
       messageId: message.messageId,
       roomToken: message.roomToken,
       referenceId: message.referenceId,
-      parentMessageId: parent is ChatFullParent ? parent.messageId : null,
+      parentMessageId: parent is ChatFullParent
+          ? parent.messageId
+          : parent is ChatDeletedParent
+          ? parent.messageId
+          : null,
       parentRoomToken: parent is ChatFullParent ? parent.roomToken : null,
+      parentThreadId: parent is ChatFullParent ? parent.message.threadId : null,
+      parentDeleted: parent is ChatDeletedParent,
       replyToMessageId: rawReplyTo is int ? rawReplyTo : null,
       replyToRoomToken: rawReplyToken is String ? rawReplyToken : null,
+      threadId: message.threadId,
     );
   }
 
@@ -96,8 +106,11 @@ final class ChatMessageConfirmation {
   final String referenceId;
   final int? parentMessageId;
   final ConversationToken? parentRoomToken;
+  final int? parentThreadId;
+  final bool parentDeleted;
   final int? replyToMessageId;
   final String? replyToRoomToken;
+  final int? threadId;
 
   @override
   String toString() => 'ChatMessageConfirmation(<redacted>)';
@@ -158,6 +171,7 @@ final class TextSendOutboxDraft {
     required this.replayContractRevision,
     required this.enqueueSequence,
     required this.replyTo,
+    required this.threadId,
     required this.replyToToken,
     required this.parentRoomToken,
   }) {
@@ -183,6 +197,9 @@ final class TextSendOutboxDraft {
         _outboxFailure(r'$.operation.replyToToken');
       }
     }
+    if (threadId != null && (threadId! < 1 || replyTo != null)) {
+      _outboxFailure(r'$.operation.threadId');
+    }
   }
 
   final ChatOperationId operationId;
@@ -193,6 +210,7 @@ final class TextSendOutboxDraft {
   final String replayContractRevision;
   final int enqueueSequence;
   final int? replyTo;
+  final int? threadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
 
@@ -226,7 +244,8 @@ ChatOutboxResult admitTextSendOperation(
       ) ||
       (draft.replyTo != null &&
           (!authority.profile.reply ||
-              draft.parentRoomToken != draft.roomToken))) {
+              draft.parentRoomToken != draft.roomToken)) ||
+      (draft.threadId != null && !authority.profile.threadFetch)) {
     return _result(ChatOutboxOutcome.rejected);
   }
   final operation = TextSendOutboxOperation(
@@ -243,6 +262,7 @@ ChatOutboxResult admitTextSendOperation(
     errorClass: null,
     nextAttemptAt: null,
     replyTo: draft.replyTo,
+    threadId: draft.threadId,
     replyToToken: draft.replyToToken,
     parentRoomToken: draft.parentRoomToken,
   );
@@ -272,17 +292,24 @@ ChatOutboxResult claimTextSendOperation(
       }.contains(binding.operation.state) ||
       (binding.operation.nextAttemptAt != null &&
           now < binding.operation.nextAttemptAt!) ||
-      !_canReplayTextSend(binding.account, authority, binding.operation) ||
-      _sendStartIsBlocked(
-        binding.account,
-        binding.operation.operationId,
-        binding.operation,
-      )) {
+      !_canReplayTextSend(binding.account, authority, binding.operation)) {
+    return _result(ChatOutboxOutcome.rejected, operationId: operationId);
+  }
+  final account = _quarantineObsoleteReplayPredecessors(
+    binding.account,
+    authority,
+    binding.operation,
+  );
+  if (_sendStartIsBlocked(
+    account,
+    binding.operation.operationId,
+    binding.operation,
+  )) {
     return _result(ChatOutboxOutcome.rejected, operationId: operationId);
   }
   return _replaceOperation(
     snapshot,
-    binding.account,
+    account,
     binding.operation.copyWith(
       state: TextSendOutboxState.sending,
       attemptCount: binding.operation.attemptCount + 1,
@@ -507,17 +534,24 @@ ChatOutboxResult manuallyResendTextSend(
       binding.operation.state != TextSendOutboxState.awaitingConfirmation ||
       binding.operation.messageIds.isNotEmpty ||
       !duplicateRiskAcknowledged ||
-      !_canReplayTextSend(binding.account, authority, binding.operation) ||
-      _sendStartIsBlocked(
-        binding.account,
-        binding.operation.operationId,
-        binding.operation,
-      )) {
+      !_canReplayTextSend(binding.account, authority, binding.operation)) {
+    return _result(ChatOutboxOutcome.rejected, operationId: operationId);
+  }
+  final account = _quarantineObsoleteReplayPredecessors(
+    binding.account,
+    authority,
+    binding.operation,
+  );
+  if (_sendStartIsBlocked(
+    account,
+    binding.operation.operationId,
+    binding.operation,
+  )) {
     return _result(ChatOutboxOutcome.rejected, operationId: operationId);
   }
   return _replaceOperation(
     snapshot,
-    binding.account,
+    account,
     binding.operation.copyWith(
       state: TextSendOutboxState.sending,
       attemptCount: binding.operation.attemptCount + 1,
@@ -597,7 +631,10 @@ _Reconciliation _reconcileOperation(
 ) {
   final matches =
       confirmations
-          .where((message) => _confirmationMatches(account, operation, message))
+          .where(
+            (message) =>
+                _authoritativeConfirmationMatches(account, operation, message),
+          )
           .map((message) => message.messageId)
           .toSet()
           .toList()
@@ -636,7 +673,7 @@ _Reconciliation _reconcileOperation(
   );
 }
 
-bool _confirmationMatches(
+bool _authoritativeConfirmationMatches(
   ChatAccountState account,
   TextSendOutboxOperation operation,
   ChatMessageConfirmation message,
@@ -647,16 +684,39 @@ bool _confirmationMatches(
       message.referenceId != operation.referenceId.value) {
     return false;
   }
+  if (operation.threadId != null) {
+    if (message.threadId != operation.threadId) {
+      return false;
+    }
+    if (message.parentMessageId == null) {
+      return false;
+    }
+    if (message.parentDeleted) {
+      return message.parentMessageId == operation.threadId &&
+          message.parentRoomToken == null &&
+          message.parentThreadId == null;
+    }
+    return message.parentMessageId == operation.threadId &&
+        message.parentRoomToken == operation.roomToken &&
+        message.parentThreadId == operation.threadId;
+  }
   if (operation.replyTo == null) {
-    return message.parentMessageId == null && message.parentRoomToken == null;
+    return message.threadId == message.messageId &&
+        message.parentMessageId == null &&
+        message.parentRoomToken == null;
   }
   if (operation.replyToToken == null) {
     return message.parentMessageId == operation.replyTo &&
-        message.parentRoomToken == operation.parentRoomToken;
+        message.parentRoomToken == operation.parentRoomToken &&
+        message.parentThreadId != null &&
+        message.parentThreadId! > 0 &&
+        message.threadId == message.parentThreadId;
   }
   return message.replyToMessageId == operation.replyTo &&
       message.replyToRoomToken == operation.replyToToken!.value &&
-      message.parentRoomToken == operation.parentRoomToken;
+      message.parentRoomToken == operation.parentRoomToken &&
+      message.parentThreadId == 0 &&
+      message.threadId == message.parentMessageId;
 }
 
 bool _responseMatches(
@@ -671,6 +731,7 @@ bool _responseMatches(
       request.roomToken == operation.roomToken &&
       request.referenceId == operation.referenceId &&
       request.replyTo == operation.replyTo &&
+      request.threadId == operation.threadId &&
       request.replyToToken == operation.replyToToken &&
       request.parentRoomToken == operation.parentRoomToken;
 }
@@ -684,6 +745,9 @@ bool _canReplayTextSend(
       operation.replayContractRevision != authority.replayContractRevision ||
       !authority.profile.sendText) {
     return false;
+  }
+  if (operation.threadId != null) {
+    return authority.profile.threadFetch;
   }
   if (operation.replyTo == null) {
     return true;
@@ -703,6 +767,39 @@ bool _authorityMatchesAccount(
     authority.server == account.server &&
     authority.capabilityGeneration == account.capabilityGeneration &&
     authority.replayContractRevision == textSendReplayContractRevision;
+
+ChatAccountState _quarantineObsoleteReplayPredecessors(
+  ChatAccountState account,
+  ChatTextSendAuthority authority,
+  TextSendOutboxOperation operation,
+) {
+  Map<ChatOperationId, TextSendOutboxOperation>? operations;
+  for (final entry in account.operations.entries) {
+    final other = entry.value;
+    if (entry.key == operation.operationId ||
+        other.roomToken != operation.roomToken ||
+        other.enqueueSequence >= operation.enqueueSequence ||
+        other.replayContractRevision == authority.replayContractRevision ||
+        !<TextSendOutboxState>{
+          TextSendOutboxState.queued,
+          TextSendOutboxState.retryable,
+          TextSendOutboxState.awaitingConfirmation,
+        }.contains(other.state)) {
+      continue;
+    }
+    operations ??= Map<ChatOperationId, TextSendOutboxOperation>.of(
+      account.operations,
+    );
+    operations[entry.key] = other.copyWith(
+      state: TextSendOutboxState.failed,
+      errorClass: 'obsolete-replay-contract',
+      nextAttemptAt: null,
+    );
+  }
+  return operations == null
+      ? account
+      : account.copyWith(operations: operations);
+}
 
 bool _sendStartIsBlocked(
   ChatAccountState account,

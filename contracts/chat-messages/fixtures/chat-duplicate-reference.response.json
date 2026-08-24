@@ -20,7 +20,8 @@
         "message": "Synthetic repeated reference",
         "messageParameters": {},
         "markdown": true,
-        "reactions": {}
+        "reactions": {},
+        "threadId": 116
       },
       {
         "id": 117,
@@ -36,7 +37,8 @@
         "message": "Synthetic repeated reference",
         "messageParameters": {},
         "markdown": true,
-        "reactions": {}
+        "reactions": {},
+        "threadId": 117
       }
     ]
   }

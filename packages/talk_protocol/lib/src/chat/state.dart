@@ -6,7 +6,7 @@ import '../server_base.dart';
 import 'identifiers.dart';
 
 const String textSendReplayContractRevision =
-    'talk-chat-text-send-f2958bb-f9b9e947-r1';
+    'talk-chat-text-send-f2958bb-f9b9e947-r2';
 
 enum ChatAccountLane { ready, reauthenticationRequired }
 
@@ -170,6 +170,7 @@ final class TextSendOutboxOperation {
     required this.errorClass,
     required this.nextAttemptAt,
     required this.replyTo,
+    required this.threadId,
     required this.replyToToken,
     required this.parentRoomToken,
   }) : messageIds = List.unmodifiable(messageIds) {
@@ -189,6 +190,7 @@ final class TextSendOutboxOperation {
   final String? errorClass;
   final int? nextAttemptAt;
   final int? replyTo;
+  final int? threadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
 
@@ -221,6 +223,7 @@ final class TextSendOutboxOperation {
         ? this.nextAttemptAt
         : nextAttemptAt as int?,
     replyTo: replyTo ?? this.replyTo,
+    threadId: threadId,
     replyToToken: identical(replyToToken, _unchanged)
         ? this.replyToToken
         : replyToToken as ConversationToken?,
@@ -243,6 +246,9 @@ final class TextSendOutboxOperation {
         _outboxFailure(r'$.operations.messageIds');
       }
       previousId = messageId;
+    }
+    if (threadId != null && (threadId! < 1 || replyTo != null)) {
+      _outboxFailure(r'$.operations.threadId');
     }
     if (replyTo == null) {
       if (replyToToken != null || parentRoomToken != null) {
@@ -279,7 +285,8 @@ final class TextSendOutboxOperation {
   @override
   String toString() =>
       'TextSendOutboxOperation(state: ${state.name}, '
-      'attemptCount: $attemptCount, message: <redacted>, '
+      'attemptCount: $attemptCount, namedThread: ${threadId != null}, '
+      'message: <redacted>, '
       'referenceId: <redacted>)';
 }
 
