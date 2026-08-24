@@ -227,13 +227,13 @@ final class AttachmentSubmissionBridge implements VoiceAttachmentSubmitter {
             }
           },
           onError: (_) {
-            fail('durable-event-stream-failed', retryAllowed: true);
+            fail('durable-event-stream-failed', retryAllowed: false);
           },
           onDone: () {
             if (finished) {
               return;
             }
-            fail('durable-event-stream-ended', retryAllowed: true);
+            fail('durable-event-stream-ended', retryAllowed: false);
           },
           cancelOnError: true,
         );

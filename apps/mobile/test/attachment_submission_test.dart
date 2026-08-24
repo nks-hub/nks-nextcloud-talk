@@ -223,6 +223,69 @@ void main() {
       expect(failure.retryAllowed, isFalse);
       expect(durable.eventCancellationCount, 1);
     });
+
+    test(
+      'does not offer a durable retry when only the observer fails',
+      () async {
+        final durable = _FakeDurableSession();
+        addTearDown(durable.close);
+        var prepareCount = 0;
+        var enqueueCount = 0;
+        final bridge = AttachmentSubmissionBridge(
+          accountId: _account,
+          server: _server,
+          roomToken: _room,
+          prepare:
+              ({
+                required accountId,
+                required roomToken,
+                required source,
+                required metadata,
+              }) async {
+                prepareCount++;
+                return _enqueueRequest(source: source, metadata: metadata);
+              },
+          enqueue: (_) async {
+            enqueueCount++;
+            return durable;
+          },
+        );
+
+        final first = await bridge.startImageUpload(_imageRequest);
+        final firstEvents = first.events.toList();
+        durable.addError(StateError('observer failed'));
+
+        final failure = (await firstEvents).single;
+        expect(failure.phase, ImageAttachmentUploadPhase.failed);
+        expect(failure.failureCode, 'durable-event-stream-failed');
+        expect(failure.retryAllowed, isFalse);
+
+        await bridge.startImageUpload(_imageRequest);
+        expect(durable.retryCount, 0);
+        expect(prepareCount, 1);
+        expect(enqueueCount, 1);
+      },
+    );
+
+    test(
+      'does not offer retry when the durable observer closes early',
+      () async {
+        final durable = _FakeDurableSession();
+        final bridge = _bridgeFor(durable);
+        final session = await bridge.startImageUpload(_imageRequest);
+        final events = session.events.toList();
+
+        await durable.close();
+
+        final failure = (await events).single;
+        expect(failure.phase, ImageAttachmentUploadPhase.failed);
+        expect(failure.failureCode, 'durable-event-stream-ended');
+        expect(failure.retryAllowed, isFalse);
+
+        await bridge.startImageUpload(_imageRequest);
+        expect(durable.retryCount, 0);
+      },
+    );
   });
 
   group('AttachmentSubmissionBridge voice transport', () {
@@ -374,6 +437,8 @@ final class _FakeDurableSession implements AttachmentSubmissionDurableSession {
   Stream<AttachmentJobProgress> get events => _events.stream;
 
   void add(AttachmentJobProgress progress) => _events.add(progress);
+
+  void addError(Object error) => _events.addError(error);
 
   @override
   Future<void> cancel() async {
