@@ -1,0 +1,483 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
+class AppLocalizationsEn extends AppLocalizations {
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
+
+  @override
+  String get dateHeaderToday => 'Today';
+
+  @override
+  String get dateHeaderYesterday => 'Yesterday';
+
+  @override
+  String get appTitle => 'NKS Talk';
+
+  @override
+  String get onboardingTitle => 'Your conversations, one app';
+
+  @override
+  String get onboardingBody =>
+      'Connect any supported Nextcloud server. Accounts, cache and background work stay strictly separated.';
+
+  @override
+  String get multiServerTitle => 'Built for multiple servers';
+
+  @override
+  String get multiServerBody =>
+      'Add personal and work accounts without rebuilding the app or sharing their data.';
+
+  @override
+  String get secureTitle => 'Credentials stay on this device';
+
+  @override
+  String get secureBody =>
+      'App passwords are stored in the system Keychain or Keystore, never in the conversation database.';
+
+  @override
+  String get addServerTitle => 'Add a Nextcloud server';
+
+  @override
+  String get serverAddressLabel => 'Server address';
+
+  @override
+  String get serverAddressHint => 'cloud.example.com';
+
+  @override
+  String get connect => 'Continue';
+
+  @override
+  String get checkingServer => 'Checking the server…';
+
+  @override
+  String get openingLogin => 'Opening secure sign-in…';
+
+  @override
+  String get waitingForLogin => 'Finish signing in in your browser';
+
+  @override
+  String get waitingForLoginBody =>
+      'This screen will continue automatically after Nextcloud approves the app.';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get retry => 'Try again';
+
+  @override
+  String get invalidServer => 'Enter a valid HTTPS Nextcloud address.';
+
+  @override
+  String get serverUnavailable =>
+      'The server could not be reached. Check the address and your connection.';
+
+  @override
+  String get serverMaintenance =>
+      'This server is currently in maintenance mode.';
+
+  @override
+  String get serverNotInstalled =>
+      'Nextcloud is not installed on this server yet.';
+
+  @override
+  String get serverUpgrade =>
+      'The server must finish its database upgrade first.';
+
+  @override
+  String get invalidResponse =>
+      'The server returned a response this app cannot safely use.';
+
+  @override
+  String get browserUnavailable => 'The sign-in page could not be opened.';
+
+  @override
+  String get loginTimedOut => 'The sign-in request expired. Start it again.';
+
+  @override
+  String get talkUnavailable =>
+      'Nextcloud Talk is not available for this account.';
+
+  @override
+  String get localPersistenceFailed =>
+      'The account could not be stored securely on this device.';
+
+  @override
+  String get unexpectedError =>
+      'Something went wrong. No account data was changed.';
+
+  @override
+  String get accounts => 'Accounts';
+
+  @override
+  String get conversations => 'Conversations';
+
+  @override
+  String get addAccount => 'Add account';
+
+  @override
+  String get switchAccount => 'Switch account';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get syncing => 'Syncing…';
+
+  @override
+  String get cached => 'Showing saved conversations';
+
+  @override
+  String get noConversations => 'No conversations yet';
+
+  @override
+  String get noConversationsBody =>
+      'When a conversation appears on this Nextcloud account, it will be shown here.';
+
+  @override
+  String get selectConversation => 'Select a conversation';
+
+  @override
+  String get selectConversationBody =>
+      'Choose a conversation to see its account-scoped details.';
+
+  @override
+  String get conversationDetails => 'Conversation details';
+
+  @override
+  String get server => 'Server';
+
+  @override
+  String get signedInAs => 'Signed in as';
+
+  @override
+  String unreadMessages(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unread messages',
+      one: '1 unread message',
+      zero: 'No unread messages',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lastMessageUnavailable => 'New activity';
+
+  @override
+  String get syncCredentialMissing => 'This account must be signed in again.';
+
+  @override
+  String get syncTalkUnavailable =>
+      'Talk is no longer available on this server.';
+
+  @override
+  String get syncUnsupported =>
+      'This server does not expose a supported conversation API.';
+
+  @override
+  String get syncRateLimited =>
+      'The server asked the app to wait before syncing again.';
+
+  @override
+  String get syncUnavailable => 'Conversation sync is temporarily unavailable.';
+
+  @override
+  String get syncUpgradeRequired =>
+      'The server must be upgraded before conversations can sync.';
+
+  @override
+  String get syncInvalidResponse =>
+      'Saved conversations are kept, but the latest server response was rejected.';
+
+  @override
+  String get syncNetwork => 'Offline. Saved conversations remain available.';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get chatEmpty => 'No messages yet';
+
+  @override
+  String get chatEmptyBody => 'Messages in this conversation will appear here.';
+
+  @override
+  String get messageHint => 'Write a message';
+
+  @override
+  String get sendMessage => 'Send message';
+
+  @override
+  String get openEmojiPicker => 'Open emoji picker';
+
+  @override
+  String get emojiSearchHint => 'Search emoji';
+
+  @override
+  String get emojiNoResults => 'No emoji found';
+
+  @override
+  String get emojiCategorySmileys => 'Smileys';
+
+  @override
+  String get emojiCategoryPeople => 'People';
+
+  @override
+  String get emojiCategoryAnimals => 'Animals';
+
+  @override
+  String get emojiCategoryFood => 'Food';
+
+  @override
+  String get emojiCategoryActivities => 'Activities';
+
+  @override
+  String get emojiCategoryTravel => 'Travel';
+
+  @override
+  String get emojiCategoryObjects => 'Objects';
+
+  @override
+  String get emojiCategorySymbols => 'Symbols';
+
+  @override
+  String get openGiphyPicker => 'Open GIF picker';
+
+  @override
+  String get giphyChecking => 'Checking GIF availability…';
+
+  @override
+  String get giphyRetry => 'Try GIF integration again';
+
+  @override
+  String get giphyUnavailable => 'GIFs are not available on this server.';
+
+  @override
+  String get giphySearchHint => 'Search GIFs';
+
+  @override
+  String get giphyNoResults => 'No GIFs found';
+
+  @override
+  String get giphyLoadMore => 'Load more';
+
+  @override
+  String get messageTooLong => 'The message is too long.';
+
+  @override
+  String get loadOlderMessages => 'Load older messages';
+
+  @override
+  String get loadingOlderMessages => 'Loading older messages…';
+
+  @override
+  String get readOnlyConversation => 'This conversation is read-only.';
+
+  @override
+  String get deletedMessage => 'Message deleted';
+
+  @override
+  String get outboxQueued => 'Waiting to send';
+
+  @override
+  String get outboxSending => 'Sending…';
+
+  @override
+  String get outboxRetryable => 'Waiting for a connection';
+
+  @override
+  String get outboxAwaitingConfirmation =>
+      'The server may already have received this message.';
+
+  @override
+  String get outboxFailed => 'Message could not be sent';
+
+  @override
+  String get retrySend => 'Retry sending';
+
+  @override
+  String get resendMessage => 'Resend message';
+
+  @override
+  String get duplicateRiskTitle => 'Send this message again?';
+
+  @override
+  String get duplicateRiskBody =>
+      'The first attempt may have reached the server. Sending again can create a duplicate message.';
+
+  @override
+  String get confirmResend => 'Send again';
+
+  @override
+  String get chatUnsupported =>
+      'This server does not expose a supported chat API.';
+
+  @override
+  String get chatUnavailable =>
+      'Chat is temporarily unavailable. Saved messages remain visible.';
+
+  @override
+  String get chatInvalidResponse =>
+      'Saved messages are kept, but the latest chat response was rejected.';
+
+  @override
+  String get thread => 'Thread';
+
+  @override
+  String threadReplies(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count replies',
+      one: '1 reply',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get openThread => 'Open thread';
+
+  @override
+  String get edited => 'edited';
+
+  @override
+  String get attachment => 'Attachment';
+
+  @override
+  String get openAttachment => 'Open attachment';
+
+  @override
+  String get imageAttachment => 'Image attachment';
+
+  @override
+  String get openImage => 'Open image';
+
+  @override
+  String get loadingImage => 'Loading image…';
+
+  @override
+  String get imageLoadFailed => 'The image could not be loaded.';
+
+  @override
+  String get zoomOut => 'Zoom out';
+
+  @override
+  String get resetZoom => 'Reset zoom';
+
+  @override
+  String get zoomIn => 'Zoom in';
+
+  @override
+  String get attachImage => 'Attach image';
+
+  @override
+  String get preparingImage => 'Preparing image…';
+
+  @override
+  String get imageUploadQueued => 'Waiting to upload';
+
+  @override
+  String uploadingImage(int percent) {
+    return 'Uploading image… $percent%';
+  }
+
+  @override
+  String get confirmingAttachment => 'Confirming the attachment…';
+
+  @override
+  String get cancellingUpload => 'Cancelling upload…';
+
+  @override
+  String get imageSent => 'Image sent';
+
+  @override
+  String get imageUploadFailed => 'The image could not be sent.';
+
+  @override
+  String get uploadCancelled => 'Upload cancelled';
+
+  @override
+  String get participantAvatarGuest => 'Guest';
+
+  @override
+  String get participantAvatarBot => 'Bot';
+
+  @override
+  String get participantAvatarBridge => 'Bridge participant';
+
+  @override
+  String get participantAvatarSystem => 'System';
+
+  @override
+  String get participantAvatarUnknown => 'Participant';
+
+  @override
+  String replyingTo(Object name) {
+    return 'Replying to $name';
+  }
+
+  @override
+  String get mediaCapabilityChecking => 'Checking attachment support…';
+
+  @override
+  String get mediaCapabilityUnavailable =>
+      'Attachments are temporarily unavailable.';
+
+  @override
+  String get retryMediaCapabilities => 'Try attachments again';
+
+  @override
+  String get recordVoiceMessage => 'Record voice message';
+
+  @override
+  String get stopVoiceRecording => 'Stop recording';
+
+  @override
+  String get playVoicePreview => 'Play voice message preview';
+
+  @override
+  String get cancelVoiceMessage => 'Cancel voice message';
+
+  @override
+  String get sendVoiceMessage => 'Send voice message';
+
+  @override
+  String get voiceMessageQueued => 'Voice message waiting to send';
+
+  @override
+  String get voiceUnsupported =>
+      'Voice messages are not supported in this conversation.';
+
+  @override
+  String get voicePermissionDenied => 'Microphone access was denied.';
+
+  @override
+  String get voicePermissionPermanentlyDenied =>
+      'Allow microphone access in system settings.';
+
+  @override
+  String get voicePermissionRequestFailed =>
+      'Microphone access could not be checked.';
+
+  @override
+  String get voiceRecordingFailed => 'The voice message could not be recorded.';
+
+  @override
+  String get voiceInvalidRecording => 'The recording is empty or unsupported.';
+
+  @override
+  String get voicePlaybackFailed =>
+      'The recording preview could not be played.';
+
+  @override
+  String get voiceSendFailed => 'The voice message could not be queued.';
+
+  @override
+  String get voiceCleanupFailed => 'The recording could not be removed safely.';
+}

@@ -185,7 +185,7 @@ Future<void> _verifyLiveBridge(
     () => find.byIcon(Icons.cloud_off_rounded).evaluate().isNotEmpty,
   );
   expect(_syncIndicatorVisible(), isFalse);
-  await tester.tap(find.byIcon(Icons.refresh_rounded));
+  await tester.tap(find.byKey(const Key('retry-chat-sync')));
   await _pumpUntil(
     tester,
     () => futureTimeouts.length == 3 && _syncIndicatorVisible(),
