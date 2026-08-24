@@ -1,0 +1,192 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/testing.dart';
+import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/features/chat/chat_service.dart';
+import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
+
+import 'test_support.dart';
+
+void main() {
+  group('outgoing message truth states', () {
+    test('queued, sending, and ambiguous sends stay sending', () {
+      for (final state in <String>[
+        'queued',
+        'sending',
+        'awaitingConfirmation',
+      ]) {
+        final status = resolveOutgoingMessageStatuses(
+          _projection(outboxState: state),
+        ).single;
+
+        expect(status.state, OutgoingMessageDeliveryState.sending);
+        expect(status.confirmationAmbiguous, state == 'awaitingConfirmation');
+      }
+    });
+
+    test('retryable and terminal failures are not sent', () {
+      for (final state in <String>['retryable', 'failed']) {
+        final status = resolveOutgoingMessageStatuses(
+          _projection(outboxState: state),
+        ).single;
+
+        expect(status.state, OutgoingMessageDeliveryState.failed);
+        expect(status.messageId, isNull);
+      }
+    });
+
+    test('completed operation without cached confirmation is not sent', () {
+      final status = resolveOutgoingMessageStatuses(
+        _projection(outboxState: 'completed', messageIds: const [120]),
+      ).single;
+
+      expect(status.state, OutgoingMessageDeliveryState.sending);
+      expect(status.messageId, isNull);
+    });
+
+    test('server-confirmed own message is sent without invented receipts', () {
+      final status = resolveOutgoingMessageStatuses(
+        _projection(
+          outboxState: 'completed',
+          messageIds: const [120],
+          confirmedMessages: [_message(messageId: 120)],
+        ),
+      ).single;
+
+      expect(status.state, OutgoingMessageDeliveryState.sent);
+      expect(status.messageId, 120);
+      expect(
+        OutgoingMessageDeliveryState.values.map((state) => state.name),
+        isNot(contains(anyOf('delivered', 'read'))),
+      );
+    });
+  });
+
+  testWidgets('indicator renders the resolved state and caller label', (
+    tester,
+  ) async {
+    final status = resolveOutgoingMessageStatuses(
+      _projection(
+        outboxState: 'completed',
+        messageIds: const [120],
+        confirmedMessages: [_message(messageId: 120)],
+      ),
+    ).single;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OutgoingMessageStatusIndicator(
+            status: status,
+            label: 'Odesláno',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.done_rounded), findsOneWidget);
+    expect(find.text('Odesláno'), findsOneWidget);
+  });
+
+  test('service projection ignores unconfirmed reference collisions', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    await database
+        .into(database.textSendOperations)
+        .insert(_operation(outboxState: 'completed', messageIds: const [120]));
+    await database
+        .into(database.cachedChatMessages)
+        .insert(_message(messageId: 120));
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          _message(
+            messageId: 121,
+            actorId: 'another-user',
+            displayText: 'Reference collision from another user',
+          ),
+        );
+    final api = HttpNextcloudApi(
+      client: MockClient((_) => throw StateError('Network must not be used')),
+    );
+    addTearDown(api.close);
+    final service = ChatService(
+      accounts: accounts,
+      chat: ChatRepository(database),
+      credentials: MemoryCredentialVault(),
+      api: api,
+    );
+
+    final statuses = await service
+        .watchOutgoingMessageStatuses(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        )
+        .first;
+
+    expect(statuses, hasLength(1));
+    expect(statuses.single.messageId, 120);
+    expect(statuses.single.state, OutgoingMessageDeliveryState.sent);
+  });
+}
+
+StoredOutgoingTextMessage _projection({
+  required String outboxState,
+  List<int> messageIds = const [],
+  List<CachedChatMessage> confirmedMessages = const [],
+}) => StoredOutgoingTextMessage(
+  operation: _operation(outboxState: outboxState, messageIds: messageIds),
+  confirmedMessages: confirmedMessages,
+);
+
+StoredTextSendOperation _operation({
+  required String outboxState,
+  List<int> messageIds = const [],
+}) => StoredTextSendOperation(
+  accountId: 'account-a',
+  operationId: '00000000-0000-4000-8000-000000000001',
+  roomToken: 'rooma123',
+  referenceId: '00000000-0000-4000-8000-000000000002',
+  message: 'Synthetic outgoing message',
+  replayContractRevision: 'talk-chat-text-send-f2958bb-f9b9e947-r2',
+  enqueueSequence: 1,
+  outboxState: outboxState,
+  attemptCount: 1,
+  messageIdsJson: jsonEncode(messageIds),
+  duplicateRiskAcknowledged: false,
+  createdAtMillis: 1,
+  updatedAtMillis: 1,
+);
+
+CachedChatMessage _message({
+  required int messageId,
+  String actorId = 'fixture-user',
+  String displayText = 'Synthetic outgoing message',
+}) => CachedChatMessage(
+  accountId: 'account-a',
+  roomToken: 'rooma123',
+  messageId: messageId,
+  actorType: 'users',
+  actorId: actorId,
+  actorDisplayName: actorId,
+  timestamp: 1770000120,
+  systemMessage: '',
+  messageType: 'comment',
+  referenceId: '00000000-0000-4000-8000-000000000002',
+  displayText: displayText,
+  deleted: false,
+  rawJson: '{}',
+);
