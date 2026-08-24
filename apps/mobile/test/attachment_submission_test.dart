@@ -118,6 +118,59 @@ void main() {
     );
 
     test(
+      'offers confirmation reconciliation on the admitted durable job',
+      () async {
+        final durable = _FakeDurableSession();
+        addTearDown(durable.close);
+        var prepareCount = 0;
+        var enqueueCount = 0;
+        final bridge = AttachmentSubmissionBridge(
+          accountId: _account,
+          server: _server,
+          roomToken: _room,
+          prepare:
+              ({
+                required accountId,
+                required roomToken,
+                required source,
+                required metadata,
+              }) async {
+                prepareCount++;
+                return _enqueueRequest(source: source, metadata: metadata);
+              },
+          enqueue: (request) async {
+            enqueueCount++;
+            return durable;
+          },
+        );
+
+        final first = await bridge.startImageUpload(_imageRequest);
+        final failureFuture = first.events.first;
+        durable.add(
+          _progress(
+            AttachmentJobPhase.awaitingConfirmation,
+            progress: 1,
+            errorClass: attachmentConfirmationReconciliationRequired,
+            retryAllowed: true,
+          ),
+        );
+
+        final failure = await failureFuture;
+        expect(failure.phase, ImageAttachmentUploadPhase.failed);
+        expect(
+          failure.failureCode,
+          attachmentConfirmationReconciliationRequired,
+        );
+        expect(failure.retryAllowed, isTrue);
+
+        await bridge.startImageUpload(_imageRequest);
+        expect(durable.retryCount, 1);
+        expect(prepareCount, 1);
+        expect(enqueueCount, 1);
+      },
+    );
+
+    test(
       'cancels the durable job and releases its event subscription',
       () async {
         final durable = _FakeDurableSession();

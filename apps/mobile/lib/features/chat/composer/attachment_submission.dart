@@ -333,6 +333,12 @@ final class _DurableImageBinding {
 }
 
 ImageAttachmentUploadEvent _mapImageProgress(AttachmentJobProgress progress) {
+  if (progress.confirmationReconciliationRequired) {
+    return ImageAttachmentUploadEvent.failed(
+      attachmentConfirmationReconciliationRequired,
+      retryAllowed: true,
+    );
+  }
   return switch (progress.phase) {
     AttachmentJobPhase.localPrepared => ImageAttachmentUploadEvent.queued(),
     AttachmentJobPhase.probing ||
