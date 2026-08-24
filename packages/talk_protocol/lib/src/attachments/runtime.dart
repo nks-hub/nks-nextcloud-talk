@@ -1038,7 +1038,7 @@ bool _confirmationMatches(
     confirmation.server == job.server &&
     confirmation.roomToken == job.draft.roomToken &&
     confirmation.referenceId == job.draft.referenceId.value &&
-    confirmation.systemMessage == 'file_shared' &&
+    confirmation.systemMessage.isEmpty &&
     confirmation.hasFileRichObject &&
     confirmation.messageType == job.draft.expectedMessageType;
 

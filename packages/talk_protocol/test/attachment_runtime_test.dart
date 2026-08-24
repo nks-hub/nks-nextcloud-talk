@@ -79,6 +79,16 @@ void main() {
       );
       expect(wrongType.outcome, AttachmentRuntimeOutcome.noMatch);
 
+      final legacySystemMessage = reconcileAttachmentConfirmation(
+        snapshot,
+        accountId: accountA,
+        jobId: operation.jobId,
+        confirmations: <AttachmentMessageConfirmation>[
+          confirmation(operation, 500, systemMessage: 'file_shared'),
+        ],
+      );
+      expect(legacySystemMessage.outcome, AttachmentRuntimeOutcome.noMatch);
+
       final complete = reconcileAttachmentConfirmation(
         snapshot,
         accountId: accountA,
@@ -794,6 +804,7 @@ AttachmentRuntimeSnapshot _driveToAwaiting(AttachmentJobDraft operation) {
 AttachmentMessageConfirmation confirmation(
   AttachmentJobDraft operation,
   int messageId, {
+  String systemMessage = '',
   String messageType = 'comment',
   bool hasFileRichObject = true,
 }) => AttachmentMessageConfirmation(
@@ -802,7 +813,7 @@ AttachmentMessageConfirmation confirmation(
   messageId: messageId,
   roomToken: operation.roomToken,
   referenceId: operation.referenceId.value,
-  systemMessage: 'file_shared',
+  systemMessage: systemMessage,
   messageType: messageType,
   hasFileRichObject: hasFileRichObject,
 );
