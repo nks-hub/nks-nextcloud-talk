@@ -291,6 +291,344 @@ void main() {
   });
 
   test(
+    'exhausted confirmation catch-up persists reconciliation and retries safely',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final firstCatchUpStarted = Completer<void>();
+      final releaseFirstCatchUp = Completer<void>();
+      final finalCatchUpStarted = Completer<void>();
+      final releaseFinalCatchUp = Completer<void>();
+      var catchUpCalls = 0;
+      var uploaded = 0;
+      var finalized = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            uploaded++;
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            finalized++;
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        identifierFactory: _SequentialIdentifierFactory(),
+        confirmationRetryDelays: const <Duration>[Duration.zero, Duration.zero],
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              catchUpCalls++;
+              if (catchUpCalls == 1) {
+                firstCatchUpStarted.complete();
+                await releaseFirstCatchUp.future;
+                await fixture.cacheConfirmation(
+                  messageId: 113,
+                  hasFileRichObject: false,
+                );
+              } else if (catchUpCalls == 3) {
+                finalCatchUpStarted.complete();
+                await releaseFinalCatchUp.future;
+              } else if (catchUpCalls == 4) {
+                await fixture.cacheConfirmation(messageId: 114);
+              }
+            },
+      );
+      addTearDown(service.close);
+
+      final first = await service.enqueue(fixture.request(normalMaximum: 32));
+      await first.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+      );
+      await firstCatchUpStarted.future.timeout(const Duration(seconds: 2));
+
+      final second = await service.enqueue(fixture.request(normalMaximum: 32));
+      await second.events
+          .firstWhere((event) => event.phase == AttachmentJobPhase.uploaded)
+          .timeout(const Duration(seconds: 2));
+      expect(uploaded, 2);
+      expect(finalized, 1);
+      expect(await fixture.sourceFile.exists(), isTrue);
+
+      releaseFirstCatchUp.complete();
+      await finalCatchUpStarted.future.timeout(const Duration(seconds: 2));
+      releaseFinalCatchUp.complete();
+      final reconciliationRequired = await first.events
+          .firstWhere(
+            (event) =>
+                event.errorClass ==
+                attachmentConfirmationReconciliationRequired,
+          )
+          .timeout(const Duration(seconds: 2));
+      final storedFirst = await fixture.repository.getStoredJob(
+        accountId: 'account-a',
+        jobId: first.jobId.value,
+      );
+      final storedSecond = await fixture.repository.getStoredJob(
+        accountId: 'account-a',
+        jobId: second.jobId.value,
+      );
+
+      expect(catchUpCalls, 3);
+      expect(
+        reconciliationRequired.phase,
+        AttachmentJobPhase.awaitingConfirmation,
+      );
+      expect(reconciliationRequired.automaticRetryCount, 3);
+      expect(reconciliationRequired.retryAllowed, isTrue);
+      expect(
+        storedFirst?.errorClass,
+        attachmentConfirmationReconciliationRequired,
+      );
+      expect(storedFirst?.automaticRetryCount, 3);
+      expect(storedFirst?.nextAttemptAtMillis, isNull);
+      expect(storedSecond?.phase, AttachmentJobPhase.uploaded.name);
+      expect(await fixture.sourceFile.exists(), isTrue);
+      expect(finalized, 1);
+
+      await first.retry();
+      await first.events
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed)
+          .timeout(const Duration(seconds: 2));
+      await second.events
+          .firstWhere(
+            (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+          )
+          .timeout(const Duration(seconds: 2));
+
+      expect(catchUpCalls, greaterThanOrEqualTo(4));
+      expect(finalized, 2);
+    },
+  );
+
+  test(
+    'reconciliation marker survives restart and requires explicit retry',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      var initialCatchUps = 0;
+      var finalized = 0;
+      final initialService = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            finalized++;
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              initialCatchUps++;
+            },
+      );
+      addTearDown(initialService.close);
+
+      final session = await initialService.enqueue(
+        fixture.request(normalMaximum: 32),
+      );
+      final reconciliationRequired = await session.events
+          .firstWhere((event) => event.confirmationReconciliationRequired)
+          .timeout(const Duration(seconds: 2));
+
+      expect(initialCatchUps, 1);
+      expect(reconciliationRequired.retryAllowed, isTrue);
+      expect(finalized, 1);
+      expect(await fixture.sourceFile.exists(), isTrue);
+      await initialService.close();
+
+      var resumedCatchUps = 0;
+      var resumedRequests = 0;
+      final resumedService = fixture.service(
+        MockClient((request) async {
+          resumedRequests++;
+          fail('Restart must not replay ${request.method} ${request.url}');
+        }),
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              resumedCatchUps++;
+              await fixture.cacheConfirmation(messageId: 115);
+            },
+      );
+      addTearDown(resumedService.close);
+
+      await resumedService.ready;
+      await pumpEventQueue(times: 20);
+      final retained = await resumedService
+          .watchJob(accountId: session.accountId, jobId: session.jobId)
+          .first;
+
+      expect(retained.confirmationReconciliationRequired, isTrue);
+      expect(retained.retryAllowed, isTrue);
+      expect(resumedCatchUps, 0);
+      expect(resumedRequests, 0);
+
+      final completed = resumedService
+          .watchJob(accountId: session.accountId, jobId: session.jobId)
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed);
+      await resumedService.retry(
+        accountId: session.accountId,
+        jobId: session.jobId,
+      );
+      await completed.timeout(const Duration(seconds: 2));
+
+      expect(resumedCatchUps, 1);
+      expect(resumedRequests, 0);
+      expect(finalized, 1);
+      await _expectFileRemoved(fixture.sourceFile);
+    },
+  );
+
+  test('retries reconciliation marker persistence after one failure', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var markerPersistAttempts = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      catchUpConfirmation:
+          ({
+            required accountId,
+            required roomToken,
+            required threadId,
+          }) async {},
+      persistTransition:
+          ({
+            required account,
+            required job,
+            required metadata,
+            required updatedAt,
+          }) async {
+            if (job.phase == AttachmentJobPhase.awaitingConfirmation &&
+                job.errorClass ==
+                    attachmentConfirmationReconciliationRequired) {
+              markerPersistAttempts++;
+              if (markerPersistAttempts == 1) {
+                throw StateError('Synthetic one-shot persistence failure');
+              }
+            }
+            await fixture.repository.persistTransition(
+              account: account,
+              job: job,
+              metadata: metadata,
+              updatedAt: updatedAt,
+            );
+          },
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    final reconciliationRequired = await session.events
+        .firstWhere((event) => event.confirmationReconciliationRequired)
+        .timeout(const Duration(seconds: 2));
+
+    expect(reconciliationRequired.retryAllowed, isTrue);
+    expect(markerPersistAttempts, 2);
+    expect(await fixture.sourceFile.exists(), isTrue);
+  });
+
+  test('close persists an exhausted in-flight reconciliation', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final lastCatchUpStarted = Completer<void>();
+    final releaseLastCatchUp = Completer<void>();
+    var catchUpCalls = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      confirmationRetryDelays: const <Duration>[Duration.zero],
+      catchUpConfirmation:
+          ({required accountId, required roomToken, required threadId}) async {
+            catchUpCalls++;
+            if (catchUpCalls == 2) {
+              lastCatchUpStarted.complete();
+              await releaseLastCatchUp.future;
+            }
+          },
+    );
+    addTearDown(() async {
+      if (!releaseLastCatchUp.isCompleted) {
+        releaseLastCatchUp.complete();
+      }
+      await service.close();
+    });
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    await lastCatchUpStarted.future.timeout(const Duration(seconds: 2));
+    final close = service.close();
+    releaseLastCatchUp.complete();
+    await close.timeout(const Duration(seconds: 2));
+
+    final stored = await fixture.repository.getStoredJob(
+      accountId: session.accountId.value,
+      jobId: session.jobId.value,
+    );
+    expect(catchUpCalls, 2);
+    expect(stored?.errorClass, attachmentConfirmationReconciliationRequired);
+    expect(stored?.automaticRetryCount, 2);
+
+    var restartedCatchUps = 0;
+    final restarted = fixture.service(
+      _unexpectedClient(),
+      catchUpConfirmation:
+          ({required accountId, required roomToken, required threadId}) async {
+            restartedCatchUps++;
+          },
+    );
+    addTearDown(restarted.close);
+    await restarted.ready;
+    await pumpEventQueue(times: 20);
+
+    expect(restartedCatchUps, 0);
+  });
+
+  test(
     'room scheduler reruns work enqueued while its run becomes idle',
     () async {
       final fixture = await _Fixture.create();
@@ -1272,7 +1610,10 @@ final class _Fixture {
     hasFileRichObject: true,
   );
 
-  Future<void> cacheConfirmation({required int messageId}) {
+  Future<void> cacheConfirmation({
+    required int messageId,
+    bool hasFileRichObject = true,
+  }) {
     final wire = <String, Object?>{
       'id': messageId,
       'token': 'rooma123',
@@ -1284,15 +1625,17 @@ final class _Fixture {
       'messageType': 'comment',
       'isReplyable': true,
       'referenceId': '11111111-1111-4111-8111-111111111111',
-      'message': '{file}',
-      'messageParameters': <String, Object?>{
-        'file': <String, Object?>{
-          'type': 'file',
-          'id': 'fixture-file',
-          'name': 'source.png',
-          'link': '/remote.php/dav/files/fixture/source.png',
-        },
-      },
+      'message': hasFileRichObject ? '{file}' : 'Pending attachment',
+      'messageParameters': hasFileRichObject
+          ? <String, Object?>{
+              'file': <String, Object?>{
+                'type': 'file',
+                'id': 'fixture-file',
+                'name': 'source.png',
+                'link': '/remote.php/dav/files/fixture/source.png',
+              },
+            }
+          : <String, Object?>{},
       'markdown': false,
       'reactions': <String, Object?>{},
       'reactionsSelf': <Object?>[],

@@ -28,6 +28,9 @@ typedef CatchUpAttachmentConfirmation =
     });
 typedef BeforeAttachmentRoomIdle = Future<void> Function();
 
+const String attachmentConfirmationReconciliationRequired =
+    'confirmation-reconciliation-required';
+
 abstract interface class AttachmentIdentifierFactory {
   AttachmentJobId newJobId();
 
@@ -112,6 +115,10 @@ final class AttachmentJobProgress {
   final bool retryAllowed;
   final String? errorClass;
   final List<int> messageIds;
+
+  bool get confirmationReconciliationRequired =>
+      phase == AttachmentJobPhase.awaitingConfirmation &&
+      errorClass == attachmentConfirmationReconciliationRequired;
 
   bool get isTerminal => const <AttachmentJobPhase>{
     AttachmentJobPhase.completed,
@@ -467,17 +474,40 @@ final class AttachmentService {
   }) async {
     await _ready;
     _ensureOpen();
-    late final _AttachmentRoomKey roomKey;
+    final key = _jobKey(accountId, jobId);
+    _AttachmentRoomKey? roomKey;
+    var retryConfirmation = false;
     await _stateMutex.protect(() async {
       final job = _snapshot.accounts[accountId]?.jobs[jobId];
       if (job == null) {
         throw StateError('Attachment job does not exist');
       }
+      if (job.phase == AttachmentJobPhase.awaitingConfirmation &&
+          job.errorClass == attachmentConfirmationReconciliationRequired) {
+        final account = _snapshot.accounts[accountId]!;
+        final jobs = Map<AttachmentJobId, AttachmentJob>.of(account.jobs);
+        final updatedJob = job.copyWith(errorClass: null);
+        jobs[jobId] = updatedJob;
+        final updatedAccount = account.copyWith(jobs: jobs);
+        final updatedMetadata = _metadata[key]!.copyWith(
+          automaticRetryCount: 0,
+          nextAttemptAt: null,
+        );
+        await _persistTransition(
+          account: updatedAccount,
+          job: updatedJob,
+          metadata: updatedMetadata,
+          updatedAt: _clock().toUtc(),
+        );
+        _snapshot = _snapshot.replaceAccount(updatedAccount);
+        _metadata[key] = updatedMetadata;
+        retryConfirmation = true;
+        return;
+      }
       if (job.phase != AttachmentJobPhase.retryable &&
           job.phase != AttachmentJobPhase.cleanupFailed) {
         throw StateError('Attachment job is not retryable');
       }
-      final key = _jobKey(accountId, jobId);
       final metadata = _metadata[key]!;
       final updated = metadata.copyWith(
         automaticRetryCount: 0,
@@ -487,8 +517,18 @@ final class AttachmentService {
       _metadata[key] = updated;
       roomKey = _AttachmentRoomKey(accountId, job.draft.roomToken);
     });
-    _retryTimers.remove(roomKey)?.cancel();
-    await _scheduleRoom(roomKey);
+    if (retryConfirmation) {
+      _clearConfirmationCatchUp(key);
+      final active = _confirmationCatchUps[key];
+      if (active != null) {
+        await active;
+      }
+      _queueConfirmationCatchUp(key);
+      return;
+    }
+    final retryRoom = roomKey!;
+    _retryTimers.remove(retryRoom)?.cancel();
+    await _scheduleRoom(retryRoom);
   }
 
   Future<void> completeReauthentication({
@@ -598,7 +638,6 @@ final class AttachmentService {
       timer.cancel();
     }
     _confirmationRetryTimers.clear();
-    _confirmationRetryCounts.clear();
     _roomRerunRequests.clear();
     for (final cancellation in _cancellations.values) {
       cancellation.cancel();
@@ -607,6 +646,7 @@ final class AttachmentService {
     await Future.wait<void>(
       _confirmationCatchUps.values.toList(growable: false),
     );
+    _confirmationRetryCounts.clear();
     for (final entry in _verifiedSources.entries.toList(growable: false)) {
       try {
         await _transport.releaseSource(entry.value);
@@ -657,7 +697,8 @@ final class AttachmentService {
         if (_isSourceReleasePhase(job.phase)) {
           terminal.add(key);
         } else if (!_isTerminal(job.phase)) {
-          if (job.phase == AttachmentJobPhase.awaitingConfirmation) {
+          if (job.phase == AttachmentJobPhase.awaitingConfirmation &&
+              job.errorClass != attachmentConfirmationReconciliationRequired) {
             awaitingConfirmation.add(key);
           }
           rooms.add(_AttachmentRoomKey(account.accountId, job.draft.roomToken));
@@ -786,9 +827,6 @@ final class AttachmentService {
         roomToken: job.draft.roomToken,
         threadId: job.draft.metadata.threadId,
       );
-      if (_closed) {
-        return;
-      }
       final current = _jobForKey(key);
       if (current == null ||
           current.phase != AttachmentJobPhase.awaitingConfirmation) {
@@ -807,24 +845,30 @@ final class AttachmentService {
         );
         if (_jobForKey(key)?.phase == AttachmentJobPhase.completed) {
           _clearConfirmationCatchUp(key);
+        } else if (_jobForKey(key)?.phase ==
+            AttachmentJobPhase.awaitingConfirmation) {
+          shouldRetry = true;
         }
       }
     } on Object {
       shouldRetry = true;
     }
-    if (shouldRetry && !_closed) {
-      _scheduleConfirmationRetry(key);
+    if (shouldRetry) {
+      await _scheduleConfirmationRetry(key);
     }
   }
 
-  void _scheduleConfirmationRetry(AttachmentPersistenceKey key) {
-    if (_closed ||
-        _catchUpConfirmation == null ||
+  Future<void> _scheduleConfirmationRetry(AttachmentPersistenceKey key) async {
+    if (_catchUpConfirmation == null ||
         _confirmationRetryTimers.containsKey(key)) {
       return;
     }
     final retryCount = _confirmationRetryCounts[key] ?? 0;
-    if (retryCount >= _confirmationRetryDelays.length) {
+    if (_closed || retryCount >= _confirmationRetryDelays.length) {
+      await _markConfirmationReconciliationRequired(
+        key,
+        attemptCount: retryCount + 1,
+      );
       return;
     }
     _confirmationRetryCounts[key] = retryCount + 1;
@@ -835,6 +879,54 @@ final class AttachmentService {
         _queueConfirmationCatchUp(key);
       },
     );
+  }
+
+  Future<void> _markConfirmationReconciliationRequired(
+    AttachmentPersistenceKey key, {
+    required int attemptCount,
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await _stateMutex.protect(() async {
+          final accountId = AccountId.parse(key.accountId);
+          final jobId = AttachmentJobId.parse(key.jobId);
+          final account = _snapshot.accounts[accountId];
+          final job = account?.jobs[jobId];
+          final metadata = _metadata[key];
+          if (account == null ||
+              job == null ||
+              metadata == null ||
+              job.phase != AttachmentJobPhase.awaitingConfirmation) {
+            return;
+          }
+          final jobs = Map<AttachmentJobId, AttachmentJob>.of(account.jobs);
+          final updatedJob = job.copyWith(
+            errorClass: attachmentConfirmationReconciliationRequired,
+          );
+          jobs[jobId] = updatedJob;
+          final updatedAccount = account.copyWith(jobs: jobs);
+          final updatedMetadata = metadata.copyWith(
+            automaticRetryCount: attemptCount,
+            nextAttemptAt: null,
+          );
+          await _persistTransition(
+            account: updatedAccount,
+            job: updatedJob,
+            metadata: updatedMetadata,
+            updatedAt: _clock().toUtc(),
+          );
+          _snapshot = _snapshot.replaceAccount(updatedAccount);
+          _metadata[key] = updatedMetadata;
+        });
+        _confirmationRetryCounts.remove(key);
+        return;
+      } on Object {
+        if (attempt >= _localPersistenceRetryDelays.length) {
+          rethrow;
+        }
+        await Future<void>.delayed(_localPersistenceRetryDelays[attempt]);
+      }
+    }
   }
 
   void _clearConfirmationCatchUp(AttachmentPersistenceKey key) {
@@ -1467,7 +1559,9 @@ AttachmentJobProgress _progressFromRow(StoredAttachmentJob row) {
     automaticRetryCount: row.automaticRetryCount,
     retryAllowed:
         phase == AttachmentJobPhase.retryable ||
-        phase == AttachmentJobPhase.cleanupFailed,
+        phase == AttachmentJobPhase.cleanupFailed ||
+        phase == AttachmentJobPhase.awaitingConfirmation &&
+            row.errorClass == attachmentConfirmationReconciliationRequired,
     errorClass: row.localCleanupError ?? row.errorClass,
     messageIds: List<int>.unmodifiable(messageIds),
   );
