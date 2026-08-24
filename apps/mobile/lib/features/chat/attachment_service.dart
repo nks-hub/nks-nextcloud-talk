@@ -13,6 +13,13 @@ typedef ReleaseDurableAttachmentSource =
     Future<void> Function(PreparedAttachmentSource source);
 typedef WatchAttachmentConfirmationCandidates =
     Stream<AttachmentConfirmationSnapshot> Function();
+typedef PersistAttachmentTransition =
+    Future<void> Function({
+      required AttachmentAccountState account,
+      required AttachmentJob job,
+      required AttachmentExecutionMetadata metadata,
+      required DateTime updatedAt,
+    });
 
 abstract interface class AttachmentIdentifierFactory {
   AttachmentJobId newJobId();
@@ -127,6 +134,12 @@ final class DurableAttachmentSession {
 }
 
 final class AttachmentService {
+  static const List<Duration> _localPersistenceRetryDelays = <Duration>[
+    Duration(milliseconds: 25),
+    Duration(milliseconds: 250),
+    Duration(seconds: 1),
+  ];
+
   factory AttachmentService({
     required AttachmentRepository repository,
     required CredentialVault credentials,
@@ -136,6 +149,7 @@ final class AttachmentService {
         const UuidAttachmentIdentifierFactory(),
     DateTime Function()? clock,
     WatchAttachmentConfirmationCandidates? watchConfirmationCandidates,
+    PersistAttachmentTransition? persistTransition,
     List<Duration> retryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -154,6 +168,7 @@ final class AttachmentService {
       clock: clock ?? DateTime.now,
       watchConfirmationCandidates:
           watchConfirmationCandidates ?? repository.watchConfirmationCandidates,
+      persistTransition: persistTransition ?? repository.persistTransition,
       retryDelays: List<Duration>.unmodifiable(retryDelays),
     );
     service._ready = service._initialize();
@@ -168,6 +183,7 @@ final class AttachmentService {
     required this._identifierFactory,
     required this._clock,
     required this._watchConfirmationCandidates,
+    required this._persistTransition,
     required this._retryDelays,
   });
 
@@ -178,6 +194,7 @@ final class AttachmentService {
   final AttachmentIdentifierFactory _identifierFactory;
   final DateTime Function() _clock;
   final WatchAttachmentConfirmationCandidates _watchConfirmationCandidates;
+  final PersistAttachmentTransition _persistTransition;
   final List<Duration> _retryDelays;
   final _AsyncMutex _stateMutex = _AsyncMutex();
   final Map<_AttachmentRoomKey, Future<void>> _roomRuns = {};
@@ -186,8 +203,11 @@ final class AttachmentService {
   _verifiedSources = {};
   final Map<AttachmentPersistenceKey, AttachmentCancellationController>
   _cancellations = {};
+  final Map<AttachmentPersistenceKey, Completer<void>> _terminalSourceReleases =
+      {};
 
   late final Future<void> _ready;
+  Future<void> _startupMaintenance = Future<void>.value();
   StreamSubscription<AttachmentConfirmationSnapshot>? _confirmationSubscription;
   Future<void> _confirmationTail = Future<void>.value();
   AttachmentRuntimeSnapshot _snapshot = AttachmentRuntimeSnapshot(
@@ -532,6 +552,7 @@ final class AttachmentService {
     _confirmationSubscription = null;
     await confirmationSubscription?.cancel();
     await _confirmationTail;
+    await _startupMaintenance;
     for (final timer in _retryTimers.values) {
       timer.cancel();
     }
@@ -577,28 +598,28 @@ final class AttachmentService {
       _queueConfirmationSnapshot,
       onError: (Object _, StackTrace _) {},
     );
-    Future<void>.microtask(() async {
-      final terminal = <AttachmentPersistenceKey>[];
-      final rooms = <_AttachmentRoomKey>{};
-      for (final account in _snapshot.accounts.values) {
-        for (final job in account.jobs.values) {
-          final key = _jobKey(account.accountId, job.jobId);
-          if (_isSourceReleasePhase(job.phase)) {
-            terminal.add(key);
-          } else if (!_isTerminal(job.phase)) {
-            rooms.add(
-              _AttachmentRoomKey(account.accountId, job.draft.roomToken),
-            );
-          }
+    _startupMaintenance = Future<void>.microtask(_runStartupMaintenance);
+  }
+
+  Future<void> _runStartupMaintenance() async {
+    final terminal = <AttachmentPersistenceKey>[];
+    final rooms = <_AttachmentRoomKey>{};
+    for (final account in _snapshot.accounts.values) {
+      for (final job in account.jobs.values) {
+        final key = _jobKey(account.accountId, job.jobId);
+        if (_isSourceReleasePhase(job.phase)) {
+          terminal.add(key);
+        } else if (!_isTerminal(job.phase)) {
+          rooms.add(_AttachmentRoomKey(account.accountId, job.draft.roomToken));
         }
       }
-      for (final key in terminal) {
-        await _releaseTerminalSource(key);
-      }
-      for (final room in rooms) {
-        unawaited(_scheduleRoom(room));
-      }
-    });
+    }
+    for (final key in terminal) {
+      await _releaseTerminalSource(key);
+    }
+    for (final room in rooms) {
+      unawaited(_scheduleRoom(room));
+    }
   }
 
   void _queueConfirmationSnapshot(AttachmentConfirmationSnapshot snapshot) {
@@ -612,12 +633,27 @@ final class AttachmentService {
       if (_closed) {
         return;
       }
+      await _reconcileObservedConfirmationsWithRetry(snapshot);
+    }();
+  }
+
+  Future<void> _reconcileObservedConfirmationsWithRetry(
+    AttachmentConfirmationSnapshot snapshot,
+  ) async {
+    for (var attempt = 0; ; attempt++) {
+      if (_closed) {
+        return;
+      }
       try {
         await _reconcileObservedConfirmations(snapshot);
+        return;
       } on Object {
-        // Database observation never authorizes a transport retry or resend.
+        if (attempt >= _localPersistenceRetryDelays.length) {
+          return;
+        }
+        await Future<void>.delayed(_localPersistenceRetryDelays[attempt]);
       }
-    }();
+    }
   }
 
   Future<void> _reconcileObservedConfirmations(
@@ -1022,7 +1058,7 @@ final class AttachmentService {
         result.outcome != AttachmentRuntimeOutcome.unchanged) {
       metadata = metadata.copyWith(automaticRetryCount: 0, nextAttemptAt: null);
     }
-    await _repository.persistTransition(
+    await _persistTransition(
       account: account,
       job: job,
       metadata: metadata,
@@ -1039,7 +1075,7 @@ final class AttachmentService {
     final accountId = AccountId.parse(key.accountId);
     final jobId = AttachmentJobId.parse(key.jobId);
     final account = _snapshot.accounts[accountId]!;
-    return _repository.persistTransition(
+    return _persistTransition(
       account: account,
       job: account.jobs[jobId]!,
       metadata: metadata,
@@ -1061,30 +1097,102 @@ final class AttachmentService {
 
   Future<void> _releaseTerminalSource(AttachmentPersistenceKey key) async {
     await _releaseVerifiedSource(key);
-    final job = _jobForKey(key);
-    final metadata = _metadata[key];
-    if (job == null || metadata == null || metadata.sourceReleased) {
+    Completer<void>? claim;
+    AttachmentJob? claimedJob;
+    var ownsClaim = false;
+    await _stateMutex.protect(() async {
+      final active = _terminalSourceReleases[key];
+      if (active != null) {
+        claim = active;
+        return;
+      }
+      final job = _jobForKey(key);
+      final metadata = _metadata[key];
+      if (job == null || metadata == null || metadata.sourceReleased) {
+        return;
+      }
+      claim = Completer<void>();
+      claimedJob = job;
+      ownsClaim = true;
+      _terminalSourceReleases[key] = claim!;
+    });
+    final activeClaim = claim;
+    if (activeClaim == null) {
       return;
     }
+    if (ownsClaim) {
+      unawaited(_executeTerminalSourceRelease(key, claimedJob!, activeClaim));
+    }
+    await activeClaim.future;
+  }
+
+  Future<void> _executeTerminalSourceRelease(
+    AttachmentPersistenceKey key,
+    AttachmentJob job,
+    Completer<void> claim,
+  ) async {
+    Object? failure;
+    StackTrace? failureStack;
+    var released = false;
     try {
       await _releaseSource(job.draft.source);
-      final updated = metadata.copyWith(
-        sourceReleased: true,
-        localCleanupError: null,
-      );
-      await _stateMutex.protect(() async {
-        await _persistCurrentJob(key, updated);
-        _metadata[key] = updated;
-      });
+      released = true;
     } on Object {
-      final updated = metadata.copyWith(
-        sourceReleased: false,
-        localCleanupError: 'local-source-cleanup-failed',
+      released = false;
+    }
+    try {
+      await _recordTerminalSourceRelease(
+        key,
+        released: released,
+        error: released ? null : 'local-source-cleanup-failed',
       );
+    } on Object catch (error, stackTrace) {
+      failure = error;
+      failureStack = stackTrace;
+    }
+    try {
       await _stateMutex.protect(() async {
-        await _persistCurrentJob(key, updated);
-        _metadata[key] = updated;
+        if (identical(_terminalSourceReleases[key], claim)) {
+          _terminalSourceReleases.remove(key);
+        }
       });
+    } on Object catch (error, stackTrace) {
+      failure ??= error;
+      failureStack ??= stackTrace;
+    }
+    if (failure == null) {
+      claim.complete();
+    } else {
+      claim.completeError(failure, failureStack);
+    }
+  }
+
+  Future<void> _recordTerminalSourceRelease(
+    AttachmentPersistenceKey key, {
+    required bool released,
+    required String? error,
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await _stateMutex.protect(() async {
+          final metadata = _metadata[key];
+          if (metadata == null) {
+            return;
+          }
+          final updated = metadata.copyWith(
+            sourceReleased: released,
+            localCleanupError: error,
+          );
+          _metadata[key] = updated;
+          await _persistCurrentJob(key, updated);
+        });
+        return;
+      } on Object {
+        if (attempt >= _localPersistenceRetryDelays.length) {
+          rethrow;
+        }
+        await Future<void>.delayed(_localPersistenceRetryDelays[attempt]);
+      }
     }
   }
 

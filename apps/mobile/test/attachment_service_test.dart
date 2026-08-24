@@ -199,6 +199,52 @@ void main() {
     },
   );
 
+  test('close waits for startup terminal source release', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final jobId = await fixture.seedTerminal(messageId: 108);
+    final releaseStarted = Completer<void>();
+    final allowRelease = Completer<void>();
+    var releaseCalls = 0;
+    final service = fixture.service(
+      _unexpectedClient(),
+      releaseSource: (source) async {
+        releaseCalls++;
+        if (!releaseStarted.isCompleted) {
+          releaseStarted.complete();
+        }
+        await allowRelease.future;
+        final file = File.fromUri(Uri.parse(source.handle.value));
+        if (await file.exists()) {
+          await file.delete();
+        }
+      },
+    );
+    addTearDown(() async {
+      if (!allowRelease.isCompleted) {
+        allowRelease.complete();
+      }
+      await service.close();
+    });
+
+    await service.ready;
+    var closeCompleted = false;
+    final close = service.close().whenComplete(() => closeCompleted = true);
+    await releaseStarted.future.timeout(const Duration(seconds: 1));
+    await pumpEventQueue(times: 10);
+
+    expect(closeCompleted, isFalse);
+    allowRelease.complete();
+    await close;
+    final stored = await fixture.repository.getStoredJob(
+      accountId: 'account-a',
+      jobId: jobId.value,
+    );
+
+    expect(releaseCalls, 1);
+    expect(stored?.sourceReleased, isTrue);
+  });
+
   test(
     'multiple cached matches stay ambiguous without an observer loop',
     () async {
@@ -309,6 +355,70 @@ void main() {
   );
 
   test(
+    'observed confirmation retries locally after one persistence failure',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final jobId = await fixture.seedInFlight(AttachmentRequestStep.finalize);
+      final controller = StreamController<AttachmentConfirmationSnapshot>();
+      addTearDown(controller.close);
+      var completedPersistAttempts = 0;
+      final service = fixture.service(
+        _unexpectedClient(),
+        watchConfirmationCandidates: () => controller.stream,
+        persistTransition:
+            ({
+              required account,
+              required job,
+              required metadata,
+              required updatedAt,
+            }) async {
+              if (job.phase == AttachmentJobPhase.completed &&
+                  !metadata.sourceReleased) {
+                completedPersistAttempts++;
+                if (completedPersistAttempts == 1) {
+                  throw StateError('Synthetic one-shot persistence failure');
+                }
+              }
+              await fixture.repository.persistTransition(
+                account: account,
+                job: job,
+                metadata: metadata,
+                updatedAt: updatedAt,
+              );
+            },
+      );
+      addTearDown(service.close);
+      await service.ready;
+      await service
+          .watchJob(accountId: AccountId.parse('account-a'), jobId: jobId)
+          .firstWhere(
+            (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+          );
+
+      controller.add(
+        AttachmentConfirmationSnapshot(<AttachmentConfirmationBatch>[
+          AttachmentConfirmationBatch(
+            accountId: AccountId.parse('account-a'),
+            jobId: jobId,
+            confirmations: <AttachmentMessageConfirmation>[
+              fixture.confirmation(jobId, messageId: 109),
+            ],
+          ),
+        ]),
+      );
+      final completed = await service
+          .watchJob(accountId: AccountId.parse('account-a'), jobId: jobId)
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed)
+          .timeout(const Duration(seconds: 2));
+
+      expect(completed.messageIds, [109]);
+      expect(completedPersistAttempts, 2);
+      await _expectFileRemoved(fixture.sourceFile);
+    },
+  );
+
+  test(
     'cancel aborts upload, cleans remote draft, and releases source',
     () async {
       final fixture = await _Fixture.create();
@@ -348,6 +458,62 @@ void main() {
       expect(await fixture.sourceFile.exists(), isFalse);
     },
   );
+
+  test('concurrent cancel releases a terminal source once', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final releaseStarted = Completer<void>();
+    final allowRelease = Completer<void>();
+    var releaseCalls = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_ocsFailure(400), 400);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      releaseSource: (source) async {
+        final call = ++releaseCalls;
+        if (!releaseStarted.isCompleted) {
+          releaseStarted.complete();
+        }
+        await allowRelease.future;
+        if (call > 1) {
+          throw StateError('Synthetic duplicate release failure');
+        }
+        final file = File.fromUri(Uri.parse(source.handle.value));
+        if (await file.exists()) {
+          await file.delete();
+        }
+      },
+    );
+    addTearDown(() async {
+      if (!allowRelease.isCompleted) {
+        allowRelease.complete();
+      }
+      await service.close();
+    });
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    await session.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.failed,
+    );
+    final firstCancel = session.cancel();
+    await releaseStarted.future.timeout(const Duration(seconds: 1));
+    final secondCancel = session.cancel();
+    await pumpEventQueue(times: 20);
+
+    expect(releaseCalls, 1);
+    allowRelease.complete();
+    await Future.wait<void>([firstCancel, secondCancel]);
+    final stored = await fixture.repository.getStoredJob(
+      accountId: session.accountId.value,
+      jobId: session.jobId.value,
+    );
+
+    expect(stored?.sourceReleased, isTrue);
+    expect(stored?.localCleanupError, isNull);
+  });
 
   test(
     'bounds automatic retries without deleting the pending source',
@@ -709,20 +875,24 @@ final class _Fixture {
     List<Duration> retryDelays = const [Duration(milliseconds: 1)],
     AttachmentSourceProvider? sourceProvider,
     WatchAttachmentConfirmationCandidates? watchConfirmationCandidates,
+    PersistAttachmentTransition? persistTransition,
+    ReleaseDurableAttachmentSource? releaseSource,
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
     return AttachmentService(
       repository: repository,
       credentials: credentials,
-      releaseSource: (source) async {
-        if (source.ownership != AttachmentSourceOwnership.appOwnedCopy) {
-          return;
-        }
-        final file = File.fromUri(Uri.parse(source.handle.value));
-        if (await file.exists()) {
-          await file.delete();
-        }
-      },
+      releaseSource:
+          releaseSource ??
+          (source) async {
+            if (source.ownership != AttachmentSourceOwnership.appOwnedCopy) {
+              return;
+            }
+            final file = File.fromUri(Uri.parse(source.handle.value));
+            if (await file.exists()) {
+              await file.delete();
+            }
+          },
       transport: HttpAttachmentTransport(
         client: client,
         sourceProvider: sources,
@@ -730,6 +900,7 @@ final class _Fixture {
       identifierFactory: _IdentifierFactory(),
       retryDelays: retryDelays,
       watchConfirmationCandidates: watchConfirmationCandidates,
+      persistTransition: persistTransition,
     );
   }
 
@@ -871,6 +1042,51 @@ final class _Fixture {
         localCleanupError: null,
         createdAt: DateTime.utc(2026, 8, 24),
       ),
+      updatedAt: DateTime.utc(2026, 8, 24),
+    );
+    return jobId;
+  }
+
+  Future<AttachmentJobId> seedTerminal({required int messageId}) async {
+    final jobId = await seedInFlight(AttachmentRequestStep.finalize);
+    final accountId = AccountId.parse('account-a');
+    final key = (accountId: accountId.value, jobId: jobId.value);
+    final loaded = await repository.loadRuntime();
+    var snapshot = loaded.snapshot;
+    final metadata = loaded.metadata[key]!;
+    final recovered = recoverAttachmentAfterRestart(
+      snapshot,
+      accountId: accountId,
+      jobId: jobId,
+    );
+    if (!recovered.canCommit) {
+      throw StateError('Synthetic terminal job recovery failed');
+    }
+    snapshot = recovered.plan!.commit(snapshot);
+    var account = snapshot.accounts[accountId]!;
+    await repository.persistTransition(
+      account: account,
+      job: account.jobs[jobId]!,
+      metadata: metadata,
+      updatedAt: DateTime.utc(2026, 8, 24),
+    );
+    final completed = reconcileAttachmentConfirmation(
+      snapshot,
+      accountId: accountId,
+      jobId: jobId,
+      confirmations: <AttachmentMessageConfirmation>[
+        confirmation(jobId, messageId: messageId),
+      ],
+    );
+    if (!completed.canCommit) {
+      throw StateError('Synthetic terminal job confirmation failed');
+    }
+    snapshot = completed.plan!.commit(snapshot);
+    account = snapshot.accounts[accountId]!;
+    await repository.persistTransition(
+      account: account,
+      job: account.jobs[jobId]!,
+      metadata: metadata,
       updatedAt: DateTime.utc(2026, 8, 24),
     );
     return jobId;
