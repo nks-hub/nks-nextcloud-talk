@@ -155,6 +155,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
   ref,
 ) async {
   final source = await ref.watch(attachmentSourceProvider.future);
+  final chat = ref.watch(chatServiceProvider);
   final service = AttachmentService(
     repository: ref.watch(attachmentRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
@@ -163,6 +164,13 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
       client: http.Client(),
       sourceProvider: source,
     ),
+    catchUpConfirmation:
+        ({required accountId, required roomToken, required threadId}) =>
+            chat.syncRoom(
+              accountId: accountId.value,
+              roomToken: roomToken.value,
+              threadId: threadId,
+            ),
   );
   ref.onDispose(() {
     unawaited(service.close());
@@ -260,6 +268,7 @@ final giphyRepositoryProvider = FutureProvider.autoDispose
     });
 
 final accountsProvider = StreamProvider<List<StoredAccount>>((ref) {
+  ref.watch(attachmentServiceProvider);
   return ref.watch(accountRepositoryProvider).watchAccounts();
 });
 

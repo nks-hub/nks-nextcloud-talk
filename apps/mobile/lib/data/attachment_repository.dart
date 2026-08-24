@@ -174,6 +174,52 @@ final class AttachmentRepository {
     }).distinct();
   }
 
+  Future<AttachmentConfirmationBatch?> loadConfirmationCandidates({
+    required String accountId,
+    required String jobId,
+  }) async {
+    final jobs = _database.attachmentJobs;
+    final accounts = _database.accounts;
+    final messages = _database.cachedChatMessages;
+    final query =
+        _database.select(jobs).join([
+          innerJoin(
+            accounts,
+            accounts.id.equalsExp(jobs.accountId) &
+                accounts.serverUrl.equalsExp(jobs.serverUrl),
+          ),
+          innerJoin(
+            messages,
+            messages.accountId.equalsExp(jobs.accountId) &
+                messages.roomToken.equalsExp(jobs.roomToken) &
+                messages.referenceId.equalsExp(jobs.referenceId),
+          ),
+        ])..where(
+          jobs.accountId.equals(accountId) &
+              jobs.jobId.equals(jobId) &
+              jobs.phase.equals(AttachmentJobPhase.awaitingConfirmation.name),
+        );
+    _ConfirmationAccumulator? accumulator;
+    for (final row in await query.get()) {
+      final job = row.readTable(jobs);
+      final account = row.readTable(accounts);
+      final message = row.readTable(messages);
+      final confirmation = _confirmationFromCache(
+        account: account,
+        row: message,
+      );
+      if (confirmation == null) {
+        continue;
+      }
+      accumulator ??= _ConfirmationAccumulator(
+        accountId: AccountId.parse(job.accountId),
+        jobId: AttachmentJobId.parse(job.jobId),
+      );
+      accumulator.confirmations[confirmation.messageId] = confirmation;
+    }
+    return accumulator?.build();
+  }
+
   Future<StoredAttachmentJob?> getStoredJob({
     required String accountId,
     required String jobId,

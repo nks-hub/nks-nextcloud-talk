@@ -303,6 +303,17 @@ void main() {
       expect(snapshot.batches, hasLength(1));
       expect(snapshot.batches.single.accountId.value, 'account-a');
       expect(snapshot.batches.single.confirmations.single.messageId, 405);
+      final targeted = await repository.loadConfirmationCandidates(
+        accountId: 'account-a',
+        jobId: snapshot.batches.single.jobId.value,
+      );
+      final drifted = await repository.loadConfirmationCandidates(
+        accountId: 'account-c',
+        jobId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      );
+
+      expect(targeted?.confirmations.single.messageId, 405);
+      expect(drifted, isNull);
     },
   );
 }

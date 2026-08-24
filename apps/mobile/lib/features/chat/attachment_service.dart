@@ -20,6 +20,13 @@ typedef PersistAttachmentTransition =
       required AttachmentExecutionMetadata metadata,
       required DateTime updatedAt,
     });
+typedef CatchUpAttachmentConfirmation =
+    Future<void> Function({
+      required AccountId accountId,
+      required ConversationToken roomToken,
+      required int? threadId,
+    });
+typedef BeforeAttachmentRoomIdle = Future<void> Function();
 
 abstract interface class AttachmentIdentifierFactory {
   AttachmentJobId newJobId();
@@ -150,6 +157,13 @@ final class AttachmentService {
     DateTime Function()? clock,
     WatchAttachmentConfirmationCandidates? watchConfirmationCandidates,
     PersistAttachmentTransition? persistTransition,
+    CatchUpAttachmentConfirmation? catchUpConfirmation,
+    BeforeAttachmentRoomIdle? beforeRoomIdle,
+    List<Duration> confirmationRetryDelays = const <Duration>[
+      Duration(seconds: 2),
+      Duration(seconds: 10),
+      Duration(minutes: 1),
+    ],
     List<Duration> retryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -158,6 +172,12 @@ final class AttachmentService {
   }) {
     if (retryDelays.any((delay) => delay < Duration.zero)) {
       throw ArgumentError.value(retryDelays, 'retryDelays');
+    }
+    if (confirmationRetryDelays.any((delay) => delay < Duration.zero)) {
+      throw ArgumentError.value(
+        confirmationRetryDelays,
+        'confirmationRetryDelays',
+      );
     }
     final service = AttachmentService._(
       repository: repository,
@@ -169,6 +189,11 @@ final class AttachmentService {
       watchConfirmationCandidates:
           watchConfirmationCandidates ?? repository.watchConfirmationCandidates,
       persistTransition: persistTransition ?? repository.persistTransition,
+      catchUpConfirmation: catchUpConfirmation,
+      beforeRoomIdle: beforeRoomIdle,
+      confirmationRetryDelays: List<Duration>.unmodifiable(
+        confirmationRetryDelays,
+      ),
       retryDelays: List<Duration>.unmodifiable(retryDelays),
     );
     service._ready = service._initialize();
@@ -184,6 +209,9 @@ final class AttachmentService {
     required this._clock,
     required this._watchConfirmationCandidates,
     required this._persistTransition,
+    required this._catchUpConfirmation,
+    required this._beforeRoomIdle,
+    required this._confirmationRetryDelays,
     required this._retryDelays,
   });
 
@@ -195,10 +223,17 @@ final class AttachmentService {
   final DateTime Function() _clock;
   final WatchAttachmentConfirmationCandidates _watchConfirmationCandidates;
   final PersistAttachmentTransition _persistTransition;
+  final CatchUpAttachmentConfirmation? _catchUpConfirmation;
+  final BeforeAttachmentRoomIdle? _beforeRoomIdle;
+  final List<Duration> _confirmationRetryDelays;
   final List<Duration> _retryDelays;
   final _AsyncMutex _stateMutex = _AsyncMutex();
   final Map<_AttachmentRoomKey, Future<void>> _roomRuns = {};
+  final Set<_AttachmentRoomKey> _roomRerunRequests = {};
   final Map<_AttachmentRoomKey, Timer> _retryTimers = {};
+  final Map<AttachmentPersistenceKey, Future<void>> _confirmationCatchUps = {};
+  final Map<AttachmentPersistenceKey, Timer> _confirmationRetryTimers = {};
+  final Map<AttachmentPersistenceKey, int> _confirmationRetryCounts = {};
   final Map<AttachmentPersistenceKey, AttachmentVerifiedSource>
   _verifiedSources = {};
   final Map<AttachmentPersistenceKey, AttachmentCancellationController>
@@ -404,6 +439,7 @@ final class AttachmentService {
       await active;
     }
     if (_jobForKey(key)?.phase == AttachmentJobPhase.cancelled) {
+      _clearConfirmationCatchUp(key);
       await _releaseTerminalSource(key);
     }
     await _scheduleRoom(roomKey);
@@ -535,6 +571,7 @@ final class AttachmentService {
       }
     });
     for (final key in completed) {
+      _clearConfirmationCatchUp(key);
       await _releaseTerminalSource(key);
     }
     for (final room in rooms) {
@@ -557,10 +594,19 @@ final class AttachmentService {
       timer.cancel();
     }
     _retryTimers.clear();
+    for (final timer in _confirmationRetryTimers.values) {
+      timer.cancel();
+    }
+    _confirmationRetryTimers.clear();
+    _confirmationRetryCounts.clear();
+    _roomRerunRequests.clear();
     for (final cancellation in _cancellations.values) {
       cancellation.cancel();
     }
     await Future.wait<void>(_roomRuns.values.toList(growable: false));
+    await Future.wait<void>(
+      _confirmationCatchUps.values.toList(growable: false),
+    );
     for (final entry in _verifiedSources.entries.toList(growable: false)) {
       try {
         await _transport.releaseSource(entry.value);
@@ -603,6 +649,7 @@ final class AttachmentService {
 
   Future<void> _runStartupMaintenance() async {
     final terminal = <AttachmentPersistenceKey>[];
+    final awaitingConfirmation = <AttachmentPersistenceKey>[];
     final rooms = <_AttachmentRoomKey>{};
     for (final account in _snapshot.accounts.values) {
       for (final job in account.jobs.values) {
@@ -610,12 +657,18 @@ final class AttachmentService {
         if (_isSourceReleasePhase(job.phase)) {
           terminal.add(key);
         } else if (!_isTerminal(job.phase)) {
+          if (job.phase == AttachmentJobPhase.awaitingConfirmation) {
+            awaitingConfirmation.add(key);
+          }
           rooms.add(_AttachmentRoomKey(account.accountId, job.draft.roomToken));
         }
       }
     }
     for (final key in terminal) {
       await _releaseTerminalSource(key);
+    }
+    for (final key in awaitingConfirmation) {
+      _queueConfirmationCatchUp(key);
     }
     for (final room in rooms) {
       unawaited(_scheduleRoom(room));
@@ -693,6 +746,7 @@ final class AttachmentService {
       });
       final key = completedKey;
       if (key != null) {
+        _clearConfirmationCatchUp(key);
         await _releaseTerminalSource(key);
       }
       final room = completedRoom;
@@ -702,23 +756,123 @@ final class AttachmentService {
     }
   }
 
+  void _queueConfirmationCatchUp(AttachmentPersistenceKey key) {
+    if (_closed || _catchUpConfirmation == null) {
+      return;
+    }
+    _confirmationRetryTimers.remove(key)?.cancel();
+    if (_confirmationCatchUps.containsKey(key)) {
+      return;
+    }
+    late final Future<void> operation;
+    operation = _runConfirmationCatchUp(key).whenComplete(() {
+      if (identical(_confirmationCatchUps[key], operation)) {
+        _confirmationCatchUps.remove(key);
+      }
+    });
+    _confirmationCatchUps[key] = operation;
+  }
+
+  Future<void> _runConfirmationCatchUp(AttachmentPersistenceKey key) async {
+    var shouldRetry = false;
+    try {
+      final job = _jobForKey(key);
+      if (job == null || job.phase != AttachmentJobPhase.awaitingConfirmation) {
+        _clearConfirmationCatchUp(key);
+        return;
+      }
+      await _catchUpConfirmation!(
+        accountId: job.accountId,
+        roomToken: job.draft.roomToken,
+        threadId: job.draft.metadata.threadId,
+      );
+      if (_closed) {
+        return;
+      }
+      final current = _jobForKey(key);
+      if (current == null ||
+          current.phase != AttachmentJobPhase.awaitingConfirmation) {
+        _clearConfirmationCatchUp(key);
+        return;
+      }
+      final batch = await _repository.loadConfirmationCandidates(
+        accountId: key.accountId,
+        jobId: key.jobId,
+      );
+      if (batch == null) {
+        shouldRetry = true;
+      } else {
+        await _reconcileObservedConfirmations(
+          AttachmentConfirmationSnapshot(<AttachmentConfirmationBatch>[batch]),
+        );
+        if (_jobForKey(key)?.phase == AttachmentJobPhase.completed) {
+          _clearConfirmationCatchUp(key);
+        }
+      }
+    } on Object {
+      shouldRetry = true;
+    }
+    if (shouldRetry && !_closed) {
+      _scheduleConfirmationRetry(key);
+    }
+  }
+
+  void _scheduleConfirmationRetry(AttachmentPersistenceKey key) {
+    if (_closed ||
+        _catchUpConfirmation == null ||
+        _confirmationRetryTimers.containsKey(key)) {
+      return;
+    }
+    final retryCount = _confirmationRetryCounts[key] ?? 0;
+    if (retryCount >= _confirmationRetryDelays.length) {
+      return;
+    }
+    _confirmationRetryCounts[key] = retryCount + 1;
+    _confirmationRetryTimers[key] = Timer(
+      _confirmationRetryDelays[retryCount],
+      () {
+        _confirmationRetryTimers.remove(key);
+        _queueConfirmationCatchUp(key);
+      },
+    );
+  }
+
+  void _clearConfirmationCatchUp(AttachmentPersistenceKey key) {
+    _confirmationRetryTimers.remove(key)?.cancel();
+    _confirmationRetryCounts.remove(key);
+  }
+
   Future<void> _scheduleRoom(_AttachmentRoomKey roomKey) async {
     await _ready;
     if (_closed) {
       return;
     }
+    _roomRerunRequests.add(roomKey);
     final active = _roomRuns[roomKey];
     if (active != null) {
       return active;
     }
     late final Future<void> run;
-    run = _runRoom(roomKey).whenComplete(() {
+    run = _drainRoom(roomKey).whenComplete(() {
       if (identical(_roomRuns[roomKey], run)) {
         _roomRuns.remove(roomKey);
+      }
+      if (!_closed && _roomRerunRequests.remove(roomKey)) {
+        unawaited(_scheduleRoom(roomKey));
       }
     });
     _roomRuns[roomKey] = run;
     return run;
+  }
+
+  Future<void> _drainRoom(_AttachmentRoomKey roomKey) async {
+    while (!_closed) {
+      _roomRerunRequests.remove(roomKey);
+      await _runRoom(roomKey);
+      if (!_roomRerunRequests.contains(roomKey)) {
+        return;
+      }
+    }
   }
 
   Future<void> _runRoom(_AttachmentRoomKey roomKey) async {
@@ -727,6 +881,7 @@ final class AttachmentService {
         () async => _selectNextJob(roomKey),
       );
       if (selection == null) {
+        await _beforeRoomIdle?.call();
         return;
       }
       final progressed = await _executeOneStep(selection);
@@ -755,8 +910,10 @@ final class AttachmentService {
       if (_isTerminal(phase)) {
         continue;
       }
-      if (phase == AttachmentJobPhase.awaitingConfirmation ||
-          phase == AttachmentJobPhase.finalizing ||
+      if (phase == AttachmentJobPhase.awaitingConfirmation) {
+        continue;
+      }
+      if (phase == AttachmentJobPhase.finalizing ||
           phase == AttachmentJobPhase.probing ||
           phase == AttachmentJobPhase.uploading &&
               job.inFlightRequest != null) {
@@ -831,6 +988,7 @@ final class AttachmentService {
       }
 
       AttachmentRequest? request;
+      var planningRejected = false;
       await _stateMutex.protect(() async {
         final currentJob = _jobForKey(key);
         if (cancellation.isCancelled ||
@@ -858,6 +1016,7 @@ final class AttachmentService {
           sourceObservation: observation,
         );
         if (!result.canCommit) {
+          planningRejected = true;
           return;
         }
         await _commitTransition(result, key);
@@ -866,6 +1025,9 @@ final class AttachmentService {
       });
       final plannedRequest = request;
       if (plannedRequest == null) {
+        if (planningRejected) {
+          return false;
+        }
         final current = _jobForKey(key);
         if (current != null && _isSourceReleasePhase(current.phase)) {
           await _releaseTerminalSource(key);
@@ -928,6 +1090,9 @@ final class AttachmentService {
         current.phase == AttachmentJobPhase.awaitingConfirmation ||
         _isSourceReleasePhase(current.phase)) {
       await _releaseVerifiedSource(key);
+    }
+    if (current.phase == AttachmentJobPhase.awaitingConfirmation) {
+      _queueConfirmationCatchUp(key);
     }
     if (_isSourceReleasePhase(current.phase)) {
       await _releaseTerminalSource(key);

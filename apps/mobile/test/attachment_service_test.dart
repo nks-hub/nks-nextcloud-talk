@@ -199,6 +199,161 @@ void main() {
     },
   );
 
+  test(
+    'startup catch-up retries and reconciles only authoritative cache',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final jobId = await fixture.seedInFlight(AttachmentRequestStep.finalize);
+      var catchUpCalls = 0;
+      final service = fixture.service(
+        _unexpectedClient(),
+        watchConfirmationCandidates: () => const Stream.empty(),
+        confirmationRetryDelays: const <Duration>[Duration.zero],
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              expect(accountId.value, 'account-a');
+              expect(roomToken.value, 'rooma123');
+              expect(threadId, isNull);
+              catchUpCalls++;
+              if (catchUpCalls == 1) {
+                throw StateError('Synthetic first catch-up failure');
+              }
+              await fixture.cacheConfirmation(messageId: 110);
+            },
+      );
+      addTearDown(service.close);
+
+      await service.ready;
+      final completed = await service
+          .watchJob(accountId: AccountId.parse('account-a'), jobId: jobId)
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed)
+          .timeout(const Duration(seconds: 2));
+
+      expect(catchUpCalls, 2);
+      expect(completed.messageIds, [110]);
+      await _expectFileRemoved(fixture.sourceFile);
+    },
+  );
+
+  test('pending confirmation allows a later room DAV upload', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var uploaded = 0;
+    var finalized = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          uploaded++;
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          finalized++;
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    await first.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+    );
+    final second = await service.enqueue(fixture.request(normalMaximum: 32));
+    final secondUploaded = await second.events
+        .firstWhere((event) => event.phase == AttachmentJobPhase.uploaded)
+        .timeout(const Duration(seconds: 2));
+
+    expect(secondUploaded.phase, AttachmentJobPhase.uploaded);
+    expect(uploaded, 2);
+    expect(finalized, 1);
+    await fixture.cacheConfirmation(messageId: 112);
+    await first.events.firstWhere(
+      (event) => event.phase == AttachmentJobPhase.completed,
+    );
+    await second.events
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    expect(finalized, 2);
+  });
+
+  test(
+    'room scheduler reruns work enqueued while its run becomes idle',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final idleReached = Completer<void>();
+      final releaseIdle = Completer<void>();
+      var idleCount = 0;
+      var finalized = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            finalized++;
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        identifierFactory: _SequentialIdentifierFactory(),
+        beforeRoomIdle: () async {
+          idleCount++;
+          if (idleCount == 2) {
+            idleReached.complete();
+            await releaseIdle.future;
+          }
+        },
+      );
+      addTearDown(() async {
+        if (!releaseIdle.isCompleted) {
+          releaseIdle.complete();
+        }
+        await service.close();
+      });
+
+      final first = await service.enqueue(fixture.request(normalMaximum: 32));
+      await first.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+      );
+      await fixture.cacheConfirmation(messageId: 111);
+      await first.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.completed,
+      );
+      await idleReached.future.timeout(const Duration(seconds: 2));
+      await fixture.sourceFile.writeAsBytes(fixture.bytes, flush: true);
+
+      final second = await service.enqueue(fixture.request(normalMaximum: 32));
+      releaseIdle.complete();
+      await second.events
+          .firstWhere(
+            (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+          )
+          .timeout(const Duration(seconds: 2));
+
+      expect(finalized, 2);
+    },
+  );
+
   test('close waits for startup terminal source release', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -877,6 +1032,10 @@ final class _Fixture {
     WatchAttachmentConfirmationCandidates? watchConfirmationCandidates,
     PersistAttachmentTransition? persistTransition,
     ReleaseDurableAttachmentSource? releaseSource,
+    CatchUpAttachmentConfirmation? catchUpConfirmation,
+    BeforeAttachmentRoomIdle? beforeRoomIdle,
+    List<Duration> confirmationRetryDelays = const <Duration>[],
+    AttachmentIdentifierFactory? identifierFactory,
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
     return AttachmentService(
@@ -897,10 +1056,13 @@ final class _Fixture {
         client: client,
         sourceProvider: sources,
       ),
-      identifierFactory: _IdentifierFactory(),
+      identifierFactory: identifierFactory ?? _IdentifierFactory(),
       retryDelays: retryDelays,
       watchConfirmationCandidates: watchConfirmationCandidates,
       persistTransition: persistTransition,
+      catchUpConfirmation: catchUpConfirmation,
+      beforeRoomIdle: beforeRoomIdle,
+      confirmationRetryDelays: confirmationRetryDelays,
     );
   }
 
@@ -1265,6 +1427,32 @@ final class _IdentifierFactory implements AttachmentIdentifierFactory {
   @override
   DavUploadSessionId newUploadSessionId() =>
       DavUploadSessionId.parse('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+}
+
+final class _SequentialIdentifierFactory
+    implements AttachmentIdentifierFactory {
+  int _job = 0;
+  int _reference = 0;
+  int _request = 0;
+  int _upload = 0;
+
+  @override
+  AttachmentJobId newJobId() =>
+      AttachmentJobId.parse('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${++_job}');
+
+  @override
+  AttachmentRequestId newRequestId() =>
+      AttachmentRequestId.parse('attachment-request-${++_request}');
+
+  @override
+  ChatReferenceId newReferenceId() => ChatReferenceId.parse(
+    '11111111-1111-4111-8111-11111111111${++_reference}',
+  );
+
+  @override
+  DavUploadSessionId newUploadSessionId() => DavUploadSessionId.parse(
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${++_upload}',
+  );
 }
 
 http.Client _unexpectedClient() => MockClient((request) async {
