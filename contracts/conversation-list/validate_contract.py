@@ -728,8 +728,7 @@ def negotiate_conversation_profile(
         )
         if errors:
             raise ResponseSemanticError(
-                "Cursor-v4 response violates the wire schema: "
-                + "; ".join(errors)
+                "Cursor-v4 response violates the wire schema: " + "; ".join(errors)
             )
         classification, _ = classify_response(probe.get("instance"), "200")
         if classification == "ocs-error":

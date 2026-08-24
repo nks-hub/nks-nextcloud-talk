@@ -35,7 +35,9 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def resolve_pointer(document: dict[str, Any], reference: str) -> Any:
     if not reference.startswith("#/"):
-        raise ContractValidationError(f"Only local references are supported: {reference}")
+        raise ContractValidationError(
+            f"Only local references are supported: {reference}"
+        )
 
     current: Any = document
     for raw_part in reference[2:].split("/"):
@@ -43,7 +45,9 @@ def resolve_pointer(document: dict[str, Any], reference: str) -> Any:
         try:
             current = current[part]
         except (KeyError, TypeError) as error:
-            raise ContractValidationError(f"Unresolvable reference: {reference}") from error
+            raise ContractValidationError(
+                f"Unresolvable reference: {reference}"
+            ) from error
     return current
 
 
@@ -60,12 +64,16 @@ def expand_references(
     if "$ref" in value:
         reference = value["$ref"]
         if reference in reference_stack:
-            raise ContractValidationError(f"Circular reference is not supported: {reference}")
+            raise ContractValidationError(
+                f"Circular reference is not supported: {reference}"
+            )
         target = deepcopy(resolve_pointer(document, reference))
         siblings = {key: item for key, item in value.items() if key != "$ref"}
         if siblings:
             if not isinstance(target, dict):
-                raise ContractValidationError(f"Reference siblings require an object: {reference}")
+                raise ContractValidationError(
+                    f"Reference siblings require an object: {reference}"
+                )
             target.update(siblings)
         return expand_references(target, document, reference_stack + (reference,))
 
@@ -128,7 +136,9 @@ def response_schema(
 ) -> dict[str, Any]:
     status = fixture.get("status")
     media_type = fixture.get("mediaType")
-    response = expand_references(operation.get("responses", {}).get(status, {}), document)
+    response = expand_references(
+        operation.get("responses", {}).get(status, {}), document
+    )
     try:
         return response["content"][media_type]["schema"]
     except KeyError as error:
@@ -144,7 +154,9 @@ def validate_json_schema(
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     return [
         error.message
-        for error in sorted(validator.iter_errors(instance), key=lambda item: list(item.path))
+        for error in sorted(
+            validator.iter_errors(instance), key=lambda item: list(item.path)
+        )
     ]
 
 
@@ -189,12 +201,16 @@ def assert_wire_round_trip(
         decoded_values = parse_qs(encoded, keep_blank_values=True, strict_parsing=True)
         decoded = {key: values[-1] for key, values in decoded_values.items()}
         if decoded != instance:
-            raise ContractValidationError(f"{fixture_name} failed {encoding} round trip")
+            raise ContractValidationError(
+                f"{fixture_name} failed {encoding} round trip"
+            )
         return
 
     if encoding == "indexed-form":
         notifications = instance.get("notifications", [])
-        pairs = [(f"notifications[{index}]", raw) for index, raw in enumerate(notifications)]
+        pairs = [
+            (f"notifications[{index}]", raw) for index, raw in enumerate(notifications)
+        ]
         encoded = urlencode(pairs)
         decoded_values = parse_qs(encoded, keep_blank_values=True, strict_parsing=True)
         indexed: list[tuple[int, str]] = []
@@ -207,27 +223,37 @@ def assert_wire_round_trip(
             indexed.append((int(match.group(1)), values[0]))
         indexed.sort(key=lambda item: item[0])
         if [index for index, _ in indexed] != list(range(len(notifications))):
-            raise ContractValidationError(f"{fixture_name} has a sparse indexed form array")
+            raise ContractValidationError(
+                f"{fixture_name} has a sparse indexed form array"
+            )
         if [value for _, value in indexed] != notifications:
-            raise ContractValidationError(f"{fixture_name} failed indexed form round trip")
+            raise ContractValidationError(
+                f"{fixture_name} failed indexed form round trip"
+            )
         return
 
     if encoding is not None:
-        raise ContractValidationError(f"{fixture_name} uses unknown wire encoding {encoding}")
+        raise ContractValidationError(
+            f"{fixture_name} uses unknown wire encoding {encoding}"
+        )
 
 
 def decode_base64(value: str, field_name: str) -> bytes:
     try:
         return base64.b64decode(value, validate=True)
     except ValueError as error:
-        raise ContractValidationError(f"{field_name} is not canonical base64") from error
+        raise ContractValidationError(
+            f"{field_name} is not canonical base64"
+        ) from error
 
 
 def load_rsa_public_key(public_key_pem: str) -> rsa.RSAPublicKey:
     try:
         public_key = serialization.load_pem_public_key(public_key_pem.encode("ascii"))
     except (ValueError, TypeError) as error:
-        raise ContractValidationError("userPublicKey is not a valid PEM public key") from error
+        raise ContractValidationError(
+            "userPublicKey is not a valid PEM public key"
+        ) from error
     if not isinstance(public_key, rsa.RSAPublicKey) or public_key.key_size != 2048:
         raise ContractValidationError("userPublicKey must contain a 2048-bit RSA key")
     return public_key
@@ -241,7 +267,9 @@ def verify_device_identity(instance: dict[str, Any]) -> None:
         "deviceIdentifierSignature",
     )
     if len(identifier_digest) != hashlib.sha512().digest_size:
-        raise ContractValidationError("deviceIdentifier must decode to a SHA-512 digest")
+        raise ContractValidationError(
+            "deviceIdentifier must decode to a SHA-512 digest"
+        )
     try:
         public_key.verify(
             signature,
@@ -250,7 +278,9 @@ def verify_device_identity(instance: dict[str, Any]) -> None:
             utils.Prehashed(hashes.SHA512()),
         )
     except ValueError as error:
-        raise ContractValidationError("device identity signature verification failed") from error
+        raise ContractValidationError(
+            "device identity signature verification failed"
+        ) from error
 
 
 def simulate_notification_batch(
@@ -342,8 +372,13 @@ def main() -> int:
     try:
         manifest = load_json(MANIFEST_PATH)
         contract_path = (FIXTURE_ROOT / manifest["contract"]).resolve()
-        if contract_path.parent != CONTRACT_ROOT or contract_path.name != "openapi.json":
-            raise ContractValidationError("Manifest contract must resolve to openapi.json")
+        if (
+            contract_path.parent != CONTRACT_ROOT
+            or contract_path.name != "openapi.json"
+        ):
+            raise ContractValidationError(
+                "Manifest contract must resolve to openapi.json"
+            )
         document = load_json(contract_path)
         validate_spec(document)
 
@@ -357,10 +392,14 @@ def main() -> int:
         seen_files: set[str] = set()
         for fixture in fixtures:
             if not isinstance(fixture, dict):
-                raise ContractValidationError("Every fixture manifest entry must be an object")
+                raise ContractValidationError(
+                    "Every fixture manifest entry must be an object"
+                )
             fixture_file = fixture.get("file")
             if fixture_file in seen_files:
-                raise ContractValidationError(f"Fixture is listed more than once: {fixture_file}")
+                raise ContractValidationError(
+                    f"Fixture is listed more than once: {fixture_file}"
+                )
             seen_files.add(fixture_file)
             counts = validate_fixture(document, fixture)
             device_checks += counts[0]

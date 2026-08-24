@@ -323,7 +323,9 @@ def expand_references(
         if "$ref" in value:
             reference = require_string(value["$ref"], "OpenAPI reference")
             if reference in active:
-                raise ContractValidationError("Recursive OpenAPI reference is unsupported")
+                raise ContractValidationError(
+                    "Recursive OpenAPI reference is unsupported"
+                )
             target = expand_references(
                 deepcopy(_resolve_pointer(document, reference)),
                 document,
@@ -367,7 +369,9 @@ def request_schema(
     try:
         raw = operation["requestBody"]["content"][media_type]["schema"]
     except KeyError as error:
-        raise ContractValidationError("Operation lacks the declared request schema") from error
+        raise ContractValidationError(
+            "Operation lacks the declared request schema"
+        ) from error
     return require_object(expand_references(raw, document), "request schema")
 
 
@@ -380,15 +384,21 @@ def response_schema(
     try:
         raw_response = operation["responses"][status]
     except KeyError as error:
-        raise ContractValidationError("Operation lacks the declared response status") from error
+        raise ContractValidationError(
+            "Operation lacks the declared response status"
+        ) from error
     response = require_object(
         expand_references(raw_response, document),
         "response definition",
     )
     try:
-        return require_object(response["content"][media_type]["schema"], "response schema")
+        return require_object(
+            response["content"][media_type]["schema"], "response schema"
+        )
     except KeyError as error:
-        raise ContractValidationError("Response lacks the declared media type") from error
+        raise ContractValidationError(
+            "Response lacks the declared media type"
+        ) from error
 
 
 def _schema_property_names(schema: dict[str, Any]) -> set[str]:
@@ -420,7 +430,10 @@ def _summarize_schema_error(error: Any, safe_members: set[str]) -> str:
         else:
             path += "[<member>]"
     validator = error.validator
-    if not isinstance(validator, str) or SCHEMA_PATH_MEMBER.fullmatch(validator) is None:
+    if (
+        not isinstance(validator, str)
+        or SCHEMA_PATH_MEMBER.fullmatch(validator) is None
+    ):
         validator = "unknown"
     return f"{path} [{validator}]"
 
@@ -464,7 +477,10 @@ def normalize_server(value: Any) -> str:
         if "//" in path or "\\" in path or "%" in path:
             raise ContractValidationError("Server subpath is ambiguous")
         segments = path.split("/")[1:]
-        if any(segment in {"", ".", ".."} or CONTROL.search(segment) for segment in segments):
+        if any(
+            segment in {"", ".", ".."} or CONTROL.search(segment)
+            for segment in segments
+        ):
             raise ContractValidationError("Server subpath is ambiguous")
     return urlunsplit(("https", authority, path, "", ""))
 
@@ -483,9 +499,7 @@ def normalize_relative_path(value: Any) -> tuple[str, str]:
         raise ContractValidationError("DAV path is not a safe relative path")
     segments = raw.split("/")
     if any(
-        segment in {"", ".", ".."}
-        or len(segment) > 255
-        or CONTROL.search(segment)
+        segment in {"", ".", ".."} or len(segment) > 255 or CONTROL.search(segment)
         for segment in segments
     ):
         raise ContractValidationError("DAV path contains an unsafe segment")
@@ -573,7 +587,9 @@ def _expected_message_type(value: Any) -> str:
 
 
 def _metadata_message_type(metadata: dict[str, Any]) -> str:
-    return "voice-message" if metadata.get("messageType") == "voice-message" else "comment"
+    return (
+        "voice-message" if metadata.get("messageType") == "voice-message" else "comment"
+    )
 
 
 def _decode_metadata(value: Any) -> dict[str, Any]:
@@ -631,10 +647,7 @@ def build_wire_case(kind: str, raw_input: Any) -> dict[str, Any]:
         raw_names = require_list(input_value.get("fileNames"), "fileNames")
         if not 1 <= len(raw_names) <= 16:
             raise ContractValidationError("fileNames count is outside the contract")
-        file_names = [
-            _validate_filename(name, "fileName")
-            for name in raw_names
-        ]
+        file_names = [_validate_filename(name, "fileName") for name in raw_names]
         allow_update = require_boolean(input_value.get("allowUpdate"), "allowUpdate")
         return {
             "operationId": "probeAttachmentFolder",
@@ -672,8 +685,7 @@ def build_wire_case(kind: str, raw_input: Any) -> dict[str, Any]:
         "operationId": "finalizeAttachment",
         **common,
         "uri": (
-            f"{server}/ocs/v2.php/apps/spreed/api/v1/chat/{room}"
-            "/attachment?format=json"
+            f"{server}/ocs/v2.php/apps/spreed/api/v1/chat/{room}/attachment?format=json"
         ),
         "body": body,
     }
@@ -704,8 +716,7 @@ def validate_built_request(document: dict[str, Any], built: dict[str, Any]) -> N
 def _normalize_features(value: Any) -> set[str]:
     raw_features = require_list(value, "talkFeatures")
     features = [
-        require_string(feature, "Talk feature", maximum=128)
-        for feature in raw_features
+        require_string(feature, "Talk feature", maximum=128) for feature in raw_features
     ]
     if len(features) != len(set(features)):
         raise ContractValidationError("Talk features must be unique")
@@ -740,7 +751,9 @@ def resolve_capability_case(raw_case: Any) -> dict[str, Any]:
         return {"supported": False, "reason": "chat-write-permission-required"}
     allowed_requests = {"caption", "voice", "voiceMime", "reply", "thread", "silent"}
     if set(requested).difference(allowed_requests):
-        raise ContractValidationError("Requested attachment options contain an unknown member")
+        raise ContractValidationError(
+            "Requested attachment options contain an unknown member"
+        )
     profile = {
         "caption": "media-caption" in features,
         "voice": "voice-message-sharing" in features,
@@ -819,7 +832,16 @@ def validate_wire_cases(document: dict[str, Any], path: Path) -> int:
             fields = safe_mapping_mismatch_fields(
                 actual,
                 expected,
-                ("operationId", "method", "uri", "headers", "body", "binding", "encodedPath", "bound"),
+                (
+                    "operationId",
+                    "method",
+                    "uri",
+                    "headers",
+                    "body",
+                    "binding",
+                    "encodedPath",
+                    "bound",
+                ),
             )
             raise ContractValidationError(
                 f"Wire case {case['id']} differs in sections: " + ", ".join(fields)
@@ -1211,8 +1233,7 @@ def build_dav_plan(kind: str, raw_input: Any) -> dict[str, Any]:
 
     ranges = _chunk_ranges(file_size, chunk_size)
     expected_ranges = {
-        _chunk_name(start, end): end - start + 1
-        for start, end in ranges
+        _chunk_name(start, end): end - start + 1 for start, end in ranges
     }
     existing_names: set[str] = set()
     for raw_chunk in existing:
@@ -1271,7 +1292,9 @@ def build_dav_plan(kind: str, raw_input: Any) -> dict[str, Any]:
     for step in steps:
         headers = require_object(step["headers"], "DAV step headers")
         if "Range" in headers or "Content-Range" in headers:
-            raise ContractValidationError("Chunk PUT must not emit an HTTP range header")
+            raise ContractValidationError(
+                "Chunk PUT must not emit an HTTP range header"
+            )
         if step["method"] == "MOVE":
             source = urlsplit(step["uri"])
             target = urlsplit(headers["Destination"])
@@ -1306,7 +1329,9 @@ def classify_dav_status(method: Any, status: Any) -> str:
 def validate_dav_cases(path: Path) -> tuple[int, int]:
     root = require_object(load_json(path), path.name)
     if root.get("upstreamCoreShas") != EXPECTED_CORE_SHAS:
-        raise ContractValidationError("DAV cases are not bound to the approved core SHAs")
+        raise ContractValidationError(
+            "DAV cases are not bound to the approved core SHAs"
+        )
     plans = require_unique_ids(root.get("plans"), REQUIRED_DAV_PLAN_IDS, "DAV plan")
     for case in plans:
         try:
@@ -1402,7 +1427,9 @@ def validate_operation(value: Any) -> dict[str, Any]:
         "sourceVerified",
     }
     if set(operation) != required:
-        raise ContractValidationError("Attachment operation shape differs from contract")
+        raise ContractValidationError(
+            "Attachment operation shape differs from contract"
+        )
     _safe_identifier(operation.get("accountId"), "operation accountId")
     operation["server"] = normalize_server(operation.get("server"))
     require_integer(
@@ -1416,16 +1443,18 @@ def validate_operation(value: Any) -> dict[str, Any]:
         maximum=128,
     )
     if revision != "talk-attachment-f2958bb-core-a0bf541-a599620-r1":
-        raise ContractValidationError("Operation replay contract revision is unsupported")
+        raise ContractValidationError(
+            "Operation replay contract revision is unsupported"
+        )
     _uuid(operation.get("jobId"), "jobId")
     _conversation_token(operation.get("roomToken"))
     _uuid(operation.get("referenceId"), "referenceId")
-    expected_message_type = _expected_message_type(
-        operation.get("expectedMessageType")
-    )
+    expected_message_type = _expected_message_type(operation.get("expectedMessageType"))
     allow_update = require_boolean(operation.get("allowUpdate"), "allowUpdate")
     if allow_update:
-        raise ContractValidationError("This contract revision requires allowUpdate=false")
+        raise ContractValidationError(
+            "This contract revision requires allowUpdate=false"
+        )
     phase = require_string(operation.get("phase"), "operation phase", maximum=32)
     if phase not in ATTACHMENT_PHASES:
         raise ContractValidationError("Attachment operation phase is unknown")
@@ -1451,26 +1480,38 @@ def validate_operation(value: Any) -> dict[str, Any]:
     resume_phase = operation.get("resumePhase")
     if phase == "retryable":
         if resume_phase not in RETRY_PHASES:
-            raise ContractValidationError("Retryable operation lacks a valid resume phase")
+            raise ContractValidationError(
+                "Retryable operation lacks a valid resume phase"
+            )
     elif resume_phase is not None:
-        raise ContractValidationError("Only retryable operation may have a resume phase")
+        raise ContractValidationError(
+            "Only retryable operation may have a resume phase"
+        )
     if finalization_dispatched and phase not in {"awaitingConfirmation", "completed"}:
-        raise ContractValidationError("Finalization dispatch flag contradicts operation phase")
-    if phase in {
-        "draftResolved",
-        "uploading",
-        "uploaded",
-        "finalizing",
-        "awaitingConfirmation",
-        "completed",
-        "cancelling",
-        "cleanupFailed",
-    } and remote_path is None:
+        raise ContractValidationError(
+            "Finalization dispatch flag contradicts operation phase"
+        )
+    if (
+        phase
+        in {
+            "draftResolved",
+            "uploading",
+            "uploaded",
+            "finalizing",
+            "awaitingConfirmation",
+            "completed",
+            "cancelling",
+            "cleanupFailed",
+        }
+        and remote_path is None
+    ):
         raise ContractValidationError("Attachment phase requires a remote temp path")
     if phase in {"cancelling", "cleanupFailed"} and not cleanup_required:
         raise ContractValidationError("Cleanup phase lacks cleanupRequired")
     if phase == "cancelled" and (cleanup_required or remote_path is not None):
-        raise ContractValidationError("Cancelled operation retained remote cleanup state")
+        raise ContractValidationError(
+            "Cancelled operation retained remote cleanup state"
+        )
     if source_verified and not (
         phase == "draftResolved"
         or (phase == "retryable" and resume_phase == "uploading")
@@ -1478,20 +1519,21 @@ def validate_operation(value: Any) -> dict[str, Any]:
         raise ContractValidationError("Source verification is stale for this phase")
     raw_message_ids = require_list(operation.get("messageIds"), "messageIds")
     message_ids = [
-        require_integer(message_id, "messageId", 1)
-        for message_id in raw_message_ids
+        require_integer(message_id, "messageId", 1) for message_id in raw_message_ids
     ]
     if len(message_ids) != len(set(message_ids)):
         raise ContractValidationError("Attachment confirmation ids must be unique")
     if phase == "completed" and len(message_ids) != 1:
         raise ContractValidationError("Completed attachment needs one confirmation")
     if phase != "completed" and len(message_ids) == 1:
-        raise ContractValidationError("Single confirmation must complete the attachment")
+        raise ContractValidationError(
+            "Single confirmation must complete the attachment"
+        )
     require_string(operation.get("lastOutcome"), "lastOutcome", maximum=64)
     source = _validate_source(operation.get("source"))
-    if expected_message_type == "voice-message" and not source["mime"].lower().startswith(
-        "audio/"
-    ):
+    if expected_message_type == "voice-message" and not source[
+        "mime"
+    ].lower().startswith("audio/"):
         raise ContractValidationError("Voice attachment source must use an audio MIME")
     return operation
 
@@ -1652,7 +1694,9 @@ def apply_state_step(operation: dict[str, Any], raw_step: Any) -> str:
         if phase != "finalizing":
             return "rejected"
         status = require_integer(step.get("status"), "finalize HTTP status", 100, 599)
-        ocs_status = require_integer(step.get("ocsStatus"), "finalize OCS status", 0, 999)
+        ocs_status = require_integer(
+            step.get("ocsStatus"), "finalize OCS status", 0, 999
+        )
         if status == 200 and ocs_status == 200:
             operation["phase"] = "awaitingConfirmation"
             operation["finalizationDispatched"] = True
@@ -1800,14 +1844,18 @@ def validate_state_cases(path: Path) -> int:
     base = validate_operation(deepcopy(root.get("baseOperation")))
     default_binding = require_object(root.get("defaultBinding"), "default binding")
     if not _transition_binding_matches(base, {"binding": default_binding}):
-        raise ContractValidationError("Default state binding differs from base operation")
+        raise ContractValidationError(
+            "Default state binding differs from base operation"
+        )
     cases = require_unique_ids(root.get("cases"), REQUIRED_STATE_IDS, "state case")
     for case in cases:
         operation = deepcopy(base)
         if "initial" in case:
             initial = require_object(case.get("initial"), "initial state overrides")
             if set(initial).difference(operation):
-                raise ContractValidationError("Initial state override has an unknown member")
+                raise ContractValidationError(
+                    "Initial state override has an unknown member"
+                )
             operation.update(deepcopy(initial))
         validate_operation(operation)
         for raw_step in require_list(case.get("steps"), "state steps"):
@@ -1825,7 +1873,9 @@ def validate_state_cases(path: Path) -> int:
                     f"State case {case['id']} has an unexpected step outcome"
                 )
             if actual_outcome == "rejected" and operation != before:
-                raise ContractValidationError("Rejected state transition changed operation")
+                raise ContractValidationError(
+                    "Rejected state transition changed operation"
+                )
             validate_operation(operation)
         expected = require_object(case.get("expected"), "state expectation")
         actual = _operation_summary(operation)
@@ -1882,7 +1932,9 @@ def validate_contract() -> dict[str, int]:
         raise ContractValidationError("Manifest Talk SHA differs from the contract")
     if manifest.get("upstreamCoreShas") != EXPECTED_CORE_SHAS:
         raise ContractValidationError("Manifest core SHAs differ from the contract")
-    contract_path = (FIXTURE_ROOT / require_string(manifest.get("contract"), "contract path")).resolve()
+    contract_path = (
+        FIXTURE_ROOT / require_string(manifest.get("contract"), "contract path")
+    ).resolve()
     if contract_path != (CONTRACT_ROOT / "openapi.json").resolve():
         raise ContractValidationError("Manifest must resolve to the local openapi.json")
 
@@ -1893,14 +1945,10 @@ def validate_contract() -> dict[str, int]:
     )
     fixture_results = [validate_fixture(document, fixture) for fixture in fixtures]
     probe_request = next(
-        fixture
-        for fixture in fixtures
-        if fixture["id"] == "probe-request"
+        fixture for fixture in fixtures if fixture["id"] == "probe-request"
     )
     finalize_request = next(
-        fixture
-        for fixture in fixtures
-        if fixture["id"] == "finalize-request"
+        fixture for fixture in fixtures if fixture["id"] == "finalize-request"
     )
     probe_body = require_object(
         load_json(_safe_fixture_path(probe_request["file"], ".json")),
@@ -1910,7 +1958,10 @@ def validate_contract() -> dict[str, int]:
         load_json(_safe_fixture_path(finalize_request["file"], ".json")),
         "finalize request",
     )
-    if probe_body.get("allowUpdate") is not False or finalize_body.get("allowUpdate") is not False:
+    if (
+        probe_body.get("allowUpdate") is not False
+        or finalize_body.get("allowUpdate") is not False
+    ):
         raise ContractValidationError("Both Talk requests must carry allowUpdate=false")
     if probe_body["allowUpdate"] != finalize_body["allowUpdate"]:
         raise ContractValidationError("allowUpdate changed across the attachment job")

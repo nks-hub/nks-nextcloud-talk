@@ -144,7 +144,9 @@ class PathAndDavPlanTest(unittest.TestCase):
             plan["binding"],
         )
         put_steps = [step for step in plan["steps"] if step["method"] == "PUT"]
-        self.assertEqual([chunk_size, chunk_size], [step["contentLength"] for step in put_steps])
+        self.assertEqual(
+            [chunk_size, chunk_size], [step["contentLength"] for step in put_steps]
+        )
         self.assertEqual(
             [
                 "0000000000000000-0000000001023999",
@@ -292,9 +294,7 @@ class FinalizeMessageTypeBindingTest(unittest.TestCase):
         invalid_titles = (" Synthetic thread", "Synthetic thread ", "x" * 201)
         for title in invalid_titles:
             with self.subTest(title_length=len(title)):
-                with self.assertRaises(
-                    attachment_contract.ContractValidationError
-                ):
+                with self.assertRaises(attachment_contract.ContractValidationError):
                     attachment_contract.build_wire_case(
                         "finalize",
                         {
