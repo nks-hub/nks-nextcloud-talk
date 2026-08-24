@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,8 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/composer/giphy.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
+import 'features/push/android_push_coordinator.dart';
+import 'features/push/android_web_push_bridge.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -86,6 +89,33 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
   );
+});
+
+final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
+  if (!Platform.isAndroid) {
+    return null;
+  }
+  final bridge = AndroidWebPushBridge();
+  ref.onDispose(() => unawaited(bridge.dispose()));
+  return bridge;
+});
+
+final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
+  final platform = ref.watch(androidWebPushPlatformProvider);
+  if (platform == null) {
+    return null;
+  }
+  final coordinator = AndroidPushCoordinator(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+    platform: platform,
+    onWakeUp: (accountId) =>
+        ref.read(conversationSyncServiceProvider).sync(accountId),
+  );
+  ref.onDispose(() => unawaited(coordinator.close()));
+  unawaited(coordinator.start());
+  return coordinator;
 });
 
 final chatServiceProvider = Provider<ChatService>((ref) {
