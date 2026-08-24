@@ -54,6 +54,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   late final VoiceAttachmentSubmitter _voiceSubmitter;
   late DurableImageAttachmentPicker _imagePicker;
   late ImageAttachmentUploadController _imageController;
+  AttachmentSubmissionBridge? _retainedImageSubmissionBridge;
   VoiceMessageController? _voiceController;
   AttachmentCancellationController? _imagePreparationCancellation;
   PreparedAttachmentSource? _preparedImageSource;
@@ -145,7 +146,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Future<ImageAttachmentUploadSession> _startImageUpload(
     ImageAttachmentUploadRequest request,
   ) async {
-    final session = await widget.submissionBridge.startImageUpload(request);
+    final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
+    _retainedImageSubmissionBridge = bridge;
+    final session = await bridge.startImageUpload(request);
     if (_sameSource(_preparedImageSource, request.source)) {
       _preparedImageSource = null;
     }
@@ -187,6 +190,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
 
   void _handleImageState() {
     final state = _imageController.state;
+    if (!state.isActive &&
+        !(state.phase == ImageAttachmentUploadPhase.failed &&
+            state.retryAllowed)) {
+      _retainedImageSubmissionBridge = null;
+    }
     if (state.phase == ImageAttachmentUploadPhase.cancelling) {
       _imagePreparationCancellation?.cancel();
     }
@@ -233,6 +241,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     _imageController
       ..removeListener(_handleImageState)
       ..dispose();
+    _retainedImageSubmissionBridge = null;
     _discardPreparedImage();
     final voiceController = _voiceController;
     _voiceController = null;

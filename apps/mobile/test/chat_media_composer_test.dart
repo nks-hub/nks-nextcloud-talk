@@ -144,6 +144,65 @@ void main() {
     expect(bridge.metadata, hasLength(1));
   });
 
+  testWidgets(
+    'image retry after a same-room rebuild reuses the admitted durable job',
+    (tester) async {
+      final admittedBridge = _RecordingBridge();
+      final rebuiltBridge = _RecordingBridge();
+      addTearDown(admittedBridge.close);
+      addTearDown(rebuiltBridge.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
+      const composerKey = Key('same-room-media-composer');
+
+      await tester.pumpWidget(
+        _composerApp(
+          composerKey: composerKey,
+          sourceStore: sourceStore,
+          bridge: admittedBridge.bridge,
+          threadId: null,
+          voiceBackends: voiceBackends,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await _pumpUntil(tester, () => admittedBridge.sessions.isNotEmpty);
+      final admittedSession = admittedBridge.sessions.single;
+      admittedSession.add(
+        _progress(
+          AttachmentJobPhase.retryable,
+          retryAllowed: true,
+          errorClass: 'dav-transient',
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const Key('retry-image-attachment-upload')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _composerApp(
+          composerKey: composerKey,
+          sourceStore: sourceStore,
+          bridge: rebuiltBridge.bridge,
+          threadId: null,
+          voiceBackends: voiceBackends,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('retry-image-attachment-upload')));
+      await _pumpUntil(
+        tester,
+        () =>
+            admittedSession.retryCount > 0 || rebuiltBridge.sessions.isNotEmpty,
+      );
+
+      expect(admittedSession.retryCount, 1);
+      expect(admittedBridge.metadata, hasLength(1));
+      expect(rebuiltBridge.metadata, isEmpty);
+      expect(rebuiltBridge.sessions, isEmpty);
+    },
+  );
+
   testWidgets('root voice recording queues and resets after confirmation', (
     tester,
   ) async {
