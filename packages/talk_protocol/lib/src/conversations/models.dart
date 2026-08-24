@@ -81,6 +81,9 @@ final class ConversationRoom {
     required this.id,
     required this.type,
     required this.name,
+    required this.objectType,
+    required this.avatarVersion,
+    required this.isCustomAvatar,
     required this.displayName,
     required this.description,
     required this.lastActivity,
@@ -101,6 +104,7 @@ final class ConversationRoom {
     required this.mentionPermissions,
     required this.participantType,
     required this.participantFlags,
+    required this.remoteServer,
     required this.readOnly,
     required this.hasCall,
     required this.callFlag,
@@ -135,6 +139,9 @@ final class ConversationRoom {
   final int id;
   final int type;
   final String name;
+  final String objectType;
+  final String avatarVersion;
+  final bool isCustomAvatar;
   final String displayName;
   final String description;
   final int lastActivity;
@@ -155,7 +162,10 @@ final class ConversationRoom {
   final int mentionPermissions;
   final int participantType;
   final int participantFlags;
+  final String? remoteServer;
   final int readOnly;
+
+  bool get isFederated => remoteServer != null && remoteServer!.isNotEmpty;
   final bool hasCall;
   final int callFlag;
   final int callRecording;
@@ -189,7 +199,7 @@ ConversationRoom parseConversationRoom(
   _requireInt(room, 'attendeeId', path);
   final attendeePermissions = _requireInt(room, 'attendeePermissions', path);
   _requireNullableString(room, 'attendeePin', path, required: true);
-  _requireString(room, 'avatarVersion', path);
+  final avatarVersion = _requireString(room, 'avatarVersion', path);
   _requireInt(room, 'breakoutRoomMode', path);
   _requireInt(room, 'breakoutRoomStatus', path);
   final callFlag = _requireInt(room, 'callFlag', path);
@@ -216,7 +226,7 @@ ConversationRoom parseConversationRoom(
   final hasCall = _requireBool(room, 'hasCall', path);
   final hasPassword = _requireBool(room, 'hasPassword', path);
   final id = _requireInt(room, 'id', path);
-  _requireBool(room, 'isCustomAvatar', path);
+  final isCustomAvatar = _requireBool(room, 'isCustomAvatar', path);
   final isFavorite = _requireBool(room, 'isFavorite', path);
   final lastActivity = _requireInt(room, 'lastActivity', path);
   final lastCommonReadMessage = _requireInt(
@@ -243,13 +253,13 @@ ConversationRoom parseConversationRoom(
   final notificationCalls = _requireInt(room, 'notificationCalls', path);
   final notificationLevel = _requireInt(room, 'notificationLevel', path);
   _requireString(room, 'objectId', path);
-  _requireString(room, 'objectType', path);
+  final objectType = _requireString(room, 'objectType', path);
   final participantFlags = _requireInt(room, 'participantFlags', path);
   final participantType = _requireInt(room, 'participantType', path);
   final permissions = _requireInt(room, 'permissions', path);
   final readOnly = _requireInt(room, 'readOnly', path);
   _requireInt(room, 'recordingConsent', path);
-  _optionalString(room, 'remoteServer', path);
+  final remoteServer = _optionalString(room, 'remoteServer', path);
   _optionalString(room, 'remoteToken', path);
   final sessionId = ConversationSessionId.parse(
     room['sessionId'],
@@ -298,6 +308,9 @@ ConversationRoom parseConversationRoom(
     id: id,
     type: type,
     name: name,
+    objectType: objectType,
+    avatarVersion: avatarVersion,
+    isCustomAvatar: isCustomAvatar,
     displayName: displayName,
     description: description,
     lastActivity: lastActivity,
@@ -318,6 +331,7 @@ ConversationRoom parseConversationRoom(
     mentionPermissions: mentionPermissions,
     participantType: participantType,
     participantFlags: participantFlags,
+    remoteServer: remoteServer,
     readOnly: readOnly,
     hasCall: hasCall,
     callFlag: callFlag,
@@ -346,10 +360,9 @@ ConversationPreview? _optionalPreview(
   }
   final path = '$parentPath.$key';
   final preview = requireObject(object[key], path: path, code: _responseCode);
-  final rawParameters = requireObject(
+  final rawParameters = _objectOrEmptyList(
     preview['messageParameters'],
     path: '$path.messageParameters',
-    code: _responseCode,
   );
   final parameters = <String, ConversationRichObjectParameter>{};
   for (final entry in rawParameters.entries) {
@@ -376,10 +389,9 @@ ConversationPreview? _optionalPreview(
 
   Map<String, int>? reactions;
   if (preview.containsKey('reactions')) {
-    final rawReactions = requireObject(
+    final rawReactions = _objectOrEmptyList(
       preview['reactions'],
       path: '$path.reactions',
-      code: _responseCode,
     );
     final parsed = <String, int>{};
     for (final entry in rawReactions.entries) {
@@ -419,6 +431,16 @@ ConversationPreview? _optionalPreview(
     threadReplies: _optionalInt(preview, 'threadReplies', path, minimum: 0),
     wire: preview,
   );
+}
+
+Map<String, Object?> _objectOrEmptyList(Object? value, {required String path}) {
+  if (value is List<Object?>) {
+    if (value.isNotEmpty) {
+      protocolFailure(_responseCode, path);
+    }
+    return const <String, Object?>{};
+  }
+  return requireObject(value, path: path, code: _responseCode);
 }
 
 String _requireString(

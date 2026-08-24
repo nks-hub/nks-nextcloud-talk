@@ -100,6 +100,40 @@ void main() {
     expect(error.path, contains('[<member>].type'));
   });
 
+  test('accepts PHP empty arrays for empty preview maps', () {
+    final body = _clone(fullFixture);
+    final lastMessage = _asObject(_firstRoom(body)['lastMessage']);
+    lastMessage['messageParameters'] = <Object?>[];
+    lastMessage['reactions'] = <Object?>[];
+
+    final response =
+        _decodeResponse(statusCode: 200, json: body, headers: fullHeaders)
+            as ConversationListSuccess;
+
+    expect(response.rooms.first.lastMessage?.messageParameters, isEmpty);
+    expect(response.rooms.first.lastMessage?.reactions, isEmpty);
+  });
+
+  test('rejects non-empty arrays for preview maps', () {
+    for (final key in <String>['messageParameters', 'reactions']) {
+      final body = _clone(fullFixture);
+      final lastMessage = _asObject(_firstRoom(body)['lastMessage']);
+      lastMessage[key] = <Object?>['invalid'];
+
+      expect(
+        () =>
+            _decodeResponse(statusCode: 200, json: body, headers: fullHeaders),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidConversationResponse,
+          ),
+        ),
+      );
+    }
+  });
+
   test('rejects a preview without its room token', () {
     final body = _clone(fullFixture);
     final lastMessage = _asObject(_firstRoom(body)['lastMessage']);

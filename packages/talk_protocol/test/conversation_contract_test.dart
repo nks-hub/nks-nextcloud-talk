@@ -82,6 +82,27 @@ void main() {
         }
       });
     }
+
+    test('exposes validated avatar metadata to clients', () {
+      final response =
+          decodeConversationListResponse(
+                request: _request(requestId: 'avatar-metadata'),
+                statusCode: 200,
+                json: _readJson(
+                  'contracts/conversation-list/fixtures/'
+                  'conversations-full.response.json',
+                ),
+                headers: headerSets['full']!,
+              )
+              as ConversationListSuccess;
+
+      final room = response.rooms.first;
+      expect(room.type, 2);
+      expect(room.name, 'synthetic-room-a');
+      expect(room.objectType, '');
+      expect(room.avatarVersion, '1');
+      expect(room.isCustomAvatar, isFalse);
+    });
   });
 
   group('conversation query fixtures', () {
