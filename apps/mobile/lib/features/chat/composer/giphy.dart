@@ -212,28 +212,39 @@ final class HttpGiphyRepository implements GiphyRepository {
     if (_closed || !_isSafeThumbnail(server, entry.thumbnailUrl)) {
       throw const GiphyException(GiphyError.invalidResponse);
     }
-    final http.Request request = abortTrigger == null
-        ? http.Request('GET', entry.thumbnailUrl)
-        : http.AbortableRequest(
-            'GET',
-            entry.thumbnailUrl,
-            abortTrigger: abortTrigger,
-          );
-    request
-      ..headers.addAll(<String, String>{
-        ...authorization.requestHeaders,
-        'Accept': 'image/gif,image/webp,image/png,image/jpeg',
-      })
-      ..followRedirects = false
-      ..maxRedirects = 0;
-
     final deadline = DateTime.now().add(requestTimeout);
-    http.StreamedResponse? response;
-    StreamIterator<List<int>>? iterator;
+    final requestAbort = _RequestAbortSignal(
+      deadline: deadline,
+      callerTrigger: abortTrigger,
+    );
+    _ResponseBodyReader? bodyReader;
     try {
-      response = await _client.send(request).timeout(_remaining(deadline));
+      final request =
+          http.AbortableRequest(
+              'GET',
+              entry.thumbnailUrl,
+              abortTrigger: requestAbort.trigger,
+            )
+            ..headers.addAll(<String, String>{
+              ...authorization.requestHeaders,
+              'Accept': 'image/gif,image/webp,image/png,image/jpeg',
+            })
+            ..followRedirects = false
+            ..maxRedirects = 0;
+      final response = await _sendWithDeadline(
+        _client.send(request),
+        deadline: deadline,
+        requestAbort: requestAbort,
+      );
+      bodyReader = _ResponseBodyReader(response.stream);
       if (response.statusCode != 200) {
-        await response.stream.drain<void>().timeout(_remaining(deadline));
+        var discarded = 0;
+        while (await bodyReader.moveNext(deadline)) {
+          discarded += bodyReader.current.length;
+          if (discarded > maximumThumbnailBytes) {
+            break;
+          }
+        }
         throw switch (response.statusCode) {
           401 => const GiphyException(GiphyError.integrationUnavailable),
           429 => const GiphyException(GiphyError.rateLimited, statusCode: 429),
@@ -245,14 +256,12 @@ final class HttpGiphyRepository implements GiphyRepository {
       }
       final contentLength = response.contentLength;
       if (contentLength != null && contentLength > maximumThumbnailBytes) {
-        await response.stream.drain<void>().timeout(_remaining(deadline));
         throw const GiphyException(GiphyError.responseTooLarge);
       }
       final bytes = BytesBuilder(copy: false);
       var received = 0;
-      iterator = StreamIterator<List<int>>(response.stream);
-      while (await iterator.moveNext().timeout(_remaining(deadline))) {
-        final chunk = iterator.current;
+      while (await bodyReader.moveNext(deadline)) {
+        final chunk = bodyReader.current;
         received += chunk.length;
         if (received > maximumThumbnailBytes) {
           throw const GiphyException(GiphyError.responseTooLarge);
@@ -274,15 +283,17 @@ final class HttpGiphyRepository implements GiphyRepository {
     } on GiphyException {
       rethrow;
     } on http.RequestAbortedException {
-      throw const GiphyException(GiphyError.cancelled);
+      throw GiphyException(requestAbort.error);
     } on TimeoutException {
-      throw const GiphyException(GiphyError.timeout);
+      requestAbort.abortForDeadline();
+      throw GiphyException(requestAbort.error);
     } on http.ClientException {
       throw const GiphyException(GiphyError.network);
     } finally {
-      if (iterator != null) {
-        await _cancelIterator(iterator, deadline);
+      if (bodyReader != null) {
+        await bodyReader.cancel(deadline);
       }
+      requestAbort.dispose();
     }
   }
 
@@ -306,25 +317,28 @@ final class HttpGiphyRepository implements GiphyRepository {
         'format': 'json',
       },
     );
-    final http.Request request = abortTrigger == null
-        ? http.Request('GET', uri)
-        : http.AbortableRequest('GET', uri, abortTrigger: abortTrigger);
-    request
-      ..headers.addAll(authorization.requestHeaders)
-      ..followRedirects = false
-      ..maxRedirects = 0;
-
     final deadline = DateTime.now().add(requestTimeout);
-    StreamIterator<List<int>>? iterator;
+    final requestAbort = _RequestAbortSignal(
+      deadline: deadline,
+      callerTrigger: abortTrigger,
+    );
+    _ResponseBodyReader? bodyReader;
     try {
-      final response = await _client
-          .send(request)
-          .timeout(_remaining(deadline));
-      iterator = StreamIterator<List<int>>(response.stream);
+      final request =
+          http.AbortableRequest('GET', uri, abortTrigger: requestAbort.trigger)
+            ..headers.addAll(authorization.requestHeaders)
+            ..followRedirects = false
+            ..maxRedirects = 0;
+      final response = await _sendWithDeadline(
+        _client.send(request),
+        deadline: deadline,
+        requestAbort: requestAbort,
+      );
+      bodyReader = _ResponseBodyReader(response.stream);
       if (response.statusCode != 200) {
         var discarded = 0;
-        while (await iterator.moveNext().timeout(_remaining(deadline))) {
-          discarded += iterator.current.length;
+        while (await bodyReader.moveNext(deadline)) {
+          discarded += bodyReader.current.length;
           if (discarded > maximumResponseBytes) {
             break;
           }
@@ -344,8 +358,8 @@ final class HttpGiphyRepository implements GiphyRepository {
       }
       final bytes = BytesBuilder(copy: false);
       var received = 0;
-      while (await iterator.moveNext().timeout(_remaining(deadline))) {
-        final chunk = iterator.current;
+      while (await bodyReader.moveNext(deadline)) {
+        final chunk = bodyReader.current;
         received += chunk.length;
         if (received > maximumResponseBytes) {
           throw const GiphyException(GiphyError.responseTooLarge);
@@ -356,17 +370,19 @@ final class HttpGiphyRepository implements GiphyRepository {
     } on GiphyException {
       rethrow;
     } on http.RequestAbortedException {
-      throw const GiphyException(GiphyError.cancelled);
+      throw GiphyException(requestAbort.error);
     } on TimeoutException {
-      throw const GiphyException(GiphyError.timeout);
+      requestAbort.abortForDeadline();
+      throw GiphyException(requestAbort.error);
     } on http.ClientException {
       throw const GiphyException(GiphyError.network);
     } on FormatException {
       throw const GiphyException(GiphyError.invalidResponse);
     } finally {
-      if (iterator != null) {
-        await _cancelIterator(iterator, deadline);
+      if (bodyReader != null) {
+        await bodyReader.cancel(deadline);
       }
+      requestAbort.dispose();
     }
   }
 
@@ -762,12 +778,123 @@ Future<void> _cancelIterator(
   try {
     final cancellation = iterator.cancel();
     final remaining = deadline.difference(DateTime.now());
-    if (remaining <= Duration.zero) {
-      unawaited(cancellation);
+    final budget =
+        remaining > Duration.zero && remaining < _abortSettlementTimeout
+        ? remaining
+        : _abortSettlementTimeout;
+    await cancellation.timeout(budget);
+  } on Object {
+    // Cancellation is capped by the bounded settlement window.
+  }
+}
+
+const _abortSettlementTimeout = Duration(milliseconds: 100);
+
+Future<T> _sendWithDeadline<T>(
+  Future<T> send, {
+  required DateTime deadline,
+  required _RequestAbortSignal requestAbort,
+}) {
+  return send.timeout(
+    _remaining(deadline),
+    onTimeout: () {
+      requestAbort.abortForDeadline();
+      return send.timeout(_abortSettlementTimeout);
+    },
+  );
+}
+
+final class _ResponseBodyReader {
+  _ResponseBodyReader(Stream<List<int>> stream)
+    : _iterator = StreamIterator<List<int>>(stream) {
+    _startMove();
+  }
+
+  final StreamIterator<List<int>> _iterator;
+  Future<bool>? _pendingMove;
+
+  List<int> get current => _iterator.current;
+
+  Future<bool> moveNext(DateTime deadline) async {
+    final pending = _pendingMove ?? _startMove();
+    final hasNext = await pending.timeout(_remaining(deadline));
+    if (identical(_pendingMove, pending)) {
+      _pendingMove = null;
+    }
+    return hasNext;
+  }
+
+  Future<bool> _startMove() {
+    final pending = _iterator.moveNext();
+    _pendingMove = pending;
+    unawaited(
+      pending.then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stackTrace) {},
+      ),
+    );
+    return pending;
+  }
+
+  Future<void> cancel(DateTime deadline) {
+    return _cancelIterator(_iterator, deadline);
+  }
+}
+
+enum _RequestAbortCause { caller, deadline }
+
+final class _RequestAbortSignal {
+  _RequestAbortSignal({
+    required DateTime deadline,
+    required Future<void>? callerTrigger,
+  }) {
+    final remaining = deadline.difference(DateTime.now());
+    _deadlineTimer = Timer(
+      remaining > Duration.zero ? remaining : Duration.zero,
+      abortForDeadline,
+    );
+    if (callerTrigger != null) {
+      _callerSubscription = Stream<void>.fromFuture(callerTrigger).listen(
+        (_) => _abort(_RequestAbortCause.caller),
+        onError: (Object error, StackTrace stackTrace) {
+          _abort(_RequestAbortCause.caller);
+        },
+      );
+    }
+  }
+
+  final Completer<void> _trigger = Completer<void>();
+  late final Timer _deadlineTimer;
+  StreamSubscription<void>? _callerSubscription;
+  _RequestAbortCause? _cause;
+  bool _disposed = false;
+
+  Future<void> get trigger => _trigger.future;
+
+  GiphyError get error => _cause == _RequestAbortCause.deadline
+      ? GiphyError.timeout
+      : GiphyError.cancelled;
+
+  void abortForDeadline() => _abort(_RequestAbortCause.deadline);
+
+  void _abort(_RequestAbortCause cause) {
+    if (_disposed || _trigger.isCompleted) {
       return;
     }
-    await cancellation.timeout(remaining);
-  } on Object {
-    // Cancellation cannot extend the bounded request deadline.
+    _cause = cause;
+    _trigger.complete();
+  }
+
+  void dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _deadlineTimer.cancel();
+    final callerSubscription = _callerSubscription;
+    _callerSubscription = null;
+    if (callerSubscription != null) {
+      unawaited(callerSubscription.cancel());
+    }
   }
 }

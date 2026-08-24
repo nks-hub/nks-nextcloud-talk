@@ -358,23 +358,48 @@ void main() {
       },
     );
 
-    test('times out a stalled server request', () async {
-      final repository = HttpGiphyRepository(
-        server: server,
-        authorization: authorization,
-        client: MockClient((_) async {
-          await Completer<void>().future;
-          return http.Response('', 200);
-        }),
-        requestTimeout: const Duration(milliseconds: 1),
-      );
-      addTearDown(repository.close);
+    test(
+      'deadline physically aborts a stalled send',
+      () async {
+        final client = _DeadlineSendClient();
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
 
-      await expectLater(
-        repository.trending(cursor: 0, limit: 10),
-        throwsA(_giphyError(GiphyError.timeout)),
-      );
-    });
+        await expectLater(
+          repository.trending(cursor: 0, limit: 10),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.wasAborted, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
+
+    test(
+      'deadline aborts and cancels a stalled success body',
+      () async {
+        final client = _AbortAwareBodyClient(statusCode: 200);
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
+
+        await expectLater(
+          repository.trending(cursor: 0, limit: 10),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.requestAborted, isTrue);
+        expect(client.subscriptionCancelled, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
 
     test(
       'bounds cancellation of a stalled error response body',
@@ -399,6 +424,50 @@ void main() {
       },
       timeout: const Timeout(Duration(seconds: 1)),
     );
+
+    test(
+      'deadline aborts and cancels a stalled thumbnail error body',
+      () async {
+        final client = _AbortAwareBodyClient(statusCode: 503);
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
+
+        await expectLater(
+          repository.loadThumbnail(_giphyEntry('stalled-thumbnail')),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.requestAborted, isTrue);
+        expect(client.subscriptionCancelled, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
+
+    test('cancels an oversized thumbnail response subscription', () async {
+      final client = _AbortAwareBodyClient(
+        statusCode: 200,
+        contentLength: 65,
+        headers: const <String, String>{'content-type': 'image/gif'},
+      );
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: client,
+        maximumThumbnailBytes: 64,
+      );
+      addTearDown(repository.close);
+
+      await expectLater(
+        repository.loadThumbnail(_giphyEntry('oversized-thumbnail')),
+        throwsA(_giphyError(GiphyError.responseTooLarge)),
+      );
+      expect(client.requestAborted, isFalse);
+      expect(client.subscriptionCancelled, isTrue);
+    });
 
     test('maps an explicit abort trigger to cancellation', () async {
       final abort = Completer<void>();
@@ -555,6 +624,61 @@ final class _OversizedClient extends http.BaseClient {
       Stream<List<int>>.value(List<int>.filled(65, 0x20)),
       200,
       contentLength: 65,
+    );
+  }
+}
+
+final class _DeadlineSendClient extends http.BaseClient {
+  bool wasAborted = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final trigger = (request as http.Abortable).abortTrigger!;
+    await trigger;
+    wasAborted = true;
+    throw http.RequestAbortedException(request.url);
+  }
+}
+
+final class _AbortAwareBodyClient extends http.BaseClient {
+  _AbortAwareBodyClient({
+    required this.statusCode,
+    this.contentLength,
+    this.headers = const <String, String>{},
+  });
+
+  final int statusCode;
+  final int? contentLength;
+  final Map<String, String> headers;
+  bool requestAborted = false;
+  bool subscriptionCancelled = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final trigger = (request as http.Abortable).abortTrigger!;
+    late StreamController<List<int>> controller;
+    controller = StreamController<List<int>>(
+      onCancel: () {
+        subscriptionCancelled = true;
+        if (!controller.isClosed) {
+          return controller.close();
+        }
+      },
+    );
+    unawaited(
+      trigger.then((_) async {
+        requestAborted = true;
+        if (!controller.isClosed) {
+          controller.addError(http.RequestAbortedException(request.url));
+          await controller.close();
+        }
+      }),
+    );
+    return http.StreamedResponse(
+      controller.stream,
+      statusCode,
+      contentLength: contentLength,
+      headers: headers,
     );
   }
 }
