@@ -90,6 +90,77 @@ void main() {
     await Future.wait(accountALoads);
   });
 
+  test('enforces the global cap fairly across three accounts', () async {
+    final coordinator = _coordinator(maximumCacheBytes: 1024);
+    final gates = <String, Completer<Uint8List>>{};
+    final started = <String>[];
+    final completed = <String>{};
+    final activeByAccount = <String, int>{};
+    final maximumByAccount = <String, int>{};
+    var active = 0;
+    var maximumActive = 0;
+
+    Future<Uint8List> controlledLoad(String accountId, int index) async {
+      final key = '$accountId-$index';
+      final gate = gates.putIfAbsent(key, Completer<Uint8List>.new);
+      started.add(key);
+      active++;
+      maximumActive = active > maximumActive ? active : maximumActive;
+      final accountActive = (activeByAccount[accountId] ?? 0) + 1;
+      activeByAccount[accountId] = accountActive;
+      final accountMaximum = maximumByAccount[accountId] ?? 0;
+      if (accountActive > accountMaximum) {
+        maximumByAccount[accountId] = accountActive;
+      }
+      try {
+        return await gate.future;
+      } finally {
+        active--;
+        activeByAccount[accountId] = activeByAccount[accountId]! - 1;
+      }
+    }
+
+    final loads = <Future<Uint8List>>[];
+    for (final entry in const {'a': 3, 'b': 3, 'c': 2}.entries) {
+      for (var index = 0; index < entry.value; index++) {
+        loads.add(
+          coordinator.load(
+            accountId: 'account-${entry.key}',
+            resourceUrl: _resource(index),
+            loader: () => controlledLoad(entry.key, index),
+          ),
+        );
+      }
+    }
+    await _flushAsyncWork();
+
+    expect(started, ['a-0', 'a-1', 'b-0', 'b-1']);
+    expect(active, 4);
+
+    gates['a-0']!.complete(_bytes(1, 0));
+    completed.add('a-0');
+    await _flushAsyncWork();
+
+    expect(started[4], 'c-0');
+
+    while (completed.length < loads.length) {
+      await _flushAsyncWork();
+      final batch = started
+          .where((key) => !completed.contains(key))
+          .toList(growable: false);
+      expect(batch, isNotEmpty);
+      for (final key in batch) {
+        gates[key]!.complete(_bytes(1, completed.length));
+        completed.add(key);
+      }
+    }
+    await Future.wait(loads);
+
+    expect(maximumActive, 4);
+    expect(maximumByAccount.values, everyElement(lessThanOrEqualTo(2)));
+    expect(started.toSet(), hasLength(loads.length));
+  });
+
   test('keeps the same resource isolated between accounts', () async {
     final coordinator = _coordinator();
     final resource = _resource(0);
@@ -194,6 +265,45 @@ void main() {
     expect(loads, {0: 1, 1: 2, 2: 1});
   });
 
+  test('evicts least recently used tiny values above 64 entries', () async {
+    final coordinator = _coordinator(maximumCacheBytes: 1024);
+
+    for (var index = 0; index < 64; index++) {
+      await coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(index),
+        loader: () async => _bytes(1, index),
+      );
+    }
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(0),
+      loader: () => throw StateError('recent entry was evicted'),
+    );
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(64),
+      loader: () async => _bytes(1, 64),
+    );
+
+    var evictedReloads = 0;
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(0),
+      loader: () => throw StateError('recent entry was evicted'),
+    );
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(1),
+      loader: () async {
+        evictedReloads++;
+        return _bytes(1, 1);
+      },
+    );
+
+    expect(evictedReloads, 1);
+  });
+
   test('a failed load releases its account slot', () async {
     final coordinator = _coordinator();
     final failedGate = Completer<Uint8List>();
@@ -237,32 +347,57 @@ void main() {
     await Future.wait([second, third]);
   });
 
-  test('coalesces simultaneous loads of one account resource', () async {
+  test('a cancelled queued load does not poison the same key', () async {
     final coordinator = _coordinator();
-    final gate = Completer<Uint8List>();
-    var loads = 0;
+    final blockers = List.generate(2, (_) => Completer<Uint8List>());
+    final blockingLoads = [
+      for (var index = 0; index < blockers.length; index++)
+        coordinator.load(
+          accountId: 'account-a',
+          resourceUrl: _resource(index),
+          loader: () => blockers[index].future,
+        ),
+    ];
+    await _flushAsyncWork();
 
-    Future<Uint8List> loader() async {
-      loads++;
-      return gate.future;
-    }
-
-    final first = coordinator.load(
+    var cancelledStarted = 0;
+    var succeedingStarted = 0;
+    final resource = _resource(99);
+    final cancelled = coordinator.load(
       accountId: 'account-a',
-      resourceUrl: _resource(0),
-      loader: loader,
+      resourceUrl: resource,
+      loader: () async {
+        cancelledStarted++;
+        throw StateError('synthetic cancellation');
+      },
     );
-    final second = coordinator.load(
+    final cancellationExpectation = expectLater(
+      cancelled,
+      throwsA(isA<StateError>()),
+    );
+    final succeeding = coordinator.load(
       accountId: 'account-a',
-      resourceUrl: _resource(0),
-      loader: loader,
+      resourceUrl: resource,
+      loader: () async {
+        succeedingStarted++;
+        return _bytes(2, 4);
+      },
     );
     await _flushAsyncWork();
 
-    expect(loads, 1);
+    expect(cancelledStarted, 0);
+    expect(succeedingStarted, 0);
 
-    gate.complete(_bytes(2, 4));
-    expect(await second, same(await first));
+    blockers[0].complete(_bytes(2, 0));
+    await cancellationExpectation;
+    await _flushAsyncWork();
+
+    expect(cancelledStarted, 1);
+    expect(succeedingStarted, 1);
+    expect(await succeeding, [4, 4]);
+
+    blockers[1].complete(_bytes(2, 1));
+    await Future.wait(blockingLoads);
   });
 }
 

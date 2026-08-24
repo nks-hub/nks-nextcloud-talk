@@ -16,14 +16,18 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
   }
 
   static const int maximumConcurrentLoadsPerAccount = 2;
+  static const int maximumConcurrentLoads = 4;
+  static const int maximumCacheEntries = 64;
 
   final int Function(T value) byteSizeOf;
   final int maximumCacheBytes;
   final Map<String, _AccountLoadQueue> _accountQueues = {};
-  final Map<_GiphyReferenceKey, Future<T>> _inFlight = {};
+  final ListQueue<String> _readyAccounts = ListQueue();
+  final Set<String> _readyAccountIds = {};
   final LinkedHashMap<_GiphyReferenceKey, _CachedReference<T>> _cache =
       LinkedHashMap();
 
+  int _activeLoads = 0;
   int _cachedBytes = 0;
 
   Future<T> load({
@@ -42,13 +46,7 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
       return Future<T>.value(cached.value);
     }
 
-    final existing = _inFlight[key];
-    if (existing != null) {
-      return existing;
-    }
-
     final completer = Completer<T>();
-    _inFlight[key] = completer.future;
     final queue = _accountQueues.putIfAbsent(accountId, _AccountLoadQueue.new);
     queue.pending.add(() async {
       try {
@@ -57,29 +55,47 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
         completer.complete(value);
       } on Object catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
-      } finally {
-        _inFlight.remove(key);
       }
     });
-    _pump(accountId, queue);
+    _markReady(accountId, queue);
+    _pump();
     return completer.future;
   }
 
-  void _pump(String accountId, _AccountLoadQueue queue) {
-    while (queue.active < maximumConcurrentLoadsPerAccount &&
-        queue.pending.isNotEmpty) {
+  void _markReady(String accountId, _AccountLoadQueue queue) {
+    if (queue.pending.isNotEmpty &&
+        queue.active < maximumConcurrentLoadsPerAccount &&
+        _readyAccountIds.add(accountId)) {
+      _readyAccounts.addLast(accountId);
+    }
+  }
+
+  void _pump() {
+    while (_activeLoads < maximumConcurrentLoads && _readyAccounts.isNotEmpty) {
+      final accountId = _readyAccounts.removeFirst();
+      _readyAccountIds.remove(accountId);
+      final queue = _accountQueues[accountId];
+      if (queue == null ||
+          queue.pending.isEmpty ||
+          queue.active >= maximumConcurrentLoadsPerAccount) {
+        continue;
+      }
       final task = queue.pending.removeFirst();
       queue.active++;
+      _activeLoads++;
+      _markReady(accountId, queue);
       unawaited(
         task().whenComplete(() {
           queue.active--;
+          _activeLoads--;
           if (queue.active == 0 && queue.pending.isEmpty) {
             if (identical(_accountQueues[accountId], queue)) {
               _accountQueues.remove(accountId);
             }
-            return;
+          } else {
+            _markReady(accountId, queue);
           }
-          _pump(accountId, queue);
+          _pump();
         }),
       );
     }
@@ -98,7 +114,9 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
     if (previous != null) {
       _cachedBytes -= previous.byteLength;
     }
-    while (_cachedBytes + byteLength > maximumCacheBytes && _cache.isNotEmpty) {
+    while ((_cachedBytes + byteLength > maximumCacheBytes ||
+            _cache.length >= maximumCacheEntries) &&
+        _cache.isNotEmpty) {
       final oldestKey = _cache.keys.first;
       final oldest = _cache.remove(oldestKey)!;
       _cachedBytes -= oldest.byteLength;
