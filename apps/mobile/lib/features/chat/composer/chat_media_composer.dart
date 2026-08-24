@@ -55,6 +55,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   late DurableImageAttachmentPicker _imagePicker;
   late ImageAttachmentUploadController _imageController;
   AttachmentSubmissionBridge? _retainedImageSubmissionBridge;
+  bool _imageAdmissionPending = false;
+  bool _discardPreparedImageAfterAdmission = false;
   VoiceMessageController? _voiceController;
   AttachmentCancellationController? _imagePreparationCancellation;
   PreparedAttachmentSource? _preparedImageSource;
@@ -147,12 +149,28 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     ImageAttachmentUploadRequest request,
   ) async {
     final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
+    final admissionSourceStore = widget.sourceStore;
     _retainedImageSubmissionBridge = bridge;
-    final session = await bridge.startImageUpload(request);
-    if (_sameSource(_preparedImageSource, request.source)) {
-      _preparedImageSource = null;
+    _imageAdmissionPending = true;
+    var durablyAccepted = false;
+    try {
+      final session = await bridge.startImageUpload(request);
+      durablyAccepted = true;
+      if (_sameSource(_preparedImageSource, request.source)) {
+        _preparedImageSource = null;
+      }
+      return session;
+    } finally {
+      _imageAdmissionPending = false;
+      final discardAfterAdmission = _discardPreparedImageAfterAdmission;
+      _discardPreparedImageAfterAdmission = false;
+      if (!durablyAccepted && discardAfterAdmission) {
+        if (_sameSource(_preparedImageSource, request.source)) {
+          _preparedImageSource = null;
+        }
+        unawaited(admissionSourceStore.discard(request.source.handle));
+      }
     }
-    return session;
   }
 
   Future<ImageAttachmentUploadRequest?> _prepareImage() async {
@@ -227,6 +245,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
 
   void _discardPreparedImage() {
     final source = _preparedImageSource;
+    if (source != null && _imageAdmissionPending) {
+      _discardPreparedImageAfterAdmission = true;
+      return;
+    }
     _preparedImageSource = null;
     if (source != null) {
       unawaited(widget.sourceStore.discard(source.handle));

@@ -307,6 +307,136 @@ void main() {
     expect(bridge.sessions, hasLength(1));
   });
 
+  testWidgets(
+    'navigation does not discard an image before durable admission settles',
+    (tester) async {
+      final prepareStarted = Completer<void>();
+      final releasePrepare = Completer<void>();
+      final enqueueFinished = Completer<void>();
+      final durable = _DurableSession();
+      addTearDown(durable.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
+      PreparedAttachmentSource? preparedSource;
+      final bridge = AttachmentSubmissionBridge(
+        accountId: _account,
+        server: _server,
+        roomToken: _room,
+        prepare:
+            ({
+              required accountId,
+              required roomToken,
+              required source,
+              required metadata,
+            }) async {
+              preparedSource = source;
+              prepareStarted.complete();
+              await releasePrepare.future;
+              return _enqueueRequest(
+                source: source,
+                metadata: metadata,
+                profile: _profile(),
+              );
+            },
+        enqueue: (_) async {
+          enqueueFinished.complete();
+          return durable;
+        },
+      );
+
+      await tester.pumpWidget(
+        _composerApp(
+          sourceStore: sourceStore,
+          bridge: bridge,
+          threadId: null,
+          voiceBackends: voiceBackends,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await _pumpUntil(tester, () => prepareStarted.isCompleted);
+      final source = preparedSource!;
+      final sourcePath = (await tester.runAsync(
+        () => sourceStore.resolveVerifiedPath(source),
+      ))!;
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      var sourceExistsDuringAdmission = true;
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await tester.pump(const Duration(milliseconds: 1));
+        sourceExistsDuringAdmission = (await tester.runAsync(
+          () => File(sourcePath).exists(),
+        ))!;
+        if (!sourceExistsDuringAdmission) {
+          break;
+        }
+      }
+
+      releasePrepare.complete();
+      await _pumpUntil(tester, () => enqueueFinished.isCompleted);
+      expect(sourceExistsDuringAdmission, isTrue);
+    },
+  );
+
+  testWidgets('failed admission after navigation discards the prepared image', (
+    tester,
+  ) async {
+    final prepareStarted = Completer<void>();
+    final releasePrepare = Completer<void>();
+    final prepareSettled = Completer<void>();
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    PreparedAttachmentSource? preparedSource;
+    final bridge = AttachmentSubmissionBridge(
+      accountId: _account,
+      server: _server,
+      roomToken: _room,
+      prepare:
+          ({
+            required accountId,
+            required roomToken,
+            required source,
+            required metadata,
+          }) async {
+            preparedSource = source;
+            prepareStarted.complete();
+            await releasePrepare.future;
+            prepareSettled.complete();
+            throw StateError('durable admission failed');
+          },
+      enqueue: (_) => throw StateError('enqueue must not run'),
+    );
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('pick-image-attachment')));
+    await _pumpUntil(tester, () => prepareStarted.isCompleted);
+    final sourcePath = (await tester.runAsync(
+      () => sourceStore.resolveVerifiedPath(preparedSource!),
+    ))!;
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    releasePrepare.complete();
+    await _pumpUntil(tester, () => prepareSettled.isCompleted);
+
+    var sourceExists = true;
+    for (var attempt = 0; attempt < 100; attempt++) {
+      await tester.pump(const Duration(milliseconds: 1));
+      sourceExists = (await tester.runAsync(() => File(sourcePath).exists()))!;
+      if (!sourceExists) {
+        break;
+      }
+    }
+    expect(sourceExists, isFalse);
+  });
+
   testWidgets('narrow idle toolbar keeps all five actions on one baseline', (
     tester,
   ) async {
