@@ -683,35 +683,4 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsLeaveRejected =>
       'Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.';
-
-  @override
-  String get settingsTitle => 'Nastavení';
-
-  @override
-  String get settingsAccountsSection => 'Účty';
-
-  @override
-  String get settingsAccountSelected => 'Aktivní';
-
-  @override
-  String get settingsAccountsLoadFailed => 'Účty se nepodařilo načíst.';
-
-  @override
-  String get settingsAddAccount => 'Přidat účet';
-
-  @override
-  String get settingsRemoveAccountUnavailable =>
-      'Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.';
-
-  @override
-  String get settingsThemeSection => 'Vzhled';
-
-  @override
-  String get settingsThemeSystem => 'Podle systému';
-
-  @override
-  String get settingsThemeLight => 'Světlý';
-
-  @override
-  String get settingsThemeDark => 'Tmavý';
 }

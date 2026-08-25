@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -31,7 +30,6 @@ import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
-import 'features/settings/theme_preference.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -353,34 +351,6 @@ final accountsProvider = StreamProvider<List<StoredAccount>>((ref) {
 final selectedAccountProvider = StreamProvider<StoredAccount?>((ref) {
   return ref.watch(accountRepositoryProvider).watchSelectedAccount();
 });
-
-final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
-  return FileThemePreferenceStore();
-});
-
-final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
-  ThemeModeController.new,
-);
-
-final class ThemeModeController extends Notifier<ThemeMode> {
-  @override
-  ThemeMode build() {
-    unawaited(_load());
-    return ThemeMode.system;
-  }
-
-  Future<void> _load() async {
-    final stored = await ref.read(themePreferenceStoreProvider).read();
-    if (state != stored) {
-      state = stored;
-    }
-  }
-
-  Future<void> setThemeMode(ThemeMode mode) async {
-    state = mode;
-    await ref.read(themePreferenceStoreProvider).write(mode);
-  }
-}
 
 final conversationsProvider =
     StreamProvider.family<List<CachedConversation>, String>((ref, accountId) {

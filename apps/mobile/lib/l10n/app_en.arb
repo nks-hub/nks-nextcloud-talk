@@ -187,9 +187,7 @@
   "roomDetailsParticipantsCount": "{count} participants",
   "@roomDetailsParticipantsCount": {
     "placeholders": {
-      "count": {
-        "type": "int"
-      }
+      "count": {"type": "int"}
     }
   },
   "roomDetailsParticipantsEmpty": "No participants found.",
@@ -218,15 +216,5 @@
   "roomDetailsActionErrorReauth": "Please sign in again to make this change.",
   "roomDetailsActionErrorForbidden": "You don't have permission to do this.",
   "roomDetailsActionErrorRoomMissing": "This conversation no longer exists.",
-  "roomDetailsLeaveRejected": "You can't leave until another moderator is promoted.",
-  "settingsTitle": "Settings",
-  "settingsAccountsSection": "Accounts",
-  "settingsAccountSelected": "Active",
-  "settingsAccountsLoadFailed": "Accounts could not be loaded.",
-  "settingsAddAccount": "Add account",
-  "settingsRemoveAccountUnavailable": "Removing an account isn't supported yet. Sign out of it on the server if you need to revoke access.",
-  "settingsThemeSection": "Appearance",
-  "settingsThemeSystem": "Match system",
-  "settingsThemeLight": "Light",
-  "settingsThemeDark": "Dark"
+  "roomDetailsLeaveRejected": "You can't leave until another moderator is promoted."
 }
