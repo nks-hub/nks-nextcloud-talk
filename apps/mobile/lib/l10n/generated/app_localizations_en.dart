@@ -686,6 +686,37 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t leave until another moderator is promoted.';
 
   @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsAccountsSection => 'Accounts';
+
+  @override
+  String get settingsAccountSelected => 'Active';
+
+  @override
+  String get settingsAccountsLoadFailed => 'Accounts could not be loaded.';
+
+  @override
+  String get settingsAddAccount => 'Add account';
+
+  @override
+  String get settingsRemoveAccountUnavailable =>
+      'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.';
+
+  @override
+  String get settingsThemeSection => 'Appearance';
+
+  @override
+  String get settingsThemeSystem => 'Match system';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
   String get conversationActionsTitle => 'Conversation actions';
 
   @override

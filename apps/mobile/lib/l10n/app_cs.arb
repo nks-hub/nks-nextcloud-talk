@@ -212,7 +212,6 @@
   "roomDetailsActionErrorForbidden": "K této akci nemáte oprávnění.",
   "roomDetailsActionErrorRoomMissing": "Tato konverzace už neexistuje.",
   "roomDetailsLeaveRejected": "Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.",
-<<<<<<< HEAD
   "settingsTitle": "Nastavení",
   "settingsAccountsSection": "Účty",
   "settingsAccountSelected": "Aktivní",
@@ -222,8 +221,7 @@
   "settingsThemeSection": "Vzhled",
   "settingsThemeSystem": "Podle systému",
   "settingsThemeLight": "Světlý",
-  "settingsThemeDark": "Tmavý"
-=======
+  "settingsThemeDark": "Tmavý",
   "conversationActionsTitle": "Akce konverzace",
   "conversationActionMarkUnread": "Označit jako nepřečtené",
   "conversationActionArchive": "Archivovat konverzaci",
@@ -231,11 +229,12 @@
   "conversationArchivedSectionShow": "{count, plural, =1{Archivováno (1)} few{Archivováno ({count})} other{Archivováno ({count})}}",
   "@conversationArchivedSectionShow": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "conversationArchivedSectionHide": "Zpět na konverzace",
   "conversationActionErrorGeneric": "Akci se nepodařilo dokončit. Zkuste to prosím znovu.",
   "conversationActionErrorReauth": "Pro tuto změnu se prosím přihlaste znovu."
->>>>>>> worktree-agent-a8bf028493589ce92
 }
