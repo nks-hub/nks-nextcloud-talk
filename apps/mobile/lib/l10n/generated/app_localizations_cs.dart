@@ -999,4 +999,15 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get imageShareFailed => 'Obrázek se nepodařilo sdílet.';
+
+  @override
+  String get jumpToOriginalMessage => 'Zobrazit původní zprávu';
+
+  @override
+  String get jumpToMessageNotFound =>
+      'Tato zpráva už v konverzaci není dostupná.';
+
+  @override
+  String get jumpToMessageConversationMissing =>
+      'Tato konverzace není v zařízení dostupná.';
 }

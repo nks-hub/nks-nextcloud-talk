@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talk_protocol/talk_protocol.dart' show ConversationToken;
 
 import '../../app_providers.dart';
 import '../../core/brand_mark.dart';
@@ -375,12 +376,54 @@ void _openMessageSearch(BuildContext context, String accountId) {
         builder: (context, ref, _) => MessageSearchScreen(
           accountId: accountId,
           service: ref.watch(messageSearchServiceProvider),
-          // Navigation into the found conversation is intentionally not
-          // handled here; closing the search screen is all this entry
-          // point does today.
-          onResultSelected: (roomToken, messageId) =>
-              Navigator.of(context).pop(),
+          onResultSelected: (roomToken, messageId) => unawaited(
+            _openSearchResult(context, ref, accountId, roomToken, messageId),
+          ),
         ),
+      ),
+    ),
+  );
+}
+
+/// Closes the search screen and opens the found conversation on the found
+/// message. A room the account has no cached row for is reported instead of
+/// opened as a guess, mirroring how deep links refuse to invent a target.
+Future<void> _openSearchResult(
+  BuildContext context,
+  WidgetRef ref,
+  String accountId,
+  ConversationToken roomToken,
+  int messageId,
+) async {
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+  final strings = AppLocalizations.of(context);
+  final accounts = ref.read(accountRepositoryProvider);
+  final account = await accounts.getAccount(accountId);
+  final conversation = account == null
+      ? null
+      : await accounts.getConversation(
+          accountId: accountId,
+          token: roomToken.value,
+        );
+  navigator.pop();
+  if (account == null || conversation == null) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const Key('search-conversation-missing'),
+          content: Text(strings.jumpToMessageConversationMissing),
+        ),
+      );
+    return;
+  }
+  await navigator.push<void>(
+    MaterialPageRoute<void>(
+      builder: (context) => PresenceChatRoomScreen(
+        account: account,
+        conversation: conversation,
+        jumpToMessageId: messageId,
       ),
     ),
   );

@@ -317,5 +317,8 @@
   "imageSavePermissionDenied": "Uložení vyžaduje přístup do galerie. Povolte ho v nastavení systému a zkuste to znovu.",
   "imageSaveOutOfSpace": "V zařízení není dost volného místa pro uložení obrázku.",
   "imageSaveFailed": "Obrázek se nepodařilo uložit.",
-  "imageShareFailed": "Obrázek se nepodařilo sdílet."
+  "imageShareFailed": "Obrázek se nepodařilo sdílet.",
+  "jumpToOriginalMessage": "Zobrazit původní zprávu",
+  "jumpToMessageNotFound": "Tato zpráva už v konverzaci není dostupná.",
+  "jumpToMessageConversationMissing": "Tato konverzace není v zařízení dostupná."
 }

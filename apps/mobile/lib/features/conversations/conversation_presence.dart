@@ -174,10 +174,14 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
     super.key,
     required this.account,
     required this.conversation,
+    this.jumpToMessageId,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
+
+  /// Opens the room on a specific message instead of on the newest one.
+  final int? jumpToMessageId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -224,7 +228,11 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
           children: [
             OngoingCallBanner(account: account, conversation: current),
             Expanded(
-              child: ChatRoomPane(account: account, conversation: current),
+              child: ChatRoomPane(
+                account: account,
+                conversation: current,
+                jumpToMessageId: jumpToMessageId,
+              ),
             ),
           ],
         ),

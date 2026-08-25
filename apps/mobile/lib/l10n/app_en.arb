@@ -345,5 +345,8 @@
   "imageSavePermissionDenied": "Saving needs access to your gallery. Grant it in the system settings and try again.",
   "imageSaveOutOfSpace": "There is not enough free space to save the image.",
   "imageSaveFailed": "The image could not be saved.",
-  "imageShareFailed": "The image could not be shared."
+  "imageShareFailed": "The image could not be shared.",
+  "jumpToOriginalMessage": "Show the original message",
+  "jumpToMessageNotFound": "That message is no longer available in this conversation.",
+  "jumpToMessageConversationMissing": "That conversation is not available on this device."
 }

@@ -998,4 +998,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get imageShareFailed => 'The image could not be shared.';
+
+  @override
+  String get jumpToOriginalMessage => 'Show the original message';
+
+  @override
+  String get jumpToMessageNotFound =>
+      'That message is no longer available in this conversation.';
+
+  @override
+  String get jumpToMessageConversationMissing =>
+      'That conversation is not available on this device.';
 }
