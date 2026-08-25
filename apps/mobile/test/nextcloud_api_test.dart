@@ -200,6 +200,173 @@ void main() {
     );
   });
 
+  test(
+    'reads the capability snapshot once per account and validity window',
+    () async {
+      var requests = 0;
+      var now = DateTime.utc(2026, 8, 25, 12);
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async {
+          requests++;
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }),
+        capabilityCacheTtl: const Duration(minutes: 5),
+        clock: () => now,
+      );
+      addTearDown(api.close);
+
+      Future<CapabilitySnapshot> read({
+        ServerBase? target,
+        String loginName = 'fixture-user',
+        String appPassword = 'fixture-password',
+      }) => api.getAuthenticatedCapabilities(
+        server: target ?? server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+
+      for (var step = 0; step < 6; step++) {
+        expect((await read()).hasTalk, isTrue);
+      }
+      expect(requests, 1, reason: 'repeated steps reuse one snapshot');
+
+      await read(loginName: 'other-user', appPassword: 'other-password');
+      expect(
+        requests,
+        2,
+        reason: 'a second account never reads the first cache',
+      );
+
+      await read(target: ServerBase.parse('https://other.example.invalid'));
+      expect(
+        requests,
+        3,
+        reason: 'a second server never reads the first cache',
+      );
+
+      await read(appPassword: 'rotated-password');
+      expect(requests, 4, reason: 'reauthentication invalidates the snapshot');
+      await read(appPassword: 'rotated-password');
+      expect(requests, 4);
+
+      now = now.add(const Duration(minutes: 5, seconds: 1));
+      await read(appPassword: 'rotated-password');
+      expect(requests, 5, reason: 'the validity window expires');
+    },
+  );
+
+  test('collapses a burst of concurrent capability reads into one', () async {
+    var requests = 0;
+    final release = Completer<void>();
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        await release.future;
+        return http.Response(jsonEncode(capabilitiesJson()), 200);
+      }),
+    );
+    addTearDown(api.close);
+
+    final burst = List.generate(
+      4,
+      (_) => api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      ),
+    );
+    await pumpEventQueue();
+    expect(requests, 1, reason: 'later steps join the read already in flight');
+
+    release.complete();
+    for (final snapshot in await Future.wait(burst)) {
+      expect(snapshot.hasTalk, isTrue);
+    }
+    expect(requests, 1);
+  });
+
+  test('does not let one aborted step cancel a concurrent read', () async {
+    final cancellation = Completer<void>();
+    var requests = 0;
+    final api = HttpNextcloudApi(
+      client: _AbortAwareOnceClient(
+        onRequest: () => requests++,
+        response: () => http.Response(jsonEncode(capabilitiesJson()), 200),
+      ),
+    );
+    addTearDown(api.close);
+
+    final cancellable = api.getAuthenticatedCapabilities(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+      abortTrigger: cancellation.future,
+    );
+    await pumpEventQueue();
+    final shared = api.getAuthenticatedCapabilities(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await pumpEventQueue();
+    cancellation.complete();
+
+    await expectLater(
+      cancellable,
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.code,
+          'code',
+          NextcloudApiError.cancelled,
+        ),
+      ),
+    );
+    expect((await shared).hasTalk, isTrue);
+    expect(requests, 2);
+  });
+
+  test('drops the cached snapshot after an unauthorized request', () async {
+    var capabilityRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          capabilityRequests++;
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        return http.Response('', 401);
+      }),
+    );
+    addTearDown(api.close);
+
+    Future<CapabilitySnapshot> read() => api.getAuthenticatedCapabilities(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+
+    await read();
+    await read();
+    expect(capabilityRequests, 1);
+
+    await expectLater(
+      api.getWebPushVapid(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      ),
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          401,
+        ),
+      ),
+    );
+
+    await read();
+    expect(capabilityRequests, 2);
+  });
+
   test('performs the authenticated Web Push registration handshake', () async {
     final requests = <http.Request>[];
     final responses = <http.Response>[
@@ -326,6 +493,31 @@ final class _OversizedStreamingClient extends http.BaseClient {
       List<int>.filled(48 * 1024, 0x20),
     ]);
     return http.StreamedResponse(chunks, 200);
+  }
+}
+
+/// Answers a plain request once the caller stops waiting for it, and aborts an
+/// abortable one, so a shared read and a cancelled read can be told apart.
+final class _AbortAwareOnceClient extends http.BaseClient {
+  _AbortAwareOnceClient({required this.onRequest, required this.response});
+
+  final void Function() onRequest;
+  final http.Response Function() response;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    onRequest();
+    if (request is http.Abortable) {
+      await request.abortTrigger;
+      throw http.RequestAbortedException(request.url);
+    }
+    await pumpEventQueue();
+    final body = response();
+    return http.StreamedResponse(
+      Stream<List<int>>.value(body.bodyBytes),
+      body.statusCode,
+      headers: body.headers,
+    );
   }
 }
 

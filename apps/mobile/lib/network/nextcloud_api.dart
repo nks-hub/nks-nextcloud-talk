@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -85,7 +86,10 @@ final class HttpNextcloudApi {
     http.Client? client,
     this.originPolicy = ServerOriginPolicy.production,
     this.requestTimeout = const Duration(seconds: 20),
-  }) : _client = client ?? http.Client();
+    this.capabilityCacheTtl = const Duration(minutes: 5),
+    DateTime Function()? clock,
+  }) : _client = client ?? http.Client(),
+       _clock = clock ?? DateTime.now;
 
   static const _statusMaximumBytes = 64 * 1024;
   static const _loginMaximumBytes = 128 * 1024;
@@ -164,6 +168,19 @@ final class HttpNextcloudApi {
   final http.Client _client;
   final ServerOriginPolicy originPolicy;
   final Duration requestTimeout;
+  final Duration capabilityCacheTtl;
+  final DateTime Function() _clock;
+
+  /// In-memory only: a capability snapshot is server truth that must never
+  /// outlive the process that verified the credentials behind it, and the part
+  /// the app needs across restarts is already persisted as Talk features in
+  /// `chat_capabilities`.
+  ///
+  /// Keyed by server plus login name so two accounts — or the same login on two
+  /// servers — can never read each other's snapshot. Each entry also carries a
+  /// fingerprint of the Authorization header, so a rotated app password misses
+  /// the cache instead of reusing the snapshot of the revoked session.
+  final Map<String, _CachedCapabilities> _capabilityCache = {};
 
   Future<ServerStatus> getServerStatus(ServerBase server) async {
     final payload = await _sendJson(
@@ -216,11 +233,62 @@ final class HttpNextcloudApi {
     required String appPassword,
     Future<void>? abortTrigger,
   }) async {
+    final authorization = _basicAuthorization(loginName, appPassword);
+    final fingerprint = _credentialFingerprint(authorization);
+    final cacheKey = '${server.uri}\u0000$loginName';
+    final now = _clock();
+    final cached = _capabilityCache[cacheKey];
+    if (cached != null &&
+        cached.credentialFingerprint == fingerprint &&
+        now.isBefore(cached.expiresAt)) {
+      return cached.snapshot;
+    }
+
+    final pending = _readCapabilities(
+      server: server,
+      authorization: authorization,
+      abortTrigger: abortTrigger,
+    );
+    // A cancellable read stays private: a caller that joined it must never have
+    // its snapshot torn down by whoever happens to abort first. Every other read
+    // is published while still in flight, so the burst of steps that opens a
+    // room shares one request instead of racing several identical ones.
+    final shared = abortTrigger == null;
+    final entry = _CachedCapabilities(
+      credentialFingerprint: fingerprint,
+      snapshot: pending,
+      expiresAt: now.add(capabilityCacheTtl),
+    );
+    if (shared) {
+      _capabilityCache[cacheKey] = entry;
+    }
+    final CapabilitySnapshot snapshot;
+    try {
+      snapshot = await pending;
+    } on Object {
+      // No failure — network, 401, malformed payload — is ever cached, so the
+      // next read after an error always reaches the server again.
+      if (identical(_capabilityCache[cacheKey], entry)) {
+        _capabilityCache.remove(cacheKey);
+      }
+      rethrow;
+    }
+    if (!shared) {
+      _capabilityCache[cacheKey] ??= entry;
+    }
+    return snapshot;
+  }
+
+  Future<CapabilitySnapshot> _readCapabilities({
+    required ServerBase server,
+    required String authorization,
+    required Future<void>? abortTrigger,
+  }) async {
     final request = _request('GET', server.capabilitiesUri, abortTrigger)
       ..headers.addAll({
         'Accept': 'application/json',
         'OCS-APIRequest': 'true',
-        'Authorization': _basicAuthorization(loginName, appPassword),
+        'Authorization': authorization,
       });
     final payload = await _sendJson(
       request,
@@ -230,6 +298,19 @@ final class HttpNextcloudApi {
     return CapabilitySnapshot.fromJson(
       payload.json,
       context: CapabilityContext.authenticated,
+    );
+  }
+
+  /// Any authenticated request answered with 401 means the session behind those
+  /// credentials no longer holds the authority the snapshot was read under, so
+  /// the snapshot is dropped before the caller can gate a feature on it.
+  void _invalidateCapabilitiesForCredentials(String? authorization) {
+    if (authorization == null) {
+      return;
+    }
+    final fingerprint = _credentialFingerprint(authorization);
+    _capabilityCache.removeWhere(
+      (_, entry) => entry.credentialFingerprint == fingerprint,
     );
   }
 
@@ -999,6 +1080,9 @@ final class HttpNextcloudApi {
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
+      if (response.statusCode == 401) {
+        _invalidateCapabilitiesForCredentials(request.headers['Authorization']);
+      }
       if (!allowedStatusCodes.contains(response.statusCode)) {
         await response.stream.drain<void>();
         throw NextcloudApiException(
@@ -1129,6 +1213,23 @@ final class _JsonPayload {
 String _basicAuthorization(String loginName, String appPassword) {
   final bytes = Uint8List.fromList(utf8.encode('$loginName:$appPassword'));
   return 'Basic ${base64Encode(bytes)}';
+}
+
+/// Digest of the Authorization header, so credential rotation can be detected
+/// without the cache ever retaining the header, the login name or the password.
+String _credentialFingerprint(String authorization) =>
+    sha256.convert(utf8.encode(authorization)).toString();
+
+final class _CachedCapabilities {
+  const _CachedCapabilities({
+    required this.credentialFingerprint,
+    required this.snapshot,
+    required this.expiresAt,
+  });
+
+  final String credentialFingerprint;
+  final Future<CapabilitySnapshot> snapshot;
+  final DateTime expiresAt;
 }
 
 bool _isAllowedAvatarUri(ServerBase server, Uri avatarUri) {

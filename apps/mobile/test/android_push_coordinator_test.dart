@@ -524,6 +524,7 @@ void main() {
       final fixture = await _createAccounts(const <String>['account-a']);
       final platform = _FakeAndroidWebPushPlatform();
       var requests = 0;
+      var now = DateTime.utc(2026, 8, 25, 12);
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
           expect(request.url.path, endsWith('/cloud/capabilities'));
@@ -533,6 +534,7 @@ void main() {
           }
           return http.Response('', 503);
         }),
+        clock: () => now,
       );
       addTearDown(api.close);
       final retryTimers = <_ManualRetryTimer>[];
@@ -573,6 +575,9 @@ void main() {
 
       await coordinator.reconcileAccount('account-a');
       expect(retryTimers[2].isActive, isFalse);
+      // The successful reconcile cached the snapshot; let it fall out of its
+      // validity window so the next reconcile reaches the failing server again.
+      now = now.add(const Duration(minutes: 6));
       await expectLater(
         coordinator.reconcileAccount('account-a'),
         throwsA(isA<NextcloudApiException>()),
