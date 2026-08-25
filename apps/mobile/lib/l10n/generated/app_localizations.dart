@@ -596,6 +596,12 @@ abstract class AppLocalizations {
   /// **'Loading older messages…'**
   String get loadingOlderMessages;
 
+  /// No description provided for @chatHistoryGapNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Some messages between here are missing'**
+  String get chatHistoryGapNotice;
+
   /// No description provided for @readOnlyConversation.
   ///
   /// In en, this message translates to:

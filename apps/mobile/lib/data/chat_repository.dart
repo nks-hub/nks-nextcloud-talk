@@ -1397,6 +1397,15 @@ ChatSendRequest _restoreSendRequest({
   );
 }
 
+/// Decodes the `blocks` column of a [StoredChatScope] row into the ranges of
+/// message IDs the client has actually confirmed by fetching them from the
+/// server. A scope can hold more than one block: two ranges that are not
+/// adjacent mean there is a gap of messages between them that was never
+/// fetched. Callers that render cached messages (see `chat_room_pane.dart`)
+/// use this to tell honest contiguous history apart from two cached islands
+/// with a hole in between, instead of gluing them together.
+List<ChatBlock> decodeChatScopeBlocks(String source) => _decodeBlocks(source);
+
 List<ChatBlock> _decodeBlocks(String source) {
   final decoded = jsonDecode(source);
   if (decoded is! List<Object?> || decoded.isEmpty) {

@@ -286,6 +286,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingOlderMessages => 'Loading older messages…';
 
   @override
+  String get chatHistoryGapNotice => 'Some messages between here are missing';
+
+  @override
   String get readOnlyConversation => 'This conversation is read-only.';
 
   @override

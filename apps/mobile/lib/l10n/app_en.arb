@@ -83,6 +83,7 @@
   "messageTooLong": "The message is too long.",
   "loadOlderMessages": "Load older messages",
   "loadingOlderMessages": "Loading older messages…",
+  "chatHistoryGapNotice": "Some messages between here are missing",
   "readOnlyConversation": "This conversation is read-only.",
   "deletedMessage": "Message deleted",
   "outboxQueued": "Waiting to send",

@@ -1419,6 +1419,208 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets(
+    'shows the load-older control while history remains, and hides it '
+    'once the scope reports it is exhausted',
+    (tester) async {
+      await database
+          .into(database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: account.id,
+              roomToken: conversation.token,
+              scopeKey: 'root',
+              historyCursor: '10',
+              futureCursor: '10',
+              lastCommonRead: '10',
+              lastReadMessage: 0,
+              unreadMessages: 0,
+              hasHistory: true,
+              futureConverged: true,
+              blocksJson: '[["10","10"]]',
+            ),
+          );
+
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('chat-load-older')), findsOneWidget);
+      expect(find.text('Load older messages'), findsOneWidget);
+
+      // A real page fetch that flips `hasHistory` to false is already
+      // covered end-to-end by chat_service_integration_test.dart and the
+      // talk_protocol merge fixtures; this only has to prove the pane reacts
+      // to that scope change, so it writes the resulting state directly.
+      await (database.update(database.chatScopes)..where(
+            (scope) =>
+                scope.accountId.equals(account.id) &
+                scope.roomToken.equals(conversation.token) &
+                scope.scopeKey.equals('root'),
+          ))
+          .write(const ChatScopesCompanion(hasHistory: Value(false)));
+      await tester.pump();
+
+      expect(find.byKey(const Key('chat-load-older')), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets(
+    'tapping load older surfaces a retry-able error without leaving the '
+    'control stuck spinning',
+    (tester) async {
+      await database
+          .into(database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: account.id,
+              roomToken: conversation.token,
+              scopeKey: 'root',
+              historyCursor: '10',
+              futureCursor: '10',
+              lastCommonRead: '10',
+              lastReadMessage: 0,
+              unreadMessages: 0,
+              hasHistory: true,
+              futureConverged: true,
+              blocksJson: '[["10","10"]]',
+            ),
+          );
+
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('chat-load-older')), findsOneWidget);
+
+      // No app password is stored for this account (the vault is empty, as
+      // in every other test in this file), so the real ChatService fails
+      // fast with a credential error instead of reaching the network -
+      // deterministic, and it exercises the exact catch/retry path a real
+      // failed page fetch would take.
+      await tester.tap(find.byKey(const Key('chat-load-older')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('retry-chat-sync')), findsOneWidget);
+      // hasHistory was never touched by the failed attempt, so the control
+      // must still be there, enabled, ready for the user to retry directly.
+      final loadOlderButton = tester.widget<TextButton>(
+        find.descendant(
+          of: find.byKey(const Key('chat-load-older')),
+          matching: find.byType(TextButton),
+        ),
+      );
+      expect(loadOlderButton.onPressed != null, isTrue);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('retry-chat-sync')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets(
+    'keeps two disjoint cached ranges visibly separated instead of '
+    'gluing them into one history',
+    (tester) async {
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 20,
+          actorId: 'someone-else',
+          actorDisplayName: 'Other person',
+          timestamp: 1724300100,
+          message: 'Older block message',
+        ),
+        displayText: 'Older block message',
+      );
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 50,
+          actorId: 'someone-else',
+          actorDisplayName: 'Other person',
+          timestamp: 1724300200,
+          message: 'Boundary before the gap',
+        ),
+        displayText: 'Boundary before the gap',
+      );
+      // Falls inside the gap (51-69): never confirmed by a fetch, so it
+      // must never render even though the row happens to be cached, for
+      // example a leftover from a state the client no longer stands behind.
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 60,
+          actorId: 'someone-else',
+          actorDisplayName: 'Other person',
+          timestamp: 1724300250,
+          message: 'Ghost message inside the gap',
+        ),
+        displayText: 'Ghost message inside the gap',
+      );
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 80,
+          actorId: 'someone-else',
+          actorDisplayName: 'Other person',
+          timestamp: 1724300300,
+          message: 'First message after the gap',
+        ),
+        displayText: 'First message after the gap',
+      );
+      await database
+          .into(database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: account.id,
+              roomToken: conversation.token,
+              scopeKey: 'root',
+              historyCursor: '10',
+              futureCursor: '100',
+              lastCommonRead: '10',
+              lastReadMessage: 0,
+              unreadMessages: 0,
+              hasHistory: false,
+              futureConverged: true,
+              blocksJson: '[["10","50"],["70","100"]]',
+            ),
+          );
+
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Cached hello'), findsOneWidget);
+      expect(find.text('Older block message'), findsOneWidget);
+      expect(find.text('Boundary before the gap'), findsOneWidget);
+      expect(find.text('First message after the gap'), findsOneWidget);
+      expect(find.text('Ghost message inside the gap'), findsNothing);
+      expect(find.byKey(const Key('chat-history-gap')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
 }
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';

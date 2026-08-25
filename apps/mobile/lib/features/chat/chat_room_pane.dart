@@ -1094,7 +1094,19 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       unawaited(_toggleReaction(message, parsed, emoji));
     }
 
-    final messages = messagesValue.valueOrNull ?? const <CachedChatMessage>[];
+    final scope = scopeValue.valueOrNull;
+    final scopeBlocks = _decodeScopeBlocks(scope);
+    // Cached rows are keyed only by (account, room, thread); the scope's
+    // blocks are the authoritative record of which message IDs the client
+    // actually confirmed by fetching them. Filtering here means a stray
+    // cached row that falls outside every known block (for example a future
+    // jump-to-message feature caching a preview ahead of the surrounding
+    // history) is never silently glued into the timeline as if it were
+    // contiguous with what is shown around it.
+    final messages = _messagesWithinBlocks(
+      messagesValue.valueOrNull ?? const <CachedChatMessage>[],
+      scopeBlocks,
+    );
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
     final deliveryStates = <int, OutgoingMessageDeliveryState>{
@@ -1105,7 +1117,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final pending = operations
         .where((operation) => operation.outboxState != 'completed')
         .toList(growable: false);
-    final scope = scopeValue.valueOrNull;
     final showInitialLoading =
         !_initialAttemptFinished && messages.isEmpty && pending.isEmpty;
     final error = _localError ?? _storedError(scope?.lastSyncError);
@@ -1203,6 +1214,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   conversation: widget.conversation,
                   threadId: widget.threadId,
                   messages: messages,
+                  blocks: scopeBlocks,
                   pending: pending,
                   hasOlder: scope?.hasHistory ?? false,
                   loadingOlder: _loadingOlder,
@@ -1353,6 +1365,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.conversation,
     required this.threadId,
     required this.messages,
+    required this.blocks,
     required this.pending,
     required this.hasOlder,
     required this.loadingOlder,
@@ -1371,6 +1384,11 @@ final class _ChatTimeline extends StatelessWidget {
   final CachedConversation conversation;
   final int? threadId;
   final List<CachedChatMessage> messages;
+
+  /// The scope's confirmed message-id ranges, `null` when the scope itself
+  /// hasn't loaded yet. More than one entry means the client knows about a
+  /// gap between two cached ranges (see [_gapBeforeContentIndex]).
+  final List<ChatBlock>? blocks;
   final List<StoredTextSendOperation> pending;
   final bool hasOlder;
   final bool loadingOlder;
@@ -1432,11 +1450,15 @@ final class _ChatTimeline extends StatelessWidget {
           final next = contentIndex + 1 >= messages.length
               ? null
               : messages[contentIndex + 1];
+          final gapBeforeThis = _gapBeforeContentIndex(contentIndex);
           final groupedWithPrevious =
-              previous != null && _messagesShareGroup(previous, message);
+              !gapBeforeThis &&
+              previous != null &&
+              _messagesShareGroup(previous, message);
           final groupedWithNext =
               next != null && _messagesShareGroup(message, next);
           final startsDay =
+              gapBeforeThis ||
               previous == null ||
               !_sameLocalDay(previous.timestamp, message.timestamp);
           return KeyedSubtree(
@@ -1446,6 +1468,8 @@ final class _ChatTimeline extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (gapBeforeThis)
+                  const _ChatHistoryGapNotice(key: Key('chat-history-gap')),
                 if (startsDay) _DaySeparator(timestamp: message.timestamp),
                 _MessageBubble(
                   account: account,
@@ -1477,6 +1501,21 @@ final class _ChatTimeline extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Whether the scope's confirmed ranges show a gap between the message at
+  /// `index - 1` and the one at `index`. [messages] only ever contains rows
+  /// [_messagesWithinBlocks] already verified as covered by some block, so a
+  /// change of block between two consecutive entries always means real
+  /// unfetched history sits between them, not merely an absent cache row.
+  bool _gapBeforeContentIndex(int index) {
+    final ranges = blocks;
+    if (ranges == null || ranges.length < 2 || index <= 0) {
+      return false;
+    }
+    final previousBlock = _blockIndexOf(ranges, messages[index - 1].messageId);
+    final currentBlock = _blockIndexOf(ranges, messages[index].messageId);
+    return previousBlock != currentBlock;
   }
 }
 
@@ -2304,6 +2343,86 @@ String _messageActionErrorMessage(
     ChatMessageActionError.conversationMissing ||
     ChatMessageActionError.invalidResponse => strings.chatInvalidResponse,
   };
+}
+
+/// Decodes a scope's stored `blocks` column, or `null` when the scope
+/// hasn't loaded yet or its blocks are unreadable. A missing/undecodable
+/// scope means the client cannot yet judge what is contiguous, so callers
+/// fall back to showing the cache unfiltered rather than hiding everything.
+List<ChatBlock>? _decodeScopeBlocks(StoredChatScope? scope) {
+  if (scope == null) {
+    return null;
+  }
+  try {
+    return decodeChatScopeBlocks(scope.blocksJson);
+  } on Object {
+    return null;
+  }
+}
+
+/// Keeps only cached messages the scope's blocks actually cover. With no
+/// scope info yet ([blocks] is `null`) nothing is filtered, since there is
+/// nothing to judge coverage against.
+List<CachedChatMessage> _messagesWithinBlocks(
+  List<CachedChatMessage> messages,
+  List<ChatBlock>? blocks,
+) {
+  if (blocks == null) {
+    return messages;
+  }
+  return messages
+      .where((message) => _blockIndexOf(blocks, message.messageId) != -1)
+      .toList(growable: false);
+}
+
+int _blockIndexOf(List<ChatBlock> blocks, int messageId) {
+  final cursor = ChatCursor.parse(messageId.toString());
+  for (var index = 0; index < blocks.length; index++) {
+    if (blocks[index].contains(cursor)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/// A visible divider marking a gap the client honestly knows about: two
+/// cached ranges with unfetched messages between them. The current fetch
+/// protocol only ever extends a scope's history/future cursor at its two
+/// ends (see `planChatGetMerge`), so there is no request that can close an
+/// interior gap; this only ever renders when a future feature (for example
+/// jumping to a specific message) caches a range disconnected from what is
+/// already known, which is why it does not offer a "load" action that
+/// would have nothing to call.
+final class _ChatHistoryGapNotice extends StatelessWidget {
+  const _ChatHistoryGapNotice({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final label = AppLocalizations.of(context).chatHistoryGapNotice;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Semantics(
+        label: label,
+        child: Row(
+          children: [
+            Expanded(child: Divider(color: scheme.outlineVariant)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
+            Expanded(child: Divider(color: scheme.outlineVariant)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 ChatMessage? _parseCachedMessage(CachedChatMessage cached) {
