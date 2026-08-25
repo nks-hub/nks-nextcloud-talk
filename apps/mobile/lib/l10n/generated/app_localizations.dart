@@ -518,6 +518,18 @@ abstract class AppLocalizations {
   /// **'Symbols'**
   String get emojiCategorySymbols;
 
+  /// No description provided for @mentionSuggestionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get mentionSuggestionsEmpty;
+
+  /// No description provided for @mentionSuggestionsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load suggestions'**
+  String get mentionSuggestionsError;
+
   /// No description provided for @openGiphyPicker.
   ///
   /// In en, this message translates to:
