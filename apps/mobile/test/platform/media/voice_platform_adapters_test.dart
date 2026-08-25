@@ -45,18 +45,30 @@ void main() {
 
   group('RecordVoiceRecorder', () {
     test(
-      'commits a valid WAV as an app-owned source with exact duration',
+      'commits a compressed recording as an app-owned source with elapsed '
+      'duration and the configured bit rate',
       () async {
-        final backend = _FakeVoiceCaptureBackend(wavBytes: _oneSecondWav());
-        final recorder = RecordVoiceRecorder(backend: backend, store: store);
+        final backend = _FakeVoiceCaptureBackend(
+          recordingBytes: _fakeRecordingBytes(),
+        );
+        final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+        final recorder = RecordVoiceRecorder(
+          backend: backend,
+          store: store,
+          clock: clock,
+        );
         addTearDown(recorder.close);
 
         await recorder.start();
+        clock.advance(const Duration(seconds: 4, milliseconds: 250));
         final recording = await recorder.stop();
 
-        expect(recording.duration, const Duration(seconds: 1));
-        expect(recording.source.mimeType, 'audio/wav');
-        expect(recording.source.displayName, 'voice-message.wav');
+        expect(recording.duration, const Duration(seconds: 4, milliseconds: 250));
+        expect(recording.source.mimeType, voiceRecordingMimeType);
+        expect(recording.source.displayName, 'voice-message.m4a');
+        expect(backend.lastBitRate, 64000);
+        expect(backend.lastSampleRate, 48000);
+        expect(backend.lastChannels, 1);
         expect(
           (await store.observe(
             recording.source.handle,
@@ -74,19 +86,48 @@ void main() {
     );
 
     test(
+      'rejects a recording whose stop time did not advance past its start',
+      () async {
+        final backend = _FakeVoiceCaptureBackend(
+          recordingBytes: _fakeRecordingBytes(),
+        );
+        final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+        final recorder = RecordVoiceRecorder(
+          backend: backend,
+          store: store,
+          clock: clock,
+        );
+        addTearDown(recorder.close);
+
+        await recorder.start();
+        await expectLater(
+          recorder.stop(),
+          throwsA(
+            isA<VoicePlatformException>().having(
+              (error) => error.code,
+              'code',
+              VoicePlatformError.invalidRecording,
+            ),
+          ),
+        );
+        expect(await _stagingFiles(root), isEmpty);
+      },
+    );
+
+    test(
       'never adopts a path that the active store session does not own',
       () async {
         final foreign = File(
-          '${root.parent.path}${Platform.pathSeparator}foreign.wav',
+          '${root.parent.path}${Platform.pathSeparator}foreign.m4a',
         );
-        await foreign.writeAsBytes(_oneSecondWav(), flush: true);
+        await foreign.writeAsBytes(_fakeRecordingBytes(), flush: true);
         addTearDown(() async {
           if (await foreign.exists()) {
             await foreign.delete();
           }
         });
         final backend = _FakeVoiceCaptureBackend(
-          wavBytes: _oneSecondWav(),
+          recordingBytes: _fakeRecordingBytes(),
           stopPathOverride: foreign.path,
         );
         final recorder = RecordVoiceRecorder(backend: backend, store: store);
@@ -112,7 +153,9 @@ void main() {
     test(
       'cancel and close release staging and the backend exactly once',
       () async {
-        final backend = _FakeVoiceCaptureBackend(wavBytes: _oneSecondWav());
+        final backend = _FakeVoiceCaptureBackend(
+          recordingBytes: _fakeRecordingBytes(),
+        );
         final recorder = RecordVoiceRecorder(backend: backend, store: store);
 
         await recorder.start();
@@ -126,8 +169,8 @@ void main() {
       },
     );
 
-    test('fails before recording when WAV is unsupported', () async {
-      final backend = _FakeVoiceCaptureBackend(supportsWav: false);
+    test('fails before recording when the encoder is unsupported', () async {
+      final backend = _FakeVoiceCaptureBackend(supportsEncoding: false);
       final recorder = RecordVoiceRecorder(backend: backend, store: store);
       addTearDown(recorder.close);
 
@@ -137,7 +180,7 @@ void main() {
           isA<VoicePlatformException>().having(
             (error) => error.code,
             'code',
-            VoicePlatformError.wavUnsupported,
+            VoicePlatformError.encodingUnsupported,
           ),
         ),
       );
@@ -148,12 +191,13 @@ void main() {
 
   group('AudioplayersVoicePreviewPlayer', () {
     test(
-      'resolves a verified handle and completes on native playback completion',
+      'resolves a verified handle, forwards the real MIME type, and '
+      'completes on native playback completion',
       () async {
         final source = await store.copyFromStream(
-          stream: Stream<List<int>>.value(_oneSecondWav()),
-          mimeType: 'audio/wav',
-          displayName: 'preview.wav',
+          stream: Stream<List<int>>.value(_fakeRecordingBytes()),
+          mimeType: 'audio/mp4',
+          displayName: 'preview.m4a',
         );
         final backend = _FakeVoicePlaybackBackend();
         final player = AudioplayersVoicePreviewPlayer(
@@ -167,6 +211,7 @@ void main() {
         await backend.started.future;
         expect(completed, isFalse);
         expect(backend.lastPath, isNot(contains(source.handle.value)));
+        expect(backend.lastMimeType, 'audio/mp4');
 
         backend.complete();
         await playback;
@@ -176,9 +221,9 @@ void main() {
 
     test('stop unblocks active playback and close disposes once', () async {
       final source = await store.copyFromStream(
-        stream: Stream<List<int>>.value(_oneSecondWav()),
-        mimeType: 'audio/wav',
-        displayName: 'preview.wav',
+        stream: Stream<List<int>>.value(_fakeRecordingBytes()),
+        mimeType: 'audio/mp4',
+        displayName: 'preview.m4a',
       );
       final backend = _FakeVoicePlaybackBackend();
       final player = AudioplayersVoicePreviewPlayer(
@@ -202,9 +247,9 @@ void main() {
       'propagates native start failures and clears active playback',
       () async {
         final source = await store.copyFromStream(
-          stream: Stream<List<int>>.value(_oneSecondWav()),
-          mimeType: 'audio/wav',
-          displayName: 'preview.wav',
+          stream: Stream<List<int>>.value(_fakeRecordingBytes()),
+          mimeType: 'audio/mp4',
+          displayName: 'preview.m4a',
         );
         final backend = _FakeVoicePlaybackBackend(
           playFailure: StateError('Synthetic playback start failure.'),
@@ -228,20 +273,24 @@ void main() {
 final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   _FakeVoiceCaptureBackend({
     this.permission = true,
-    this.supportsWav = true,
-    this.wavBytes,
+    bool supportsEncoding = true,
+    this.recordingBytes,
     this.stopPathOverride,
-  });
+    // ignore: prefer_initializing_formals
+  }) : _supportsEncoding = supportsEncoding;
 
   final bool permission;
-  final bool supportsWav;
-  final List<int>? wavBytes;
+  final bool _supportsEncoding;
+  final List<int>? recordingBytes;
   final String? stopPathOverride;
   String? _path;
   int permissionRequests = 0;
   int starts = 0;
   int cancels = 0;
   int disposes = 0;
+  int? lastBitRate;
+  int? lastSampleRate;
+  int? lastChannels;
 
   @override
   Future<bool> requestPermission() async {
@@ -250,17 +299,21 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   }
 
   @override
-  Future<bool> supportsWaveEncoding() async => supportsWav;
+  Future<bool> supportsEncoding() async => _supportsEncoding;
 
   @override
-  Future<void> startWave({
+  Future<void> start({
     required String path,
     required int sampleRate,
     required int channels,
+    required int bitRate,
   }) async {
     starts++;
     _path = path;
-    final bytes = wavBytes;
+    lastBitRate = bitRate;
+    lastSampleRate = sampleRate;
+    lastChannels = channels;
+    final bytes = recordingBytes;
     if (bytes != null) {
       await File(path).writeAsBytes(bytes, flush: true);
     }
@@ -284,13 +337,31 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   }
 }
 
+final class _FakeVoiceRecordingClock implements VoiceRecordingClock {
+  _FakeVoiceRecordingClock(this._value);
+
+  DateTime _value;
+
+  @override
+  DateTime now() => _value;
+
+  void advance(Duration by) {
+    _value = _value.add(by);
+  }
+}
+
 final class _FakeVoicePlaybackBackend implements VoicePlaybackBackend {
   _FakeVoicePlaybackBackend({this.playFailure});
 
   final StreamController<void> _completed = StreamController<void>.broadcast();
+  final StreamController<Duration> _position =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration> _duration =
+      StreamController<Duration>.broadcast();
   final Completer<void> started = Completer<void>();
   final Object? playFailure;
   String? lastPath;
+  String? lastMimeType;
   int stops = 0;
   int disposes = 0;
 
@@ -298,8 +369,15 @@ final class _FakeVoicePlaybackBackend implements VoicePlaybackBackend {
   Stream<void> get completed => _completed.stream;
 
   @override
-  Future<void> playFile(String path) async {
+  Stream<Duration> get positionChanged => _position.stream;
+
+  @override
+  Stream<Duration> get durationChanged => _duration.stream;
+
+  @override
+  Future<void> playFile(String path, {required String mimeType}) async {
     lastPath = path;
+    lastMimeType = mimeType;
     if (!started.isCompleted) {
       started.complete();
     }
@@ -320,38 +398,13 @@ final class _FakeVoicePlaybackBackend implements VoicePlaybackBackend {
   Future<void> dispose() async {
     disposes++;
     await _completed.close();
+    await _position.close();
+    await _duration.close();
   }
 }
 
-Uint8List _oneSecondWav() {
-  const sampleRate = 8000;
-  const channels = 1;
-  const bitsPerSample = 16;
-  const dataLength = sampleRate * channels * (bitsPerSample ~/ 8);
-  final bytes = Uint8List(44 + dataLength);
-  final data = ByteData.sublistView(bytes);
-
-  _ascii(bytes, 0, 'RIFF');
-  data.setUint32(4, 36 + dataLength, Endian.little);
-  _ascii(bytes, 8, 'WAVE');
-  _ascii(bytes, 12, 'fmt ');
-  data.setUint32(16, 16, Endian.little);
-  data.setUint16(20, 1, Endian.little);
-  data.setUint16(22, channels, Endian.little);
-  data.setUint32(24, sampleRate, Endian.little);
-  data.setUint32(28, sampleRate * channels * 2, Endian.little);
-  data.setUint16(32, channels * 2, Endian.little);
-  data.setUint16(34, bitsPerSample, Endian.little);
-  _ascii(bytes, 36, 'data');
-  data.setUint32(40, dataLength, Endian.little);
-  return bytes;
-}
-
-void _ascii(Uint8List bytes, int offset, String value) {
-  for (var index = 0; index < value.length; index++) {
-    bytes[offset + index] = value.codeUnitAt(index);
-  }
-}
+Uint8List _fakeRecordingBytes() =>
+    Uint8List.fromList(List<int>.generate(64, (index) => index));
 
 Future<List<File>> _stagingFiles(Directory root) async {
   final staging = Directory('${root.path}${Platform.pathSeparator}staging');

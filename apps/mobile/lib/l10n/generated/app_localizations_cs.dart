@@ -493,6 +493,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get voicePlaybackFailed => 'Náhled nahrávky se nepodařilo přehrát.';
 
   @override
+  String voicePlaybackPosition(Object duration, Object position) {
+    return '$position z $duration';
+  }
+
+  @override
   String get voiceSendFailed =>
       'Hlasovou zprávu se nepodařilo zařadit k odeslání.';
 

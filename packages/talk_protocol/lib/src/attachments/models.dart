@@ -5,7 +5,14 @@ import 'identifiers.dart';
 
 const int attachmentMaximumSourceBytes = 1 << 50;
 const int attachmentMaximumChunkCount = 100000;
+
+/// MIME types a voice-message source may legitimately carry. `audio/mp4` is
+/// the compressed AAC-LC/M4A format the Flutter client records by default
+/// (see `voiceRecordingMimeType` in the mobile app's platform layer);
+/// `audio/wav` and `audio/mpeg` remain accepted for sources produced by
+/// older builds or other Talk clients.
 const Set<String> attachmentSupportedVoiceMimeTypes = <String>{
+  'audio/mp4',
   'audio/mpeg',
   'audio/wav',
 };
