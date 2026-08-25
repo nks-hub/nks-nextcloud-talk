@@ -86,6 +86,10 @@ final class ConversationRoom {
     required this.isCustomAvatar,
     required this.displayName,
     required this.description,
+    required this.status,
+    required this.statusClearAt,
+    required this.statusIcon,
+    required this.statusMessage,
     required this.lastActivity,
     required this.lastReadMessage,
     required this.lastCommonReadMessage,
@@ -144,6 +148,10 @@ final class ConversationRoom {
   final bool isCustomAvatar;
   final String displayName;
   final String description;
+  final String? status;
+  final int? statusClearAt;
+  final String? statusIcon;
+  final String? statusMessage;
   final int lastActivity;
   final int lastReadMessage;
   final int lastCommonReadMessage;
@@ -180,6 +188,32 @@ final class ConversationRoom {
   final int hasScheduledMessages;
   final ConversationPreview? lastMessage;
   final Map<String, Object?> wire;
+
+  bool get hasUserStatusWire => wire.containsKey('status');
+
+  ConversationRoom preserveUserStatusFrom(ConversationRoom previous) {
+    if (token != previous.token) {
+      protocolFailure(
+        TalkProtocolErrorCode.invalidConversationMerge,
+        r'$.rooms[].token',
+      );
+    }
+    if (hasUserStatusWire || !previous.hasUserStatusWire) {
+      return this;
+    }
+    final merged = Map<String, Object?>.of(wire);
+    for (final key in const <String>[
+      'status',
+      'statusClearAt',
+      'statusIcon',
+      'statusMessage',
+    ]) {
+      if (previous.wire.containsKey(key)) {
+        merged[key] = previous.wire[key];
+      }
+    }
+    return ConversationRoom.fromJson(merged);
+  }
 
   @override
   String toString() => 'ConversationRoom(<redacted>)';
@@ -267,10 +301,10 @@ ConversationRoom parseConversationRoom(
     code: _responseCode,
   );
   _requireInt(room, 'sipEnabled', path);
-  _optionalString(room, 'status', path);
-  _optionalNullableInt(room, 'statusClearAt', path);
-  _requireNullableString(room, 'statusIcon', path);
-  _requireNullableString(room, 'statusMessage', path);
+  final status = _optionalString(room, 'status', path);
+  final statusClearAt = _optionalNullableInt(room, 'statusClearAt', path);
+  final statusIcon = _requireNullableString(room, 'statusIcon', path);
+  final statusMessage = _requireNullableString(room, 'statusMessage', path);
   final token = ConversationToken.parse(room['token'], path: '$path.token');
   final type = _requireInt(room, 'type', path);
   final unreadMention = _requireBool(room, 'unreadMention', path);
@@ -313,6 +347,10 @@ ConversationRoom parseConversationRoom(
     isCustomAvatar: isCustomAvatar,
     displayName: displayName,
     description: description,
+    status: status,
+    statusClearAt: statusClearAt,
+    statusIcon: statusIcon,
+    statusMessage: statusMessage,
     lastActivity: lastActivity,
     lastReadMessage: lastReadMessage,
     lastCommonReadMessage: lastCommonReadMessage,

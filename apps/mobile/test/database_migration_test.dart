@@ -11,7 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
-  test('schema v1 to v7 preserves its account and conversation', () async {
+  test('schema v1 to v8 preserves its account and conversation', () async {
     final fixture =
         readFixtureJson(
               'conversation-list/fixtures/conversations-full.response.json',
@@ -51,7 +51,7 @@ void main() {
         .select(database.cachedConversations)
         .getSingle();
 
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
     expect(account.id, 'account-a');
     expect(account.talkFeaturesJson, '[]');
     expect(room.token, 'synthetic-room-token-a');
@@ -70,7 +70,7 @@ void main() {
   });
 
   test(
-    'schema v2 to v7 preserves rooms and backfills avatar metadata',
+    'schema v2 to v8 preserves rooms and backfills avatar metadata',
     () async {
       final fixture =
           readFixtureJson(
@@ -114,7 +114,7 @@ void main() {
           .getSingle();
       final account = await database.select(database.accounts).getSingle();
 
-      expect(database.schemaVersion, 7);
+      expect(database.schemaVersion, 8);
       expect(room.token, 'synthetic-room-token-a');
       expect(room.roomType, 2);
       expect(room.roomName, 'synthetic-room-a');
@@ -129,12 +129,13 @@ void main() {
     },
   );
 
-  test('schema v3 to v7 clears avatars lacking custom metadata', () async {
+  test('schema v3 to v8 clears avatars lacking custom metadata', () async {
     final database = AppDatabase.forTesting(
       NativeDatabase.memory(
         setup: (raw) {
           raw
             ..execute(_accountsV3Sql)
+            ..execute(_cachedConversationsV3Sql)
             ..execute(_cachedChatMessagesV2Sql)
             ..execute(_conversationAvatarsV3Sql)
             ..execute(_textSendOperationsV4Sql)
@@ -157,18 +158,19 @@ void main() {
     );
     addTearDown(database.close);
 
-    expect(database.schemaVersion, 7);
+    expect(database.schemaVersion, 8);
     expect(await database.select(database.conversationAvatars).get(), isEmpty);
   });
 
   test(
-    'schema v4 to v7 preserves outbox rows with no thread binding',
+    'schema v4 to v8 preserves outbox rows with no thread binding',
     () async {
       final database = AppDatabase.forTesting(
         NativeDatabase.memory(
           setup: (raw) {
             raw
               ..execute(_accountsV3Sql)
+              ..execute(_cachedConversationsV3Sql)
               ..execute(_cachedChatMessagesV2Sql)
               ..execute(_textSendOperationsV4Sql)
               ..execute(
@@ -198,14 +200,14 @@ void main() {
           .select(database.textSendOperations)
           .getSingle();
 
-      expect(database.schemaVersion, 7);
+      expect(database.schemaVersion, 8);
       expect(operation.operationId, 'operation-a');
       expect(operation.threadId, isNull);
     },
   );
 
   test(
-    'schema v5 to v7 preserves thread binding and recovers sending rows',
+    'schema v5 to v8 preserves thread binding and recovers sending rows',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'nctalk-chat-restart-',
@@ -299,7 +301,7 @@ void main() {
     },
   );
 
-  test('schema v6 to v7 preserves chat rows and creates join index', () async {
+  test('schema v6 to v8 preserves chat rows and creates join index', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-confirmation-index-',
     );
@@ -340,6 +342,7 @@ void main() {
       await database.customStatement(
         'DROP INDEX cached_chat_messages_attachment_confirmation',
       );
+      await _dropPresenceColumns(database);
       await database.customStatement('PRAGMA user_version = 6');
       await database.close();
 
@@ -352,7 +355,7 @@ void main() {
           )
           .get();
 
-      expect(database.schemaVersion, 7);
+      expect(database.schemaVersion, 8);
       expect(messages.single.messageId, 101);
       expect(indexes, hasLength(1));
     } finally {
@@ -362,6 +365,76 @@ void main() {
       }
     }
   });
+
+  test('schema v7 to v8 adds nullable peer status columns', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'nctalk-presence-migration-',
+    );
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}conversations.sqlite',
+    );
+    AppDatabase? database;
+    try {
+      database = AppDatabase.forTesting(NativeDatabase(file));
+      await database
+          .into(database.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: 'account-a',
+              serverUrl: 'https://cloud.example.invalid',
+              loginName: 'fixture-user',
+              serverProductName: 'Nextcloud',
+              createdAtMillis: 1,
+            ),
+          );
+      await database
+          .into(database.cachedConversations)
+          .insert(
+            CachedConversationsCompanion.insert(
+              accountId: 'account-a',
+              token: 'rooma123',
+              displayName: 'Synthetic room A',
+              description: '',
+              lastActivity: 1,
+              unreadMessages: 0,
+              favorite: false,
+              rawJson: '{}',
+            ),
+          );
+      await _dropPresenceColumns(database);
+      await database.customStatement('PRAGMA user_version = 7');
+      await database.close();
+      database = AppDatabase.forTesting(NativeDatabase(file));
+
+      final room = await database
+          .select(database.cachedConversations)
+          .getSingle();
+      expect(database.schemaVersion, 8);
+      expect(room.token, 'rooma123');
+      expect(room.peerStatus, isNull);
+      expect(room.peerStatusIcon, isNull);
+      expect(room.peerStatusMessage, isNull);
+      expect(room.peerStatusClearAt, isNull);
+    } finally {
+      await database?.close();
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  });
+}
+
+Future<void> _dropPresenceColumns(AppDatabase database) async {
+  for (final column in const <String>[
+    'peer_status_clear_at',
+    'peer_status_message',
+    'peer_status_icon',
+    'peer_status',
+  ]) {
+    await database.customStatement(
+      'ALTER TABLE cached_conversations DROP COLUMN $column',
+    );
+  }
 }
 
 Future<void> _insertThreadOperation(
@@ -421,6 +494,28 @@ CREATE TABLE cached_conversations (
   unread_messages INTEGER NOT NULL,
   favorite INTEGER NOT NULL CHECK (favorite IN (0, 1)),
   read_only INTEGER NOT NULL DEFAULT 0,
+  last_message_text TEXT NULL,
+  last_message_timestamp INTEGER NULL,
+  raw_json TEXT NOT NULL,
+  PRIMARY KEY(account_id, token)
+)
+''';
+
+const _cachedConversationsV3Sql = '''
+CREATE TABLE cached_conversations (
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  last_activity INTEGER NOT NULL,
+  unread_messages INTEGER NOT NULL,
+  favorite INTEGER NOT NULL CHECK (favorite IN (0, 1)),
+  read_only INTEGER NOT NULL DEFAULT 0,
+  room_type INTEGER NOT NULL DEFAULT 0,
+  room_name TEXT NOT NULL DEFAULT '',
+  object_type TEXT NOT NULL DEFAULT '',
+  avatar_version TEXT NOT NULL DEFAULT '',
+  is_custom_avatar INTEGER NOT NULL DEFAULT 0 CHECK (is_custom_avatar IN (0, 1)),
   last_message_text TEXT NULL,
   last_message_timestamp INTEGER NULL,
   raw_json TEXT NOT NULL,

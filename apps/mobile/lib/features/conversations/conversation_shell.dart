@@ -9,10 +9,10 @@ import '../../core/foreground_sync_loop.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
-import '../chat/chat_room_pane.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import 'conversation_avatar_widget.dart';
+import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
 final class ConversationShell extends ConsumerStatefulWidget {
@@ -108,8 +108,10 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            ChatRoomScreen(account: account, conversation: conversation),
+        builder: (context) => PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+        ),
       ),
     );
   }
@@ -300,7 +302,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onOpenConversation: (conversation) {
             Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
-                builder: (context) => ChatRoomScreen(
+                builder: (context) => PresenceChatRoomScreen(
                   account: selected,
                   conversation: conversation,
                 ),
@@ -583,10 +585,9 @@ final class _ExpandedShell extends StatelessWidget {
               key: const Key('conversation-detail-pane'),
               child: selectedConversation == null
                   ? const _SelectConversationPlaceholder()
-                  : ChatRoomPane(
+                  : PresenceChatRoomPane(
                       account: account,
                       conversation: selectedConversation!,
-                      showHeader: true,
                     ),
             ),
           ],
@@ -877,6 +878,15 @@ final class _ConversationTile extends StatelessWidget {
                                   ).textTheme.titleMedium,
                                 ),
                               ),
+                              if (ConversationPresence.fromConversation(
+                                    conversation,
+                                  ) !=
+                                  null) ...[
+                                const SizedBox(width: 7),
+                                ConversationPresenceBadge(
+                                  conversation: conversation,
+                                ),
+                              ],
                               const SizedBox(width: 8),
                               Text(
                                 _formatActivity(

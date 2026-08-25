@@ -17,6 +17,7 @@ final class ConversationListRequest {
     required this.server,
     required this.mode,
     required this.includeLastMessage,
+    this.includeStatus = false,
     this.cursor,
     this.userAgent = conversationContractUserAgent,
   }) {
@@ -47,13 +48,14 @@ final class ConversationListRequest {
   final ServerBase server;
   final ConversationFetchMode mode;
   final bool includeLastMessage;
+  final bool includeStatus;
   final ConversationCursor? cursor;
   final String userAgent;
 
   Map<String, String> get queryParameters => UnmodifiableMapView({
     'format': 'json',
     'noStatusUpdate': '1',
-    'includeStatus': 'false',
+    'includeStatus': includeStatus.toString(),
     if (mode == ConversationFetchMode.incremental)
       'modifiedSince': cursor!.value,
     'includeLastMessage': includeLastMessage.toString(),
@@ -72,5 +74,6 @@ final class ConversationListRequest {
   @override
   String toString() =>
       'ConversationListRequest(mode: ${mode.name}, '
-      'includeLastMessage: $includeLastMessage)';
+      'includeLastMessage: $includeLastMessage, '
+      'includeStatus: $includeStatus)';
 }

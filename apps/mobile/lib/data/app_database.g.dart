@@ -1016,6 +1016,51 @@ class $CachedConversationsTable extends CachedConversations
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _peerStatusMeta = const VerificationMeta(
+    'peerStatus',
+  );
+  @override
+  late final GeneratedColumn<String> peerStatus = GeneratedColumn<String>(
+    'peer_status',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _peerStatusIconMeta = const VerificationMeta(
+    'peerStatusIcon',
+  );
+  @override
+  late final GeneratedColumn<String> peerStatusIcon = GeneratedColumn<String>(
+    'peer_status_icon',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _peerStatusMessageMeta = const VerificationMeta(
+    'peerStatusMessage',
+  );
+  @override
+  late final GeneratedColumn<String> peerStatusMessage =
+      GeneratedColumn<String>(
+        'peer_status_message',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _peerStatusClearAtMeta = const VerificationMeta(
+    'peerStatusClearAt',
+  );
+  @override
+  late final GeneratedColumn<int> peerStatusClearAt = GeneratedColumn<int>(
+    'peer_status_clear_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastMessageTextMeta = const VerificationMeta(
     'lastMessageText',
   );
@@ -1063,6 +1108,10 @@ class $CachedConversationsTable extends CachedConversations
     objectType,
     avatarVersion,
     isCustomAvatar,
+    peerStatus,
+    peerStatusIcon,
+    peerStatusMessage,
+    peerStatusClearAt,
     lastMessageText,
     lastMessageTimestamp,
     rawJson,
@@ -1189,6 +1238,39 @@ class $CachedConversationsTable extends CachedConversations
         ),
       );
     }
+    if (data.containsKey('peer_status')) {
+      context.handle(
+        _peerStatusMeta,
+        peerStatus.isAcceptableOrUnknown(data['peer_status']!, _peerStatusMeta),
+      );
+    }
+    if (data.containsKey('peer_status_icon')) {
+      context.handle(
+        _peerStatusIconMeta,
+        peerStatusIcon.isAcceptableOrUnknown(
+          data['peer_status_icon']!,
+          _peerStatusIconMeta,
+        ),
+      );
+    }
+    if (data.containsKey('peer_status_message')) {
+      context.handle(
+        _peerStatusMessageMeta,
+        peerStatusMessage.isAcceptableOrUnknown(
+          data['peer_status_message']!,
+          _peerStatusMessageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('peer_status_clear_at')) {
+      context.handle(
+        _peerStatusClearAtMeta,
+        peerStatusClearAt.isAcceptableOrUnknown(
+          data['peer_status_clear_at']!,
+          _peerStatusClearAtMeta,
+        ),
+      );
+    }
     if (data.containsKey('last_message_text')) {
       context.handle(
         _lastMessageTextMeta,
@@ -1276,6 +1358,22 @@ class $CachedConversationsTable extends CachedConversations
         DriftSqlType.bool,
         data['${effectivePrefix}is_custom_avatar'],
       )!,
+      peerStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_status'],
+      ),
+      peerStatusIcon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_status_icon'],
+      ),
+      peerStatusMessage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}peer_status_message'],
+      ),
+      peerStatusClearAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}peer_status_clear_at'],
+      ),
       lastMessageText: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}last_message_text'],
@@ -1312,6 +1410,10 @@ class CachedConversation extends DataClass
   final String objectType;
   final String avatarVersion;
   final bool isCustomAvatar;
+  final String? peerStatus;
+  final String? peerStatusIcon;
+  final String? peerStatusMessage;
+  final int? peerStatusClearAt;
   final String? lastMessageText;
   final int? lastMessageTimestamp;
   final String rawJson;
@@ -1329,6 +1431,10 @@ class CachedConversation extends DataClass
     required this.objectType,
     required this.avatarVersion,
     required this.isCustomAvatar,
+    this.peerStatus,
+    this.peerStatusIcon,
+    this.peerStatusMessage,
+    this.peerStatusClearAt,
     this.lastMessageText,
     this.lastMessageTimestamp,
     required this.rawJson,
@@ -1349,6 +1455,18 @@ class CachedConversation extends DataClass
     map['object_type'] = Variable<String>(objectType);
     map['avatar_version'] = Variable<String>(avatarVersion);
     map['is_custom_avatar'] = Variable<bool>(isCustomAvatar);
+    if (!nullToAbsent || peerStatus != null) {
+      map['peer_status'] = Variable<String>(peerStatus);
+    }
+    if (!nullToAbsent || peerStatusIcon != null) {
+      map['peer_status_icon'] = Variable<String>(peerStatusIcon);
+    }
+    if (!nullToAbsent || peerStatusMessage != null) {
+      map['peer_status_message'] = Variable<String>(peerStatusMessage);
+    }
+    if (!nullToAbsent || peerStatusClearAt != null) {
+      map['peer_status_clear_at'] = Variable<int>(peerStatusClearAt);
+    }
     if (!nullToAbsent || lastMessageText != null) {
       map['last_message_text'] = Variable<String>(lastMessageText);
     }
@@ -1374,6 +1492,18 @@ class CachedConversation extends DataClass
       objectType: Value(objectType),
       avatarVersion: Value(avatarVersion),
       isCustomAvatar: Value(isCustomAvatar),
+      peerStatus: peerStatus == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerStatus),
+      peerStatusIcon: peerStatusIcon == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerStatusIcon),
+      peerStatusMessage: peerStatusMessage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerStatusMessage),
+      peerStatusClearAt: peerStatusClearAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(peerStatusClearAt),
       lastMessageText: lastMessageText == null && nullToAbsent
           ? const Value.absent()
           : Value(lastMessageText),
@@ -1403,6 +1533,12 @@ class CachedConversation extends DataClass
       objectType: serializer.fromJson<String>(json['objectType']),
       avatarVersion: serializer.fromJson<String>(json['avatarVersion']),
       isCustomAvatar: serializer.fromJson<bool>(json['isCustomAvatar']),
+      peerStatus: serializer.fromJson<String?>(json['peerStatus']),
+      peerStatusIcon: serializer.fromJson<String?>(json['peerStatusIcon']),
+      peerStatusMessage: serializer.fromJson<String?>(
+        json['peerStatusMessage'],
+      ),
+      peerStatusClearAt: serializer.fromJson<int?>(json['peerStatusClearAt']),
       lastMessageText: serializer.fromJson<String?>(json['lastMessageText']),
       lastMessageTimestamp: serializer.fromJson<int?>(
         json['lastMessageTimestamp'],
@@ -1427,6 +1563,10 @@ class CachedConversation extends DataClass
       'objectType': serializer.toJson<String>(objectType),
       'avatarVersion': serializer.toJson<String>(avatarVersion),
       'isCustomAvatar': serializer.toJson<bool>(isCustomAvatar),
+      'peerStatus': serializer.toJson<String?>(peerStatus),
+      'peerStatusIcon': serializer.toJson<String?>(peerStatusIcon),
+      'peerStatusMessage': serializer.toJson<String?>(peerStatusMessage),
+      'peerStatusClearAt': serializer.toJson<int?>(peerStatusClearAt),
       'lastMessageText': serializer.toJson<String?>(lastMessageText),
       'lastMessageTimestamp': serializer.toJson<int?>(lastMessageTimestamp),
       'rawJson': serializer.toJson<String>(rawJson),
@@ -1447,6 +1587,10 @@ class CachedConversation extends DataClass
     String? objectType,
     String? avatarVersion,
     bool? isCustomAvatar,
+    Value<String?> peerStatus = const Value.absent(),
+    Value<String?> peerStatusIcon = const Value.absent(),
+    Value<String?> peerStatusMessage = const Value.absent(),
+    Value<int?> peerStatusClearAt = const Value.absent(),
     Value<String?> lastMessageText = const Value.absent(),
     Value<int?> lastMessageTimestamp = const Value.absent(),
     String? rawJson,
@@ -1464,6 +1608,16 @@ class CachedConversation extends DataClass
     objectType: objectType ?? this.objectType,
     avatarVersion: avatarVersion ?? this.avatarVersion,
     isCustomAvatar: isCustomAvatar ?? this.isCustomAvatar,
+    peerStatus: peerStatus.present ? peerStatus.value : this.peerStatus,
+    peerStatusIcon: peerStatusIcon.present
+        ? peerStatusIcon.value
+        : this.peerStatusIcon,
+    peerStatusMessage: peerStatusMessage.present
+        ? peerStatusMessage.value
+        : this.peerStatusMessage,
+    peerStatusClearAt: peerStatusClearAt.present
+        ? peerStatusClearAt.value
+        : this.peerStatusClearAt,
     lastMessageText: lastMessageText.present
         ? lastMessageText.value
         : this.lastMessageText,
@@ -1501,6 +1655,18 @@ class CachedConversation extends DataClass
       isCustomAvatar: data.isCustomAvatar.present
           ? data.isCustomAvatar.value
           : this.isCustomAvatar,
+      peerStatus: data.peerStatus.present
+          ? data.peerStatus.value
+          : this.peerStatus,
+      peerStatusIcon: data.peerStatusIcon.present
+          ? data.peerStatusIcon.value
+          : this.peerStatusIcon,
+      peerStatusMessage: data.peerStatusMessage.present
+          ? data.peerStatusMessage.value
+          : this.peerStatusMessage,
+      peerStatusClearAt: data.peerStatusClearAt.present
+          ? data.peerStatusClearAt.value
+          : this.peerStatusClearAt,
       lastMessageText: data.lastMessageText.present
           ? data.lastMessageText.value
           : this.lastMessageText,
@@ -1527,6 +1693,10 @@ class CachedConversation extends DataClass
           ..write('objectType: $objectType, ')
           ..write('avatarVersion: $avatarVersion, ')
           ..write('isCustomAvatar: $isCustomAvatar, ')
+          ..write('peerStatus: $peerStatus, ')
+          ..write('peerStatusIcon: $peerStatusIcon, ')
+          ..write('peerStatusMessage: $peerStatusMessage, ')
+          ..write('peerStatusClearAt: $peerStatusClearAt, ')
           ..write('lastMessageText: $lastMessageText, ')
           ..write('lastMessageTimestamp: $lastMessageTimestamp, ')
           ..write('rawJson: $rawJson')
@@ -1549,6 +1719,10 @@ class CachedConversation extends DataClass
     objectType,
     avatarVersion,
     isCustomAvatar,
+    peerStatus,
+    peerStatusIcon,
+    peerStatusMessage,
+    peerStatusClearAt,
     lastMessageText,
     lastMessageTimestamp,
     rawJson,
@@ -1570,6 +1744,10 @@ class CachedConversation extends DataClass
           other.objectType == this.objectType &&
           other.avatarVersion == this.avatarVersion &&
           other.isCustomAvatar == this.isCustomAvatar &&
+          other.peerStatus == this.peerStatus &&
+          other.peerStatusIcon == this.peerStatusIcon &&
+          other.peerStatusMessage == this.peerStatusMessage &&
+          other.peerStatusClearAt == this.peerStatusClearAt &&
           other.lastMessageText == this.lastMessageText &&
           other.lastMessageTimestamp == this.lastMessageTimestamp &&
           other.rawJson == this.rawJson);
@@ -1589,6 +1767,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
   final Value<String> objectType;
   final Value<String> avatarVersion;
   final Value<bool> isCustomAvatar;
+  final Value<String?> peerStatus;
+  final Value<String?> peerStatusIcon;
+  final Value<String?> peerStatusMessage;
+  final Value<int?> peerStatusClearAt;
   final Value<String?> lastMessageText;
   final Value<int?> lastMessageTimestamp;
   final Value<String> rawJson;
@@ -1607,6 +1789,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     this.objectType = const Value.absent(),
     this.avatarVersion = const Value.absent(),
     this.isCustomAvatar = const Value.absent(),
+    this.peerStatus = const Value.absent(),
+    this.peerStatusIcon = const Value.absent(),
+    this.peerStatusMessage = const Value.absent(),
+    this.peerStatusClearAt = const Value.absent(),
     this.lastMessageText = const Value.absent(),
     this.lastMessageTimestamp = const Value.absent(),
     this.rawJson = const Value.absent(),
@@ -1626,6 +1812,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     this.objectType = const Value.absent(),
     this.avatarVersion = const Value.absent(),
     this.isCustomAvatar = const Value.absent(),
+    this.peerStatus = const Value.absent(),
+    this.peerStatusIcon = const Value.absent(),
+    this.peerStatusMessage = const Value.absent(),
+    this.peerStatusClearAt = const Value.absent(),
     this.lastMessageText = const Value.absent(),
     this.lastMessageTimestamp = const Value.absent(),
     required String rawJson,
@@ -1652,6 +1842,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     Expression<String>? objectType,
     Expression<String>? avatarVersion,
     Expression<bool>? isCustomAvatar,
+    Expression<String>? peerStatus,
+    Expression<String>? peerStatusIcon,
+    Expression<String>? peerStatusMessage,
+    Expression<int>? peerStatusClearAt,
     Expression<String>? lastMessageText,
     Expression<int>? lastMessageTimestamp,
     Expression<String>? rawJson,
@@ -1671,6 +1865,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
       if (objectType != null) 'object_type': objectType,
       if (avatarVersion != null) 'avatar_version': avatarVersion,
       if (isCustomAvatar != null) 'is_custom_avatar': isCustomAvatar,
+      if (peerStatus != null) 'peer_status': peerStatus,
+      if (peerStatusIcon != null) 'peer_status_icon': peerStatusIcon,
+      if (peerStatusMessage != null) 'peer_status_message': peerStatusMessage,
+      if (peerStatusClearAt != null) 'peer_status_clear_at': peerStatusClearAt,
       if (lastMessageText != null) 'last_message_text': lastMessageText,
       if (lastMessageTimestamp != null)
         'last_message_timestamp': lastMessageTimestamp,
@@ -1693,6 +1891,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     Value<String>? objectType,
     Value<String>? avatarVersion,
     Value<bool>? isCustomAvatar,
+    Value<String?>? peerStatus,
+    Value<String?>? peerStatusIcon,
+    Value<String?>? peerStatusMessage,
+    Value<int?>? peerStatusClearAt,
     Value<String?>? lastMessageText,
     Value<int?>? lastMessageTimestamp,
     Value<String>? rawJson,
@@ -1712,6 +1914,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
       objectType: objectType ?? this.objectType,
       avatarVersion: avatarVersion ?? this.avatarVersion,
       isCustomAvatar: isCustomAvatar ?? this.isCustomAvatar,
+      peerStatus: peerStatus ?? this.peerStatus,
+      peerStatusIcon: peerStatusIcon ?? this.peerStatusIcon,
+      peerStatusMessage: peerStatusMessage ?? this.peerStatusMessage,
+      peerStatusClearAt: peerStatusClearAt ?? this.peerStatusClearAt,
       lastMessageText: lastMessageText ?? this.lastMessageText,
       lastMessageTimestamp: lastMessageTimestamp ?? this.lastMessageTimestamp,
       rawJson: rawJson ?? this.rawJson,
@@ -1761,6 +1967,18 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     if (isCustomAvatar.present) {
       map['is_custom_avatar'] = Variable<bool>(isCustomAvatar.value);
     }
+    if (peerStatus.present) {
+      map['peer_status'] = Variable<String>(peerStatus.value);
+    }
+    if (peerStatusIcon.present) {
+      map['peer_status_icon'] = Variable<String>(peerStatusIcon.value);
+    }
+    if (peerStatusMessage.present) {
+      map['peer_status_message'] = Variable<String>(peerStatusMessage.value);
+    }
+    if (peerStatusClearAt.present) {
+      map['peer_status_clear_at'] = Variable<int>(peerStatusClearAt.value);
+    }
     if (lastMessageText.present) {
       map['last_message_text'] = Variable<String>(lastMessageText.value);
     }
@@ -1792,6 +2010,10 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
           ..write('objectType: $objectType, ')
           ..write('avatarVersion: $avatarVersion, ')
           ..write('isCustomAvatar: $isCustomAvatar, ')
+          ..write('peerStatus: $peerStatus, ')
+          ..write('peerStatusIcon: $peerStatusIcon, ')
+          ..write('peerStatusMessage: $peerStatusMessage, ')
+          ..write('peerStatusClearAt: $peerStatusClearAt, ')
           ..write('lastMessageText: $lastMessageText, ')
           ..write('lastMessageTimestamp: $lastMessageTimestamp, ')
           ..write('rawJson: $rawJson, ')
@@ -10358,6 +10580,10 @@ typedef $$CachedConversationsTableCreateCompanionBuilder =
       Value<String> objectType,
       Value<String> avatarVersion,
       Value<bool> isCustomAvatar,
+      Value<String?> peerStatus,
+      Value<String?> peerStatusIcon,
+      Value<String?> peerStatusMessage,
+      Value<int?> peerStatusClearAt,
       Value<String?> lastMessageText,
       Value<int?> lastMessageTimestamp,
       required String rawJson,
@@ -10378,6 +10604,10 @@ typedef $$CachedConversationsTableUpdateCompanionBuilder =
       Value<String> objectType,
       Value<String> avatarVersion,
       Value<bool> isCustomAvatar,
+      Value<String?> peerStatus,
+      Value<String?> peerStatusIcon,
+      Value<String?> peerStatusMessage,
+      Value<int?> peerStatusClearAt,
       Value<String?> lastMessageText,
       Value<int?> lastMessageTimestamp,
       Value<String> rawJson,
@@ -10481,6 +10711,26 @@ class $$CachedConversationsTableFilterComposer
 
   ColumnFilters<bool> get isCustomAvatar => $composableBuilder(
     column: $table.isCustomAvatar,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerStatus => $composableBuilder(
+    column: $table.peerStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerStatusIcon => $composableBuilder(
+    column: $table.peerStatusIcon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get peerStatusMessage => $composableBuilder(
+    column: $table.peerStatusMessage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get peerStatusClearAt => $composableBuilder(
+    column: $table.peerStatusClearAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -10592,6 +10842,26 @@ class $$CachedConversationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get peerStatus => $composableBuilder(
+    column: $table.peerStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerStatusIcon => $composableBuilder(
+    column: $table.peerStatusIcon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get peerStatusMessage => $composableBuilder(
+    column: $table.peerStatusMessage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get peerStatusClearAt => $composableBuilder(
+    column: $table.peerStatusClearAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get lastMessageText => $composableBuilder(
     column: $table.lastMessageText,
     builder: (column) => ColumnOrderings(column),
@@ -10690,6 +10960,26 @@ class $$CachedConversationsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get peerStatus => $composableBuilder(
+    column: $table.peerStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get peerStatusIcon => $composableBuilder(
+    column: $table.peerStatusIcon,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get peerStatusMessage => $composableBuilder(
+    column: $table.peerStatusMessage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get peerStatusClearAt => $composableBuilder(
+    column: $table.peerStatusClearAt,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get lastMessageText => $composableBuilder(
     column: $table.lastMessageText,
     builder: (column) => column,
@@ -10776,6 +11066,10 @@ class $$CachedConversationsTableTableManager
                 Value<String> objectType = const Value.absent(),
                 Value<String> avatarVersion = const Value.absent(),
                 Value<bool> isCustomAvatar = const Value.absent(),
+                Value<String?> peerStatus = const Value.absent(),
+                Value<String?> peerStatusIcon = const Value.absent(),
+                Value<String?> peerStatusMessage = const Value.absent(),
+                Value<int?> peerStatusClearAt = const Value.absent(),
                 Value<String?> lastMessageText = const Value.absent(),
                 Value<int?> lastMessageTimestamp = const Value.absent(),
                 Value<String> rawJson = const Value.absent(),
@@ -10794,6 +11088,10 @@ class $$CachedConversationsTableTableManager
                 objectType: objectType,
                 avatarVersion: avatarVersion,
                 isCustomAvatar: isCustomAvatar,
+                peerStatus: peerStatus,
+                peerStatusIcon: peerStatusIcon,
+                peerStatusMessage: peerStatusMessage,
+                peerStatusClearAt: peerStatusClearAt,
                 lastMessageText: lastMessageText,
                 lastMessageTimestamp: lastMessageTimestamp,
                 rawJson: rawJson,
@@ -10814,6 +11112,10 @@ class $$CachedConversationsTableTableManager
                 Value<String> objectType = const Value.absent(),
                 Value<String> avatarVersion = const Value.absent(),
                 Value<bool> isCustomAvatar = const Value.absent(),
+                Value<String?> peerStatus = const Value.absent(),
+                Value<String?> peerStatusIcon = const Value.absent(),
+                Value<String?> peerStatusMessage = const Value.absent(),
+                Value<int?> peerStatusClearAt = const Value.absent(),
                 Value<String?> lastMessageText = const Value.absent(),
                 Value<int?> lastMessageTimestamp = const Value.absent(),
                 required String rawJson,
@@ -10832,6 +11134,10 @@ class $$CachedConversationsTableTableManager
                 objectType: objectType,
                 avatarVersion: avatarVersion,
                 isCustomAvatar: isCustomAvatar,
+                peerStatus: peerStatus,
+                peerStatusIcon: peerStatusIcon,
+                peerStatusMessage: peerStatusMessage,
+                peerStatusClearAt: peerStatusClearAt,
                 lastMessageText: lastMessageText,
                 lastMessageTimestamp: lastMessageTimestamp,
                 rawJson: rawJson,

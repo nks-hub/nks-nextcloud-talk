@@ -335,6 +335,175 @@ void main() {
       ),
     );
   });
+
+  group('user status merge evidence', () {
+    final accountId = AccountId.parse('account-a');
+    final server = _serverForAccount(accountId);
+
+    ConversationRoom previousRoom() {
+      final json = _cloneRoom(compactRoomTemplate)
+        ..['token'] = 'roomc789'
+        ..['type'] = 1
+        ..['status'] = 'online'
+        ..['statusClearAt'] = 1770000120
+        ..['statusIcon'] = '🟢'
+        ..['statusMessage'] = 'Available';
+      return ConversationRoom.fromJson(json);
+    }
+
+    ConversationSnapshot snapshot() => ConversationSnapshot(
+      accounts: <AccountId, ConversationAccountState>{
+        accountId: ConversationAccountState(
+          server: server,
+          rooms: <ConversationRoom>[previousRoom()],
+          cursor: ConversationCursor.parse('100'),
+          configurationHash: ConversationConfigurationHash.parse(
+            'fixture-hash-a',
+          ),
+        ),
+      },
+    );
+
+    ConversationListRequest request(ConversationFetchMode mode) =>
+        ConversationListRequest(
+          accountId: accountId,
+          requestId: ConversationRequestId.parse('presence-${mode.name}'),
+          server: server,
+          mode: mode,
+          includeLastMessage: false,
+          includeStatus: true,
+          cursor: mode == ConversationFetchMode.incremental
+              ? ConversationCursor.parse('100')
+              : null,
+        );
+
+    test('incremental absence preserves the previous status quartet', () {
+      final delta = _cloneRoom(compactRoomTemplate)
+        ..['token'] = 'roomc789'
+        ..['type'] = 1;
+      final response = _presenceResponse(
+        request: request(ConversationFetchMode.incremental),
+        room: delta,
+        headers: headerSets['incremental']!,
+      );
+
+      final plan = const ConversationMergePlanner().plan(
+        snapshot: snapshot(),
+        response: response,
+      );
+      final room = plan.upserts.single;
+
+      expect(room.status, 'online');
+      expect(room.statusClearAt, 1770000120);
+      expect(room.statusIcon, '🟢');
+      expect(room.statusMessage, 'Available');
+      expect(room.wire['status'], 'online');
+      expect(
+        plan.nextAccountState.rooms[room.token]!.wire,
+        equals(room.wire),
+      );
+    });
+
+    for (final explicitStatus in const <String>['', 'offline']) {
+      test('incremental explicit "$explicitStatus" replaces status', () {
+        final delta = _cloneRoom(compactRoomTemplate)
+          ..['token'] = 'roomc789'
+          ..['type'] = 1
+          ..['status'] = explicitStatus
+          ..['statusClearAt'] = null
+          ..['statusIcon'] = null
+          ..['statusMessage'] = null;
+        final response = _presenceResponse(
+          request: request(ConversationFetchMode.incremental),
+          room: delta,
+          headers: headerSets['incremental']!,
+        );
+
+        final plan = const ConversationMergePlanner().plan(
+          snapshot: snapshot(),
+          response: response,
+        );
+        final room = plan.upserts.single;
+
+        expect(room.status, explicitStatus);
+        expect(room.statusClearAt, isNull);
+        expect(room.statusIcon, isNull);
+        expect(room.statusMessage, isNull);
+        expect(room.wire.containsKey('status'), isTrue);
+      });
+    }
+
+    test('explicit null status is rejected by the v4 wire contract', () {
+      final delta = _cloneRoom(compactRoomTemplate)
+        ..['token'] = 'roomc789'
+        ..['type'] = 1
+        ..['status'] = null;
+
+      expect(
+        () => _presenceResponse(
+          request: request(ConversationFetchMode.incremental),
+          room: delta,
+          headers: headerSets['incremental']!,
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidConversationResponse,
+          ),
+        ),
+      );
+    });
+
+    test('full response without status authoritatively clears it', () {
+      final full = _cloneRoom(compactRoomTemplate)
+        ..['token'] = 'roomc789'
+        ..['type'] = 1;
+      final response = _presenceResponse(
+        request: request(ConversationFetchMode.full),
+        room: full,
+        headers: headerSets['full']!,
+      );
+
+      final plan = const ConversationMergePlanner().plan(
+        snapshot: snapshot(),
+        response: response,
+      );
+      final room = plan.upserts.single;
+
+      expect(room.status, isNull);
+      expect(room.hasUserStatusWire, isFalse);
+      expect(room.wire.containsKey('statusMessage'), isFalse);
+      expect(plan.nextAccountState.rooms[room.token]!.status, isNull);
+    });
+  });
+}
+
+ConversationListSuccess _presenceResponse({
+  required ConversationListRequest request,
+  required Map<String, Object?> room,
+  required Map<String, String> headers,
+}) {
+  return decodeConversationListResponse(
+        request: request,
+        statusCode: 200,
+        json: <String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <Object?>[room],
+          },
+        },
+        headers: headers,
+      )
+      as ConversationListSuccess;
+}
+
+Map<String, Object?> _cloneRoom(Map<String, Object?> room) {
+  return _asObject(jsonDecode(jsonEncode(room)));
 }
 
 ConversationSnapshot _initialSnapshot(

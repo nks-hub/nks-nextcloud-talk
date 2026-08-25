@@ -148,5 +148,9 @@
   "voiceInvalidRecording": "Nahrávka je prázdná nebo nepodporovaná.",
   "voicePlaybackFailed": "Náhled nahrávky se nepodařilo přehrát.",
   "voiceSendFailed": "Hlasovou zprávu se nepodařilo zařadit k odeslání.",
-  "voiceCleanupFailed": "Nahrávku se nepodařilo bezpečně odstranit."
+  "voiceCleanupFailed": "Nahrávku se nepodařilo bezpečně odstranit.",
+  "presenceOnline": "Online",
+  "presenceAway": "Pryč",
+  "presenceBusy": "Zaneprázdněn",
+  "presenceDoNotDisturb": "Nerušit"
 }

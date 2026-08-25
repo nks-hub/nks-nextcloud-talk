@@ -949,6 +949,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The recording could not be removed safely.'**
   String get voiceCleanupFailed;
+
+  /// No description provided for @presenceOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get presenceOnline;
+
+  /// No description provided for @presenceAway.
+  ///
+  /// In en, this message translates to:
+  /// **'Away'**
+  String get presenceAway;
+
+  /// No description provided for @presenceBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get presenceBusy;
+
+  /// No description provided for @presenceDoNotDisturb.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not disturb'**
+  String get presenceDoNotDisturb;
 }
 
 class _AppLocalizationsDelegate

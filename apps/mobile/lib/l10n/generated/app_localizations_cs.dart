@@ -483,4 +483,16 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get voiceCleanupFailed => 'Nahrávku se nepodařilo bezpečně odstranit.';
+
+  @override
+  String get presenceOnline => 'Online';
+
+  @override
+  String get presenceAway => 'Pryč';
+
+  @override
+  String get presenceBusy => 'Zaneprázdněn';
+
+  @override
+  String get presenceDoNotDisturb => 'Nerušit';
 }

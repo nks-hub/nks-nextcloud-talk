@@ -47,9 +47,14 @@ void main() {
       final ocs = conversationResponse['ocs']! as Map<String, Object?>;
       final rawRooms = ocs['data']! as List<Object?>;
       final firstRoom = rawRooms.first! as Map<String, Object?>;
+      firstRoom['type'] = 1;
       firstRoom['objectType'] = 'file';
       firstRoom['avatarVersion'] = 'custom-avatar-v7';
       firstRoom['isCustomAvatar'] = true;
+      firstRoom['status'] = 'away';
+      firstRoom['statusClearAt'] = 1770000120;
+      firstRoom['statusIcon'] = '☕';
+      firstRoom['statusMessage'] = 'Coffee break';
       final firstLastMessage =
           firstRoom['lastMessage']! as Map<String, Object?>;
       firstLastMessage['message'] = _giphyResourceUrl;
@@ -61,9 +66,10 @@ void main() {
           }
           conversationRequests++;
           expect(request.url.queryParameters['noStatusUpdate'], '1');
+          expect(request.url.queryParameters['includeStatus'], 'true');
           expect(request.headers['Authorization'], startsWith('Basic '));
-          return http.Response(
-            jsonEncode(conversationResponse),
+          return http.Response.bytes(
+            utf8.encode(jsonEncode(conversationResponse)),
             200,
             headers: const <String, String>{
               'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
@@ -103,11 +109,21 @@ void main() {
       final firstStoredRoom = rooms.firstWhere(
         (room) => room.token == 'rooma123',
       );
-      expect(firstStoredRoom.roomType, 2);
+      expect(firstStoredRoom.roomType, 1);
       expect(firstStoredRoom.roomName, 'synthetic-room-a');
       expect(firstStoredRoom.objectType, 'file');
       expect(firstStoredRoom.avatarVersion, 'custom-avatar-v7');
       expect(firstStoredRoom.isCustomAvatar, isTrue);
+      expect(firstStoredRoom.peerStatus, 'away');
+      expect(firstStoredRoom.peerStatusClearAt, 1770000120);
+      expect(firstStoredRoom.peerStatusIcon, '☕');
+      expect(firstStoredRoom.peerStatusMessage, 'Coffee break');
+      final firstStoredWire =
+          jsonDecode(firstStoredRoom.rawJson) as Map<String, Object?>;
+      expect(firstStoredWire['status'], 'away');
+      expect(firstStoredWire['statusClearAt'], 1770000120);
+      expect(firstStoredWire['statusIcon'], '☕');
+      expect(firstStoredWire['statusMessage'], 'Coffee break');
       expect(firstStoredRoom.lastMessageText, 'GIF');
       expect(firstStoredRoom.lastMessageText, isNot(_giphyResourceUrl));
 
@@ -119,6 +135,109 @@ void main() {
       expect(secondStoredRoom.objectType, isEmpty);
       expect(secondStoredRoom.avatarVersion, '2');
       expect(secondStoredRoom.isCustomAvatar, isFalse);
+    },
+  );
+
+  test(
+    'status survives an absent delta and clears on an authoritative full',
+    () async {
+      Map<String, Object?> response() =>
+          jsonDecode(
+                jsonEncode(
+                  readFixtureJson(
+                    'conversation-list/fixtures/'
+                    'conversations-full.response.json',
+                  ),
+                ),
+              )
+              as Map<String, Object?>;
+
+      Map<String, Object?> firstRoom(Map<String, Object?> response) {
+        final ocs = response['ocs']! as Map<String, Object?>;
+        return (ocs['data']! as List<Object?>).first!
+            as Map<String, Object?>;
+      }
+
+      final statusFull = response();
+      firstRoom(statusFull)
+        ..['type'] = 1
+        ..['status'] = 'online'
+        ..['statusClearAt'] = 1770000120
+        ..['statusIcon'] = '🟢'
+        ..['statusMessage'] = 'Available';
+      final absentDelta = response();
+      firstRoom(absentDelta)['type'] = 1;
+      final clearingFull = response();
+      firstRoom(clearingFull)['type'] = 1;
+
+      var conversationRequests = 0;
+      final modifiedSinceValues = <String?>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(jsonEncode(capabilitiesJson()), 200);
+          }
+          conversationRequests++;
+          expect(request.url.queryParameters['includeStatus'], 'true');
+          modifiedSinceValues.add(request.url.queryParameters['modifiedSince']);
+          final body = switch (conversationRequests) {
+            1 => statusFull,
+            2 => absentDelta,
+            _ => clearingFull,
+          };
+          return http.Response.bytes(
+            utf8.encode(jsonEncode(body)),
+            200,
+            headers: <String, String>{
+              'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+              'X-Nextcloud-Talk-Modified-Before':
+                  '${1724300000 + conversationRequests}',
+              'X-Nextcloud-Talk-Federation-Invites': '0',
+            },
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+      );
+
+      await service.sync('account-a');
+      var stored = (await repository.watchConversations('account-a').first)
+          .firstWhere((room) => room.token == 'rooma123');
+      expect(stored.peerStatus, 'online');
+      expect(stored.peerStatusClearAt, 1770000120);
+      expect(stored.peerStatusIcon, '🟢');
+      expect(stored.peerStatusMessage, 'Available');
+
+      await service.sync('account-a');
+      stored = (await repository.watchConversations('account-a').first)
+          .firstWhere((room) => room.token == 'rooma123');
+      final preservedWire = jsonDecode(stored.rawJson) as Map<String, Object?>;
+      expect(stored.peerStatus, 'online');
+      expect(stored.peerStatusClearAt, 1770000120);
+      expect(stored.peerStatusIcon, '🟢');
+      expect(stored.peerStatusMessage, 'Available');
+      expect(preservedWire['status'], 'online');
+      expect(preservedWire['statusClearAt'], 1770000120);
+      expect(preservedWire['statusIcon'], '🟢');
+      expect(preservedWire['statusMessage'], 'Available');
+
+      await service.sync('account-a', forceFull: true);
+      stored = (await repository.watchConversations('account-a').first)
+          .firstWhere((room) => room.token == 'rooma123');
+      final clearedWire = jsonDecode(stored.rawJson) as Map<String, Object?>;
+      expect(stored.peerStatus, isNull);
+      expect(stored.peerStatusClearAt, isNull);
+      expect(stored.peerStatusIcon, isNull);
+      expect(stored.peerStatusMessage, isNull);
+      expect(clearedWire.containsKey('status'), isFalse);
+      expect(clearedWire.containsKey('statusClearAt'), isFalse);
+      expect(clearedWire.containsKey('statusIcon'), isFalse);
+      expect(clearedWire.containsKey('statusMessage'), isFalse);
+      expect(modifiedSinceValues, [null, '1724300001', null]);
     },
   );
 
@@ -592,6 +711,7 @@ void main() {
           server: server,
           mode: ConversationFetchMode.full,
           includeLastMessage: true,
+          includeStatus: true,
         ),
         loginName: username,
         appPassword: appPassword,

@@ -167,7 +167,7 @@ final class AndroidPushCoordinator {
     if (accountContext == null) {
       return;
     }
-    var shouldReregister = false;
+    var shouldReregisterImmediately = false;
     for (var batch = 0; batch < _maximumDrainBatches; batch++) {
       final events = await _platform.drainEvents(
         accountId: accountId,
@@ -187,10 +187,12 @@ final class AndroidPushCoordinator {
           case AndroidWebPushEventType.activation ||
               AndroidWebPushEventType.message:
             await _handleMessage(accountContext, event);
-          case AndroidWebPushEventType.registrationFailed ||
-              AndroidWebPushEventType.unregistered:
+          case AndroidWebPushEventType.registrationFailed:
             await _acknowledge(accountId, event.id);
-            shouldReregister = true;
+            _scheduleRetry(accountId);
+          case AndroidWebPushEventType.unregistered:
+            await _acknowledge(accountId, event.id);
+            shouldReregisterImmediately = true;
           case AndroidWebPushEventType.temporaryUnavailable:
             await _acknowledge(accountId, event.id);
             _scheduleRetry(accountId);
@@ -200,7 +202,7 @@ final class AndroidPushCoordinator {
         break;
       }
     }
-    if (shouldReregister) {
+    if (shouldReregisterImmediately) {
       _scheduleRetry(accountId, immediate: true);
     }
   }

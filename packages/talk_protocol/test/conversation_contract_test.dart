@@ -103,6 +103,43 @@ void main() {
       expect(room.avatarVersion, '1');
       expect(room.isCustomAvatar, isFalse);
     });
+
+    test('exposes explicit one-to-one user status fields', () {
+      final fixture = _readJsonObject(
+        'contracts/conversation-list/fixtures/'
+        'conversations-full.response.json',
+      );
+      final ocs = _asObject(fixture['ocs']);
+      final rooms = (ocs['data']! as List<Object?>)
+          .map(_asObject)
+          .toList(growable: false);
+      rooms.first
+        ..['type'] = 1
+        ..['status'] = 'away'
+        ..['statusClearAt'] = 1770000120
+        ..['statusIcon'] = '☕'
+        ..['statusMessage'] = 'Coffee break';
+      ocs['data'] = rooms;
+
+      final response =
+          decodeConversationListResponse(
+                request: _request(
+                  requestId: 'user-status-fields',
+                  includeStatus: true,
+                ),
+                statusCode: 200,
+                json: fixture,
+                headers: headerSets['full']!,
+              )
+              as ConversationListSuccess;
+
+      final room = response.rooms.first;
+      expect(room.status, 'away');
+      expect(room.statusClearAt, 1770000120);
+      expect(room.statusIcon, '☕');
+      expect(room.statusMessage, 'Coffee break');
+      expect(room.hasUserStatusWire, isTrue);
+    });
   });
 
   group('conversation query fixtures', () {
@@ -160,6 +197,16 @@ void main() {
         '/ocs/v2.php/apps/spreed/api/v4/room'
         '?format=json&noStatusUpdate=1&includeStatus=false&includeLastMessage=false',
       );
+    });
+
+    test('requests batched user status only when explicitly enabled', () {
+      final request = _request(
+        requestId: 'include-user-status',
+        includeStatus: true,
+      );
+
+      expect(request.queryParameters['includeStatus'], 'true');
+      expect(request.queryParameters['noStatusUpdate'], '1');
     });
   });
 
@@ -415,6 +462,7 @@ ConversationListRequest _request({
   ServerBase? server,
   ConversationFetchMode mode = ConversationFetchMode.full,
   bool includeLastMessage = false,
+  bool includeStatus = false,
   ConversationCursor? cursor,
 }) {
   return ConversationListRequest(
@@ -423,6 +471,7 @@ ConversationListRequest _request({
     server: server ?? ServerBase.parse('https://cloud.example.invalid'),
     mode: mode,
     includeLastMessage: includeLastMessage,
+    includeStatus: includeStatus,
     cursor: cursor,
   );
 }

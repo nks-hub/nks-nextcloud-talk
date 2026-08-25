@@ -483,4 +483,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceCleanupFailed => 'The recording could not be removed safely.';
+
+  @override
+  String get presenceOnline => 'Online';
+
+  @override
+  String get presenceAway => 'Away';
+
+  @override
+  String get presenceBusy => 'Busy';
+
+  @override
+  String get presenceDoNotDisturb => 'Do not disturb';
 }

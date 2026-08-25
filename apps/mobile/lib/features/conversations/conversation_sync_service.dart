@@ -185,6 +185,7 @@ final class ConversationSyncService {
           server: server,
           mode: mode,
           includeLastMessage: true,
+          includeStatus: true,
           cursor: mode == ConversationFetchMode.incremental
               ? state.cursor
               : null,

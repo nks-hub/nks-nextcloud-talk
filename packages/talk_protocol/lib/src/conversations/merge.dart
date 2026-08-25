@@ -273,8 +273,15 @@ final class ConversationMergePlanner {
     final nextRooms = mode == ConversationFetchMode.full
         ? <ConversationToken, ConversationRoom>{}
         : Map<ConversationToken, ConversationRoom>.of(current.rooms);
+    final upserts = <ConversationRoom>[];
     for (final room in response.rooms) {
-      nextRooms[room.token] = room;
+      final previous = current.rooms[room.token];
+      final nextRoom = mode == ConversationFetchMode.incremental &&
+              previous != null
+          ? room.preserveUserStatusFrom(previous)
+          : room;
+      nextRooms[room.token] = nextRoom;
+      upserts.add(nextRoom);
     }
 
     final deleteTokens = mode == ConversationFetchMode.full
@@ -302,7 +309,7 @@ final class ConversationMergePlanner {
     return ConversationMergePlan._(
       accountId: accountId,
       outcome: ConversationMergeOutcome.applied,
-      upserts: response.rooms,
+      upserts: upserts,
       deleteTokens: deleteTokens,
       previousAccountState: current,
       nextAccountState: next,

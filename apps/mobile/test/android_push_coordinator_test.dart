@@ -633,6 +633,166 @@ void main() {
     expect(retryTimers.single.isActive, isTrue);
   });
 
+  test('repeated registration failures use bounded account backoff', () async {
+    final fixture = await _createAccounts(const <String>['account-a']);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.registering
+      ..generation = 1
+      ..emitEndpointOnRegister = false
+      ..events.add(
+        _platformEvent(
+          id: 'registration-failed-1',
+          type: AndroidWebPushEventType.registrationFailed,
+        ),
+      );
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final retryTimers = <_ManualRetryTimer>[];
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+      retryDelay: const Duration(seconds: 1),
+      retryMaximumDelay: const Duration(seconds: 4),
+      randomDouble: () => 0.5,
+      createRetryTimer: (duration, callback) {
+        final timer = _ManualRetryTimer(duration, callback);
+        retryTimers.add(timer);
+        return timer;
+      },
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.drainAccount('account-a');
+    expect(retryTimers.map((timer) => timer.duration), <Duration>[
+      const Duration(seconds: 1),
+    ]);
+
+    platform.events.add(
+      _platformEvent(
+        id: 'registration-failed-2',
+        type: AndroidWebPushEventType.registrationFailed,
+      ),
+    );
+    retryTimers[0].fire();
+    await _waitUntil(() => retryTimers.length == 2);
+    expect(retryTimers.map((timer) => timer.duration), <Duration>[
+      const Duration(seconds: 1),
+      const Duration(seconds: 2),
+    ]);
+
+    platform.events.add(
+      _platformEvent(
+        id: 'registration-failed-3',
+        type: AndroidWebPushEventType.registrationFailed,
+      ),
+    );
+    retryTimers[1].fire();
+    await _waitUntil(() => retryTimers.length == 3);
+
+    expect(retryTimers.map((timer) => timer.duration), <Duration>[
+      const Duration(seconds: 1),
+      const Duration(seconds: 2),
+      const Duration(seconds: 4),
+    ]);
+    expect(platform.acknowledgedEventIds, <String>[
+      'registration-failed-1',
+      'registration-failed-2',
+      'registration-failed-3',
+    ]);
+  });
+
+  test(
+    'unregistered event keeps one immediate next-generation retry',
+    () async {
+      final fixture = await _createAccounts(const <String>['account-a']);
+      final platform = _FakeAndroidWebPushPlatform()
+        ..phase = AndroidWebPushRegistrationPhase.unregistered
+        ..generation = 1
+        ..emitEndpointOnRegister = false
+        ..events.add(
+          _platformEvent(
+            id: 'unregistered-1',
+            type: AndroidWebPushEventType.unregistered,
+          ),
+        );
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['webpush'],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/webpush/vapid')) {
+            return http.Response(
+              jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+              200,
+            );
+          }
+          fail('Unexpected request: ${request.method} ${request.url.path}');
+        }),
+      );
+      addTearDown(api.close);
+      final retryTimers = <_ManualRetryTimer>[];
+      final coordinator = AndroidPushCoordinator(
+        accounts: fixture.accounts,
+        credentials: fixture.credentials,
+        api: api,
+        platform: platform,
+        onWakeUp: (_) async {},
+        retryDelay: const Duration(seconds: 1),
+        randomDouble: () => 0.5,
+        createRetryTimer: (duration, callback) {
+          final timer = _ManualRetryTimer(duration, callback);
+          retryTimers.add(timer);
+          return timer;
+        },
+      );
+      addTearDown(coordinator.close);
+
+      await coordinator.drainAccount('account-a');
+
+      expect(platform.acknowledgedEventIds, <String>['unregistered-1']);
+      expect(retryTimers, hasLength(1));
+      expect(retryTimers.single.duration, Duration.zero);
+
+      retryTimers.single.fire();
+      await _waitUntil(() => platform.registrations.isNotEmpty);
+
+      expect(platform.registrations, <({String accountId, int generation})>[
+        (accountId: 'account-a', generation: 2),
+      ]);
+      expect(retryTimers, hasLength(1));
+    },
+  );
+
   test(
     'commits an idempotent 200 after a lost registration response',
     () async {
@@ -1014,6 +1174,23 @@ AndroidWebPushEvent _endpointEvent({
   );
 }
 
+AndroidWebPushEvent _platformEvent({
+  required String id,
+  required AndroidWebPushEventType type,
+  String accountId = 'account-a',
+  int generation = 1,
+}) {
+  return AndroidWebPushEvent(
+    id: id,
+    accountId: accountId,
+    generation: generation,
+    type: type,
+    createdAt: DateTime.utc(2026),
+    coalescedCount: 1,
+    stale: false,
+  );
+}
+
 Future<({AccountRepository accounts, MemoryCredentialVault credentials})>
 _createAccounts(List<String> accountIds) async {
   final database = openTestDatabase();
@@ -1058,6 +1235,7 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   int? generation;
   Object? drainFailure;
   AndroidNotificationOpen? launchNotification;
+  var emitEndpointOnRegister = true;
   var permission = AndroidNotificationPermission.notDetermined;
   var permissionRequests = 0;
 
@@ -1120,9 +1298,10 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
     if (!existingActiveRegistration) {
       phase = AndroidWebPushRegistrationPhase.registering;
     }
-    if (events
-        .where((event) => event.type == AndroidWebPushEventType.endpoint)
-        .isEmpty) {
+    if (emitEndpointOnRegister &&
+        events
+            .where((event) => event.type == AndroidWebPushEventType.endpoint)
+            .isEmpty) {
       events.add(
         AndroidWebPushEvent(
           id: 'endpoint-1',

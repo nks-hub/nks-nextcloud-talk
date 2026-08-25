@@ -148,5 +148,9 @@
   "voiceInvalidRecording": "The recording is empty or unsupported.",
   "voicePlaybackFailed": "The recording preview could not be played.",
   "voiceSendFailed": "The voice message could not be queued.",
-  "voiceCleanupFailed": "The recording could not be removed safely."
+  "voiceCleanupFailed": "The recording could not be removed safely.",
+  "presenceOnline": "Online",
+  "presenceAway": "Away",
+  "presenceBusy": "Busy",
+  "presenceDoNotDisturb": "Do not disturb"
 }

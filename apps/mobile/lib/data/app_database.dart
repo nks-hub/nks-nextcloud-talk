@@ -70,6 +70,14 @@ class CachedConversations extends Table {
   BoolColumn get isCustomAvatar =>
       boolean().withDefault(const Constant(false))();
 
+  TextColumn get peerStatus => text().nullable()();
+
+  TextColumn get peerStatusIcon => text().nullable()();
+
+  TextColumn get peerStatusMessage => text().nullable()();
+
+  IntColumn get peerStatusClearAt => integer().nullable()();
+
   TextColumn get lastMessageText => text().nullable()();
 
   IntColumn get lastMessageTimestamp => integer().nullable()();
@@ -417,7 +425,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -510,6 +518,24 @@ final class AppDatabase extends _$AppDatabase {
           'cached_chat_messages_attachment_confirmation '
           'ON cached_chat_messages '
           '(account_id, room_token, reference_id, message_id)',
+        );
+      }
+      if (from < 8) {
+        await migrator.addColumn(
+          cachedConversations,
+          cachedConversations.peerStatus,
+        );
+        await migrator.addColumn(
+          cachedConversations,
+          cachedConversations.peerStatusIcon,
+        );
+        await migrator.addColumn(
+          cachedConversations,
+          cachedConversations.peerStatusMessage,
+        );
+        await migrator.addColumn(
+          cachedConversations,
+          cachedConversations.peerStatusClearAt,
         );
       }
     },
