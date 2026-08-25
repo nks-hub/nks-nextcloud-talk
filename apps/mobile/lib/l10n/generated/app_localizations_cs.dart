@@ -896,4 +896,11 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'Server tuto změnu u tohoto účastníka odmítl.';
+
+  @override
+  String get cancelSend => 'Zrušit odeslání';
+
+  @override
+  String get outboxCancelAmbiguous =>
+      'Zprávu už nelze zrušit, mohla dorazit na server.';
 }

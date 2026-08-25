@@ -281,5 +281,7 @@
   "roomDetailsRemoveDialogTitle": "Odebrat účastníka?",
   "roomDetailsRemoveDialogMessage": "{name} ztratí přístup do této konverzace, dokud ho někdo znovu nepozve.",
   "roomDetailsRemoveDialogConfirm": "Odebrat",
-  "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl."
+  "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl.",
+  "cancelSend": "Zrušit odeslání",
+  "outboxCancelAmbiguous": "Zprávu už nelze zrušit, mohla dorazit na server."
 }

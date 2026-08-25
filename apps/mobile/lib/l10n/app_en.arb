@@ -295,5 +295,7 @@
     }
   },
   "roomDetailsRemoveDialogConfirm": "Remove",
-  "roomDetailsParticipantActionRejected": "The server refused this change for this participant."
+  "roomDetailsParticipantActionRejected": "The server refused this change for this participant.",
+  "cancelSend": "Cancel sending",
+  "outboxCancelAmbiguous": "This message may already have reached the server, so it can no longer be cancelled."
 }

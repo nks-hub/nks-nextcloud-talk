@@ -1705,6 +1705,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server refused this change for this participant.'**
   String get roomDetailsParticipantActionRejected;
+
+  /// No description provided for @cancelSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelSend;
+
+  /// No description provided for @outboxCancelAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'This message may already have reached the server, so it can no longer be cancelled.'**
+  String get outboxCancelAmbiguous;
 }
 
 class _AppLocalizationsDelegate

@@ -896,4 +896,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'The server refused this change for this participant.';
+
+  @override
+  String get cancelSend => 'Cancel sending';
+
+  @override
+  String get outboxCancelAmbiguous =>
+      'This message may already have reached the server, so it can no longer be cancelled.';
 }
