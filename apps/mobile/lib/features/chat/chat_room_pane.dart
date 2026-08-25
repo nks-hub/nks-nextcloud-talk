@@ -124,12 +124,19 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
     required this.conversation,
     this.showHeader = false,
     this.threadId,
-  }) : assert(threadId == null || threadId > 0);
+    this.jumpToMessageId,
+  }) : assert(threadId == null || threadId > 0),
+       assert(jumpToMessageId == null || jumpToMessageId > 0);
 
   final StoredAccount account;
   final CachedConversation conversation;
   final bool showHeader;
   final int? threadId;
+
+  /// A message to reveal once the first synchronization settles, instead of
+  /// opening at the newest message. Used by message search and by tapping a
+  /// quoted original.
+  final int? jumpToMessageId;
 
   @override
   ConsumerState<ChatRoomPane> createState() => _ChatRoomPaneState();
@@ -137,10 +144,32 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
 
 final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     with WidgetsBindingObserver {
-  static const _quickReactionEmoji = <String>['👍', '❤️', '😂', '😮', '😢', '😡'];
+  static const _quickReactionEmoji = <String>[
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '😡',
+  ];
+
+  /// How many history pages a single jump may fetch before giving up. One
+  /// page is [ChatService] `_pageSize` messages, so this reaches roughly a
+  /// thousand messages back.
+  // ponytail: fixed page budget; make it time- or scope-aware only if real
+  // rooms turn out to need deeper jumps.
+  static const _maximumJumpPages = 10;
+
+  /// How many layout passes a reveal may take. Every pass nudges the reverse
+  /// list closer to the estimated offset of the target, which re-measures the
+  /// children around it, so the estimate converges within a few frames.
+  static const _maximumRevealPasses = 12;
+
+  static const _highlightDuration = Duration(seconds: 2);
 
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _jumpTargetKey = GlobalKey();
   final ChatMediaComposerController _mediaComposerController =
       ChatMediaComposerController();
   ForegroundSyncLoop? _syncLoop;
@@ -155,8 +184,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _giphyRequested = false;
   ChatServiceError? _localError;
   Timer? _draftTimer;
+  Timer? _highlightTimer;
   ChatRepository? _draftStore;
   CachedChatMessage? _replyTo;
+  int _jumpGeneration = 0;
+  int? _jumpTargetId;
+  int? _highlightedMessageId;
+  int? _pendingJumpMessageId;
 
   ChatRoomProviderKey get _key => (
     accountId: widget.account.id,
@@ -167,6 +201,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   @override
   void initState() {
     super.initState();
+    _pendingJumpMessageId = widget.jumpToMessageId;
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
     _composer.addListener(_scheduleDraftSave);
@@ -240,6 +275,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _replyTo = null;
     _sendGeneration++;
     _giphyGeneration++;
+    _jumpGeneration++;
+    _highlightTimer?.cancel();
+    _highlightTimer = null;
+    _jumpTargetId = null;
+    _highlightedMessageId = null;
+    _pendingJumpMessageId = widget.jumpToMessageId;
     _sending = false;
     _localError = null;
     _initialAttemptFinished = false;
@@ -256,11 +297,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _syncGeneration++;
     _sendGeneration++;
     _giphyGeneration++;
+    _jumpGeneration++;
     _liveBinding?.close();
     unawaited(_syncLoop?.stop());
     _liveBinding = null;
     _syncLoop = null;
     _draftTimer?.cancel();
+    _highlightTimer?.cancel();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -381,6 +424,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       _initialAttemptFinished = true;
       _localError = null;
     });
+    _startPendingJump();
   }
 
   void _setSyncError(int generation, Object error) {
@@ -395,15 +439,22 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       _initialAttemptFinished = true;
       _localError = code;
     });
+    // A failed first attempt still resolves the jump: paging back over a
+    // cached scope may work, and when it does not the user is told so
+    // instead of being left on the newest message without explanation.
+    _startPendingJump();
   }
 
-  Future<void> _loadOlder() async {
+  /// Returns whether the page was fetched. A refused or failed fetch is
+  /// already surfaced through [_localError]; the boolean only lets a caller
+  /// stop paging instead of retrying the same failure.
+  Future<bool> _loadOlder() async {
     if (_loadingOlder) {
-      return;
+      return false;
     }
     final scope = ref.read(chatScopeProvider(_key)).valueOrNull;
     if (scope?.hasHistory != true) {
-      return;
+      return false;
     }
     setState(() => _loadingOlder = true);
     try {
@@ -417,14 +468,17 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       if (mounted) {
         setState(() => _localError = null);
       }
+      return true;
     } on ChatServiceException catch (error) {
       if (mounted) {
         setState(() => _localError = error.code);
       }
+      return false;
     } on Object {
       if (mounted) {
         setState(() => _localError = ChatServiceError.invalidResponse);
       }
+      return false;
     } finally {
       if (mounted) {
         setState(() => _loadingOlder = false);
@@ -438,9 +492,155 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
     final position = _scrollController.position;
     if (position.pixels >= position.maxScrollExtent - 160) {
-      _loadOlder();
+      unawaited(_loadOlder());
     }
   }
+
+  void _startPendingJump() {
+    final target = _pendingJumpMessageId;
+    if (target == null) {
+      return;
+    }
+    _pendingJumpMessageId = null;
+    unawaited(_jumpToMessage(target));
+  }
+
+  /// Reveals [messageId] inside this scope, fetching older history pages
+  /// while the message is not covered by the scope's confirmed blocks.
+  ///
+  /// Both entry points - a search result and a tapped quote - land here, so
+  /// the fetch, the scroll and the highlight exist exactly once. Paging back
+  /// is the only way to reach an uncached message: `planChatGetMerge` only
+  /// extends a scope at its two cursor ends, so an ad-hoc fetch anchored on
+  /// an arbitrary id would be discarded as stale rather than merged.
+  Future<void> _jumpToMessage(int messageId) async {
+    final generation = ++_jumpGeneration;
+    final key = _key;
+    final chat = ref.read(chatRepositoryProvider);
+    for (var page = 0; page <= _maximumJumpPages; page++) {
+      final scope = await chat.getScope(
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+        threadId: key.threadId,
+      );
+      if (!_isCurrentJump(key, generation)) {
+        return;
+      }
+      final blocks = _decodeScopeBlocks(scope);
+      if (blocks != null && _blockIndexOf(blocks, messageId) != -1) {
+        if (await _revealMessage(messageId, key, generation)) {
+          return;
+        }
+        // The id sits inside a confirmed range but has no visible row: it is
+        // hidden, expired or deleted server-side. Paging further back cannot
+        // produce it.
+        break;
+      }
+      if (scope?.hasHistory != true || !await _loadOlder()) {
+        break;
+      }
+    }
+    if (mounted && _isCurrentJump(key, generation)) {
+      _reportJumpFailed();
+    }
+  }
+
+  /// Scrolls the target into view and highlights it. Returns `false` only
+  /// when the message never materialized, which is the caller's cue to tell
+  /// the user rather than to leave the timeline where it was.
+  Future<bool> _revealMessage(
+    int messageId,
+    ChatRoomProviderKey key,
+    int generation,
+  ) async {
+    if (_jumpTargetId != messageId) {
+      setState(() => _jumpTargetId = messageId);
+    }
+    for (var pass = 0; pass < _maximumRevealPasses; pass++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_isCurrentJump(key, generation)) {
+        // A newer jump or a scope change owns the outcome now.
+        return true;
+      }
+      final targetContext = _jumpTargetKey.currentContext;
+      if (targetContext != null && targetContext.mounted) {
+        await Scrollable.ensureVisible(
+          targetContext,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+        if (_isCurrentJump(key, generation)) {
+          _highlight(messageId);
+        }
+        return true;
+      }
+      _scrollTowards(messageId);
+    }
+    return false;
+  }
+
+  /// Moves the reversed timeline to where [messageId] is estimated to sit so
+  /// the list builds the children around it; the next pass then measures the
+  /// real position. Off-screen children have no extent yet, so the estimate
+  /// improves with every pass instead of landing in one step.
+  void _scrollTowards(int messageId) {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final messages = _visibleMessages();
+    final index = messages.indexWhere(
+      (message) => message.messageId == messageId,
+    );
+    if (index < 0 || messages.length < 2) {
+      return;
+    }
+    final position = _scrollController.position;
+    // The timeline is reversed: the newest message sits at offset zero and
+    // the oldest at the far end.
+    final fraction = (messages.length - 1 - index) / (messages.length - 1);
+    final offset = position.maxScrollExtent * fraction;
+    _scrollController.jumpTo(
+      offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+    );
+  }
+
+  /// The same rows the timeline renders, filtered by the scope's blocks so
+  /// an index here matches an index there.
+  List<CachedChatMessage> _visibleMessages() {
+    final key = _key;
+    return _messagesWithinBlocks(
+      ref.read(chatMessagesProvider(key)).valueOrNull ??
+          const <CachedChatMessage>[],
+      _decodeScopeBlocks(ref.read(chatScopeProvider(key)).valueOrNull),
+    );
+  }
+
+  void _highlight(int messageId) {
+    _highlightTimer?.cancel();
+    setState(() => _highlightedMessageId = messageId);
+    _highlightTimer = Timer(_highlightDuration, () {
+      if (mounted) {
+        setState(() => _highlightedMessageId = null);
+      }
+    });
+  }
+
+  void _reportJumpFailed() {
+    setState(() => _jumpTargetId = null);
+    final strings = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const Key('chat-jump-not-found'),
+          content: Text(strings.jumpToMessageNotFound),
+        ),
+      );
+  }
+
+  bool _isCurrentJump(ChatRoomProviderKey key, int generation) =>
+      mounted && generation == _jumpGeneration && key == _key;
 
   void _startReply(CachedChatMessage message) {
     if (message.systemMessage.isNotEmpty || message.deleted) {
@@ -808,7 +1008,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(6),
-                        child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 28),
+                        ),
                       ),
                     ),
                 ],
@@ -1110,8 +1313,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
     final deliveryStates = <int, OutgoingMessageDeliveryState>{
-      for (final status in
-          statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])
+      for (final status
+          in statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])
         if (status.messageId != null) status.messageId!: status.state,
     };
     final pending = operations
@@ -1219,12 +1422,17 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   hasOlder: scope?.hasHistory ?? false,
                   loadingOlder: _loadingOlder,
                   controller: _scrollController,
-                  onLoadOlder: _loadOlder,
+                  onLoadOlder: () => unawaited(_loadOlder()),
                   onRetry: _sync,
                   onResend: _confirmResend,
                   onOpenThread: _openThread,
                   onMessageActions: handleMessageActions,
                   onReactionTap: handleReactionTap,
+                  onJumpToMessage: (messageId) =>
+                      unawaited(_jumpToMessage(messageId)),
+                  jumpTargetId: _jumpTargetId,
+                  jumpTargetKey: _jumpTargetKey,
+                  highlightedMessageId: _highlightedMessageId,
                   deliveryStates: deliveryStates,
                   lastCommonRead: _cursorValue(scope?.lastCommonRead),
                 ),
@@ -1376,6 +1584,10 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onOpenThread,
     required this.onMessageActions,
     required this.onReactionTap,
+    required this.onJumpToMessage,
+    required this.jumpTargetId,
+    required this.jumpTargetKey,
+    required this.highlightedMessageId,
     required this.deliveryStates,
     required this.lastCommonRead,
   });
@@ -1399,8 +1611,19 @@ final class _ChatTimeline extends StatelessWidget {
   final ValueChanged<CachedChatMessage> onOpenThread;
   final void Function(CachedChatMessage message, ChatMessage? parsed)
   onMessageActions;
-  final void Function(CachedChatMessage message, ChatMessage? parsed, String emoji)
+  final void Function(
+    CachedChatMessage message,
+    ChatMessage? parsed,
+    String emoji,
+  )
   onReactionTap;
+  final ValueChanged<int> onJumpToMessage;
+
+  /// The message a jump is currently resolving. It carries [jumpTargetKey]
+  /// so the pane can measure it once the list has built it.
+  final int? jumpTargetId;
+  final GlobalKey jumpTargetKey;
+  final int? highlightedMessageId;
   final Map<int, OutgoingMessageDeliveryState> deliveryStates;
   final int? lastCommonRead;
 
@@ -1472,9 +1695,12 @@ final class _ChatTimeline extends StatelessWidget {
                   const _ChatHistoryGapNotice(key: Key('chat-history-gap')),
                 if (startsDay) _DaySeparator(timestamp: message.timestamp),
                 _MessageBubble(
+                  key: message.messageId == jumpTargetId ? jumpTargetKey : null,
                   account: account,
                   message: message,
                   parsed: parsed,
+                  highlighted: message.messageId == highlightedMessageId,
+                  onJumpToMessage: onJumpToMessage,
                   showAuthor: !groupedWithPrevious,
                   showAvatar: !groupedWithNext,
                   groupedWithPrevious: groupedWithPrevious,
@@ -1521,9 +1747,12 @@ final class _ChatTimeline extends StatelessWidget {
 
 final class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    super.key,
     required this.account,
     required this.message,
     required this.parsed,
+    required this.highlighted,
+    required this.onJumpToMessage,
     required this.showAuthor,
     required this.showAvatar,
     required this.groupedWithPrevious,
@@ -1538,6 +1767,11 @@ final class _MessageBubble extends StatelessWidget {
   final StoredAccount account;
   final CachedChatMessage message;
   final ChatMessage? parsed;
+
+  /// Draws a short-lived ring around the bubble so the user can see where a
+  /// jump landed.
+  final bool highlighted;
+  final ValueChanged<int> onJumpToMessage;
   final bool showAuthor;
   final bool showAvatar;
   final bool groupedWithPrevious;
@@ -1546,7 +1780,11 @@ final class _MessageBubble extends StatelessWidget {
   final ValueChanged<CachedChatMessage>? onOpenThread;
   final void Function(CachedChatMessage message, ChatMessage? parsed)
   onMessageActions;
-  final void Function(CachedChatMessage message, ChatMessage? parsed, String emoji)
+  final void Function(
+    CachedChatMessage message,
+    ChatMessage? parsed,
+    String emoji,
+  )
   onReactionTap;
   final OutgoingMessageDeliveryState? deliveryState;
 
@@ -1623,66 +1861,90 @@ final class _MessageBubble extends StatelessWidget {
                     onLongPress: message.deleted
                         ? null
                         : () => onMessageActions(message, parsed),
-                    child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: outgoing
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHigh,
-                      borderRadius: _bubbleRadius(
-                        outgoing: outgoing,
-                        groupEnd: groupEnd,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: outgoing
+                            ? scheme.primaryContainer
+                            : scheme.surfaceContainerHigh,
+                        borderRadius: _bubbleRadius(
+                          outgoing: outgoing,
+                          groupEnd: groupEnd,
+                        ),
+                        border: highlighted
+                            ? Border.all(color: scheme.tertiary, width: 2)
+                            : null,
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!outgoing && showAuthor)
-                            ExcludeSemantics(
-                              child: Text(
-                                message.actorDisplayName,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: scheme.primary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!outgoing && showAuthor)
+                              ExcludeSemantics(
+                                child: Text(
+                                  message.actorDisplayName,
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: scheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                            if (!outgoing && showAuthor)
+                              const SizedBox(height: 2),
+                            DefaultTextStyle.merge(
+                              style: TextStyle(
+                                color: outgoing
+                                    ? scheme.onPrimaryContainer
+                                    : scheme.onSurface,
+                                fontStyle: message.deleted
+                                    ? FontStyle.italic
+                                    : null,
+                              ),
+                              child: ChatMessageContent(
+                                account: account,
+                                message: message.deleted ? null : parsed,
+                                fallbackText: message.deleted
+                                    ? AppLocalizations.of(
+                                        context,
+                                      ).deletedMessage
+                                    : message.displayText,
+                                foregroundColor: outgoing
+                                    ? scheme.onPrimaryContainer
+                                    : scheme.onSurface,
+                                showReplyPreview: showReplyPreview,
+                                onReactionTap: message.deleted
+                                    ? null
+                                    : (emoji) =>
+                                          onReactionTap(message, parsed, emoji),
+                                onOpenParent: onJumpToMessage,
                               ),
                             ),
-                          if (!outgoing && showAuthor)
-                            const SizedBox(height: 2),
-                          DefaultTextStyle.merge(
-                            style: TextStyle(
-                              color: outgoing
-                                  ? scheme.onPrimaryContainer
-                                  : scheme.onSurface,
-                              fontStyle: message.deleted
-                                  ? FontStyle.italic
-                                  : null,
-                            ),
-                            child: ChatMessageContent(
-                              account: account,
-                              message: message.deleted ? null : parsed,
-                              fallbackText: message.deleted
-                                  ? AppLocalizations.of(context).deletedMessage
-                                  : message.displayText,
-                              foregroundColor: outgoing
-                                  ? scheme.onPrimaryContainer
-                                  : scheme.onSurface,
-                              showReplyPreview: showReplyPreview,
-                              onReactionTap: message.deleted
-                                  ? null
-                                  : (emoji) =>
-                                        onReactionTap(message, parsed, emoji),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (parsed?.lastEditTimestamp != null) ...[
+                            const SizedBox(height: 3),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (parsed?.lastEditTimestamp != null) ...[
+                                  Text(
+                                    AppLocalizations.of(context).edited,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: outgoing
+                                              ? scheme.onPrimaryContainer
+                                              : scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
                                 Text(
-                                  AppLocalizations.of(context).edited,
+                                  _formatMessageClock(
+                                    context,
+                                    message.timestamp,
+                                  ),
                                   style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
                                         color: outgoing
@@ -1690,54 +1952,48 @@ final class _MessageBubble extends StatelessWidget {
                                             : scheme.onSurfaceVariant,
                                       ),
                                 ),
-                                const SizedBox(width: 6),
-                              ],
-                              Text(
-                                _formatMessageClock(context, message.timestamp),
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: outgoing
-                                          ? scheme.onPrimaryContainer
-                                          : scheme.onSurfaceVariant,
+                                if (outgoing && deliveryState != null) ...[
+                                  const SizedBox(width: 6),
+                                  _DeliveryMark(
+                                    key: Key(
+                                      'chat-delivery-${message.messageId}',
                                     ),
-                              ),
-                              if (outgoing && deliveryState != null) ...[
-                                const SizedBox(width: 6),
-                                _DeliveryMark(
-                                  key: Key(
-                                    'chat-delivery-${message.messageId}',
+                                    state: deliveryState!,
+                                    color: scheme.onPrimaryContainer,
                                   ),
-                                  state: deliveryState!,
-                                  color: scheme.onPrimaryContainer,
-                                ),
+                                ],
                               ],
-                            ],
-                          ),
-                          if (canOpenThread) ...[
-                            const SizedBox(height: 2),
-                            TextButton.icon(
-                              key: Key('chat-open-thread-${message.messageId}'),
-                              onPressed: () => onOpenThread!(message),
-                              style: TextButton.styleFrom(
-                                foregroundColor: outgoing
-                                    ? scheme.onPrimaryContainer
-                                    : scheme.primary,
-                                minimumSize: const Size(48, 48),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
+                            ),
+                            if (canOpenThread) ...[
+                              const SizedBox(height: 2),
+                              TextButton.icon(
+                                key: Key(
+                                  'chat-open-thread-${message.messageId}',
+                                ),
+                                onPressed: () => onOpenThread!(message),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: outgoing
+                                      ? scheme.onPrimaryContainer
+                                      : scheme.primary,
+                                  minimumSize: const Size(48, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.forum_outlined,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  threadReplies > 0
+                                      ? strings.threadReplies(threadReplies)
+                                      : strings.openThread,
                                 ),
                               ),
-                              icon: const Icon(Icons.forum_outlined, size: 18),
-                              label: Text(
-                                threadReplies > 0
-                                    ? strings.threadReplies(threadReplies)
-                                    : strings.openThread,
-                              ),
-                            ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
                     ),
                   ),
                 ),
@@ -2102,10 +2358,7 @@ final class _ChatComposer extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (replyTo != null)
-                      _ReplyBanner(
-                        message: replyTo!,
-                        onCancel: onCancelReply,
-                      ),
+                      _ReplyBanner(message: replyTo!, onCancel: onCancelReply),
                     MentionSuggestionsBar(
                       controller: controller,
                       source: mentionSource,
@@ -2171,11 +2424,7 @@ int? _cursorValue(String? raw) {
 /// the message, `read` additionally means it is at or below the common read
 /// marker; neither is inferred from local activity.
 final class _DeliveryMark extends StatelessWidget {
-  const _DeliveryMark({
-    super.key,
-    required this.state,
-    required this.color,
-  });
+  const _DeliveryMark({super.key, required this.state, required this.color});
 
   final OutgoingMessageDeliveryState state;
   final Color color;
@@ -2229,9 +2478,9 @@ final class _ReplyBanner extends StatelessWidget {
               children: [
                 Text(
                   strings.replyingTo(message.actorDisplayName),
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: scheme.primary,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: scheme.primary),
                 ),
                 Text(
                   message.displayText,
@@ -2412,9 +2661,9 @@ final class _ChatHistoryGapNotice extends StatelessWidget {
               child: Text(
                 label,
                 textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
             Expanded(child: Divider(color: scheme.outlineVariant)),

@@ -24,6 +24,7 @@ final class ChatMessageContent extends StatelessWidget {
     required this.foregroundColor,
     this.showReplyPreview = true,
     this.onReactionTap,
+    this.onOpenParent,
   });
 
   final StoredAccount account;
@@ -35,6 +36,10 @@ final class ChatMessageContent extends StatelessWidget {
   /// Toggles the account's own reaction for the tapped emoji. `null` renders
   /// the existing reactions read-only (e.g. for a deleted message).
   final ValueChanged<String>? onReactionTap;
+
+  /// Jumps to the quoted original, identified by its message id. `null`
+  /// renders the reply preview as a plain, non-interactive quote.
+  final ValueChanged<int>? onOpenParent;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +63,11 @@ final class ChatMessageContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showReplyPreview && parsed.parent != null) ...[
-          _ReplyPreview(account: account, message: parsed),
+          _ReplyPreview(
+            account: account,
+            message: parsed,
+            onOpenParent: onOpenParent,
+          ),
           const SizedBox(height: 8),
         ],
         if (giphySelection.references.isEmpty)
@@ -794,10 +803,15 @@ final class _RichObjectPill extends StatelessWidget {
 }
 
 final class _ReplyPreview extends StatelessWidget {
-  const _ReplyPreview({required this.account, required this.message});
+  const _ReplyPreview({
+    required this.account,
+    required this.message,
+    required this.onOpenParent,
+  });
 
   final StoredAccount account;
   final ChatMessage message;
+  final ValueChanged<int>? onOpenParent;
 
   @override
   Widget build(BuildContext context) {
@@ -806,7 +820,9 @@ final class _ReplyPreview extends StatelessWidget {
     final parent = message.parent;
     final String author;
     final String text;
+    int? parentId;
     if (parent is ChatFullParent) {
+      parentId = parent.message.messageId;
       author = parent.message.actorDisplayName;
       final rendered = renderRichChatMessage(
         message: parent.message.message,
@@ -819,43 +835,67 @@ final class _ReplyPreview extends StatelessWidget {
       author = '';
       text = strings.deletedMessage;
     }
+    final targetId = parentId;
+    final jump = targetId == null ? null : onOpenParent;
     return Semantics(
       label: author.isEmpty ? text : '${strings.replyingTo(author)}. $text',
+      button: jump != null,
+      hint: jump == null ? null : strings.jumpToOriginalMessage,
+      onTap: jump == null ? null : () => jump(targetId!),
       child: ExcludeSemantics(
-        child: Container(
-          key: Key('chat-reply-preview-${message.messageId}'),
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(9, 6, 8, 6),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(7),
-            border: Border(left: BorderSide(color: scheme.primary, width: 3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (author.isNotEmpty)
+        child: _tappable(
+          jump == null ? null : () => jump(targetId!),
+          message.messageId,
+          Container(
+            key: Key('chat-reply-preview-${message.messageId}'),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(9, 6, 8, 6),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(7),
+              border: Border(left: BorderSide(color: scheme.primary, width: 3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (author.isNotEmpty)
+                  Text(
+                    author,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 Text(
-                  author,
-                  maxLines: 1,
+                  text,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w700,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
-              Text(
-                text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Wraps the quote in a tap target only when there is somewhere to jump.
+  /// A quote whose original was deleted stays inert instead of offering a
+  /// jump that would always fail.
+  Widget _tappable(VoidCallback? onTap, int messageId, Widget child) {
+    if (onTap == null) {
+      return child;
+    }
+    return GestureDetector(
+      key: Key('chat-reply-jump-$messageId'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: child,
     );
   }
 }
@@ -885,10 +925,7 @@ final class _ReactionSummary extends StatelessWidget {
                   : scheme.onSurface;
               final pill = Container(
                 key: Key('chat-reaction-${message.messageId}-$index'),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: selected
                       ? scheme.primaryContainer
@@ -1266,10 +1303,7 @@ TextStyle? _headingStyle(ThemeData theme, int level) {
 
 /// A Talk attachment carries a WebDAV path. The `link` field points at the
 /// Files web page and would answer with HTML, so it must not be downloaded.
-Uri? _davDownloadUri(
-  StoredAccount account,
-  ChatRichObjectParameter parameter,
-) {
+Uri? _davDownloadUri(StoredAccount account, ChatRichObjectParameter parameter) {
   final raw = parameter.wire['path'];
   if (raw is! String) {
     return null;

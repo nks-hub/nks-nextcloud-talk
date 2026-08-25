@@ -295,5 +295,8 @@
     }
   },
   "roomDetailsRemoveDialogConfirm": "Remove",
-  "roomDetailsParticipantActionRejected": "The server refused this change for this participant."
+  "roomDetailsParticipantActionRejected": "The server refused this change for this participant.",
+  "jumpToOriginalMessage": "Show the original message",
+  "jumpToMessageNotFound": "That message is no longer available in this conversation.",
+  "jumpToMessageConversationMissing": "That conversation is not available on this device."
 }

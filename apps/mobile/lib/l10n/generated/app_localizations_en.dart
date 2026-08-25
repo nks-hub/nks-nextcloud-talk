@@ -896,4 +896,15 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'The server refused this change for this participant.';
+
+  @override
+  String get jumpToOriginalMessage => 'Show the original message';
+
+  @override
+  String get jumpToMessageNotFound =>
+      'That message is no longer available in this conversation.';
+
+  @override
+  String get jumpToMessageConversationMissing =>
+      'That conversation is not available on this device.';
 }

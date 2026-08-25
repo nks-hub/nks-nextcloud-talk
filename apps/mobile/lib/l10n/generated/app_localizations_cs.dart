@@ -896,4 +896,15 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'Server tuto změnu u tohoto účastníka odmítl.';
+
+  @override
+  String get jumpToOriginalMessage => 'Zobrazit původní zprávu';
+
+  @override
+  String get jumpToMessageNotFound =>
+      'Tato zpráva už v konverzaci není dostupná.';
+
+  @override
+  String get jumpToMessageConversationMissing =>
+      'Tato konverzace není v zařízení dostupná.';
 }

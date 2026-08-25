@@ -1705,6 +1705,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server refused this change for this participant.'**
   String get roomDetailsParticipantActionRejected;
+
+  /// No description provided for @jumpToOriginalMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the original message'**
+  String get jumpToOriginalMessage;
+
+  /// No description provided for @jumpToMessageNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'That message is no longer available in this conversation.'**
+  String get jumpToMessageNotFound;
+
+  /// No description provided for @jumpToMessageConversationMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'That conversation is not available on this device.'**
+  String get jumpToMessageConversationMissing;
 }
 
 class _AppLocalizationsDelegate
