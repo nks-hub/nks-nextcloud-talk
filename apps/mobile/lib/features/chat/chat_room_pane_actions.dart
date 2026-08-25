@@ -345,12 +345,12 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// [_openScheduledMessages] is how an unclear result gets settled.
   Future<void> _scheduleMessage() async {
     final text = _composer.text.trim();
-    if (text.isEmpty || _sending || widget.conversation.readOnly != 0) {
+    if (text.isEmpty || _sending || _isReadOnlyNow()) {
       return;
     }
     final targetKey = _key;
     final at = await showSendLaterSheet(context: context, now: DateTime.now());
-    if (at == null || !mounted || targetKey != _key) {
+    if (at == null || !mounted || targetKey != _key || _isReadOnlyNow()) {
       return;
     }
     final strings = AppLocalizations.of(context);
@@ -520,6 +520,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     ChatMessage? parsed,
     String emoji,
   ) async {
+    if (_isReadOnlyNow()) {
+      return;
+    }
     final selfReacted = parsed?.reactionsSelf.contains(emoji) ?? false;
     final targetKey = _key;
     try {
@@ -547,6 +550,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   }
 
   Future<void> _openReactionPicker(CachedChatMessage message) async {
+    if (_isReadOnlyNow()) {
+      return;
+    }
     final strings = AppLocalizations.of(context);
     await showModalBottomSheet<void>(
       context: context,
@@ -601,6 +607,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   }
 
   Future<void> _openFullReactionPicker(CachedChatMessage message) async {
+    if (_isReadOnlyNow()) {
+      return;
+    }
     final strings = AppLocalizations.of(context);
     await showModalBottomSheet<void>(
       context: context,

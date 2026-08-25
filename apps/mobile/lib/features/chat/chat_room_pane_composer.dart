@@ -2,7 +2,9 @@ part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   void _startReply(CachedChatMessage message) {
-    if (message.systemMessage.isNotEmpty || message.deleted) {
+    if (_isReadOnlyNow() ||
+        message.systemMessage.isNotEmpty ||
+        message.deleted) {
       return;
     }
     _update(() => _replyTo = message);
@@ -10,7 +12,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
 
   Future<void> _send() async {
     final message = _composer.text.trim();
-    if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
+    if (message.isEmpty || _sending || _isReadOnlyNow()) {
       return;
     }
     await _sendMessage(message, clearComposer: true);
@@ -50,7 +52,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (expectedKey != null && expectedKey != targetKey) {
       return;
     }
-    if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
+    if (message.isEmpty || _sending || _isReadOnlyNow()) {
       return;
     }
     final replyTo = targetKey.threadId == null ? _replyTo : null;
@@ -105,7 +107,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   }
 
   Future<void> _showEmojiPicker() async {
-    if (_sending || widget.conversation.readOnly != 0) {
+    if (_sending || _isReadOnlyNow()) {
       return;
     }
     final strings = AppLocalizations.of(context);
@@ -122,6 +124,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             child: EmojiPicker(
               labels: _emojiPickerLabels(strings),
               onSelected: (choice) {
+                if (!mounted || _isReadOnlyNow()) {
+                  Navigator.of(sheetContext).pop();
+                  return;
+                }
                 if (!insertComposerText(_composer, choice.glyph)) {
                   _showComposerLimitError();
                   return;
@@ -153,7 +159,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   }
 
   Future<void> _requestGiphy({bool refresh = false}) async {
-    if (_sending || widget.conversation.readOnly != 0) {
+    if (_sending || _isReadOnlyNow()) {
       return;
     }
     final targetKey = _key;

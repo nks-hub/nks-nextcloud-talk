@@ -162,6 +162,52 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('named thread follows live read-only conversation updates', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(
+          account: account,
+          conversation: conversation,
+          threadId: 20,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
+
+    await (database.update(database.cachedConversations)..where(
+          (row) =>
+              row.accountId.equals(account.id) &
+              row.token.equals(conversation.token),
+        ))
+        .write(const CachedConversationsCompanion(readOnly: Value(1)));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isEmpty,
+    );
+
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+
+    await (database.update(database.cachedConversations)..where(
+          (row) =>
+              row.accountId.equals(account.id) &
+              row.token.equals(conversation.token),
+        ))
+        .write(const CachedConversationsCompanion(readOnly: Value(0)));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets(
     'every grouped incoming and outgoing message exposes its author',
     (tester) async {
@@ -401,6 +447,52 @@ void _registerChatRoomPaneInteractionTests() {
     expect(find.byKey(const Key('message-action-react')), findsOneWidget);
     await tester.tapAt(const Offset(1, 1));
     await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('open message actions recheck a live read-only transition', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(reply: true, react: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-react')), findsOneWidget);
+
+    await (database.update(database.cachedConversations)..where(
+          (row) =>
+              row.accountId.equals(account.id) &
+              row.token.equals(conversation.token),
+        ))
+        .write(const CachedConversationsCompanion(readOnly: Value(1)));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('message-action-reply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-reply')), findsNothing);
+    expect(find.byKey(const Key('message-action-react')), findsNothing);
 
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());

@@ -315,14 +315,26 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       );
   }
 
-  /// The freshest cached row for this room, falling back to the snapshot the
-  /// pane was constructed with. Both production entry points and the
-  /// test-only screen route through this pane, so resolving it here means the
-  /// pin banner behaves identically in all of them.
-  CachedConversation _liveConversation() {
-    final conversations = ref
-        .watch(conversationsProvider(widget.account.id))
-        .valueOrNull;
+  /// Watches the freshest cached row for this room, falling back to the
+  /// snapshot the pane was constructed with until Drift emits its first row.
+  CachedConversation _watchLiveConversation() {
+    return _resolveLiveConversation(
+      ref.watch(conversationsProvider(widget.account.id)).valueOrNull,
+    );
+  }
+
+  /// Reads the same row for event-time admission checks. A sheet or menu can
+  /// remain open while another client makes the room read-only, so callbacks
+  /// must not rely on the writable state captured by the previous build.
+  CachedConversation _readLiveConversation() {
+    return _resolveLiveConversation(
+      ref.read(conversationsProvider(widget.account.id)).valueOrNull,
+    );
+  }
+
+  CachedConversation _resolveLiveConversation(
+    List<CachedConversation>? conversations,
+  ) {
     if (conversations == null) {
       return widget.conversation;
     }
@@ -333,6 +345,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
     return widget.conversation;
   }
+
+  bool _isReadOnlyNow() => _readLiveConversation().readOnly != 0;
 
   bool _isCurrentJump(ChatRoomProviderKey key, int generation) =>
       mounted && generation == _jumpGeneration && key == _key;

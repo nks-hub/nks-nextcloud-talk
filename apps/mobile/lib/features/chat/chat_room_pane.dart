@@ -341,10 +341,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
     final statusesValue = ref.watch(outgoingMessageStatusesProvider(_key));
     final scopeValue = ref.watch(chatScopeProvider(_key));
-    final attachmentDependencies = widget.conversation.readOnly == 0
+    final liveConversation = _watchLiveConversation();
+    final readOnly = liveConversation.readOnly != 0;
+    final attachmentDependencies = !readOnly
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
-    final mentionSource = widget.conversation.readOnly == 0
+    final mentionSource = !readOnly
         ? ref.watch(
             mentionSuggestionSourceProvider((
               accountId: widget.account.id,
@@ -355,7 +357,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final actionsProfile = ref
         .watch(chatMessageActionsProfileProvider(_key))
         .valueOrNull;
-    final readOnly = widget.conversation.readOnly != 0;
     final canReplyToMessage =
         !readOnly &&
         widget.threadId == null &&
@@ -363,10 +364,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final profileCanEdit = actionsProfile?.edit ?? false;
     final profileCanDelete = actionsProfile?.delete ?? false;
     final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);
-    // The pin and the scheduled-message count live on the conversation row,
-    // which the list keeps fresh; `widget.conversation` is only the snapshot
-    // this pane was opened with.
-    final liveConversation = _liveConversation();
     final pinned = PinnedMessageState.fromCachedConversation(liveConversation);
     // Pins are a whole-room concept, so a thread pane neither shows nor
     // offers them; the root room pane owns that.
@@ -430,7 +427,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         !_initialAttemptFinished && messages.isEmpty && pending.isEmpty;
     final error = _localError ?? _storedError(scope?.lastSyncError);
     final strings = AppLocalizations.of(context);
-    final giphy = _giphyRequested && widget.conversation.readOnly == 0
+    final giphy = _giphyRequested && !readOnly
         ? ref.watch(giphyRepositoryProvider(widget.account.id))
         : null;
     final giphyRepository = giphy?.valueOrNull;
@@ -572,7 +569,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           onCancelReply: () => setState(() => _replyTo = null),
           controller: _composer,
           sending: _sending,
-          readOnly: widget.conversation.readOnly != 0,
+          readOnly: readOnly,
           mentionSource: mentionSource?.valueOrNull,
           mediaComposer: attachmentDependencies == null
               ? const SizedBox.shrink()
