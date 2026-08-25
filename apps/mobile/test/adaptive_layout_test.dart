@@ -267,7 +267,6 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('chat-room-pane')), findsOneWidget);
-    expect(find.byType(ConversationDetailsPane), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));

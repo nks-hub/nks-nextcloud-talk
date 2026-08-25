@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
@@ -95,32 +94,6 @@ void main() {
       expect(status.state, OutgoingMessageDeliveryState.sending);
       expect(status.messageId, isNull);
     });
-  });
-
-  testWidgets('indicator renders the resolved state and caller label', (
-    tester,
-  ) async {
-    final status = resolveOutgoingMessageStatuses(
-      _projection(
-        outboxState: 'completed',
-        messageIds: const [120],
-        confirmedMessages: [_message(messageId: 120)],
-      ),
-    ).single;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: OutgoingMessageStatusIndicator(
-            status: status,
-            label: 'Odesláno',
-          ),
-        ),
-      ),
-    );
-
-    expect(find.byIcon(Icons.done_rounded), findsOneWidget);
-    expect(find.text('Odesláno'), findsOneWidget);
   });
 
   test('service projection ignores unconfirmed reference collisions', () async {

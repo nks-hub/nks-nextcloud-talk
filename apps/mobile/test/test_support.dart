@@ -43,9 +43,13 @@ final class RecordingLoginPageLauncher implements LoginPageLauncher {
   }
 }
 
-Widget localizedTestApp({required Widget home, ThemeData? theme}) {
+Widget localizedTestApp({
+  required Widget home,
+  ThemeData? theme,
+  Locale locale = const Locale('en'),
+}) {
   return MaterialApp(
-    locale: const Locale('en'),
+    locale: locale,
     theme: theme ?? AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
