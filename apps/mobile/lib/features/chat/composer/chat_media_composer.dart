@@ -11,10 +11,42 @@ import '../../../platform/media/voice_platform_adapters.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
 import 'attachment_submission.dart';
+import 'giphy_attachment.dart';
 import 'voice_message.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
 typedef CreateVoicePlaybackBackend = VoicePlaybackBackend Function();
+
+typedef LoadGiphyAttachmentPayload =
+    Future<GiphyAttachmentPayload> Function(
+      AttachmentCancellationSignal cancellationSignal,
+    );
+
+final class ChatMediaComposerController {
+  Object? _owner;
+  Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
+
+  Future<bool> submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
+    final submit = _submitGiphy;
+    return submit == null ? false : submit(loader);
+  }
+
+  void _attach(
+    Object owner,
+    Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
+  ) {
+    _owner = owner;
+    _submitGiphy = submitGiphy;
+  }
+
+  void _detach(Object owner) {
+    if (!identical(_owner, owner)) {
+      return;
+    }
+    _owner = null;
+    _submitGiphy = null;
+  }
+}
 
 final class ChatMediaComposer extends StatefulWidget {
   const ChatMediaComposer({
@@ -26,6 +58,7 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.sourceStore,
     required this.capabilityProfile,
     required this.submissionBridge,
+    this.controller,
     this.idleActions = const <Widget>[],
     this.imageSelectionBackend = const FileSelectorImageSelectionBackend(),
     this.createVoiceCaptureBackend,
@@ -39,6 +72,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final DurableAttachmentSourceStore sourceStore;
   final AttachmentCapabilityProfile capabilityProfile;
   final AttachmentSubmissionBridge submissionBridge;
+  final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
   final ImageSelectionBackend imageSelectionBackend;
   final CreateVoiceCaptureBackend? createVoiceCaptureBackend;
@@ -90,11 +124,16 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       () => widget.submissionBridge,
     );
     _initializeControllers();
+    widget.controller?._attach(this, _submitGiphyAttachment);
   }
 
   @override
   void didUpdateWidget(covariant ChatMediaComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this, _submitGiphyAttachment);
+    }
     if (oldWidget.accountId == widget.accountId &&
         oldWidget.server == widget.server &&
         oldWidget.roomToken == widget.roomToken &&
@@ -206,6 +245,57 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     }
   }
 
+  Future<bool> _submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
+    if (_disposed || !_imageSupported || _imageController.state.isActive) {
+      return false;
+    }
+    await _imageController.pickAndStart(() => _prepareGiphyAttachment(loader));
+    return true;
+  }
+
+  Future<ImageAttachmentUploadRequest?> _prepareGiphyAttachment(
+    LoadGiphyAttachmentPayload loader,
+  ) async {
+    final cancellation = AttachmentCancellationController();
+    _imagePreparationCancellation = cancellation;
+    PreparedAttachmentSource? source;
+    try {
+      final payload = await loader(cancellation.signal);
+      if (payload.mimeType != 'image/gif' ||
+          !payload.displayName.toLowerCase().endsWith('.gif')) {
+        throw const AttachmentSubmissionException(
+          AttachmentSubmissionFailure.unsupported,
+        );
+      }
+      if (_disposed || cancellation.isCancelled) {
+        return null;
+      }
+      source = await widget.sourceStore.copyFromStream(
+        stream: Stream<List<int>>.value(payload.body),
+        mimeType: payload.mimeType,
+        displayName: payload.displayName,
+        expectedByteLength: payload.body.lengthInBytes,
+        cancellationSignal: cancellation.signal,
+      );
+      if (_disposed || cancellation.isCancelled) {
+        await widget.sourceStore.discard(source.handle);
+        return null;
+      }
+      _preparedImageSource = source;
+      return ImageAttachmentUploadRequest(
+        accountId: widget.accountId,
+        server: widget.server,
+        roomToken: widget.roomToken,
+        source: source,
+        metadata: _imageMetadata,
+      );
+    } finally {
+      if (identical(_imagePreparationCancellation, cancellation)) {
+        _imagePreparationCancellation = null;
+      }
+    }
+  }
+
   void _handleImageState() {
     final state = _imageController.state;
     if (!state.isActive &&
@@ -276,6 +366,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   @override
   void dispose() {
     _disposed = true;
+    widget.controller?._detach(this);
     _releaseControllers();
     super.dispose();
   }

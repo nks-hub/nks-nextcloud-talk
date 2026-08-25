@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/composer/attachment_submission.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
+import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
@@ -93,6 +94,67 @@ void main() {
       );
     },
   );
+
+  testWidgets('Giphy bytes enter the same durable image upload pipeline', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final controller = ChatMediaComposerController();
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: 73,
+        voiceBackends: voiceBackends,
+        controller: controller,
+      ),
+    );
+
+    final started = await tester.runAsync(
+      () => controller.submitGiphyAttachment(
+        (_) async => GiphyAttachmentPayload(
+          body: Uint8List.fromList(const <int>[
+            0x47,
+            0x49,
+            0x46,
+            0x38,
+            0x39,
+            0x61,
+            0x01,
+            0x00,
+            0x01,
+            0x00,
+          ]),
+          mimeType: 'image/gif',
+          displayName: 'giphy-fixture.gif',
+        ),
+      ),
+    );
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(started, isTrue);
+    expect(bridge.sources, hasLength(1));
+    expect(bridge.sources.single.mimeType, 'image/gif');
+    expect(bridge.sources.single.displayName, 'giphy-fixture.gif');
+    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+    expect(bridge.metadata.single.threadId, 73);
+
+    await tester.pump();
+    bridge.sessions.single.add(
+      _progress(AttachmentJobPhase.completed, progress: 1),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('image-attachment-upload-panel'))
+          .evaluate()
+          .isEmpty,
+    );
+  });
 
   testWidgets('thread image retry and cancellation keep standalone threadId', (
     tester,
@@ -556,6 +618,7 @@ Widget _composerApp({
   _VoiceBackendFactory? voiceBackends,
   ImageSelectionBackend imageSelectionBackend = const _ImageBackend(),
   List<Widget> idleActions = const <Widget>[],
+  ChatMediaComposerController? controller,
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -568,6 +631,7 @@ Widget _composerApp({
         sourceStore: sourceStore,
         capabilityProfile: profile ?? _profile(),
         submissionBridge: bridge,
+        controller: controller,
         idleActions: idleActions,
         imageSelectionBackend: imageSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,
@@ -622,6 +686,7 @@ final class _RecordingBridge {
             required source,
             required metadata,
           }) async {
+            sources.add(source);
             this.metadata.add(metadata);
             return _enqueueRequest(
               source: source,
@@ -638,6 +703,7 @@ final class _RecordingBridge {
   }
 
   final AttachmentCapabilityProfile profile;
+  final List<PreparedAttachmentSource> sources = <PreparedAttachmentSource>[];
   final List<AttachmentMetadata> metadata = <AttachmentMetadata>[];
   final List<_DurableSession> sessions = <_DurableSession>[];
   late final AttachmentSubmissionBridge bridge;
