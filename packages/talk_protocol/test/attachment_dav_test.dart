@@ -125,6 +125,45 @@ void main() {
       );
     });
 
+    test('classifies quota exceeded (507) as non-retryable, not transient', () {
+      final request = AttachmentDavRequest.normalPut(
+        context: attachmentContext(9),
+        davUserId: davUserA,
+        remotePath: DavRelativePath.parse('Talk/Draft/job.upload'),
+        source: prepared,
+      );
+      expect(
+        decodeAttachmentDavResponse(
+          request: request,
+          statusCode: 507,
+          body: Uint8List(0),
+        ).classification,
+        AttachmentDavClassification.quotaExceeded,
+      );
+    });
+
+    test('classifies missing write permission (403) distinctly', () {
+      final request = AttachmentDavRequest.chunkPut(
+        context: attachmentContext(10),
+        davUserId: davUserA,
+        uploadSessionId: session,
+        source: prepared,
+        range: DavChunkRange(
+          start: 0,
+          end: 1023999,
+          fileSize: prepared.byteLength,
+        ),
+      );
+      expect(
+        decodeAttachmentDavResponse(
+          request: request,
+          statusCode: 403,
+          body: Uint8List(0),
+        ).classification,
+        AttachmentDavClassification.permissionDenied,
+      );
+    });
+
     test('rejects redirects instead of following untrusted locations', () {
       final request = AttachmentDavRequest.normalPut(
         context: attachmentContext(8),

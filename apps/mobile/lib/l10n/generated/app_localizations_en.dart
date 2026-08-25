@@ -409,6 +409,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageUploadFailed => 'The image could not be sent.';
 
   @override
+  String get imageUploadFailedQuota =>
+      'The image could not be sent: storage quota exceeded.';
+
+  @override
+  String get imageUploadFailedPermission =>
+      'The image could not be sent: you do not have permission to upload files here.';
+
+  @override
   String get uploadCancelled => 'Upload cancelled';
 
   @override

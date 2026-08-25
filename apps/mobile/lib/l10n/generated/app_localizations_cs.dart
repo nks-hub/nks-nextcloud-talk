@@ -411,6 +411,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get imageUploadFailed => 'Obrázek se nepodařilo odeslat.';
 
   @override
+  String get imageUploadFailedQuota =>
+      'Obrázek se nepodařilo odeslat: úložiště je zaplněné.';
+
+  @override
+  String get imageUploadFailedPermission =>
+      'Obrázek se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.';
+
+  @override
   String get uploadCancelled => 'Nahrávání bylo zrušeno';
 
   @override

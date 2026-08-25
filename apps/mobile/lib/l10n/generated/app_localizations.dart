@@ -812,6 +812,18 @@ abstract class AppLocalizations {
   /// **'The image could not be sent.'**
   String get imageUploadFailed;
 
+  /// No description provided for @imageUploadFailedQuota.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be sent: storage quota exceeded.'**
+  String get imageUploadFailedQuota;
+
+  /// No description provided for @imageUploadFailedPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be sent: you do not have permission to upload files here.'**
+  String get imageUploadFailedPermission;
+
   /// No description provided for @uploadCancelled.
   ///
   /// In en, this message translates to:

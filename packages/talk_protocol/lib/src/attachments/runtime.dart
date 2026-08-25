@@ -765,6 +765,8 @@ AttachmentRuntimeResult _applyDavResponse(
         AttachmentRuntimeOutcome.retryable,
       );
     case AttachmentDavClassification.deterministicFailure:
+    case AttachmentDavClassification.quotaExceeded:
+    case AttachmentDavClassification.permissionDenied:
       if (_isCleanupStep(response.request.step)) {
         return _replaceJob(
           snapshot,
@@ -786,7 +788,12 @@ AttachmentRuntimeResult _applyDavResponse(
           cleanupChunkSession:
               job.draft.uploadMode == AttachmentUploadMode.chunked,
           cleanupDraftFile: job.remoteTemporaryPath != null,
-          errorClass: 'dav-rejected',
+          errorClass: switch (response.classification) {
+            AttachmentDavClassification.quotaExceeded => 'dav-quota-exceeded',
+            AttachmentDavClassification.permissionDenied =>
+              'dav-permission-denied',
+            _ => 'dav-rejected',
+          },
         ),
         AttachmentRuntimeOutcome.failed,
       );
