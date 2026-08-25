@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -13,6 +14,8 @@ import '../../network/nextcloud_api.dart';
 import 'android_web_push_bridge.dart';
 
 typedef AndroidPushWakeUp = Future<void> Function(String accountId);
+typedef AndroidPushRetryTimerFactory =
+    Timer Function(Duration duration, void Function() callback);
 
 final class AndroidPushCoordinator {
   AndroidPushCoordinator({
@@ -22,11 +25,20 @@ final class AndroidPushCoordinator {
     required AndroidWebPushPlatform platform,
     required AndroidPushWakeUp onWakeUp,
     this.retryDelay = const Duration(seconds: 30),
+    this.retryMaximumDelay = const Duration(hours: 1),
+    double Function()? randomDouble,
+    AndroidPushRetryTimerFactory? createRetryTimer,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _platform = platform,
-       _onWakeUp = onWakeUp;
+       _onWakeUp = onWakeUp,
+       _randomDouble = randomDouble ?? Random().nextDouble,
+       _createRetryTimer = createRetryTimer ?? Timer.new {
+    if (retryDelay <= Duration.zero || retryMaximumDelay < retryDelay) {
+      throw ArgumentError('Invalid Android push retry timing');
+    }
+  }
 
   static const _drainBatchSize = 50;
   static const _maximumDrainBatches = 8;
@@ -38,10 +50,15 @@ final class AndroidPushCoordinator {
   final AndroidWebPushPlatform _platform;
   final AndroidPushWakeUp _onWakeUp;
   final Duration retryDelay;
+  final Duration retryMaximumDelay;
+  final double Function() _randomDouble;
+  final AndroidPushRetryTimerFactory _createRetryTimer;
 
   final Map<String, StoredAccount> _knownAccounts = {};
   final Map<String, Future<void>> _accountTails = {};
   final Map<String, Timer> _retryTimers = {};
+  final Map<String, int> _retryFailures = {};
+  final Map<String, int> _retryRequestSequences = {};
   final ListQueue<AndroidNotificationOpen> _pendingOpens = ListQueue();
   final StreamController<void> _notificationOpenedController =
       StreamController<void>.broadcast();
@@ -95,16 +112,16 @@ final class AndroidPushCoordinator {
   }
 
   Future<void> reconcileAccount(String accountId) {
-    return _retryAccountOperation(
+    return _serialize(
       accountId,
-      () => _serialize(accountId, () => _reconcileAccount(accountId)),
+      () => _runAccountOperation(accountId, () => _reconcileAccount(accountId)),
     );
   }
 
   Future<void> drainAccount(String accountId) {
-    return _retryAccountOperation(
+    return _serialize(
       accountId,
-      () => _serialize(accountId, () => _drainAccount(accountId)),
+      () => _runAccountOperation(accountId, () => _drainAccount(accountId)),
     );
   }
 
@@ -235,9 +252,16 @@ final class AndroidPushCoordinator {
       final state = await _platform.getRegistrationState(
         accountId: context.account.id,
       );
-      if (state.generation != event.generation ||
-          state.phase != AndroidWebPushRegistrationPhase.active) {
+      if (state.generation != event.generation) {
+        await _acknowledge(context.account.id, event.id);
+        return;
+      }
+      if (state.phase == AndroidWebPushRegistrationPhase.registering) {
         _scheduleRetry(context.account.id);
+        return;
+      }
+      if (state.phase != AndroidWebPushRegistrationPhase.active) {
+        await _acknowledge(context.account.id, event.id);
         return;
       }
       await _api.activateWebPush(
@@ -252,8 +276,12 @@ final class AndroidPushCoordinator {
     try {
       await _onWakeUp(context.account.id);
       await _acknowledge(context.account.id, event.id);
-    } on Object {
-      _scheduleRetry(context.account.id);
+    } on Object catch (error) {
+      if (_isRetryable(error)) {
+        _scheduleRetry(context.account.id);
+        return;
+      }
+      rethrow;
     }
   }
 
@@ -369,8 +397,12 @@ final class AndroidPushCoordinator {
     _notificationOpenedController.add(null);
     try {
       await _onWakeUp(open.accountId);
-    } on Object {
-      _scheduleRetry(open.accountId);
+    } on Object catch (error) {
+      if (_isRetryable(error)) {
+        _scheduleRetry(open.accountId);
+        return;
+      }
+      rethrow;
     }
   }
 
@@ -396,26 +428,82 @@ final class AndroidPushCoordinator {
     return current;
   }
 
-  Future<void> _retryAccountOperation(
+  Future<void> _runAccountOperation(
     String accountId,
     Future<void> Function() operation,
   ) async {
+    final retryRequestSequence = _retryRequestSequences[accountId] ?? 0;
     try {
       await operation();
-    } on Object {
-      _scheduleRetry(accountId);
+      if ((_retryRequestSequences[accountId] ?? 0) == retryRequestSequence) {
+        _resetRetry(accountId);
+      }
+    } on Object catch (error) {
+      if (_isRetryable(error)) {
+        _scheduleRetry(accountId);
+      } else {
+        _resetRetry(accountId);
+      }
       rethrow;
     }
   }
 
   void _scheduleRetry(String accountId, {bool immediate = false}) {
-    if (_closed || _retryTimers.containsKey(accountId)) {
+    if (_closed) {
       return;
     }
-    _retryTimers[accountId] = Timer(immediate ? Duration.zero : retryDelay, () {
+    _retryRequestSequences[accountId] =
+        (_retryRequestSequences[accountId] ?? 0) + 1;
+    if (immediate) {
+      _retryTimers.remove(accountId)?.cancel();
+    } else if (_retryTimers.containsKey(accountId)) {
+      return;
+    }
+    final delay = immediate ? Duration.zero : _nextRetryDelay(accountId);
+    late final Timer timer;
+    timer = _createRetryTimer(delay, () {
+      if (!identical(_retryTimers[accountId], timer)) {
+        return;
+      }
       _retryTimers.remove(accountId);
       _runDetached(reconcileAccount(accountId));
     });
+    _retryTimers[accountId] = timer;
+  }
+
+  Duration _nextRetryDelay(String accountId) {
+    final consecutiveFailures = (_retryFailures[accountId] ?? 0) + 1;
+    _retryFailures[accountId] = consecutiveFailures;
+    var delay = retryDelay;
+    for (
+      var attempt = 1;
+      attempt < consecutiveFailures && delay < retryMaximumDelay;
+      attempt++
+    ) {
+      final doubled = delay.inMicroseconds * 2;
+      delay = Duration(
+        microseconds: doubled > retryMaximumDelay.inMicroseconds
+            ? retryMaximumDelay.inMicroseconds
+            : doubled,
+      );
+    }
+    final randomValue = _randomDouble();
+    if (randomValue < 0 || randomValue > 1) {
+      throw StateError('Android push retry jitter is out of range');
+    }
+    final jitteredMicroseconds =
+        (delay.inMicroseconds * (0.8 + (randomValue * 0.4))).round();
+    return Duration(
+      microseconds: jitteredMicroseconds > retryMaximumDelay.inMicroseconds
+          ? retryMaximumDelay.inMicroseconds
+          : jitteredMicroseconds,
+    );
+  }
+
+  void _resetRetry(String accountId) {
+    _retryTimers.remove(accountId)?.cancel();
+    _retryFailures.remove(accountId);
+    _retryRequestSequences.remove(accountId);
   }
 
   void _runDetached(Future<void> task) {
@@ -431,6 +519,8 @@ final class AndroidPushCoordinator {
       timer.cancel();
     }
     _retryTimers.clear();
+    _retryFailures.clear();
+    _retryRequestSequences.clear();
     await _accountsSubscription?.cancel();
     await _eventsSubscription?.cancel();
     await _openSubscription?.cancel();
@@ -447,6 +537,21 @@ final RegExp _uuidV4Pattern = RegExp(
 );
 
 bool _validNotificationId(Object? value) => value is int && value > 0;
+
+bool _isRetryable(Object error) {
+  if (error is! NextcloudApiException) {
+    return false;
+  }
+  return switch (error.code) {
+    NextcloudApiError.network || NextcloudApiError.timeout => true,
+    NextcloudApiError.unexpectedStatus => switch (error.statusCode) {
+      408 || 429 => true,
+      final statusCode? when statusCode >= 500 && statusCode <= 599 => true,
+      _ => false,
+    },
+    _ => false,
+  };
+}
 
 final class _DecodedPushPayload {
   const _DecodedPushPayload({this.activationToken});
