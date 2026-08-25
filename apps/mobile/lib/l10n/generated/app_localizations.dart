@@ -890,6 +890,18 @@ abstract class AppLocalizations {
   /// **'Stop recording'**
   String get stopVoiceRecording;
 
+  /// No description provided for @playVoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Play voice message'**
+  String get playVoiceMessage;
+
+  /// No description provided for @stopVoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop voice message'**
+  String get stopVoiceMessage;
+
   /// No description provided for @playVoicePreview.
   ///
   /// In en, this message translates to:

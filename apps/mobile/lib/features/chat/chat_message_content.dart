@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
+import '../../platform/media/voice_platform_adapters.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
@@ -910,6 +911,138 @@ final class _ReactionSummary extends StatelessWidget {
   }
 }
 
+/// Plays a voice message straight from the bubble. The file is fetched over
+/// the account's authenticated origin, never through a public link.
+final class _VoiceAttachment extends ConsumerStatefulWidget {
+  const _VoiceAttachment({
+    required this.account,
+    required this.uri,
+    required this.messageId,
+    required this.name,
+  });
+
+  final StoredAccount account;
+  final Uri uri;
+  final int messageId;
+  final String name;
+
+  @override
+  ConsumerState<_VoiceAttachment> createState() => _VoiceAttachmentState();
+}
+
+final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
+  VoicePlaybackBackend? _backend;
+  StreamSubscription<void>? _completion;
+  bool _playing = false;
+  bool _loading = false;
+  bool _failed = false;
+
+  @override
+  void dispose() {
+    unawaited(_completion?.cancel());
+    unawaited(_backend?.dispose());
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_loading) {
+      return;
+    }
+    if (_playing) {
+      await _backend?.stop();
+      if (mounted) {
+        setState(() => _playing = false);
+      }
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final file = await ref.read(
+        chatVoiceFileProvider((
+          account: widget.account,
+          uri: widget.uri,
+          messageId: widget.messageId,
+        )).future,
+      );
+      if (!mounted) {
+        return;
+      }
+      final backend = _backend ??= AudioplayersVoicePlaybackBackend();
+      _completion ??= backend.completed.listen((_) {
+        if (mounted) {
+          setState(() => _playing = false);
+        }
+      });
+      await backend.playFile(file.path);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _playing = true;
+        });
+      }
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _playing = false;
+          _failed = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final label = _playing
+        ? strings.stopVoiceMessage
+        : strings.playVoiceMessage;
+    return Container(
+      key: Key('chat-voice-${widget.messageId}'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: Key('chat-voice-toggle-${widget.messageId}'),
+            tooltip: label,
+            onPressed: _loading ? null : () => unawaited(_toggle()),
+            icon: _loading
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                    semanticLabel: label,
+                  ),
+          ),
+          Flexible(
+            child: Text(
+              _failed ? strings.voicePlaybackFailed : widget.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: _failed ? scheme.error : scheme.onSurface,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+}
+
 final class _ChatAttachment extends ConsumerWidget {
   const _ChatAttachment({
     super.key,
@@ -932,6 +1065,9 @@ final class _ChatAttachment extends ConsumerWidget {
         ? strings.attachment
         : parameter.name!.trim();
     final mimeType = _mimeType(parameter);
+    final voiceUri = mimeType?.startsWith('audio/') == true
+        ? _davDownloadUri(account, parameter)
+        : null;
     final previewUri = _previewUri(account, parameter, mimeType);
     final link = _safeSameOriginLink(account, parameter.link);
     final previewProvider = previewUri == null
@@ -964,6 +1100,13 @@ final class _ChatAttachment extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (voiceUri != null)
+          _VoiceAttachment(
+            account: account,
+            uri: voiceUri,
+            messageId: messageId,
+            name: name,
+          ),
         if (loadedImage != null) ...[
           Semantics(
             key: Key('chat-open-image-$messageId-$index'),
@@ -1103,6 +1246,36 @@ TextStyle? _headingStyle(ThemeData theme, int level) {
     3 => theme.textTheme.titleMedium,
     _ => theme.textTheme.titleSmall,
   }?.copyWith(fontWeight: FontWeight.w700);
+}
+
+/// A Talk attachment carries a WebDAV path. The `link` field points at the
+/// Files web page and would answer with HTML, so it must not be downloaded.
+Uri? _davDownloadUri(
+  StoredAccount account,
+  ChatRichObjectParameter parameter,
+) {
+  final raw = parameter.wire['path'];
+  if (raw is! String) {
+    return null;
+  }
+  final segments = raw
+      .split('/')
+      .where((segment) => segment.isNotEmpty && segment != '.')
+      .toList(growable: false);
+  if (segments.isEmpty || segments.contains('..')) {
+    return null;
+  }
+  final server = ServerBase.parse(account.serverUrl);
+  return server.uri.replace(
+    pathSegments: [
+      ...server.uri.pathSegments,
+      'remote.php',
+      'dav',
+      'files',
+      account.loginName,
+      ...segments,
+    ],
+  );
 }
 
 String? _mimeType(ChatRichObjectParameter parameter) {

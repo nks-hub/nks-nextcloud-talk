@@ -452,6 +452,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get stopVoiceRecording => 'Zastavit nahrávání';
 
   @override
+  String get playVoiceMessage => 'Přehrát hlasovou zprávu';
+
+  @override
+  String get stopVoiceMessage => 'Zastavit hlasovou zprávu';
+
+  @override
   String get playVoicePreview => 'Přehrát náhled hlasové zprávy';
 
   @override

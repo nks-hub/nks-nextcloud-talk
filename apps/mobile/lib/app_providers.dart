@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'core/giphy_reference_load_coordinator.dart';
@@ -394,6 +395,30 @@ final chatMediaProvider = FutureProvider.autoDispose
       return ref
           .watch(chatMediaRepositoryProvider)
           .loadPreview(account: key.account, uri: key.uri);
+    });
+
+typedef ChatVoiceProviderKey = ({StoredAccount account, Uri uri, int messageId});
+
+/// A voice message is fetched once per room visit and materialised in the
+/// app cache directory so a platform player can open it.
+final chatVoiceFileProvider = FutureProvider.autoDispose
+    .family<ChatVoiceFile, ChatVoiceProviderKey>((ref, key) async {
+      final directory = Directory(
+        '${(await getApplicationCacheDirectory()).path}'
+        '${Platform.pathSeparator}voice',
+      );
+      return ref
+          .watch(chatMediaRepositoryProvider)
+          .loadVoiceFile(
+            account: key.account,
+            uri: key.uri,
+            directory: directory,
+            cacheKey:
+                '${key.account.id}-${key.messageId}'.replaceAll(
+                  RegExp(r'[^A-Za-z0-9._-]'),
+                  '_',
+                ),
+          );
     });
 
 final chatMessagesProvider =

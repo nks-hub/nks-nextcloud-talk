@@ -139,6 +139,8 @@
   "retryMediaCapabilities": "Try attachments again",
   "recordVoiceMessage": "Record voice message",
   "stopVoiceRecording": "Stop recording",
+  "playVoiceMessage": "Play voice message",
+  "stopVoiceMessage": "Stop voice message",
   "playVoicePreview": "Play voice message preview",
   "cancelVoiceMessage": "Cancel voice message",
   "sendVoiceMessage": "Send voice message",

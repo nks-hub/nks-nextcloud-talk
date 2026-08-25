@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -25,6 +26,13 @@ final class ChatMediaRepositoryException implements Exception {
   String toString() => 'ChatMediaRepositoryException(${code.name})';
 }
 
+final class ChatVoiceFile {
+  const ChatVoiceFile({required this.path, required this.contentType});
+
+  final String path;
+  final String contentType;
+}
+
 final class ChatMediaImage {
   ChatMediaImage({required Uint8List body, required this.contentType})
     : body = Uint8List.fromList(body);
@@ -42,11 +50,120 @@ final class ChatMediaRepository {
        _ownsClient = client == null;
 
   static const int _maximumPreviewBytes = 8 * 1024 * 1024;
+  static const int _maximumVoiceBytes = 32 * 1024 * 1024;
 
   final CredentialVault _credentials;
   final http.Client _client;
   final bool _ownsClient;
   final Duration requestTimeout;
+
+  /// Materialises a voice message inside [directory] so a platform player can
+  /// open it. The bytes never leave the account origin and the response is
+  /// bounded, because a chat peer controls the file.
+  Future<ChatVoiceFile> loadVoiceFile({
+    required StoredAccount account,
+    required Uri uri,
+    required Directory directory,
+    required String cacheKey,
+  }) async {
+    final server = ServerBase.parse(account.serverUrl);
+    if (!server.hasSameOrigin(uri) ||
+        uri.userInfo.isNotEmpty ||
+        uri.fragment.isNotEmpty) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidUri,
+      );
+    }
+    final appPassword = await _credentials.readAppPassword(account.id);
+    if (appPassword == null) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.credentialMissing,
+      );
+    }
+    final credentials = base64Encode(
+      utf8.encode('${account.loginName}:$appPassword'),
+    );
+    final request = http.Request('GET', uri)
+      ..followRedirects = false
+      ..maxRedirects = 0
+      ..headers.addAll({
+        'Accept': 'audio/*',
+        'OCS-APIRequest': 'true',
+        'Authorization': 'Basic $credentials',
+      });
+    final http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(requestTimeout);
+    } on Object {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    }
+    if (response.statusCode != 200) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    }
+    if ((response.contentLength ?? 0) > _maximumVoiceBytes) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.responseTooLarge,
+      );
+    }
+    final contentType = response.headers['content-type']
+        ?.split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    if (contentType == null || !contentType.startsWith('audio/')) {
+      await _discard(response);
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidResponse,
+      );
+    }
+
+    final builder = BytesBuilder(copy: false);
+    var length = 0;
+    final iterator = StreamIterator<List<int>>(response.stream);
+    try {
+      await (() async {
+        while (await iterator.moveNext()) {
+          length += iterator.current.length;
+          if (length > _maximumVoiceBytes) {
+            throw const ChatMediaRepositoryException(
+              ChatMediaRepositoryError.responseTooLarge,
+            );
+          }
+          builder.add(iterator.current);
+        }
+      })().timeout(requestTimeout);
+    } on ChatMediaRepositoryException {
+      rethrow;
+    } on Object {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.unavailable,
+      );
+    } finally {
+      try {
+        await iterator.cancel().timeout(requestTimeout);
+      } on Object {
+        // The response is already complete or unusable.
+      }
+    }
+    final body = builder.takeBytes();
+    if (body.isEmpty) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidResponse,
+      );
+    }
+    await directory.create(recursive: true);
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}$cacheKey',
+    );
+    await file.writeAsBytes(body, flush: true);
+    return ChatVoiceFile(path: file.path, contentType: contentType);
+  }
 
   Future<ChatMediaImage?> loadPreview({
     required StoredAccount account,

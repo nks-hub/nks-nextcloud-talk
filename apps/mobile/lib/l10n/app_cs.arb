@@ -139,6 +139,8 @@
   "retryMediaCapabilities": "Zkusit přílohy znovu",
   "recordVoiceMessage": "Nahrát hlasovou zprávu",
   "stopVoiceRecording": "Zastavit nahrávání",
+  "playVoiceMessage": "Přehrát hlasovou zprávu",
+  "stopVoiceMessage": "Zastavit hlasovou zprávu",
   "playVoicePreview": "Přehrát náhled hlasové zprávy",
   "cancelVoiceMessage": "Zrušit hlasovou zprávu",
   "sendVoiceMessage": "Odeslat hlasovou zprávu",

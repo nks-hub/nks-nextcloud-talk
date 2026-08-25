@@ -775,6 +775,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a voice message renders a player instead of a file chip', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final voice = _messageJson(
+      id: 50,
+      actorId: 'someone-else',
+      actorDisplayName: 'Other person',
+      timestamp: 1724300200,
+      message: '{file}',
+      messageParameters: const {
+        'file': {
+          'type': 'file',
+          'id': '91',
+          'name': 'voice-message.wav',
+          'link': '/index.php/f/91',
+          'path': 'Talk/voice-message.wav',
+          'mimetype': 'audio/wav',
+          'preview-available': 'no',
+        },
+      },
+    );
+    await _insertCachedMessage(
+      database,
+      voice,
+      displayText: 'voice-message.wav',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-voice-50')), findsOneWidget);
+    expect(find.byKey(const Key('chat-voice-toggle-50')), findsOneWidget);
+    expect(
+      tester
+          .widget<Icon>(find.byIcon(Icons.play_arrow_rounded))
+          .semanticLabel,
+      'Play voice message',
+    );
+
+    semantics.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a long press targets a message for a reply', (tester) async {
     await tester.pumpWidget(
       app(

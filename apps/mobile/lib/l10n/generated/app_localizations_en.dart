@@ -451,6 +451,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stopVoiceRecording => 'Stop recording';
 
   @override
+  String get playVoiceMessage => 'Play voice message';
+
+  @override
+  String get stopVoiceMessage => 'Stop voice message';
+
+  @override
   String get playVoicePreview => 'Play voice message preview';
 
   @override
