@@ -171,6 +171,94 @@ void main() {
     },
   );
 
+  test('retries a retained activation after a detached HTTP failure', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    const accountId = 'account-a';
+    await accounts.upsertAccount(
+      accountId: accountId,
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026),
+    );
+    final credentials = MemoryCredentialVault()
+      ..values[accountId] = 'fixture-password';
+    final firstActivationAttempt = Completer<void>();
+    final secondActivationAttempt = Completer<void>();
+    var activationAttempts = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/activate')) {
+          activationAttempts++;
+          if (activationAttempts == 1) {
+            firstActivationAttempt.complete();
+            return http.Response(jsonEncode(_ocs(const <Object>[], 503)), 503);
+          }
+          if (!secondActivationAttempt.isCompleted) {
+            secondActivationAttempt.complete();
+          }
+          return http.Response(jsonEncode(_ocs(const <Object>[], 202)), 202);
+        }
+        if (request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 201)), 201);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final platform = _FakeAndroidWebPushPlatform();
+    final coordinator = AndroidPushCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+      retryDelay: const Duration(milliseconds: 5),
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.start();
+    await platform.endpointCommitted.future.timeout(const Duration(seconds: 1));
+    platform.events.add(
+      _messageEvent(
+        id: 'activation-retry',
+        content: <String, Object>{
+          'activationToken': '9f9bcfc4-93db-4f23-a8f4-5f2403f722cc',
+        },
+      ),
+    );
+    platform.eventsController.add(1);
+
+    await firstActivationAttempt.future.timeout(const Duration(seconds: 1));
+    expect(platform.acknowledgedEventIds, isNot(contains('activation-retry')));
+    await secondActivationAttempt.future.timeout(
+      const Duration(milliseconds: 250),
+    );
+    await _waitUntil(
+      () => platform.acknowledgedEventIds.contains('activation-retry'),
+    );
+
+    expect(activationAttempts, 2);
+  });
+
   test('invalid or undecrypted messages are terminally acknowledged', () async {
     final database = openTestDatabase();
     addTearDown(database.close);
@@ -218,6 +306,57 @@ void main() {
 
     expect(wakeUps, 0);
     expect(platform.acknowledgedEventIds, <String>['bad-message']);
+  });
+
+  test('retains activation until its endpoint generation is active', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    const accountId = 'account-a';
+    await accounts.upsertAccount(
+      accountId: accountId,
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026),
+    );
+    final credentials = MemoryCredentialVault()
+      ..values[accountId] = 'fixture-password';
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.registering
+      ..generation = 1
+      ..events.add(
+        _messageEvent(
+          id: 'early-activation',
+          type: AndroidWebPushEventType.activation,
+          content: <String, Object>{
+            'activationToken': '9f9bcfc4-93db-4f23-a8f4-5f2403f722cc',
+          },
+        ),
+      );
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        fail('Activation must wait while registration is not active.');
+      }),
+    );
+    addTearDown(api.close);
+    final coordinator = AndroidPushCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+      retryDelay: const Duration(hours: 1),
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.drainAccount(accountId);
+
+    expect(platform.acknowledgedEventIds, isNot(contains('early-activation')));
+    expect(
+      platform.events.map((event) => event.id),
+      contains('early-activation'),
+    );
   });
 
   test(
@@ -279,12 +418,13 @@ void main() {
 AndroidWebPushEvent _messageEvent({
   required String id,
   required Map<String, Object> content,
+  AndroidWebPushEventType type = AndroidWebPushEventType.message,
 }) {
   return AndroidWebPushEvent(
     id: id,
     accountId: 'account-a',
     generation: 1,
-    type: AndroidWebPushEventType.message,
+    type: type,
     createdAt: DateTime.utc(2026),
     coalescedCount: 1,
     stale: false,
@@ -313,6 +453,7 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   final registrations = <({String accountId, int generation})>[];
   final committedEventIds = <String>[];
   final acknowledgedEventIds = <String>[];
+  final endpointCommitted = Completer<void>();
   AndroidWebPushRegistrationPhase? phase;
   int? generation;
   AndroidNotificationOpen? launchNotification;
@@ -370,9 +511,14 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
     required int generation,
     required String vapidPublicKey,
   }) async {
+    final existingActiveRegistration =
+        this.generation == generation &&
+        phase == AndroidWebPushRegistrationPhase.active;
     registrations.add((accountId: accountId, generation: generation));
     this.generation = generation;
-    phase = AndroidWebPushRegistrationPhase.registering;
+    if (!existingActiveRegistration) {
+      phase = AndroidWebPushRegistrationPhase.registering;
+    }
     if (events
         .where((event) => event.type == AndroidWebPushEventType.endpoint)
         .isEmpty) {
@@ -408,6 +554,9 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   }) async {
     committedEventIds.add(eventId);
     phase = AndroidWebPushRegistrationPhase.active;
+    if (!endpointCommitted.isCompleted) {
+      endpointCommitted.complete();
+    }
     return const AndroidWebPushCommitResult(serverRevokeGenerations: <int>[]);
   }
 
@@ -452,4 +601,12 @@ final class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
     await eventsController.close();
     await openController.close();
   }
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 1));
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+  }
+  expect(condition(), isTrue);
 }

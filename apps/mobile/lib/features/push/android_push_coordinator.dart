@@ -95,11 +95,17 @@ final class AndroidPushCoordinator {
   }
 
   Future<void> reconcileAccount(String accountId) {
-    return _serialize(accountId, () => _reconcileAccount(accountId));
+    return _retryAccountOperation(
+      accountId,
+      () => _serialize(accountId, () => _reconcileAccount(accountId)),
+    );
   }
 
   Future<void> drainAccount(String accountId) {
-    return _serialize(accountId, () => _drainAccount(accountId));
+    return _retryAccountOperation(
+      accountId,
+      () => _serialize(accountId, () => _drainAccount(accountId)),
+    );
   }
 
   Future<void> _reconcileAccount(String accountId) async {
@@ -231,7 +237,7 @@ final class AndroidPushCoordinator {
       );
       if (state.generation != event.generation ||
           state.phase != AndroidWebPushRegistrationPhase.active) {
-        await _acknowledge(context.account.id, event.id);
+        _scheduleRetry(context.account.id);
         return;
       }
       await _api.activateWebPush(
@@ -388,6 +394,18 @@ final class AndroidPushCoordinator {
         });
     _accountTails[accountId] = current;
     return current;
+  }
+
+  Future<void> _retryAccountOperation(
+    String accountId,
+    Future<void> Function() operation,
+  ) async {
+    try {
+      await operation();
+    } on Object {
+      _scheduleRetry(accountId);
+      rethrow;
+    }
   }
 
   void _scheduleRetry(String accountId, {bool immediate = false}) {
