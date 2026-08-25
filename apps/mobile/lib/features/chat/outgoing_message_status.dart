@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 
-enum OutgoingMessageDeliveryState { sending, failed, sent }
+enum OutgoingMessageDeliveryState { sending, failed, sent, read }
 
 final class OutgoingMessageStatus {
   const OutgoingMessageStatus({
@@ -28,14 +29,20 @@ List<OutgoingMessageStatus> resolveOutgoingMessageStatuses(
   if (operation.outboxState == 'completed' &&
       projection.confirmedMessages.isNotEmpty) {
     return projection.confirmedMessages
-        .map(
-          (message) => OutgoingMessageStatus(
+        .map((message) {
+          final messageCursor = ChatCursor.parse(message.messageId.toString());
+          final commonRead = projection.lastCommonRead;
+          final state =
+              commonRead != null && commonRead.compareTo(messageCursor) >= 0
+              ? OutgoingMessageDeliveryState.read
+              : OutgoingMessageDeliveryState.sent;
+          return OutgoingMessageStatus(
             operation: operation,
             messageId: message.messageId,
-            state: OutgoingMessageDeliveryState.sent,
+            state: state,
             confirmationAmbiguous: false,
-          ),
-        )
+          );
+        })
         .toList(growable: false);
   }
 
@@ -73,6 +80,7 @@ final class OutgoingMessageStatusIndicator extends StatelessWidget {
       OutgoingMessageDeliveryState.sending => Icons.schedule_send_rounded,
       OutgoingMessageDeliveryState.failed => Icons.error_outline_rounded,
       OutgoingMessageDeliveryState.sent => Icons.done_rounded,
+      OutgoingMessageDeliveryState.read => Icons.done_all_rounded,
     };
     return Row(
       mainAxisSize: MainAxisSize.min,

@@ -20,10 +20,12 @@ final class StoredOutgoingTextMessage {
   StoredOutgoingTextMessage({
     required this.operation,
     required Iterable<CachedChatMessage> confirmedMessages,
+    required this.lastCommonRead,
   }) : confirmedMessages = List.unmodifiable(confirmedMessages);
 
   final StoredTextSendOperation operation;
   final List<CachedChatMessage> confirmedMessages;
+  final ChatCursor? lastCommonRead;
 }
 
 final class ChatRepository {
@@ -103,6 +105,7 @@ final class ChatRepository {
   }) {
     final operations = _database.textSendOperations;
     final messages = _database.cachedChatMessages;
+    final scopes = _database.chatScopes;
     final query =
         _database.select(operations).join([
             leftOuterJoin(
@@ -110,6 +113,12 @@ final class ChatRepository {
               messages.accountId.equalsExp(operations.accountId) &
                   messages.roomToken.equalsExp(operations.roomToken) &
                   messages.referenceId.equalsExp(operations.referenceId),
+            ),
+            leftOuterJoin(
+              scopes,
+              scopes.accountId.equalsExp(operations.accountId) &
+                  scopes.roomToken.equalsExp(operations.roomToken) &
+                  scopes.scopeKey.equals(_scopeKey(threadId)),
             ),
           ])
           ..where(
@@ -128,9 +137,18 @@ final class ChatRepository {
       final grouped = <String, _OutgoingTextMessageAccumulator>{};
       for (final row in rows) {
         final operation = row.readTable(operations);
+        final scope = row.readTableOrNull(scopes);
         final accumulator = grouped.putIfAbsent(
           operation.operationId,
-          () => _OutgoingTextMessageAccumulator(operation),
+          () => _OutgoingTextMessageAccumulator(
+            operation,
+            lastCommonRead: scope == null
+                ? null
+                : ChatCursor.parse(
+                    scope.lastCommonRead,
+                    path: r'$.chatScopes.lastCommonRead',
+                  ),
+          ),
         );
         final message = row.readTableOrNull(messages);
         if (message != null &&
@@ -1296,10 +1314,15 @@ TextSendOutboxState _outboxState(String value) {
 }
 
 final class _OutgoingTextMessageAccumulator {
-  _OutgoingTextMessageAccumulator(this.operation)
-    : confirmedMessageIds = _decodeMessageIds(operation.messageIdsJson).toSet();
+  _OutgoingTextMessageAccumulator(
+    this.operation, {
+    required this.lastCommonRead,
+  }) : confirmedMessageIds = _decodeMessageIds(
+         operation.messageIdsJson,
+       ).toSet();
 
   final StoredTextSendOperation operation;
+  final ChatCursor? lastCommonRead;
   final Set<int> confirmedMessageIds;
   final Map<int, CachedChatMessage> confirmedMessages = {};
 
@@ -1309,6 +1332,7 @@ final class _OutgoingTextMessageAccumulator {
     return StoredOutgoingTextMessage(
       operation: operation,
       confirmedMessages: messages,
+      lastCommonRead: lastCommonRead,
     );
   }
 }
