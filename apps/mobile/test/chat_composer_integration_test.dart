@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
@@ -17,7 +18,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('emoji and account Giphy selection use the real text send flow', (
+  testWidgets('Giphy selection sends without inserting a composer link', (
     tester,
   ) async {
     final harness = await _ComposerHarness.create();
@@ -54,6 +55,12 @@ void main() {
     );
     await _pumpUntil(tester, () => gif.evaluate().isNotEmpty);
     await _pumpTransition(tester);
+    final thumbnailImage = tester.widget<Image>(
+      find.descendant(of: gif, matching: find.byType(Image)),
+    );
+    final resizedThumbnail = thumbnailImage.image as ResizeImage;
+    expect(resizedThumbnail.width, 480);
+    expect(resizedThumbnail.height, 480);
     final pickerRect = tester.getRect(find.byType(GiphyPicker));
     final viewportHeight =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
@@ -63,15 +70,18 @@ void main() {
     await tester.pump();
     await tester.tap(gif);
     await _pumpTransition(tester);
+    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
 
-    expect(_composer(tester).text, '👋 https://giphy.com/gifs/wave ');
+    expect(_composer(tester).text, '👋');
+    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave']);
+    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
     await tester.tap(find.byKey(const Key('send-message')));
     await _pumpUntil(
       tester,
-      () => harness.sentMessages.isNotEmpty && _composer(tester).text.isEmpty,
+      () => harness.sentMessages.length == 2 && _composer(tester).text.isEmpty,
     );
 
-    expect(harness.sentMessages, <String>['👋 https://giphy.com/gifs/wave']);
+    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave', '👋']);
     expect(_composer(tester).text, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -120,12 +130,142 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+
+  testWidgets(
+    'first Giphy tap keeps the probe alive before the watched frame',
+    (tester) async {
+      final harness = await _ComposerHarness.create();
+      addTearDown(harness.close);
+      final probeClient = _ControlledGiphyClient();
+      addTearDown(probeClient.close);
+      var factoryInvocations = 0;
+
+      await tester.pumpWidget(
+        harness.app(
+          overrides: <Override>[
+            giphyRepositoryFactoryProvider.overrideWithValue(({
+              required ServerBase server,
+              required GiphyAuthorization authorization,
+            }) {
+              factoryInvocations++;
+              return HttpGiphyRepository(
+                server: server,
+                authorization: authorization,
+                client: probeClient,
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await tester.runAsync(() async {
+        for (var attempt = 0; attempt < 100; attempt++) {
+          if (probeClient.requestStarted.isCompleted) {
+            return;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 1));
+        }
+      });
+      final startedBeforeFrame = probeClient.requestStarted.isCompleted;
+
+      await tester.pump();
+      await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
+      probeClient.complete(_giphyResponse());
+      await _pumpUntil(
+        tester,
+        () => find.byType(GiphyPicker).evaluate().isNotEmpty,
+      );
+
+      expect(startedBeforeFrame, isTrue);
+      expect(factoryInvocations, 1);
+      expect(probeClient.closed, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets(
+    'a completed Giphy probe cannot cross a changed account or room scope',
+    (tester) async {
+      final harness = await _ComposerHarness.create();
+      addTearDown(harness.close);
+      final probeClient = _ControlledGiphyClient();
+      addTearDown(probeClient.close);
+      final factoryOverride = giphyRepositoryFactoryProvider.overrideWithValue(
+        ({
+          required ServerBase server,
+          required GiphyAuthorization authorization,
+        }) {
+          return HttpGiphyRepository(
+            server: server,
+            authorization: authorization,
+            client: probeClient,
+          );
+        },
+      );
+
+      await tester.pumpWidget(
+        harness.app(overrides: <Override>[factoryOverride]),
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
+
+      final accountB = harness.account.copyWith(
+        id: 'account-b',
+        serverUrl: 'https://cloud-b.example.invalid',
+        loginName: 'fixture-user-b',
+      );
+      final conversationB = harness.conversation.copyWith(
+        accountId: accountB.id,
+        token: 'roomb123',
+        displayName: 'Room B',
+      );
+      await tester.pumpWidget(
+        harness.app(
+          account: accountB,
+          conversation: conversationB,
+          overrides: <Override>[factoryOverride],
+        ),
+      );
+      await tester.pump();
+
+      probeClient.complete(_giphyResponse());
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump();
+
+      expect(find.byType(GiphyPicker), findsNothing);
+      expect(harness.sentMessages, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
 }
 
 TextEditingController _composer(WidgetTester tester) {
   return tester
       .widget<TextField>(find.byKey(const Key('chat-composer')))
       .controller!;
+}
+
+bool _sendButtonEnabled(WidgetTester tester) {
+  return tester
+          .widget<IconButton>(find.byKey(const Key('send-message')))
+          .onPressed !=
+      null;
 }
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
@@ -255,7 +395,11 @@ final class _ComposerHarness {
     );
   }
 
-  Widget app({List<Override> overrides = const <Override>[]}) {
+  Widget app({
+    StoredAccount? account,
+    CachedConversation? conversation,
+    List<Override> overrides = const <Override>[],
+  }) {
     return ProviderScope(
       overrides: <Override>[
         appDatabaseProvider.overrideWithValue(database),
@@ -264,7 +408,10 @@ final class _ComposerHarness {
         ...overrides,
       ],
       child: localizedTestApp(
-        home: ChatRoomPane(account: account, conversation: conversation),
+        home: ChatRoomPane(
+          account: account ?? this.account,
+          conversation: conversation ?? this.conversation,
+        ),
       ),
     );
   }
@@ -328,6 +475,71 @@ HttpGiphyRepository _giphyRepository() {
       return http.Response('', 404);
     }),
   );
+}
+
+String _giphyResponse() => jsonEncode(<String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': 'ok',
+      'statuscode': 200,
+      'message': 'OK',
+    },
+    'data': <String, Object?>{
+      'entries': <Object?>[
+        <String, Object?>{
+          'thumbnailUrl':
+              'https://cloud.example.invalid/apps/integration_giphy/gif/wave',
+          'title': 'Wave',
+          'subline': 'Fixture author',
+          'resourceUrl': 'https://giphy.com/gifs/wave',
+        },
+      ],
+      'cursor': 1,
+    },
+  },
+});
+
+final class _ControlledGiphyClient extends http.BaseClient {
+  final requestStarted = Completer<void>();
+  final _response = Completer<http.StreamedResponse>();
+  bool closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    if (!requestStarted.isCompleted) {
+      requestStarted.complete();
+    }
+    return _response.future;
+  }
+
+  void complete(String body) {
+    if (_response.isCompleted) {
+      return;
+    }
+    _response.complete(
+      http.StreamedResponse(
+        Stream<List<int>>.value(utf8.encode(body)),
+        200,
+        headers: const <String, String>{
+          'content-type': 'application/json; charset=utf-8',
+        },
+      ),
+    );
+  }
+
+  @override
+  void close() {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    if (!_response.isCompleted) {
+      _response.completeError(
+        http.ClientException('fixture connection cancelled'),
+      );
+    }
+    super.close();
+  }
 }
 
 Map<String, Object?> _conversationRoomJson() {

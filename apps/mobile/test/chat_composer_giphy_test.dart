@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart' show IOStreamedResponse;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
@@ -285,6 +287,157 @@ void main() {
     });
 
     test(
+      'resolves a Giphy reference and loads its same-origin proxy',
+      () async {
+        final observed = <http.Request>[];
+        final resourceUrl = Uri.parse(
+          'https://giphy.com/gifs/waving-cat-fixture123',
+        );
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: MockClient((request) async {
+            observed.add(request);
+            if (request.url.path.endsWith('/ocs/v2.php/references/resolve')) {
+              return http.Response(
+                _validReferenceResponse(resourceUrl),
+                200,
+                headers: const <String, String>{
+                  'content-type': 'application/json; charset=utf-8',
+                },
+              );
+            }
+            if (request.url.path.endsWith(
+              '/apps/integration_giphy/gif/proxy',
+            )) {
+              return http.Response.bytes(
+                _validGif,
+                200,
+                headers: const <String, String>{'content-type': 'image/gif'},
+              );
+            }
+            return http.Response('', 404);
+          }),
+        );
+        addTearDown(repository.close);
+
+        final media = await repository.loadReference(resourceUrl);
+
+        expect(media.resourceUrl, resourceUrl);
+        expect(media.body, _validGif);
+        expect(media.contentType, 'image/gif');
+        expect(media.aspectRatio, 1);
+        expect(observed, hasLength(2));
+        expect(
+          observed.first.url.path,
+          '/nextcloud/ocs/v2.php/references/resolve',
+        );
+        expect(observed.first.url.queryParameters, <String, String>{
+          'reference': resourceUrl.toString(),
+          'format': 'json',
+        });
+        expect(observed.first.headers['Authorization'], startsWith('Basic '));
+        expect(observed.first.followRedirects, isFalse);
+        expect(
+          observed.last.url,
+          Uri.parse(
+            'https://cloud.example.invalid/nextcloud/index.php/apps/'
+            'integration_giphy/gif/proxy',
+          ),
+        );
+        expect(observed.last.headers['Authorization'], startsWith('Basic '));
+        expect(observed.last.followRedirects, isFalse);
+      },
+    );
+
+    test('rejects a foreign Giphy reference proxy before loading it', () async {
+      var requests = 0;
+      final resourceUrl = Uri.parse(
+        'https://giphy.com/gifs/waving-cat-fixture123',
+      );
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((request) async {
+          requests++;
+          return http.Response(
+            _validReferenceResponse(
+              resourceUrl,
+              proxiedUrl: 'https://media.giphy.com/media/fixture/giphy.gif',
+            ),
+            200,
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      await expectLater(
+        repository.loadReference(resourceUrl),
+        throwsA(_giphyError(GiphyError.invalidResponse)),
+      );
+      expect(requests, 1);
+    });
+
+    test('rejects a same-origin URL outside the Giphy app route', () async {
+      var requests = 0;
+      final resourceUrl = Uri.parse(
+        'https://giphy.com/gifs/waving-cat-fixture123',
+      );
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((request) async {
+          requests++;
+          return http.Response(
+            _validReferenceResponse(
+              resourceUrl,
+              proxiedUrl:
+                  'https://cloud.example.invalid/nextcloud/ocs/v2.php/'
+                  'apps/integration_giphy/gif/proxy',
+            ),
+            200,
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      await expectLater(
+        repository.loadReference(resourceUrl),
+        throwsA(_giphyError(GiphyError.invalidResponse)),
+      );
+      expect(requests, 1);
+    });
+
+    test('rejects a static image for a Giphy reference', () async {
+      var requests = 0;
+      final resourceUrl = Uri.parse(
+        'https://giphy.com/gifs/waving-cat-fixture123',
+      );
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((request) async {
+          requests++;
+          if (requests == 1) {
+            return http.Response(_validReferenceResponse(resourceUrl), 200);
+          }
+          return http.Response.bytes(
+            _validPng,
+            200,
+            headers: const <String, String>{'content-type': 'image/png'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+
+      await expectLater(
+        repository.loadReference(resourceUrl),
+        throwsA(_giphyError(GiphyError.invalidResponse)),
+      );
+      expect(requests, 2);
+    });
+
+    test(
       'loads attribution from the exact authenticated server path',
       () async {
         late http.Request observed;
@@ -390,6 +543,37 @@ void main() {
       }
     });
 
+    test('rejects GIFs with an oversized logical screen', () async {
+      final oversizedCanvas = Uint8List.fromList(_validGif)
+        ..[6] = 0xff
+        ..[7] = 0xff
+        ..[8] = 0xff
+        ..[9] = 0xff;
+
+      for (final loadAttribution in <bool>[true, false]) {
+        final repository = HttpGiphyRepository(
+          server: server,
+          authorization: authorization,
+          client: MockClient(
+            (_) async => http.Response.bytes(
+              oversizedCanvas,
+              200,
+              headers: const <String, String>{'content-type': 'image/gif'},
+            ),
+          ),
+        );
+        addTearDown(repository.close);
+
+        final operation = loadAttribution
+            ? repository.loadAttributionAsset()
+            : repository.loadThumbnail(_giphyEntry('oversized-canvas'));
+        await expectLater(
+          operation,
+          throwsA(_giphyError(GiphyError.invalidResponse)),
+        );
+      }
+    });
+
     test(
       'attribution deadline physically aborts a stalled send',
       () async {
@@ -404,6 +588,27 @@ void main() {
 
         await expectLater(
           repository.loadAttributionAsset(),
+          throwsA(_giphyError(GiphyError.timeout)),
+        );
+        expect(client.wasAborted, isTrue);
+      },
+      timeout: const Timeout(Duration(seconds: 1)),
+    );
+
+    test(
+      'covariant IO client future maps to a bounded timeout',
+      () async {
+        final client = _CovariantDeadlineSendClient();
+        final repository = HttpGiphyRepository(
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          authorization: authorization,
+          client: client,
+          requestTimeout: const Duration(milliseconds: 10),
+        );
+        addTearDown(repository.close);
+
+        await expectLater(
+          repository.trending(cursor: 0, limit: 20),
           throwsA(_giphyError(GiphyError.timeout)),
         );
         expect(client.wasAborted, isTrue);
@@ -668,36 +873,26 @@ void main() {
     expect(rendered, isNot(contains('fixture-password')));
   });
 
-  test(
-    'controller suppresses stale search results and inserts selected URL',
-    () async {
-      final repository = _ControlledRepository();
-      final controller = GiphyController(repository: repository);
-      addTearDown(controller.dispose);
+  test('controller suppresses stale search results', () async {
+    final repository = _ControlledRepository();
+    final controller = GiphyController(repository: repository);
+    addTearDown(controller.dispose);
 
-      final first = controller.search('old');
-      final second = controller.search('new');
-      repository.complete(
-        'new',
-        GiphyPage(entries: <GiphyEntry>[_giphyEntry('new')], cursor: 1),
-      );
-      await second;
-      repository.complete(
-        'old',
-        GiphyPage(entries: <GiphyEntry>[_giphyEntry('old')], cursor: 1),
-      );
-      await first;
+    final first = controller.search('old');
+    final second = controller.search('new');
+    repository.complete(
+      'new',
+      GiphyPage(entries: <GiphyEntry>[_giphyEntry('new')], cursor: 1),
+    );
+    await second;
+    repository.complete(
+      'old',
+      GiphyPage(entries: <GiphyEntry>[_giphyEntry('old')], cursor: 1),
+    );
+    await first;
 
-      expect(controller.entries.single.title, 'new');
-      final draft = TextEditingController(text: 'hello');
-      addTearDown(draft.dispose);
-      expect(
-        controller.insertSelection(draft, controller.entries.single),
-        isTrue,
-      );
-      expect(draft.text, 'hello https://giphy.com/gifs/new ');
-    },
-  );
+    expect(controller.entries.single.title, 'new');
+  });
 
   group('GiphyPicker attribution', () {
     testWidgets('shows the server mark and opens Giphy', (tester) async {
@@ -783,6 +978,17 @@ final _validGif = base64Decode(
   'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
 );
 
+final _validPng = Uint8List.fromList(const <int>[
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+]);
+
 CapabilitySnapshot _capabilities(
   Object? integration, {
   bool includeIntegration = true,
@@ -817,6 +1023,35 @@ Map<String, Object?> _entry({
 };
 
 String _validResponse() => _responseWithEntry(_entry());
+
+String _validReferenceResponse(
+  Uri resourceUrl, {
+  String proxiedUrl =
+      'https://cloud.example.invalid/nextcloud/index.php/apps/'
+      'integration_giphy/gif/proxy',
+}) => jsonEncode(<String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': 'ok',
+      'statuscode': 200,
+      'message': 'OK',
+    },
+    'data': <String, Object?>{
+      'references': <String, Object?>{
+        resourceUrl.toString(): <String, Object?>{
+          'richObjectType': 'integration_giphy_gif',
+          'richObject': <String, Object?>{
+            'id': 'fixture123',
+            'proxied_url': proxiedUrl,
+            'images': <String, Object?>{
+              'fixed_width': <String, Object?>{'width': '400', 'height': '200'},
+            },
+          },
+        },
+      },
+    },
+  },
+});
 
 String _responseWithEntry(Map<String, Object?> entry) =>
     jsonEncode(<String, Object?>{
@@ -866,6 +1101,17 @@ final class _DeadlineSendClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final trigger = (request as http.Abortable).abortTrigger!;
     await trigger;
+    wasAborted = true;
+    throw http.RequestAbortedException(request.url);
+  }
+}
+
+final class _CovariantDeadlineSendClient extends http.BaseClient {
+  bool wasAborted = false;
+
+  @override
+  Future<IOStreamedResponse> send(http.BaseRequest request) async {
+    await (request as http.Abortable).abortTrigger!;
     wasAborted = true;
     throw http.RequestAbortedException(request.url);
   }

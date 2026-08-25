@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_providers.dart';
 import '../../core/foreground_sync_loop.dart';
+import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
@@ -118,6 +119,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   ForegroundSyncLoop? _syncLoop;
   ChatLiveRoomBinding? _liveBinding;
   int _syncGeneration = 0;
+  int _sendGeneration = 0;
+  int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
   bool _sending = false;
@@ -150,6 +153,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       return;
     }
     _composer.clear();
+    _sendGeneration++;
+    _giphyGeneration++;
+    _sending = false;
     _localError = null;
     _initialAttemptFinished = false;
     _giphyRequested = false;
@@ -162,6 +168,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _syncGeneration++;
+    _sendGeneration++;
+    _giphyGeneration++;
     _liveBinding?.close();
     unawaited(_syncLoop?.stop());
     _liveBinding = null;
@@ -347,17 +355,59 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
       return;
     }
+    await _sendMessage(message, clearComposer: true);
+  }
+
+  Future<void> _sendGiphyForScope(
+    Uri resourceUrl,
+    ChatRoomProviderKey targetKey,
+    int giphyGeneration,
+  ) async {
+    if (!_isCurrentGiphyScope(targetKey, giphyGeneration)) {
+      return;
+    }
+    if (!isSupportedGiphyResource(resourceUrl)) {
+      if (mounted) {
+        setState(() => _localError = ChatServiceError.invalidResponse);
+      }
+      return;
+    }
+    await _sendMessage(
+      resourceUrl.toString(),
+      clearComposer: false,
+      expectedKey: targetKey,
+    );
+  }
+
+  Future<void> _sendMessage(
+    String message, {
+    required bool clearComposer,
+    ChatRoomProviderKey? expectedKey,
+  }) async {
+    final targetKey = _key;
+    if (expectedKey != null && expectedKey != targetKey) {
+      return;
+    }
+    if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
+      return;
+    }
+    final generation = ++_sendGeneration;
     setState(() => _sending = true);
     try {
       await ref
           .read(chatServiceProvider)
           .sendText(
-            accountId: widget.account.id,
-            roomToken: widget.conversation.token,
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
             message: message,
-            threadId: widget.threadId,
+            threadId: targetKey.threadId,
           );
-      _composer.clear();
+      if (!_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      if (clearComposer && _composer.text.trim() == message) {
+        _composer.clear();
+      }
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           0,
@@ -365,22 +415,26 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           curve: Curves.easeOut,
         );
       }
-      if (mounted) {
+      if (_isCurrentSendScope(targetKey, generation)) {
         setState(() => _localError = null);
       }
     } on ChatServiceException catch (error) {
-      if (mounted) {
+      if (_isCurrentSendScope(targetKey, generation)) {
         setState(() => _localError = error.code);
       }
     } on Object {
-      if (mounted) {
+      if (_isCurrentSendScope(targetKey, generation)) {
         setState(() => _localError = ChatServiceError.invalidResponse);
       }
     } finally {
-      if (mounted) {
+      if (_isCurrentSendScope(targetKey, generation)) {
         setState(() => _sending = false);
       }
     }
+  }
+
+  bool _isCurrentSendScope(ChatRoomProviderKey targetKey, int generation) {
+    return mounted && generation == _sendGeneration && targetKey == _key;
   }
 
   Future<void> _showEmojiPicker() async {
@@ -431,28 +485,43 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (_sending || widget.conversation.readOnly != 0) {
       return;
     }
+    final targetKey = _key;
+    final generation = ++_giphyGeneration;
+    final provider = giphyRepositoryProvider(targetKey.accountId);
+    final subscription = ref.listenManual<AsyncValue<HttpGiphyRepository?>>(
+      provider,
+      (_, _) {},
+      fireImmediately: true,
+    );
     if (!_giphyRequested) {
       setState(() => _giphyRequested = true);
-      await Future<void>.delayed(Duration.zero);
-    }
-    if (refresh) {
-      ref.invalidate(giphyRepositoryProvider(widget.account.id));
     }
     try {
-      final repository = await ref.read(
-        giphyRepositoryProvider(widget.account.id).future,
-      );
-      if (!mounted || repository == null) {
+      if (refresh) {
+        ref.invalidate(provider);
+      }
+      final repository = await ref.read(provider.future);
+      if (!_isCurrentGiphyScope(targetKey, generation) || repository == null) {
         return;
       }
-      await _showGiphyPicker(repository);
+      await _showGiphyPicker(repository, targetKey, generation);
     } on Object {
       // The watched provider exposes a localized retry state in the composer.
+    } finally {
+      subscription.close();
     }
   }
 
-  Future<void> _showGiphyPicker(HttpGiphyRepository repository) async {
-    if (!mounted) {
+  bool _isCurrentGiphyScope(ChatRoomProviderKey targetKey, int generation) {
+    return mounted && generation == _giphyGeneration && targetKey == _key;
+  }
+
+  Future<void> _showGiphyPicker(
+    HttpGiphyRepository repository,
+    ChatRoomProviderKey targetKey,
+    int generation,
+  ) async {
+    if (!_isCurrentGiphyScope(targetKey, generation)) {
       return;
     }
     final strings = AppLocalizations.of(context);
@@ -483,11 +552,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                 ),
                 onAttributionPressed: _openGiphyAttribution,
                 onSelected: (entry) {
-                  if (!controller.insertSelection(_composer, entry)) {
-                    _showComposerLimitError();
-                    return;
-                  }
                   Navigator.of(sheetContext).pop();
+                  unawaited(
+                    _sendGiphyForScope(
+                      entry.resourceUrl,
+                      targetKey,
+                      generation,
+                    ),
+                  );
                 },
               ),
             ),
@@ -620,7 +692,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       giphyAction = null;
     } else {
       giphyTooltip = strings.openGiphyPicker;
-      giphyAction = () => unawaited(_showGiphyPicker(giphyRepository));
+      giphyAction = () => unawaited(_requestGiphy());
     }
     final idleComposerActions = <Widget>[
       IconButton(
@@ -919,6 +991,7 @@ final class _ChatTimeline extends StatelessWidget {
         final operation = pending[contentIndex - messages.length];
         return _PendingMessageBubble(
           key: ValueKey('chat-pending-${operation.operationId}'),
+          account: account,
           operation: operation,
           onRetry: onRetry,
           onResend: () => onResend(operation),
@@ -1180,11 +1253,13 @@ final class _DaySeparator extends StatelessWidget {
 final class _PendingMessageBubble extends StatelessWidget {
   const _PendingMessageBubble({
     super.key,
+    required this.account,
     required this.operation,
     required this.onRetry,
     required this.onResend,
   });
 
+  final StoredAccount account;
   final StoredTextSendOperation operation;
   final VoidCallback onRetry;
   final VoidCallback onResend;
@@ -1203,6 +1278,8 @@ final class _PendingMessageBubble extends StatelessWidget {
     };
     final retryable = operation.outboxState == 'retryable';
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
+    final resourceUrl = exactGiphyResource(operation.message);
+    final isGiphy = resourceUrl != null;
     return Align(
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
@@ -1215,10 +1292,17 @@ final class _PendingMessageBubble extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  operation.message,
-                  style: TextStyle(color: scheme.onSecondaryContainer),
-                ),
+                if (isGiphy)
+                  ChatPendingGiphyReference(
+                    account: account,
+                    resourceUrl: resourceUrl,
+                    foregroundColor: scheme.onSecondaryContainer,
+                  )
+                else
+                  Text(
+                    normalizeGiphyReferencePreview(operation.message),
+                    style: TextStyle(color: scheme.onSecondaryContainer),
+                  ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1358,6 +1442,7 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
               fit: BoxFit.cover,
               gaplessPlayback: true,
               cacheWidth: 480,
+              cacheHeight: 480,
               errorBuilder: (_, _, _) => Icon(
                 Icons.broken_image_outlined,
                 color: scheme.onSurfaceVariant,

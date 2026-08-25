@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
 
-import 'composer_text_editing.dart';
+import '../../../core/giphy_reference.dart';
 
 enum GiphyAvailabilityState { available, unavailable, unknown }
 
@@ -85,6 +85,39 @@ final class GiphyThumbnail {
   final String contentType;
 }
 
+final class GiphyReferenceMedia {
+  GiphyReferenceMedia({
+    required this.resourceUrl,
+    required Uint8List body,
+    required this.contentType,
+    required this.aspectRatio,
+  }) : body = Uint8List.fromList(body);
+
+  final Uri resourceUrl;
+  final Uint8List body;
+  final String contentType;
+  final double? aspectRatio;
+}
+
+final class GiphyReferenceRequest {
+  const GiphyReferenceRequest({
+    required this.accountId,
+    required this.resourceUrl,
+  });
+
+  final String accountId;
+  final Uri resourceUrl;
+
+  @override
+  bool operator ==(Object other) =>
+      other is GiphyReferenceRequest &&
+      other.accountId == accountId &&
+      other.resourceUrl == resourceUrl;
+
+  @override
+  int get hashCode => Object.hash(accountId, resourceUrl);
+}
+
 final class GiphyAttributionAsset {
   GiphyAttributionAsset({required Uint8List body, required this.contentType})
     : body = Uint8List.fromList(body);
@@ -94,6 +127,9 @@ final class GiphyAttributionAsset {
 }
 
 final Uri giphyAttributionUri = Uri.parse('https://giphy.com');
+
+const _maximumGifLogicalDimension = 4096;
+const _maximumGifLogicalPixels = 4 * 1024 * 1024;
 
 enum GiphyError {
   integrationUnavailable,
@@ -143,10 +179,12 @@ final class HttpGiphyRepository implements GiphyRepository {
     this.requestTimeout = const Duration(seconds: 20),
     this.maximumResponseBytes = 2 * 1024 * 1024,
     this.maximumThumbnailBytes = 8 * 1024 * 1024,
+    this.maximumReferenceBytes = 16 * 1024 * 1024,
     this.maximumAttributionBytes = 256 * 1024,
   }) : _client = client ?? http.Client() {
     _requirePositive(maximumResponseBytes, 'maximumResponseBytes');
     _requirePositive(maximumThumbnailBytes, 'maximumThumbnailBytes');
+    _requirePositive(maximumReferenceBytes, 'maximumReferenceBytes');
     _requirePositive(maximumAttributionBytes, 'maximumAttributionBytes');
   }
 
@@ -155,6 +193,7 @@ final class HttpGiphyRepository implements GiphyRepository {
   final Duration requestTimeout;
   final int maximumResponseBytes;
   final int maximumThumbnailBytes;
+  final int maximumReferenceBytes;
   final int maximumAttributionBytes;
   final http.Client _client;
   ({int cursor, int limit, GiphyPage page})? _prefetchedTrending;
@@ -308,11 +347,48 @@ final class HttpGiphyRepository implements GiphyRepository {
     );
   }
 
+  Future<GiphyReferenceMedia> loadReference(
+    Uri resourceUrl, {
+    Future<void>? abortTrigger,
+  }) async {
+    if (_closed || !isSupportedGiphyResource(resourceUrl)) {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final reference = await _resolveReference(
+      resourceUrl,
+      abortTrigger: abortTrigger,
+    );
+    final image = await _loadImage(
+      reference.proxiedUrl,
+      maximumBytes: maximumReferenceBytes,
+      abortTrigger: abortTrigger,
+    );
+    if (image.contentType != 'image/gif') {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    return GiphyReferenceMedia(
+      resourceUrl: resourceUrl,
+      body: image.body,
+      contentType: image.contentType,
+      aspectRatio: _gifAspectRatio(image.body) ?? reference.aspectRatio,
+    );
+  }
+
   Future<GiphyThumbnail> loadThumbnail(
     GiphyEntry entry, {
     Future<void>? abortTrigger,
+  }) => _loadImage(
+    entry.thumbnailUrl,
+    maximumBytes: maximumThumbnailBytes,
+    abortTrigger: abortTrigger,
+  );
+
+  Future<GiphyThumbnail> _loadImage(
+    Uri imageUrl, {
+    required int maximumBytes,
+    Future<void>? abortTrigger,
   }) async {
-    if (_closed || !_isSafeThumbnail(server, entry.thumbnailUrl)) {
+    if (_closed || !_isSafeThumbnail(server, imageUrl)) {
       throw const GiphyException(GiphyError.invalidResponse);
     }
     final deadline = DateTime.now().add(requestTimeout);
@@ -325,7 +401,7 @@ final class HttpGiphyRepository implements GiphyRepository {
       final request =
           http.AbortableRequest(
               'GET',
-              entry.thumbnailUrl,
+              imageUrl,
               abortTrigger: requestAbort.trigger,
             )
             ..headers.addAll(<String, String>{
@@ -344,7 +420,7 @@ final class HttpGiphyRepository implements GiphyRepository {
         var discarded = 0;
         while (await bodyReader.moveNext(deadline)) {
           discarded += bodyReader.current.length;
-          if (discarded > maximumThumbnailBytes) {
+          if (discarded > maximumBytes) {
             break;
           }
         }
@@ -358,7 +434,7 @@ final class HttpGiphyRepository implements GiphyRepository {
         };
       }
       final contentLength = response.contentLength;
-      if (contentLength != null && contentLength > maximumThumbnailBytes) {
+      if (contentLength != null && contentLength > maximumBytes) {
         throw const GiphyException(GiphyError.responseTooLarge);
       }
       final bytes = BytesBuilder(copy: false);
@@ -366,7 +442,7 @@ final class HttpGiphyRepository implements GiphyRepository {
       while (await bodyReader.moveNext(deadline)) {
         final chunk = bodyReader.current;
         received += chunk.length;
-        if (received > maximumThumbnailBytes) {
+        if (received > maximumBytes) {
           throw const GiphyException(GiphyError.responseTooLarge);
         }
         bytes.add(chunk);
@@ -489,6 +565,86 @@ final class HttpGiphyRepository implements GiphyRepository {
     }
   }
 
+  Future<({Uri proxiedUrl, double? aspectRatio})> _resolveReference(
+    Uri resourceUrl, {
+    Future<void>? abortTrigger,
+  }) async {
+    final uri = server.uri.replace(
+      path: '${server.basePath}/ocs/v2.php/references/resolve',
+      queryParameters: <String, String>{
+        'reference': resourceUrl.toString(),
+        'format': 'json',
+      },
+    );
+    final deadline = DateTime.now().add(requestTimeout);
+    final requestAbort = _RequestAbortSignal(
+      deadline: deadline,
+      callerTrigger: abortTrigger,
+    );
+    _ResponseBodyReader? bodyReader;
+    try {
+      final request =
+          http.AbortableRequest('GET', uri, abortTrigger: requestAbort.trigger)
+            ..headers.addAll(authorization.requestHeaders)
+            ..followRedirects = false
+            ..maxRedirects = 0;
+      final response = await _sendWithDeadline(
+        _client.send(request),
+        deadline: deadline,
+        requestAbort: requestAbort,
+      );
+      bodyReader = _ResponseBodyReader(response.stream);
+      if (response.statusCode != 200) {
+        var discarded = 0;
+        while (await bodyReader.moveNext(deadline)) {
+          discarded += bodyReader.current.length;
+          if (discarded > maximumResponseBytes) {
+            break;
+          }
+        }
+        throw switch (response.statusCode) {
+          401 || 404 => const GiphyException(GiphyError.integrationUnavailable),
+          429 => const GiphyException(GiphyError.rateLimited, statusCode: 429),
+          _ => GiphyException(
+            GiphyError.unexpectedStatus,
+            statusCode: response.statusCode,
+          ),
+        };
+      }
+      final contentLength = response.contentLength;
+      if (contentLength != null && contentLength > maximumResponseBytes) {
+        throw const GiphyException(GiphyError.responseTooLarge);
+      }
+      final bytes = BytesBuilder(copy: false);
+      var received = 0;
+      while (await bodyReader.moveNext(deadline)) {
+        final chunk = bodyReader.current;
+        received += chunk.length;
+        if (received > maximumResponseBytes) {
+          throw const GiphyException(GiphyError.responseTooLarge);
+        }
+        bytes.add(chunk);
+      }
+      return _decodeReference(bytes.takeBytes(), resourceUrl);
+    } on GiphyException {
+      rethrow;
+    } on http.RequestAbortedException {
+      throw GiphyException(requestAbort.error);
+    } on TimeoutException {
+      requestAbort.abortForDeadline();
+      throw GiphyException(requestAbort.error);
+    } on http.ClientException {
+      throw const GiphyException(GiphyError.network);
+    } on FormatException {
+      throw const GiphyException(GiphyError.invalidResponse);
+    } finally {
+      if (bodyReader != null) {
+        await bodyReader.cancel(deadline);
+      }
+      requestAbort.dispose();
+    }
+  }
+
   GiphyPage _decodePage(Uint8List bytes) {
     final Object? decoded;
     try {
@@ -514,6 +670,39 @@ final class HttpGiphyRepository implements GiphyRepository {
     return GiphyPage(entries: rawEntries.map(_decodeEntry), cursor: cursor);
   }
 
+  ({Uri proxiedUrl, double? aspectRatio}) _decodeReference(
+    Uint8List bytes,
+    Uri resourceUrl,
+  ) {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(bytes));
+    } on Object {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final root = _object(decoded);
+    final ocs = _object(root['ocs']);
+    final meta = _object(ocs['meta']);
+    if (meta['status'] != 'ok' || meta['statuscode'] != 200) {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final data = _object(ocs['data']);
+    final references = _object(data['references']);
+    final reference = _object(references[resourceUrl.toString()]);
+    if (reference['richObjectType'] != 'integration_giphy_gif') {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final richObject = _object(reference['richObject']);
+    final proxiedUrl = _uri(richObject['proxied_url']);
+    if (!_isSafeThumbnail(server, proxiedUrl)) {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    return (
+      proxiedUrl: proxiedUrl,
+      aspectRatio: _referenceAspectRatio(richObject['images']),
+    );
+  }
+
   GiphyEntry _decodeEntry(Object? raw) {
     final entry = _object(raw);
     final thumbnailUrl = _uri(entry['thumbnailUrl']);
@@ -524,7 +713,7 @@ final class HttpGiphyRepository implements GiphyRepository {
         thumbnailUrl.userInfo.isNotEmpty ||
         thumbnailUrl.fragment.isNotEmpty ||
         thumbnailUrl.path.isEmpty ||
-        !_isSafeGiphyResource(resourceUrl)) {
+        !isSupportedGiphyResource(resourceUrl)) {
       throw const GiphyException(GiphyError.invalidResponse);
     }
     return GiphyEntry(
@@ -578,17 +767,6 @@ final class GiphyController extends ChangeNotifier {
   }
 
   Future<bool> loadMore() => _load(term: _term, append: true);
-
-  bool insertSelection(
-    TextEditingController composer,
-    GiphyEntry entry, {
-    int maximumCharacters = 32000,
-  }) => insertComposerText(
-    composer,
-    entry.resourceUrl.toString(),
-    mode: ComposerInsertionMode.separatedToken,
-    maximumCharacters: maximumCharacters,
-  );
 
   Future<bool> _load({required String? term, required bool append}) async {
     if (_disposed ||
@@ -924,13 +1102,41 @@ Uri _uri(Object? value) {
   return uri;
 }
 
-bool _isSafeGiphyResource(Uri uri) {
-  final host = uri.host.toLowerCase();
-  return uri.scheme == 'https' &&
-      (host == 'giphy.com' || host.endsWith('.giphy.com')) &&
-      uri.userInfo.isEmpty &&
-      uri.fragment.isEmpty &&
-      uri.pathSegments.isNotEmpty;
+double? _referenceAspectRatio(Object? rawImages) {
+  if (rawImages is! Map<String, Object?>) {
+    return null;
+  }
+  for (final name in const <String>['fixed_width', 'original', 'downsized']) {
+    final rawRendition = rawImages[name];
+    if (rawRendition is! Map<String, Object?>) {
+      continue;
+    }
+    final width = _referenceDimension(rawRendition['width']);
+    final height = _referenceDimension(rawRendition['height']);
+    if (width == null || height == null) {
+      continue;
+    }
+    final ratio = width / height;
+    if (ratio.isFinite && ratio >= 0.1 && ratio <= 10) {
+      return ratio;
+    }
+  }
+  return null;
+}
+
+double? _referenceDimension(Object? value) {
+  final parsed = switch (value) {
+    num() => value.toDouble(),
+    String() => double.tryParse(value),
+    _ => null,
+  };
+  if (parsed == null ||
+      !parsed.isFinite ||
+      parsed <= 0 ||
+      parsed > _maximumGifLogicalDimension) {
+    return null;
+  }
+  return parsed;
 }
 
 bool _isSafeThumbnail(ServerBase server, Uri uri) {
@@ -939,20 +1145,27 @@ bool _isSafeThumbnail(ServerBase server, Uri uri) {
       uri.fragment.isNotEmpty) {
     return false;
   }
-  final prefix = <String>[
-    ...server.uri.pathSegments,
-    'apps',
-    'integration_giphy',
-  ];
-  if (uri.pathSegments.length <= prefix.length) {
-    return false;
-  }
-  for (var index = 0; index < prefix.length; index++) {
-    if (uri.pathSegments[index] != prefix[index]) {
-      return false;
+  final baseSegments = server.uri.pathSegments;
+  for (final routePrefix in const <List<String>>[
+    <String>['apps', 'integration_giphy'],
+    <String>['index.php', 'apps', 'integration_giphy'],
+  ]) {
+    final prefix = <String>[...baseSegments, ...routePrefix];
+    if (uri.pathSegments.length <= prefix.length) {
+      continue;
+    }
+    var matches = true;
+    for (var index = 0; index < prefix.length; index++) {
+      if (uri.pathSegments[index] != prefix[index]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
     }
   }
-  return true;
+  return false;
 }
 
 bool _matchesThumbnailSignature(String contentType, Uint8List body) {
@@ -970,7 +1183,9 @@ bool _matchesThumbnailSignature(String contentType, Uint8List body) {
 
   return switch (contentType) {
     'image/gif' =>
-      startsWith(ascii.encode('GIF87a')) || startsWith(ascii.encode('GIF89a')),
+      (startsWith(ascii.encode('GIF87a')) ||
+              startsWith(ascii.encode('GIF89a'))) &&
+          _hasSafeGifLogicalScreen(body),
     'image/png' => startsWith(const <int>[
       0x89,
       0x50,
@@ -988,6 +1203,30 @@ bool _matchesThumbnailSignature(String contentType, Uint8List body) {
           ascii.decode(body.sublist(8, 12), allowInvalid: true) == 'WEBP',
     _ => false,
   };
+}
+
+bool _hasSafeGifLogicalScreen(Uint8List body) {
+  if (body.length < 10) {
+    return false;
+  }
+  final width = body[6] | (body[7] << 8);
+  final height = body[8] | (body[9] << 8);
+  if (width == 0 ||
+      height == 0 ||
+      width > _maximumGifLogicalDimension ||
+      height > _maximumGifLogicalDimension) {
+    return false;
+  }
+  return width <= _maximumGifLogicalPixels ~/ height;
+}
+
+double? _gifAspectRatio(Uint8List body) {
+  if (!_hasSafeGifLogicalScreen(body)) {
+    return null;
+  }
+  final width = body[6] | (body[7] << 8);
+  final height = body[8] | (body[9] << 8);
+  return width / height;
 }
 
 Duration _remaining(DateTime deadline) {
@@ -1021,14 +1260,22 @@ Future<T> _sendWithDeadline<T>(
   Future<T> send, {
   required DateTime deadline,
   required _RequestAbortSignal requestAbort,
-}) {
-  return send.timeout(
-    _remaining(deadline),
-    onTimeout: () {
-      requestAbort.abortForDeadline();
-      return send.timeout(_abortSettlementTimeout);
-    },
+}) async {
+  final normalized = Completer<T>();
+  unawaited(
+    send.then<void>(
+      (value) => normalized.complete(value),
+      onError: (Object error, StackTrace stackTrace) {
+        normalized.completeError(error, stackTrace);
+      },
+    ),
   );
+  try {
+    return await normalized.future.timeout(_remaining(deadline));
+  } on TimeoutException {
+    requestAbort.abortForDeadline();
+    return normalized.future.timeout(_abortSettlementTimeout);
+  }
 }
 
 final class _ResponseBodyReader {

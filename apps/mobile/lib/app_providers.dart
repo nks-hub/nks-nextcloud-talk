@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'core/giphy_reference_load_coordinator.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
 import 'data/attachment_repository.dart';
@@ -265,6 +266,38 @@ final giphyRepositoryProvider = FutureProvider.autoDispose
         }
       }
       return repository;
+    });
+
+final giphyReferenceLoadCoordinatorProvider =
+    Provider<GiphyReferenceLoadCoordinator<GiphyReferenceMedia>>((ref) {
+      return GiphyReferenceLoadCoordinator<GiphyReferenceMedia>(
+        byteSizeOf: (media) => media.body.lengthInBytes,
+      );
+    });
+
+final giphyReferenceMediaProvider = FutureProvider.autoDispose
+    .family<GiphyReferenceMedia, GiphyReferenceRequest>((ref, request) async {
+      final abort = Completer<void>();
+      final coordinator = ref.watch(giphyReferenceLoadCoordinatorProvider);
+      ref.onDispose(() {
+        if (!abort.isCompleted) {
+          abort.complete();
+        }
+      });
+      final repository = await ref.watch(
+        giphyRepositoryProvider(request.accountId).future,
+      );
+      if (repository == null) {
+        throw const GiphyException(GiphyError.integrationUnavailable);
+      }
+      return coordinator.load(
+        accountId: request.accountId,
+        resourceUrl: request.resourceUrl,
+        loader: () => repository.loadReference(
+          request.resourceUrl,
+          abortTrigger: abort.future,
+        ),
+      );
     });
 
 final accountsProvider = StreamProvider<List<StoredAccount>>((ref) {
