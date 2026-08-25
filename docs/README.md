@@ -2,6 +2,8 @@
 
 Dokumentace je rozdělená podle stavu poznání:
 
+- [Kompletní TODO](TODO.md) je průběžně udržovaný seznam všech otevřených bodů
+  napříč požadavky, prioritní frontou a backlogem.
 - [Výzkum](research/README.md) obsahuje ověřená upstream a runtime fakta.
 - [Architektura](architecture/README.md) obsahuje návrh systému, požadavky,
   synchronizační invarianty a implementační brány.
