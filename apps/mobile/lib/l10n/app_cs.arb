@@ -211,5 +211,15 @@
   "roomDetailsActionErrorReauth": "Pro tuto změnu se prosím přihlaste znovu.",
   "roomDetailsActionErrorForbidden": "K této akci nemáte oprávnění.",
   "roomDetailsActionErrorRoomMissing": "Tato konverzace už neexistuje.",
-  "roomDetailsLeaveRejected": "Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora."
+  "roomDetailsLeaveRejected": "Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.",
+  "settingsTitle": "Nastavení",
+  "settingsAccountsSection": "Účty",
+  "settingsAccountSelected": "Aktivní",
+  "settingsAccountsLoadFailed": "Účty se nepodařilo načíst.",
+  "settingsAddAccount": "Přidat účet",
+  "settingsRemoveAccountUnavailable": "Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.",
+  "settingsThemeSection": "Vzhled",
+  "settingsThemeSystem": "Podle systému",
+  "settingsThemeLight": "Světlý",
+  "settingsThemeDark": "Tmavý"
 }
