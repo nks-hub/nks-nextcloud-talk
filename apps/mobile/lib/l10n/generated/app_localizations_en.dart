@@ -1110,4 +1110,92 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
       'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.';
+
+  @override
+  String get messageActionPin => 'Pin message';
+
+  @override
+  String get messageActionUnpin => 'Unpin message';
+
+  @override
+  String get messagePinned => 'Message pinned';
+
+  @override
+  String get messageUnpinned => 'Message unpinned';
+
+  @override
+  String get pinnedMessageLabel => 'Pinned message';
+
+  @override
+  String get pinnedMessageOpen => 'Show pinned message';
+
+  @override
+  String get pinnedMessageHide => 'Hide for me';
+
+  @override
+  String get messageActionRemind => 'Remind me';
+
+  @override
+  String get reminderTitle => 'Remind me about this message';
+
+  @override
+  String get reminderLaterToday => 'Later today';
+
+  @override
+  String get reminderTomorrow => 'Tomorrow morning';
+
+  @override
+  String get reminderThisWeekend => 'This weekend';
+
+  @override
+  String get reminderNextWeek => 'Next week';
+
+  @override
+  String get reminderCustom => 'Pick a date and time';
+
+  @override
+  String get reminderRemove => 'Remove reminder';
+
+  @override
+  String reminderSet(String time) {
+    return 'Reminder set for $time';
+  }
+
+  @override
+  String get reminderRemoved => 'Reminder removed';
+
+  @override
+  String reminderExisting(String time) {
+    return 'Reminder set for $time';
+  }
+
+  @override
+  String get scheduleMessage => 'Send later';
+
+  @override
+  String get scheduleMessageTitle => 'Send this message later';
+
+  @override
+  String scheduleMessageSet(String time) {
+    return 'Message scheduled for $time';
+  }
+
+  @override
+  String get scheduledMessagesTitle => 'Scheduled messages';
+
+  @override
+  String get scheduledMessagesOpen => 'Scheduled messages';
+
+  @override
+  String get scheduledMessagesEmpty =>
+      'Nothing is scheduled in this conversation.';
+
+  @override
+  String get scheduledMessageDelete => 'Delete scheduled message';
+
+  @override
+  String get scheduledMessageDeleted => 'Scheduled message deleted';
+
+  @override
+  String get scheduleTimeInPast => 'Pick a time in the future.';
 }

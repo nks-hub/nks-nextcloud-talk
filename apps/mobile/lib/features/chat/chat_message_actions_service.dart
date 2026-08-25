@@ -19,6 +19,7 @@ enum ChatMessageActionError {
   talkUnavailable,
   actionUnsupported,
   messageMissing,
+  notFound,
   reauthenticationRequired,
   rateLimited,
   serviceUnavailable,
@@ -181,6 +182,254 @@ final class ChatMessageActionsService {
     ),
   );
 
+  /// Pins [messageId] for the whole conversation, without an expiry.
+  ///
+  /// `pinUntil: 0` is the wire value for "until someone unpins it"; a timed
+  /// pin would need a future timestamp instead. Talk keeps at most one pin
+  /// per conversation, so pinning replaces whatever was pinned before.
+  Future<void> pinMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) => _mutateMessage(
+    accountId: accountId,
+    roomToken: roomToken,
+    build: (context) => RichChatRequest.pinMessage(
+      accountId: AccountId.parse(accountId),
+      requestId: ChatRequestId.parse(_uuid.v4()),
+      server: context.server,
+      roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+      profile: context.profile,
+      messageId: messageId,
+      pinUntil: 0,
+      now: DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+    ),
+  );
+
+  Future<void> unpinMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) => _mutateMessage(
+    accountId: accountId,
+    roomToken: roomToken,
+    build: (context) => RichChatRequest.unpinMessage(
+      accountId: AccountId.parse(accountId),
+      requestId: ChatRequestId.parse(_uuid.v4()),
+      server: context.server,
+      roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+      profile: context.profile,
+      messageId: messageId,
+    ),
+  );
+
+  /// Hides the conversation's pin for this account only. The pin stays in
+  /// place for everyone else, which is why this needs no moderator role.
+  Future<void> hidePinnedMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.hidePinnedMessage(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
+  /// Returns the reminder this account set on [messageId], or `null` when
+  /// there is none. Talk answers a missing reminder with `404`, which is a
+  /// state here rather than a failure.
+  Future<RichChatReminder?> getReminder({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.getReminder(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+      ),
+    );
+    final RichChatResponse response;
+    try {
+      response = await _send(
+        accountId: accountId,
+        context: context,
+        request: request,
+      );
+    } on ChatMessageActionException catch (error) {
+      if (error.code == ChatMessageActionError.notFound) {
+        return null;
+      }
+      rethrow;
+    }
+    return response.reminder;
+  }
+
+  /// Sets this account's reminder on [messageId] at [timestamp], a Unix
+  /// timestamp in seconds. Setting one where a reminder already exists
+  /// replaces it.
+  Future<void> setReminder({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+    required int timestamp,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.setReminder(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+        timestamp: timestamp,
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
+  Future<void> deleteReminder({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.deleteReminder(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
+  /// Hands [message] to the server to deliver at [sendAt], a Unix timestamp
+  /// in seconds.
+  ///
+  /// The schedule is held by the server, not by this client, and creating it
+  /// deliberately does not touch the durable text-send outbox. That outbox
+  /// exists to settle one question - did this exact POST reach the chat - and
+  /// answers it by scanning fresh history for the operation's `referenceId`.
+  /// A scheduled message produces no history entry until [sendAt], so an
+  /// outbox entry for it would sit unmatched for hours and either stay
+  /// ambiguous forever or invite a manual resend that duplicates the message
+  /// once the server fires it. Creating the schedule is therefore a one-shot
+  /// mutation exactly like edit or pin: `201` means the server owns it from
+  /// here, and an ambiguous result is resolved by reading the scheduled list
+  /// back with [listScheduledMessages], never by replaying.
+  Future<void> scheduleMessage({
+    required String accountId,
+    required String roomToken,
+    required String message,
+    required int sendAt,
+    bool silent = false,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.createScheduled(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        message: message,
+        sendAt: sendAt,
+        silent: silent,
+        threadId: 0,
+        threadTitle: '',
+        now: DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
+  /// Reads back everything this account has scheduled in [roomToken]. This is
+  /// also how an ambiguous [scheduleMessage] result is resolved.
+  Future<List<RichChatScheduledMessage>> listScheduledMessages({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.getScheduled(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+      ),
+    );
+    final response = await _send(
+      accountId: accountId,
+      context: context,
+      request: request,
+    );
+    return response.scheduledMessages;
+  }
+
+  Future<void> deleteScheduledMessage({
+    required String accountId,
+    required String roomToken,
+    required String scheduleId,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(
+      () => RichChatRequest.deleteScheduled(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        scheduleId: RichChatScheduleId.parse(
+          scheduleId,
+          path: r'$.scheduleId',
+          code: TalkProtocolErrorCode.invalidRichChatRequest,
+        ),
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
+  /// Runs a mutation whose success response carries the authoritative message
+  /// as its `parent`, and writes that message back into the cache.
+  Future<void> _mutateMessage({
+    required String accountId,
+    required String roomToken,
+    required RichChatRequest Function(_MessageActionContext context) build,
+  }) async {
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
+    final request = _buildRequest(() => build(context));
+    final response = await _send(
+      accountId: accountId,
+      context: context,
+      request: request,
+    );
+    await _applyParentMutation(
+      accountId: accountId,
+      context: context,
+      response: response,
+    );
+  }
+
   Future<void> _mutateReaction({
     required String accountId,
     required String roomToken,
@@ -302,6 +551,13 @@ final class ChatMessageActionsService {
           ChatMessageActionError.reauthenticationRequired,
         );
       case RichChatResponseClassification.deterministicFailure:
+        // `404` is how Talk reports "there is nothing here" - no reminder on
+        // this message, no such schedule - which callers resolve themselves.
+        throw ChatMessageActionException(
+          response.statusCode == 404
+              ? ChatMessageActionError.notFound
+              : ChatMessageActionError.serviceUnavailable,
+        );
       case RichChatResponseClassification.ambiguous:
       case RichChatResponseClassification.serverError:
         throw const ChatMessageActionException(
@@ -374,11 +630,18 @@ final class ChatMessageActionsService {
       observedAt: DateTime.now().toUtc(),
     );
     final role = participantRoleFor(room.participantType);
+    // `scheduled-messages` is only ever announced under `features-local`, so
+    // passing an empty local set here would gate scheduling away on every
+    // server that supports it.
+    final rawSpreed = capabilities.capabilities['spreed'];
+    final spreed = rawSpreed is Map<String, Object?>
+        ? rawSpreed
+        : const <String, Object?>{};
     final RichChatCapabilityProfile profile;
     try {
       profile = RichChatCapabilityProfile.fromTalkFeatures(
         talkFeatures: capabilities.talkFeatures.toList(),
-        talkLocalFeatures: const <String>[],
+        talkLocalFeatures: spreed['features-local'] ?? const <Object?>[],
         federated: room.isFederated,
         moderator:
             role == ParticipantRole.owner ||
@@ -421,6 +684,7 @@ final class _MessageActionContext {
 ChatMessageActionError _mapApiError(NextcloudApiException error) {
   return switch (error.statusCode) {
     401 => ChatMessageActionError.reauthenticationRequired,
+    404 => ChatMessageActionError.notFound,
     429 => ChatMessageActionError.rateLimited,
     500 || 502 || 503 || 504 => ChatMessageActionError.serviceUnavailable,
     _ => switch (error.code) {

@@ -358,5 +358,53 @@
   "settingsRemoveAccountDialogMessage": "Účet {loginName} na {serverUrl} bude z tohoto zařízení odebrán. Smažou se jeho konverzace, zprávy, rozepsané texty, čekající nahrávání, uložené náhledy i hlasové zprávy a uložené heslo. Aplikační heslo se odvolá na serveru.",
   "settingsRemoveAccountDialogConfirm": "Odebrat",
   "settingsRemoveAccountDone": "Účet byl odebrán.",
-  "settingsRemoveAccountDoneNotRevoked": "Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení."
+  "settingsRemoveAccountDoneNotRevoked": "Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.",
+  "messageActionPin": "Připnout zprávu",
+  "messageActionUnpin": "Odepnout zprávu",
+  "messagePinned": "Zpráva připnuta",
+  "messageUnpinned": "Zpráva odepnuta",
+  "pinnedMessageLabel": "Připnutá zpráva",
+  "pinnedMessageOpen": "Zobrazit připnutou zprávu",
+  "pinnedMessageHide": "Skrýt pro mě",
+  "messageActionRemind": "Připomenout",
+  "reminderTitle": "Připomenout tuto zprávu",
+  "reminderLaterToday": "Dnes večer",
+  "reminderTomorrow": "Zítra ráno",
+  "reminderThisWeekend": "O víkendu",
+  "reminderNextWeek": "Příští týden",
+  "reminderCustom": "Vybrat datum a čas",
+  "reminderRemove": "Zrušit připomenutí",
+  "reminderSet": "Připomenutí nastaveno na {time}",
+  "@reminderSet": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderRemoved": "Připomenutí zrušeno",
+  "reminderExisting": "Připomenutí nastaveno na {time}",
+  "@reminderExisting": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleMessage": "Odeslat později",
+  "scheduleMessageTitle": "Odeslat tuto zprávu později",
+  "scheduleMessageSet": "Zpráva naplánována na {time}",
+  "@scheduleMessageSet": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduledMessagesTitle": "Naplánované zprávy",
+  "scheduledMessagesOpen": "Naplánované zprávy",
+  "scheduledMessagesEmpty": "V této konverzaci není nic naplánováno.",
+  "scheduledMessageDelete": "Smazat naplánovanou zprávu",
+  "scheduledMessageDeleted": "Naplánovaná zpráva smazána",
+  "scheduleTimeInPast": "Vyberte čas v budoucnosti."
 }

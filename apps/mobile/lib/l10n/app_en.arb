@@ -386,5 +386,53 @@
   "settingsRemoveAccountDialogMessage": "{loginName} on {serverUrl} will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.",
   "settingsRemoveAccountDialogConfirm": "Remove",
   "settingsRemoveAccountDone": "The account was removed.",
-  "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server."
+  "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.",
+  "messageActionPin": "Pin message",
+  "messageActionUnpin": "Unpin message",
+  "messagePinned": "Message pinned",
+  "messageUnpinned": "Message unpinned",
+  "pinnedMessageLabel": "Pinned message",
+  "pinnedMessageOpen": "Show pinned message",
+  "pinnedMessageHide": "Hide for me",
+  "messageActionRemind": "Remind me",
+  "reminderTitle": "Remind me about this message",
+  "reminderLaterToday": "Later today",
+  "reminderTomorrow": "Tomorrow morning",
+  "reminderThisWeekend": "This weekend",
+  "reminderNextWeek": "Next week",
+  "reminderCustom": "Pick a date and time",
+  "reminderRemove": "Remove reminder",
+  "reminderSet": "Reminder set for {time}",
+  "@reminderSet": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderRemoved": "Reminder removed",
+  "reminderExisting": "Reminder set for {time}",
+  "@reminderExisting": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduleMessage": "Send later",
+  "scheduleMessageTitle": "Send this message later",
+  "scheduleMessageSet": "Message scheduled for {time}",
+  "@scheduleMessageSet": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "scheduledMessagesTitle": "Scheduled messages",
+  "scheduledMessagesOpen": "Scheduled messages",
+  "scheduledMessagesEmpty": "Nothing is scheduled in this conversation.",
+  "scheduledMessageDelete": "Delete scheduled message",
+  "scheduledMessageDeleted": "Scheduled message deleted",
+  "scheduleTimeInPast": "Pick a time in the future."
 }

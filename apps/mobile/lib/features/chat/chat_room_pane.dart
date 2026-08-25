@@ -16,6 +16,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_details_screen.dart';
 import 'chat_message_actions_service.dart';
+import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_service.dart';
@@ -639,6 +640,25 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       );
   }
 
+  /// The freshest cached row for this room, falling back to the snapshot the
+  /// pane was constructed with. Both production entry points and the
+  /// test-only screen route through this pane, so resolving it here means the
+  /// pin banner behaves identically in all of them.
+  CachedConversation _liveConversation() {
+    final conversations = ref
+        .watch(conversationsProvider(widget.account.id))
+        .valueOrNull;
+    if (conversations == null) {
+      return widget.conversation;
+    }
+    for (final conversation in conversations) {
+      if (conversation.token == widget.conversation.token) {
+        return conversation;
+      }
+    }
+    return widget.conversation;
+  }
+
   bool _isCurrentJump(ChatRoomProviderKey key, int generation) =>
       mounted && generation == _jumpGeneration && key == _key;
 
@@ -800,6 +820,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     required bool canEdit,
     required bool canDelete,
     required bool canReact,
+    required bool canPin,
+    required bool isPinned,
+    required bool canRemind,
   }) {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
@@ -869,6 +892,36 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                     unawaited(_openReactionPicker(message));
                   },
                 ),
+              if (canPin && !isPinned)
+                ListTile(
+                  key: const Key('message-action-pin'),
+                  leading: const Icon(Icons.push_pin_outlined),
+                  title: Text(strings.messageActionPin),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_pinMessage(message));
+                  },
+                ),
+              if (canPin && isPinned)
+                ListTile(
+                  key: const Key('message-action-unpin'),
+                  leading: const Icon(Icons.push_pin_rounded),
+                  title: Text(strings.messageActionUnpin),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_unpinMessage(message));
+                  },
+                ),
+              if (canRemind)
+                ListTile(
+                  key: const Key('message-action-remind'),
+                  leading: const Icon(Icons.alarm_add_outlined),
+                  title: Text(strings.messageActionRemind),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_openReminder(message));
+                  },
+                ),
             ],
           ),
         ),
@@ -928,6 +981,268 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           ),
         );
     }
+  }
+
+  /// Pins [message] for the whole conversation.
+  ///
+  /// The pin lives on the room, not on the message, so the banner only
+  /// appears once the conversation row carries the new `lastPinnedId`. The
+  /// refresh below is what fetches that row; without it the pin would be
+  /// invisible until the next scheduled conversation sync.
+  Future<void> _pinMessage(CachedChatMessage message) async {
+    final targetKey = _key;
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .pinMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+          );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+      return;
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+      return;
+    }
+    await _refreshConversations();
+    if (!mounted) {
+      return;
+    }
+    _showActionNotice(
+      AppLocalizations.of(context).messagePinned,
+      const Key('chat-pin-success'),
+    );
+  }
+
+  Future<void> _unpinMessage(CachedChatMessage message) async {
+    final targetKey = _key;
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .unpinMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+          );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+      return;
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+      return;
+    }
+    await _refreshConversations();
+    if (!mounted) {
+      return;
+    }
+    _showActionNotice(
+      AppLocalizations.of(context).messageUnpinned,
+      const Key('chat-unpin-success'),
+    );
+  }
+
+  /// Hides the conversation pin for this account only.
+  Future<void> _hidePinnedMessage(int messageId) async {
+    final targetKey = _key;
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .hidePinnedMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: messageId,
+          );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+      return;
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+      return;
+    }
+    await _refreshConversations();
+  }
+
+  /// Opens the reminder options for [message] and applies the choice.
+  ///
+  /// The existing reminder is read first so the sheet can offer to remove it;
+  /// Talk answers "no reminder here" with a `404`, which the service reports
+  /// as `null` rather than as a failure.
+  Future<void> _openReminder(CachedChatMessage message) async {
+    final targetKey = _key;
+    final service = ref.read(chatMessageActionsServiceProvider);
+    RichChatReminder? existing;
+    try {
+      existing = await service.getReminder(
+        accountId: targetKey.accountId,
+        roomToken: targetKey.roomToken,
+        messageId: message.messageId,
+      );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+      return;
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+      return;
+    }
+    if (!mounted || targetKey != _key) {
+      return;
+    }
+    final existingAt = existing == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(
+            existing.timestamp * 1000,
+          ).toLocal();
+    final now = DateTime.now();
+    final result = await showReminderSheet(
+      context: context,
+      now: now,
+      existing: existingAt,
+    );
+    if (result == null || !mounted || targetKey != _key) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    try {
+      switch (result.action) {
+        case ReminderSheetAction.remove:
+          await service.deleteReminder(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+          );
+          if (mounted) {
+            _showActionNotice(
+              strings.reminderRemoved,
+              const Key('chat-reminder-removed'),
+            );
+          }
+        case ReminderSheetAction.set:
+          final at = result.at!;
+          if (!at.isAfter(DateTime.now())) {
+            _showActionNotice(
+              strings.scheduleTimeInPast,
+              const Key('chat-reminder-past'),
+            );
+            return;
+          }
+          await service.setReminder(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+            timestamp: at.toUtc().millisecondsSinceEpoch ~/ 1000,
+          );
+          if (mounted) {
+            _showActionNotice(
+              strings.reminderSet(formatMoment(context, at)),
+              const Key('chat-reminder-set'),
+            );
+          }
+      }
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+    }
+  }
+
+  /// Hands the composed text to the server to deliver later.
+  ///
+  /// This never enters the durable text-send outbox. That outbox settles
+  /// "did this POST reach the chat" by matching its `referenceId` against
+  /// fresh history, and a scheduled message has no history entry until the
+  /// server fires it, so an outbox record would stay unresolved for hours and
+  /// a manual resend would duplicate it. The schedule is the server's, and
+  /// [_openScheduledMessages] is how an unclear result gets settled.
+  Future<void> _scheduleMessage() async {
+    final text = _composer.text.trim();
+    if (text.isEmpty || _sending || widget.conversation.readOnly != 0) {
+      return;
+    }
+    final targetKey = _key;
+    final at = await showSendLaterSheet(context: context, now: DateTime.now());
+    if (at == null || !mounted || targetKey != _key) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    if (!at.isAfter(DateTime.now())) {
+      _showActionNotice(
+        strings.scheduleTimeInPast,
+        const Key('chat-schedule-past'),
+      );
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .scheduleMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            message: text,
+            sendAt: at.toUtc().millisecondsSinceEpoch ~/ 1000,
+          );
+      if (!mounted || targetKey != _key) {
+        return;
+      }
+      _composer.clear();
+      _showActionNotice(
+        strings.scheduleMessageSet(formatMoment(context, at)),
+        const Key('chat-schedule-success'),
+      );
+      await _refreshConversations();
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  Future<void> _openScheduledMessages() async {
+    final targetKey = _key;
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => ScheduledMessagesSheet(
+        accountId: targetKey.accountId,
+        roomToken: targetKey.roomToken,
+      ),
+    );
+    await _refreshConversations();
+  }
+
+  /// Pulls the conversation list again so a room-level change - a new pin, a
+  /// new scheduled message - reaches the cached row this pane renders from.
+  ///
+  /// Neither the pin nor the scheduled-message count is carried by a chat
+  /// message: both live on the conversation, so only a conversation sync can
+  /// observe them. A full sync is asked for because a delta may legitimately
+  /// skip a room whose `lastActivity` a pin did not move.
+  Future<void> _refreshConversations() async {
+    try {
+      await ref
+          .read(conversationSyncServiceProvider)
+          .sync(widget.account.id, forceFull: true);
+    } on Object {
+      // The mutation itself already succeeded; a stale banner until the next
+      // scheduled sync is not worth a second error channel on top of the
+      // pane's own sync error handling.
+    }
+  }
+
+  void _showActionNotice(String text, Key key) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(key: key, content: Text(text)));
   }
 
   Future<void> _copyMessageText(String text) async {
@@ -1363,6 +1678,20 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final profileCanEdit = actionsProfile?.edit ?? false;
     final profileCanDelete = actionsProfile?.delete ?? false;
     final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);
+    // The pin and the scheduled-message count live on the conversation row,
+    // which the list keeps fresh; `widget.conversation` is only the snapshot
+    // this pane was opened with.
+    final liveConversation = _liveConversation();
+    final pinned = PinnedMessageState.fromCachedConversation(liveConversation);
+    // Pins are a whole-room concept, so a thread pane neither shows nor
+    // offers them; the root room pane owns that.
+    final inRootRoom = widget.threadId == null;
+    final profileCanPin = inRootRoom && (actionsProfile?.pin ?? false);
+    final profileCanHidePin =
+        inRootRoom && (actionsProfile?.hidePinned ?? false);
+    final profileCanRemind = actionsProfile?.reminders ?? false;
+    final profileCanSchedule =
+        !readOnly && inRootRoom && (actionsProfile?.scheduled ?? false);
     void handleMessageActions(CachedChatMessage message, ChatMessage? parsed) {
       final outgoing = message.actorId == widget.account.loginName;
       _showMessageActions(
@@ -1372,6 +1701,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         canEdit: profileCanEdit && outgoing,
         canDelete: profileCanDelete && outgoing,
         canReact: profileCanReact,
+        canPin: profileCanPin && message.systemMessage.isEmpty,
+        isPinned: pinned.messageId == message.messageId,
+        canRemind: profileCanRemind && message.systemMessage.isEmpty,
       );
     }
 
@@ -1471,6 +1803,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               )
             : const Icon(Icons.gif_box_outlined),
       ),
+      if (profileCanSchedule)
+        IconButton(
+          key: const Key('schedule-message'),
+          onPressed: _sending ? null : () => unawaited(_scheduleMessage()),
+          tooltip: strings.scheduleMessage,
+          icon: const Icon(Icons.schedule_send_outlined),
+        ),
       IconButton.filled(
         key: const Key('send-message'),
         onPressed: _sending ? null : _send,
@@ -1491,6 +1830,23 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           _ChatHeader(
             account: widget.account,
             conversation: widget.conversation,
+          ),
+        PinnedMessageBanner(
+          account: widget.account,
+          conversation: liveConversation,
+          pinned: pinned,
+          canHide: profileCanHidePin,
+          onOpen: (messageId) => unawaited(_jumpToMessage(messageId)),
+          onHide: (messageId) => unawaited(_hidePinnedMessage(messageId)),
+        ),
+        if (profileCanSchedule &&
+            scheduledMessageCount(liveConversation) > 0)
+          ListTile(
+            key: const Key('open-scheduled-messages'),
+            dense: true,
+            leading: const Icon(Icons.schedule_send_outlined),
+            title: Text(strings.scheduledMessagesOpen),
+            onTap: () => unawaited(_openScheduledMessages()),
           ),
         if (_syncing)
           LinearProgressIndicator(
@@ -2760,7 +3116,8 @@ String _messageActionErrorMessage(
     ChatMessageActionError.talkUnavailable => strings.talkUnavailable,
     ChatMessageActionError.actionUnsupported =>
       strings.messageActionUnsupported,
-    ChatMessageActionError.messageMissing =>
+    ChatMessageActionError.messageMissing ||
+    ChatMessageActionError.notFound =>
       strings.messageActionMessageMissing,
     ChatMessageActionError.rateLimited => strings.syncRateLimited,
     ChatMessageActionError.serviceUnavailable ||

@@ -1111,4 +1111,92 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
       'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.';
+
+  @override
+  String get messageActionPin => 'Připnout zprávu';
+
+  @override
+  String get messageActionUnpin => 'Odepnout zprávu';
+
+  @override
+  String get messagePinned => 'Zpráva připnuta';
+
+  @override
+  String get messageUnpinned => 'Zpráva odepnuta';
+
+  @override
+  String get pinnedMessageLabel => 'Připnutá zpráva';
+
+  @override
+  String get pinnedMessageOpen => 'Zobrazit připnutou zprávu';
+
+  @override
+  String get pinnedMessageHide => 'Skrýt pro mě';
+
+  @override
+  String get messageActionRemind => 'Připomenout';
+
+  @override
+  String get reminderTitle => 'Připomenout tuto zprávu';
+
+  @override
+  String get reminderLaterToday => 'Dnes večer';
+
+  @override
+  String get reminderTomorrow => 'Zítra ráno';
+
+  @override
+  String get reminderThisWeekend => 'O víkendu';
+
+  @override
+  String get reminderNextWeek => 'Příští týden';
+
+  @override
+  String get reminderCustom => 'Vybrat datum a čas';
+
+  @override
+  String get reminderRemove => 'Zrušit připomenutí';
+
+  @override
+  String reminderSet(String time) {
+    return 'Připomenutí nastaveno na $time';
+  }
+
+  @override
+  String get reminderRemoved => 'Připomenutí zrušeno';
+
+  @override
+  String reminderExisting(String time) {
+    return 'Připomenutí nastaveno na $time';
+  }
+
+  @override
+  String get scheduleMessage => 'Odeslat později';
+
+  @override
+  String get scheduleMessageTitle => 'Odeslat tuto zprávu později';
+
+  @override
+  String scheduleMessageSet(String time) {
+    return 'Zpráva naplánována na $time';
+  }
+
+  @override
+  String get scheduledMessagesTitle => 'Naplánované zprávy';
+
+  @override
+  String get scheduledMessagesOpen => 'Naplánované zprávy';
+
+  @override
+  String get scheduledMessagesEmpty =>
+      'V této konverzaci není nic naplánováno.';
+
+  @override
+  String get scheduledMessageDelete => 'Smazat naplánovanou zprávu';
+
+  @override
+  String get scheduledMessageDeleted => 'Naplánovaná zpráva smazána';
+
+  @override
+  String get scheduleTimeInPast => 'Vyberte čas v budoucnosti.';
 }
