@@ -59,17 +59,17 @@ final class SettingsScreen extends ConsumerWidget {
             child: Column(
               children: [
                 _ThemeModeTile(
-                  key: const Key('theme-mode-system'),
+                  tileKey: const Key('theme-mode-system'),
                   label: strings.settingsThemeSystem,
                   mode: ThemeMode.system,
                 ),
                 _ThemeModeTile(
-                  key: const Key('theme-mode-light'),
+                  tileKey: const Key('theme-mode-light'),
                   label: strings.settingsThemeLight,
                   mode: ThemeMode.light,
                 ),
                 _ThemeModeTile(
-                  key: const Key('theme-mode-dark'),
+                  tileKey: const Key('theme-mode-dark'),
                   label: strings.settingsThemeDark,
                   mode: ThemeMode.dark,
                 ),
@@ -133,14 +133,23 @@ final class _AccountTile extends ConsumerWidget {
 }
 
 final class _ThemeModeTile extends StatelessWidget {
-  const _ThemeModeTile({required super.key, required this.label, required this.mode});
+  const _ThemeModeTile({
+    required this.tileKey,
+    required this.label,
+    required this.mode,
+  });
 
+  final Key tileKey;
   final String label;
   final ThemeMode mode;
 
   @override
   Widget build(BuildContext context) {
-    return RadioListTile<ThemeMode>(title: Text(label), value: mode);
+    return RadioListTile<ThemeMode>(
+      key: tileKey,
+      title: Text(label),
+      value: mode,
+    );
   }
 }
 
