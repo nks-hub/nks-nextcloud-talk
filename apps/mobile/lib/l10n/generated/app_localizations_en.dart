@@ -869,4 +869,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get newConversationErrorNetwork => 'Could not reach the server.';
+
+  @override
+  String get roomDetailsParticipantActionsTooltip => 'Participant actions';
+
+  @override
+  String get roomDetailsPromoteModerator => 'Promote to moderator';
+
+  @override
+  String get roomDetailsDemoteModerator => 'Remove moderator rights';
+
+  @override
+  String get roomDetailsRemoveParticipant => 'Remove from conversation';
+
+  @override
+  String get roomDetailsRemoveDialogTitle => 'Remove participant?';
+
+  @override
+  String roomDetailsRemoveDialogMessage(String name) {
+    return '$name will lose access to this conversation until someone invites them back.';
+  }
+
+  @override
+  String get roomDetailsRemoveDialogConfirm => 'Remove';
+
+  @override
+  String get roomDetailsParticipantActionRejected =>
+      'The server refused this change for this participant.';
 }

@@ -869,4 +869,31 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get newConversationErrorNetwork => 'Server je nedostupný.';
+
+  @override
+  String get roomDetailsParticipantActionsTooltip => 'Akce s účastníkem';
+
+  @override
+  String get roomDetailsPromoteModerator => 'Povýšit na moderátora';
+
+  @override
+  String get roomDetailsDemoteModerator => 'Odebrat práva moderátora';
+
+  @override
+  String get roomDetailsRemoveParticipant => 'Odebrat z konverzace';
+
+  @override
+  String get roomDetailsRemoveDialogTitle => 'Odebrat účastníka?';
+
+  @override
+  String roomDetailsRemoveDialogMessage(String name) {
+    return '$name ztratí přístup do této konverzace, dokud ho někdo znovu nepozve.';
+  }
+
+  @override
+  String get roomDetailsRemoveDialogConfirm => 'Odebrat';
+
+  @override
+  String get roomDetailsParticipantActionRejected =>
+      'Server tuto změnu u tohoto účastníka odmítl.';
 }

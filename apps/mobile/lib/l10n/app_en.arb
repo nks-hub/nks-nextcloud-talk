@@ -280,5 +280,20 @@
   "newConversationErrorRateLimited": "Too many requests. Try again soon.",
   "newConversationErrorServiceUnavailable": "The server is temporarily unavailable.",
   "newConversationErrorInvalidResponse": "The server sent an unexpected response.",
-  "newConversationErrorNetwork": "Could not reach the server."
+  "newConversationErrorNetwork": "Could not reach the server.",
+  "roomDetailsParticipantActionsTooltip": "Participant actions",
+  "roomDetailsPromoteModerator": "Promote to moderator",
+  "roomDetailsDemoteModerator": "Remove moderator rights",
+  "roomDetailsRemoveParticipant": "Remove from conversation",
+  "roomDetailsRemoveDialogTitle": "Remove participant?",
+  "roomDetailsRemoveDialogMessage": "{name} will lose access to this conversation until someone invites them back.",
+  "@roomDetailsRemoveDialogMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsRemoveDialogConfirm": "Remove",
+  "roomDetailsParticipantActionRejected": "The server refused this change for this participant."
 }
