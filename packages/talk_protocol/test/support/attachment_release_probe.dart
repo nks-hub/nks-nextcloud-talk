@@ -183,7 +183,7 @@ void main() {
             messageId: 501,
             roomToken: room,
             referenceId: draft.referenceId.value,
-            systemMessage: 'file_shared',
+            systemMessage: '',
             messageType: 'comment',
             hasFileRichObject: true,
           ),
