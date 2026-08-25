@@ -219,6 +219,47 @@ void main() {
       expect(result.resourceUrl, contains('fixtureroom1'));
     });
 
+    // The live provider serialises attributes as strings; a numeric
+    // timestamp only ever appeared in hand-written fixtures. Requiring the
+    // number made every real search fail with invalidSearchResponse.
+    test('decodes the string timestamp a live server sends', () {
+      final entry = searchEntry(timestamp: null);
+      final attributes = entry['attributes']! as Map<String, Object?>;
+      attributes['timestamp'] = '1770000000';
+
+      final response = decodeMessageSearchResponse(
+        request: globalRequest(),
+        statusCode: 200,
+        json: successBody(entries: [entry]),
+      );
+
+      expect(
+        response.results.single.timestamp,
+        DateTime.fromMillisecondsSinceEpoch(1770000000 * 1000, isUtc: true),
+      );
+    });
+
+    test('rejects a timestamp that is neither a number nor digits', () {
+      final entry = searchEntry(timestamp: null);
+      final attributes = entry['attributes']! as Map<String, Object?>;
+      attributes['timestamp'] = 'not-a-timestamp';
+
+      expect(
+        () => decodeMessageSearchResponse(
+          request: globalRequest(),
+          statusCode: 200,
+          json: successBody(entries: [entry]),
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.path,
+            'path',
+            r'$.ocs.data.entries[0].attributes.timestamp',
+          ),
+        ),
+      );
+    });
+
     test('leaves timestamp null when the server omits it', () {
       final response = decodeMessageSearchResponse(
         request: globalRequest(),

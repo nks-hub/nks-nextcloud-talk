@@ -111,14 +111,21 @@ MessageSearchResult parseMessageSearchResult(
 
   DateTime? timestamp;
   if (attributes['timestamp'] != null) {
-    final rawTimestamp = requireInt(
-      attributes['timestamp'],
-      path: '$path.attributes.timestamp',
-      code: _responseCode,
-      minimum: 0,
-    );
+    // A live unified search provider serialises every attribute as a string,
+    // `timestamp` included, so requiring a JSON number here rejected every
+    // real search result. Both forms are accepted: the string is what the
+    // server actually sends, the number keeps older shapes decodable.
+    final rawTimestamp = attributes['timestamp'];
+    final seconds = switch (rawTimestamp) {
+      final int value => value,
+      final String value when value.length <= 20 => int.tryParse(value),
+      _ => null,
+    };
+    if (seconds == null || seconds < 0) {
+      protocolFailure(_responseCode, '$path.attributes.timestamp');
+    }
     timestamp = DateTime.fromMillisecondsSinceEpoch(
-      rawTimestamp * 1000,
+      seconds * 1000,
       isUtc: true,
     );
   }
