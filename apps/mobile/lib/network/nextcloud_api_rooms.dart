@@ -1,0 +1,415 @@
+part of 'nextcloud_api.dart';
+
+mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
+  /// Resolves how a room's call would be signalled. It is the first step of
+  /// any call and is deliberately separate from media handling.
+  Future<SignalingSettingsResponse> getSignalingSettings({
+    required SignalingSettingsRequest settingsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', settingsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...settingsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _signalingSettingsAllowedStatusCodes,
+      maximumBytes: chatMaximumResponseBytes,
+      timeout: const Duration(seconds: 20),
+    );
+    return decodeSignalingSettingsResponse(
+      request: settingsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Read-only room participant list, including role and (when the server
+  /// returns it) each attendee's user status.
+  Future<ParticipantsResponse> getParticipants({
+    required ParticipantsRequest participantsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', participantsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...participantsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _participantsAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeParticipantsResponse(
+      request: participantsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Promotes, demotes or removes a single attendee. Moderator-only on the
+  /// server. `attendeeId` is carried in the query string, so no request body
+  /// is sent for either the POST or the DELETE variants.
+  Future<ParticipantModerationResponse> moderateParticipant({
+    required ParticipantModerationRequest moderationRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            moderationRequest.httpMethod,
+            moderationRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...moderationRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _participantModerationAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeParticipantModerationResponse(
+      request: moderationRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Renames a conversation. Moderator-only on the server.
+  Future<UpdateRoomNameResponse> updateRoomName({
+    required UpdateRoomNameRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('PUT', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomDetailUpdateAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateRoomNameResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Changes a conversation's description. Moderator-only on the server.
+  Future<UpdateRoomDescriptionResponse> updateRoomDescription({
+    required UpdateRoomDescriptionRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('PUT', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomDetailUpdateAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateRoomDescriptionResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Sets the caller's own per-conversation notification level.
+  Future<UpdateNotificationLevelResponse> updateNotificationLevel({
+    required UpdateNotificationLevelRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateNotificationLevelResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Marks or unmarks a conversation as one of the caller's favorites.
+  Future<SetFavoriteResponse> setFavorite({
+    required SetFavoriteRequest favoriteRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(favoriteRequest.httpMethod, favoriteRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...favoriteRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetFavoriteResponse(
+      request: favoriteRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Archives or unarchives a conversation for the caller.
+  Future<SetArchivedResponse> setArchived({
+    required SetArchivedRequest archivedRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(archivedRequest.httpMethod, archivedRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...archivedRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetArchivedResponse(
+      request: archivedRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Deletes a conversation for everyone. Moderator-only on the server.
+  Future<DeleteRoomResponse> deleteRoom({
+    required DeleteRoomRequest deleteRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', deleteRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...deleteRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomRemovalAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeDeleteRoomResponse(
+      request: deleteRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Removes the caller from a conversation. Irreversible from the client's
+  /// point of view.
+  Future<LeaveRoomResponse> leaveRoom({
+    required LeaveRoomRequest leaveRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', leaveRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...leaveRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomRemovalAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeLeaveRoomResponse(
+      request: leaveRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Applies one moderator-only administration change to a conversation:
+  /// public/private, password, lobby, read-only or emoji/removed avatar. The
+  /// six endpoints share a status-code range and a response family, so they
+  /// share one transport method too.
+  Future<RoomAdministrationResponse> administerRoom({
+    required RoomAdministrationRequest administrationRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            administrationRequest.httpMethod,
+            administrationRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...administrationRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final formBody = administrationRequest.formBody;
+    if (formBody != null) {
+      request.bodyFields = formBody;
+    }
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeRoomAdministrationResponse(
+      request: administrationRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Uploads an image as the conversation avatar. Moderator-only on the
+  /// server, and the only administration endpoint that is `multipart/form-data`
+  /// rather than form fields.
+  Future<RoomAdministrationResponse> uploadRoomAvatar({
+    required SetRoomAvatarRequest avatarRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    // The contract encodes the multipart body itself, including the
+    // `Content-Type` header with its boundary, so the wire format that was
+    // contract-tested is the one that goes out.
+    final request = _request('POST', avatarRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...avatarRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyBytes = avatarRequest.multipartBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+      timeout: const Duration(seconds: 60),
+    );
+    return decodeRoomAdministrationResponse(
+      request: avatarRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Reads every ban on a conversation. Moderator-only on the server.
+  Future<RoomBanResponse> listBans({
+    required ListBansRequest listRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', listRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...listRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: bansMaximumWireBytes,
+    );
+    return decodeListBansResponse(
+      request: listRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Bans one attendee. The server removes them from the conversation in the
+  /// same call. Moderator-only.
+  Future<RoomBanResponse> banActor({
+    required BanActorRequest banRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', banRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...banRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = banRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: bansMaximumWireBytes,
+    );
+    return decodeBanActorResponse(
+      request: banRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Lifts one ban. Moderator-only.
+  Future<RoomBanResponse> unbanActor({
+    required UnbanActorRequest unbanRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', unbanRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...unbanRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: bansMaximumWireBytes,
+    );
+    return decodeUnbanActorResponse(
+      request: unbanRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+}
