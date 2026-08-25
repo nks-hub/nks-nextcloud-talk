@@ -5,17 +5,31 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.unifiedpush.android.connector.UnifiedPush
 
-internal class AndroidWebPushChannel(context: Context) : MethodChannel.MethodCallHandler {
+internal class AndroidWebPushChannel(
+    context: Context,
+    private val activity: AndroidWebPushActivity,
+) : MethodChannel.MethodCallHandler {
     private val applicationContext = context.applicationContext
     private val store = AndroidWebPushStore(applicationContext)
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
-            if (call.method != "getAvailability") {
+            if (call.method !in NON_STORE_METHODS) {
                 reconcilePendingNativeUnregistrations()
             }
             when (call.method) {
                 "getAvailability" -> result.success(getAvailability())
+                "getRegistrationState" -> {
+                    result.success(getRegistrationState(requireArguments(call)))
+                }
+                "getNotificationPermission" -> {
+                    result.success(activity.registrationPermissionStatus())
+                }
+                "requestNotificationPermission" -> {
+                    activity.requestNotificationPermission(result)
+                    return
+                }
+                "getLaunchNotification" -> result.success(activity.takeLaunchNotification())
                 "register" -> result.success(register(requireArguments(call)))
                 "commitEndpoint" -> result.success(commitEndpoint(requireArguments(call)))
                 "retireAfterServerRevocation" -> {
@@ -54,6 +68,10 @@ internal class AndroidWebPushChannel(context: Context) : MethodChannel.MethodCal
             "available" to available,
             "playServicesAvailable" to available,
         )
+    }
+
+    private fun getRegistrationState(arguments: Map<*, *>): Map<String, Any?> {
+        return store.registrationState(arguments.requiredAccountId())
     }
 
     private fun register(arguments: Map<*, *>): Map<String, Any> {
@@ -173,6 +191,12 @@ internal class AndroidWebPushChannel(context: Context) : MethodChannel.MethodCal
         private const val MAX_ACCOUNT_ID_LENGTH = 256
         private const val MAX_DRAIN_EVENTS = 100
         private const val MAX_ACK_EVENTS = 100
+        private val NON_STORE_METHODS = setOf(
+            "getAvailability",
+            "getNotificationPermission",
+            "requestNotificationPermission",
+            "getLaunchNotification",
+        )
 
         private fun Map<*, *>.requiredAccountId(): String {
             return requiredString("accountId", MAX_ACCOUNT_ID_LENGTH)

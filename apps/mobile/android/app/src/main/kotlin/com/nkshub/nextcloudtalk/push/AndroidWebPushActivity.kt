@@ -1,19 +1,35 @@
 package com.nkshub.nextcloudtalk.push
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.ArrayDeque
 
 class AndroidWebPushActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var methodChannel: MethodChannel? = null
-    private var channelHandler: AndroidWebPushChannel? = null
+    private var pendingPermissionResult: MethodChannel.Result? = null
+    private val notificationOpenDelivery = AndroidNotificationOpenDelivery { notification ->
+        mainHandler.post {
+            methodChannel?.invokeMethod("notificationOpened", notification)
+        }
+    }
     private val notifierListener: (Int) -> Unit = { count ->
         mainHandler.post {
             methodChannel?.invokeMethod("eventsAvailable", mapOf("count" to count))
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        notificationOpen(intent)?.let(notificationOpenDelivery::opened)
+        super.onCreate(savedInstanceState)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -22,22 +38,156 @@ class AndroidWebPushActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
         )
-        val handler = AndroidWebPushChannel(applicationContext)
+        val handler = AndroidWebPushChannel(applicationContext, this)
         channel.setMethodCallHandler(handler)
         methodChannel = channel
-        channelHandler = handler
         AndroidWebPushNotifier.attach(notifierListener)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val notification = notificationOpen(intent) ?: return
+        notificationOpenDelivery.opened(notification)
+    }
+
+    internal fun registrationPermissionStatus(): Map<String, String> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return mapOf("status" to "granted")
+        }
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return mapOf("status" to "granted")
+        }
+        val asked = getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
+            .getBoolean(PERMISSION_ASKED, false)
+        return mapOf("status" to if (asked) "denied" else "notDetermined")
+    }
+
+    internal fun requestNotificationPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(mapOf("status" to "granted"))
+            return
+        }
+        if (pendingPermissionResult != null) {
+            result.error(
+                "permission_request_in_progress",
+                "A notification permission request is already active.",
+                null,
+            )
+            return
+        }
+        pendingPermissionResult = result
+        setPermissionAsked(true)
+        requestPermissions(
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST,
+        )
+    }
+
+    internal fun takeLaunchNotification(): Map<String, Any?>? {
+        return notificationOpenDelivery.markReadyAndTakeLaunch()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) {
+            return
+        }
+        if (grantResults.isEmpty()) {
+            setPermissionAsked(false)
+        }
+        val result = pendingPermissionResult ?: return
+        pendingPermissionResult = null
+        result.success(registrationPermissionStatus())
     }
 
     override fun onDestroy() {
         AndroidWebPushNotifier.detach(notifierListener)
+        if (pendingPermissionResult != null) {
+            setPermissionAsked(false)
+        }
+        pendingPermissionResult?.error(
+            "permission_request_cancelled",
+            "The notification permission request was cancelled.",
+            null,
+        )
+        pendingPermissionResult = null
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
-        channelHandler = null
         super.onDestroy()
+    }
+
+    internal fun notificationOpen(intent: Intent?): Map<String, Any?>? {
+        val openIntent = intent ?: return null
+        val token = AndroidSystemNotifications.notificationOpenToken(openIntent, packageName)
+            ?: return null
+        return runCatching {
+            AndroidWebPushStore(applicationContext).consumeNotificationOpen(token)
+        }.getOrNull()
+    }
+
+    private fun setPermissionAsked(asked: Boolean) {
+        getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putBoolean(PERMISSION_ASKED, asked)
+            .apply()
     }
 
     companion object {
         private const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/android_web_push"
+        internal const val PERMISSION_PREFERENCES = "android_web_push_permission"
+        internal const val PERMISSION_ASKED = "asked"
+        internal const val NOTIFICATION_PERMISSION_REQUEST = 4107
+    }
+}
+
+internal class AndroidNotificationOpenDelivery(
+    private val deliver: (Map<String, Any?>) -> Unit,
+) {
+    private val pending = ArrayDeque<Map<String, Any?>>()
+    private var ready = false
+
+    fun opened(notification: Map<String, Any?>) {
+        val liveNotification = synchronized(this) {
+            if (!ready) {
+                if (pending.size >= MAX_PENDING_NOTIFICATION_OPENS) {
+                    val launch = pending.removeFirst()
+                    pending.removeFirst()
+                    pending.addFirst(launch)
+                }
+                pending.addLast(notification)
+                null
+            } else {
+                notification
+            }
+        }
+        liveNotification?.let(deliver)
+    }
+
+    fun markReadyAndTakeLaunch(): Map<String, Any?>? {
+        val callbacks = mutableListOf<Map<String, Any?>>()
+        val launch = synchronized(this) {
+            if (ready) {
+                return null
+            }
+            ready = true
+            val first = pending.pollFirst()
+            while (pending.isNotEmpty()) {
+                callbacks.add(pending.removeFirst())
+            }
+            first
+        }
+        callbacks.forEach(deliver)
+        return launch
+    }
+
+    companion object {
+        internal const val MAX_PENDING_NOTIFICATION_OPENS = 128
     }
 }

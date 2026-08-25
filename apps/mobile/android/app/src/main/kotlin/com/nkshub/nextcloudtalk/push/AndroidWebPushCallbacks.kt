@@ -19,12 +19,27 @@ internal object AndroidWebPushEventSink {
         notifyIfStored(result)
     }
 
-    fun activation(context: Context, message: PushMessage, instance: String) {
-        val result = AndroidWebPushStore(context).storeActivation(
-            instance = instance,
-            content = message.content,
-            decrypted = message.decrypted,
-        )
+    fun message(context: Context, message: PushMessage, instance: String) {
+        val store = AndroidWebPushStore(context)
+        val payload = AndroidWebPushPayloadParser.parse(message.content, message.decrypted)
+        val result = when (payload) {
+            is AndroidWebPushPayload.Activation -> store.storeActivation(
+                instance = instance,
+                content = message.content,
+                decrypted = message.decrypted,
+            )
+            AndroidWebPushPayload.Invalid -> store.storeInvalidMessage(instance)
+            else -> store.storeMessage(
+                instance = instance,
+                content = message.content,
+                decrypted = message.decrypted,
+            )
+        }
+        if (result.stored) {
+            store.accountIdForInstance(instance)?.let { accountId ->
+                AndroidSystemNotifications.apply(context, accountId, payload)
+            }
+        }
         notifyIfStored(result)
     }
 
@@ -62,7 +77,7 @@ class AndroidWebPushReceiver : MessagingReceiver() {
         context: Context,
         message: PushMessage,
         instance: String,
-    ) = AndroidWebPushEventSink.activation(context, message, instance)
+    ) = AndroidWebPushEventSink.message(context, message, instance)
 
     override fun onRegistrationFailed(
         context: Context,
@@ -82,7 +97,7 @@ class AndroidWebPushService : PushService() {
         AndroidWebPushEventSink.endpoint(this, endpoint, instance)
 
     override fun onMessage(message: PushMessage, instance: String) =
-        AndroidWebPushEventSink.activation(this, message, instance)
+        AndroidWebPushEventSink.message(this, message, instance)
 
     override fun onRegistrationFailed(reason: FailedReason, instance: String) =
         AndroidWebPushEventSink.registrationFailed(this, reason, instance)

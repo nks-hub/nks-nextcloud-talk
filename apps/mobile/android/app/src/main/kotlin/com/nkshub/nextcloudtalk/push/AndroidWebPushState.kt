@@ -14,6 +14,7 @@ internal enum class PushRegistrationPhase {
 internal enum class StoredPushEventType(val wireName: String) {
     ENDPOINT("endpoint"),
     ACTIVATION("activation"),
+    MESSAGE("message"),
     REGISTRATION_FAILED("registrationFailed"),
     UNREGISTERED("unregistered"),
     TEMPORARY_UNAVAILABLE("temporaryUnavailable"),
@@ -65,6 +66,29 @@ internal data class StoredPushEvent(
     }
 }
 
+internal data class StoredNotificationOpen(
+    val token: String,
+    val accountId: String,
+    val notificationId: Long,
+    val app: String,
+    val type: String?,
+    val objectId: String?,
+    val createdAtMillis: Long,
+) {
+    fun toChannelMap(): Map<String, Any?> = mapOf(
+        "accountId" to accountId,
+        "notificationId" to notificationId,
+        "app" to app,
+        "type" to type,
+        "objectId" to objectId,
+    )
+
+    override fun toString(): String {
+        return "StoredNotificationOpen(token=<redacted>, accountId=<redacted>, " +
+            "notificationId=$notificationId, app=$app, objectId=<redacted>)"
+    }
+}
+
 internal data class AndroidWebPushState(
     val registrations: MutableList<PushRegistrationRecord> = mutableListOf(),
     val events: MutableList<StoredPushEvent> = mutableListOf(),
@@ -73,6 +97,14 @@ internal data class AndroidWebPushState(
     override fun toString(): String {
         return "AndroidWebPushState(registrations=${registrations.size}, events=${events.size}, " +
             "accounts=${generationHighWatermarks.size})"
+    }
+}
+
+internal data class AndroidNotificationOpenState(
+    val notificationOpens: MutableList<StoredNotificationOpen> = mutableListOf(),
+) {
+    override fun toString(): String {
+        return "AndroidNotificationOpenState(notificationOpens=${notificationOpens.size})"
     }
 }
 
@@ -196,6 +228,26 @@ internal class AndroidWebPushStateMachine(
             type = StoredPushEventType.ACTIVATION,
             createdAtMillis = nowMillis,
             coalescedCount = (previous?.coalescedCount ?: 0) + 1,
+            stale = false,
+            payload = payload.toMutableMap(),
+        ).also(state.events::add)
+    }
+
+    fun appendMessage(
+        state: AndroidWebPushState,
+        instance: String,
+        payload: Map<String, Any?>,
+        nowMillis: Long,
+    ): StoredPushEvent? {
+        val record = callbackRecord(state, instance) ?: return null
+        ensureEventCapacity(state)
+        return StoredPushEvent(
+            id = newId(),
+            accountId = record.accountId,
+            generation = record.generation,
+            type = StoredPushEventType.MESSAGE,
+            createdAtMillis = nowMillis,
+            coalescedCount = 1,
             stale = false,
             payload = payload.toMutableMap(),
         ).also(state.events::add)
@@ -410,6 +462,73 @@ internal class AndroidWebPushStateMachine(
         }
     }
 
+    fun storeNotificationOpen(
+        state: AndroidNotificationOpenState,
+        token: String,
+        accountId: String,
+        notificationId: Long,
+        app: String,
+        type: String?,
+        objectId: String?,
+        nowMillis: Long,
+    ) {
+        pruneNotificationOpens(state, nowMillis)
+        state.notificationOpens.removeAll {
+            it.token == token ||
+                (it.accountId == accountId && it.notificationId == notificationId)
+        }
+        while (state.notificationOpens.size >= MAX_NOTIFICATION_OPENS) {
+            state.notificationOpens.removeAt(0)
+        }
+        state.notificationOpens.add(
+            StoredNotificationOpen(
+                token = token,
+                accountId = accountId,
+                notificationId = notificationId,
+                app = app,
+                type = type,
+                objectId = objectId,
+                createdAtMillis = nowMillis,
+            ),
+        )
+    }
+
+    fun consumeNotificationOpen(
+        state: AndroidNotificationOpenState,
+        token: String,
+        nowMillis: Long,
+    ): StoredNotificationOpen? {
+        val open = state.notificationOpens.firstOrNull { it.token == token } ?: return null
+        pruneNotificationOpens(state, nowMillis)
+        if (open !in state.notificationOpens) {
+            return null
+        }
+        state.notificationOpens.remove(open)
+        return open
+    }
+
+    fun revokeNotificationOpen(
+        state: AndroidNotificationOpenState,
+        accountId: String,
+        notificationId: Long,
+    ) {
+        revokeNotificationOpens(state, accountId, setOf(notificationId))
+    }
+
+    fun revokeNotificationOpens(
+        state: AndroidNotificationOpenState,
+        accountId: String,
+        notificationIds: Set<Long>,
+    ) {
+        state.notificationOpens.removeAll {
+            it.accountId == accountId && it.notificationId in notificationIds
+        }
+    }
+
+    fun revokeAllNotificationOpens(state: AndroidNotificationOpenState, accountId: String) {
+        state.notificationOpens.removeAll { it.accountId == accountId }
+    }
+
     private fun appendSimpleEvent(
         state: AndroidWebPushState,
         instance: String,
@@ -529,10 +648,18 @@ internal class AndroidWebPushStateMachine(
         state.registrations.removeAll { it.instance in removableInstances }
     }
 
+    private fun pruneNotificationOpens(state: AndroidNotificationOpenState, nowMillis: Long) {
+        val cutoff = nowMillis - NOTIFICATION_OPEN_RETENTION_MILLIS
+        state.notificationOpens.removeAll { it.createdAtMillis < cutoff }
+    }
+
     companion object {
         internal const val MAX_ACTIVE_ACCOUNTS = 32
         internal const val MAX_STORED_EVENTS = 384
+        internal const val MAX_NOTIFICATION_OPENS = 128
         internal const val RETIRED_RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1000L
+        internal const val NOTIFICATION_OPEN_RETENTION_MILLIS =
+            7L * 24L * 60L * 60L * 1000L
     }
 }
 

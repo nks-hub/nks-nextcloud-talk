@@ -215,6 +215,37 @@ class AndroidWebPushStateMachineTest {
     }
 
     @Test
+    fun ordinaryMessagesRemainDistinctUntilDartAcknowledgesThem() {
+        val state = AndroidWebPushState()
+        val registration = machine.beginRegistration(
+            state,
+            "account",
+            1,
+            "instance",
+            1,
+        ).record
+
+        val first = machine.appendMessage(
+            state,
+            registration.instance,
+            mapOf("content" to "first"),
+            2,
+        )!!
+        val second = machine.appendMessage(
+            state,
+            registration.instance,
+            mapOf("content" to "second"),
+            3,
+        )!!
+
+        assertEquals(2, state.events.size)
+        assertEquals(StoredPushEventType.MESSAGE, first.type)
+        assertEquals(StoredPushEventType.MESSAGE, second.type)
+        assertEquals(1, first.coalescedCount)
+        assertEquals(1, second.coalescedCount)
+    }
+
+    @Test
     fun retiringGenerationAcceptsWakeUpsButCannotActivateANewEndpoint() {
         val state = AndroidWebPushState()
         val old = machine.beginRegistration(state, "account", 1, "old", 1).record
@@ -296,6 +327,169 @@ class AndroidWebPushStateMachineTest {
         assertEquals("registration_not_found", error.code)
         assertEquals(PushRegistrationPhase.UNREGISTERED, record.phase)
         assertEquals(endpoint.id, record.committedEndpointEventId)
+    }
+
+    @Test
+    fun notificationOpenTokensAreOneTimeAndAccountScopedForIdenticalIds() {
+        val state = AndroidNotificationOpenState()
+        machine.storeNotificationOpen(
+            state,
+            "token-a",
+            "account-a",
+            Long.MAX_VALUE,
+            "spreed",
+            "chat",
+            "room-a",
+            1,
+        )
+        machine.storeNotificationOpen(
+            state,
+            "token-b",
+            "account-b",
+            Long.MAX_VALUE,
+            "spreed",
+            "chat",
+            "room-b",
+            2,
+        )
+
+        val first = machine.consumeNotificationOpen(state, "token-a", 3)
+        assertEquals("account-a", first?.accountId)
+        assertEquals(Long.MAX_VALUE, first?.notificationId)
+        assertEquals("room-a", first?.objectId)
+        assertNull(machine.consumeNotificationOpen(state, "token-a", 4))
+
+        val second = machine.consumeNotificationOpen(state, "token-b", 5)
+        assertEquals("account-b", second?.accountId)
+        assertEquals("room-b", second?.objectId)
+    }
+
+    @Test
+    fun replacingAndDeletingNotificationOpenTokensStayWithinOneAccount() {
+        val state = AndroidNotificationOpenState()
+        machine.storeNotificationOpen(
+            state,
+            "old-a",
+            "account-a",
+            7,
+            "spreed",
+            null,
+            null,
+            1,
+        )
+        machine.storeNotificationOpen(
+            state,
+            "new-a",
+            "account-a",
+            7,
+            "spreed",
+            null,
+            null,
+            2,
+        )
+        machine.storeNotificationOpen(
+            state,
+            "token-b",
+            "account-b",
+            7,
+            "spreed",
+            null,
+            null,
+            3,
+        )
+
+        assertNull(machine.consumeNotificationOpen(state, "old-a", 4))
+        machine.revokeNotificationOpen(state, "account-a", 7)
+        assertNull(machine.consumeNotificationOpen(state, "new-a", 5))
+        assertEquals(
+            "account-b",
+            machine.consumeNotificationOpen(state, "token-b", 6)?.accountId,
+        )
+    }
+
+    @Test
+    fun notificationOpenExpiryKeepsTheExactBoundaryAndRemovesOlderTokens() {
+        val state = AndroidNotificationOpenState()
+        val createdAt = 100L
+        machine.storeNotificationOpen(
+            state,
+            "boundary-token",
+            "account-a",
+            1,
+            "spreed",
+            null,
+            null,
+            createdAt,
+        )
+        machine.storeNotificationOpen(
+            state,
+            "expired-token",
+            "account-b",
+            2,
+            "spreed",
+            null,
+            null,
+            createdAt,
+        )
+
+        assertEquals(
+            "account-a",
+            machine.consumeNotificationOpen(
+                state,
+                "boundary-token",
+                createdAt + AndroidWebPushStateMachine.NOTIFICATION_OPEN_RETENTION_MILLIS,
+            )?.accountId,
+        )
+        assertNull(
+            machine.consumeNotificationOpen(
+                state,
+                "expired-token",
+                createdAt + AndroidWebPushStateMachine.NOTIFICATION_OPEN_RETENTION_MILLIS + 1,
+            ),
+        )
+        assertFalse(state.notificationOpens.any { it.token == "expired-token" })
+    }
+
+    @Test
+    fun notificationOpenDeliveryWaitsForReadinessThenUsesCallbacks() {
+        val callbacks = mutableListOf<Map<String, Any?>>()
+        val delivery = AndroidNotificationOpenDelivery(callbacks::add)
+        val launch = mapOf<String, Any?>("accountId" to "account-a", "notificationId" to 1L)
+        val queued = mapOf<String, Any?>("accountId" to "account-b", "notificationId" to 2L)
+        val live = mapOf<String, Any?>("accountId" to "account-c", "notificationId" to 3L)
+
+        delivery.opened(launch)
+        delivery.opened(queued)
+        assertTrue(callbacks.isEmpty())
+
+        assertEquals(launch, delivery.markReadyAndTakeLaunch())
+        assertEquals(listOf(queued), callbacks)
+
+        delivery.opened(live)
+        assertEquals(listOf(queued, live), callbacks)
+        assertNull(delivery.markReadyAndTakeLaunch())
+    }
+
+    @Test
+    fun notificationOpenDeliveryIsBoundedAndKeepsLaunchPlusNewestTaps() {
+        val callbacks = mutableListOf<Map<String, Any?>>()
+        val delivery = AndroidNotificationOpenDelivery(callbacks::add)
+        val submitted = (0..AndroidNotificationOpenDelivery.MAX_PENDING_NOTIFICATION_OPENS)
+            .map { index -> mapOf<String, Any?>("notificationId" to index.toLong()) }
+
+        submitted.forEach(delivery::opened)
+        val launch = delivery.markReadyAndTakeLaunch()
+
+        assertEquals(0L, launch?.get("notificationId"))
+        assertEquals(
+            AndroidNotificationOpenDelivery.MAX_PENDING_NOTIFICATION_OPENS - 1,
+            callbacks.size,
+        )
+        assertEquals(2L, callbacks.first()["notificationId"])
+        assertEquals(
+            AndroidNotificationOpenDelivery.MAX_PENDING_NOTIFICATION_OPENS.toLong(),
+            callbacks.last()["notificationId"],
+        )
     }
 
     private fun endpoint(name: String): Map<String, Any?> {
