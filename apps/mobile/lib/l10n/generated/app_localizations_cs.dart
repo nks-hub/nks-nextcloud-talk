@@ -788,4 +788,22 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get messageActionMessageMissing => 'Tato zpráva už není dostupná.';
+
+  @override
+  String get searchMessagesTooltip => 'Hledat ve zprávách';
+
+  @override
+  String get searchMessagesTitle => 'Hledat ve zprávách';
+
+  @override
+  String get searchMessagesHint => 'Hledat ve zprávách';
+
+  @override
+  String get searchMessagesPrompt => 'Zadejte hledaný text';
+
+  @override
+  String get searchMessagesNoResults => 'Nic nenalezeno';
+
+  @override
+  String get searchMessagesError => 'Hledání selhalo. Zkuste to znovu.';
 }

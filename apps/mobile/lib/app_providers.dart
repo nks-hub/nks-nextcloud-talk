@@ -27,6 +27,7 @@ import 'features/chat/composer/giphy.dart';
 import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/newconversation/new_conversation_service.dart';
+import 'features/search/message_search_service.dart';
 import 'features/conversations/deep_link_bridge.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
@@ -105,6 +106,14 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
 
 final newConversationServiceProvider = Provider<NewConversationService>((ref) {
   return HttpNewConversationService(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+final messageSearchServiceProvider = Provider<MessageSearchService>((ref) {
+  return HttpMessageSearchService(
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),

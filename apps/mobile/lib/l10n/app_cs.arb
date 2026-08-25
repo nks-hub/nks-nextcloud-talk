@@ -249,5 +249,11 @@
   "deleteMessageConfirmBody": "Tuto akci nelze vrátit zpět.",
   "reactionPickerMore": "Další emoji…",
   "messageActionUnsupported": "Tato akce zde není dostupná.",
-  "messageActionMessageMissing": "Tato zpráva už není dostupná."
+  "messageActionMessageMissing": "Tato zpráva už není dostupná.",
+  "searchMessagesTooltip": "Hledat ve zprávách",
+  "searchMessagesTitle": "Hledat ve zprávách",
+  "searchMessagesHint": "Hledat ve zprávách",
+  "searchMessagesPrompt": "Zadejte hledaný text",
+  "searchMessagesNoResults": "Nic nenalezeno",
+  "searchMessagesError": "Hledání selhalo. Zkuste to znovu."
 }

@@ -10,6 +10,7 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
+import '../search/message_search_screen.dart';
 import 'conversation_list_actions.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
@@ -365,6 +366,24 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 }
 
+void _openMessageSearch(BuildContext context, String accountId) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (context) => Consumer(
+        builder: (context, ref, _) => MessageSearchScreen(
+          accountId: accountId,
+          service: ref.watch(messageSearchServiceProvider),
+          // Navigation into the found conversation is intentionally not
+          // handled here; closing the search screen is all this entry
+          // point does today.
+          onResultSelected: (roomToken, messageId) =>
+              Navigator.of(context).pop(),
+        ),
+      ),
+    ),
+  );
+}
+
 bool _isPermanentConversationSyncError(ConversationSyncError error) {
   return switch (error) {
     ConversationSyncError.rateLimited ||
@@ -520,6 +539,12 @@ final class _CompactShell extends StatelessWidget {
         ),
         actions: [
           IconButton(
+            key: const Key('open-message-search'),
+            onPressed: () => _openMessageSearch(context, account.id),
+            tooltip: strings.searchMessagesTooltip,
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
             onPressed: syncing ? null : onRefresh,
             tooltip: strings.refresh,
             icon: const Icon(Icons.refresh_rounded),
@@ -614,6 +639,13 @@ final class _ExpandedShell extends StatelessWidget {
                               strings.conversations,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
+                          ),
+                          IconButton(
+                            key: const Key('open-message-search'),
+                            onPressed: () =>
+                                _openMessageSearch(context, account.id),
+                            tooltip: strings.searchMessagesTooltip,
+                            icon: const Icon(Icons.search),
                           ),
                           IconButton(
                             onPressed: syncing ? null : onRefresh,
