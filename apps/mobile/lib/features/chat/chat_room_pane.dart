@@ -629,6 +629,16 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                     unawaited(_copyMessageText(copyText));
                   },
                 ),
+              if (copyText.isNotEmpty)
+                ListTile(
+                  key: const Key('message-action-forward'),
+                  leading: const Icon(Icons.forward_rounded),
+                  title: Text(strings.messageActionForward),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_forwardMessage(copyText));
+                  },
+                ),
               if (canEdit)
                 ListTile(
                   key: const Key('message-action-edit'),
@@ -664,6 +674,60 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ),
       ),
     );
+  }
+
+  /// Forwards the rendered text of a message into another conversation of the
+  /// same account.
+  ///
+  /// ponytail: Nextcloud Talk has no documented forward endpoint in
+  /// `docs/architecture/chat-messages-api.md`, and the upstream clients
+  /// implement forwarding as a plain send of the original text into the target
+  /// room. This reuses `ChatService.sendText` for exactly that. Deliberate
+  /// simplification: quoted attribution of the original author and forwarding
+  /// of rich objects (files, polls, locations) are not carried over — those
+  /// need a documented contract first.
+  Future<void> _forwardMessage(String text) async {
+    final accountId = widget.account.id;
+    final target = await showModalBottomSheet<CachedConversation>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _ForwardTargetSheet(
+        accountId: accountId,
+        excludedToken: widget.conversation.token,
+      ),
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(chatServiceProvider)
+          .sendText(
+            accountId: accountId,
+            roomToken: target.token,
+            message: text,
+          );
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('chat-forward-success'),
+            content: Text(strings.messageForwarded(target.displayName)),
+          ),
+        );
+    } on Object {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('chat-forward-failure'),
+            content: Text(strings.messageForwardFailed),
+          ),
+        );
+    }
   }
 
   Future<void> _copyMessageText(String text) async {
@@ -1997,6 +2061,79 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Picks the conversation a message is forwarded into.
+///
+/// Only writable conversations of the same account are offered; the room the
+/// message already lives in is filtered out. The cached list is read without a
+/// spinner so an account that has not synced yet shows the empty state instead
+/// of an indeterminate progress indicator.
+final class _ForwardTargetSheet extends ConsumerWidget {
+  const _ForwardTargetSheet({
+    required this.accountId,
+    required this.excludedToken,
+  });
+
+  final String accountId;
+  final String excludedToken;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final targets =
+        (ref.watch(conversationsProvider(accountId)).valueOrNull ??
+                const <CachedConversation>[])
+            .where(
+              (conversation) =>
+                  conversation.token != excludedToken &&
+                  conversation.readOnly == 0,
+            )
+            .toList(growable: false);
+    return SafeArea(
+      child: Column(
+        key: const Key('chat-forward-sheet'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+            child: Text(
+              strings.forwardMessageTitle,
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          if (targets.isEmpty)
+            Padding(
+              key: const Key('chat-forward-empty'),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Text(strings.forwardNoConversations),
+            )
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: targets.length,
+                itemBuilder: (context, index) {
+                  final target = targets[index];
+                  return ListTile(
+                    key: Key('chat-forward-conversation-${target.token}'),
+                    leading: const Icon(Icons.forum_outlined),
+                    title: Text(
+                      target.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.of(context).pop(target),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }

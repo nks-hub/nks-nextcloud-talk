@@ -273,5 +273,17 @@
   "newConversationErrorRateLimited": "Příliš mnoho požadavků. Zkuste to za chvíli.",
   "newConversationErrorServiceUnavailable": "Server je dočasně nedostupný.",
   "newConversationErrorInvalidResponse": "Server poslal neočekávanou odpověď.",
-  "newConversationErrorNetwork": "Server je nedostupný."
+  "newConversationErrorNetwork": "Server je nedostupný.",
+  "messageActionForward": "Přeposlat",
+  "forwardMessageTitle": "Přeposlat do konverzace",
+  "forwardNoConversations": "Žádná jiná konverzace není k dispozici.",
+  "messageForwarded": "Zpráva přeposlána do {conversation}",
+  "@messageForwarded": {
+    "placeholders": {
+      "conversation": {
+        "type": "String"
+      }
+    }
+  },
+  "messageForwardFailed": "Zprávu se nepodařilo přeposlat."
 }

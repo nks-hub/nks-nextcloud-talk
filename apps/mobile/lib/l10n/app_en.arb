@@ -280,5 +280,17 @@
   "newConversationErrorRateLimited": "Too many requests. Try again soon.",
   "newConversationErrorServiceUnavailable": "The server is temporarily unavailable.",
   "newConversationErrorInvalidResponse": "The server sent an unexpected response.",
-  "newConversationErrorNetwork": "Could not reach the server."
+  "newConversationErrorNetwork": "Could not reach the server.",
+  "messageActionForward": "Forward",
+  "forwardMessageTitle": "Forward to conversation",
+  "forwardNoConversations": "No other conversation is available.",
+  "messageForwarded": "Message forwarded to {conversation}",
+  "@messageForwarded": {
+    "placeholders": {
+      "conversation": {
+        "type": "String"
+      }
+    }
+  },
+  "messageForwardFailed": "The message could not be forwarded."
 }
