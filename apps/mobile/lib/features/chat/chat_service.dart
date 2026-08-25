@@ -708,7 +708,7 @@ final class ChatService {
       limit: _pageSize,
       includeLastKnown: false,
       timeoutSeconds: scope.futureConverged ? 30 : 0,
-      interactive: true,
+      interactive: !prepared.profile.backgroundCatchUp,
       threadId: prepared.networkThreadId,
       futureConverged: scope.futureConverged,
     );

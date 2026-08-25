@@ -97,6 +97,7 @@ Future<void> _verifyLiveBridge(
                 'conversation-v4',
                 'chat-v2',
                 'chat-reference-id',
+                'chat-keep-notifications',
                 'threads',
               ],
             ),
@@ -117,6 +118,19 @@ Future<void> _verifyLiveBridge(
       }
 
       futureTimeouts.add(request.url.queryParameters['timeout']);
+      final interactiveCatchUp = const <int>{
+        1,
+        3,
+        4,
+      }.contains(futureTimeouts.length);
+      expect(
+        request.url.queryParameters['noStatusUpdate'],
+        interactiveCatchUp ? '0' : '1',
+      );
+      expect(
+        request.url.queryParameters['markNotificationsAsRead'],
+        interactiveCatchUp ? '1' : '0',
+      );
       switch (futureTimeouts.length) {
         case 1:
           expect(request.url.queryParameters['lastKnownMessageId'], '109');
