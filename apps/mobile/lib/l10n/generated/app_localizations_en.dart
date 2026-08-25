@@ -502,6 +502,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'The recording preview could not be played.';
 
   @override
+  String voicePlaybackPosition(Object duration, Object position) {
+    return '$position of $duration';
+  }
+
+  @override
   String get voiceSendFailed => 'The voice message could not be queued.';
 
   @override

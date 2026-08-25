@@ -820,13 +820,14 @@ final class _CaptureBackend implements VoiceCaptureBackend {
   Future<bool> requestPermission() async => true;
 
   @override
-  Future<bool> supportsWaveEncoding() async => true;
+  Future<bool> supportsEncoding() async => true;
 
   @override
-  Future<void> startWave({
+  Future<void> start({
     required String path,
     required int sampleRate,
     required int channels,
+    required int bitRate,
   }) async {
     _path = path;
     starts++;
@@ -850,13 +851,23 @@ final class _CaptureBackend implements VoiceCaptureBackend {
 
 final class _PlaybackBackend implements VoicePlaybackBackend {
   final StreamController<void> _completed = StreamController<void>.broadcast();
+  final StreamController<Duration> _position =
+      StreamController<Duration>.broadcast();
+  final StreamController<Duration> _duration =
+      StreamController<Duration>.broadcast();
   bool _closed = false;
 
   @override
   Stream<void> get completed => _completed.stream;
 
   @override
-  Future<void> playFile(String path) async {}
+  Stream<Duration> get positionChanged => _position.stream;
+
+  @override
+  Stream<Duration> get durationChanged => _duration.stream;
+
+  @override
+  Future<void> playFile(String path, {required String mimeType}) async {}
 
   @override
   Future<void> stop() async {}
@@ -868,6 +879,8 @@ final class _PlaybackBackend implements VoicePlaybackBackend {
     }
     _closed = true;
     await _completed.close();
+    await _position.close();
+    await _duration.close();
   }
 
   Future<void> closeIfNeeded() => dispose();

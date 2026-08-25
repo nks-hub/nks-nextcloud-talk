@@ -976,7 +976,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           setState(() => _playing = false);
         }
       });
-      await backend.playFile(file.path);
+      await backend.playFile(file.path, mimeType: file.contentType);
       if (mounted) {
         setState(() {
           _loading = false;

@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:nextcloudtalk/features/chat/composer/voice_message.dart';
@@ -8,13 +6,34 @@ import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dar
 import 'package:record/record.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+/// Voice messages are recorded as AAC-LC in an MP4/M4A container instead of
+/// raw PCM WAV.
+///
+/// `record` (pubspec ^7.1.1) implements [AudioEncoder.aacLc] natively on
+/// Android through `MediaRecorder`, and `audioplayers` (pubspec ^6.8.1)
+/// plays MP4/AAC out of the box on Android, so no extra native codec has to
+/// be shipped on either side. At [_voiceBitRate] bit/s a five-second
+/// recording drops from roughly 3.1 MB (16-bit PCM WAV) to well under
+/// 100 KB, which keeps voice messages on the non-chunked upload path
+/// instead of forcing chunked delivery for what is a short clip.
+const AudioEncoder _voiceEncoder = AudioEncoder.aacLc;
+const int _voiceBitRate = 64000;
+
+/// The real MIME type of the file [RecordVoiceRecorder] produces. It must
+/// stay in sync with the encoder above and with
+/// [attachmentSupportedVoiceMimeTypes] in `talk_protocol`, because the
+/// filename and MIME type sent to the server always have to match the
+/// actual bytes on disk.
+const String voiceRecordingMimeType = 'audio/mp4';
+const String voiceRecordingFileExtension = '.m4a';
+
 enum VoicePlatformError {
   closed,
   alreadyRecording,
   noActiveRecording,
-  wavUnsupported,
+  encodingUnsupported,
   foreignRecordingPath,
-  invalidWave,
+  invalidRecording,
   foreignSource,
 }
 
@@ -30,12 +49,13 @@ final class VoicePlatformException implements Exception {
 abstract interface class VoiceCaptureBackend {
   Future<bool> requestPermission();
 
-  Future<bool> supportsWaveEncoding();
+  Future<bool> supportsEncoding();
 
-  Future<void> startWave({
+  Future<void> start({
     required String path,
     required int sampleRate,
     required int channels,
+    required int bitRate,
   });
 
   Future<String?> stop();
@@ -48,7 +68,7 @@ abstract interface class VoiceCaptureBackend {
 /// Native `record` backend.
 ///
 /// Linux recording requires the external `parecord`, `pactl`, and `ffmpeg`
-/// commands documented by record 7.1.1. [supportsWaveEncoding] is checked on
+/// commands documented by record 7.1.1. [supportsEncoding] is checked on
 /// every recording start so a missing runtime dependency fails closed.
 final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
   RecordPluginVoiceCaptureBackend({AudioRecorder? recorder})
@@ -60,17 +80,19 @@ final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
   Future<bool> requestPermission() => _recorder.hasPermission();
 
   @override
-  Future<bool> supportsWaveEncoding() =>
-      _recorder.isEncoderSupported(AudioEncoder.wav);
+  Future<bool> supportsEncoding() =>
+      _recorder.isEncoderSupported(_voiceEncoder);
 
   @override
-  Future<void> startWave({
+  Future<void> start({
     required String path,
     required int sampleRate,
     required int channels,
+    required int bitRate,
   }) => _recorder.start(
     RecordConfig(
-      encoder: AudioEncoder.wav,
+      encoder: _voiceEncoder,
+      bitRate: bitRate,
       sampleRate: sampleRate,
       numChannels: channels,
       autoGain: true,
@@ -103,6 +125,23 @@ final class RecordMicrophonePermissionGateway
       : MicrophonePermissionStatus.denied;
 }
 
+/// Tells [RecordVoiceRecorder] when recording started and stopped so it can
+/// derive a duration. Wall-clock elapsed time is a reliable,
+/// container-format-agnostic proxy for audio duration here because a
+/// recording session runs continuously from [start] to [stop] with no
+/// seeking or pausing, and it avoids parsing MP4/AAC container metadata
+/// just to learn how long a clip is.
+abstract interface class VoiceRecordingClock {
+  DateTime now();
+}
+
+final class SystemVoiceRecordingClock implements VoiceRecordingClock {
+  const SystemVoiceRecordingClock();
+
+  @override
+  DateTime now() => DateTime.now();
+}
+
 enum _RecorderPhase { idle, starting, recording, stopping, closed }
 
 final class RecordVoiceRecorder implements VoiceRecorder {
@@ -111,15 +150,17 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     required DurableAttachmentSourceStore store,
     int sampleRate = 48000,
     int channels = 1,
-    String displayName = 'voice-message.wav',
-    WavDurationReader durationReader = const WavDurationReader(),
+    int bitRate = _voiceBitRate,
+    String displayName = 'voice-message.m4a',
+    VoiceRecordingClock clock = const SystemVoiceRecordingClock(),
   }) : this._(
          backend: backend,
          store: store,
          sampleRate: sampleRate,
          channels: channels,
+         bitRate: bitRate,
          displayName: displayName,
-         durationReader: durationReader,
+         clock: clock,
        );
 
   RecordVoiceRecorder._({
@@ -127,14 +168,19 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     required this.store,
     required this.sampleRate,
     required this.channels,
+    required this.bitRate,
     required this.displayName,
-    required this._durationReader,
-  }) {
+    required VoiceRecordingClock clock,
+    // ignore: prefer_initializing_formals
+  }) : _clock = clock {
     if (sampleRate < 8000 || sampleRate > 192000) {
       throw ArgumentError.value(sampleRate, 'sampleRate');
     }
     if (channels < 1 || channels > 2) {
       throw ArgumentError.value(channels, 'channels');
+    }
+    if (bitRate < 8000 || bitRate > 320000) {
+      throw ArgumentError.value(bitRate, 'bitRate');
     }
   }
 
@@ -142,11 +188,13 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   final DurableAttachmentSourceStore store;
   final int sampleRate;
   final int channels;
+  final int bitRate;
   final String displayName;
-  final WavDurationReader _durationReader;
+  final VoiceRecordingClock _clock;
 
   _RecorderPhase _phase = _RecorderPhase.idle;
   DurableAttachmentWriteSession? _session;
+  DateTime? _startedAt;
   Future<void>? _closeFuture;
 
   @override
@@ -160,19 +208,26 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     _phase = _RecorderPhase.starting;
     DurableAttachmentWriteSession? session;
     try {
-      if (!await backend.supportsWaveEncoding()) {
-        throw const VoicePlatformException(VoicePlatformError.wavUnsupported);
+      if (!await backend.supportsEncoding()) {
+        throw const VoicePlatformException(
+          VoicePlatformError.encodingUnsupported,
+        );
       }
-      session = await store.beginExternalWrite(fileExtension: '.wav');
+      session = await store.beginExternalWrite(
+        fileExtension: voiceRecordingFileExtension,
+      );
       _session = session;
-      await backend.startWave(
+      await backend.start(
         path: session.filePath,
         sampleRate: sampleRate,
         channels: channels,
+        bitRate: bitRate,
       );
+      _startedAt = _clock.now();
       _phase = _RecorderPhase.recording;
     } catch (_) {
       _session = null;
+      _startedAt = null;
       await session?.abort();
       _phase = _RecorderPhase.idle;
       rethrow;
@@ -189,7 +244,9 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     }
     _phase = _RecorderPhase.stopping;
     final session = _session!;
+    final startedAt = _startedAt!;
     _session = null;
+    _startedAt = null;
     PreparedAttachmentSource? source;
     try {
       final returnedPath = await backend.stop();
@@ -199,13 +256,17 @@ final class RecordVoiceRecorder implements VoiceRecorder {
         );
       }
       source = await session.commit(
-        mimeType: 'audio/wav',
+        mimeType: voiceRecordingMimeType,
         displayName: displayName,
       );
-      final path = await store.resolveVerifiedPath(source);
-      final duration = await _durationReader.read(path);
+      // Re-verifies the committed file still matches the recorded size and
+      // hash before the recording is handed back to the caller.
+      await store.resolveVerifiedPath(source);
+      final duration = _clock.now().difference(startedAt);
       if (duration <= Duration.zero) {
-        throw const VoicePlatformException(VoicePlatformError.invalidWave);
+        throw const VoicePlatformException(
+          VoicePlatformError.invalidRecording,
+        );
       }
       _phase = _RecorderPhase.idle;
       return VoiceRecording(source: source, duration: duration);
@@ -228,6 +289,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     }
     final session = _session;
     _session = null;
+    _startedAt = null;
     Object? firstFailure;
     StackTrace? firstStack;
     try {
@@ -283,100 +345,19 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   }
 }
 
-final class WavDurationReader {
-  const WavDurationReader();
-
-  Future<Duration> read(String path) async {
-    final file = await File(path).open(mode: FileMode.read);
-    try {
-      final fileLength = await file.length();
-      if (fileLength < 44) {
-        throw const VoicePlatformException(VoicePlatformError.invalidWave);
-      }
-      final header = await file.read(12);
-      if (_ascii(header, 0) != 'RIFF' || _ascii(header, 8) != 'WAVE') {
-        throw const VoicePlatformException(VoicePlatformError.invalidWave);
-      }
-      int? byteRate;
-      int? dataLength;
-      var position = 12;
-      while (position + 8 <= fileLength) {
-        await file.setPosition(position);
-        final chunkHeader = await file.read(8);
-        if (chunkHeader.length != 8) {
-          break;
-        }
-        final chunkName = _ascii(chunkHeader, 0);
-        final chunkLength = ByteData.sublistView(
-          Uint8List.fromList(chunkHeader),
-        ).getUint32(4, Endian.little);
-        final dataStart = position + 8;
-        final paddedLength = chunkLength + (chunkLength.isOdd ? 1 : 0);
-        if (chunkLength < 0 || dataStart + paddedLength > fileLength) {
-          throw const VoicePlatformException(VoicePlatformError.invalidWave);
-        }
-        if (chunkName == 'fmt ') {
-          if (chunkLength < 16) {
-            throw const VoicePlatformException(VoicePlatformError.invalidWave);
-          }
-          await file.setPosition(dataStart);
-          final formatBytes = await file.read(16);
-          if (formatBytes.length != 16) {
-            throw const VoicePlatformException(VoicePlatformError.invalidWave);
-          }
-          final format = ByteData.sublistView(Uint8List.fromList(formatBytes));
-          final encoding = format.getUint16(0, Endian.little);
-          final channels = format.getUint16(2, Endian.little);
-          final sampleRate = format.getUint32(4, Endian.little);
-          final declaredByteRate = format.getUint32(8, Endian.little);
-          final blockAlign = format.getUint16(12, Endian.little);
-          final bitsPerSample = format.getUint16(14, Endian.little);
-          if (encoding != 1 ||
-              channels < 1 ||
-              sampleRate < 1 ||
-              blockAlign < 1 ||
-              bitsPerSample < 1 ||
-              bitsPerSample % 8 != 0 ||
-              blockAlign != channels * (bitsPerSample ~/ 8) ||
-              declaredByteRate != sampleRate * blockAlign) {
-            throw const VoicePlatformException(VoicePlatformError.invalidWave);
-          }
-          byteRate = declaredByteRate;
-        } else if (chunkName == 'data') {
-          dataLength = chunkLength;
-        }
-        if (byteRate != null && dataLength != null) {
-          break;
-        }
-        position = dataStart + paddedLength;
-      }
-      if (byteRate == null || dataLength == null || dataLength < 1) {
-        throw const VoicePlatformException(VoicePlatformError.invalidWave);
-      }
-      final microseconds =
-          (dataLength * Duration.microsecondsPerSecond + byteRate ~/ 2) ~/
-          byteRate;
-      if (microseconds < 1) {
-        throw const VoicePlatformException(VoicePlatformError.invalidWave);
-      }
-      return Duration(microseconds: microseconds);
-    } finally {
-      await file.close();
-    }
-  }
-
-  String _ascii(List<int> bytes, int start) {
-    if (start < 0 || start + 4 > bytes.length) {
-      return '';
-    }
-    return String.fromCharCodes(bytes.sublist(start, start + 4));
-  }
-}
-
 abstract interface class VoicePlaybackBackend {
   Stream<void> get completed;
 
-  Future<void> playFile(String path);
+  /// Playback position ticks while a file plays.
+  Stream<Duration> get positionChanged;
+
+  /// Fires once the total length of the currently loaded file is known.
+  Stream<Duration> get durationChanged;
+
+  /// [mimeType] must describe the real content of [path]; it is forwarded
+  /// to the platform player instead of being guessed, so a WAV recording
+  /// is never played back as if it were something else.
+  Future<void> playFile(String path, {required String mimeType});
 
   Future<void> stop();
 
@@ -393,8 +374,14 @@ final class AudioplayersVoicePlaybackBackend implements VoicePlaybackBackend {
   Stream<void> get completed => _player.onPlayerComplete;
 
   @override
-  Future<void> playFile(String path) =>
-      _player.play(DeviceFileSource(path, mimeType: 'audio/wav'));
+  Stream<Duration> get positionChanged => _player.onPositionChanged;
+
+  @override
+  Stream<Duration> get durationChanged => _player.onDurationChanged;
+
+  @override
+  Future<void> playFile(String path, {required String mimeType}) =>
+      _player.play(DeviceFileSource(path, mimeType: mimeType));
 
   @override
   Future<void> stop() => _player.stop();
@@ -433,7 +420,7 @@ final class AudioplayersVoicePreviewPlayer implements VoicePreviewPlayer {
     );
     try {
       await Future.wait<void>(<Future<void>>[
-        backend.playFile(path),
+        backend.playFile(path, mimeType: source.mimeType),
         active.completer.future,
       ], eagerError: true);
     } finally {

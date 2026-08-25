@@ -980,6 +980,12 @@ abstract class AppLocalizations {
   /// **'The recording preview could not be played.'**
   String get voicePlaybackFailed;
 
+  /// No description provided for @voicePlaybackPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{position} of {duration}'**
+  String voicePlaybackPosition(Object duration, Object position);
+
   /// No description provided for @voiceSendFailed.
   ///
   /// In en, this message translates to:
