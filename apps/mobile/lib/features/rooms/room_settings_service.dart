@@ -28,10 +28,16 @@ enum RoomSettingsError {
 }
 
 final class RoomSettingsException implements Exception {
-  const RoomSettingsException(this.code);
+  const RoomSettingsException(this.code, {this.message});
 
   final RoomSettingsError code;
 
+  /// The server's own translated explanation, when it sent one. Only the
+  /// password endpoint does: Talk documents `ocs.data.message` on a `400` as
+  /// the violated password policy, and tells clients to show it.
+  final String? message;
+
+  /// Never renders [message]: it describes the password the caller just sent.
   @override
   String toString() => 'RoomSettingsException(${code.name})';
 }
@@ -499,6 +505,222 @@ final class RoomSettingsService {
     }
   }
 
+  /// Turns a group conversation into a public one or back again. The server
+  /// answers with the refreshed room on some of these endpoints and with
+  /// nothing on others, so the caller gets whatever it sent back.
+  Future<ConversationRoom?> setPublic({
+    required String accountId,
+    required String roomToken,
+    required bool public,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomPublicRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        public: public,
+      ),
+    );
+  }
+
+  /// Sets or clears the password of a public conversation.
+  ///
+  /// [password] is a secret: it reaches the request body and nothing else. A
+  /// refusal from the instance password policy arrives as
+  /// [RoomSettingsException] with [RoomSettingsError.rejected] and the
+  /// server's translated explanation in [RoomSettingsException.message].
+  Future<ConversationRoom?> setPassword({
+    required String accountId,
+    required String roomToken,
+    required String password,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomPasswordRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        password: password,
+      ),
+    );
+  }
+
+  /// Turns the lobby of a group or public conversation on or off. Needs the
+  /// server's `webinary-lobby` capability, which the caller gates on.
+  Future<ConversationRoom?> setLobby({
+    required String accountId,
+    required String roomToken,
+    required RoomLobbyState state,
+    int? timerSecondsSinceEpoch,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomLobbyRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        state: state,
+        timerSecondsSinceEpoch: timerSecondsSinceEpoch,
+      ),
+    );
+  }
+
+  /// Puts a group or public conversation into read-only mode or back. Needs
+  /// the server's `read-only-rooms` capability, which the caller gates on.
+  Future<ConversationRoom?> setReadOnly({
+    required String accountId,
+    required String roomToken,
+    required RoomReadOnlyState state,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomReadOnlyRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        state: state,
+      ),
+    );
+  }
+
+  /// Sets a single emoji as the conversation avatar. Needs the server's
+  /// `avatar` capability, which the caller gates on.
+  Future<ConversationRoom?> setEmojiAvatar({
+    required String accountId,
+    required String roomToken,
+    required String emoji,
+    String? hexColor,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomEmojiAvatarRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        emoji: emoji,
+        hexColor: hexColor,
+      ),
+    );
+  }
+
+  /// Uploads an image as the conversation avatar. Needs the server's `avatar`
+  /// capability, which the caller gates on.
+  ///
+  /// The server refuses a non-square image, an oversized one and a type other
+  /// than PNG or JPEG with a `400` and its own translated explanation, which
+  /// arrives as [RoomSettingsException.message].
+  Future<ConversationRoom?> uploadAvatar({
+    required String accountId,
+    required String roomToken,
+    required List<int> imageBytes,
+    required String contentType,
+    required String fileName,
+  }) async {
+    final context = await _authContext(accountId);
+    final SetRoomAvatarRequest request;
+    try {
+      request = SetRoomAvatarRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(context.account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        imageBytes: imageBytes,
+        contentType: contentType,
+        fileName: fileName,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.rejected);
+    }
+
+    final response = await _call(
+      () => _api.uploadRoomAvatar(
+        avatarRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+    return _classifyAdministration(response);
+  }
+
+  /// Removes the conversation's custom avatar. Needs the server's `avatar`
+  /// capability, which the caller gates on.
+  Future<ConversationRoom?> deleteAvatar({
+    required String accountId,
+    required String roomToken,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => DeleteRoomAvatarRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+      ),
+    );
+  }
+
+  /// Runs one administration change and classifies its shared response
+  /// family. Every one of these endpoints is moderator-only on the server;
+  /// the caller is responsible for not offering them to anyone else.
+  Future<ConversationRoom?> _administer({
+    required String accountId,
+    required String roomToken,
+    required RoomAdministrationRequest Function(_RoomIdentifiers) build,
+  }) async {
+    final context = await _authContext(accountId);
+    final RoomAdministrationRequest request;
+    try {
+      request = build(
+        _RoomIdentifiers(
+          accountId: AccountId.parse(accountId),
+          server: ServerBase.parse(context.account.serverUrl),
+          roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        ),
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+
+    final response = await _call(
+      () => _api.administerRoom(
+        administrationRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+    return _classifyAdministration(response);
+  }
+
+  ConversationRoom? _classifyAdministration(
+    RoomAdministrationResponse response,
+  ) {
+    return switch (response) {
+      RoomAdministrationSuccess(:final room) => room,
+      RoomAdministrationRejected(:final message) => throw RoomSettingsException(
+        RoomSettingsError.rejected,
+        message: message,
+      ),
+      RoomAdministrationReauthenticationRequired() =>
+        throw const RoomSettingsException(
+          RoomSettingsError.reauthenticationRequired,
+        ),
+      RoomAdministrationForbidden() => throw const RoomSettingsException(
+        RoomSettingsError.forbidden,
+      ),
+      RoomAdministrationRoomMissing() => throw const RoomSettingsException(
+        RoomSettingsError.roomMissing,
+      ),
+      RoomAdministrationHttpFailure(:final kind) => throw RoomSettingsException(
+        _mapHttpFailure(kind),
+      ),
+    };
+  }
+
   Future<_AuthContext> _authContext(String accountId) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {
@@ -544,6 +766,20 @@ final class _AuthContext {
 
   final StoredAccount account;
   final String appPassword;
+}
+
+/// The three validated identifiers every administration request needs, parsed
+/// once so each builder does not repeat the same three parses.
+final class _RoomIdentifiers {
+  const _RoomIdentifiers({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+  });
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
 }
 
 final roomSettingsServiceProvider = Provider<RoomSettingsService>((ref) {

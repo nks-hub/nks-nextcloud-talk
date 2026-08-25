@@ -804,6 +804,205 @@ LeaveRoomResponse decodeLeaveRoomResponse({
 }
 
 // ---------------------------------------------------------------------------
+// Conversation administration (public, password, lobby, read-only, avatar)
+// ---------------------------------------------------------------------------
+
+/// A classified response to any [RoomAdministrationRequest].
+///
+/// The six administration endpoints answer with the same status codes and the
+/// same meaning for each of them, so they share one response family the way
+/// the three participant-moderation endpoints do.
+sealed class RoomAdministrationResponse {
+  const RoomAdministrationResponse(this.request);
+
+  final RoomAdministrationRequest request;
+  int get statusCode;
+}
+
+/// HTTP 200. The change was applied.
+///
+/// [room] is the refreshed conversation when the endpoint answered with one:
+/// Talk `docs/webinar.md` and `docs/avatar.md` document the lobby and avatar
+/// payloads as "See array definition in Get user´s conversations", while the
+/// public, password and read-only sections document no data at all. A caller
+/// that needs the new state either uses [room] or refetches.
+final class RoomAdministrationSuccess extends RoomAdministrationResponse {
+  RoomAdministrationSuccess._({
+    required RoomAdministrationRequest request,
+    required this.room,
+  }) : super(request);
+
+  @override
+  int get statusCode => 200;
+
+  final ConversationRoom? room;
+
+  @override
+  String toString() => 'RoomAdministrationSuccess(room: ${room != null})';
+}
+
+/// HTTP 400. The server refused the change: the conversation type does not
+/// support it, the value is invalid, or a password violated the instance
+/// policy.
+///
+/// [message] is the translated explanation Talk `docs/conversation.md`
+/// ("Set password for a conversation") tells clients to show: "`400 Bad
+/// Request` When the password does not match the password policy. Show
+/// `ocs.data.message` to the user in this case". It is `null` for every other
+/// refusal, which carries no such field.
+final class RoomAdministrationRejected extends RoomAdministrationResponse {
+  const RoomAdministrationRejected._({
+    required RoomAdministrationRequest request,
+    required this.message,
+  }) : super(request);
+
+  @override
+  int get statusCode => 400;
+
+  final String? message;
+
+  /// Never renders [message]: the server composes it from the failing
+  /// password policy rules, so it is about a secret the caller just sent.
+  @override
+  String toString() =>
+      'RoomAdministrationRejected(explained: ${message != null})';
+}
+
+/// HTTP 401. The account must reauthenticate before another call.
+final class RoomAdministrationReauthenticationRequired
+    extends RoomAdministrationResponse {
+  const RoomAdministrationReauthenticationRequired._({
+    required RoomAdministrationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 401;
+
+  @override
+  String toString() => 'RoomAdministrationReauthenticationRequired()';
+}
+
+/// HTTP 403. The caller is not a moderator or owner of the conversation, or
+/// the conversation is not public where the endpoint requires it to be.
+final class RoomAdministrationForbidden extends RoomAdministrationResponse {
+  const RoomAdministrationForbidden._({
+    required RoomAdministrationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 403;
+
+  @override
+  String toString() => 'RoomAdministrationForbidden()';
+}
+
+/// HTTP 404. The conversation no longer exists for this participant.
+final class RoomAdministrationRoomMissing extends RoomAdministrationResponse {
+  const RoomAdministrationRoomMissing._({
+    required RoomAdministrationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 404;
+
+  @override
+  String toString() => 'RoomAdministrationRoomMissing()';
+}
+
+/// A supported non-body HTTP failure.
+final class RoomAdministrationHttpFailure extends RoomAdministrationResponse {
+  const RoomAdministrationHttpFailure._({
+    required RoomAdministrationRequest request,
+    required this.statusCode,
+    required this.kind,
+  }) : super(request);
+
+  @override
+  final int statusCode;
+  final RoomSettingsHttpFailureKind kind;
+
+  @override
+  String toString() =>
+      'RoomAdministrationHttpFailure(statusCode: $statusCode, '
+      'kind: ${kind.name})';
+}
+
+RoomAdministrationResponse decodeRoomAdministrationResponse({
+  required RoomAdministrationRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 400:
+      return RoomAdministrationRejected._(
+        request: request,
+        message: _optionalRejectionMessage(_decodeOcsEnvelope(body)),
+      );
+    case 401:
+      _decodeOcsEnvelope(body);
+      return RoomAdministrationReauthenticationRequired._(request: request);
+    case 403:
+      _decodeOcsEnvelope(body);
+      return RoomAdministrationForbidden._(request: request);
+    case 404:
+      _decodeOcsEnvelope(body);
+      return RoomAdministrationRoomMissing._(request: request);
+    case 429:
+      return RoomAdministrationHttpFailure._(
+        request: request,
+        statusCode: 429,
+        kind: RoomSettingsHttpFailureKind.rateLimited,
+      );
+    case 503:
+      return RoomAdministrationHttpFailure._(
+        request: request,
+        statusCode: 503,
+        kind: RoomSettingsHttpFailureKind.serviceUnavailable,
+      );
+    case 200:
+      return RoomAdministrationSuccess._(
+        request: request,
+        room: _optionalRoom(_decodeOcsEnvelope(body)),
+      );
+    default:
+      protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      );
+  }
+}
+
+/// Reads the refreshed conversation out of a `200` payload, or returns `null`
+/// when the endpoint answered without one. PHP renders an empty associative
+/// array as `[]`, so a list is the documented "no data" shape rather than a
+/// malformed room.
+ConversationRoom? _optionalRoom(Object? data) {
+  if (data == null || data is List<Object?>) {
+    return null;
+  }
+  final session = JsonFreezeSession(
+    errorCode: _responseCode,
+    errorPath: r'$.ocs.data',
+  );
+  return parseConversationRoom(data, path: r'$.ocs.data', session: session);
+}
+
+/// Reads `ocs.data.message` out of a `400` payload. Absent for every refusal
+/// except a violated password policy, and never trusted beyond a bounded
+/// string.
+String? _optionalRejectionMessage(Object? data) {
+  if (data is! Map<String, Object?> || data['message'] == null) {
+    return null;
+  }
+  return requireString(
+    data['message'],
+    path: r'$.ocs.data.message',
+    code: _responseCode,
+    maxLength: 4096,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Shared envelope decoding
 // ---------------------------------------------------------------------------
 

@@ -1110,4 +1110,183 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
       'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.';
+
+  @override
+  String get roomDetailsGuestsLabel => 'Guests';
+
+  @override
+  String get roomDetailsGuestsAllowed => 'Anyone with the link can join';
+
+  @override
+  String get roomDetailsGuestsBlocked => 'Invited people only';
+
+  @override
+  String get roomDetailsGuestsCloseDialogTitle => 'Stop allowing guests?';
+
+  @override
+  String get roomDetailsGuestsCloseDialogMessage =>
+      'The link stops working and any guest who joined through it loses access. Invited participants are not affected.';
+
+  @override
+  String get roomDetailsGuestsCloseDialogConfirm => 'Make private';
+
+  @override
+  String get roomDetailsInviteLinkAction => 'Share the guest link';
+
+  @override
+  String get roomDetailsInviteLinkSubtitle =>
+      'Anyone with this link can join as a guest';
+
+  @override
+  String get roomDetailsInviteLinkShareSubject => 'Join the conversation';
+
+  @override
+  String get roomDetailsPasswordLabel => 'Password';
+
+  @override
+  String get roomDetailsPasswordSet => 'Guests need a password';
+
+  @override
+  String get roomDetailsPasswordUnset => 'No password';
+
+  @override
+  String get roomDetailsPasswordDialogTitle => 'Password for guests';
+
+  @override
+  String get roomDetailsPasswordFieldLabel => 'New password';
+
+  @override
+  String get roomDetailsPasswordRemoveAction => 'Remove the password';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogTitle => 'Remove the password?';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogMessage =>
+      'Anyone with the link will be able to join without a password.';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogConfirm => 'Remove';
+
+  @override
+  String get roomDetailsPasswordRejected => 'The server refused this password.';
+
+  @override
+  String get roomDetailsLobbyLabel => 'Lobby';
+
+  @override
+  String get roomDetailsLobbyOff => 'Everyone can take part';
+
+  @override
+  String get roomDetailsLobbyOn => 'Only moderators can take part';
+
+  @override
+  String roomDetailsLobbyOnUntil(String time) {
+    return 'Only moderators until $time';
+  }
+
+  @override
+  String get roomDetailsLobbyDialogTitle => 'Open the lobby';
+
+  @override
+  String get roomDetailsLobbyDialogMessage =>
+      'While the lobby is on, only moderators can read, write and call. Pick when it should open, or leave it for a moderator to open by hand.';
+
+  @override
+  String get roomDetailsLobbyTimerNone => 'No end time';
+
+  @override
+  String get roomDetailsLobbyTimerPick => 'Pick a date and time';
+
+  @override
+  String get roomDetailsLobbyDialogConfirm => 'Turn the lobby on';
+
+  @override
+  String get roomDetailsReadOnlyToggleLabel => 'Read-only';
+
+  @override
+  String get roomDetailsReadOnlyToggleOn => 'Nobody can write or call';
+
+  @override
+  String get roomDetailsReadOnlyToggleOff => 'Everyone can write';
+
+  @override
+  String get roomDetailsReadOnlyDialogTitle => 'Lock the conversation?';
+
+  @override
+  String get roomDetailsReadOnlyDialogMessage =>
+      'Nobody will be able to send messages or start a call until a moderator unlocks it again.';
+
+  @override
+  String get roomDetailsReadOnlyDialogConfirm => 'Lock';
+
+  @override
+  String get roomDetailsAvatarAction => 'Conversation picture';
+
+  @override
+  String get roomDetailsAvatarDialogTitle => 'Conversation picture';
+
+  @override
+  String get roomDetailsAvatarDialogMessage =>
+      'Pick an emoji to use as the conversation picture.';
+
+  @override
+  String get roomDetailsAvatarSetAction => 'Use this emoji';
+
+  @override
+  String get roomDetailsAvatarRemoveAction => 'Remove the picture';
+
+  @override
+  String roomDetailsAvatarEmojiSemantics(String emoji) {
+    return 'Emoji $emoji';
+  }
+
+  @override
+  String get roomDetailsBanParticipant => 'Ban from the conversation';
+
+  @override
+  String get roomDetailsBanDialogTitle => 'Ban this participant?';
+
+  @override
+  String roomDetailsBanDialogMessage(String name) {
+    return '$name is removed from the conversation and cannot rejoin until the ban is lifted.';
+  }
+
+  @override
+  String get roomDetailsBanNoteLabel => 'Reason (only moderators see it)';
+
+  @override
+  String get roomDetailsBanDialogConfirm => 'Ban';
+
+  @override
+  String get roomDetailsBansAction => 'Banned participants';
+
+  @override
+  String get roomDetailsBansDialogTitle => 'Banned participants';
+
+  @override
+  String get roomDetailsBansEmpty => 'Nobody is banned.';
+
+  @override
+  String get roomDetailsBansLoadError => 'Bans could not be loaded.';
+
+  @override
+  String get roomDetailsUnbanAction => 'Lift the ban';
+
+  @override
+  String get roomDetailsBanRejected => 'The server refused this ban.';
+
+  @override
+  String get roomDetailsAvatarPickImage => 'Choose a picture';
+
+  @override
+  String get roomDetailsAvatarTypeRejected =>
+      'Only a square PNG or JPEG works as a conversation picture.';
+
+  @override
+  String get roomDetailsAvatarTooLarge => 'That picture is too large.';
+
+  @override
+  String get roomDetailsAvatarRejected =>
+      'The server would not take this picture.';
 }
