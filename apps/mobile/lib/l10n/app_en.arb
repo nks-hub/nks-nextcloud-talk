@@ -159,5 +159,15 @@
   "presenceOnline": "Online",
   "presenceAway": "Away",
   "presenceBusy": "Busy",
-  "presenceDoNotDisturb": "Do not disturb"
+  "presenceDoNotDisturb": "Do not disturb",
+  "settingsTitle": "Settings",
+  "settingsAccountsSection": "Accounts",
+  "settingsAccountSelected": "Active",
+  "settingsAccountsLoadFailed": "Accounts could not be loaded.",
+  "settingsAddAccount": "Add account",
+  "settingsRemoveAccountUnavailable": "Removing an account isn't supported yet. Sign out of it on the server if you need to revoke access.",
+  "settingsThemeSection": "Appearance",
+  "settingsThemeSystem": "Match system",
+  "settingsThemeLight": "Light",
+  "settingsThemeDark": "Dark"
 }
