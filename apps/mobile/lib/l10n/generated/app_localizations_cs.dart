@@ -896,4 +896,42 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'Server tuto změnu u tohoto účastníka odmítl.';
+
+  @override
+  String get callBannerTitle => 'Probíhá hovor';
+
+  @override
+  String callBannerRunningFor(String duration) {
+    return 'Běží $duration';
+  }
+
+  @override
+  String get callBannerJoin => 'Připojit se k hovoru';
+
+  @override
+  String callBannerJoinUnsupported(String transport) {
+    return 'Připojení zatím není implementované (signalizace: $transport).';
+  }
+
+  @override
+  String get callBannerTransportChecking =>
+      'Zjišťuji, jak je hovor signalizován…';
+
+  @override
+  String get callBannerTransportUnavailable =>
+      'Transport hovoru se nepodařilo zjistit.';
+
+  @override
+  String get callBannerTransportReauth =>
+      'Přihlaste se znovu, aby šlo zjistit signalizaci hovoru.';
+
+  @override
+  String get callBannerTransportRoomUnavailable =>
+      'Tato konverzace už na serveru není dostupná.';
+
+  @override
+  String get callTransportInternal => 'interní';
+
+  @override
+  String get callTransportExternalHpb => 'externí HPB';
 }

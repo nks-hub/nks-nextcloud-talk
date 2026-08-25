@@ -1705,6 +1705,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server refused this change for this participant.'**
   String get roomDetailsParticipantActionRejected;
+
+  /// No description provided for @callBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call in progress'**
+  String get callBannerTitle;
+
+  /// No description provided for @callBannerRunningFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Running for {duration}'**
+  String callBannerRunningFor(String duration);
+
+  /// No description provided for @callBannerJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join call'**
+  String get callBannerJoin;
+
+  /// No description provided for @callBannerJoinUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining is not implemented yet ({transport} signalling).'**
+  String callBannerJoinUnsupported(String transport);
+
+  /// No description provided for @callBannerTransportChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking how this call is signalled…'**
+  String get callBannerTransportChecking;
+
+  /// No description provided for @callBannerTransportUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The call transport could not be resolved.'**
+  String get callBannerTransportUnavailable;
+
+  /// No description provided for @callBannerTransportReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to see how this call is signalled.'**
+  String get callBannerTransportReauth;
+
+  /// No description provided for @callBannerTransportRoomUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation is no longer available on the server.'**
+  String get callBannerTransportRoomUnavailable;
+
+  /// No description provided for @callTransportInternal.
+  ///
+  /// In en, this message translates to:
+  /// **'internal'**
+  String get callTransportInternal;
+
+  /// No description provided for @callTransportExternalHpb.
+  ///
+  /// In en, this message translates to:
+  /// **'external HPB'**
+  String get callTransportExternalHpb;
 }
 
 class _AppLocalizationsDelegate

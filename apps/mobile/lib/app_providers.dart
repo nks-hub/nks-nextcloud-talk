@@ -18,6 +18,7 @@ import 'data/chat_media_repository.dart';
 import 'data/chat_repository.dart';
 import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
+import 'features/calls/call_transport_service.dart';
 import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
@@ -103,6 +104,24 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
     api: ref.watch(nextcloudApiProvider),
   );
 });
+
+final callTransportServiceProvider = Provider<CallTransportService>((ref) {
+  return CallTransportService(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+/// Resolves how a room's call is signalled. Kept out of the conversation
+/// stream because it costs a request per room and only matters while an
+/// ongoing call is actually on screen.
+final callTransportProvider = FutureProvider.autoDispose
+    .family<CallTransport, CallRoomKey>((ref, key) {
+      return ref
+          .watch(callTransportServiceProvider)
+          .resolve(accountId: key.accountId, roomToken: key.roomToken);
+    });
 
 final newConversationServiceProvider = Provider<NewConversationService>((ref) {
   return HttpNewConversationService(

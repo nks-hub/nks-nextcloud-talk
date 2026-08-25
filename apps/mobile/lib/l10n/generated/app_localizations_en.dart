@@ -896,4 +896,42 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get roomDetailsParticipantActionRejected =>
       'The server refused this change for this participant.';
+
+  @override
+  String get callBannerTitle => 'Call in progress';
+
+  @override
+  String callBannerRunningFor(String duration) {
+    return 'Running for $duration';
+  }
+
+  @override
+  String get callBannerJoin => 'Join call';
+
+  @override
+  String callBannerJoinUnsupported(String transport) {
+    return 'Joining is not implemented yet ($transport signalling).';
+  }
+
+  @override
+  String get callBannerTransportChecking =>
+      'Checking how this call is signalled…';
+
+  @override
+  String get callBannerTransportUnavailable =>
+      'The call transport could not be resolved.';
+
+  @override
+  String get callBannerTransportReauth =>
+      'Sign in again to see how this call is signalled.';
+
+  @override
+  String get callBannerTransportRoomUnavailable =>
+      'This conversation is no longer available on the server.';
+
+  @override
+  String get callTransportInternal => 'internal';
+
+  @override
+  String get callTransportExternalHpb => 'external HPB';
 }

@@ -295,5 +295,29 @@
     }
   },
   "roomDetailsRemoveDialogConfirm": "Remove",
-  "roomDetailsParticipantActionRejected": "The server refused this change for this participant."
+  "roomDetailsParticipantActionRejected": "The server refused this change for this participant.",
+  "callBannerTitle": "Call in progress",
+  "callBannerRunningFor": "Running for {duration}",
+  "@callBannerRunningFor": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "callBannerJoin": "Join call",
+  "callBannerJoinUnsupported": "Joining is not implemented yet ({transport} signalling).",
+  "@callBannerJoinUnsupported": {
+    "placeholders": {
+      "transport": {
+        "type": "String"
+      }
+    }
+  },
+  "callBannerTransportChecking": "Checking how this call is signalled…",
+  "callBannerTransportUnavailable": "The call transport could not be resolved.",
+  "callBannerTransportReauth": "Sign in again to see how this call is signalled.",
+  "callBannerTransportRoomUnavailable": "This conversation is no longer available on the server.",
+  "callTransportInternal": "internal",
+  "callTransportExternalHpb": "external HPB"
 }
