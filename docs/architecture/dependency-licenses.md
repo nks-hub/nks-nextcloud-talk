@@ -20,7 +20,7 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 ## Přímé Flutter runtime závislosti
 
-Následujících šestnáct hostovaných balíků je přímo deklarovaných v
+Následujících sedmnáct hostovaných balíků je přímo deklarovaných v
 `apps/mobile/pubspec.yaml`. Verze a archive SHA-256 jsou z
 `apps/mobile/pubspec.lock`; licence a jejich SHA-256 byly ověřené v odpovídajícím
 staženém balíku v lokální Pub cache.
@@ -29,6 +29,7 @@ staženém balíku v lokální Pub cache.
 
 | Komponenta | Verze a integrita | Licence a notice | Použití |
 | --- | --- | --- | --- |
+| [`app_badge_plus`](https://pub.dev/packages/app_badge_plus) | 1.3.4; archive SHA-256 `a22719127af1b80c6d5803fb80c02b600ceb14f726210c12b6198fe11b8bc025`; LICENSE SHA-256 `23f2a5ed6e28c323d4cfa58fb051da600c32d5fa715c11bdaefa629d8f656093` | MIT; Copyright 2024 LioLin | Nastavení počtu na unread badge ikony aplikace (Android/iOS/macOS); zvolen pro MIT licenci, aktivní údržbu a `isSupported()` API, díky kterému launcher bez podpory zůstane no-op |
 | [`audioplayers`](https://pub.dev/packages/audioplayers) | 6.8.1; archive SHA-256 `2ba4bb2944baacbdd5372ff8254a8e7feb8c10d7739545e392f5605a8f618745`; LICENSE SHA-256 `d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41` | MIT; Copyright 2017 Blue Fire | Přehrávání lokálně připravených hlasových zpráv |
 | [`crypto`](https://pub.dev/packages/crypto) | 3.0.7; archive SHA-256 `c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf`; LICENSE SHA-256 `ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888` | BSD-3-Clause; Copyright 2015, the Dart project authors | SHA-256 integrita durable kopie přílohy |
 | [`cupertino_icons`](https://pub.dev/packages/cupertino_icons) | 1.0.9; archive SHA-256 `41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd`; LICENSE SHA-256 `310d6ab6483280280c9db122bded0a63c09558bc5743720f61dbcbb494db370a` | MIT; Copyright 2016 Vladimir Kharlampidi | Cupertino icon font pro iOS vzhled |

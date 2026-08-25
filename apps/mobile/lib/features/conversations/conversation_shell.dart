@@ -14,6 +14,7 @@ import '../push/android_web_push_bridge.dart';
 import 'conversation_avatar_widget.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
+import 'unread_badge.dart';
 
 final class ConversationShell extends ConsumerStatefulWidget {
   const ConversationShell({super.key});
@@ -318,6 +319,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(appIconBadgeSyncProvider);
     final accountsValue = ref.watch(accountsProvider);
     final selectedValue = ref.watch(selectedAccountProvider);
     return selectedValue.when(
@@ -337,6 +339,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
         return ConversationWorkspace(
           account: selected,
           accounts: accounts,
+          unreadByAccount: ref.watch(unreadSummaryProvider).byAccount,
           conversations: conversations,
           selectedConversationToken: _selectedConversationToken,
           loading: conversationsValue.isLoading,
@@ -383,6 +386,7 @@ final class ConversationWorkspace extends StatelessWidget {
     super.key,
     required this.account,
     required this.accounts,
+    this.unreadByAccount = const {},
     required this.conversations,
     required this.selectedConversationToken,
     required this.loading,
@@ -396,6 +400,11 @@ final class ConversationWorkspace extends StatelessWidget {
 
   final StoredAccount account;
   final List<StoredAccount> accounts;
+
+  /// Unread message count per account id, used only to badge the account
+  /// switcher. Defaults to empty so existing data-driven call sites (and
+  /// tests) that don't care about badges keep working unchanged.
+  final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final String? selectedConversationToken;
   final bool loading;
@@ -414,6 +423,7 @@ final class ConversationWorkspace extends StatelessWidget {
           return _CompactShell(
             account: account,
             accounts: accounts,
+            unreadByAccount: unreadByAccount,
             conversations: conversations,
             loading: loading,
             syncing: syncing,
@@ -431,6 +441,7 @@ final class ConversationWorkspace extends StatelessWidget {
         return _ExpandedShell(
           account: account,
           accounts: accounts,
+          unreadByAccount: unreadByAccount,
           conversations: conversations,
           selectedConversation: selectedConversation,
           loading: loading,
@@ -458,6 +469,7 @@ final class _CompactShell extends StatelessWidget {
   const _CompactShell({
     required this.account,
     required this.accounts,
+    this.unreadByAccount = const {},
     required this.conversations,
     required this.loading,
     required this.syncing,
@@ -469,6 +481,7 @@ final class _CompactShell extends StatelessWidget {
 
   final StoredAccount account;
   final List<StoredAccount> accounts;
+  final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final bool loading;
   final bool syncing;
@@ -515,6 +528,7 @@ final class _CompactShell extends StatelessWidget {
           _AccountMenu(
             selected: account,
             accounts: accounts,
+            unreadByAccount: unreadByAccount,
             onSelect: onSelectAccount,
             onAdd: onAddAccount,
           ),
@@ -545,6 +559,7 @@ final class _ExpandedShell extends StatelessWidget {
   const _ExpandedShell({
     required this.account,
     required this.accounts,
+    this.unreadByAccount = const {},
     required this.conversations,
     required this.selectedConversation,
     required this.loading,
@@ -557,6 +572,7 @@ final class _ExpandedShell extends StatelessWidget {
 
   final StoredAccount account;
   final List<StoredAccount> accounts;
+  final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
   final CachedConversation? selectedConversation;
   final bool loading;
@@ -577,6 +593,7 @@ final class _ExpandedShell extends StatelessWidget {
             _AccountRail(
               selected: account,
               accounts: accounts,
+              unreadByAccount: unreadByAccount,
               onSelect: onSelectAccount,
               onAdd: onAddAccount,
             ),
@@ -646,12 +663,14 @@ final class _AccountRail extends StatelessWidget {
   const _AccountRail({
     required this.selected,
     required this.accounts,
+    this.unreadByAccount = const {},
     required this.onSelect,
     required this.onAdd,
   });
 
   final StoredAccount selected;
   final List<StoredAccount> accounts;
+  final Map<String, int> unreadByAccount;
   final ValueChanged<String> onSelect;
   final VoidCallback onAdd;
 
@@ -699,7 +718,11 @@ final class _AccountRail extends StatelessWidget {
                           child: SizedBox.square(
                             dimension: 56,
                             child: Center(
-                              child: _AccountAvatar(account: account),
+                              child: _AccountAvatar(
+                                account: account,
+                                unreadCount:
+                                    unreadByAccount[account.id] ?? 0,
+                              ),
                             ),
                           ),
                         ),
@@ -728,6 +751,7 @@ final class _AccountMenu extends StatelessWidget {
   const _AccountMenu({
     required this.selected,
     required this.accounts,
+    this.unreadByAccount = const {},
     required this.onSelect,
     required this.onAdd,
   });
@@ -736,6 +760,7 @@ final class _AccountMenu extends StatelessWidget {
 
   final StoredAccount selected;
   final List<StoredAccount> accounts;
+  final Map<String, int> unreadByAccount;
   final ValueChanged<String> onSelect;
   final VoidCallback onAdd;
 
@@ -744,7 +769,10 @@ final class _AccountMenu extends StatelessWidget {
     final strings = AppLocalizations.of(context);
     return PopupMenuButton<String>(
       tooltip: strings.switchAccount,
-      icon: _AccountAvatar(account: selected),
+      icon: _AccountAvatar(
+        account: selected,
+        unreadCount: unreadByAccount[selected.id] ?? 0,
+      ),
       onSelected: (value) => value == _addKey ? onAdd() : onSelect(value),
       itemBuilder: (context) => [
         for (final account in accounts)
@@ -753,7 +781,10 @@ final class _AccountMenu extends StatelessWidget {
             enabled: account.id != selected.id,
             child: ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: _AccountAvatar(account: account),
+              leading: _AccountAvatar(
+                account: account,
+                unreadCount: unreadByAccount[account.id] ?? 0,
+              ),
               title: Text(account.loginName),
               subtitle: Text(Uri.parse(account.serverUrl).host),
               trailing: account.id == selected.id
@@ -776,9 +807,10 @@ final class _AccountMenu extends StatelessWidget {
 }
 
 final class _AccountAvatar extends StatelessWidget {
-  const _AccountAvatar({required this.account});
+  const _AccountAvatar({required this.account, this.unreadCount = 0});
 
   final StoredAccount account;
+  final int unreadCount;
 
   @override
   Widget build(BuildContext context) {
@@ -788,10 +820,23 @@ final class _AccountAvatar extends StatelessWidget {
             account.loginName.trim().runes.first,
           ).toUpperCase();
     final scheme = Theme.of(context).colorScheme;
-    return CircleAvatar(
-      backgroundColor: scheme.tertiaryContainer,
-      foregroundColor: scheme.onTertiaryContainer,
-      child: Text(initial),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        CircleAvatar(
+          backgroundColor: scheme.tertiaryContainer,
+          foregroundColor: scheme.onTertiaryContainer,
+          child: Text(initial),
+        ),
+        Positioned(
+          right: -4,
+          top: -4,
+          child: UnreadCountBadge(
+            key: Key('account-unread-badge-${account.id}'),
+            count: unreadCount,
+          ),
+        ),
+      ],
     );
   }
 }

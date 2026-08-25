@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  app_badge_plus: ^1.3.4
   audioplayers: ^6.8.1
   crypto: ^3.0.7
   file_selector: ^1.1.0
