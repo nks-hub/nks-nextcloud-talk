@@ -22,6 +22,11 @@ coverage/
 __pycache__/
 *.py[cod]
 
+# Go push gateway
+/services/push_gateway/push-gateway
+/services/push_gateway/push-gateway.exe
+/services/push_gateway/push-gateway-*
+
 # Android
 android/.gradle/
 android/app/debug/
