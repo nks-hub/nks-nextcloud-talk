@@ -22,7 +22,6 @@ import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/emoji_picker.dart';
 import 'composer/giphy.dart';
-import 'composer/giphy_attachment.dart';
 
 final class ChatRoomScreen extends StatelessWidget {
   const ChatRoomScreen({
@@ -450,14 +449,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       }
       return;
     }
-    final loader = GiphyAttachmentLoader(repository.loadReference);
-    final started = await _mediaComposerController.submitGiphyAttachment(
-      (cancellationSignal) =>
-          loader.load(entry, cancellationSignal: cancellationSignal),
+    // A GIF is sent as a reference, not as a file in the user's storage. The
+    // bubble resolves that reference through the account's own server and
+    // renders the animation inline.
+    await _sendMessage(
+      entry.resourceUrl.toString(),
+      clearComposer: false,
+      expectedKey: targetKey,
     );
-    if (!started && _isCurrentGiphyScope(targetKey, giphyGeneration)) {
-      setState(() => _localError = ChatServiceError.serviceUnavailable);
-    }
   }
 
   Future<void> _sendMessage(

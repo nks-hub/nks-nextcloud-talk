@@ -23,7 +23,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('Giphy selection uploads GIF bytes without sending a link', (
+  testWidgets('Giphy selection sends a reference and keeps the composer', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
@@ -75,23 +75,24 @@ void main() {
     await tester.pump();
     await tester.tap(gif);
     await _pumpTransition(tester);
-    await _pumpUntil(tester, () => harness.finalizedFileNames.isNotEmpty);
+    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
 
+    // The GIF travels as a reference the bubble renders, so nothing is
+    // uploaded into the user's own storage.
+    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave']);
+    expect(harness.uploadedAttachments, isEmpty);
+    expect(harness.finalizedFileNames, isEmpty);
+    // Text already typed must survive sending a GIF.
     expect(_composer(tester).text, '👋');
-    expect(harness.sentMessages, isEmpty);
-    expect(harness.uploadedAttachments, <List<int>>[_animatedGif]);
-    expect(
-      harness.finalizedFileNames.single,
-      matches(RegExp(r'^giphy-[0-9a-f]{16}\.gif$')),
-    );
+
     await _pumpUntil(tester, () => _sendButtonEnabled(tester));
     await tester.tap(find.byKey(const Key('send-message')));
     await _pumpUntil(
       tester,
-      () => harness.sentMessages.length == 1 && _composer(tester).text.isEmpty,
+      () => harness.sentMessages.length == 2 && _composer(tester).text.isEmpty,
     );
 
-    expect(harness.sentMessages, <String>['👋']);
+    expect(harness.sentMessages.last, '👋');
     expect(_composer(tester).text, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());

@@ -1189,46 +1189,49 @@ final class _ChatAttachment extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
         ],
-        Material(
-          color: scheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(10),
-          child: InkWell(
-            key: Key('chat-open-attachment-$messageId-$index'),
-            onTap: openAttachment,
-            borderRadius: BorderRadius.circular(10),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      mimeType?.startsWith('image/') == true
-                          ? Icons.image_rounded
-                          : Icons.insert_drive_file_rounded,
-                      color: scheme.primary,
+        // The message text already names the file through its rich object, so
+        // this action stays a compact button instead of repeating the name.
+        Semantics(
+          button: true,
+          label: '${strings.openAttachment}: $name',
+          child: ExcludeSemantics(
+            child: Material(
+              color: scheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                key: Key('chat-open-attachment-$messageId-$index'),
+                onTap: openAttachment,
+                borderRadius: BorderRadius.circular(10),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
                     ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          mimeType?.startsWith('image/') == true
+                              ? Icons.image_rounded
+                              : Icons.insert_drive_file_rounded,
+                          color: scheme.primary,
+                        ),
+                        if (opensExternally) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.open_in_new_rounded,
+                            size: 18,
+                            color: scheme.primary,
+                          ),
+                        ],
+                      ],
                     ),
-                    if (opensExternally) ...[
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.open_in_new_rounded,
-                        size: 18,
-                        semanticLabel: strings.openAttachment,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),

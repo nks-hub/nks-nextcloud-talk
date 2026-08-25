@@ -479,7 +479,29 @@ Desktop-specific klávesnice, hover/focus, system tray, auto-start, file drop a
 background delivery vzniknou pouze jako ověřené platformní řezy; nesmí se
 předstírat existencí generated runneru.
 
-### D-028: Giphy jako skutečná Talk GIF příloha
+### D-028: Giphy jako renderovaná reference
+
+Stav: Přepsáno 25. srpna 2026 výslovným uživatelským rozhodnutím. Předchozí
+attachment varianta je popsaná níže a už neplatí.
+
+GIF se neukládá do úložiště uživatele. Výběr v pickeru odešle `resourceUrl`
+jako zprávu a bublina ji vykreslí: klient si referenci vyřeší přes
+account-scoped Nextcloud References resolver a zobrazí animovaný GIF inline.
+Uživatel tedy nevidí URL, ale animaci.
+
+Důvodem změny je, že příloha zakládá soubor ve Files uživatele, což je pro
+odeslání GIFu nepřiměřené. Renderovaná reference odpovídá tomu, jak to řeší
+Chatujme.
+
+Bezpečnostní hranice zůstávají: klient přijme jen `integration_giphy_gif`,
+same-origin proxy konkrétního serveru a validní `image/gif` bajty. Loader je
+account-scoped, bounded a s LRU. Jediný viditelný externí odkaz je povinná
+GIPHY attribution v pickeru.
+
+Známé omezení: příjemce bez zapnuté Giphy integrace na svém serveru referenci
+nevyřeší a uvidí odkaz. To je cena zvolené varianty.
+
+### D-028a: Historická varianta Giphy jako Talk příloha
 
 Stav: Původní wire-reference varianta byla 25. srpna 2026 nahrazena výslovným
 uživatelským rozhodnutím. Commit `7ca580e` propojuje picker se skutečným
