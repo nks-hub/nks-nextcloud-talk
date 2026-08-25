@@ -44,6 +44,95 @@ void main() {
   });
 
   group('RecordVoiceRecorder', () {
+    test('a paused stretch is left out of the recorded duration', () async {
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+      );
+      addTearDown(recorder.close);
+
+      await recorder.start();
+      clock.advance(const Duration(seconds: 2));
+      await recorder.pause();
+      clock.advance(const Duration(seconds: 30));
+      await recorder.resume();
+      clock.advance(const Duration(seconds: 3));
+      final recording = await recorder.stop();
+
+      expect(recording.duration, const Duration(seconds: 5));
+      expect(backend.pauses, 1);
+      expect(backend.resumes, 1);
+
+      await recorder.discard(recording.source);
+    });
+
+    test('stopping straight from a pause keeps the captured stretch', () async {
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+      );
+      addTearDown(recorder.close);
+
+      await recorder.start();
+      clock.advance(const Duration(seconds: 7));
+      await recorder.pause();
+      clock.advance(const Duration(minutes: 5));
+      final recording = await recorder.stop();
+
+      expect(recording.duration, const Duration(seconds: 7));
+
+      await recorder.discard(recording.source);
+    });
+
+    test('pause and resume are refused outside a live session', () async {
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+      );
+      final recorder = RecordVoiceRecorder(backend: backend, store: store);
+      addTearDown(recorder.close);
+
+      await expectLater(
+        recorder.pause(),
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.noActiveRecording,
+          ),
+        ),
+      );
+      await recorder.start();
+      await expectLater(
+        recorder.resume(),
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.noActiveRecording,
+          ),
+        ),
+      );
+      expect(backend.resumes, 0);
+      await recorder.cancel();
+    });
+
+    test('maps the platform dBFS range onto drawable bar heights', () {
+      expect(normalizedVoiceAmplitude(0), 1);
+      expect(normalizedVoiceAmplitude(-25), closeTo(0.5, 0.001));
+      expect(normalizedVoiceAmplitude(-160), 0);
+      expect(normalizedVoiceAmplitude(double.nan), 0);
+    });
+
     test(
       'commits a compressed recording as an app-owned source with elapsed '
       'duration and the configured bit rate',
@@ -283,11 +372,24 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   final bool _supportsEncoding;
   final List<int>? recordingBytes;
   final String? stopPathOverride;
+  final StreamController<double> _amplitude =
+      StreamController<double>.broadcast();
   String? _path;
   int permissionRequests = 0;
   int starts = 0;
+  int pauses = 0;
+  int resumes = 0;
   int cancels = 0;
   int disposes = 0;
+
+  @override
+  Future<void> pause() async => pauses++;
+
+  @override
+  Future<void> resume() async => resumes++;
+
+  @override
+  Stream<double> get amplitude => _amplitude.stream;
   int? lastBitRate;
   int? lastSampleRate;
   int? lastChannels;
@@ -362,6 +464,7 @@ final class _FakeVoicePlaybackBackend implements VoicePlaybackBackend {
   final Object? playFailure;
   String? lastPath;
   String? lastMimeType;
+  final List<Duration> seeks = <Duration>[];
   int stops = 0;
   int disposes = 0;
 
@@ -373,6 +476,17 @@ final class _FakeVoicePlaybackBackend implements VoicePlaybackBackend {
 
   @override
   Stream<Duration> get durationChanged => _duration.stream;
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> resume() async {}
+
+  @override
+  Future<void> seek(Duration position) async {
+    seeks.add(position);
+  }
 
   @override
   Future<void> playFile(String path, {required String mimeType}) async {

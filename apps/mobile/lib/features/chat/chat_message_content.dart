@@ -983,13 +983,23 @@ final class _VoiceAttachment extends ConsumerStatefulWidget {
 final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   VoicePlaybackBackend? _backend;
   StreamSubscription<void>? _completion;
+  StreamSubscription<Duration>? _positionUpdates;
+  StreamSubscription<Duration>? _durationUpdates;
   bool _playing = false;
   bool _loading = false;
   bool _failed = false;
+  Duration _position = Duration.zero;
+  Duration? _total;
+
+  /// Set while the listener drags the slider, so incoming position ticks do
+  /// not fight the thumb under their finger.
+  Duration? _scrubbing;
 
   @override
   void dispose() {
     unawaited(_completion?.cancel());
+    unawaited(_positionUpdates?.cancel());
+    unawaited(_durationUpdates?.cancel());
     unawaited(_backend?.dispose());
     super.dispose();
   }
@@ -998,13 +1008,25 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     if (_loading) {
       return;
     }
-    if (_playing) {
-      await _backend?.stop();
+    final backend = _backend;
+    if (backend != null && _playing) {
+      await backend.pause();
       if (mounted) {
         setState(() => _playing = false);
       }
       return;
     }
+    if (backend != null && _total != null) {
+      await backend.resume();
+      if (mounted) {
+        setState(() => _playing = true);
+      }
+      return;
+    }
+    await _start();
+  }
+
+  Future<void> _start() async {
     setState(() {
       _loading = true;
       _failed = false;
@@ -1020,10 +1042,24 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       if (!mounted) {
         return;
       }
-      final backend = _backend ??= AudioplayersVoicePlaybackBackend();
+      final backend =
+          _backend ??= ref.read(chatVoicePlaybackBackendProvider)();
       _completion ??= backend.completed.listen((_) {
         if (mounted) {
-          setState(() => _playing = false);
+          setState(() {
+            _playing = false;
+            _position = Duration.zero;
+          });
+        }
+      });
+      _positionUpdates ??= backend.positionChanged.listen((value) {
+        if (mounted && _scrubbing == null) {
+          setState(() => _position = value);
+        }
+      });
+      _durationUpdates ??= backend.durationChanged.listen((value) {
+        if (mounted && value > Duration.zero) {
+          setState(() => _total = value);
         }
       });
       await backend.playFile(file.path, mimeType: file.contentType);
@@ -1044,13 +1080,32 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     }
   }
 
+  Future<void> _seek(Duration position) async {
+    final backend = _backend;
+    setState(() {
+      _scrubbing = null;
+      _position = position;
+    });
+    if (backend == null) {
+      return;
+    }
+    try {
+      await backend.seek(position);
+    } on Object {
+      if (mounted) {
+        setState(() => _failed = true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final label = _playing
-        ? strings.stopVoiceMessage
+        ? strings.pauseVoiceMessage
         : strings.playVoiceMessage;
+    final total = _total;
     return Container(
       key: Key('chat-voice-${widget.messageId}'),
       margin: const EdgeInsets.only(top: 8),
@@ -1072,18 +1127,25 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Icon(
-                    _playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                    _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                     semanticLabel: label,
                   ),
           ),
           Flexible(
-            child: Text(
-              _failed ? strings.voicePlaybackFailed : widget.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: _failed ? scheme.error : scheme.onSurface,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _failed ? strings.voicePlaybackFailed : widget.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: _failed ? scheme.error : scheme.onSurface,
+                  ),
+                ),
+                if (total != null) _timeline(context, strings, total),
+              ],
             ),
           ),
           const SizedBox(width: 4),
@@ -1091,6 +1153,59 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       ),
     );
   }
+
+  Widget _timeline(
+    BuildContext context,
+    AppLocalizations strings,
+    Duration total,
+  ) {
+    final shown = _scrubbing ?? _position;
+    final clamped = shown < Duration.zero
+        ? Duration.zero
+        : (shown > total ? total : shown);
+    final progress = strings.voiceMessageProgress(
+      _formatPlaybackTime(clamped),
+      _formatPlaybackTime(total),
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Slider(
+            key: Key('chat-voice-position-${widget.messageId}'),
+            value: clamped.inMilliseconds.toDouble(),
+            max: total.inMilliseconds.toDouble(),
+            label: _formatPlaybackTime(clamped),
+            semanticFormatterCallback: (_) => progress,
+            onChanged: (value) => setState(
+              () => _scrubbing = Duration(milliseconds: value.round()),
+            ),
+            onChangeEnd: (value) =>
+                unawaited(_seek(Duration(milliseconds: value.round()))),
+          ),
+        ),
+        Text(
+          progress,
+          key: Key('chat-voice-progress-${widget.messageId}'),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// `m:ss` for anything under an hour, `h:mm:ss` beyond it. Voice messages are
+/// short, so the hour part is only there to keep a stray long file readable.
+String _formatPlaybackTime(Duration value) {
+  final total = value.isNegative ? Duration.zero : value;
+  final seconds = (total.inSeconds % 60).toString().padLeft(2, '0');
+  final minutes = total.inMinutes % 60;
+  if (total.inHours == 0) {
+    return '$minutes:$seconds';
+  }
+  return '${total.inHours}:${minutes.toString().padLeft(2, '0')}:$seconds';
 }
 
 final class _ChatAttachment extends ConsumerWidget {

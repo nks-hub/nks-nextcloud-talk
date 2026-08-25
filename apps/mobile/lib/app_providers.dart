@@ -29,6 +29,7 @@ import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/newconversation/new_conversation_service.dart';
 import 'features/search/message_search_service.dart';
+import 'platform/media/voice_platform_adapters.dart';
 import 'features/conversations/deep_link_bridge.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
@@ -637,6 +638,13 @@ final chatMediaProvider = FutureProvider.autoDispose
     });
 
 typedef ChatVoiceProviderKey = ({StoredAccount account, Uri uri, int messageId});
+
+/// Player a chat bubble uses for a voice message. Injected so widget tests can
+/// drive playback without a platform audio session.
+final chatVoicePlaybackBackendProvider =
+    Provider<VoicePlaybackBackend Function()>(
+      (ref) => AudioplayersVoicePlaybackBackend.new,
+    );
 
 /// A voice message is fetched once per room visit and materialised in the
 /// app cache directory so a platform player can open it.

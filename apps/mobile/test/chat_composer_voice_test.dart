@@ -75,6 +75,41 @@ void main() {
       },
     );
 
+    test('pause and resume move between recording states', () async {
+      final fixture = _VoiceFixture();
+      addTearDown(fixture.close);
+      await fixture.controller.start();
+
+      expect(await fixture.controller.pauseRecording(), isTrue);
+      expect(fixture.controller.state.phase, VoiceMessagePhase.paused);
+      expect(fixture.recorder.pauses, 1);
+      expect(await fixture.controller.pauseRecording(), isFalse);
+
+      expect(await fixture.controller.resumeRecording(), isTrue);
+      expect(fixture.controller.state.phase, VoiceMessagePhase.recording);
+      expect(fixture.recorder.resumes, 1);
+      expect(await fixture.controller.resumeRecording(), isFalse);
+    });
+
+    test('a paused recording can still be stopped and cancelled', () async {
+      final fixture = _VoiceFixture();
+      addTearDown(fixture.close);
+      await fixture.controller.start();
+      await fixture.controller.pauseRecording();
+
+      expect(await fixture.controller.stop(), isTrue);
+      expect(fixture.controller.state.phase, VoiceMessagePhase.ready);
+
+      final cancelled = _VoiceFixture();
+      addTearDown(cancelled.close);
+      await cancelled.controller.start();
+      await cancelled.controller.pauseRecording();
+
+      expect(await cancelled.controller.cancel(), isTrue);
+      expect(cancelled.recorder.cancels, 1);
+      expect(cancelled.controller.state.phase, VoiceMessagePhase.idle);
+    });
+
     test('cancel while recording invokes recorder cleanup', () async {
       final fixture = _VoiceFixture();
       addTearDown(fixture.close);
@@ -297,13 +332,28 @@ final class _FakeRecorder implements VoiceRecorder {
   _FakeRecorder(this.recording);
 
   final VoiceRecording recording;
+  final StreamController<double> _amplitude =
+      StreamController<double>.broadcast();
   int starts = 0;
+  int pauses = 0;
+  int resumes = 0;
   int cancels = 0;
   int closes = 0;
   final List<PreparedAttachmentSource> discarded = [];
 
   @override
   Future<void> start() async => starts++;
+
+  @override
+  Future<void> pause() async => pauses++;
+
+  @override
+  Future<void> resume() async => resumes++;
+
+  @override
+  Stream<double> get amplitude => _amplitude.stream;
+
+  void emitAmplitude(double value) => _amplitude.add(value);
 
   @override
   Future<VoiceRecording> stop() async => recording;
@@ -317,7 +367,10 @@ final class _FakeRecorder implements VoiceRecorder {
   }
 
   @override
-  Future<void> close() async => closes++;
+  Future<void> close() async {
+    closes++;
+    await _amplitude.close();
+  }
 }
 
 final class _FakePlayer implements VoicePreviewPlayer {

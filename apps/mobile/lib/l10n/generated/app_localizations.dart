@@ -791,7 +791,7 @@ abstract class AppLocalizations {
   /// No description provided for @preparingImage.
   ///
   /// In en, this message translates to:
-  /// **'Preparing image…'**
+  /// **'Preparing attachment…'**
   String get preparingImage;
 
   /// No description provided for @imageUploadQueued.
@@ -803,7 +803,7 @@ abstract class AppLocalizations {
   /// No description provided for @uploadingImage.
   ///
   /// In en, this message translates to:
-  /// **'Uploading image… {percent}%'**
+  /// **'Uploading… {percent}%'**
   String uploadingImage(int percent);
 
   /// No description provided for @confirmingAttachment.
@@ -821,25 +821,25 @@ abstract class AppLocalizations {
   /// No description provided for @imageSent.
   ///
   /// In en, this message translates to:
-  /// **'Image sent'**
+  /// **'Attachment sent'**
   String get imageSent;
 
   /// No description provided for @imageUploadFailed.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent.'**
+  /// **'The attachment could not be sent.'**
   String get imageUploadFailed;
 
   /// No description provided for @imageUploadFailedQuota.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent: storage quota exceeded.'**
+  /// **'The attachment could not be sent: storage quota exceeded.'**
   String get imageUploadFailedQuota;
 
   /// No description provided for @imageUploadFailedPermission.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent: you do not have permission to upload files here.'**
+  /// **'The attachment could not be sent: you do not have permission to upload files here.'**
   String get imageUploadFailedPermission;
 
   /// No description provided for @uploadCancelled.
@@ -1945,6 +1945,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not reach the server.'**
   String get searchMessagesErrorNetwork;
+
+  /// No description provided for @addAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attachment'**
+  String get addAttachment;
+
+  /// No description provided for @attachFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a picture'**
+  String get attachFromGallery;
+
+  /// No description provided for @attachFromCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a picture'**
+  String get attachFromCamera;
+
+  /// No description provided for @attachFromFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file'**
+  String get attachFromFile;
+
+  /// No description provided for @attachmentCameraDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking a picture needs camera access. Grant it in the system settings and try again.'**
+  String get attachmentCameraDenied;
+
+  /// No description provided for @attachmentCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No camera is available on this device.'**
+  String get attachmentCameraUnavailable;
+
+  /// No description provided for @attachmentTypeUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'That file type cannot be attached here.'**
+  String get attachmentTypeUnsupported;
+
+  /// No description provided for @pauseVoiceRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause recording'**
+  String get pauseVoiceRecording;
+
+  /// No description provided for @resumeVoiceRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume recording'**
+  String get resumeVoiceRecording;
+
+  /// No description provided for @voiceRecordingLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording level'**
+  String get voiceRecordingLevel;
+
+  /// No description provided for @voicePauseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The recording could not be paused.'**
+  String get voicePauseFailed;
+
+  /// No description provided for @pauseVoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause voice message'**
+  String get pauseVoiceMessage;
+
+  /// No description provided for @voiceMessagePosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback position'**
+  String get voiceMessagePosition;
+
+  /// No description provided for @voiceMessageProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{position} of {duration}'**
+  String voiceMessageProgress(String position, String duration);
 }
 
 class _AppLocalizationsDelegate

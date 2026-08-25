@@ -50,7 +50,7 @@ void main() {
           voiceBackends: voiceBackends,
         ),
       );
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await _pickAttachmentSource(tester);
       await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
       expect(bridge.metadata, hasLength(1));
@@ -62,7 +62,7 @@ void main() {
         _progress(AttachmentJobPhase.uploading, progress: 0.42),
       );
       await tester.pump();
-      expect(find.text('Uploading image… 42%'), findsOneWidget);
+      expect(find.text('Uploading… 42%'), findsOneWidget);
       expect(
         tester
             .widget<LinearProgressIndicator>(
@@ -81,7 +81,7 @@ void main() {
         find.byKey(const Key('image-attachment-upload-panel')),
         findsNothing,
       );
-      expect(find.text('Image sent'), findsNothing);
+      expect(find.text('Attachment sent'), findsNothing);
       expect(
         find.byKey(const Key('image-attachment-upload-progress')),
         findsNothing,
@@ -172,7 +172,7 @@ void main() {
         voiceBackends: voiceBackends,
       ),
     );
-    await tester.tap(find.byKey(const Key('pick-image-attachment')));
+    await _pickAttachmentSource(tester);
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     final metadata = bridge.metadata.single;
@@ -226,7 +226,7 @@ void main() {
           voiceBackends: voiceBackends,
         ),
       );
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await _pickAttachmentSource(tester);
       await _pumpUntil(tester, () => admittedBridge.sessions.isNotEmpty);
       final admittedSession = admittedBridge.sessions.single;
       admittedSession.add(
@@ -358,7 +358,7 @@ void main() {
     );
 
     await tester.pumpWidget(app());
-    await tester.tap(find.byKey(const Key('pick-image-attachment')));
+    await _pickAttachmentSource(tester);
     await _pumpUntil(tester, () => backend.selectionRequested);
 
     await tester.pumpWidget(app());
@@ -414,7 +414,7 @@ void main() {
           voiceBackends: voiceBackends,
         ),
       );
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await _pickAttachmentSource(tester);
       await _pumpUntil(tester, () => prepareStarted.isCompleted);
       final source = preparedSource!;
       final sourcePath = (await tester.runAsync(
@@ -477,7 +477,7 @@ void main() {
         voiceBackends: voiceBackends,
       ),
     );
-    await tester.tap(find.byKey(const Key('pick-image-attachment')));
+    await _pickAttachmentSource(tester);
     await _pumpUntil(tester, () => prepareStarted.isCompleted);
     final sourcePath = (await tester.runAsync(
       () => sourceStore.resolveVerifiedPath(preparedSource!),
@@ -607,6 +607,129 @@ void main() {
     await tester.tap(find.byKey(const Key('retry-media-capabilities')));
     expect(retries, 1);
   });
+
+  testWidgets('recording offers pause, resume and a live waveform', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('voice-record')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('voice-waveform')), findsOneWidget);
+    final capture = voiceBackends.captureBackends.single;
+    capture
+      ..emitAmplitude(0.8)
+      ..emitAmplitude(0.2);
+    await _pumpUntil(tester, () => _waveformValue(tester) == '20%');
+
+    await tester.tap(find.byKey(const Key('voice-pause')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-resume')).evaluate().isNotEmpty,
+    );
+    expect(capture.pauses, 1);
+    expect(find.byKey(const Key('voice-pause')), findsNothing);
+    expect(find.byKey(const Key('voice-waveform')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('voice-resume')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,
+    );
+    expect(capture.resumes, 1);
+
+    await tester.tap(find.byKey(const Key('voice-cancel-recording')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-record')).evaluate().isNotEmpty,
+    );
+    expect(find.byKey(const Key('voice-waveform')), findsNothing);
+  });
+
+  testWidgets('a generic file travels the same durable upload path', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        imageSelectionBackend: const _DocumentBackend(),
+      ),
+    );
+    await _pickAttachmentSource(tester, source: AttachmentPickerSource.file);
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(bridge.sources, hasLength(1));
+    expect(bridge.sources.single.mimeType, 'application/pdf');
+    expect(bridge.sources.single.displayName, 'report.pdf');
+    expect(
+      bridge.sources.single.ownership,
+      AttachmentSourceOwnership.appOwnedCopy,
+    );
+    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+  });
+
+  testWidgets('a refused camera reports its own message, not a generic one', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        imageSelectionBackend: const _RefusingCameraBackend(),
+      ),
+    );
+    await _pickAttachmentSource(tester, source: AttachmentPickerSource.camera);
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('image-attachment-upload-panel'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(
+      find.text(
+        'Taking a picture needs camera access. Grant it in the system '
+        'settings and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('retry-image-attachment-upload')),
+      findsNothing,
+    );
+    expect(bridge.sessions, isEmpty);
+  });
 }
 
 Widget _composerApp({
@@ -657,6 +780,28 @@ Future<void> _prepareVoicePreview(
     tester,
     () => find.byKey(const Key('voice-send')).evaluate().isNotEmpty,
   );
+}
+
+String? _waveformValue(WidgetTester tester) => tester
+    .widget<Semantics>(
+      find.descendant(
+        of: find.byKey(const Key('voice-waveform')),
+        matching: find.byType(Semantics),
+      ),
+    )
+    .properties
+    .value;
+
+/// Opens the attachment source sheet and chooses one of its entries, which is
+/// the only way the picker is reachable from the composer toolbar.
+Future<void> _pickAttachmentSource(
+  WidgetTester tester, {
+  AttachmentPickerSource source = AttachmentPickerSource.gallery,
+}) async {
+  await tester.tap(find.byKey(const Key('pick-image-attachment')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(Key('attach-source-${source.name}')));
+  await tester.pump();
 }
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
@@ -746,7 +891,7 @@ final class _ImageBackend implements ImageSelectionBackend {
   const _ImageBackend();
 
   @override
-  Future<ImageSelection?> selectImage() async {
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
     final bytes = <int>[
       0x89,
       0x50,
@@ -773,18 +918,50 @@ final class _ImageBackend implements ImageSelectionBackend {
   }
 }
 
+final class _DocumentBackend implements ImageSelectionBackend {
+  const _DocumentBackend();
+
+  @override
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
+    final bytes = <int>[0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a];
+    return ImageSelection(
+      displayName: 'report.pdf',
+      declaredMimeType: null,
+      byteLength: bytes.length,
+      openRead: ({int? start, int? end}) {
+        final first = start ?? 0;
+        final last = end == null || end > bytes.length ? bytes.length : end;
+        return Stream<List<int>>.value(bytes.sublist(first, last));
+      },
+    );
+  }
+}
+
+final class _RefusingCameraBackend implements ImageSelectionBackend {
+  const _RefusingCameraBackend();
+
+  @override
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
+    throw const ImageAttachmentPickerException(
+      ImageAttachmentPickerError.cameraPermissionDenied,
+    );
+  }
+}
+
 final class _PendingImageBackend implements ImageSelectionBackend {
   final Completer<ImageSelection?> _selection = Completer<ImageSelection?>();
   bool selectionRequested = false;
 
   @override
-  Future<ImageSelection?> selectImage() {
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) {
     selectionRequested = true;
     return _selection.future;
   }
 
   Future<void> complete() async {
-    _selection.complete(await const _ImageBackend().selectImage());
+    _selection.complete(
+      await const _ImageBackend().selectImage(AttachmentPickerSource.gallery),
+    );
   }
 }
 
@@ -812,9 +989,24 @@ final class _VoiceBackendFactory {
 }
 
 final class _CaptureBackend implements VoiceCaptureBackend {
+  final StreamController<double> _amplitude =
+      StreamController<double>.broadcast();
   String? _path;
   int starts = 0;
+  int pauses = 0;
+  int resumes = 0;
   int disposes = 0;
+
+  @override
+  Future<void> pause() async => pauses++;
+
+  @override
+  Future<void> resume() async => resumes++;
+
+  @override
+  Stream<double> get amplitude => _amplitude.stream;
+
+  void emitAmplitude(double value) => _amplitude.add(value);
 
   @override
   Future<bool> requestPermission() async => true;
@@ -846,7 +1038,10 @@ final class _CaptureBackend implements VoiceCaptureBackend {
   }
 
   @override
-  Future<void> dispose() async => disposes++;
+  Future<void> dispose() async {
+    disposes++;
+    await _amplitude.close();
+  }
 }
 
 final class _PlaybackBackend implements VoicePlaybackBackend {
@@ -868,6 +1063,15 @@ final class _PlaybackBackend implements VoicePlaybackBackend {
 
   @override
   Future<void> playFile(String path, {required String mimeType}) async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> resume() async {}
+
+  @override
+  Future<void> seek(Duration position) async {}
 
   @override
   Future<void> stop() async {}

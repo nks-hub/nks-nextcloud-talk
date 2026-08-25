@@ -397,14 +397,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachImage => 'Připojit obrázek';
 
   @override
-  String get preparingImage => 'Připravuji obrázek…';
+  String get preparingImage => 'Připravuji přílohu…';
 
   @override
   String get imageUploadQueued => 'Čeká na nahrání';
 
   @override
   String uploadingImage(int percent) {
-    return 'Nahrávám obrázek… $percent %';
+    return 'Nahrávám… $percent %';
   }
 
   @override
@@ -414,18 +414,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get cancellingUpload => 'Ruším nahrávání…';
 
   @override
-  String get imageSent => 'Obrázek byl odeslán';
+  String get imageSent => 'Příloha byla odeslána';
 
   @override
-  String get imageUploadFailed => 'Obrázek se nepodařilo odeslat.';
+  String get imageUploadFailed => 'Přílohu se nepodařilo odeslat.';
 
   @override
   String get imageUploadFailedQuota =>
-      'Obrázek se nepodařilo odeslat: úložiště je zaplněné.';
+      'Přílohu se nepodařilo odeslat: úložiště je zaplněné.';
 
   @override
   String get imageUploadFailedPermission =>
-      'Obrázek se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.';
+      'Přílohu se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.';
 
   @override
   String get uploadCancelled => 'Nahrávání bylo zrušeno';
@@ -1040,4 +1040,51 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get searchMessagesErrorNetwork => 'Server je nedostupný.';
+
+  @override
+  String get addAttachment => 'Přidat přílohu';
+
+  @override
+  String get attachFromGallery => 'Vybrat obrázek';
+
+  @override
+  String get attachFromCamera => 'Vyfotit';
+
+  @override
+  String get attachFromFile => 'Vybrat soubor';
+
+  @override
+  String get attachmentCameraDenied =>
+      'Focení vyžaduje přístup ke kameře. Povolte ho v nastavení systému a zkuste to znovu.';
+
+  @override
+  String get attachmentCameraUnavailable =>
+      'Toto zařízení nemá dostupnou kameru.';
+
+  @override
+  String get attachmentTypeUnsupported =>
+      'Tento typ souboru sem nelze připojit.';
+
+  @override
+  String get pauseVoiceRecording => 'Pozastavit nahrávání';
+
+  @override
+  String get resumeVoiceRecording => 'Pokračovat v nahrávání';
+
+  @override
+  String get voiceRecordingLevel => 'Hlasitost nahrávání';
+
+  @override
+  String get voicePauseFailed => 'Nahrávání se nepodařilo pozastavit.';
+
+  @override
+  String get pauseVoiceMessage => 'Pozastavit hlasovou zprávu';
+
+  @override
+  String get voiceMessagePosition => 'Pozice přehrávání';
+
+  @override
+  String voiceMessageProgress(String position, String duration) {
+    return '$position z $duration';
+  }
 }

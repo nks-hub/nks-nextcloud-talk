@@ -395,14 +395,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachImage => 'Attach image';
 
   @override
-  String get preparingImage => 'Preparing image…';
+  String get preparingImage => 'Preparing attachment…';
 
   @override
   String get imageUploadQueued => 'Waiting to upload';
 
   @override
   String uploadingImage(int percent) {
-    return 'Uploading image… $percent%';
+    return 'Uploading… $percent%';
   }
 
   @override
@@ -412,18 +412,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancellingUpload => 'Cancelling upload…';
 
   @override
-  String get imageSent => 'Image sent';
+  String get imageSent => 'Attachment sent';
 
   @override
-  String get imageUploadFailed => 'The image could not be sent.';
+  String get imageUploadFailed => 'The attachment could not be sent.';
 
   @override
   String get imageUploadFailedQuota =>
-      'The image could not be sent: storage quota exceeded.';
+      'The attachment could not be sent: storage quota exceeded.';
 
   @override
   String get imageUploadFailedPermission =>
-      'The image could not be sent: you do not have permission to upload files here.';
+      'The attachment could not be sent: you do not have permission to upload files here.';
 
   @override
   String get uploadCancelled => 'Upload cancelled';
@@ -1039,4 +1039,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchMessagesErrorNetwork => 'Could not reach the server.';
+
+  @override
+  String get addAttachment => 'Add attachment';
+
+  @override
+  String get attachFromGallery => 'Choose a picture';
+
+  @override
+  String get attachFromCamera => 'Take a picture';
+
+  @override
+  String get attachFromFile => 'Choose a file';
+
+  @override
+  String get attachmentCameraDenied =>
+      'Taking a picture needs camera access. Grant it in the system settings and try again.';
+
+  @override
+  String get attachmentCameraUnavailable =>
+      'No camera is available on this device.';
+
+  @override
+  String get attachmentTypeUnsupported =>
+      'That file type cannot be attached here.';
+
+  @override
+  String get pauseVoiceRecording => 'Pause recording';
+
+  @override
+  String get resumeVoiceRecording => 'Resume recording';
+
+  @override
+  String get voiceRecordingLevel => 'Recording level';
+
+  @override
+  String get voicePauseFailed => 'The recording could not be paused.';
+
+  @override
+  String get pauseVoiceMessage => 'Pause voice message';
+
+  @override
+  String get voiceMessagePosition => 'Playback position';
+
+  @override
+  String voiceMessageProgress(String position, String duration) {
+    return '$position of $duration';
+  }
 }
