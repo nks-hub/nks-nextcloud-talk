@@ -9,6 +9,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_participant_avatar.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import 'participants_service.dart';
+import 'room_settings_service.dart';
 
 const int _roomTypeOneToOne = 1;
 const int _roomTypeGroup = 2;
@@ -22,8 +23,9 @@ const int _notificationAlways = 1;
 const int _notificationMention = 2;
 const int _notificationNever = 3;
 
-/// Read-only conversation details: room metadata plus the participant list
-/// with each attendee's role and, when the server returned it, user status.
+/// Conversation details: room metadata, the moderator-gated settings
+/// actions (rename, description, notification level, favorite, leave) and
+/// the participant list with each attendee's role and status.
 final class RoomDetailsScreen extends ConsumerStatefulWidget {
   const RoomDetailsScreen({
     super.key,
@@ -40,11 +42,18 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
   late Future<List<Participant>> _participants;
+  late ConversationRoom? _room;
+  late bool _isFavorite;
+  late int _notificationLevel;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _participants = _load();
+    _room = _parseCachedRoom(widget.conversation);
+    _isFavorite = widget.conversation.favorite;
+    _notificationLevel = _room?.notificationLevel ?? _notificationDefault;
   }
 
   Future<List<Participant>> _load() {
@@ -62,6 +71,235 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
     });
   }
 
+  /// Owners, moderators and guest moderators may rename the conversation and
+  /// change its description; a plain participant must never see these.
+  bool get _isModerator {
+    return switch (participantRoleFor(_room?.participantType ?? -1)) {
+      ParticipantRole.owner ||
+      ParticipantRole.moderator ||
+      ParticipantRole.guestModerator => true,
+      _ => false,
+    };
+  }
+
+  /// The server is the source of truth for whether leaving is currently
+  /// allowed (e.g. it is refused for the last moderator); default to hidden
+  /// when that could not be determined from the cached room.
+  bool get _canLeave => _room?.canLeaveConversation ?? false;
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await action();
+    } on RoomSettingsException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final strings = AppLocalizations.of(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_actionErrorMessage(strings, error.code))));
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _renameRoom() async {
+    final strings = AppLocalizations.of(context);
+    final controller = TextEditingController(text: widget.conversation.displayName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(strings.roomDetailsRenameDialogTitle),
+        content: TextField(
+          key: const Key('room-details-rename-field'),
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: strings.roomDetailsRenameFieldLabel),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            key: const Key('room-details-rename-save'),
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text(strings.roomDetailsSave),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.trim().isEmpty || !mounted) {
+      return;
+    }
+    await _runAction(() async {
+      final room = await ref
+          .read(roomSettingsServiceProvider)
+          .renameRoom(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            name: newName,
+          );
+      if (mounted) {
+        setState(() => _room = room);
+      }
+    });
+  }
+
+  Future<void> _editDescription() async {
+    final strings = AppLocalizations.of(context);
+    final controller = TextEditingController(text: widget.conversation.description);
+    final newDescription = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(strings.roomDetailsDescriptionDialogTitle),
+        content: TextField(
+          key: const Key('room-details-description-field'),
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 6,
+          decoration: InputDecoration(labelText: strings.roomDetailsDescriptionFieldLabel),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            key: const Key('room-details-description-save'),
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text(strings.roomDetailsSave),
+          ),
+        ],
+      ),
+    );
+    if (newDescription == null || !mounted) {
+      return;
+    }
+    await _runAction(() async {
+      final room = await ref
+          .read(roomSettingsServiceProvider)
+          .updateDescription(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            description: newDescription,
+          );
+      if (mounted) {
+        setState(() => _room = room);
+      }
+    });
+  }
+
+  Future<void> _changeNotificationLevel() async {
+    final strings = AppLocalizations.of(context);
+    final current = switch (_notificationLevel) {
+      _notificationAlways => RoomNotificationLevel.always,
+      _notificationMention => RoomNotificationLevel.mentions,
+      _notificationNever => RoomNotificationLevel.never,
+      _ => null,
+    };
+    final selected = await showDialog<RoomNotificationLevel>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        key: const Key('room-details-notification-dialog'),
+        title: Text(strings.roomDetailsNotificationDialogTitle),
+        children: [
+          for (final level in RoomNotificationLevel.values)
+            SimpleDialogOption(
+              key: Key('room-details-notification-${level.name}'),
+              onPressed: () => Navigator.of(dialogContext).pop(level),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    child: level == current ? const Icon(Icons.check, size: 20) : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(_notificationLevelLabel(strings, level)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _runAction(() async {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .setNotificationLevel(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            level: selected,
+          );
+      if (mounted) {
+        setState(() => _notificationLevel = selected.wireValue);
+      }
+    });
+  }
+
+  Future<void> _toggleFavorite(bool value) async {
+    await _runAction(() async {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .setFavorite(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            favorite: value,
+          );
+      if (mounted) {
+        setState(() => _isFavorite = value);
+      }
+    });
+  }
+
+  Future<void> _confirmLeave() async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('room-details-leave-dialog'),
+        title: Text(strings.roomDetailsLeaveDialogTitle),
+        content: Text(strings.roomDetailsLeaveDialogMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            key: const Key('room-details-leave-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(strings.roomDetailsLeaveDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    var left = false;
+    await _runAction(() async {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .leaveRoom(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+          );
+      left = true;
+    });
+    if (left && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -70,7 +308,61 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
       appBar: AppBar(title: Text(strings.roomDetailsTitle)),
       body: ListView(
         children: [
-          _RoomSummary(account: widget.account, conversation: widget.conversation),
+          _RoomSummary(
+            account: widget.account,
+            conversation: widget.conversation,
+            displayName: _room?.displayName ?? widget.conversation.displayName,
+            description: _room?.description ?? widget.conversation.description,
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              strings.roomDetailsActionsHeader,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          if (_isModerator)
+            ListTile(
+              key: const Key('room-details-rename'),
+              leading: const Icon(Icons.edit_outlined),
+              title: Text(strings.roomDetailsRenameAction),
+              onTap: _busy ? null : _renameRoom,
+            ),
+          if (_isModerator)
+            ListTile(
+              key: const Key('room-details-description-edit'),
+              leading: const Icon(Icons.short_text),
+              title: Text(strings.roomDetailsDescriptionEditAction),
+              onTap: _busy ? null : _editDescription,
+            ),
+          ListTile(
+            key: const Key('room-details-notification-picker'),
+            leading: const Icon(Icons.notifications_outlined),
+            title: Text(strings.roomDetailsNotificationLabel),
+            subtitle: Text(
+              _notificationLabel(strings, _notificationLevel),
+              key: const Key('room-details-notification-subtitle'),
+            ),
+            onTap: _busy ? null : _changeNotificationLevel,
+          ),
+          SwitchListTile(
+            key: const Key('room-details-favorite-toggle'),
+            secondary: const Icon(Icons.star_outline),
+            title: Text(strings.roomDetailsFavoriteLabel),
+            value: _isFavorite,
+            onChanged: _busy ? null : _toggleFavorite,
+          ),
+          if (_canLeave)
+            ListTile(
+              key: const Key('room-details-leave'),
+              leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
+              title: Text(
+                strings.roomDetailsLeaveAction,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: _busy ? null : _confirmLeave,
+            ),
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -117,16 +409,25 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
 }
 
 final class _RoomSummary extends StatelessWidget {
-  const _RoomSummary({required this.account, required this.conversation});
+  const _RoomSummary({
+    required this.account,
+    required this.conversation,
+    required this.displayName,
+    required this.description,
+  });
 
   final StoredAccount account;
   final CachedConversation conversation;
 
+  /// The live name and description, which may already reflect a rename or
+  /// description edit made in this screen; [conversation] itself never
+  /// changes for the lifetime of the widget.
+  final String displayName;
+  final String description;
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final room = _parseCachedRoom(conversation);
-    final notificationLevel = room?.notificationLevel;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -144,17 +445,18 @@ final class _RoomSummary extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  conversation.displayName,
+                  displayName,
+                  key: const Key('room-details-name'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
             ],
           ),
-          if (conversation.description.trim().isNotEmpty) ...[
+          if (description.trim().isNotEmpty) ...[
             const SizedBox(height: 16),
             _InfoRow(
               label: strings.roomDetailsDescriptionLabel,
-              value: conversation.description,
+              value: description,
             ),
           ],
           const SizedBox(height: 12),
@@ -169,13 +471,6 @@ final class _RoomSummary extends StatelessWidget {
                 ? strings.roomDetailsReadOnlyYes
                 : strings.roomDetailsReadOnlyNo,
           ),
-          if (notificationLevel != null) ...[
-            const SizedBox(height: 12),
-            _InfoRow(
-              label: strings.roomDetailsNotificationLabel,
-              value: _notificationLabel(strings, notificationLevel),
-            ),
-          ],
         ],
       ),
     );
@@ -285,6 +580,8 @@ String _roomTypeLabel(AppLocalizations strings, int roomType) {
   };
 }
 
+/// Labels the wire-level notification value shown as read-only room
+/// metadata, including the `default` value the picker never offers.
 String _notificationLabel(AppLocalizations strings, int notificationLevel) {
   return switch (notificationLevel) {
     _notificationDefault => strings.roomDetailsNotificationDefault,
@@ -292,6 +589,14 @@ String _notificationLabel(AppLocalizations strings, int notificationLevel) {
     _notificationMention => strings.roomDetailsNotificationMention,
     _notificationNever => strings.roomDetailsNotificationNever,
     _ => strings.roomDetailsNotificationUnknown,
+  };
+}
+
+String _notificationLevelLabel(AppLocalizations strings, RoomNotificationLevel level) {
+  return switch (level) {
+    RoomNotificationLevel.always => strings.roomDetailsNotificationAlways,
+    RoomNotificationLevel.mentions => strings.roomDetailsNotificationMention,
+    RoomNotificationLevel.never => strings.roomDetailsNotificationNever,
   };
 }
 
@@ -307,9 +612,24 @@ String _roleLabel(AppLocalizations strings, ParticipantRole? role) {
   };
 }
 
+String _actionErrorMessage(AppLocalizations strings, RoomSettingsError code) {
+  return switch (code) {
+    RoomSettingsError.reauthenticationRequired => strings.roomDetailsActionErrorReauth,
+    RoomSettingsError.forbidden => strings.roomDetailsActionErrorForbidden,
+    RoomSettingsError.roomMissing => strings.roomDetailsActionErrorRoomMissing,
+    RoomSettingsError.rejected => strings.roomDetailsLeaveRejected,
+    RoomSettingsError.accountMissing ||
+    RoomSettingsError.credentialMissing ||
+    RoomSettingsError.rateLimited ||
+    RoomSettingsError.serviceUnavailable ||
+    RoomSettingsError.invalidResponse ||
+    RoomSettingsError.network => strings.roomDetailsActionErrorGeneric,
+  };
+}
+
 /// The cached room JSON is written from the same validated decoder that
-/// produces it, so this only fails on local corruption; the summary simply
-/// omits fields (like notification level) that are not otherwise cached.
+/// produces it, so this only fails on local corruption; the screen simply
+/// hides the actions (like rename) that need it when parsing fails.
 ConversationRoom? _parseCachedRoom(CachedConversation conversation) {
   try {
     return ConversationRoom.fromJson(jsonDecode(conversation.rawJson));

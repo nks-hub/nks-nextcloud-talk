@@ -46,6 +46,8 @@ export 'src/rich_chat/renderer.dart';
 export 'src/rich_chat/request.dart';
 export 'src/rich_chat/response.dart';
 export 'src/rich_chat/state.dart';
+export 'src/room_settings/request.dart';
+export 'src/room_settings/response.dart';
 export 'src/search/identifiers.dart' show SearchRequestId;
 export 'src/search/models.dart';
 export 'src/search/request.dart';

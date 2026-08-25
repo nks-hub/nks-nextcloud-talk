@@ -108,6 +108,7 @@ void main() {
   testWidgets('shows conversation metadata and the participant list', (
     tester,
   ) async {
+    _growViewport(tester);
     await tester.pumpWidget(
       app(
         home: RoomDetailsScreen(account: account, conversation: conversation),
@@ -155,6 +156,7 @@ void main() {
   testWidgets('opening the chat room screen exposes an info action', (
     tester,
   ) async {
+    _growViewport(tester);
     await tester.pumpWidget(
       app(
         home: ChatRoomScreen(account: account, conversation: conversation),
@@ -182,6 +184,7 @@ void main() {
   testWidgets('offers a retry when the participant list fails to load', (
     tester,
   ) async {
+    _growViewport(tester);
     var requestCount = 0;
     final client = MockClient((request) async {
       requestCount++;
@@ -223,6 +226,369 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('a moderator can rename the conversation', (tester) async {
+    _growViewport(tester);
+    final renamedJson = Map<String, Object?>.from(_conversationRoomJson())
+      ..['name'] = 'renamed-room'
+      ..['displayName'] = 'Renamed Room';
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' && request.url.path.endsWith('/rooma123')) {
+        expect(request.bodyFields['roomName'], 'Renamed Room');
+        return _ocsSuccess(renamedJson);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-rename')).evaluate().isNotEmpty,
+    );
+    expect(find.text('Synthetic room A'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('room-details-rename')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('room-details-rename-field')),
+      'Renamed Room',
+    );
+    await tester.tap(find.byKey(const Key('room-details-rename-save')));
+    await _pumpUntil(tester, () => _roomTitleText(tester) == 'Renamed Room');
+
+    expect(find.text('Synthetic room A'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a rename that the server rejects keeps the original name', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' && request.url.path.endsWith('/rooma123')) {
+        return _ocsFailure(403);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-rename')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-rename')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('room-details-rename-field')),
+      'Renamed Room',
+    );
+    await tester.tap(find.byKey(const Key('room-details-rename-save')));
+    await _pumpUntil(
+      tester,
+      () => find.text("You don't have permission to do this.").evaluate().isNotEmpty,
+    );
+
+    expect(find.text('Synthetic room A'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('changing the notification level updates the picker subtitle', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/notify')) {
+        expect(request.bodyFields['level'], '3');
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-notification-picker'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(_notificationSubtitleText(tester), 'All messages');
+
+    await tester.tap(find.byKey(const Key('room-details-notification-picker')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-notification-never')));
+    await _pumpUntil(tester, () => _notificationSubtitleText(tester) == 'Off');
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('hides moderator-only actions for a plain participant', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final memberConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'participantType': 3, 'canLeaveConversation': true},
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: account,
+          conversation: memberConversation,
+        ),
+        client: participantsClient(const <Object?>[]),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-notification-picker'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('room-details-rename')), findsNothing);
+    expect(
+      find.byKey(const Key('room-details-description-edit')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('room-details-favorite-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('room-details-leave')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('hides the leave action when the server disallows it', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final lockedConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'canLeaveConversation': false},
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: account,
+          conversation: lockedConversation,
+        ),
+        client: participantsClient(const <Object?>[]),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-notification-picker'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('room-details-leave')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('cancelling the leave confirmation keeps the screen open', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    var leaveRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'DELETE' &&
+          request.url.path.endsWith('/participants/self')) {
+        leaveRequests++;
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-leave')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-leave')));
+    await tester.pump();
+    expect(find.byKey(const Key('room-details-leave-dialog')), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
+    expect(leaveRequests, 0);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets(
+    'confirming leave calls the API and returns to the previous screen',
+    (tester) async {
+      _growViewport(tester);
+      var leaveRequests = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/participants')) {
+          return _ocsSuccess(const <Object?>[]);
+        }
+        if (request.method == 'DELETE' &&
+            request.url.path.endsWith('/participants/self')) {
+          leaveRequests++;
+          return _ocsSuccess(const <Object?>[]);
+        }
+        return http.Response('', 404);
+      });
+
+      await tester.pumpWidget(
+        app(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  key: const Key('open-room-details-from-list'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RoomDetailsScreen(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+          client: client,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-room-details-from-list')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('room-details-leave')).evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.byKey(const Key('room-details-leave')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('room-details-leave-confirm')));
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('room-details-screen')).evaluate().isEmpty,
+      );
+
+      expect(leaveRequests, 1);
+      expect(
+        find.byKey(const Key('open-room-details-from-list')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+}
+
+http.Response _ocsSuccess([Object? data = const <Object?>[]]) {
+  return http.Response(
+    jsonEncode({
+      'ocs': {
+        'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+        'data': data,
+      },
+    }),
+    200,
+  );
+}
+
+http.Response _ocsFailure(int statusCode) {
+  return http.Response(
+    jsonEncode({
+      'ocs': {
+        'meta': {'status': 'failure', 'statuscode': statusCode},
+        'data': <Object?>[],
+      },
+    }),
+    statusCode,
+  );
+}
+
+Future<CachedConversation> _insertConversation(
+  AppDatabase database,
+  StoredAccount account, {
+  required Map<String, Object?> overrides,
+}) async {
+  final roomJson = Map<String, Object?>.from(_conversationRoomJson())
+    ..addAll(overrides);
+  final room = ConversationRoom.fromJson(roomJson);
+  await database
+      .into(database.cachedConversations)
+      .insertOnConflictUpdate(
+        CachedConversationsCompanion.insert(
+          accountId: account.id,
+          token: room.token.value,
+          displayName: room.displayName,
+          description: room.description,
+          lastActivity: room.lastActivity,
+          unreadMessages: room.unreadMessages,
+          favorite: room.isFavorite,
+          readOnly: Value(room.readOnly),
+          roomType: Value(room.type),
+          roomName: Value(room.name),
+          objectType: Value(room.objectType),
+          avatarVersion: Value(room.avatarVersion),
+          isCustomAvatar: Value(room.isCustomAvatar),
+          rawJson: jsonEncode(roomJson),
+        ),
+      );
+  return database.select(database.cachedConversations).getSingle();
 }
 
 Map<String, Object?> _participantJson({
@@ -262,6 +628,39 @@ Map<String, Object?> _conversationRoomJson() {
 
 Object? _readFixtureJson(String relativePath) {
   return jsonDecode(File('../../contracts/$relativePath').readAsStringSync());
+}
+
+/// Reads the live room title text by key rather than by string content, so
+/// a still-closing rename dialog's own text field (which briefly carries the
+/// same string while its dismiss transition plays) cannot be mistaken for
+/// the summary having refreshed.
+String? _roomTitleText(WidgetTester tester) {
+  final finder = find.byKey(const Key('room-details-name'));
+  if (finder.evaluate().isEmpty) {
+    return null;
+  }
+  return tester.widget<Text>(finder).data;
+}
+
+/// Reads the notification picker's subtitle by key for the same reason as
+/// [_roomTitleText]: the picker dialog's own option labels repeat these
+/// strings and can still be mounted mid dismiss-transition.
+String? _notificationSubtitleText(WidgetTester tester) {
+  final finder = find.byKey(const Key('room-details-notification-subtitle'));
+  if (finder.evaluate().isEmpty) {
+    return null;
+  }
+  return tester.widget<Text>(finder).data;
+}
+
+/// The settings actions row pushes the participant list further down than
+/// the default test surface; grow it so the whole screen builds without
+/// needing to scroll to reach the participant tiles.
+void _growViewport(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(400, 1600);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  addTearDown(tester.view.resetPhysicalSize);
 }
 
 Future<void> _pumpUntil(

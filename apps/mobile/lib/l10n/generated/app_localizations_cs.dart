@@ -621,4 +621,66 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsRoleUnknown => 'Neznámá role';
+
+  @override
+  String get roomDetailsActionsHeader => 'Nastavení konverzace';
+
+  @override
+  String get roomDetailsRenameAction => 'Přejmenovat konverzaci';
+
+  @override
+  String get roomDetailsRenameDialogTitle => 'Přejmenovat konverzaci';
+
+  @override
+  String get roomDetailsRenameFieldLabel => 'Název';
+
+  @override
+  String get roomDetailsDescriptionEditAction => 'Upravit popis';
+
+  @override
+  String get roomDetailsDescriptionDialogTitle => 'Upravit popis';
+
+  @override
+  String get roomDetailsDescriptionFieldLabel => 'Popis';
+
+  @override
+  String get roomDetailsSave => 'Uložit';
+
+  @override
+  String get roomDetailsNotificationDialogTitle => 'Úroveň oznámení';
+
+  @override
+  String get roomDetailsFavoriteLabel => 'Oblíbená konverzace';
+
+  @override
+  String get roomDetailsLeaveAction => 'Opustit konverzaci';
+
+  @override
+  String get roomDetailsLeaveDialogTitle => 'Opustit konverzaci?';
+
+  @override
+  String get roomDetailsLeaveDialogMessage =>
+      'Přestanete dostávat nové zprávy z této konverzace, dokud vás do ní někdo znovu nepozve.';
+
+  @override
+  String get roomDetailsLeaveDialogConfirm => 'Opustit';
+
+  @override
+  String get roomDetailsActionErrorGeneric =>
+      'Změnu se nepodařilo uložit. Zkuste to prosím znovu.';
+
+  @override
+  String get roomDetailsActionErrorReauth =>
+      'Pro tuto změnu se prosím přihlaste znovu.';
+
+  @override
+  String get roomDetailsActionErrorForbidden => 'K této akci nemáte oprávnění.';
+
+  @override
+  String get roomDetailsActionErrorRoomMissing =>
+      'Tato konverzace už neexistuje.';
+
+  @override
+  String get roomDetailsLeaveRejected =>
+      'Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.';
 }
