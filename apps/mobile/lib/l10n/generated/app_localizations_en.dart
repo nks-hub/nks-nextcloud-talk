@@ -610,4 +610,67 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roomDetailsRoleUnknown => 'Unknown role';
+
+  @override
+  String get roomDetailsActionsHeader => 'Conversation settings';
+
+  @override
+  String get roomDetailsRenameAction => 'Rename conversation';
+
+  @override
+  String get roomDetailsRenameDialogTitle => 'Rename conversation';
+
+  @override
+  String get roomDetailsRenameFieldLabel => 'Name';
+
+  @override
+  String get roomDetailsDescriptionEditAction => 'Edit description';
+
+  @override
+  String get roomDetailsDescriptionDialogTitle => 'Edit description';
+
+  @override
+  String get roomDetailsDescriptionFieldLabel => 'Description';
+
+  @override
+  String get roomDetailsSave => 'Save';
+
+  @override
+  String get roomDetailsNotificationDialogTitle => 'Notification level';
+
+  @override
+  String get roomDetailsFavoriteLabel => 'Favorite conversation';
+
+  @override
+  String get roomDetailsLeaveAction => 'Leave conversation';
+
+  @override
+  String get roomDetailsLeaveDialogTitle => 'Leave conversation?';
+
+  @override
+  String get roomDetailsLeaveDialogMessage =>
+      'You will stop receiving new messages from this conversation until someone invites you back.';
+
+  @override
+  String get roomDetailsLeaveDialogConfirm => 'Leave';
+
+  @override
+  String get roomDetailsActionErrorGeneric =>
+      'The change could not be saved. Please try again.';
+
+  @override
+  String get roomDetailsActionErrorReauth =>
+      'Please sign in again to make this change.';
+
+  @override
+  String get roomDetailsActionErrorForbidden =>
+      'You don\'t have permission to do this.';
+
+  @override
+  String get roomDetailsActionErrorRoomMissing =>
+      'This conversation no longer exists.';
+
+  @override
+  String get roomDetailsLeaveRejected =>
+      'You can\'t leave until another moderator is promoted.';
 }

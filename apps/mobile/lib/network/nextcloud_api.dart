@@ -100,6 +100,31 @@ final class HttpNextcloudApi {
     429,
     503,
   };
+  static const _roomSettingsMaximumBytes = 2 * 1024 * 1024;
+  static const _roomDetailUpdateAllowedStatusCodes = {
+    200,
+    401,
+    403,
+    404,
+    429,
+    503,
+  };
+  static const _roomSettingsMutationAllowedStatusCodes = {
+    200,
+    401,
+    404,
+    429,
+    503,
+  };
+  static const _leaveRoomAllowedStatusCodes = {
+    200,
+    400,
+    401,
+    403,
+    404,
+    429,
+    503,
+  };
   static final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
     200,
     201,
@@ -430,6 +455,135 @@ final class HttpNextcloudApi {
     );
     return decodeParticipantsResponse(
       request: participantsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Renames a conversation. Moderator-only on the server.
+  Future<UpdateRoomNameResponse> updateRoomName({
+    required UpdateRoomNameRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('PUT', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomDetailUpdateAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateRoomNameResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Changes a conversation's description. Moderator-only on the server.
+  Future<UpdateRoomDescriptionResponse> updateRoomDescription({
+    required UpdateRoomDescriptionRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('PUT', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomDetailUpdateAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateRoomDescriptionResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Sets the caller's own per-conversation notification level.
+  Future<UpdateNotificationLevelResponse> updateNotificationLevel({
+    required UpdateNotificationLevelRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateNotificationLevelResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Marks or unmarks a conversation as one of the caller's favorites.
+  Future<SetFavoriteResponse> setFavorite({
+    required SetFavoriteRequest favoriteRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request(favoriteRequest.httpMethod, favoriteRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...favoriteRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetFavoriteResponse(
+      request: favoriteRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Removes the caller from a conversation. Irreversible from the client's
+  /// point of view.
+  Future<LeaveRoomResponse> leaveRoom({
+    required LeaveRoomRequest leaveRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', leaveRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...leaveRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _leaveRoomAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeLeaveRoomResponse(
+      request: leaveRequest,
       statusCode: payload.statusCode,
       body: payload.body,
     );

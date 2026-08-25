@@ -1195,6 +1195,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unknown role'**
   String get roomDetailsRoleUnknown;
+
+  /// No description provided for @roomDetailsActionsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation settings'**
+  String get roomDetailsActionsHeader;
+
+  /// No description provided for @roomDetailsRenameAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename conversation'**
+  String get roomDetailsRenameAction;
+
+  /// No description provided for @roomDetailsRenameDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename conversation'**
+  String get roomDetailsRenameDialogTitle;
+
+  /// No description provided for @roomDetailsRenameFieldLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get roomDetailsRenameFieldLabel;
+
+  /// No description provided for @roomDetailsDescriptionEditAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit description'**
+  String get roomDetailsDescriptionEditAction;
+
+  /// No description provided for @roomDetailsDescriptionDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit description'**
+  String get roomDetailsDescriptionDialogTitle;
+
+  /// No description provided for @roomDetailsDescriptionFieldLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get roomDetailsDescriptionFieldLabel;
+
+  /// No description provided for @roomDetailsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get roomDetailsSave;
+
+  /// No description provided for @roomDetailsNotificationDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification level'**
+  String get roomDetailsNotificationDialogTitle;
+
+  /// No description provided for @roomDetailsFavoriteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite conversation'**
+  String get roomDetailsFavoriteLabel;
+
+  /// No description provided for @roomDetailsLeaveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave conversation'**
+  String get roomDetailsLeaveAction;
+
+  /// No description provided for @roomDetailsLeaveDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave conversation?'**
+  String get roomDetailsLeaveDialogTitle;
+
+  /// No description provided for @roomDetailsLeaveDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will stop receiving new messages from this conversation until someone invites you back.'**
+  String get roomDetailsLeaveDialogMessage;
+
+  /// No description provided for @roomDetailsLeaveDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get roomDetailsLeaveDialogConfirm;
+
+  /// No description provided for @roomDetailsActionErrorGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'The change could not be saved. Please try again.'**
+  String get roomDetailsActionErrorGeneric;
+
+  /// No description provided for @roomDetailsActionErrorReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in again to make this change.'**
+  String get roomDetailsActionErrorReauth;
+
+  /// No description provided for @roomDetailsActionErrorForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have permission to do this.'**
+  String get roomDetailsActionErrorForbidden;
+
+  /// No description provided for @roomDetailsActionErrorRoomMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation no longer exists.'**
+  String get roomDetailsActionErrorRoomMissing;
+
+  /// No description provided for @roomDetailsLeaveRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t leave until another moderator is promoted.'**
+  String get roomDetailsLeaveRejected;
 }
 
 class _AppLocalizationsDelegate
