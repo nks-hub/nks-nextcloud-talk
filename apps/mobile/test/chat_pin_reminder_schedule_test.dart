@@ -1,24 +1,3 @@
-@Skip('Harness is unresolved: the first widget test never completes.')
-library;
-
-// The subject code is exercised and passing - a copy of this suite's pin
-// assertions running on the harness from chat_message_jump_test.dart finds
-// `chat-pinned-banner` and passes in about a second. What is unresolved is
-// this file's own fixture setup: with it, the first `pumpWidget` plus bounded
-// pumps never return, and a per-test timeout never fires, so the pane is
-// starving the event loop rather than merely running slowly.
-//
-// Ruled out already: the pane changes themselves (chat_message_jump_test and
-// chat_forward_message_test both still pass against them), the bounded
-// `settle` helper, a missing chat scope, unanswered avatar requests, and both
-// 304 and 403 as the catch-all sync response. Also ruled out since: seeding
-// the account row with the same talk feature set the capabilities response
-// reports, which would have removed a write-back that re-triggers the
-// accounts stream. The remaining suspects are the room payload edits this
-// file makes (participant type, permissions, dropped `remoteServer`) and the
-// extra mock branches. Rebuilding the setup on chat_message_jump_test's
-// harness is the shortest way to finish this.
-
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
@@ -50,10 +29,14 @@ const _fullFeatures = <String>[
 
 /// Bounded replacement for `pumpAndSettle`: the pane keeps an indeterminate
 /// sync progress bar on screen while its foreground loop runs, so settling can
-/// never complete here.
+/// never complete here. Real async turns let Drift and HTTP finish between
+/// frames, matching the lifecycle used by the working message-jump harness.
 Future<void> settle(WidgetTester tester) async {
   for (var index = 0; index < 12; index++) {
     await tester.pump(const Duration(milliseconds: 120));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
   }
 }
 
@@ -67,6 +50,19 @@ Future<void> flush(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 120));
   }
   await settle(tester);
+}
+
+Future<void> pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var attempt = 0; attempt < 200; attempt++) {
+    await tester.pump(const Duration(milliseconds: 10));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
+    if (condition()) {
+      return;
+    }
+  }
+  fail('Condition was not reached');
 }
 
 Future<void> teardownTree(WidgetTester tester) async {
@@ -181,9 +177,7 @@ void main() {
             referenceId: 'fixture-reference-$messageId',
             displayText: text,
             deleted: false,
-            rawJson: jsonEncode(
-              _messageJson(messageId: messageId, text: text),
-            ),
+            rawJson: jsonEncode(_messageJson(messageId: messageId, text: text)),
           ),
         );
   }
@@ -379,10 +373,8 @@ void main() {
       await tester.pumpWidget(
         wrap(
           api: buildApi(
-            onRichChat: (request) => http.Response(
-              jsonEncode(_pinResponse()),
-              200,
-            ),
+            onRichChat: (request) =>
+                http.Response(jsonEncode(_pinResponse()), 200),
           ),
           home: PresenceChatRoomScreen(
             account: account,
@@ -399,6 +391,10 @@ void main() {
 
       await tester.tap(find.byKey(const Key('message-action-pin')));
       await flush(tester);
+      await pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-pin-success')).evaluate().isNotEmpty,
+      );
 
       expect(
         requestLog,
@@ -420,10 +416,8 @@ void main() {
       await tester.pumpWidget(
         wrap(
           api: buildApi(
-            onRichChat: (request) => http.Response(
-              jsonEncode(_pinResponse()),
-              200,
-            ),
+            onRichChat: (request) =>
+                http.Response(jsonEncode(_pinResponse()), 200),
           ),
           home: PresenceChatRoomScreen(
             account: account,
@@ -571,6 +565,10 @@ void main() {
     });
 
     testWidgets('an existing reminder can be removed', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(800, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       final conversation = await insertRoom();
       await insertMessage();
       await tester.pumpWidget(
@@ -601,6 +599,8 @@ void main() {
 
       final remove = find.byKey(const Key('reminder-remove'));
       expect(remove, findsOneWidget);
+      await tester.ensureVisible(remove);
+      await settle(tester);
       await tester.tap(remove);
       await flush(tester);
 
@@ -655,9 +655,7 @@ void main() {
       final conversation = await insertRoom();
       await tester.pumpWidget(
         wrap(
-          api: buildApi(
-            localFeatures: const <String>[],
-          ),
+          api: buildApi(localFeatures: const <String>[]),
           home: PresenceChatRoomScreen(
             account: account,
             conversation: conversation,
@@ -678,7 +676,8 @@ void main() {
       await tester.pumpWidget(
         wrap(
           api: buildApi(
-            talkFeatures: const <String>[..._fullFeatures,
+            talkFeatures: const <String>[
+              ..._fullFeatures,
               'scheduled-messages',
             ],
           ),
@@ -751,9 +750,7 @@ void main() {
       );
       expect(
         requestLog,
-        contains(
-          'POST /ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule',
-        ),
+        contains('POST /ocs/v2.php/apps/spreed/api/v1/chat/rooma123/schedule'),
       );
       expect(find.byKey(const Key('chat-schedule-success')), findsOneWidget);
       // The text left the composer only because the server accepted it.
@@ -781,10 +778,7 @@ void main() {
             localFeatures: const <String>['scheduled-messages'],
             onRichChat: (request) => http.Response(
               jsonEncode(
-                _scheduleOcs(
-                  201,
-                  int.parse(request.bodyFields['sendAt']!),
-                ),
+                _scheduleOcs(201, int.parse(request.bodyFields['sendAt']!)),
               ),
               201,
             ),
@@ -815,9 +809,9 @@ void main() {
       );
       await flush(tester);
 
-      final operations = await database.select(
-        database.textSendOperations,
-      ).get();
+      final operations = await database
+          .select(database.textSendOperations)
+          .get();
       expect(operations, isEmpty);
 
       await teardownTree(tester);
@@ -886,9 +880,7 @@ void main() {
       final conversation = await insertRoom();
       await tester.pumpWidget(
         wrap(
-          api: buildApi(
-            localFeatures: const <String>['scheduled-messages'],
-          ),
+          api: buildApi(localFeatures: const <String>['scheduled-messages']),
           home: PresenceChatRoomScreen(
             account: account,
             conversation: conversation,
@@ -1018,15 +1010,13 @@ Map<String, Object?> _failureOcs(int statusCode) => <String, Object?>{
   },
 };
 
-Map<String, Object?> _reminderOcs(int statusCode, int timestamp) => _ocs(
-  statusCode,
-  <String, Object?>{
-    'userId': 'fixture-user',
-    'token': 'rooma123',
-    'messageId': 10,
-    'timestamp': timestamp,
-  },
-);
+Map<String, Object?> _reminderOcs(int statusCode, int timestamp) =>
+    _ocs(statusCode, <String, Object?>{
+      'userId': 'fixture-user',
+      'token': 'rooma123',
+      'messageId': 10,
+      'timestamp': timestamp,
+    });
 
 Map<String, Object?> _scheduleOcs(int statusCode, int sendAt) =>
     _ocs(statusCode, _scheduledMessageJson(sendAt));
@@ -1072,7 +1062,6 @@ Map<String, Object?> _messageJson({
   'reactions': <String, Object?>{},
   'reactionsSelf': <Object?>[],
   'threadId': messageId,
-  'deleted': false,
 };
 
 Map<String, Object?> _roomJson({
