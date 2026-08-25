@@ -259,7 +259,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
     ),
     catchUpConfirmation:
         ({required accountId, required roomToken, required threadId}) =>
-            chat.syncRoom(
+            chat.catchUpRoom(
               accountId: accountId.value,
               roomToken: roomToken.value,
               threadId: threadId,
