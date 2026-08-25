@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/app_database.dart';
@@ -58,37 +57,4 @@ List<OutgoingMessageStatus> resolveOutgoingMessageStatuses(
       confirmationAmbiguous: operation.outboxState == 'awaitingConfirmation',
     ),
   ];
-}
-
-final class OutgoingMessageStatusIndicator extends StatelessWidget {
-  const OutgoingMessageStatusIndicator({
-    super.key,
-    required this.status,
-    required this.label,
-    this.iconSize = 16,
-    this.style,
-  });
-
-  final OutgoingMessageStatus status;
-  final String label;
-  final double iconSize;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = switch (status.state) {
-      OutgoingMessageDeliveryState.sending => Icons.schedule_send_rounded,
-      OutgoingMessageDeliveryState.failed => Icons.error_outline_rounded,
-      OutgoingMessageDeliveryState.sent => Icons.done_rounded,
-      OutgoingMessageDeliveryState.read => Icons.done_all_rounded,
-    };
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: iconSize),
-        const SizedBox(width: 4),
-        Flexible(child: Text(label, style: style)),
-      ],
-    );
-  }
 }
