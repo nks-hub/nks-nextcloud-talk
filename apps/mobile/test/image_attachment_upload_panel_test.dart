@@ -140,6 +140,84 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('shows a quota-specific message without a retry action for 507', (
+    tester,
+  ) async {
+    final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
+    addTearDown(events.close);
+    final controller = ImageAttachmentUploadController(
+      startUpload: (_) async => ImageAttachmentUploadSession(
+        events: events.stream,
+        cancel: () async {},
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.startPrepared(_request);
+    events.add(
+      ImageAttachmentUploadEvent.failed(
+        'dav-quota-exceeded',
+        retryAllowed: false,
+      ),
+    );
+
+    await tester.pumpWidget(_app(controller));
+
+    expect(
+      find.text('The image could not be sent: storage quota exceeded.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('retry-image-attachment-upload')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('dismiss-image-attachment-upload')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'shows a permission-specific message without a retry action for 403',
+    (tester) async {
+      final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
+      addTearDown(events.close);
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) async => ImageAttachmentUploadSession(
+          events: events.stream,
+          cancel: () async {},
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.startPrepared(_request);
+      events.add(
+        ImageAttachmentUploadEvent.failed(
+          'dav-permission-denied',
+          retryAllowed: false,
+        ),
+      );
+
+      await tester.pumpWidget(_app(controller));
+
+      expect(
+        find.text(
+          'The image could not be sent: you do not have permission to '
+          'upload files here.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('retry-image-attachment-upload')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('dismiss-image-attachment-upload')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 Widget _app(

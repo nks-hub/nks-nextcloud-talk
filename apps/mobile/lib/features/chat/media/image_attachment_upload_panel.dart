@@ -281,6 +281,10 @@ String _statusText(
     strings.confirmingAttachment,
   ImageAttachmentUploadPhase.cancelling => strings.cancellingUpload,
   ImageAttachmentUploadPhase.completed => strings.imageSent,
-  ImageAttachmentUploadPhase.failed => strings.imageUploadFailed,
+  ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
+    'dav-quota-exceeded' => strings.imageUploadFailedQuota,
+    'dav-permission-denied' => strings.imageUploadFailedPermission,
+    _ => strings.imageUploadFailed,
+  },
   ImageAttachmentUploadPhase.cancelled => strings.uploadCancelled,
 };

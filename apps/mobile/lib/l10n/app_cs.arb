@@ -126,6 +126,8 @@
   "cancellingUpload": "Ruším nahrávání…",
   "imageSent": "Obrázek byl odeslán",
   "imageUploadFailed": "Obrázek se nepodařilo odeslat.",
+  "imageUploadFailedQuota": "Obrázek se nepodařilo odeslat: úložiště je zaplněné.",
+  "imageUploadFailedPermission": "Obrázek se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.",
   "uploadCancelled": "Nahrávání bylo zrušeno",
   "participantAvatarGuest": "Host",
   "participantAvatarBot": "Bot",

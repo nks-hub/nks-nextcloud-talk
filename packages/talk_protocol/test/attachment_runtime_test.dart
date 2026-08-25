@@ -215,6 +215,67 @@ void main() {
       expect(_state(snapshot, operation).cleanupDraftFile, isTrue);
     });
 
+    test(
+      'quota exceeded (507) during upload fails the job instead of retrying',
+      () {
+        final operation = draft();
+        var snapshot = _driveProbe(operation);
+        final upload = _plan(
+          snapshot,
+          operation,
+          41,
+          observation: observation(operation.source),
+        );
+        snapshot = commit(snapshot, upload);
+        final response = decodeAttachmentDavResponse(
+          request: upload.request! as AttachmentDavRequest,
+          statusCode: 507,
+          body: Uint8List(0),
+        );
+        snapshot = _apply(snapshot, operation, response);
+        final job = _state(snapshot, operation);
+        expect(job.phase, AttachmentJobPhase.failed);
+        expect(job.errorClass, 'dav-quota-exceeded');
+        expect(job.resumePhase, isNull);
+        expect(job.cleanupDraftFile, isTrue);
+
+        // A failed job never plans another automatic byte request: the
+        // runtime does not retry quota errors.
+        final next = planNextAttachmentStep(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+          authority: authority(room: operation.roomToken),
+          requestId: requestId(42),
+        );
+        expect(next.canCommit, isFalse);
+      },
+    );
+
+    test('missing write permission (403) during upload fails the job instead '
+        'of retrying', () {
+      final operation = draft();
+      var snapshot = _driveProbe(operation);
+      final upload = _plan(
+        snapshot,
+        operation,
+        43,
+        observation: observation(operation.source),
+      );
+      snapshot = commit(snapshot, upload);
+      final response = decodeAttachmentDavResponse(
+        request: upload.request! as AttachmentDavRequest,
+        statusCode: 403,
+        body: Uint8List(0),
+      );
+      snapshot = _apply(snapshot, operation, response);
+      final job = _state(snapshot, operation);
+      expect(job.phase, AttachmentJobPhase.failed);
+      expect(job.errorClass, 'dav-permission-denied');
+      expect(job.resumePhase, isNull);
+      expect(job.cleanupDraftFile, isTrue);
+    });
+
     test('chunk resume uploads only missing chunks then moves .file', () {
       final prepared = source(size: 2048000);
       final operation = draft(preparedSource: prepared);

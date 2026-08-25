@@ -33,6 +33,8 @@ enum AttachmentFinalizeClassification {
 enum AttachmentDavClassification {
   success,
   deterministicFailure,
+  quotaExceeded,
+  permissionDenied,
   reauthenticationRequired,
   transientFailure,
 }
@@ -286,6 +288,10 @@ AttachmentDavResponse decodeAttachmentDavResponse({
   }
   final classification = statusCode == 401
       ? AttachmentDavClassification.reauthenticationRequired
+      : statusCode == 507
+      ? AttachmentDavClassification.quotaExceeded
+      : statusCode == 403
+      ? AttachmentDavClassification.permissionDenied
       : statusCode == 429 || statusCode >= 500
       ? AttachmentDavClassification.transientFailure
       : AttachmentDavClassification.deterministicFailure;

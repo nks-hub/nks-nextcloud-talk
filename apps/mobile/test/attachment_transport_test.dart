@@ -421,26 +421,31 @@ void main() {
       }
     });
 
-    test('preserves DAV 401, 429 and 5xx classifications', () async {
-      for (final testCase in <(int, AttachmentDavClassification)>[
-        (401, AttachmentDavClassification.reauthenticationRequired),
-        (429, AttachmentDavClassification.transientFailure),
-        (503, AttachmentDavClassification.transientFailure),
-      ]) {
-        final transport = _transport(
-          MockClient((_) async => http.Response('', testCase.$1)),
-        );
-        final response = await transport.sendDav(
-          request: AttachmentDavRequest.chunkMkcol(
-            context: _context(300 + testCase.$1),
-            davUserId: _davUser,
-            uploadSessionId: _uploadSession(),
-          ),
-          authorization: _authorization,
-        );
-        expect(response.classification, testCase.$2);
-      }
-    });
+    test(
+      'preserves DAV 401, 429, 5xx, quota and permission classifications',
+      () async {
+        for (final testCase in <(int, AttachmentDavClassification)>[
+          (401, AttachmentDavClassification.reauthenticationRequired),
+          (429, AttachmentDavClassification.transientFailure),
+          (503, AttachmentDavClassification.transientFailure),
+          (507, AttachmentDavClassification.quotaExceeded),
+          (403, AttachmentDavClassification.permissionDenied),
+        ]) {
+          final transport = _transport(
+            MockClient((_) async => http.Response('', testCase.$1)),
+          );
+          final response = await transport.sendDav(
+            request: AttachmentDavRequest.chunkMkcol(
+              context: _context(300 + testCase.$1),
+              davUserId: _davUser,
+              uploadSessionId: _uploadSession(),
+            ),
+            authorization: _authorization,
+          );
+          expect(response.classification, testCase.$2);
+        }
+      },
+    );
 
     test('wraps malformed DAV XML as stage-aware response error', () async {
       final request = AttachmentDavRequest.chunkPropfind(
