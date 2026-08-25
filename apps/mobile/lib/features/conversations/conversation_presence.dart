@@ -237,6 +237,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
     return Column(
       children: [
         Container(
@@ -264,6 +265,21 @@ final class PresenceChatRoomPane extends StatelessWidget {
                   conversation: conversation,
                   titleStyle: Theme.of(context).textTheme.titleMedium,
                   fallbackSubtitle: conversation.description,
+                ),
+              ),
+              IconButton(
+                key: const Key('open-room-details'),
+                tooltip: strings.roomDetailsOpenTooltip,
+                icon: const Icon(Icons.info_outline_rounded),
+                onPressed: () => unawaited(
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (context) => RoomDetailsScreen(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

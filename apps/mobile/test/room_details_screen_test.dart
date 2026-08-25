@@ -10,7 +10,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
-import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -153,33 +153,49 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('opening the chat room screen exposes an info action', (
-    tester,
-  ) async {
-    _growViewport(tester);
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-        client: participantsClient(const <Object?>[]),
-      ),
-    );
-    await tester.pump();
+  // Both room surfaces the app really navigates to, not ChatRoomScreen:
+  // that one is reachable from tests only, so asserting on it would prove
+  // nothing about whether a user can open the details.
+  for (final surface in <String, Widget Function()>{
+    'the room screen': () => PresenceChatRoomScreen(
+      account: account,
+      conversation: conversation,
+    ),
+    'the room pane': () => Scaffold(
+      body: PresenceChatRoomPane(account: account, conversation: conversation),
+    ),
+  }.entries) {
+    testWidgets('${surface.key} exposes an info action', (tester) async {
+      _growViewport(tester);
+      await tester.pumpWidget(
+        app(
+          home: surface.value(),
+          client: participantsClient(const <Object?>[]),
+          overrides: [
+            conversationsProvider.overrideWith(
+              (ref, accountId) => Stream.value([conversation]),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
 
-    final infoButton = find.byKey(const Key('open-room-details'));
-    expect(infoButton, findsOneWidget);
-    await tester.tap(infoButton);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+      final infoButton = find.byKey(const Key('open-room-details'));
+      expect(infoButton, findsOneWidget);
+      await tester.tap(infoButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
-    await _pumpUntil(
-      tester,
-      () => find.text('No participants found.').evaluate().isNotEmpty,
-    );
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  });
+      expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
+      await _pumpUntil(
+        tester,
+        () => find.text('No participants found.').evaluate().isNotEmpty,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+  }
 
   testWidgets('offers a retry when the participant list fails to load', (
     tester,

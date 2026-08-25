@@ -1555,6 +1555,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search failed. Try again.'**
   String get searchMessagesError;
+
+  /// No description provided for @newConversationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get newConversationTitle;
+
+  /// No description provided for @newConversationSearchLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search people and groups'**
+  String get newConversationSearchLabel;
+
+  /// No description provided for @newConversationIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a name to find someone to chat with.'**
+  String get newConversationIdle;
+
+  /// No description provided for @newConversationEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No people or groups found.'**
+  String get newConversationEmpty;
+
+  /// No description provided for @newConversationNameDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name this group conversation'**
+  String get newConversationNameDialogTitle;
+
+  /// No description provided for @newConversationNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation name'**
+  String get newConversationNameLabel;
+
+  /// No description provided for @newConversationCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get newConversationCreate;
+
+  /// No description provided for @newConversationErrorAccountMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This account is no longer available.'**
+  String get newConversationErrorAccountMissing;
+
+  /// No description provided for @newConversationErrorCredentialMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to search for people and groups.'**
+  String get newConversationErrorCredentialMissing;
+
+  /// No description provided for @newConversationErrorInvalidSearchTerm.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a search term.'**
+  String get newConversationErrorInvalidSearchTerm;
+
+  /// No description provided for @newConversationErrorRoomNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation needs a name.'**
+  String get newConversationErrorRoomNameRequired;
+
+  /// No description provided for @newConversationErrorReauthenticationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to continue.'**
+  String get newConversationErrorReauthenticationRequired;
+
+  /// No description provided for @newConversationErrorOcsFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected the request.'**
+  String get newConversationErrorOcsFailure;
+
+  /// No description provided for @newConversationErrorRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Try again soon.'**
+  String get newConversationErrorRateLimited;
+
+  /// No description provided for @newConversationErrorServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is temporarily unavailable.'**
+  String get newConversationErrorServiceUnavailable;
+
+  /// No description provided for @newConversationErrorInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The server sent an unexpected response.'**
+  String get newConversationErrorInvalidResponse;
+
+  /// No description provided for @newConversationErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server.'**
+  String get newConversationErrorNetwork;
 }
 
 class _AppLocalizationsDelegate

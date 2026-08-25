@@ -8,9 +8,11 @@ import '../../core/brand_mark.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import '../search/message_search_screen.dart';
+import '../settings/settings_screen.dart';
 import 'conversation_list_actions.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
@@ -384,6 +386,33 @@ void _openMessageSearch(BuildContext context, String accountId) {
   );
 }
 
+void _openSettings(BuildContext context) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (context) => const SettingsScreen()),
+  );
+}
+
+/// Opens the new-conversation screen and, once the server has created the
+/// room, refreshes the list so the caller's own conversation stream is the
+/// single source of truth for what exists.
+void _openNewConversation(
+  BuildContext context,
+  String accountId,
+  Future<void> Function() onRefresh,
+) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (context) => NewConversationScreen(
+        accountId: accountId,
+        onConversationCreated: (_) {
+          Navigator.of(context).pop();
+          unawaited(onRefresh());
+        },
+      ),
+    ),
+  );
+}
+
 bool _isPermanentConversationSyncError(ConversationSyncError error) {
   return switch (error) {
     ConversationSyncError.rateLimited ||
@@ -575,6 +604,12 @@ final class _CompactShell extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        key: const Key('open-new-conversation'),
+        onPressed: () => _openNewConversation(context, account.id, onRefresh),
+        tooltip: strings.newConversationTitle,
+        child: const Icon(Icons.chat_bubble_outline_rounded),
+      ),
     );
   }
 }
@@ -639,6 +674,16 @@ final class _ExpandedShell extends StatelessWidget {
                               strings.conversations,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
+                          ),
+                          IconButton(
+                            key: const Key('open-new-conversation'),
+                            onPressed: () => _openNewConversation(
+                              context,
+                              account.id,
+                              onRefresh,
+                            ),
+                            tooltip: strings.newConversationTitle,
+                            icon: const Icon(Icons.chat_bubble_outline_rounded),
                           ),
                           IconButton(
                             key: const Key('open-message-search'),
@@ -766,10 +811,21 @@ final class _AccountRail extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.all(12),
-            child: IconButton.filledTonal(
-              onPressed: onAdd,
-              tooltip: strings.addAccount,
-              icon: const Icon(Icons.add_rounded),
+            child: Column(
+              children: [
+                IconButton.filledTonal(
+                  onPressed: onAdd,
+                  tooltip: strings.addAccount,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+                const SizedBox(height: 8),
+                IconButton(
+                  key: const Key('open-settings'),
+                  onPressed: () => _openSettings(context),
+                  tooltip: strings.settingsTitle,
+                  icon: const Icon(Icons.settings_outlined),
+                ),
+              ],
             ),
           ),
         ],
@@ -788,6 +844,7 @@ final class _AccountMenu extends StatelessWidget {
   });
 
   static const _addKey = '__add_account__';
+  static const _settingsKey = '__settings__';
 
   final StoredAccount selected;
   final List<StoredAccount> accounts;
@@ -804,7 +861,11 @@ final class _AccountMenu extends StatelessWidget {
         account: selected,
         unreadCount: unreadByAccount[selected.id] ?? 0,
       ),
-      onSelected: (value) => value == _addKey ? onAdd() : onSelect(value),
+      onSelected: (value) => switch (value) {
+        _addKey => onAdd(),
+        _settingsKey => _openSettings(context),
+        _ => onSelect(value),
+      },
       itemBuilder: (context) => [
         for (final account in accounts)
           PopupMenuItem<String>(
@@ -830,6 +891,15 @@ final class _AccountMenu extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.add_rounded),
             title: Text(strings.addAccount),
+          ),
+        ),
+        PopupMenuItem<String>(
+          key: const Key('open-settings'),
+          value: _settingsKey,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.settings_outlined),
+            title: Text(strings.settingsTitle),
           ),
         ),
       ],

@@ -810,4 +810,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchMessagesError => 'Search failed. Try again.';
+
+  @override
+  String get newConversationTitle => 'New conversation';
+
+  @override
+  String get newConversationSearchLabel => 'Search people and groups';
+
+  @override
+  String get newConversationIdle => 'Type a name to find someone to chat with.';
+
+  @override
+  String get newConversationEmpty => 'No people or groups found.';
+
+  @override
+  String get newConversationNameDialogTitle => 'Name this group conversation';
+
+  @override
+  String get newConversationNameLabel => 'Conversation name';
+
+  @override
+  String get newConversationCreate => 'Create';
+
+  @override
+  String get newConversationErrorAccountMissing =>
+      'This account is no longer available.';
+
+  @override
+  String get newConversationErrorCredentialMissing =>
+      'Sign in again to search for people and groups.';
+
+  @override
+  String get newConversationErrorInvalidSearchTerm => 'Enter a search term.';
+
+  @override
+  String get newConversationErrorRoomNameRequired =>
+      'The conversation needs a name.';
+
+  @override
+  String get newConversationErrorReauthenticationRequired =>
+      'Sign in again to continue.';
+
+  @override
+  String get newConversationErrorOcsFailure =>
+      'The server rejected the request.';
+
+  @override
+  String get newConversationErrorRateLimited =>
+      'Too many requests. Try again soon.';
+
+  @override
+  String get newConversationErrorServiceUnavailable =>
+      'The server is temporarily unavailable.';
+
+  @override
+  String get newConversationErrorInvalidResponse =>
+      'The server sent an unexpected response.';
+
+  @override
+  String get newConversationErrorNetwork => 'Could not reach the server.';
 }

@@ -256,5 +256,22 @@
   "searchMessagesHint": "Hledat ve zprávách",
   "searchMessagesPrompt": "Zadejte hledaný text",
   "searchMessagesNoResults": "Nic nenalezeno",
-  "searchMessagesError": "Hledání selhalo. Zkuste to znovu."
+  "searchMessagesError": "Hledání selhalo. Zkuste to znovu.",
+  "newConversationTitle": "Nová konverzace",
+  "newConversationSearchLabel": "Hledat lidi a skupiny",
+  "newConversationIdle": "Začněte psát jméno a najděte, s kým chcete chatovat.",
+  "newConversationEmpty": "Nenašli se žádní lidé ani skupiny.",
+  "newConversationNameDialogTitle": "Pojmenujte skupinovou konverzaci",
+  "newConversationNameLabel": "Název konverzace",
+  "newConversationCreate": "Vytvořit",
+  "newConversationErrorAccountMissing": "Tento účet už není dostupný.",
+  "newConversationErrorCredentialMissing": "Přihlaste se znovu, abyste mohli hledat lidi a skupiny.",
+  "newConversationErrorInvalidSearchTerm": "Zadejte hledaný výraz.",
+  "newConversationErrorRoomNameRequired": "Konverzace potřebuje název.",
+  "newConversationErrorReauthenticationRequired": "Pro pokračování se přihlaste znovu.",
+  "newConversationErrorOcsFailure": "Server požadavek odmítl.",
+  "newConversationErrorRateLimited": "Příliš mnoho požadavků. Zkuste to za chvíli.",
+  "newConversationErrorServiceUnavailable": "Server je dočasně nedostupný.",
+  "newConversationErrorInvalidResponse": "Server poslal neočekávanou odpověď.",
+  "newConversationErrorNetwork": "Server je nedostupný."
 }

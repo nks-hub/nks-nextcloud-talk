@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../l10n/generated/app_localizations.dart';
 import 'new_conversation_service.dart';
 
 const Duration _searchDebounce = Duration(milliseconds: 300);
@@ -134,27 +135,30 @@ final class _NewConversationScreenState
   }
 
   Future<String?> _promptRoomName(String groupLabel) {
+    final strings = AppLocalizations.of(context);
     final controller = TextEditingController(text: groupLabel);
     return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Name this group conversation'),
+        title: Text(strings.newConversationNameDialogTitle),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Conversation name'),
+          decoration: InputDecoration(
+            labelText: strings.newConversationNameLabel,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+            child: Text(strings.cancel),
           ),
           FilledButton(
             onPressed: () {
               final name = controller.text.trim();
               Navigator.of(dialogContext).pop(name.isEmpty ? null : name);
             },
-            child: const Text('Create'),
+            child: Text(strings.newConversationCreate),
           ),
         ],
       ),
@@ -163,8 +167,9 @@ final class _NewConversationScreenState
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('New conversation')),
+      appBar: AppBar(title: Text(strings.newConversationTitle)),
       body: Column(
         children: [
           Padding(
@@ -173,9 +178,9 @@ final class _NewConversationScreenState
               controller: _searchController,
               autofocus: true,
               enabled: !_creating,
-              decoration: const InputDecoration(
-                labelText: 'Search people and groups',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                labelText: strings.newConversationSearchLabel,
+                prefixIcon: const Icon(Icons.search),
               ),
               onChanged: _onSearchChanged,
               onSubmitted: (value) {
@@ -194,14 +199,13 @@ final class _NewConversationScreenState
   }
 
   Widget _buildBody(BuildContext context) {
+    final strings = AppLocalizations.of(context);
     return switch (_state) {
-      _SearchIdle() => const _CenteredMessage(
-        'Type a name to find someone to chat with.',
-      ),
+      _SearchIdle() => _CenteredMessage(strings.newConversationIdle),
       _SearchLoading() => const Center(child: CircularProgressIndicator()),
       _SearchFailed(:final error) => _CenteredMessage(_errorMessage(error)),
       _SearchResults(recipients: final recipients) when recipients.isEmpty =>
-        const _CenteredMessage('No people or groups found.'),
+        _CenteredMessage(strings.newConversationEmpty),
       _SearchResults(:final recipients) => ListView.builder(
         itemCount: recipients.length,
         itemBuilder: (context, index) {
@@ -226,23 +230,29 @@ final class _NewConversationScreenState
     };
   }
 
-  String _errorMessage(NewConversationError error) => switch (error) {
-    NewConversationError.accountMissing =>
-      'This account is no longer available.',
-    NewConversationError.credentialMissing =>
-      'Sign in again to search for people and groups.',
-    NewConversationError.invalidSearchTerm => 'Enter a search term.',
-    NewConversationError.roomNameRequired => 'The conversation needs a name.',
-    NewConversationError.reauthenticationRequired =>
-      'Sign in again to continue.',
-    NewConversationError.ocsFailure => 'The server rejected the request.',
-    NewConversationError.rateLimited => 'Too many requests. Try again soon.',
-    NewConversationError.serviceUnavailable =>
-      'The server is temporarily unavailable.',
-    NewConversationError.invalidResponse =>
-      'The server sent an unexpected response.',
-    NewConversationError.network => 'Could not reach the server.',
-  };
+  String _errorMessage(NewConversationError error) {
+    final strings = AppLocalizations.of(context);
+    return switch (error) {
+      NewConversationError.accountMissing =>
+        strings.newConversationErrorAccountMissing,
+      NewConversationError.credentialMissing =>
+        strings.newConversationErrorCredentialMissing,
+      NewConversationError.invalidSearchTerm =>
+        strings.newConversationErrorInvalidSearchTerm,
+      NewConversationError.roomNameRequired =>
+        strings.newConversationErrorRoomNameRequired,
+      NewConversationError.reauthenticationRequired =>
+        strings.newConversationErrorReauthenticationRequired,
+      NewConversationError.ocsFailure => strings.newConversationErrorOcsFailure,
+      NewConversationError.rateLimited =>
+        strings.newConversationErrorRateLimited,
+      NewConversationError.serviceUnavailable =>
+        strings.newConversationErrorServiceUnavailable,
+      NewConversationError.invalidResponse =>
+        strings.newConversationErrorInvalidResponse,
+      NewConversationError.network => strings.newConversationErrorNetwork,
+    };
+  }
 }
 
 final class _CenteredMessage extends StatelessWidget {

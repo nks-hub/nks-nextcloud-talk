@@ -6,8 +6,8 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../onboarding/onboarding_screen.dart';
 
-/// Standalone accounts and appearance settings screen. Not wired into any
-/// navigation entry point yet — the caller decides how to reach it.
+/// Accounts and appearance settings. Reached from the account menu in the
+/// compact shell and from the account rail in the expanded one.
 final class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 

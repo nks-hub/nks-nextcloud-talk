@@ -809,4 +809,64 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get searchMessagesError => 'Hledání selhalo. Zkuste to znovu.';
+
+  @override
+  String get newConversationTitle => 'Nová konverzace';
+
+  @override
+  String get newConversationSearchLabel => 'Hledat lidi a skupiny';
+
+  @override
+  String get newConversationIdle =>
+      'Začněte psát jméno a najděte, s kým chcete chatovat.';
+
+  @override
+  String get newConversationEmpty => 'Nenašli se žádní lidé ani skupiny.';
+
+  @override
+  String get newConversationNameDialogTitle =>
+      'Pojmenujte skupinovou konverzaci';
+
+  @override
+  String get newConversationNameLabel => 'Název konverzace';
+
+  @override
+  String get newConversationCreate => 'Vytvořit';
+
+  @override
+  String get newConversationErrorAccountMissing =>
+      'Tento účet už není dostupný.';
+
+  @override
+  String get newConversationErrorCredentialMissing =>
+      'Přihlaste se znovu, abyste mohli hledat lidi a skupiny.';
+
+  @override
+  String get newConversationErrorInvalidSearchTerm => 'Zadejte hledaný výraz.';
+
+  @override
+  String get newConversationErrorRoomNameRequired =>
+      'Konverzace potřebuje název.';
+
+  @override
+  String get newConversationErrorReauthenticationRequired =>
+      'Pro pokračování se přihlaste znovu.';
+
+  @override
+  String get newConversationErrorOcsFailure => 'Server požadavek odmítl.';
+
+  @override
+  String get newConversationErrorRateLimited =>
+      'Příliš mnoho požadavků. Zkuste to za chvíli.';
+
+  @override
+  String get newConversationErrorServiceUnavailable =>
+      'Server je dočasně nedostupný.';
+
+  @override
+  String get newConversationErrorInvalidResponse =>
+      'Server poslal neočekávanou odpověď.';
+
+  @override
+  String get newConversationErrorNetwork => 'Server je nedostupný.';
 }

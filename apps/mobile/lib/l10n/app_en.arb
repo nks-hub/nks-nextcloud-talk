@@ -263,5 +263,22 @@
   "searchMessagesHint": "Search messages",
   "searchMessagesPrompt": "Type to search messages",
   "searchMessagesNoResults": "No messages found",
-  "searchMessagesError": "Search failed. Try again."
+  "searchMessagesError": "Search failed. Try again.",
+  "newConversationTitle": "New conversation",
+  "newConversationSearchLabel": "Search people and groups",
+  "newConversationIdle": "Type a name to find someone to chat with.",
+  "newConversationEmpty": "No people or groups found.",
+  "newConversationNameDialogTitle": "Name this group conversation",
+  "newConversationNameLabel": "Conversation name",
+  "newConversationCreate": "Create",
+  "newConversationErrorAccountMissing": "This account is no longer available.",
+  "newConversationErrorCredentialMissing": "Sign in again to search for people and groups.",
+  "newConversationErrorInvalidSearchTerm": "Enter a search term.",
+  "newConversationErrorRoomNameRequired": "The conversation needs a name.",
+  "newConversationErrorReauthenticationRequired": "Sign in again to continue.",
+  "newConversationErrorOcsFailure": "The server rejected the request.",
+  "newConversationErrorRateLimited": "Too many requests. Try again soon.",
+  "newConversationErrorServiceUnavailable": "The server is temporarily unavailable.",
+  "newConversationErrorInvalidResponse": "The server sent an unexpected response.",
+  "newConversationErrorNetwork": "Could not reach the server."
 }
