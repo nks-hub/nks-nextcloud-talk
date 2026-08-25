@@ -287,6 +287,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get loadingOlderMessages => 'Načítám starší zprávy…';
 
   @override
+  String get chatHistoryGapNotice => 'Část zpráv zde chybí';
+
+  @override
   String get readOnlyConversation => 'Tato konverzace je jen pro čtení.';
 
   @override
