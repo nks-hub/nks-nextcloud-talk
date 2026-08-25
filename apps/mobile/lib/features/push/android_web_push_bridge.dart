@@ -24,6 +24,10 @@ enum AndroidWebPushRegistrationPhase {
 
 enum AndroidNotificationPermission { notDetermined, denied, granted }
 
+enum AndroidNotificationActionKind { reply, markRead }
+
+enum AndroidNotificationActionOutcome { completed, failed }
+
 abstract interface class AndroidWebPushPlatform {
   Stream<int> get eventsAvailable;
 
@@ -70,7 +74,70 @@ abstract interface class AndroidWebPushPlatform {
     required Iterable<String> eventIds,
   });
 
+  /// Queued notification actions of exactly [accountId]. Each call counts as
+  /// one attempt natively; an action that runs out of attempts is dropped from
+  /// the queue and shown to the user as a failed notification.
+  Future<List<AndroidNotificationAction>> drainNotificationActions({
+    required String accountId,
+    int limit,
+  });
+
+  /// Removes a queued action. [AndroidNotificationActionOutcome.completed]
+  /// cancels its notification, `failed` replaces it with a visible failure.
+  Future<bool> resolveNotificationAction({
+    required String accountId,
+    required String actionId,
+    required AndroidNotificationActionOutcome outcome,
+  });
+
   Future<void> dispose();
+}
+
+class AndroidNotificationAction {
+  const AndroidNotificationAction({
+    required this.id,
+    required this.accountId,
+    required this.kind,
+    required this.notificationId,
+    required this.roomToken,
+    required this.replyText,
+  });
+
+  final String id;
+  final String accountId;
+  final AndroidNotificationActionKind kind;
+  final int notificationId;
+  final String roomToken;
+  final String? replyText;
+
+  factory AndroidNotificationAction.fromMap(Map<Object?, Object?> map) {
+    final notificationId = _requiredInt(map, 'notificationId');
+    final replyText = _optionalString(map, 'replyText');
+    final kind = switch (_requiredString(map, 'kind')) {
+      'REPLY' => AndroidNotificationActionKind.reply,
+      'MARK_READ' => AndroidNotificationActionKind.markRead,
+      _ => throw const FormatException('Native notification action is invalid.'),
+    };
+    if (notificationId <= 0 ||
+        (kind == AndroidNotificationActionKind.reply &&
+            (replyText == null || replyText.trim().isEmpty))) {
+      throw const FormatException('Native notification action is invalid.');
+    }
+    return AndroidNotificationAction(
+      id: _requiredString(map, 'id'),
+      accountId: _requiredString(map, 'accountId'),
+      kind: kind,
+      notificationId: notificationId,
+      roomToken: _requiredString(map, 'roomToken'),
+      replyText: replyText,
+    );
+  }
+
+  @override
+  String toString() =>
+      'AndroidNotificationAction(id: <redacted>, accountId: <redacted>, '
+      'kind: ${kind.name}, notificationId: $notificationId, '
+      'roomToken: <redacted>, replyText: <redacted>)';
 }
 
 class AndroidWebPushAvailability {
@@ -432,6 +499,40 @@ class AndroidWebPushBridge implements AndroidWebPushPlatform {
       'eventIds': ids,
     });
     return _requiredInt(response, 'removedCount');
+  }
+
+  @override
+  Future<List<AndroidNotificationAction>> drainNotificationActions({
+    required String accountId,
+    int limit = 20,
+  }) async {
+    final response = await _channel.invokeMethod<List<Object?>>(
+      'drainNotificationActions',
+      <String, Object>{'accountId': accountId, 'limit': limit},
+    );
+    if (response == null) {
+      throw const FormatException('Native notification action list is missing.');
+    }
+    return response
+        .map((action) => AndroidNotificationAction.fromMap(_requiredMap(action)))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<bool> resolveNotificationAction({
+    required String accountId,
+    required String actionId,
+    required AndroidNotificationActionOutcome outcome,
+  }) async {
+    final response = await _invokeMap(
+      'resolveNotificationAction',
+      <String, Object>{
+        'accountId': accountId,
+        'actionId': actionId,
+        'outcome': outcome.name,
+      },
+    );
+    return _requiredBool(response, 'resolved');
   }
 
   @override

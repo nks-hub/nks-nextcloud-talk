@@ -1,10 +1,16 @@
 package com.nkshub.nextcloudtalk.push
 
+import android.app.Notification
+import android.app.NotificationManager
+import android.app.RemoteInput
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.junit.Assert.assertEquals
@@ -255,6 +261,412 @@ class AndroidWebPushRuntimeTest {
         val eventIds = events.mapNotNull { it["id"] as? String }.toSet()
         assertTrue(eventIds.isNotEmpty())
         assertTrue(store.acknowledge(DURABILITY_ACCOUNT_ID, eventIds) > 0)
+    }
+
+    @Test
+    fun notificationActionsAreAccountScopedDurableAndOneShot() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountA = "instrumentation-action-account-a"
+        val accountB = "instrumentation-action-account-b"
+        drainAllActions(store, accountA)
+        drainAllActions(store, accountB)
+
+        val replyA = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountA,
+            notificationId = 4101,
+            roomToken = "roomalpha",
+        )
+        val markReadA = store.armNotificationAction(
+            kind = NotificationActionKind.MARK_READ,
+            accountId = accountA,
+            notificationId = 4101,
+            roomToken = "roomalpha",
+        )
+        val replyB = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountB,
+            notificationId = 4101,
+            roomToken = "roombravo",
+        )
+        assertNotEquals(replyA, markReadA)
+        assertNotEquals(replyA, replyB)
+
+        val preferences = context.getSharedPreferences(
+            AndroidNotificationOpenStore.PREFERENCES_NAME,
+            Context.MODE_PRIVATE,
+        )
+        val encrypted = preferences.getString(AndroidNotificationOpenStore.STATE_KEY, null)
+        assertNotNull(encrypted)
+        assertFalse(encrypted!!.contains(replyA))
+        assertFalse(encrypted.contains(accountA))
+        assertFalse(encrypted.contains("roomalpha"))
+
+        // An armed token cannot be fired as the other kind.
+        assertNull(store.fireNotificationAction(replyA, NotificationActionKind.MARK_READ, "x"))
+        assertNull(
+            store.fireNotificationAction(
+                "nksact1_${"A".repeat(43)}",
+                NotificationActionKind.REPLY,
+                "x",
+            ),
+        )
+
+        val fired = AndroidWebPushStore(context)
+            .fireNotificationAction(replyA, NotificationActionKind.REPLY, "hello there")
+        assertNotNull(fired)
+        assertEquals(accountA, fired!!.queued.accountId)
+        assertEquals("roomalpha", fired.queued.roomToken)
+        assertEquals("hello there", fired.queued.replyText)
+        assertTrue(fired.evicted.isEmpty())
+        // One tap consumes every armed intent of that notification.
+        assertNull(store.fireNotificationAction(replyA, NotificationActionKind.REPLY, "again"))
+        assertNull(
+            store.fireNotificationAction(markReadA, NotificationActionKind.MARK_READ, null),
+        )
+
+        val reopened = AndroidWebPushStore(context)
+        assertTrue(reopened.claimNotificationActions(accountB, 10).ready.isEmpty())
+        val claimed = reopened.claimNotificationActions(accountA, 10)
+        assertEquals(1, claimed.ready.size)
+        assertTrue(claimed.exhausted.isEmpty())
+        val queued = claimed.ready.single()
+        assertEquals(replyA, queued.token)
+        assertEquals(NotificationActionKind.REPLY, queued.kind)
+        assertEquals("hello there", queued.replyText)
+        assertEquals(1, queued.attempts)
+        assertFalse(queued.toString().contains("hello there"))
+        assertFalse(queued.toString().contains("roomalpha"))
+        assertFalse(queued.toString().contains(accountA))
+
+        val channelMap = queued.toChannelMap()
+        assertEquals(replyA, channelMap["id"])
+        assertEquals("REPLY", channelMap["kind"])
+        assertEquals(4101L, channelMap["notificationId"])
+
+        // The other account cannot resolve it away.
+        assertNull(reopened.resolveNotificationAction(accountB, replyA))
+        assertNotNull(reopened.resolveNotificationAction(accountA, replyA))
+        assertNull(reopened.resolveNotificationAction(accountA, replyA))
+        assertTrue(reopened.claimNotificationActions(accountA, 10).ready.isEmpty())
+
+        store.fireNotificationAction(replyB, NotificationActionKind.REPLY, "other account")
+        drainAllActions(store, accountB)
+    }
+
+    @Test
+    fun queuedActionSurvivesNotificationRevocationAndBoundsRetries() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-action-retention"
+        drainAllActions(store, accountId)
+
+        val armed = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4102,
+            roomToken = "roomcharlie",
+        )
+        val keptArmed = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4103,
+            roomToken = "roomcharlie",
+        )
+        store.fireNotificationAction(armed, NotificationActionKind.REPLY, "typed text")
+
+        // A server-side delete disarms pending intents but must never discard
+        // text the user already sent off.
+        store.revokeNotificationOpens(accountId, setOf(4102L, 4103L))
+        assertNull(store.fireNotificationAction(keptArmed, NotificationActionKind.REPLY, "x"))
+        assertEquals(1, store.claimNotificationActions(accountId, 10).ready.size)
+
+        var exhausted: StoredNotificationAction? = null
+        for (attempt in 2..AndroidWebPushStateMachine.MAX_NOTIFICATION_ACTION_ATTEMPTS + 1) {
+            val claim = store.claimNotificationActions(accountId, 10)
+            exhausted = claim.exhausted.singleOrNull() ?: exhausted
+        }
+        assertNotNull(exhausted)
+        assertEquals("typed text", exhausted!!.replyText)
+        assertTrue(store.claimNotificationActions(accountId, 10).ready.isEmpty())
+    }
+
+    @Test
+    fun notificationActionIntentsAreExplicitOpaqueAndPerAccount() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-action-intent"
+        drainAllActions(store, accountId)
+        val token = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4104,
+            roomToken = "roomdelta",
+        )
+
+        val intent = AndroidSystemNotifications.notificationActionIntent(
+            context,
+            NotificationActionKind.REPLY,
+            token,
+        )
+        assertEquals(context.packageName, intent.component?.packageName)
+        assertEquals(
+            AndroidNotificationActionReceiver::class.java.name,
+            intent.component?.className,
+        )
+        val serialized = intent.toUri(Intent.URI_INTENT_SCHEME)
+        assertFalse(serialized.contains(accountId))
+        assertFalse(serialized.contains("roomdelta"))
+
+        val parsed = AndroidSystemNotifications.notificationActionRequest(
+            intent,
+            context.packageName,
+        )
+        assertEquals(NotificationActionKind.REPLY to token, parsed)
+        // A foreign scheme, an unknown host and a bad token are all rejected.
+        assertNull(
+            AndroidSystemNotifications.notificationActionRequest(intent, "com.example.other"),
+        )
+        assertNull(
+            AndroidSystemNotifications.notificationActionRequest(
+                Intent(intent).apply {
+                    data = Uri.parse("${context.packageName}://notification-open/$token")
+                },
+                context.packageName,
+            ),
+        )
+        assertNull(
+            AndroidSystemNotifications.notificationActionRequest(
+                Intent(intent).apply {
+                    data = Uri.parse("${context.packageName}://notification-reply/not-a-token")
+                },
+                context.packageName,
+            ),
+        )
+
+        val replyIntent = AndroidSystemNotifications.notificationActionPendingIntent(
+            context,
+            NotificationActionKind.REPLY,
+            token,
+        )
+        val markReadToken = store.armNotificationAction(
+            kind = NotificationActionKind.MARK_READ,
+            accountId = accountId,
+            notificationId = 4104,
+            roomToken = "roomdelta",
+        )
+        val markReadIntent = AndroidSystemNotifications.notificationActionPendingIntent(
+            context,
+            NotificationActionKind.MARK_READ,
+            markReadToken,
+        )
+        assertNotEquals(replyIntent, markReadIntent)
+        assertNotEquals(replyIntent.intentSender, markReadIntent.intentSender)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertFalse(markReadIntent.isImmutable == false)
+            assertTrue(replyIntent.isImmutable == false)
+        }
+        replyIntent.cancel()
+        markReadIntent.cancel()
+        drainAllActions(store, accountId)
+    }
+
+    @Test
+    fun channelRejectsForeignAccountAndInvalidActionArguments() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountA = "instrumentation-action-channel-a"
+        val accountB = "instrumentation-action-channel-b"
+        drainAllActions(store, accountA)
+        drainAllActions(store, accountB)
+        val token = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountA,
+            notificationId = 4105,
+            roomToken = "roomecho",
+        )
+        store.fireNotificationAction(token, NotificationActionKind.REPLY, "channel text")
+
+        ActivityScenario.launch(AndroidWebPushActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val channel = AndroidWebPushChannel(activity.applicationContext, activity)
+
+                val foreign = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "drainNotificationActions",
+                        mapOf("accountId" to accountB, "limit" to 10),
+                    ),
+                    foreign,
+                )
+                assertTrue((foreign.value as List<*>).isEmpty())
+
+                val badLimit = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "drainNotificationActions",
+                        mapOf("accountId" to accountA, "limit" to 0),
+                    ),
+                    badLimit,
+                )
+                assertEquals("invalid_drain_limit", badLimit.errorCode)
+
+                val drained = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "drainNotificationActions",
+                        mapOf("accountId" to accountA, "limit" to 10),
+                    ),
+                    drained,
+                )
+                val action = (drained.value as List<*>).single() as Map<*, *>
+                assertEquals(accountA, action["accountId"])
+                assertEquals("roomecho", action["roomToken"])
+                assertEquals("channel text", action["replyText"])
+
+                val badOutcome = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "resolveNotificationAction",
+                        mapOf(
+                            "accountId" to accountA,
+                            "actionId" to token,
+                            "outcome" to "pretend-ok",
+                        ),
+                    ),
+                    badOutcome,
+                )
+                assertEquals("invalid_outcome", badOutcome.errorCode)
+
+                val foreignResolve = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "resolveNotificationAction",
+                        mapOf(
+                            "accountId" to accountB,
+                            "actionId" to token,
+                            "outcome" to "completed",
+                        ),
+                    ),
+                    foreignResolve,
+                )
+                assertEquals(false, (foreignResolve.value as Map<*, *>)["resolved"])
+
+                val resolved = CapturingResult()
+                channel.onMethodCall(
+                    MethodCall(
+                        "resolveNotificationAction",
+                        mapOf(
+                            "accountId" to accountA,
+                            "actionId" to token,
+                            "outcome" to "completed",
+                        ),
+                    ),
+                    resolved,
+                )
+                assertEquals(true, (resolved.value as Map<*, *>)["resolved"])
+            }
+        }
+        assertTrue(store.claimNotificationActions(accountA, 10).ready.isEmpty())
+    }
+
+    @Test
+    fun postedChatNotificationCarriesReplyAndMarkReadAndQueuesTheTap() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            instrumentation.uiAutomation.grantRuntimePermission(
+                context.packageName,
+                "android.permission.POST_NOTIFICATIONS",
+            )
+        }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-action-runtime"
+        drainAllActions(store, accountId)
+        manager.cancelAll()
+
+        AndroidSystemNotifications.apply(
+            context,
+            accountId,
+            AndroidWebPushPayload.Message(
+                notificationId = 4106,
+                app = "spreed",
+                subject = "instrumentation subject",
+                type = "chat",
+                objectId = "roomfoxtrot",
+            ),
+        )
+
+        val posted = manager.activeNotifications.single {
+            it.notification.extras.getString(Notification.EXTRA_TEXT) ==
+                "instrumentation subject"
+        }
+        val actions = posted.notification.actions
+        assertEquals(2, actions.size)
+        val remoteInputs = actions[0].remoteInputs
+        assertNotNull(remoteInputs)
+        assertEquals(
+            AndroidSystemNotifications.REPLY_RESULT_KEY,
+            remoteInputs!!.single().resultKey,
+        )
+        assertNull(actions[1].remoteInputs)
+
+        // Reproduce what the system does when the user submits the reply.
+        val replyIntent = Intent(
+            AndroidSystemNotifications.ACTION_NOTIFICATION_ACTION,
+        )
+        val armed = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4106,
+            roomToken = "roomfoxtrot",
+        )
+        replyIntent.data = AndroidSystemNotifications
+            .notificationActionIntent(context, NotificationActionKind.REPLY, armed)
+            .data
+        RemoteInput.addResultsToIntent(
+            remoteInputs,
+            replyIntent,
+            android.os.Bundle().apply {
+                putCharSequence(
+                    AndroidSystemNotifications.REPLY_RESULT_KEY,
+                    "  runtime reply  ",
+                )
+            },
+        )
+        AndroidNotificationActionReceiver().onReceive(context, replyIntent)
+
+        val queued = store.claimNotificationActions(accountId, 10).ready.single()
+        assertEquals("runtime reply", queued.replyText)
+        assertEquals("roomfoxtrot", queued.roomToken)
+        assertEquals(accountId, queued.accountId)
+
+        // The tap is visibly acknowledged: the notification is replaced by a
+        // status without actions instead of silently staying as it was.
+        val queuedNotification = manager.activeNotifications.single {
+            it.tag == posted.tag
+        }
+        assertTrue(queuedNotification.notification.actions.isNullOrEmpty())
+        assertNotEquals(
+            "instrumentation subject",
+            queuedNotification.notification.extras.getString(Notification.EXTRA_TEXT),
+        )
+
+        store.resolveNotificationAction(accountId, queued.token)
+        manager.cancelAll()
+    }
+
+    private fun drainAllActions(store: AndroidWebPushStore, accountId: String) {
+        var guard = 0
+        while (guard++ < 20) {
+            val claim = store.claimNotificationActions(accountId, 100)
+            if (claim.ready.isEmpty()) {
+                return
+            }
+            claim.ready.forEach { store.resolveNotificationAction(accountId, it.token) }
+        }
     }
 
     companion object {

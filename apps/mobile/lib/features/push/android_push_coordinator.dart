@@ -17,6 +17,16 @@ typedef AndroidPushWakeUp = Future<void> Function(String accountId);
 typedef AndroidPushRetryTimerFactory =
     Timer Function(Duration duration, void Function() callback);
 
+/// How a notification action ended. [retry] keeps the durable native record so
+/// the next drain tries again; nothing is ever dropped on the floor.
+enum AndroidPushActionOutcome { completed, failed, retry }
+
+/// Performs one notification action. The implementation routes a reply through
+/// the durable chat outbox so it keeps its `referenceId` correlation instead of
+/// becoming a second, uncorrelated POST.
+typedef AndroidPushActionHandler =
+    Future<AndroidPushActionOutcome> Function(AndroidNotificationAction action);
+
 final class AndroidPushCoordinator {
   AndroidPushCoordinator({
     required AccountRepository accounts,
@@ -24,6 +34,7 @@ final class AndroidPushCoordinator {
     required HttpNextcloudApi api,
     required AndroidWebPushPlatform platform,
     required AndroidPushWakeUp onWakeUp,
+    AndroidPushActionHandler? onNotificationAction,
     this.retryDelay = const Duration(seconds: 30),
     this.retryMaximumDelay = const Duration(hours: 1),
     double Function()? randomDouble,
@@ -33,6 +44,7 @@ final class AndroidPushCoordinator {
        _api = api,
        _platform = platform,
        _onWakeUp = onWakeUp,
+       _onNotificationAction = onNotificationAction,
        _randomDouble = randomDouble ?? Random().nextDouble,
        _createRetryTimer = createRetryTimer ?? Timer.new {
     if (retryDelay <= Duration.zero || retryMaximumDelay < retryDelay) {
@@ -43,12 +55,14 @@ final class AndroidPushCoordinator {
   static const _drainBatchSize = 50;
   static const _maximumDrainBatches = 8;
   static const _maximumPayloadBytes = 16 * 1024;
+  static const _actionDrainBatchSize = 20;
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final AndroidWebPushPlatform _platform;
   final AndroidPushWakeUp _onWakeUp;
+  final AndroidPushActionHandler? _onNotificationAction;
   final Duration retryDelay;
   final Duration retryMaximumDelay;
   final double Function() _randomDouble;
@@ -165,6 +179,9 @@ final class AndroidPushCoordinator {
   }) async {
     final accountContext = context ?? await _loadContext(accountId);
     if (accountContext == null) {
+      // A missing account or credential still has to answer the queued
+      // notification actions; the handler turns that into a visible failure.
+      await _drainNotificationActions(accountId);
       return;
     }
     var shouldReregisterImmediately = false;
@@ -204,6 +221,63 @@ final class AndroidPushCoordinator {
     }
     if (shouldReregisterImmediately) {
       _scheduleRetry(accountId, immediate: true);
+    }
+    await _drainNotificationActions(accountId);
+  }
+
+  /// Runs the reply and mark-as-read actions the user triggered from the
+  /// notification shade, strictly inside [accountId].
+  ///
+  /// A retryable failure leaves the action in the native durable queue and
+  /// arms the account retry, so an action typed while the app was dead or
+  /// offline survives instead of being dropped.
+  Future<void> _drainNotificationActions(String accountId) async {
+    final handler = _onNotificationAction;
+    if (handler == null || _closed) {
+      return;
+    }
+    final actions = await _platform.drainNotificationActions(
+      accountId: accountId,
+      limit: _actionDrainBatchSize,
+    );
+    for (final action in actions) {
+      if (_closed) {
+        return;
+      }
+      if (action.accountId != accountId) {
+        // A record can only reach the wrong account through a corrupt store;
+        // it must never send anything into another account's server.
+        await _platform.resolveNotificationAction(
+          accountId: accountId,
+          actionId: action.id,
+          outcome: AndroidNotificationActionOutcome.failed,
+        );
+        continue;
+      }
+      final AndroidPushActionOutcome outcome;
+      try {
+        outcome = await handler(action);
+      } on Object {
+        _scheduleRetry(accountId);
+        return;
+      }
+      switch (outcome) {
+        case AndroidPushActionOutcome.completed:
+          await _platform.resolveNotificationAction(
+            accountId: accountId,
+            actionId: action.id,
+            outcome: AndroidNotificationActionOutcome.completed,
+          );
+        case AndroidPushActionOutcome.failed:
+          await _platform.resolveNotificationAction(
+            accountId: accountId,
+            actionId: action.id,
+            outcome: AndroidNotificationActionOutcome.failed,
+          );
+        case AndroidPushActionOutcome.retry:
+          _scheduleRetry(accountId);
+          return;
+      }
     }
   }
 

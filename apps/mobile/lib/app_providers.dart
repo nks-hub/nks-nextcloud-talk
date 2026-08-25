@@ -32,6 +32,7 @@ import 'features/search/message_search_service.dart';
 import 'features/conversations/deep_link_bridge.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
+import 'features/rooms/room_settings_service.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
@@ -160,11 +161,71 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
     platform: platform,
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
+    onNotificationAction: (action) => _runNotificationAction(ref, action),
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
   return coordinator;
 });
+
+/// Executes a notification-shade action for exactly `action.accountId`.
+///
+/// A reply goes through [ChatService.sendText] and therefore through the
+/// durable text-send outbox: the same `referenceId` correlation, the same
+/// ambiguous-send rules and the same visible retry entry in the room as a
+/// reply typed in the composer. Sending straight from the notification would
+/// be a second, uncorrelated POST and the documented duplicate risk of
+/// `docs/architecture/chat-messages-api.md` would apply to it.
+Future<AndroidPushActionOutcome> _runNotificationAction(
+  Ref ref,
+  AndroidNotificationAction action,
+) async {
+  try {
+    switch (action.kind) {
+      case AndroidNotificationActionKind.reply:
+        await ref
+            .read(chatServiceProvider)
+            .sendText(
+              accountId: action.accountId,
+              roomToken: action.roomToken,
+              message: action.replyText ?? '',
+            );
+      case AndroidNotificationActionKind.markRead:
+        // The read marker is an explicit message id, so the cached room has
+        // to know the newest message before the marker can move.
+        await ref.read(conversationSyncServiceProvider).sync(action.accountId);
+        await ref
+            .read(roomSettingsServiceProvider)
+            .markConversationRead(
+              accountId: action.accountId,
+              roomToken: action.roomToken,
+            );
+        await ref.read(conversationSyncServiceProvider).sync(action.accountId);
+    }
+    return AndroidPushActionOutcome.completed;
+  } on ChatServiceException catch (error) {
+    return switch (error.code) {
+      ChatServiceError.network ||
+      ChatServiceError.rateLimited ||
+      ChatServiceError.serviceUnavailable ||
+      ChatServiceError.talkUnavailable => AndroidPushActionOutcome.retry,
+      _ => AndroidPushActionOutcome.failed,
+    };
+  } on RoomSettingsException catch (error) {
+    return switch (error.code) {
+      RoomSettingsError.network ||
+      RoomSettingsError.rateLimited ||
+      RoomSettingsError.serviceUnavailable => AndroidPushActionOutcome.retry,
+      _ => AndroidPushActionOutcome.failed,
+    };
+  } on NextcloudApiException catch (error) {
+    return switch (error.code) {
+      NextcloudApiError.network ||
+      NextcloudApiError.timeout => AndroidPushActionOutcome.retry,
+      _ => AndroidPushActionOutcome.failed,
+    };
+  }
+}
 
 final deepLinkPlatformProvider = Provider<DeepLinkPlatform?>((ref) {
   if (!Platform.isAndroid) {

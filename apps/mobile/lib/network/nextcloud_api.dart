@@ -808,6 +808,39 @@ final class HttpNextcloudApi {
     );
   }
 
+  /// Moves the read marker to [ChatSetReadMarkerRequest.lastReadMessage].
+  Future<ChatReadResponse> markChatRead({
+    required ChatSetReadMarkerRequest readRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final formBody = readRequest.formBody;
+    if (formBody is! Map<String, Object>) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    final request = _request('POST', readRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...readRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = formBody.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _chatReadAllowedStatusCodes,
+      maximumBytes: chatMaximumResponseBytes,
+    );
+    return decodeChatReadResponse(
+      request: readRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
   /// Clears the read marker so the conversation shows as unread again.
   Future<ChatReadResponse> markChatUnread({
     required ChatMarkUnreadRequest markUnreadRequest,

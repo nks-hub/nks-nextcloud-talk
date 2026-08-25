@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="push_action_reply">Odpovědět</string>
+    <string name="push_action_mark_read">Označit jako přečtené</string>
+    <string name="push_action_reply_queued">Odesílám odpověď…</string>
+    <string name="push_action_mark_read_queued">Označuji jako přečtené…</string>
+    <string name="push_action_reply_empty">Odpověď byla prázdná a neodeslala se.</string>
+    <string name="push_action_reply_failed">Odpověď se nepodařilo odeslat. Klepnutím otevřete konverzaci.</string>
+    <string name="push_action_mark_read_failed">Konverzaci se nepodařilo označit jako přečtenou. Klepnutím ji otevřete.</string>
+</resources>
