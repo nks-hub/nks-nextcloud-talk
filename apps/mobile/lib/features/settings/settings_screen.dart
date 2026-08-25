@@ -17,6 +17,19 @@ final class SettingsScreen extends ConsumerWidget {
     final accounts = ref.watch(accountsProvider);
     final themeMode = ref.watch(themeModeProvider);
 
+    // Removing the last account leaves this screen with nothing to manage,
+    // while the shell underneath has already switched to onboarding. Close
+    // settings so the user lands there instead of on an empty list.
+    ref.listen(accountsProvider, (previous, next) {
+      final remaining = next.valueOrNull;
+      if (remaining != null && remaining.isEmpty) {
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(title: Text(strings.settingsTitle)),
       body: ListView(
@@ -41,15 +54,6 @@ final class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.add_rounded),
             title: Text(strings.settingsAddAccount),
             onTap: () => _addAccount(context),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Text(
-              strings.settingsRemoveAccountUnavailable,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
           ),
           const Divider(height: 1),
           _SectionHeader(strings.settingsThemeSection),
@@ -99,13 +103,24 @@ final class SettingsScreen extends ConsumerWidget {
   }
 }
 
-final class _AccountTile extends ConsumerWidget {
+final class _AccountTile extends ConsumerStatefulWidget {
   const _AccountTile(this.account);
 
   final StoredAccount account;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AccountTile> createState() => _AccountTileState();
+}
+
+final class _AccountTileState extends ConsumerState<_AccountTile> {
+  /// Guards against a second tap arriving while the first removal is still
+  /// running. Deliberately not rendered as a spinner: an indeterminate
+  /// progress indicator animates forever and would wedge `pumpAndSettle`.
+  var _removing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final account = widget.account;
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return ListTile(
@@ -116,18 +131,88 @@ final class _AccountTile extends ConsumerWidget {
       ),
       title: Text(account.loginName),
       subtitle: Text(account.serverUrl),
-      trailing: account.selected
-          ? Text(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (account.selected)
+            Text(
               strings.settingsAccountSelected,
               style: Theme.of(
                 context,
               ).textTheme.labelSmall?.copyWith(color: scheme.primary),
-            )
-          : null,
-      onTap: account.selected
+            ),
+          IconButton(
+            key: Key('account-remove-${account.id}'),
+            icon: const Icon(Icons.delete_outline_rounded),
+            tooltip: strings.settingsRemoveAccount,
+            onPressed: _removing ? null : _confirmRemoval,
+          ),
+        ],
+      ),
+      onTap: account.selected || _removing
           ? null
-          : () =>
-                ref.read(accountRepositoryProvider).selectAccount(account.id),
+          : () => ref.read(accountRepositoryProvider).selectAccount(account.id),
+    );
+  }
+
+  Future<void> _confirmRemoval() async {
+    final account = widget.account;
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final dialogStrings = AppLocalizations.of(dialogContext);
+        return AlertDialog(
+          key: const Key('account-remove-dialog'),
+          title: Text(dialogStrings.settingsRemoveAccountDialogTitle),
+          content: Text(
+            dialogStrings.settingsRemoveAccountDialogMessage(
+              account.loginName,
+              account.serverUrl,
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const Key('account-remove-cancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(dialogStrings.cancel),
+            ),
+            TextButton(
+              key: const Key('account-remove-confirm'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(dialogContext).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(dialogStrings.settingsRemoveAccountDialogConfirm),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _removing = true);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final outcome = await ref
+        .read(accountRemovalServiceProvider)
+        .removeAccount(account.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _removing = false);
+    if (!outcome.accountExisted) {
+      return;
+    }
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          outcome.appPasswordRevoked
+              ? strings.settingsRemoveAccountDone
+              : strings.settingsRemoveAccountDoneNotRevoked,
+        ),
+      ),
     );
   }
 }

@@ -352,5 +352,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsRemoveAccount": "Odebrat účet",
+  "settingsRemoveAccountDialogTitle": "Odebrat tento účet?",
+  "settingsRemoveAccountDialogMessage": "Účet {loginName} na {serverUrl} bude z tohoto zařízení odebrán. Smažou se jeho konverzace, zprávy, rozepsané texty, čekající nahrávání, uložené náhledy i hlasové zprávy a uložené heslo. Aplikační heslo se odvolá na serveru.",
+  "settingsRemoveAccountDialogConfirm": "Odebrat",
+  "settingsRemoveAccountDone": "Účet byl odebrán.",
+  "settingsRemoveAccountDoneNotRevoked": "Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení."
 }

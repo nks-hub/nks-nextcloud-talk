@@ -1087,4 +1087,28 @@ class AppLocalizationsCs extends AppLocalizations {
   String voiceMessageProgress(String position, String duration) {
     return '$position z $duration';
   }
+
+  @override
+  String get settingsRemoveAccount => 'Odebrat účet';
+
+  @override
+  String get settingsRemoveAccountDialogTitle => 'Odebrat tento účet?';
+
+  @override
+  String settingsRemoveAccountDialogMessage(
+    Object loginName,
+    Object serverUrl,
+  ) {
+    return 'Účet $loginName na $serverUrl bude z tohoto zařízení odebrán. Smažou se jeho konverzace, zprávy, rozepsané texty, čekající nahrávání, uložené náhledy i hlasové zprávy a uložené heslo. Aplikační heslo se odvolá na serveru.';
+  }
+
+  @override
+  String get settingsRemoveAccountDialogConfirm => 'Odebrat';
+
+  @override
+  String get settingsRemoveAccountDone => 'Účet byl odebrán.';
+
+  @override
+  String get settingsRemoveAccountDoneNotRevoked =>
+      'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.';
 }

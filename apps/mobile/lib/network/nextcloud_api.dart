@@ -101,6 +101,7 @@ final class HttpNextcloudApi {
   static const _createConversationMaximumBytes = 1 * 1024 * 1024;
   static const _avatarMaximumBytes = 2 * 1024 * 1024;
   static const _webPushMaximumBytes = 64 * 1024;
+  static const _appPasswordMaximumBytes = 64 * 1024;
   static const _participantsMaximumBytes = 2 * 1024 * 1024;
   static const _mentionsMaximumBytes = 1 * 1024 * 1024;
   static const _mentionsAllowedStatusCodes = {200, 401, 404, 429, 503};
@@ -440,6 +441,45 @@ final class HttpNextcloudApi {
       maximumBytes: _webPushMaximumBytes,
     );
     _webPushOcsData(payload, expectedStatusCodes: const {200, 202});
+  }
+
+  /// Destroys the app password this request authenticates with.
+  ///
+  /// Nextcloud documents `DELETE /ocs/v2.php/core/apppassword` for exactly
+  /// this housekeeping step and specifies a plain OCS response with status
+  /// 200, so anything else is reported as a failure rather than treated as a
+  /// completed revocation. The same documentation tells clients to remove the
+  /// account even when the call does not return 200, which is why every
+  /// caller has to keep going after this throws.
+  Future<void> revokeAppPassword({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _authenticatedOcsRequest(
+      'DELETE',
+      _appPasswordUri(server),
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200},
+      maximumBytes: _appPasswordMaximumBytes,
+    );
+    final root = payload.json;
+    final ocs = root is Map<String, Object?> ? root['ocs'] : null;
+    final meta = ocs is Map<String, Object?> ? ocs['meta'] : null;
+    if (meta is! Map<String, Object?> ||
+        meta['status'] != 'ok' ||
+        meta['statuscode'] != 200) {
+      throw const NextcloudApiException(
+        NextcloudApiError.unexpectedStatus,
+        statusCode: 200,
+      );
+    }
   }
 
   Future<ConversationListResponse> getConversations({
@@ -1035,6 +1075,13 @@ final class HttpNextcloudApi {
     final tail = suffix == null ? '' : '/$suffix';
     return server.uri.replace(
       path: '$basePath/ocs/v2.php/apps/notifications/api/v2/webpush$tail',
+      queryParameters: const {'format': 'json'},
+    );
+  }
+
+  Uri _appPasswordUri(ServerBase server) {
+    return server.uri.replace(
+      path: '${server.basePath}/ocs/v2.php/core/apppassword',
       queryParameters: const {'format': 'json'},
     );
   }

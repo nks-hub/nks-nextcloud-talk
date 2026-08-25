@@ -2029,6 +2029,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{position} of {duration}'**
   String voiceMessageProgress(String position, String duration);
+
+  /// No description provided for @settingsRemoveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove account'**
+  String get settingsRemoveAccount;
+
+  /// No description provided for @settingsRemoveAccountDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this account?'**
+  String get settingsRemoveAccountDialogTitle;
+
+  /// No description provided for @settingsRemoveAccountDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{loginName} on {serverUrl} will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.'**
+  String settingsRemoveAccountDialogMessage(Object loginName, Object serverUrl);
+
+  /// No description provided for @settingsRemoveAccountDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get settingsRemoveAccountDialogConfirm;
+
+  /// No description provided for @settingsRemoveAccountDone.
+  ///
+  /// In en, this message translates to:
+  /// **'The account was removed.'**
+  String get settingsRemoveAccountDone;
+
+  /// No description provided for @settingsRemoveAccountDoneNotRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.'**
+  String get settingsRemoveAccountDoneNotRevoked;
 }
 
 class _AppLocalizationsDelegate

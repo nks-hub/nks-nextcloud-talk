@@ -141,6 +141,82 @@ final class AccountRepository {
     });
   }
 
+  /// Deletes every row belonging to [accountId] and returns the durable
+  /// attachment source handles the removed upload jobs pointed at, so the
+  /// caller can drop the copied files those handles still keep on disk.
+  ///
+  /// Every account-scoped table is listed here on purpose instead of relying
+  /// on `ON DELETE CASCADE`. Two of them ([AttachmentRuntimeAccounts] and
+  /// [AttachmentJobs]) have no cascade at all, `PRAGMA foreign_keys` is off in
+  /// tests, and a future table added without a cascade would otherwise leak an
+  /// account's data silently. A removal that misses a table is a broken
+  /// security promise, not a stale cache.
+  ///
+  /// If the removed account was the selected one and others remain, the oldest
+  /// survivor is selected so the app never ends up with accounts but no active
+  /// one. Removing the last account deliberately leaves nothing selected: that
+  /// is what returns the shell to onboarding.
+  Future<List<String>> purgeAccount(String accountId) {
+    return _database.transaction(() async {
+      final sourceHandles =
+          await (_database.selectOnly(_database.attachmentJobs)
+                ..addColumns([_database.attachmentJobs.sourceHandle])
+                ..where(_database.attachmentJobs.accountId.equals(accountId)))
+              .map((row) => row.read(_database.attachmentJobs.sourceHandle)!)
+              .get();
+
+      final wasSelected = (await getAccount(accountId))?.selected ?? false;
+
+      await (_database.delete(_database.attachmentJobs)
+            ..where((job) => job.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.attachmentRuntimeAccounts)
+            ..where((runtime) => runtime.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.chatDrafts)
+            ..where((draft) => draft.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.textSendOperations)
+            ..where((operation) => operation.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.cachedChatMessages)
+            ..where((message) => message.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.chatScopes)
+            ..where((scope) => scope.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.chatCapabilities)
+            ..where((capability) => capability.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.conversationAvatars)
+            ..where((avatar) => avatar.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.cachedConversations)
+            ..where((conversation) => conversation.accountId.equals(accountId)))
+          .go();
+      await (_database.delete(_database.accounts)
+            ..where((account) => account.id.equals(accountId)))
+          .go();
+
+      if (wasSelected) {
+        final successor =
+            await (_database.select(_database.accounts)
+                  ..orderBy([
+                    (account) => OrderingTerm.asc(account.createdAtMillis),
+                  ])
+                  ..limit(1))
+                .getSingleOrNull();
+        if (successor != null) {
+          await (_database.update(_database.accounts)
+                ..where((account) => account.id.equals(successor.id)))
+              .write(const AccountsCompanion(selected: Value(true)));
+        }
+      }
+
+      return sourceHandles;
+    });
+  }
+
   Future<ConversationAccountState> loadConversationState(
     StoredAccount account,
   ) async {
