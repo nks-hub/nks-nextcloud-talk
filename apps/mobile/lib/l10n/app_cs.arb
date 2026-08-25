@@ -303,5 +303,12 @@
       }
     }
   },
-  "messageForwardFailed": "Zprávu se nepodařilo přeposlat."
+  "messageForwardFailed": "Zprávu se nepodařilo přeposlat.",
+  "cancelSend": "Zrušit odeslání",
+  "outboxCancelAmbiguous": "Zprávu už nelze zrušit, mohla dorazit na server.",
+  "roomDetailsDeleteAction": "Smazat konverzaci",
+  "roomDetailsDeleteDialogTitle": "Smazat konverzaci?",
+  "roomDetailsDeleteDialogMessage": "Konverzace i všechny její zprávy se smažou všem účastníkům. Akci nelze vzít zpět.",
+  "roomDetailsDeleteDialogConfirm": "Smazat",
+  "roomDetailsDeleteRejected": "Tuto konverzaci nelze smazat. Konverzaci jeden na jednoho lze jen opustit."
 }

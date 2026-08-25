@@ -37,8 +37,8 @@ final class RoomSettingsException implements Exception {
 }
 
 /// Applies conversation-settings changes (rename, description, notification
-/// level, favorite, leave) scoped to a single account. Every action is a
-/// direct, single request; none of them retry or queue.
+/// level, favorite, leave, delete) scoped to a single account. Every action is
+/// a direct, single request; none of them retry or queue.
 final class RoomSettingsService {
   RoomSettingsService({
     required AccountRepository accounts,
@@ -327,6 +327,60 @@ final class RoomSettingsService {
       case ChatReadClassification.readConfirmed:
       case ChatReadClassification.ocsError:
         throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+  }
+
+  /// Deletes a conversation for everyone and drops it from the local cache.
+  ///
+  /// [canDeleteConversation] is the server's own eligibility flag from the
+  /// room payload; the request refuses to build without it, because the
+  /// server answers `403` for a plain participant and `400` for a one-to-one
+  /// conversation.
+  Future<void> deleteRoom({
+    required String accountId,
+    required String roomToken,
+    required bool canDeleteConversation,
+  }) async {
+    final context = await _authContext(accountId);
+    final DeleteRoomRequest request;
+    try {
+      request = DeleteRoomRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(context.account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        canDeleteConversation: canDeleteConversation,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.forbidden);
+    }
+
+    final response = await _call(
+      () => _api.deleteRoom(
+        deleteRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+
+    switch (response) {
+      case DeleteRoomSuccess():
+      // The room is gone for everyone, so a stale cached row would only make
+      // the list offer a conversation that no longer exists.
+      case DeleteRoomRoomMissing():
+        await _accounts.removeConversation(
+          accountId: accountId,
+          token: roomToken,
+        );
+      case DeleteRoomRejected():
+        throw const RoomSettingsException(RoomSettingsError.rejected);
+      case DeleteRoomReauthenticationRequired():
+        throw const RoomSettingsException(
+          RoomSettingsError.reauthenticationRequired,
+        );
+      case DeleteRoomForbidden():
+        throw const RoomSettingsException(RoomSettingsError.forbidden);
+      case DeleteRoomHttpFailure(:final kind):
+        throw RoomSettingsException(_mapHttpFailure(kind));
     }
   }
 

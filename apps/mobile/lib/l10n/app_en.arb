@@ -331,5 +331,12 @@
       }
     }
   },
-  "messageForwardFailed": "The message could not be forwarded."
+  "messageForwardFailed": "The message could not be forwarded.",
+  "cancelSend": "Cancel sending",
+  "outboxCancelAmbiguous": "This message may already have reached the server, so it can no longer be cancelled.",
+  "roomDetailsDeleteAction": "Delete conversation",
+  "roomDetailsDeleteDialogTitle": "Delete conversation?",
+  "roomDetailsDeleteDialogMessage": "The conversation and all of its messages are removed for everyone. This cannot be undone.",
+  "roomDetailsDeleteDialogConfirm": "Delete",
+  "roomDetailsDeleteRejected": "This conversation cannot be deleted. You can only leave a one-to-one conversation."
 }

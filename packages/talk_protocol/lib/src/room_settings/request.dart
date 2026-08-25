@@ -210,6 +210,50 @@ final class SetArchivedRequest {
   String toString() => 'SetArchivedRequest(archived: $archived)';
 }
 
+/// Deletes a conversation for everyone.
+///
+/// `DELETE /ocs/v2.php/apps/spreed/api/v4/room/{token}`, verified against
+/// Talk `docs/conversation.md` ("Delete a conversation") on master
+/// `f2958bb25be6604240c58a3faf9a2033a30d20e5` and stable
+/// `f9b9e9474e3621b47f74bf8890c4642cb49eed97`, where the controller carries
+/// `#[RequireModeratorParticipant]` and answers `400` for a one-to-one
+/// conversation, `403` for a non-moderator and `404` for an unknown room.
+///
+/// No Talk capability flag governs this operation; `docs/capabilities.md` at
+/// both revisions only lists message-level delete features. The documented
+/// eligibility signal is the room's own `canDeleteConversation` field
+/// ("Flag if the user can delete the conversation for everyone (not possible
+/// without moderator permissions or in one-to-one conversations)"), so that
+/// is what gates admission here. The server stays the authority; this only
+/// stops a request that is guaranteed to be refused.
+final class DeleteRoomRequest {
+  DeleteRoomRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required bool canDeleteConversation,
+    this.userAgent = roomSettingsContractUserAgent,
+  }) {
+    if (!canDeleteConversation) {
+      protocolFailure(_requestCode, r'$.room.canDeleteConversation');
+    }
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String userAgent;
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+
+  Uri get uri => _roomUri(server, roomToken);
+
+  @override
+  String toString() => 'DeleteRoomRequest(<redacted>)';
+}
+
 /// Removes the caller from a conversation. Irreversible from the client's
 /// point of view: rejoining a non-listable conversation needs a new invite.
 final class LeaveRoomRequest {

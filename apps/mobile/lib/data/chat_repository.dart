@@ -700,6 +700,45 @@ final class ChatRepository {
     });
   }
 
+  /// Drops a pending text send from the outbox for good.
+  ///
+  /// Only an operation the client can prove never reached the server may be
+  /// removed; see the outbox state table in
+  /// `docs/architecture/chat-messages-api.md`. Returns `false` without
+  /// touching anything when the send may already exist on the server, so the
+  /// caller can say so instead of reporting a cancellation that never
+  /// happened. The check and the delete share one transaction, so a claim
+  /// that starts transmitting in parallel cannot slip past the gate.
+  Future<bool> cancelTextSend({
+    required String accountId,
+    required String operationId,
+  }) {
+    return _database.transaction(() async {
+      final rows = _database.textSendOperations;
+      final row =
+          await (_database.select(rows)..where(
+                (operation) =>
+                    operation.accountId.equals(accountId) &
+                    operation.operationId.equals(operationId),
+              ))
+              .getSingleOrNull();
+      if (row == null) {
+        // Already gone, so a repeated cancel is not a failure.
+        return true;
+      }
+      if (!_isCancellableTextSend(row)) {
+        return false;
+      }
+      await (_database.delete(rows)..where(
+            (operation) =>
+                operation.accountId.equals(accountId) &
+                operation.operationId.equals(operationId),
+          ))
+          .go();
+      return true;
+    });
+  }
+
   Future<void> recordRoomError({
     required String accountId,
     required String roomToken,
@@ -1422,6 +1461,31 @@ List<ChatBlock> _decodeBlocks(String source) {
         );
       })
       .toList(growable: false);
+}
+
+/// Whether the outbox row provably never left this device.
+///
+/// `queued` was never claimed, so no request body exists. `retryable` is only
+/// reached for failures the contract classifies as happening before the
+/// server stored a comment, which is exactly why the same payload may be
+/// replayed - and therefore dropped - without risking a duplicate. A `failed`
+/// row is a deterministic server refusal.
+///
+/// Everything else may already exist on the server: `sending` is in flight,
+/// `awaitingConfirmation` is the contract's explicit ambiguous state,
+/// `completed` has a real message, and a `failed` row quarantined out of an
+/// ambiguous state by an obsolete replay contract inherits that ambiguity.
+/// A known server match, recorded as message IDs, rules out a cancel too.
+bool _isCancellableTextSend(StoredTextSendOperation operation) {
+  if (operation.errorClass == 'obsolete-replay-contract' ||
+      _decodeMessageIds(operation.messageIdsJson).isNotEmpty) {
+    return false;
+  }
+  return const <String>{
+    'queued',
+    'retryable',
+    'failed',
+  }.contains(operation.outboxState);
 }
 
 List<int> _decodeMessageIds(String source) {

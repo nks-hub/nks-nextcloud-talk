@@ -1093,6 +1093,31 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
   }
 
+  /// Drops a pending send. The service refuses operations whose body may
+  /// already have reached the server; those keep their bubble and the user is
+  /// told why, because silently hiding one would hide a message that exists.
+  Future<void> _cancelPending(StoredTextSendOperation operation) async {
+    final strings = AppLocalizations.of(context);
+    bool cancelled;
+    try {
+      cancelled = await ref
+          .read(chatServiceProvider)
+          .cancelText(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            operationId: operation.operationId,
+          );
+    } on Object {
+      cancelled = false;
+    }
+    if (!mounted || cancelled) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(strings.outboxCancelAmbiguous)));
+  }
+
   void _openThread(CachedChatMessage message) {
     if (widget.threadId != null || message.messageId < 1) {
       return;
@@ -1286,6 +1311,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   onLoadOlder: _loadOlder,
                   onRetry: _sync,
                   onResend: _confirmResend,
+                  onCancel: (operation) => unawaited(_cancelPending(operation)),
                   onOpenThread: _openThread,
                   onMessageActions: handleMessageActions,
                   onReactionTap: handleReactionTap,
@@ -1437,6 +1463,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onLoadOlder,
     required this.onRetry,
     required this.onResend,
+    required this.onCancel,
     required this.onOpenThread,
     required this.onMessageActions,
     required this.onReactionTap,
@@ -1460,6 +1487,7 @@ final class _ChatTimeline extends StatelessWidget {
   final VoidCallback onLoadOlder;
   final VoidCallback onRetry;
   final ValueChanged<StoredTextSendOperation> onResend;
+  final ValueChanged<StoredTextSendOperation> onCancel;
   final ValueChanged<CachedChatMessage> onOpenThread;
   final void Function(CachedChatMessage message, ChatMessage? parsed)
   onMessageActions;
@@ -1562,6 +1590,7 @@ final class _ChatTimeline extends StatelessWidget {
           operation: operation,
           onRetry: onRetry,
           onResend: () => onResend(operation),
+          onCancel: () => onCancel(operation),
         );
       },
     );
@@ -1868,12 +1897,14 @@ final class _PendingMessageBubble extends StatelessWidget {
     required this.operation,
     required this.onRetry,
     required this.onResend,
+    required this.onCancel,
   });
 
   final StoredAccount account;
   final StoredTextSendOperation operation;
   final VoidCallback onRetry;
   final VoidCallback onResend;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -1948,6 +1979,15 @@ final class _PendingMessageBubble extends StatelessWidget {
                         tooltip: strings.resendMessage,
                         icon: const Icon(Icons.send_rounded),
                       ),
+                    // Offered on every pending state, including the ambiguous
+                    // ones the service refuses: the answer there is an
+                    // explanation, not a hidden button.
+                    IconButton(
+                      key: Key('chat-cancel-${operation.operationId}'),
+                      onPressed: onCancel,
+                      tooltip: strings.cancelSend,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
                   ],
                 ),
               ],

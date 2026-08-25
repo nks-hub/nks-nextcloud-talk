@@ -951,4 +951,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageForwardFailed => 'The message could not be forwarded.';
+
+  @override
+  String get cancelSend => 'Cancel sending';
+
+  @override
+  String get outboxCancelAmbiguous =>
+      'This message may already have reached the server, so it can no longer be cancelled.';
+
+  @override
+  String get roomDetailsDeleteAction => 'Delete conversation';
+
+  @override
+  String get roomDetailsDeleteDialogTitle => 'Delete conversation?';
+
+  @override
+  String get roomDetailsDeleteDialogMessage =>
+      'The conversation and all of its messages are removed for everyone. This cannot be undone.';
+
+  @override
+  String get roomDetailsDeleteDialogConfirm => 'Delete';
+
+  @override
+  String get roomDetailsDeleteRejected =>
+      'This conversation cannot be deleted. You can only leave a one-to-one conversation.';
 }

@@ -677,6 +677,234 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('offers delete only to a moderator the server allows it to', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    // A plain participant, even where the cached room still claims the flag.
+    final memberConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'participantType': 3, 'canDeleteConversation': true},
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: account,
+          conversation: memberConversation,
+        ),
+        client: participantsClient(const <Object?>[]),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-notification-picker'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(find.byKey(const Key('room-details-delete')), findsNothing);
+
+    // A moderator of a room the server refuses to delete, e.g. one-to-one.
+    final lockedConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'participantType': 1, 'canDeleteConversation': false},
+    );
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: account,
+          conversation: lockedConversation,
+        ),
+        client: participantsClient(const <Object?>[]),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-notification-picker'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('room-details-delete')), findsNothing);
+    expect(find.byKey(const Key('room-details-leave')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('cancelling the delete confirmation keeps the conversation', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    var deleteRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'DELETE' &&
+          request.url.path.endsWith('/room/rooma123')) {
+        deleteRequests++;
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-delete')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-delete')));
+    await tester.pump();
+    expect(find.byKey(const Key('room-details-delete-dialog')), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
+    expect(deleteRequests, 0);
+    expect(
+      (await database.select(database.cachedConversations).getSingleOrNull())
+          ?.token,
+      'rooma123',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets(
+    'confirming delete removes the conversation and returns to the list',
+    (tester) async {
+      _growViewport(tester);
+      var deleteRequests = 0;
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/participants')) {
+          return _ocsSuccess(const <Object?>[]);
+        }
+        if (request.method == 'DELETE' &&
+            request.url.path.endsWith('/room/rooma123')) {
+          deleteRequests++;
+          return _ocsSuccess(const <Object?>[]);
+        }
+        return http.Response('', 404);
+      });
+
+      await tester.pumpWidget(
+        app(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  key: const Key('open-room-details-from-list'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RoomDetailsScreen(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+          client: client,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('open-room-details-from-list')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('room-details-delete')).evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.byKey(const Key('room-details-delete')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('room-details-delete-confirm')));
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('room-details-screen')).evaluate().isEmpty,
+      );
+
+      expect(deleteRequests, 1);
+      expect(
+        await database.select(database.cachedConversations).getSingleOrNull(),
+        isNull,
+      );
+      expect(
+        find.byKey(const Key('open-room-details-from-list')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets('a refused delete keeps the room and explains the refusal', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'DELETE' &&
+          request.url.path.endsWith('/room/rooma123')) {
+        return _ocsFailure(400);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-delete')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-delete')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-delete-confirm')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text(
+            'This conversation cannot be deleted. You can only leave a '
+            'one-to-one conversation.',
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
+    expect(
+      (await database.select(database.cachedConversations).getSingleOrNull())
+          ?.token,
+      'rooma123',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('cancelling the leave confirmation keeps the screen open', (
     tester,
   ) async {

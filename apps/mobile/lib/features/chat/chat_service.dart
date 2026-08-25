@@ -252,6 +252,25 @@ final class ChatService {
     });
   }
 
+  /// Removes a pending outbox operation. Returns `false` when the send may
+  /// already have reached the server, in which case nothing was cancelled and
+  /// the caller has to tell the user instead of pretending otherwise.
+  ///
+  /// Local only: no request is made and no room sync error is recorded, and
+  /// the room lane keeps a claim from racing the gate.
+  Future<bool> cancelText({
+    required String accountId,
+    required String roomToken,
+    required String operationId,
+  }) {
+    return _serializeRoom<bool>(_roomKey(accountId, roomToken), () {
+      return _chat.cancelTextSend(
+        accountId: accountId,
+        operationId: operationId,
+      );
+    });
+  }
+
   Future<_PreparedChat> _prepare(
     String accountId,
     String roomToken, {

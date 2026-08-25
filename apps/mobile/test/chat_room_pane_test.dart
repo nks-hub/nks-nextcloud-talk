@@ -1194,6 +1194,90 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('cancelling a queued send clears the outbox row and bubble', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-q',
+      outboxState: 'queued',
+      message: 'Queued fixture text',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Queued fixture text'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-cancel-operation-q')));
+    await _pumpUntil(
+      tester,
+      () => find.text('Queued fixture text').evaluate().isEmpty,
+    );
+
+    expect(
+      await (database.select(database.textSendOperations)
+            ..where((operation) => operation.operationId.equals('operation-q')))
+          .getSingleOrNull(),
+      isNull,
+    );
+    expect(find.byKey(const Key('chat-cancel-operation-q')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('cancelling an ambiguous send keeps it and says why', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-x',
+      outboxState: 'awaitingConfirmation',
+      message: 'Maybe sent fixture text',
+      attemptCount: 1,
+    );
+
+    // The refusal is a snackbar, so this needs the screen that owns a
+    // Scaffold rather than the bare pane.
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-cancel-operation-x')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text(
+            'This message may already have reached the server, so it can no '
+            'longer be cancelled.',
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    final row =
+        await (database.select(database.textSendOperations)..where(
+              (operation) => operation.operationId.equals('operation-x'),
+            ))
+            .getSingleOrNull();
+    expect(row?.outboxState, 'awaitingConfirmation');
+    expect(find.text('Maybe sent fixture text'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets(
     'the actions menu offers edit, delete and react only when both '
     'ownership and capability allow it',
@@ -1721,6 +1805,55 @@ Future<void> _insertCachedMessage(
           rawJson: jsonEncode(wire),
         ),
       );
+}
+
+Future<void> _insertPendingOperation(
+  AppDatabase database,
+  StoredAccount account,
+  CachedConversation conversation, {
+  required String operationId,
+  required String outboxState,
+  required String message,
+  int attemptCount = 0,
+}) {
+  return database
+      .into(database.textSendOperations)
+      .insert(
+        TextSendOperationsCompanion.insert(
+          accountId: account.id,
+          operationId: operationId,
+          roomToken: conversation.token,
+          referenceId: 'reference-$operationId',
+          message: message,
+          replayContractRevision: 'fixture-revision',
+          enqueueSequence: 1,
+          outboxState: outboxState,
+          attemptCount: attemptCount,
+          messageIdsJson: '[]',
+          duplicateRiskAcknowledged: false,
+          createdAtMillis: 1,
+          updatedAtMillis: 1,
+        ),
+      );
+}
+
+/// Pumps until [condition] holds, letting the real database work in between
+/// run through [WidgetTester.runAsync]; the fake clock alone never drives it.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int maxAttempts = 100,
+}) async {
+  for (var attempt = 0; attempt < maxAttempts; attempt++) {
+    if (condition()) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 10));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
+  }
+  fail('Condition was not reached');
 }
 
 Key _dayKey(int timestamp) {

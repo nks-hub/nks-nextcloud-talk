@@ -551,6 +551,133 @@ SetArchivedResponse decodeSetArchivedResponse({
 }
 
 // ---------------------------------------------------------------------------
+// Delete (DELETE .../room/{token})
+// ---------------------------------------------------------------------------
+
+sealed class DeleteRoomResponse {
+  const DeleteRoomResponse(this.request);
+
+  final DeleteRoomRequest request;
+  int get statusCode;
+}
+
+final class DeleteRoomSuccess extends DeleteRoomResponse {
+  const DeleteRoomSuccess._({required DeleteRoomRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 200;
+
+  @override
+  String toString() => 'DeleteRoomSuccess()';
+}
+
+/// HTTP 400. The server refused the deletion, e.g. a one-to-one conversation
+/// that can only be left.
+final class DeleteRoomRejected extends DeleteRoomResponse {
+  const DeleteRoomRejected._({required DeleteRoomRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 400;
+
+  @override
+  String toString() => 'DeleteRoomRejected()';
+}
+
+final class DeleteRoomReauthenticationRequired extends DeleteRoomResponse {
+  const DeleteRoomReauthenticationRequired._({
+    required DeleteRoomRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 401;
+
+  @override
+  String toString() => 'DeleteRoomReauthenticationRequired()';
+}
+
+/// HTTP 403. The caller is not a moderator or owner of the conversation.
+final class DeleteRoomForbidden extends DeleteRoomResponse {
+  const DeleteRoomForbidden._({required DeleteRoomRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 403;
+
+  @override
+  String toString() => 'DeleteRoomForbidden()';
+}
+
+final class DeleteRoomRoomMissing extends DeleteRoomResponse {
+  const DeleteRoomRoomMissing._({required DeleteRoomRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 404;
+
+  @override
+  String toString() => 'DeleteRoomRoomMissing()';
+}
+
+final class DeleteRoomHttpFailure extends DeleteRoomResponse {
+  const DeleteRoomHttpFailure._({
+    required DeleteRoomRequest request,
+    required this.statusCode,
+    required this.kind,
+  }) : super(request);
+
+  @override
+  final int statusCode;
+  final RoomSettingsHttpFailureKind kind;
+
+  @override
+  String toString() =>
+      'DeleteRoomHttpFailure(statusCode: $statusCode, kind: ${kind.name})';
+}
+
+DeleteRoomResponse decodeDeleteRoomResponse({
+  required DeleteRoomRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 400:
+      _decodeOcsEnvelope(body);
+      return DeleteRoomRejected._(request: request);
+    case 401:
+      _decodeOcsEnvelope(body);
+      return DeleteRoomReauthenticationRequired._(request: request);
+    case 403:
+      _decodeOcsEnvelope(body);
+      return DeleteRoomForbidden._(request: request);
+    case 404:
+      _decodeOcsEnvelope(body);
+      return DeleteRoomRoomMissing._(request: request);
+    case 429:
+      return DeleteRoomHttpFailure._(
+        request: request,
+        statusCode: 429,
+        kind: RoomSettingsHttpFailureKind.rateLimited,
+      );
+    case 503:
+      return DeleteRoomHttpFailure._(
+        request: request,
+        statusCode: 503,
+        kind: RoomSettingsHttpFailureKind.serviceUnavailable,
+      );
+    case 200:
+      _decodeOcsEnvelope(body);
+      return DeleteRoomSuccess._(request: request);
+    default:
+      protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Leave (DELETE .../room/{token}/participants/self)
 // ---------------------------------------------------------------------------
 

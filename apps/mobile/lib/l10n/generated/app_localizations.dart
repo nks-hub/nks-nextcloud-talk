@@ -1795,6 +1795,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The message could not be forwarded.'**
   String get messageForwardFailed;
+
+  /// No description provided for @cancelSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel sending'**
+  String get cancelSend;
+
+  /// No description provided for @outboxCancelAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'This message may already have reached the server, so it can no longer be cancelled.'**
+  String get outboxCancelAmbiguous;
+
+  /// No description provided for @roomDetailsDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete conversation'**
+  String get roomDetailsDeleteAction;
+
+  /// No description provided for @roomDetailsDeleteDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete conversation?'**
+  String get roomDetailsDeleteDialogTitle;
+
+  /// No description provided for @roomDetailsDeleteDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation and all of its messages are removed for everyone. This cannot be undone.'**
+  String get roomDetailsDeleteDialogMessage;
+
+  /// No description provided for @roomDetailsDeleteDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get roomDetailsDeleteDialogConfirm;
+
+  /// No description provided for @roomDetailsDeleteRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation cannot be deleted. You can only leave a one-to-one conversation.'**
+  String get roomDetailsDeleteRejected;
 }
 
 class _AppLocalizationsDelegate
