@@ -4,12 +4,16 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.RemoteInput
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.util.JsonReader
 import android.util.JsonToken
+import com.nkshub.nextcloudtalk.R
 import java.io.ByteArrayInputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
@@ -301,6 +305,234 @@ internal object AndroidSystemNotifications {
         )
     }
 
+    fun isValidRoomToken(token: String): Boolean = ROOM_TOKEN_PATTERN.matches(token)
+
+    fun notificationActionIntent(
+        context: Context,
+        kind: NotificationActionKind,
+        actionToken: String,
+    ): Intent {
+        require(AndroidWebPushStore.isValidNotificationActionToken(actionToken))
+        return Intent(context, AndroidNotificationActionReceiver::class.java).apply {
+            action = ACTION_NOTIFICATION_ACTION
+            // Only the opaque token travels in the intent. Account id, room
+            // token and typed text stay in the encrypted store, so a dumpsys
+            // of pending intents cannot reveal them.
+            data = Uri.Builder()
+                .scheme(context.packageName)
+                .authority(actionUriHost(kind))
+                .appendPath(actionToken)
+                .build()
+        }
+    }
+
+    fun notificationActionRequest(
+        intent: Intent,
+        packageName: String,
+    ): Pair<NotificationActionKind, String>? {
+        if (intent.action != ACTION_NOTIFICATION_ACTION) {
+            return null
+        }
+        val data = intent.data ?: return null
+        if (
+            data.scheme != packageName ||
+            data.query != null ||
+            data.fragment != null ||
+            data.pathSegments.size != 1
+        ) {
+            return null
+        }
+        val kind = when (data.host) {
+            REPLY_URI_HOST -> NotificationActionKind.REPLY
+            MARK_READ_URI_HOST -> NotificationActionKind.MARK_READ
+            else -> return null
+        }
+        val token = data.pathSegments.single()
+            .takeIf(AndroidWebPushStore::isValidNotificationActionToken)
+            ?: return null
+        return kind to token
+    }
+
+    fun notificationActionPendingIntent(
+        context: Context,
+        kind: NotificationActionKind,
+        actionToken: String,
+    ): PendingIntent {
+        // Direct reply needs FLAG_MUTABLE: the system writes the typed text
+        // into this exact intent through RemoteInput. Mark as read carries no
+        // user input, so it stays immutable. Both are explicit component
+        // intents to an unexported receiver of this app.
+        val mutability = when (kind) {
+            NotificationActionKind.REPLY -> PendingIntent.FLAG_MUTABLE
+            NotificationActionKind.MARK_READ -> PendingIntent.FLAG_IMMUTABLE
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            0,
+            notificationActionIntent(context, kind, actionToken),
+            PendingIntent.FLAG_ONE_SHOT or mutability,
+        )
+    }
+
+    /// Moves an armed action into the durable queue and repaints the
+    /// notification so the tap is never a silent no-op.
+    fun performAction(
+        context: Context,
+        kind: NotificationActionKind,
+        actionToken: String,
+        replyText: String?,
+    ): Boolean {
+        val store = AndroidWebPushStore(context)
+        val fired = store.fireNotificationAction(actionToken, kind, replyText) ?: return false
+        fired.evicted.forEach { showActionFailure(context, store, it) }
+        val queued = fired.queued
+        if (queued.kind == NotificationActionKind.REPLY && queued.replyText.isNullOrBlank()) {
+            store.resolveNotificationAction(queued.accountId, queued.token)
+            showActionStatus(context, store, queued, R.string.push_action_reply_empty)
+            return true
+        }
+        showActionStatus(context, store, queued, queuedStatusResource(queued.kind))
+        // Wakes a running Flutter engine; a dead process picks the queue up on
+        // its next start instead.
+        AndroidWebPushNotifier.publish(store.pendingEventCount(queued.accountId))
+        return true
+    }
+
+    fun cancelNotification(context: Context, accountId: String, notificationId: Long) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(
+            notificationTag(accountGroupKey(accountId), notificationId),
+            PLATFORM_NOTIFICATION_ID,
+        )
+    }
+
+    fun showActionFailure(
+        context: Context,
+        store: AndroidWebPushStore,
+        action: StoredNotificationAction,
+    ) {
+        showActionStatus(context, store, action, failureStatusResource(action.kind))
+    }
+
+    private fun showActionStatus(
+        context: Context,
+        store: AndroidWebPushStore,
+        action: StoredNotificationAction,
+        statusResource: Int,
+    ) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        ensureChannel(manager)
+        val groupKey = accountGroupKey(action.accountId)
+        // ponytail: the original subject is not kept in the action record, so
+        // the status notification shows only the status line. Tapping it still
+        // opens the exact room of the exact account.
+        val openToken = store.storeNotificationOpen(
+            accountId = action.accountId,
+            notificationId = action.notificationId,
+            app = DEFAULT_TALK_APP,
+            type = "chat",
+            objectId = action.roomToken,
+        )
+        val status = context.getString(statusResource)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(context, CHANNEL_ID)
+        } else {
+            Notification.Builder(context)
+        }
+        val notification = builder
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(context.getString(R.string.push_notification_app_name))
+            .setContentText(status)
+            .setStyle(Notification.BigTextStyle().bigText(status))
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setGroup(groupKey)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(notificationOpenPendingIntent(context, openToken))
+            .build()
+        manager.notify(
+            notificationTag(groupKey, action.notificationId),
+            PLATFORM_NOTIFICATION_ID,
+            notification,
+        )
+    }
+
+    private fun queuedStatusResource(kind: NotificationActionKind): Int = when (kind) {
+        NotificationActionKind.REPLY -> R.string.push_action_reply_queued
+        NotificationActionKind.MARK_READ -> R.string.push_action_mark_read_queued
+    }
+
+    private fun failureStatusResource(kind: NotificationActionKind): Int = when (kind) {
+        NotificationActionKind.REPLY -> R.string.push_action_reply_failed
+        NotificationActionKind.MARK_READ -> R.string.push_action_mark_read_failed
+    }
+
+    private fun actionUriHost(kind: NotificationActionKind): String = when (kind) {
+        NotificationActionKind.REPLY -> REPLY_URI_HOST
+        NotificationActionKind.MARK_READ -> MARK_READ_URI_HOST
+    }
+
+    private fun chatActions(
+        context: Context,
+        store: AndroidWebPushStore,
+        accountId: String,
+        notificationId: Long,
+        payload: AndroidWebPushPayload.Message,
+    ): List<Notification.Action> {
+        val roomToken = payload.objectId
+        if (
+            payload.app != DEFAULT_TALK_APP ||
+            payload.type != "chat" ||
+            roomToken == null ||
+            !isValidRoomToken(roomToken)
+        ) {
+            return emptyList()
+        }
+        val replyToken = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = notificationId,
+            roomToken = roomToken,
+        )
+        val markReadToken = store.armNotificationAction(
+            kind = NotificationActionKind.MARK_READ,
+            accountId = accountId,
+            notificationId = notificationId,
+            roomToken = roomToken,
+        )
+        val replyLabel = context.getString(R.string.push_action_reply)
+        val replyAction = Notification.Action.Builder(
+            Icon.createWithResource(context, android.R.drawable.ic_menu_send),
+            replyLabel,
+            notificationActionPendingIntent(context, NotificationActionKind.REPLY, replyToken),
+        )
+            .addRemoteInput(RemoteInput.Builder(REPLY_RESULT_KEY).setLabel(replyLabel).build())
+            .setAllowGeneratedReplies(false)
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    setSemanticAction(Notification.Action.SEMANTIC_ACTION_REPLY)
+                }
+            }
+            .build()
+        val markReadAction = Notification.Action.Builder(
+            Icon.createWithResource(context, android.R.drawable.ic_menu_view),
+            context.getString(R.string.push_action_mark_read),
+            notificationActionPendingIntent(
+                context,
+                NotificationActionKind.MARK_READ,
+                markReadToken,
+            ),
+        )
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    setSemanticAction(Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                }
+            }
+            .build()
+        return listOf(replyAction, markReadAction)
+    }
+
     private fun show(
         context: Context,
         manager: NotificationManager,
@@ -328,7 +560,13 @@ internal object AndroidSystemNotifications {
         }
         val notification = builder
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle(if (app == "spreed") "NKS Talk" else app)
+            .setContentTitle(
+                if (app == DEFAULT_TALK_APP) {
+                    context.getString(R.string.push_notification_app_name)
+                } else {
+                    app
+                },
+            )
             .setContentText(subject)
             .setStyle(Notification.BigTextStyle().bigText(subject))
             .setCategory(Notification.CATEGORY_MESSAGE)
@@ -336,6 +574,10 @@ internal object AndroidSystemNotifications {
             .setGroup(groupKey)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .apply {
+                chatActions(context, store, accountId, notificationId, payload)
+                    .forEach(::addAction)
+            }
             .build()
         manager.notify(
             notificationTag(groupKey, notificationId),
@@ -373,8 +615,49 @@ internal object AndroidSystemNotifications {
         return "$groupKey:$notificationId"
     }
 
+    const val ACTION_NOTIFICATION_ACTION =
+        "com.nkshub.nextcloudtalk.action.PUSH_NOTIFICATION_ACTION"
+    const val REPLY_RESULT_KEY = "com.nkshub.nextcloudtalk.notification_reply"
+
     private const val CHANNEL_ID = "nextcloud_talk_messages"
     private const val OPEN_URI_HOST = "notification-open"
+    private const val REPLY_URI_HOST = "notification-reply"
+    private const val MARK_READ_URI_HOST = "notification-mark-read"
     private const val DEFAULT_NOTIFICATION_APP = "Nextcloud"
+    private const val DEFAULT_TALK_APP = "spreed"
     private const val PLATFORM_NOTIFICATION_ID = 1
+    private val ROOM_TOKEN_PATTERN = Regex("^[a-z0-9]{4,30}$")
+}
+
+/// Runs the reply and mark-as-read notification actions. It never talks to the
+/// network: the work is queued durably and the Dart durable outbox performs it,
+/// so a reply cannot bypass `referenceId` correlation and become a duplicate.
+class AndroidNotificationActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val request = AndroidSystemNotifications.notificationActionRequest(
+            intent,
+            context.packageName,
+        ) ?: return
+        val (kind, token) = request
+        val replyText = if (kind == NotificationActionKind.REPLY) {
+            RemoteInput.getResultsFromIntent(intent)
+                ?.getCharSequence(AndroidSystemNotifications.REPLY_RESULT_KEY)
+                ?.toString()
+                ?.trim()
+                ?.take(MAX_REPLY_LENGTH)
+        } else {
+            null
+        }
+        // ponytail: keystore-backed store work runs inline on the broadcast
+        // thread; the payload is a few hundred bytes. Move to goAsync() with a
+        // worker if a slow device ever trips the receiver timeout. A failure
+        // here has no user-visible surface left, so it must not crash the app.
+        runCatching {
+            AndroidSystemNotifications.performAction(context, kind, token, replyText)
+        }
+    }
+
+    private companion object {
+        private const val MAX_REPLY_LENGTH = 8000
+    }
 }

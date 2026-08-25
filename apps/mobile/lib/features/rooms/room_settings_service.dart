@@ -330,6 +330,79 @@ final class RoomSettingsService {
     }
   }
 
+  /// Moves the read marker to the newest message the cached room knows about.
+  ///
+  /// The read marker is an explicit message id, so a room whose cache has no
+  /// last message yet cannot be marked read; the caller has to sync first
+  /// rather than guess an id.
+  Future<void> markConversationRead({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final context = await _authContext(accountId);
+    final conversation = await _accounts.getConversation(
+      accountId: accountId,
+      token: roomToken,
+    );
+    if (conversation == null) {
+      throw const RoomSettingsException(RoomSettingsError.roomMissing);
+    }
+
+    final server = ServerBase.parse(context.account.serverUrl);
+    final CapabilitySnapshot capabilities;
+    try {
+      capabilities = await _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      );
+    } on NextcloudApiException catch (error) {
+      throw RoomSettingsException(_mapApiError(error));
+    }
+
+    final ChatSetReadMarkerRequest request;
+    try {
+      final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+      final lastMessage = room.lastMessage?.id;
+      if (lastMessage == null || lastMessage < 1) {
+        throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+      }
+      request = ChatSetReadMarkerRequest(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: ChatCapabilityProfile.fromSnapshot(
+          capabilities,
+          federated: room.isFederated,
+        ),
+        lastReadMessage: lastMessage,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+
+    final response = await _call(
+      () => _api.markChatRead(
+        readRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+
+    switch (response.classification) {
+      case ChatReadClassification.readConfirmed:
+        return;
+      case ChatReadClassification.reauthenticationRequired:
+        throw const RoomSettingsException(
+          RoomSettingsError.reauthenticationRequired,
+        );
+      case ChatReadClassification.unreadConfirmed:
+      case ChatReadClassification.ocsError:
+        throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+  }
+
   /// Deletes a conversation for everyone and drops it from the local cache.
   ///
   /// [canDeleteConversation] is the server's own eligibility flag from the

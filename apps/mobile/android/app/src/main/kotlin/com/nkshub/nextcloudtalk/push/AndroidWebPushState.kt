@@ -89,6 +89,59 @@ internal data class StoredNotificationOpen(
     }
 }
 
+internal enum class NotificationActionKind {
+    REPLY,
+    MARK_READ,
+    ;
+
+    companion object {
+        fun parse(value: String?): NotificationActionKind? {
+            return entries.firstOrNull { it.name == value }
+        }
+    }
+}
+
+/// A notification action that either still arms a `PendingIntent` (`queued`
+/// false) or that the user already triggered and the Dart durable outbox has
+/// yet to consume (`queued` true).
+internal data class StoredNotificationAction(
+    val token: String,
+    val kind: NotificationActionKind,
+    val accountId: String,
+    val notificationId: Long,
+    val roomToken: String,
+    val replyText: String?,
+    val queued: Boolean,
+    val attempts: Int,
+    val createdAtMillis: Long,
+) {
+    fun toChannelMap(): Map<String, Any?> = mapOf(
+        "id" to token,
+        "accountId" to accountId,
+        "kind" to kind.name,
+        "notificationId" to notificationId,
+        "roomToken" to roomToken,
+        "replyText" to replyText,
+    )
+
+    override fun toString(): String {
+        return "StoredNotificationAction(token=<redacted>, kind=${kind.name}, " +
+            "accountId=<redacted>, notificationId=$notificationId, " +
+            "roomToken=<redacted>, replyText=<redacted>, queued=$queued, " +
+            "attempts=$attempts)"
+    }
+}
+
+internal data class FiredNotificationAction(
+    val queued: StoredNotificationAction,
+    val evicted: List<StoredNotificationAction>,
+)
+
+internal data class NotificationActionClaim(
+    val ready: List<StoredNotificationAction>,
+    val exhausted: List<StoredNotificationAction>,
+)
+
 internal data class AndroidWebPushState(
     val registrations: MutableList<PushRegistrationRecord> = mutableListOf(),
     val events: MutableList<StoredPushEvent> = mutableListOf(),
@@ -102,9 +155,11 @@ internal data class AndroidWebPushState(
 
 internal data class AndroidNotificationOpenState(
     val notificationOpens: MutableList<StoredNotificationOpen> = mutableListOf(),
+    val notificationActions: MutableList<StoredNotificationAction> = mutableListOf(),
 ) {
     override fun toString(): String {
-        return "AndroidNotificationOpenState(notificationOpens=${notificationOpens.size})"
+        return "AndroidNotificationOpenState(notificationOpens=${notificationOpens.size}, " +
+            "notificationActions=${notificationActions.size})"
     }
 }
 
@@ -529,6 +584,146 @@ internal class AndroidWebPushStateMachine(
         state.notificationOpens.removeAll { it.accountId == accountId }
     }
 
+    /// Arms one action `PendingIntent` for `notificationId` of `accountId`.
+    ///
+    /// Re-arming replaces the previous armed record of the same kind so a stale
+    /// `PendingIntent` can never fire against a superseded notification. Work
+    /// the user already triggered is never touched here.
+    fun armNotificationAction(
+        state: AndroidNotificationOpenState,
+        token: String,
+        kind: NotificationActionKind,
+        accountId: String,
+        notificationId: Long,
+        roomToken: String,
+        nowMillis: Long,
+    ) {
+        pruneNotificationActions(state, nowMillis)
+        state.notificationActions.removeAll {
+            it.token == token ||
+                (
+                    !it.queued &&
+                        it.accountId == accountId &&
+                        it.notificationId == notificationId &&
+                        it.kind == kind
+                    )
+        }
+        evictArmedNotificationActions(state)
+        state.notificationActions.add(
+            StoredNotificationAction(
+                token = token,
+                kind = kind,
+                accountId = accountId,
+                notificationId = notificationId,
+                roomToken = roomToken,
+                replyText = null,
+                queued = false,
+                attempts = 0,
+                createdAtMillis = nowMillis,
+            ),
+        )
+    }
+
+    /// Turns an armed action into queued work. Returns `null` when the token is
+    /// unknown, already fired or of a different kind than the intent claimed.
+    fun fireNotificationAction(
+        state: AndroidNotificationOpenState,
+        token: String,
+        kind: NotificationActionKind,
+        replyText: String?,
+        nowMillis: Long,
+    ): FiredNotificationAction? {
+        pruneNotificationActions(state, nowMillis)
+        val armed = state.notificationActions.firstOrNull {
+            it.token == token && !it.queued && it.kind == kind
+        } ?: return null
+        // One tap consumes every armed action of that notification: the
+        // notification itself is replaced by the queued state right after.
+        state.notificationActions.removeAll {
+            !it.queued &&
+                it.accountId == armed.accountId &&
+                it.notificationId == armed.notificationId
+        }
+        val evicted = mutableListOf<StoredNotificationAction>()
+        while (state.notificationActions.count { it.queued } >= MAX_QUEUED_NOTIFICATION_ACTIONS) {
+            val oldest = state.notificationActions.first { it.queued }
+            state.notificationActions.remove(oldest)
+            evicted.add(oldest)
+        }
+        val queued = armed.copy(
+            replyText = replyText,
+            queued = true,
+            createdAtMillis = nowMillis,
+        )
+        state.notificationActions.add(queued)
+        return FiredNotificationAction(queued = queued, evicted = evicted)
+    }
+
+    /// Hands queued actions of exactly `accountId` to the Dart layer and counts
+    /// the attempt. An action that ran out of attempts is reported separately
+    /// so the caller can tell the user instead of dropping it silently.
+    fun claimNotificationActions(
+        state: AndroidNotificationOpenState,
+        accountId: String,
+        limit: Int,
+        nowMillis: Long,
+    ): NotificationActionClaim {
+        pruneNotificationActions(state, nowMillis)
+        val claimed = state.notificationActions
+            .filter { it.queued && it.accountId == accountId }
+            .take(limit)
+        val ready = mutableListOf<StoredNotificationAction>()
+        val exhausted = mutableListOf<StoredNotificationAction>()
+        claimed.forEach { action ->
+            val index = state.notificationActions.indexOf(action)
+            val attempted = action.copy(attempts = action.attempts + 1)
+            if (attempted.attempts > MAX_NOTIFICATION_ACTION_ATTEMPTS) {
+                state.notificationActions.removeAt(index)
+                exhausted.add(action)
+            } else {
+                state.notificationActions[index] = attempted
+                ready.add(attempted)
+            }
+        }
+        return NotificationActionClaim(ready = ready, exhausted = exhausted)
+    }
+
+    fun resolveNotificationAction(
+        state: AndroidNotificationOpenState,
+        accountId: String,
+        token: String,
+    ): StoredNotificationAction? {
+        val action = state.notificationActions.firstOrNull {
+            it.token == token && it.queued && it.accountId == accountId
+        } ?: return null
+        state.notificationActions.remove(action)
+        return action
+    }
+
+    /// Disarms `PendingIntent` targets after the server withdrew notifications.
+    /// A `null` [notificationIds] means every notification of the account.
+    fun revokeArmedNotificationActions(
+        state: AndroidNotificationOpenState,
+        accountId: String,
+        notificationIds: Set<Long>?,
+    ) {
+        state.notificationActions.removeAll {
+            !it.queued &&
+                it.accountId == accountId &&
+                (notificationIds == null || it.notificationId in notificationIds)
+        }
+    }
+
+    private fun evictArmedNotificationActions(state: AndroidNotificationOpenState) {
+        while (state.notificationActions.size >= MAX_NOTIFICATION_ACTIONS) {
+            val armedIndex = state.notificationActions.indexOfFirst { !it.queued }
+            if (armedIndex < 0) {
+                return
+            }
+            state.notificationActions.removeAt(armedIndex)
+        }
+    }
+
     private fun appendSimpleEvent(
         state: AndroidWebPushState,
         instance: String,
@@ -653,10 +848,24 @@ internal class AndroidWebPushStateMachine(
         state.notificationOpens.removeAll { it.createdAtMillis < cutoff }
     }
 
+    /// Only armed records expire. Queued work carries text the user typed and
+    /// leaves the store solely through an explicit resolve or attempt
+    /// exhaustion, both of which tell the user what happened.
+    private fun pruneNotificationActions(
+        state: AndroidNotificationOpenState,
+        nowMillis: Long,
+    ) {
+        val cutoff = nowMillis - NOTIFICATION_OPEN_RETENTION_MILLIS
+        state.notificationActions.removeAll { !it.queued && it.createdAtMillis < cutoff }
+    }
+
     companion object {
         internal const val MAX_ACTIVE_ACCOUNTS = 32
         internal const val MAX_STORED_EVENTS = 384
         internal const val MAX_NOTIFICATION_OPENS = 128
+        internal const val MAX_NOTIFICATION_ACTIONS = 128
+        internal const val MAX_QUEUED_NOTIFICATION_ACTIONS = 64
+        internal const val MAX_NOTIFICATION_ACTION_ATTEMPTS = 8
         internal const val RETIRED_RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1000L
         internal const val NOTIFICATION_OPEN_RETENTION_MILLIS =
             7L * 24L * 60L * 60L * 1000L

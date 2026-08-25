@@ -296,6 +296,29 @@ internal class AndroidWebPushStore(context: Context) {
         notificationOpenStore.revokeAll(accountId)
     }
 
+    fun armNotificationAction(
+        kind: NotificationActionKind,
+        accountId: String,
+        notificationId: Long,
+        roomToken: String,
+    ): String = notificationOpenStore.arm(kind, accountId, notificationId, roomToken)
+
+    fun fireNotificationAction(
+        token: String,
+        kind: NotificationActionKind,
+        replyText: String?,
+    ): FiredNotificationAction? = notificationOpenStore.fire(token, kind, replyText)
+
+    fun claimNotificationActions(
+        accountId: String,
+        limit: Int,
+    ): NotificationActionClaim = notificationOpenStore.claim(accountId, limit)
+
+    fun resolveNotificationAction(
+        accountId: String,
+        token: String,
+    ): StoredNotificationAction? = notificationOpenStore.resolveAction(accountId, token)
+
     private fun validateEndpoint(
         url: String,
         publicKey: String?,
@@ -497,6 +520,7 @@ internal class AndroidWebPushStore(context: Context) {
         private const val MAX_ENDPOINT_LENGTH = 8 * 1024
         private const val MAX_KEY_MATERIAL_LENGTH = 512
         private val OPEN_TOKEN_PATTERN = Regex("^nksopen1_[A-Za-z0-9_-]{43}$")
+        private val ACTION_TOKEN_PATTERN = Regex("^nksact1_[A-Za-z0-9_-]{43}$")
 
         fun newOpaqueInstance(): String {
             val random = ByteArray(24).also(SECURE_RANDOM::nextBytes)
@@ -510,6 +534,15 @@ internal class AndroidWebPushStore(context: Context) {
         internal fun newOpaqueOpenToken(): String {
             val random = ByteArray(32).also(SECURE_RANDOM::nextBytes)
             return "nksopen1_${Base64.encodeToString(random, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)}"
+        }
+
+        fun isValidNotificationActionToken(token: String): Boolean {
+            return ACTION_TOKEN_PATTERN.matches(token)
+        }
+
+        internal fun newOpaqueActionToken(): String {
+            val random = ByteArray(32).also(SECURE_RANDOM::nextBytes)
+            return "nksact1_${Base64.encodeToString(random, Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE)}"
         }
     }
 }
@@ -572,9 +605,10 @@ internal class AndroidNotificationOpenStore(context: Context) {
         }
         synchronized(OPEN_STORE_LOCK) {
             val state = readState()
-            val before = state.notificationOpens.size
+            val before = state.size()
             stateMachine.revokeNotificationOpens(state, accountId, notificationIds)
-            if (state.notificationOpens.size != before) {
+            stateMachine.revokeArmedNotificationActions(state, accountId, notificationIds)
+            if (state.size() != before) {
                 writeState(state)
             }
         }
@@ -583,12 +617,94 @@ internal class AndroidNotificationOpenStore(context: Context) {
     fun revokeAll(accountId: String) {
         synchronized(OPEN_STORE_LOCK) {
             val state = readState()
-            val before = state.notificationOpens.size
+            val before = state.size()
             stateMachine.revokeAllNotificationOpens(state, accountId)
-            if (state.notificationOpens.size != before) {
+            stateMachine.revokeArmedNotificationActions(state, accountId, null)
+            if (state.size() != before) {
                 writeState(state)
             }
         }
+    }
+
+    fun arm(
+        kind: NotificationActionKind,
+        accountId: String,
+        notificationId: Long,
+        roomToken: String,
+    ): String {
+        validateRecord(accountId, notificationId, "spreed", null, roomToken)
+        if (!AndroidSystemNotifications.isValidRoomToken(roomToken)) {
+            throw PushStoreException("invalid_notification_action")
+        }
+        val token = AndroidWebPushStore.newOpaqueActionToken()
+        synchronized(OPEN_STORE_LOCK) {
+            val state = readState()
+            stateMachine.armNotificationAction(
+                state = state,
+                token = token,
+                kind = kind,
+                accountId = accountId,
+                notificationId = notificationId,
+                roomToken = roomToken,
+                nowMillis = System.currentTimeMillis(),
+            )
+            writeState(state)
+        }
+        return token
+    }
+
+    fun fire(
+        token: String,
+        kind: NotificationActionKind,
+        replyText: String?,
+    ): FiredNotificationAction? = synchronized(OPEN_STORE_LOCK) {
+        if (!AndroidWebPushStore.isValidNotificationActionToken(token)) {
+            return@synchronized null
+        }
+        val state = readState()
+        val fired = stateMachine.fireNotificationAction(
+            state = state,
+            token = token,
+            kind = kind,
+            replyText = replyText,
+            nowMillis = System.currentTimeMillis(),
+        ) ?: return@synchronized null
+        writeState(state)
+        fired
+    }
+
+    fun claim(accountId: String, limit: Int): NotificationActionClaim = synchronized(
+        OPEN_STORE_LOCK,
+    ) {
+        val state = readState()
+        val claim = stateMachine.claimNotificationActions(
+            state = state,
+            accountId = accountId,
+            limit = limit,
+            nowMillis = System.currentTimeMillis(),
+        )
+        if (claim.ready.isNotEmpty() || claim.exhausted.isNotEmpty()) {
+            writeState(state)
+        }
+        claim
+    }
+
+    fun resolveAction(
+        accountId: String,
+        token: String,
+    ): StoredNotificationAction? = synchronized(OPEN_STORE_LOCK) {
+        if (!AndroidWebPushStore.isValidNotificationActionToken(token)) {
+            return@synchronized null
+        }
+        val state = readState()
+        val resolved = stateMachine.resolveNotificationAction(state, accountId, token)
+            ?: return@synchronized null
+        writeState(state)
+        resolved
+    }
+
+    private fun AndroidNotificationOpenState.size(): Int {
+        return notificationOpens.size + notificationActions.size
     }
 
     private fun readState(): AndroidNotificationOpenState {
@@ -664,13 +780,31 @@ internal class AndroidNotificationOpenStore(context: Context) {
                     .put("createdAtMillis", open.createdAtMillis),
             )
         }
+        val notificationActions = JSONArray()
+        state.notificationActions.forEach { action ->
+            notificationActions.put(
+                JSONObject()
+                    .put("token", action.token)
+                    .put("kind", action.kind.name)
+                    .put("accountId", action.accountId)
+                    .put("notificationId", action.notificationId)
+                    .put("roomToken", action.roomToken)
+                    .putNullable("replyText", action.replyText)
+                    .put("queued", action.queued)
+                    .put("attempts", action.attempts)
+                    .put("createdAtMillis", action.createdAtMillis),
+            )
+        }
         return JSONObject()
             .put("schema", STATE_SCHEMA)
             .put("notificationOpens", notificationOpens)
+            .put("notificationActions", notificationActions)
     }
 
     private fun decodeState(json: JSONObject): AndroidNotificationOpenState {
-        if (json.getInt("schema") != STATE_SCHEMA) {
+        // Schema 1 predates notification actions; it upgrades in place with an
+        // empty action list instead of throwing away pending opens.
+        if (json.getInt("schema") !in SUPPORTED_STATE_SCHEMAS) {
             throw PushStoreException("unsupported_notification_open_state_schema")
         }
         val array = json.getJSONArray("notificationOpens")
@@ -708,7 +842,55 @@ internal class AndroidNotificationOpenStore(context: Context) {
         ) {
             throw PushStoreException("invalid_notification_open_state")
         }
-        return AndroidNotificationOpenState(opens.toMutableList())
+        return AndroidNotificationOpenState(
+            opens.toMutableList(),
+            decodeActions(json).toMutableList(),
+        )
+    }
+
+    private fun decodeActions(json: JSONObject): List<StoredNotificationAction> {
+        if (json.isNull("notificationActions")) {
+            return emptyList()
+        }
+        val array = json.getJSONArray("notificationActions")
+        if (array.length() > AndroidWebPushStateMachine.MAX_NOTIFICATION_ACTIONS) {
+            throw PushStoreException("notification_action_store_too_large")
+        }
+        val actions = array.mapObjects { item ->
+            val action = StoredNotificationAction(
+                token = item.getString("token"),
+                kind = NotificationActionKind.parse(item.getString("kind"))
+                    ?: throw PushStoreException("invalid_notification_action_state"),
+                accountId = item.getString("accountId"),
+                notificationId = item.getLong("notificationId"),
+                roomToken = item.getString("roomToken"),
+                replyText = item.nullableString("replyText"),
+                queued = item.getBoolean("queued"),
+                attempts = item.getInt("attempts"),
+                createdAtMillis = item.getLong("createdAtMillis"),
+            )
+            validateAction(action)
+            action
+        }
+        if (actions.map { it.token }.toSet().size != actions.size) {
+            throw PushStoreException("invalid_notification_action_state")
+        }
+        return actions
+    }
+
+    private fun validateAction(action: StoredNotificationAction) {
+        if (
+            !AndroidWebPushStore.isValidNotificationActionToken(action.token) ||
+            action.accountId.isBlank() || action.accountId.length > MAX_ACCOUNT_ID_LENGTH ||
+            action.notificationId <= 0 ||
+            !AndroidSystemNotifications.isValidRoomToken(action.roomToken) ||
+            action.replyText != null &&
+            (action.replyText.isEmpty() || action.replyText.length > MAX_REPLY_LENGTH) ||
+            action.attempts < 0 ||
+            action.createdAtMillis < 0
+        ) {
+            throw PushStoreException("invalid_notification_action")
+        }
     }
 
     private fun validateRecord(
@@ -770,11 +952,13 @@ internal class AndroidNotificationOpenStore(context: Context) {
         private const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_BITS = 128
         private const val ENVELOPE_VERSION = 1
-        private const val STATE_SCHEMA = 1
+        private const val STATE_SCHEMA = 2
+        private val SUPPORTED_STATE_SCHEMAS = setOf(1, 2)
         private const val MAX_ACCOUNT_ID_LENGTH = 256
         private const val MAX_APP_LENGTH = 128
         private const val MAX_TYPE_LENGTH = 128
         private const val MAX_OBJECT_ID_LENGTH = 512
+        internal const val MAX_REPLY_LENGTH = 8000
         private const val MAX_ENVELOPE_CHARS = 2 * 1024 * 1024
         private const val MAX_CIPHERTEXT_BYTES = 1024 * 1024
         private const val MAX_PLAINTEXT_BYTES = 1024 * 1024

@@ -38,6 +38,12 @@ internal class AndroidWebPushChannel(
                 "pendingEventCount" -> result.success(pendingEventCount(requireArguments(call)))
                 "drainEvents" -> result.success(drainEvents(requireArguments(call)))
                 "acknowledge" -> result.success(acknowledge(requireArguments(call)))
+                "drainNotificationActions" -> {
+                    result.success(drainNotificationActions(requireArguments(call)))
+                }
+                "resolveNotificationAction" -> {
+                    result.success(resolveNotificationAction(requireArguments(call)))
+                }
                 else -> result.notImplemented()
             }
         } catch (error: PushBridgeException) {
@@ -152,6 +158,46 @@ internal class AndroidWebPushChannel(
         return mapOf("removedCount" to store.acknowledge(accountId, eventIds))
     }
 
+    /// Hands the queued notification actions of exactly one account to Dart.
+    /// An action that ran out of attempts leaves the queue here and turns into
+    /// a visible failure notification rather than disappearing.
+    private fun drainNotificationActions(arguments: Map<*, *>): List<Map<String, Any?>> {
+        val accountId = arguments.requiredAccountId()
+        val limit = arguments.requiredInt("limit")
+        if (limit !in 1..MAX_DRAIN_EVENTS) {
+            throw PushBridgeException("invalid_drain_limit")
+        }
+        val claim = store.claimNotificationActions(accountId, limit)
+        claim.exhausted.forEach {
+            AndroidSystemNotifications.showActionFailure(applicationContext, store, it)
+        }
+        return claim.ready.map { it.toChannelMap() }
+    }
+
+    private fun resolveNotificationAction(arguments: Map<*, *>): Map<String, Any> {
+        val accountId = arguments.requiredAccountId()
+        val actionId = arguments.requiredString("actionId", MAX_ACTION_ID_LENGTH)
+        val outcome = arguments.requiredString("outcome", MAX_OUTCOME_LENGTH)
+        if (outcome !in ACTION_OUTCOMES) {
+            throw PushBridgeException("invalid_outcome")
+        }
+        val resolved = store.resolveNotificationAction(accountId, actionId)
+            ?: return mapOf("resolved" to false)
+        when (outcome) {
+            "completed" -> AndroidSystemNotifications.cancelNotification(
+                applicationContext,
+                resolved.accountId,
+                resolved.notificationId,
+            )
+            else -> AndroidSystemNotifications.showActionFailure(
+                applicationContext,
+                store,
+                resolved,
+            )
+        }
+        return mapOf("resolved" to true)
+    }
+
     private fun ensureEmbeddedDistributor() {
         if (!UnifiedPush.getDistributors(applicationContext).contains(applicationContext.packageName)) {
             throw PushBridgeException("embedded_distributor_unavailable")
@@ -191,6 +237,9 @@ internal class AndroidWebPushChannel(
         private const val MAX_ACCOUNT_ID_LENGTH = 256
         private const val MAX_DRAIN_EVENTS = 100
         private const val MAX_ACK_EVENTS = 100
+        private const val MAX_ACTION_ID_LENGTH = 64
+        private const val MAX_OUTCOME_LENGTH = 16
+        private val ACTION_OUTCOMES = setOf("completed", "failed")
         private val NON_STORE_METHODS = setOf(
             "getAvailability",
             "getNotificationPermission",

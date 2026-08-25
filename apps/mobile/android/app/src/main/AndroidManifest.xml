@@ -74,6 +74,14 @@
                 <data android:scheme="https" android:pathPattern="/call/.*"/>
             </intent-filter>
         </activity>
+        <!-- Direct reply and mark-as-read from the notification shade. Not
+             exported: only the system NotificationManager holds the explicit
+             PendingIntents that reach it, and every one of them carries an
+             opaque one-shot token instead of the account or room. -->
+        <receiver
+            android:name=".push.AndroidNotificationActionReceiver"
+            android:enabled="true"
+            android:exported="false"/>
         <receiver
             android:name=".push.AndroidWebPushReceiver"
             android:enabled="true"
