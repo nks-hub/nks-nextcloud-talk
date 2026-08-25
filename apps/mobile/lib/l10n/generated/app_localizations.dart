@@ -1327,6 +1327,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You can\'t leave until another moderator is promoted.'**
   String get roomDetailsLeaveRejected;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @settingsAccountsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts'**
+  String get settingsAccountsSection;
+
+  /// No description provided for @settingsAccountSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get settingsAccountSelected;
+
+  /// No description provided for @settingsAccountsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Accounts could not be loaded.'**
+  String get settingsAccountsLoadFailed;
+
+  /// No description provided for @settingsAddAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Add account'**
+  String get settingsAddAccount;
+
+  /// No description provided for @settingsRemoveAccountUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.'**
+  String get settingsRemoveAccountUnavailable;
+
+  /// No description provided for @settingsThemeSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsThemeSection;
+
+  /// No description provided for @settingsThemeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Match system'**
+  String get settingsThemeSystem;
+
+  /// No description provided for @settingsThemeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// No description provided for @settingsThemeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
 }
 
 class _AppLocalizationsDelegate
