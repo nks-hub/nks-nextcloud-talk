@@ -1340,6 +1340,7 @@ void main() {
         'chat-keep-notifications',
       ];
       var capabilityRequests = 0;
+      var now = DateTime.utc(2026, 8, 25, 12);
       final futureTimeouts = <String?>[];
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
@@ -1362,6 +1363,7 @@ void main() {
           futureTimeouts.add(request.url.queryParameters['timeout']);
           return http.Response('', 304);
         }),
+        clock: () => now,
       );
       addTearDown(api.close);
       final service = ChatService(
@@ -1377,6 +1379,9 @@ void main() {
 
       await binding.synchronize();
       await accounts.updateTalkFeatures('account-a', updatedFeatures.toSet());
+      // The server grows a feature only after the first snapshot has fallen out
+      // of its validity window, so the re-prepare reads the new epoch fresh.
+      now = now.add(const Duration(minutes: 6));
       await binding.synchronize();
       await binding.synchronize();
       await binding.synchronize();
@@ -1431,7 +1436,9 @@ void main() {
       await binding.synchronize();
       await binding.synchronize();
 
-      expect(capabilityRequests, 2);
+      // Re-preparing costs no capability request while the snapshot is valid;
+      // the reset poll timeout sequence is what proves the re-prepare happened.
+      expect(capabilityRequests, 1);
       expect(futureTimeouts, ['0', '0', '30']);
     },
   );
@@ -1510,7 +1517,9 @@ void main() {
       await binding.synchronize();
       await binding.synchronize();
 
-      expect(capabilityRequests, 2);
+      // Re-preparing costs no capability request while the snapshot is valid;
+      // the root/dedicated request split is what proves the re-prepare happened.
+      expect(capabilityRequests, 1);
       expect(rootRequests, 2);
       expect(dedicatedRequests, 1);
     },

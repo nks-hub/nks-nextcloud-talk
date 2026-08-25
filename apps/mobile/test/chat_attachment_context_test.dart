@@ -304,6 +304,7 @@ void main() {
     'increments only the account capability generation after a change',
     () async {
       var requestCount = 0;
+      var now = DateTime.utc(2026, 8, 24, 12);
       final api = _api((_) async {
         requestCount++;
         final features = requestCount == 1
@@ -313,7 +314,7 @@ void main() {
           jsonEncode(_attachmentCapabilities(talkFeatures: features)),
           200,
         );
-      });
+      }, clock: () => now);
       addTearDown(api.close);
       final resolver = _resolver(
         accounts: accounts,
@@ -329,6 +330,9 @@ void main() {
         source: _source(handle: 'source-a'),
         metadata: _metadata(),
       );
+      // The server gains a feature only after the first snapshot has fallen out
+      // of its validity window, so the second resolve reads it fresh.
+      now = now.add(const Duration(minutes: 6));
       final second = await resolver.resolve(
         accountId: AccountId.parse('account-a'),
         roomToken: _roomToken(),
@@ -346,12 +350,13 @@ void main() {
     'a 401 marks reauthentication without recording a false generation',
     () async {
       var requestCount = 0;
+      var now = DateTime.utc(2026, 8, 24, 12);
       final api = _api((_) async {
         requestCount++;
         return requestCount == 1
             ? http.Response(jsonEncode(_attachmentCapabilities()), 200)
             : http.Response('', 401);
-      });
+      }, clock: () => now);
       addTearDown(api.close);
       final resolver = _resolver(
         accounts: accounts,
@@ -367,6 +372,9 @@ void main() {
         metadata: _metadata(),
       );
 
+      // The session expires only after the first snapshot has fallen out of its
+      // validity window, so the second resolve reaches the rejecting server.
+      now = now.add(const Duration(minutes: 6));
       await expectLater(
         resolver.resolve(
           accountId: AccountId.parse('account-a'),
@@ -525,8 +533,9 @@ ChatAttachmentContextResolver _resolver({
 );
 
 HttpNextcloudApi _api(
-  Future<http.Response> Function(http.Request request) handler,
-) => HttpNextcloudApi(client: MockClient(handler));
+  Future<http.Response> Function(http.Request request) handler, {
+  DateTime Function()? clock,
+}) => HttpNextcloudApi(client: MockClient(handler), clock: clock);
 
 Matcher _throwsContextError(ChatAttachmentContextError code) => throwsA(
   isA<ChatAttachmentContextException>().having(
