@@ -273,5 +273,13 @@
   "newConversationErrorRateLimited": "Příliš mnoho požadavků. Zkuste to za chvíli.",
   "newConversationErrorServiceUnavailable": "Server je dočasně nedostupný.",
   "newConversationErrorInvalidResponse": "Server poslal neočekávanou odpověď.",
-  "newConversationErrorNetwork": "Server je nedostupný."
+  "newConversationErrorNetwork": "Server je nedostupný.",
+  "roomDetailsParticipantActionsTooltip": "Akce s účastníkem",
+  "roomDetailsPromoteModerator": "Povýšit na moderátora",
+  "roomDetailsDemoteModerator": "Odebrat práva moderátora",
+  "roomDetailsRemoveParticipant": "Odebrat z konverzace",
+  "roomDetailsRemoveDialogTitle": "Odebrat účastníka?",
+  "roomDetailsRemoveDialogMessage": "{name} ztratí přístup do této konverzace, dokud ho někdo znovu nepozve.",
+  "roomDetailsRemoveDialogConfirm": "Odebrat",
+  "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl."
 }

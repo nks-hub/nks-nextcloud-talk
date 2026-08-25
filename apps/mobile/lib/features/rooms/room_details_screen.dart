@@ -95,18 +95,27 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
     try {
       await action();
     } on RoomSettingsException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      final strings = AppLocalizations.of(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_actionErrorMessage(strings, error.code))));
+      _showActionError(_actionErrorMessage, error.code);
+    } on ParticipantsServiceException catch (error) {
+      _showActionError(_participantActionErrorMessage, error.code);
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
     }
+  }
+
+  void _showActionError<T>(
+    String Function(AppLocalizations, T) message,
+    T code,
+  ) {
+    if (!mounted) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message(strings, code))));
   }
 
   Future<void> _renameRoom() async {
@@ -300,6 +309,91 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
     }
   }
 
+  /// Runs a moderation change and refetches the list, because the endpoints
+  /// answer with an empty payload and the new roles are only visible after a
+  /// reload.
+  Future<void> _moderate(
+    Participant participant,
+    ParticipantModerationAction action,
+  ) async {
+    if (action == ParticipantModerationAction.remove &&
+        !await _confirmRemoval(participant)) {
+      return;
+    }
+    var changed = false;
+    await _runAction(() async {
+      await ref
+          .read(participantsServiceProvider)
+          .moderateParticipant(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            attendeeId: participant.attendeeId,
+            action: action,
+          );
+      changed = true;
+    });
+    if (changed && mounted) {
+      _retry();
+    }
+  }
+
+  Future<bool> _confirmRemoval(Participant participant) async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('room-details-remove-participant-dialog'),
+        title: Text(strings.roomDetailsRemoveDialogTitle),
+        content: Text(
+          strings.roomDetailsRemoveDialogMessage(participant.displayName),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            key: const Key('room-details-remove-participant-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(strings.roomDetailsRemoveDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true && mounted;
+  }
+
+  /// Which moderation actions the server would accept for this attendee, so
+  /// the menu never offers a change that is guaranteed to come back as an
+  /// error. The server stays the authority; this only trims the obvious ones.
+  List<ParticipantModerationAction> _availableActions(Participant participant) {
+    if (!_isModerator || _isSelf(participant)) {
+      return const [];
+    }
+    return switch (participant.role) {
+      ParticipantRole.user ||
+      ParticipantRole.userSelfJoined ||
+      ParticipantRole.guest => const [
+        ParticipantModerationAction.promote,
+        ParticipantModerationAction.remove,
+      ],
+      ParticipantRole.moderator || ParticipantRole.guestModerator => const [
+        ParticipantModerationAction.demote,
+      ],
+      // Owners cannot be demoted or removed, and an unknown role means a
+      // participant type this build does not understand.
+      ParticipantRole.owner || null => const [],
+    };
+  }
+
+  /// Best-effort self match so a moderator is not offered actions on their own
+  /// row; the login name is usually the user id, and the server refuses
+  /// self-demotion anyway when it is not.
+  bool _isSelf(Participant participant) {
+    return participant.actorType == 'users' &&
+        participant.actorId == widget.account.loginName;
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -397,6 +491,10 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
                     _ParticipantTile(
                       account: widget.account,
                       participant: participant,
+                      actions: _availableActions(participant),
+                      onAction: _busy
+                          ? null
+                          : (action) => _moderate(participant, action),
                     ),
                 ],
               );
@@ -502,10 +600,20 @@ final class _InfoRow extends StatelessWidget {
 }
 
 final class _ParticipantTile extends StatelessWidget {
-  const _ParticipantTile({required this.account, required this.participant});
+  const _ParticipantTile({
+    required this.account,
+    required this.participant,
+    required this.actions,
+    required this.onAction,
+  });
 
   final StoredAccount account;
   final Participant participant;
+
+  /// Moderation actions to offer for this attendee; empty for anyone the
+  /// signed-in account may not moderate, which hides the menu entirely.
+  final List<ParticipantModerationAction> actions;
+  final void Function(ParticipantModerationAction)? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -524,21 +632,38 @@ final class _ParticipantTile extends StatelessWidget {
       ),
       title: Text(participant.displayName),
       subtitle: Text(_roleLabel(strings, participant.role)),
-      trailing: participant.status == null
-          ? null
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.circle,
-                  size: 10,
-                  color: online ? Colors.green : scheme.outline,
-                  semanticLabel: online
-                      ? strings.presenceOnline
-                      : participant.status,
-                ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (participant.status != null)
+            Icon(
+              Icons.circle,
+              size: 10,
+              color: online ? Colors.green : scheme.outline,
+              semanticLabel: online
+                  ? strings.presenceOnline
+                  : participant.status,
+            ),
+          if (actions.isNotEmpty)
+            PopupMenuButton<ParticipantModerationAction>(
+              key: Key('room-participant-menu-${participant.attendeeId}'),
+              tooltip: strings.roomDetailsParticipantActionsTooltip,
+              enabled: onAction != null,
+              onSelected: onAction,
+              itemBuilder: (context) => [
+                for (final action in actions)
+                  PopupMenuItem(
+                    key: Key(
+                      'room-participant-${participant.attendeeId}-'
+                      '${action.name}',
+                    ),
+                    value: action,
+                    child: Text(_moderationActionLabel(strings, action)),
+                  ),
               ],
             ),
+        ],
+      ),
     );
   }
 }
@@ -609,6 +734,39 @@ String _roleLabel(AppLocalizations strings, ParticipantRole? role) {
     ParticipantRole.userSelfJoined => strings.roomDetailsRoleUser,
     ParticipantRole.guestModerator => strings.roomDetailsRoleGuestModerator,
     null => strings.roomDetailsRoleUnknown,
+  };
+}
+
+String _moderationActionLabel(
+  AppLocalizations strings,
+  ParticipantModerationAction action,
+) {
+  return switch (action) {
+    ParticipantModerationAction.promote => strings.roomDetailsPromoteModerator,
+    ParticipantModerationAction.demote => strings.roomDetailsDemoteModerator,
+    ParticipantModerationAction.remove => strings.roomDetailsRemoveParticipant,
+  };
+}
+
+String _participantActionErrorMessage(
+  AppLocalizations strings,
+  ParticipantsServiceError code,
+) {
+  return switch (code) {
+    ParticipantsServiceError.reauthenticationRequired =>
+      strings.roomDetailsActionErrorReauth,
+    ParticipantsServiceError.forbidden =>
+      strings.roomDetailsActionErrorForbidden,
+    ParticipantsServiceError.roomMissing =>
+      strings.roomDetailsActionErrorRoomMissing,
+    ParticipantsServiceError.rejected =>
+      strings.roomDetailsParticipantActionRejected,
+    ParticipantsServiceError.accountMissing ||
+    ParticipantsServiceError.credentialMissing ||
+    ParticipantsServiceError.rateLimited ||
+    ParticipantsServiceError.serviceUnavailable ||
+    ParticipantsServiceError.invalidResponse ||
+    ParticipantsServiceError.network => strings.roomDetailsActionErrorGeneric,
   };
 }
 

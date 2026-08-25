@@ -1657,6 +1657,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not reach the server.'**
   String get newConversationErrorNetwork;
+
+  /// No description provided for @roomDetailsParticipantActionsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Participant actions'**
+  String get roomDetailsParticipantActionsTooltip;
+
+  /// No description provided for @roomDetailsPromoteModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Promote to moderator'**
+  String get roomDetailsPromoteModerator;
+
+  /// No description provided for @roomDetailsDemoteModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove moderator rights'**
+  String get roomDetailsDemoteModerator;
+
+  /// No description provided for @roomDetailsRemoveParticipant.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from conversation'**
+  String get roomDetailsRemoveParticipant;
+
+  /// No description provided for @roomDetailsRemoveDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove participant?'**
+  String get roomDetailsRemoveDialogTitle;
+
+  /// No description provided for @roomDetailsRemoveDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} will lose access to this conversation until someone invites them back.'**
+  String roomDetailsRemoveDialogMessage(String name);
+
+  /// No description provided for @roomDetailsRemoveDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get roomDetailsRemoveDialogConfirm;
+
+  /// No description provided for @roomDetailsParticipantActionRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this change for this participant.'**
+  String get roomDetailsParticipantActionRejected;
 }
 
 class _AppLocalizationsDelegate

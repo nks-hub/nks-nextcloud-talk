@@ -408,6 +408,242 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('offers moderation actions that match each attendee role', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: participantsClient(_moderationParticipants()),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-participant-1')).evaluate().isNotEmpty,
+    );
+
+    // Owner: nothing can be done to them, so no menu at all.
+    expect(find.byKey(const Key('room-participant-menu-1')), findsNothing);
+    // Self: the signed-in moderator's own row stays action-free.
+    expect(find.byKey(const Key('room-participant-menu-4')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('room-participant-2-demote')), findsOneWidget);
+    expect(find.byKey(const Key('room-participant-2-promote')), findsNothing);
+    expect(find.byKey(const Key('room-participant-2-remove')), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('room-participant-3-promote')), findsOneWidget);
+    expect(find.byKey(const Key('room-participant-3-remove')), findsOneWidget);
+    expect(find.byKey(const Key('room-participant-3-demote')), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('hides moderation menus from a plain participant', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final memberConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'participantType': 3, 'canLeaveConversation': true},
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: account,
+          conversation: memberConversation,
+        ),
+        client: participantsClient(_moderationParticipants()),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-participant-3')).evaluate().isNotEmpty,
+    );
+
+    expect(find.byType(PopupMenuButton<ParticipantModerationAction>), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('promoting a participant calls the API and reloads the list', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    var promoted = false;
+    var listRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        listRequests++;
+        return _ocsSuccess(
+          promoted
+              ? _moderationParticipants(promotedAttendeeType: 2)
+              : _moderationParticipants(),
+        );
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/moderators')) {
+        expect(request.url.queryParameters['attendeeId'], '3');
+        promoted = true;
+        return _ocsSuccess();
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('room-participant-menu-3')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('room-participant-3-promote')));
+    await _pumpUntil(tester, () => promoted && listRequests == 2);
+    // The reloaded row reports the moderator role, so it keeps only the
+    // demote entry and the tile no longer offers promoting.
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('room-participant-3')).evaluate().isNotEmpty &&
+          find
+              .byKey(const Key('room-participant-menu-3'))
+              .evaluate()
+              .isNotEmpty,
+    );
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('room-participant-3-demote')), findsOneWidget);
+    expect(find.byKey(const Key('room-participant-3-promote')), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('removing a participant asks for confirmation first', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    var removeRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(_moderationParticipants());
+      }
+      if (request.method == 'DELETE' && request.url.path.endsWith('/attendees')) {
+        expect(request.url.queryParameters['attendeeId'], '3');
+        removeRequests++;
+        return _ocsSuccess();
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('room-participant-menu-3')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('room-participant-3-remove')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('room-details-remove-participant-dialog')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(removeRequests, 0);
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('room-participant-3-remove')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('room-details-remove-participant-confirm')),
+    );
+    await _pumpUntil(tester, () => removeRequests == 1);
+
+    expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a moderation change the server rejects surfaces the reason', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(_moderationParticipants());
+      }
+      if (request.url.path.endsWith('/attendees')) {
+        return _ocsFailure(400);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('room-participant-menu-3')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-participant-menu-3')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('room-participant-3-remove')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('room-details-remove-participant-confirm')),
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .text('The server refused this change for this participant.')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('room-participant-3')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('hides the leave action when the server disallows it', (
     tester,
   ) async {
@@ -605,6 +841,40 @@ Future<CachedConversation> _insertConversation(
         ),
       );
   return database.select(database.cachedConversations).getSingle();
+}
+
+/// One attendee of each role the moderation menu has to distinguish: an
+/// owner (untouchable), a moderator (demote only), a plain user (promote or
+/// remove) and the signed-in account itself.
+List<Map<String, Object?>> _moderationParticipants({
+  int promotedAttendeeType = 3,
+}) {
+  return [
+    _participantJson(
+      attendeeId: 1,
+      actorId: 'synthetic-owner',
+      participantType: 1,
+      displayName: 'Synthetic Owner',
+    ),
+    _participantJson(
+      attendeeId: 2,
+      actorId: 'synthetic-moderator',
+      participantType: 2,
+      displayName: 'Synthetic Moderator',
+    ),
+    _participantJson(
+      attendeeId: 3,
+      actorId: 'synthetic-member',
+      participantType: promotedAttendeeType,
+      displayName: 'Synthetic Member',
+    ),
+    _participantJson(
+      attendeeId: 4,
+      actorId: 'fixture-user',
+      participantType: 2,
+      displayName: 'Signed-in Moderator',
+    ),
+  ];
 }
 
 Map<String, Object?> _participantJson({

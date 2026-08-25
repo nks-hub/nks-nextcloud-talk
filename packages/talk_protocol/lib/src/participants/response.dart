@@ -154,6 +154,153 @@ ParticipantsSuccess _decodeSuccess({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Moderation (POST/DELETE .../room/{token}/moderators, DELETE .../attendees)
+// ---------------------------------------------------------------------------
+
+/// A classified response to a promote, demote or remove request. All three
+/// endpoints share the same status codes and the same meaning for each of
+/// them, so they share one response family.
+sealed class ParticipantModerationResponse {
+  const ParticipantModerationResponse(this.request);
+
+  final ParticipantModerationRequest request;
+  int get statusCode;
+}
+
+/// HTTP 200. The change was applied; the payload carries nothing useful, so
+/// callers should refetch the participant list to see the new roles.
+final class ParticipantModerationSuccess extends ParticipantModerationResponse {
+  const ParticipantModerationSuccess._({
+    required ParticipantModerationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 200;
+
+  @override
+  String toString() => 'ParticipantModerationSuccess()';
+}
+
+/// HTTP 400. The change does not apply to this attendee: promoting someone
+/// who is not a plain user or guest, demoting someone who is not a
+/// moderator, removing a moderator or owner, or removing the last moderator.
+final class ParticipantModerationRejected
+    extends ParticipantModerationResponse {
+  const ParticipantModerationRejected._({
+    required ParticipantModerationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 400;
+
+  @override
+  String toString() => 'ParticipantModerationRejected()';
+}
+
+/// HTTP 401. The account must reauthenticate before another call.
+final class ParticipantModerationReauthenticationRequired
+    extends ParticipantModerationResponse {
+  const ParticipantModerationReauthenticationRequired._({
+    required ParticipantModerationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 401;
+
+  @override
+  String toString() => 'ParticipantModerationReauthenticationRequired()';
+}
+
+/// HTTP 403. The caller is not a moderator, the target is an owner, or a
+/// moderator tried to demote themselves.
+final class ParticipantModerationForbidden
+    extends ParticipantModerationResponse {
+  const ParticipantModerationForbidden._({
+    required ParticipantModerationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 403;
+
+  @override
+  String toString() => 'ParticipantModerationForbidden()';
+}
+
+/// HTTP 404. The room or the target attendee no longer exists.
+final class ParticipantModerationTargetMissing
+    extends ParticipantModerationResponse {
+  const ParticipantModerationTargetMissing._({
+    required ParticipantModerationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 404;
+
+  @override
+  String toString() => 'ParticipantModerationTargetMissing()';
+}
+
+/// A supported non-body HTTP failure.
+final class ParticipantModerationHttpFailure
+    extends ParticipantModerationResponse {
+  const ParticipantModerationHttpFailure._({
+    required ParticipantModerationRequest request,
+    required this.statusCode,
+    required this.kind,
+  }) : super(request);
+
+  @override
+  final int statusCode;
+  final ParticipantsHttpFailureKind kind;
+
+  @override
+  String toString() =>
+      'ParticipantModerationHttpFailure(statusCode: $statusCode, '
+      'kind: ${kind.name})';
+}
+
+ParticipantModerationResponse decodeParticipantModerationResponse({
+  required ParticipantModerationRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 400:
+      _decodeOcsEnvelope(body);
+      return ParticipantModerationRejected._(request: request);
+    case 401:
+      _decodeOcsEnvelope(body);
+      return ParticipantModerationReauthenticationRequired._(request: request);
+    case 403:
+      _decodeOcsEnvelope(body);
+      return ParticipantModerationForbidden._(request: request);
+    case 404:
+      _decodeOcsEnvelope(body);
+      return ParticipantModerationTargetMissing._(request: request);
+    case 429:
+      return ParticipantModerationHttpFailure._(
+        request: request,
+        statusCode: 429,
+        kind: ParticipantsHttpFailureKind.rateLimited,
+      );
+    case 503:
+      return ParticipantModerationHttpFailure._(
+        request: request,
+        statusCode: 503,
+        kind: ParticipantsHttpFailureKind.serviceUnavailable,
+      );
+    case 200:
+      _decodeOcsEnvelope(body);
+      return ParticipantModerationSuccess._(request: request);
+    default:
+      protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      );
+  }
+}
+
 Object? _decodeOcsEnvelope(Uint8List body) {
   final decoded = _decodeJsonBytes(body);
   final root = requireObject(decoded, path: r'$', code: _responseCode);

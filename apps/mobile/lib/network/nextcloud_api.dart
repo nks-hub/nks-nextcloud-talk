@@ -117,6 +117,15 @@ final class HttpNextcloudApi {
     429,
     503,
   };
+  static const _participantModerationAllowedStatusCodes = {
+    200,
+    400,
+    401,
+    403,
+    404,
+    429,
+    503,
+  };
   static const _roomSettingsMaximumBytes = 2 * 1024 * 1024;
   static const _roomDetailUpdateAllowedStatusCodes = {
     200,
@@ -501,6 +510,36 @@ final class HttpNextcloudApi {
     );
     return decodeParticipantsResponse(
       request: participantsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Promotes, demotes or removes a single attendee. Moderator-only on the
+  /// server. `attendeeId` is carried in the query string, so no request body
+  /// is sent for either the POST or the DELETE variants.
+  Future<ParticipantModerationResponse> moderateParticipant({
+    required ParticipantModerationRequest moderationRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request(
+      moderationRequest.httpMethod,
+      moderationRequest.uri,
+      abortTrigger,
+    )..headers.addAll({
+      ...moderationRequest.headers,
+      'Accept': 'application/json',
+      'Authorization': _basicAuthorization(loginName, appPassword),
+    });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _participantModerationAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeParticipantModerationResponse(
+      request: moderationRequest,
       statusCode: payload.statusCode,
       body: payload.body,
     );
