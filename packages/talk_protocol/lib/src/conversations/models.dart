@@ -110,6 +110,8 @@ final class ConversationRoom {
     required this.participantFlags,
     required this.remoteServer,
     required this.readOnly,
+    required this.lobbyState,
+    required this.lobbyTimer,
     required this.hasCall,
     required this.callFlag,
     required this.callRecording,
@@ -172,6 +174,14 @@ final class ConversationRoom {
   final int participantFlags;
   final String? remoteServer;
   final int readOnly;
+
+  /// Webinar lobby state, `0` for no lobby and `1` for a lobby that only
+  /// moderators can pass (Talk `docs/constants.md`, "Webinar lobby states").
+  final int lobbyState;
+
+  /// UNIX timestamp at which the lobby lifts itself, or `0` when it stays on
+  /// until a moderator turns it off.
+  final int lobbyTimer;
 
   bool get isFederated => remoteServer != null && remoteServer!.isNotEmpty;
   final bool hasCall;
@@ -273,8 +283,8 @@ ConversationRoom parseConversationRoom(
   final lastReadMessage = _requireInt(room, 'lastReadMessage', path);
   _requireInt(room, 'listable', path);
   _requireString(room, 'liveTranscriptionLanguageId', path);
-  _requireInt(room, 'lobbyState', path);
-  _requireInt(room, 'lobbyTimer', path);
+  final lobbyState = _requireInt(room, 'lobbyState', path);
+  final lobbyTimer = _requireInt(room, 'lobbyTimer', path);
   final mentionPermissions = _requireInt(
     room,
     'mentionPermissions',
@@ -371,6 +381,8 @@ ConversationRoom parseConversationRoom(
     participantFlags: participantFlags,
     remoteServer: remoteServer,
     readOnly: readOnly,
+    lobbyState: lobbyState,
+    lobbyTimer: lobbyTimer,
     hasCall: hasCall,
     callFlag: callFlag,
     callRecording: callRecording,

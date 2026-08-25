@@ -10,6 +10,12 @@ const String roomSettingsContractUserAgent =
 
 const int roomNameMaximumLength = 200;
 const int roomDescriptionMaximumLength = 2000;
+const int roomPasswordMaximumLength = 255;
+const int roomAvatarEmojiMaximumLength = 32;
+
+/// Year 5138 in UNIX seconds. A lobby timer beyond this is a millisecond
+/// value that leaked in, not a date anyone meant to pick.
+const int _maximumLobbyTimerSeconds = 99999999999;
 
 const TalkProtocolErrorCode _requestCode =
     TalkProtocolErrorCode.invalidRoomSettingsRequest;
@@ -278,4 +284,354 @@ final class LeaveRoomRequest {
 
   @override
   String toString() => 'LeaveRoomRequest(<redacted>)';
+}
+
+// ---------------------------------------------------------------------------
+// Conversation administration
+//
+// Six moderator-only changes that share one request shape and one response
+// family, because the server answers all of them with the same status codes.
+// ---------------------------------------------------------------------------
+
+const String conversationV1Path = '/ocs/v2.php/apps/spreed/api/v1/room';
+
+/// Webinar lobby states from Talk `docs/constants.md`, section "Webinar lobby
+/// states": `0 No lobby`, `1 Lobby for non moderators`.
+enum RoomLobbyState {
+  none(0),
+  moderatorsOnly(1);
+
+  const RoomLobbyState(this.wireValue);
+
+  final int wireValue;
+}
+
+/// Read-only states from Talk `docs/constants.md`, section "Read-only states":
+/// `0 Read-write`, `1 Read-only`.
+enum RoomReadOnlyState {
+  readWrite(0),
+  readOnly(1);
+
+  const RoomReadOnlyState(this.wireValue);
+
+  final int wireValue;
+}
+
+final RegExp _hexColorPattern = RegExp(r'^[0-9A-Fa-f]{6}$');
+
+Uri _roomV1Uri(ServerBase server, ConversationToken roomToken, String suffix) {
+  return server.uri.replace(
+    path: '${server.basePath}$conversationV1Path/${roomToken.value}/$suffix',
+    queryParameters: const {'format': 'json'},
+  );
+}
+
+/// One moderator-only administration change to a conversation.
+///
+/// Every subclass targets an endpoint that answers `200` on success, `400`
+/// when the conversation type or the value does not allow the change, `403`
+/// for a non-moderator and `404` for an unknown room, so they all decode
+/// through `decodeRoomAdministrationResponse`.
+sealed class RoomAdministrationRequest {
+  const RoomAdministrationRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.userAgent,
+  });
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String userAgent;
+
+  String get httpMethod;
+
+  Uri get uri;
+
+  /// Form fields for the request body, or `null` when the endpoint takes none.
+  Map<String, String>? get formBody;
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+}
+
+/// Turns a group conversation into a public one or back again.
+///
+/// `POST` and `DELETE /ocs/v2.php/apps/spreed/api/v4/room/{token}/public`,
+/// from Talk `docs/conversation.md`, sections "Allow guests in a conversation
+/// (public conversation)" and "Disallow guests in a conversation (group
+/// conversation)". No capability governs the toggle itself; the server
+/// answers `400` when the conversation is not a group conversation (POST) or
+/// not a public one (DELETE), `403` for a non-moderator and `404` for an
+/// unknown room.
+///
+/// The optional `password` field the POST accepts is deliberately not
+/// modelled: `docs/conversation.md` marks it "only available with
+/// `conversation-creation-password` capability", and a password is set
+/// through [SetRoomPasswordRequest] instead, which needs no capability.
+final class SetRoomPublicRequest extends RoomAdministrationRequest {
+  SetRoomPublicRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.public,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final bool public;
+
+  @override
+  String get httpMethod => public ? 'POST' : 'DELETE';
+
+  @override
+  Map<String, String>? get formBody => null;
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'public');
+
+  @override
+  String toString() => 'SetRoomPublicRequest(public: $public)';
+}
+
+/// Sets or clears the password of a public conversation.
+///
+/// `PUT /ocs/v2.php/apps/spreed/api/v4/room/{token}/password` with a single
+/// `password` form field, from Talk `docs/conversation.md`, section "Set
+/// password for a conversation". No capability governs it. The server answers
+/// `400` when the new password violates the instance password policy — and
+/// then carries a translated explanation in `ocs.data.message`, which
+/// `RoomAdministrationRejected.message` surfaces — `403` for a non-moderator
+/// or a non-public conversation, and `404` for an unknown room.
+///
+/// Clearing the password is an empty `password` value. That is not in the
+/// documentation, but it is what the official web client sends: in
+/// `src/components/ConversationSettings/LinkShareSettings.vue` the
+/// "disable the password protection for the current conversation" path calls
+/// `this.setConversationPassword('')`.
+///
+/// The password is a secret. It appears only in [formBody]; [toString] never
+/// renders it, and neither does any response in this family.
+final class SetRoomPasswordRequest extends RoomAdministrationRequest {
+  SetRoomPasswordRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.password,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    if (password.length > roomPasswordMaximumLength ||
+        _hasControlCharacter(password)) {
+      protocolFailure(_requestCode, r'$.body.password');
+    }
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  /// The new password, or the empty string to remove password protection.
+  final String password;
+
+  bool get clearsPassword => password.isEmpty;
+
+  @override
+  String get httpMethod => 'PUT';
+
+  @override
+  Map<String, String>? get formBody =>
+      UnmodifiableMapView({'password': password});
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'password');
+
+  /// Never renders [password]: a diagnostic string must not leak the secret.
+  @override
+  String toString() =>
+      'SetRoomPasswordRequest(clearsPassword: $clearsPassword)';
+}
+
+/// Enables or disables the lobby of a group or public conversation, optionally
+/// with the moment it lifts itself.
+///
+/// `PUT /ocs/v2.php/apps/spreed/api/v4/room/{token}/webinar/lobby` with
+/// `state` and `timer`, from Talk `docs/webinar.md`, section "Set lobby for a
+/// conversation". Requires the server's `webinary-lobby` capability
+/// (`docs/capabilities.md`, Talk 7.0). The server answers `400` when the
+/// conversation type does not support a lobby or the timestamp is invalid,
+/// `403` for a non-moderator and `404` for an unknown room.
+final class SetRoomLobbyRequest extends RoomAdministrationRequest {
+  SetRoomLobbyRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.state,
+    this.timerSecondsSinceEpoch,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    final timer = timerSecondsSinceEpoch;
+    if (timer != null) {
+      if (timer <= 0 || timer > _maximumLobbyTimerSeconds) {
+        protocolFailure(_requestCode, r'$.body.timer');
+      }
+      // A timer only means anything while the lobby is on; sending one with
+      // state 0 would ask the server to schedule the end of nothing.
+      if (state == RoomLobbyState.none) {
+        protocolFailure(_requestCode, r'$.body.timer');
+      }
+    }
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final RoomLobbyState state;
+
+  /// UNIX timestamp in seconds at which the lobby lifts itself, or `null` for
+  /// a lobby that stays on until a moderator turns it off.
+  final int? timerSecondsSinceEpoch;
+
+  @override
+  String get httpMethod => 'PUT';
+
+  @override
+  Map<String, String>? get formBody => UnmodifiableMapView({
+    'state': state.wireValue.toString(),
+    'timer': ?timerSecondsSinceEpoch?.toString(),
+  });
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'webinar/lobby');
+
+  @override
+  String toString() =>
+      'SetRoomLobbyRequest(state: ${state.name}, '
+      'timed: ${timerSecondsSinceEpoch != null})';
+}
+
+/// Puts a group or public conversation into read-only mode or back into
+/// read-write.
+///
+/// `PUT /ocs/v2.php/apps/spreed/api/v4/room/{token}/read-only` with a `state`
+/// form field, from Talk `docs/conversation.md`, section "Set read-only for a
+/// conversation". Requires the server's `read-only-rooms` capability
+/// (`docs/capabilities.md`, Talk 6.0). The server answers `400` when the
+/// conversation type does not support read-only, `403` for a non-moderator
+/// and `404` for an unknown room.
+final class SetRoomReadOnlyRequest extends RoomAdministrationRequest {
+  SetRoomReadOnlyRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.state,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final RoomReadOnlyState state;
+
+  @override
+  String get httpMethod => 'PUT';
+
+  @override
+  Map<String, String>? get formBody =>
+      UnmodifiableMapView({'state': state.wireValue.toString()});
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'read-only');
+
+  @override
+  String toString() => 'SetRoomReadOnlyRequest(state: ${state.name})';
+}
+
+/// Sets a single emoji, with an optional background colour, as the
+/// conversation avatar.
+///
+/// `POST /ocs/v2.php/apps/spreed/api/v1/room/{token}/avatar/emoji`, from Talk
+/// `docs/avatar.md`, section "Set emoji as avatar". Requires the server's
+/// `avatar` capability (`docs/capabilities.md`, Talk 17). The server answers
+/// `400` for a one-to-one conversation, an `emoji` that is not a single
+/// emoji, or a `color` outside the documented pattern; `403` when the caller
+/// is not a moderator, owner or guest moderator; and `404` for an unknown
+/// room.
+///
+/// `color` is documented as a "HEX color code (6 times 0-9A-F) without the
+/// leading `#` character (omit to fallback to the default bright/dark mode
+/// icon background color)", which is exactly what [hexColor] validates.
+final class SetRoomEmojiAvatarRequest extends RoomAdministrationRequest {
+  SetRoomEmojiAvatarRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.emoji,
+    this.hexColor,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    // The server is the authority on "a single emoji"; this only rejects the
+    // shapes that are certainly wrong, so an unusual but valid grapheme
+    // cluster (skin tone, ZWJ sequence, flag) still reaches it.
+    if (emoji.isEmpty ||
+        emoji.length > roomAvatarEmojiMaximumLength ||
+        _hasControlCharacter(emoji)) {
+      protocolFailure(_requestCode, r'$.body.emoji');
+    }
+    final color = hexColor;
+    if (color != null && !_hexColorPattern.hasMatch(color)) {
+      protocolFailure(_requestCode, r'$.body.color');
+    }
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final String emoji;
+
+  /// Six hex digits without a leading `#`, or `null` for the server default.
+  final String? hexColor;
+
+  @override
+  String get httpMethod => 'POST';
+
+  @override
+  Map<String, String>? get formBody => UnmodifiableMapView({
+    'emoji': emoji,
+    'color': ?hexColor,
+  });
+
+  @override
+  Uri get uri => _roomV1Uri(server, roomToken, 'avatar/emoji');
+
+  @override
+  String toString() =>
+      'SetRoomEmojiAvatarRequest(colored: ${hexColor != null})';
+}
+
+/// Removes a conversation's custom avatar, restoring the generated one.
+///
+/// `DELETE /ocs/v2.php/apps/spreed/api/v1/room/{token}/avatar`, from Talk
+/// `docs/avatar.md`, section "Delete conversations avatar". Requires the
+/// server's `avatar` capability (`docs/capabilities.md`, Talk 17). The server
+/// answers `403` when the caller is not a moderator, owner or guest
+/// moderator, and `404` for an unknown room.
+///
+/// That same section notes: "To determine if the delete option should be
+/// presented to the user, it's recommended to check the `isCustomAvatar`
+/// property", which is what gates the action in the UI.
+final class DeleteRoomAvatarRequest extends RoomAdministrationRequest {
+  DeleteRoomAvatarRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  @override
+  String get httpMethod => 'DELETE';
+
+  @override
+  Map<String, String>? get formBody => null;
+
+  @override
+  Uri get uri => _roomV1Uri(server, roomToken, 'avatar');
+
+  @override
+  String toString() => 'DeleteRoomAvatarRequest()';
 }

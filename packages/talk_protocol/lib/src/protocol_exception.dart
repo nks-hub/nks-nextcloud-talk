@@ -26,6 +26,8 @@ enum TalkProtocolErrorCode {
   invalidParticipantsResponse,
   invalidRoomSettingsRequest,
   invalidRoomSettingsResponse,
+  invalidBansRequest,
+  invalidBansResponse,
   invalidChatIdentifier,
   invalidChatProfile,
   invalidChatRequest,

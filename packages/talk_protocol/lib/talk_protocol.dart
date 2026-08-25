@@ -5,6 +5,8 @@ export 'src/attachments/request.dart';
 export 'src/attachments/response.dart';
 export 'src/attachments/runtime.dart';
 export 'src/attachments/state.dart';
+export 'src/bans/request.dart';
+export 'src/bans/response.dart';
 export 'src/bootstrap/capabilities.dart';
 export 'src/bootstrap/login_flow.dart';
 export 'src/bootstrap/server_status.dart';
