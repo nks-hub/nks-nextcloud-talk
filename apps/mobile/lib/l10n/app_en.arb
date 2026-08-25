@@ -386,5 +386,224 @@
   "settingsRemoveAccountDialogMessage": "{loginName} on {serverUrl} will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.",
   "settingsRemoveAccountDialogConfirm": "Remove",
   "settingsRemoveAccountDone": "The account was removed.",
-  "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server."
+  "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.",
+  "roomDetailsGuestsLabel": "Guests",
+  "@roomDetailsGuestsLabel": {
+    "description": "Switch that turns a group conversation into a public one anyone with the link can join."
+  },
+  "roomDetailsGuestsAllowed": "Anyone with the link can join",
+  "@roomDetailsGuestsAllowed": {
+    "description": "Subtitle of the guest switch while the conversation is public."
+  },
+  "roomDetailsGuestsBlocked": "Invited people only",
+  "@roomDetailsGuestsBlocked": {
+    "description": "Subtitle of the guest switch while the conversation is private."
+  },
+  "roomDetailsGuestsCloseDialogTitle": "Stop allowing guests?",
+  "@roomDetailsGuestsCloseDialogTitle": {
+    "description": "Title of the dialog confirming that a public conversation becomes private."
+  },
+  "roomDetailsGuestsCloseDialogMessage": "The link stops working and any guest who joined through it loses access. Invited participants are not affected.",
+  "@roomDetailsGuestsCloseDialogMessage": {
+    "description": "Body of the dialog confirming that a public conversation becomes private."
+  },
+  "roomDetailsGuestsCloseDialogConfirm": "Make private",
+  "@roomDetailsGuestsCloseDialogConfirm": {
+    "description": "Confirm button that turns a public conversation private."
+  },
+  "roomDetailsInviteLinkAction": "Share the guest link",
+  "@roomDetailsInviteLinkAction": {
+    "description": "Action that opens the system share sheet with the conversation's guest link."
+  },
+  "roomDetailsInviteLinkSubtitle": "Anyone with this link can join as a guest",
+  "@roomDetailsInviteLinkSubtitle": {
+    "description": "Subtitle explaining what the shared guest link grants."
+  },
+  "roomDetailsInviteLinkShareSubject": "Join the conversation",
+  "@roomDetailsInviteLinkShareSubject": {
+    "description": "Subject line offered to the system share sheet for a guest link."
+  },
+  "roomDetailsPasswordLabel": "Password",
+  "@roomDetailsPasswordLabel": {
+    "description": "Label of the conversation password action."
+  },
+  "roomDetailsPasswordSet": "Guests need a password",
+  "@roomDetailsPasswordSet": {
+    "description": "Subtitle shown while the public conversation is password protected."
+  },
+  "roomDetailsPasswordUnset": "No password",
+  "@roomDetailsPasswordUnset": {
+    "description": "Subtitle shown while the public conversation has no password."
+  },
+  "roomDetailsPasswordDialogTitle": "Password for guests",
+  "@roomDetailsPasswordDialogTitle": {
+    "description": "Title of the dialog that sets the conversation password."
+  },
+  "roomDetailsPasswordFieldLabel": "New password",
+  "@roomDetailsPasswordFieldLabel": {
+    "description": "Label of the password text field."
+  },
+  "roomDetailsPasswordRemoveAction": "Remove the password",
+  "@roomDetailsPasswordRemoveAction": {
+    "description": "Action that clears the conversation password."
+  },
+  "roomDetailsPasswordRemoveDialogTitle": "Remove the password?",
+  "@roomDetailsPasswordRemoveDialogTitle": {
+    "description": "Title of the dialog confirming that the conversation password is removed."
+  },
+  "roomDetailsPasswordRemoveDialogMessage": "Anyone with the link will be able to join without a password.",
+  "@roomDetailsPasswordRemoveDialogMessage": {
+    "description": "Body of the dialog confirming that the conversation password is removed."
+  },
+  "roomDetailsPasswordRemoveDialogConfirm": "Remove",
+  "@roomDetailsPasswordRemoveDialogConfirm": {
+    "description": "Confirm button that clears the conversation password."
+  },
+  "roomDetailsPasswordRejected": "The server refused this password.",
+  "@roomDetailsPasswordRejected": {
+    "description": "Message shown when the server rejects a password and sends no explanation."
+  },
+  "roomDetailsLobbyLabel": "Lobby",
+  "@roomDetailsLobbyLabel": {
+    "description": "Label of the lobby switch."
+  },
+  "roomDetailsLobbyOff": "Everyone can take part",
+  "@roomDetailsLobbyOff": {
+    "description": "Subtitle shown while the lobby is off."
+  },
+  "roomDetailsLobbyOn": "Only moderators can take part",
+  "@roomDetailsLobbyOn": {
+    "description": "Subtitle shown while the lobby is on without an end time."
+  },
+  "roomDetailsLobbyOnUntil": "Only moderators until {time}",
+  "@roomDetailsLobbyOnUntil": {
+    "description": "Subtitle shown while the lobby is on and lifts itself at a set time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsLobbyDialogTitle": "Open the lobby",
+  "@roomDetailsLobbyDialogTitle": {
+    "description": "Title of the dialog that turns the lobby on."
+  },
+  "roomDetailsLobbyDialogMessage": "While the lobby is on, only moderators can read, write and call. Pick when it should open, or leave it for a moderator to open by hand.",
+  "@roomDetailsLobbyDialogMessage": {
+    "description": "Body of the dialog that turns the lobby on."
+  },
+  "roomDetailsLobbyTimerNone": "No end time",
+  "@roomDetailsLobbyTimerNone": {
+    "description": "Option that keeps the lobby on until a moderator turns it off."
+  },
+  "roomDetailsLobbyTimerPick": "Pick a date and time",
+  "@roomDetailsLobbyTimerPick": {
+    "description": "Option that opens the pickers for the lobby end time."
+  },
+  "roomDetailsLobbyDialogConfirm": "Turn the lobby on",
+  "@roomDetailsLobbyDialogConfirm": {
+    "description": "Confirm button that turns the lobby on."
+  },
+  "roomDetailsReadOnlyToggleLabel": "Read-only",
+  "@roomDetailsReadOnlyToggleLabel": {
+    "description": "Label of the read-only switch."
+  },
+  "roomDetailsReadOnlyToggleOn": "Nobody can write or call",
+  "@roomDetailsReadOnlyToggleOn": {
+    "description": "Subtitle shown while the conversation is read-only."
+  },
+  "roomDetailsReadOnlyToggleOff": "Everyone can write",
+  "@roomDetailsReadOnlyToggleOff": {
+    "description": "Subtitle shown while the conversation is read-write."
+  },
+  "roomDetailsReadOnlyDialogTitle": "Lock the conversation?",
+  "@roomDetailsReadOnlyDialogTitle": {
+    "description": "Title of the dialog that turns read-only mode on."
+  },
+  "roomDetailsReadOnlyDialogMessage": "Nobody will be able to send messages or start a call until a moderator unlocks it again.",
+  "@roomDetailsReadOnlyDialogMessage": {
+    "description": "Body of the dialog that turns read-only mode on."
+  },
+  "roomDetailsReadOnlyDialogConfirm": "Lock",
+  "@roomDetailsReadOnlyDialogConfirm": {
+    "description": "Confirm button that turns read-only mode on."
+  },
+  "roomDetailsAvatarAction": "Conversation picture",
+  "@roomDetailsAvatarAction": {
+    "description": "Action that opens the conversation avatar options."
+  },
+  "roomDetailsAvatarDialogTitle": "Conversation picture",
+  "@roomDetailsAvatarDialogTitle": {
+    "description": "Title of the dialog that picks an emoji as the conversation picture."
+  },
+  "roomDetailsAvatarDialogMessage": "Pick an emoji to use as the conversation picture.",
+  "@roomDetailsAvatarDialogMessage": {
+    "description": "Body of the dialog that picks an emoji as the conversation picture."
+  },
+  "roomDetailsAvatarSetAction": "Use this emoji",
+  "@roomDetailsAvatarSetAction": {
+    "description": "Confirm button that sets the picked emoji as the conversation picture."
+  },
+  "roomDetailsAvatarRemoveAction": "Remove the picture",
+  "@roomDetailsAvatarRemoveAction": {
+    "description": "Action that removes a custom conversation picture."
+  },
+  "roomDetailsAvatarEmojiSemantics": "Emoji {emoji}",
+  "@roomDetailsAvatarEmojiSemantics": {
+    "description": "Accessibility label of one selectable emoji.",
+    "placeholders": {
+      "emoji": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsBanParticipant": "Ban from the conversation",
+  "@roomDetailsBanParticipant": {
+    "description": "Moderation action that bans one attendee."
+  },
+  "roomDetailsBanDialogTitle": "Ban this participant?",
+  "@roomDetailsBanDialogTitle": {
+    "description": "Title of the dialog confirming a ban."
+  },
+  "roomDetailsBanDialogMessage": "{name} is removed from the conversation and cannot rejoin until the ban is lifted.",
+  "@roomDetailsBanDialogMessage": {
+    "description": "Body of the dialog confirming a ban.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsBanNoteLabel": "Reason (only moderators see it)",
+  "@roomDetailsBanNoteLabel": {
+    "description": "Label of the optional internal ban note field."
+  },
+  "roomDetailsBanDialogConfirm": "Ban",
+  "@roomDetailsBanDialogConfirm": {
+    "description": "Confirm button that bans an attendee."
+  },
+  "roomDetailsBansAction": "Banned participants",
+  "@roomDetailsBansAction": {
+    "description": "Action that opens the list of bans on the conversation."
+  },
+  "roomDetailsBansDialogTitle": "Banned participants",
+  "@roomDetailsBansDialogTitle": {
+    "description": "Title of the dialog listing the bans on the conversation."
+  },
+  "roomDetailsBansEmpty": "Nobody is banned.",
+  "@roomDetailsBansEmpty": {
+    "description": "Message shown when the conversation has no bans."
+  },
+  "roomDetailsBansLoadError": "Bans could not be loaded.",
+  "@roomDetailsBansLoadError": {
+    "description": "Message shown when the ban list fails to load."
+  },
+  "roomDetailsUnbanAction": "Lift the ban",
+  "@roomDetailsUnbanAction": {
+    "description": "Action that lifts one ban."
+  },
+  "roomDetailsBanRejected": "The server refused this ban.",
+  "@roomDetailsBanRejected": {
+    "description": "Message shown when the server refuses a ban."
+  }
 }

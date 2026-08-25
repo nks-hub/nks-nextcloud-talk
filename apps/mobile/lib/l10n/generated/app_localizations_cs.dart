@@ -1111,4 +1111,169 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
       'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.';
+
+  @override
+  String get roomDetailsGuestsLabel => 'Hosté';
+
+  @override
+  String get roomDetailsGuestsAllowed => 'Připojí se každý, kdo má odkaz';
+
+  @override
+  String get roomDetailsGuestsBlocked => 'Jen pozvaní lidé';
+
+  @override
+  String get roomDetailsGuestsCloseDialogTitle => 'Zakázat hosty?';
+
+  @override
+  String get roomDetailsGuestsCloseDialogMessage =>
+      'Odkaz přestane fungovat a hosté, kteří přes něj přišli, ztratí přístup. Pozvaných účastníků se to netýká.';
+
+  @override
+  String get roomDetailsGuestsCloseDialogConfirm => 'Změnit na soukromou';
+
+  @override
+  String get roomDetailsInviteLinkAction => 'Sdílet odkaz pro hosty';
+
+  @override
+  String get roomDetailsInviteLinkSubtitle =>
+      'Kdo má tento odkaz, připojí se jako host';
+
+  @override
+  String get roomDetailsInviteLinkShareSubject => 'Připojte se do konverzace';
+
+  @override
+  String get roomDetailsPasswordLabel => 'Heslo';
+
+  @override
+  String get roomDetailsPasswordSet => 'Hosté potřebují heslo';
+
+  @override
+  String get roomDetailsPasswordUnset => 'Bez hesla';
+
+  @override
+  String get roomDetailsPasswordDialogTitle => 'Heslo pro hosty';
+
+  @override
+  String get roomDetailsPasswordFieldLabel => 'Nové heslo';
+
+  @override
+  String get roomDetailsPasswordRemoveAction => 'Zrušit heslo';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogTitle => 'Zrušit heslo?';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogMessage =>
+      'Kdokoli s odkazem se pak připojí bez hesla.';
+
+  @override
+  String get roomDetailsPasswordRemoveDialogConfirm => 'Zrušit heslo';
+
+  @override
+  String get roomDetailsPasswordRejected => 'Server toto heslo odmítl.';
+
+  @override
+  String get roomDetailsLobbyLabel => 'Čekárna';
+
+  @override
+  String get roomDetailsLobbyOff => 'Zapojit se může každý';
+
+  @override
+  String get roomDetailsLobbyOn => 'Zapojit se mohou jen moderátoři';
+
+  @override
+  String roomDetailsLobbyOnUntil(String time) {
+    return 'Jen moderátoři do $time';
+  }
+
+  @override
+  String get roomDetailsLobbyDialogTitle => 'Zapnout čekárnu';
+
+  @override
+  String get roomDetailsLobbyDialogMessage =>
+      'Dokud čekárna běží, mohou číst, psát a volat jen moderátoři. Vyberte, kdy se má otevřít, nebo ji nechte otevřít ručně.';
+
+  @override
+  String get roomDetailsLobbyTimerNone => 'Bez času otevření';
+
+  @override
+  String get roomDetailsLobbyTimerPick => 'Vybrat datum a čas';
+
+  @override
+  String get roomDetailsLobbyDialogConfirm => 'Zapnout čekárnu';
+
+  @override
+  String get roomDetailsReadOnlyToggleLabel => 'Jen ke čtení';
+
+  @override
+  String get roomDetailsReadOnlyToggleOn => 'Nikdo nemůže psát ani volat';
+
+  @override
+  String get roomDetailsReadOnlyToggleOff => 'Psát může každý';
+
+  @override
+  String get roomDetailsReadOnlyDialogTitle => 'Uzamknout konverzaci?';
+
+  @override
+  String get roomDetailsReadOnlyDialogMessage =>
+      'Nikdo nebude moci poslat zprávu ani zahájit hovor, dokud ji moderátor zase neodemkne.';
+
+  @override
+  String get roomDetailsReadOnlyDialogConfirm => 'Uzamknout';
+
+  @override
+  String get roomDetailsAvatarAction => 'Obrázek konverzace';
+
+  @override
+  String get roomDetailsAvatarDialogTitle => 'Obrázek konverzace';
+
+  @override
+  String get roomDetailsAvatarDialogMessage =>
+      'Vyberte emoji, které bude sloužit jako obrázek konverzace.';
+
+  @override
+  String get roomDetailsAvatarSetAction => 'Použít toto emoji';
+
+  @override
+  String get roomDetailsAvatarRemoveAction => 'Odebrat obrázek';
+
+  @override
+  String roomDetailsAvatarEmojiSemantics(String emoji) {
+    return 'Emoji $emoji';
+  }
+
+  @override
+  String get roomDetailsBanParticipant => 'Zabanovat v konverzaci';
+
+  @override
+  String get roomDetailsBanDialogTitle => 'Zabanovat účastníka?';
+
+  @override
+  String roomDetailsBanDialogMessage(String name) {
+    return '$name bude z konverzace odebrán a nepřipojí se zpět, dokud ban nezrušíte.';
+  }
+
+  @override
+  String get roomDetailsBanNoteLabel => 'Důvod (uvidí ho jen moderátoři)';
+
+  @override
+  String get roomDetailsBanDialogConfirm => 'Zabanovat';
+
+  @override
+  String get roomDetailsBansAction => 'Zabanovaní účastníci';
+
+  @override
+  String get roomDetailsBansDialogTitle => 'Zabanovaní účastníci';
+
+  @override
+  String get roomDetailsBansEmpty => 'Nikdo není zabanovaný.';
+
+  @override
+  String get roomDetailsBansLoadError => 'Bany se nepodařilo načíst.';
+
+  @override
+  String get roomDetailsUnbanAction => 'Zrušit ban';
+
+  @override
+  String get roomDetailsBanRejected => 'Server tento ban odmítl.';
 }

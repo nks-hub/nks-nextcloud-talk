@@ -173,6 +173,149 @@ final class ParticipantsService {
     }
   }
 
+  /// Reads every ban on a conversation. Moderator-only on the server; needs
+  /// the `ban-v1` capability, which the caller gates on.
+  Future<List<RoomBan>> fetchBans({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final (account, appPassword) = await _authContext(accountId);
+
+    final ListBansRequest request;
+    try {
+      request = ListBansRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+      );
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+
+    final response = await _callBan(
+      () => _api.listBans(
+        listRequest: request,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      ),
+    );
+    if (response is RoomBanListSuccess) {
+      return response.bans;
+    }
+    throw ParticipantsServiceException(_mapBanFailure(response));
+  }
+
+  /// Bans one attendee, which also removes them from the conversation.
+  /// Moderator-only on the server; needs the `ban-v1` capability.
+  Future<void> banActor({
+    required String accountId,
+    required String roomToken,
+    required BannedActorType actorType,
+    required String actorId,
+    String internalNote = '',
+  }) async {
+    final (account, appPassword) = await _authContext(accountId);
+
+    final BanActorRequest request;
+    try {
+      request = BanActorRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        actorType: actorType,
+        actorId: actorId,
+        internalNote: internalNote,
+      );
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+
+    final response = await _callBan(
+      () => _api.banActor(
+        banRequest: request,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      ),
+    );
+    if (response is RoomBanChangeSuccess) {
+      return;
+    }
+    throw ParticipantsServiceException(_mapBanFailure(response));
+  }
+
+  /// Lifts one ban. Moderator-only on the server; needs the `ban-v1`
+  /// capability.
+  Future<void> unbanActor({
+    required String accountId,
+    required String roomToken,
+    required int banId,
+  }) async {
+    final (account, appPassword) = await _authContext(accountId);
+
+    final UnbanActorRequest request;
+    try {
+      request = UnbanActorRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        banId: banId,
+      );
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+
+    final response = await _callBan(
+      () => _api.unbanActor(
+        unbanRequest: request,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      ),
+    );
+    if (response is RoomBanChangeSuccess) {
+      return;
+    }
+    throw ParticipantsServiceException(_mapBanFailure(response));
+  }
+
+  Future<RoomBanResponse> _callBan(
+    Future<RoomBanResponse> Function() action,
+  ) async {
+    try {
+      return await action();
+    } on NextcloudApiException catch (error) {
+      throw ParticipantsServiceException(_mapApiError(error));
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+  }
+
+  /// Maps every non-success ban response onto the shared error enum. The two
+  /// success shapes are handled by the callers, which is why this only ever
+  /// sees a failure.
+  ParticipantsServiceError _mapBanFailure(RoomBanResponse response) {
+    return switch (response) {
+      RoomBanRejected() => ParticipantsServiceError.rejected,
+      RoomBanReauthenticationRequired() =>
+        ParticipantsServiceError.reauthenticationRequired,
+      RoomBanForbidden() => ParticipantsServiceError.forbidden,
+      RoomBanRoomMissing() => ParticipantsServiceError.roomMissing,
+      RoomBanHttpFailure(:final kind) =>
+        kind == RoomBanHttpFailureKind.rateLimited
+            ? ParticipantsServiceError.rateLimited
+            : ParticipantsServiceError.serviceUnavailable,
+      RoomBanListSuccess() ||
+      RoomBanChangeSuccess() => ParticipantsServiceError.invalidResponse,
+    };
+  }
+
   Future<(StoredAccount, String)> _authContext(String accountId) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {

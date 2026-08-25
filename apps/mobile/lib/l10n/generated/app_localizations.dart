@@ -2065,6 +2065,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.'**
   String get settingsRemoveAccountDoneNotRevoked;
+
+  /// Switch that turns a group conversation into a public one anyone with the link can join.
+  ///
+  /// In en, this message translates to:
+  /// **'Guests'**
+  String get roomDetailsGuestsLabel;
+
+  /// Subtitle of the guest switch while the conversation is public.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with the link can join'**
+  String get roomDetailsGuestsAllowed;
+
+  /// Subtitle of the guest switch while the conversation is private.
+  ///
+  /// In en, this message translates to:
+  /// **'Invited people only'**
+  String get roomDetailsGuestsBlocked;
+
+  /// Title of the dialog confirming that a public conversation becomes private.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop allowing guests?'**
+  String get roomDetailsGuestsCloseDialogTitle;
+
+  /// Body of the dialog confirming that a public conversation becomes private.
+  ///
+  /// In en, this message translates to:
+  /// **'The link stops working and any guest who joined through it loses access. Invited participants are not affected.'**
+  String get roomDetailsGuestsCloseDialogMessage;
+
+  /// Confirm button that turns a public conversation private.
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get roomDetailsGuestsCloseDialogConfirm;
+
+  /// Action that opens the system share sheet with the conversation's guest link.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the guest link'**
+  String get roomDetailsInviteLinkAction;
+
+  /// Subtitle explaining what the shared guest link grants.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with this link can join as a guest'**
+  String get roomDetailsInviteLinkSubtitle;
+
+  /// Subject line offered to the system share sheet for a guest link.
+  ///
+  /// In en, this message translates to:
+  /// **'Join the conversation'**
+  String get roomDetailsInviteLinkShareSubject;
+
+  /// Label of the conversation password action.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get roomDetailsPasswordLabel;
+
+  /// Subtitle shown while the public conversation is password protected.
+  ///
+  /// In en, this message translates to:
+  /// **'Guests need a password'**
+  String get roomDetailsPasswordSet;
+
+  /// Subtitle shown while the public conversation has no password.
+  ///
+  /// In en, this message translates to:
+  /// **'No password'**
+  String get roomDetailsPasswordUnset;
+
+  /// Title of the dialog that sets the conversation password.
+  ///
+  /// In en, this message translates to:
+  /// **'Password for guests'**
+  String get roomDetailsPasswordDialogTitle;
+
+  /// Label of the password text field.
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get roomDetailsPasswordFieldLabel;
+
+  /// Action that clears the conversation password.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the password'**
+  String get roomDetailsPasswordRemoveAction;
+
+  /// Title of the dialog confirming that the conversation password is removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the password?'**
+  String get roomDetailsPasswordRemoveDialogTitle;
+
+  /// Body of the dialog confirming that the conversation password is removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with the link will be able to join without a password.'**
+  String get roomDetailsPasswordRemoveDialogMessage;
+
+  /// Confirm button that clears the conversation password.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get roomDetailsPasswordRemoveDialogConfirm;
+
+  /// Message shown when the server rejects a password and sends no explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this password.'**
+  String get roomDetailsPasswordRejected;
+
+  /// Label of the lobby switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Lobby'**
+  String get roomDetailsLobbyLabel;
+
+  /// Subtitle shown while the lobby is off.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone can take part'**
+  String get roomDetailsLobbyOff;
+
+  /// Subtitle shown while the lobby is on without an end time.
+  ///
+  /// In en, this message translates to:
+  /// **'Only moderators can take part'**
+  String get roomDetailsLobbyOn;
+
+  /// Subtitle shown while the lobby is on and lifts itself at a set time.
+  ///
+  /// In en, this message translates to:
+  /// **'Only moderators until {time}'**
+  String roomDetailsLobbyOnUntil(String time);
+
+  /// Title of the dialog that turns the lobby on.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the lobby'**
+  String get roomDetailsLobbyDialogTitle;
+
+  /// Body of the dialog that turns the lobby on.
+  ///
+  /// In en, this message translates to:
+  /// **'While the lobby is on, only moderators can read, write and call. Pick when it should open, or leave it for a moderator to open by hand.'**
+  String get roomDetailsLobbyDialogMessage;
+
+  /// Option that keeps the lobby on until a moderator turns it off.
+  ///
+  /// In en, this message translates to:
+  /// **'No end time'**
+  String get roomDetailsLobbyTimerNone;
+
+  /// Option that opens the pickers for the lobby end time.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date and time'**
+  String get roomDetailsLobbyTimerPick;
+
+  /// Confirm button that turns the lobby on.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn the lobby on'**
+  String get roomDetailsLobbyDialogConfirm;
+
+  /// Label of the read-only switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get roomDetailsReadOnlyToggleLabel;
+
+  /// Subtitle shown while the conversation is read-only.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody can write or call'**
+  String get roomDetailsReadOnlyToggleOn;
+
+  /// Subtitle shown while the conversation is read-write.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone can write'**
+  String get roomDetailsReadOnlyToggleOff;
+
+  /// Title of the dialog that turns read-only mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock the conversation?'**
+  String get roomDetailsReadOnlyDialogTitle;
+
+  /// Body of the dialog that turns read-only mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody will be able to send messages or start a call until a moderator unlocks it again.'**
+  String get roomDetailsReadOnlyDialogMessage;
+
+  /// Confirm button that turns read-only mode on.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock'**
+  String get roomDetailsReadOnlyDialogConfirm;
+
+  /// Action that opens the conversation avatar options.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation picture'**
+  String get roomDetailsAvatarAction;
+
+  /// Title of the dialog that picks an emoji as the conversation picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation picture'**
+  String get roomDetailsAvatarDialogTitle;
+
+  /// Body of the dialog that picks an emoji as the conversation picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick an emoji to use as the conversation picture.'**
+  String get roomDetailsAvatarDialogMessage;
+
+  /// Confirm button that sets the picked emoji as the conversation picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this emoji'**
+  String get roomDetailsAvatarSetAction;
+
+  /// Action that removes a custom conversation picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the picture'**
+  String get roomDetailsAvatarRemoveAction;
+
+  /// Accessibility label of one selectable emoji.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji {emoji}'**
+  String roomDetailsAvatarEmojiSemantics(String emoji);
+
+  /// Moderation action that bans one attendee.
+  ///
+  /// In en, this message translates to:
+  /// **'Ban from the conversation'**
+  String get roomDetailsBanParticipant;
+
+  /// Title of the dialog confirming a ban.
+  ///
+  /// In en, this message translates to:
+  /// **'Ban this participant?'**
+  String get roomDetailsBanDialogTitle;
+
+  /// Body of the dialog confirming a ban.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is removed from the conversation and cannot rejoin until the ban is lifted.'**
+  String roomDetailsBanDialogMessage(String name);
+
+  /// Label of the optional internal ban note field.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason (only moderators see it)'**
+  String get roomDetailsBanNoteLabel;
+
+  /// Confirm button that bans an attendee.
+  ///
+  /// In en, this message translates to:
+  /// **'Ban'**
+  String get roomDetailsBanDialogConfirm;
+
+  /// Action that opens the list of bans on the conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Banned participants'**
+  String get roomDetailsBansAction;
+
+  /// Title of the dialog listing the bans on the conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Banned participants'**
+  String get roomDetailsBansDialogTitle;
+
+  /// Message shown when the conversation has no bans.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody is banned.'**
+  String get roomDetailsBansEmpty;
+
+  /// Message shown when the ban list fails to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Bans could not be loaded.'**
+  String get roomDetailsBansLoadError;
+
+  /// Action that lifts one ban.
+  ///
+  /// In en, this message translates to:
+  /// **'Lift the ban'**
+  String get roomDetailsUnbanAction;
+
+  /// Message shown when the server refuses a ban.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this ban.'**
+  String get roomDetailsBanRejected;
 }
 
 class _AppLocalizationsDelegate
