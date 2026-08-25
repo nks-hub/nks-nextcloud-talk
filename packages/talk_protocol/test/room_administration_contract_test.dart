@@ -381,6 +381,122 @@ void main() {
     });
   });
 
+  group('SetRoomAvatarRequest', () {
+    // A one-pixel PNG: enough for the magic number and the size checks.
+    final png = Uint8List.fromList(<int>[
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+      0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    ]);
+
+    SetRoomAvatarRequest request({
+      String contentType = 'image/png',
+      String fileName = 'avatar.png',
+      Uint8List? bytes,
+    }) {
+      return SetRoomAvatarRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        imageBytes: bytes ?? png,
+        contentType: contentType,
+        fileName: fileName,
+      );
+    }
+
+    test('POSTs to the v1 avatar endpoint', () {
+      expect(request().httpMethod, 'POST');
+      expect(
+        request().uri.toString(),
+        '$_v1Base/rooma123/avatar?format=json',
+      );
+    });
+
+    test('encodes the image as a single multipart file part', () {
+      final built = request();
+      final boundary = built.multipartContentType.split('boundary=').last;
+      final body = utf8.decode(built.multipartBody, allowMalformed: true);
+
+      expect(built.headers['Content-Type'], built.multipartContentType);
+      expect(
+        body,
+        startsWith(
+          '--$boundary\r\n'
+          'Content-Disposition: form-data; name="file"; '
+          'filename="avatar.png"\r\n'
+          'Content-Type: image/png\r\n'
+          '\r\n',
+        ),
+      );
+      expect(body, endsWith('\r\n--$boundary--\r\n'));
+    });
+
+    test('keeps the image bytes intact inside the body', () {
+      final built = request();
+      final body = built.multipartBody;
+      final boundary = built.multipartContentType.split('boundary=').last;
+      // The bytes sit immediately before the closing boundary.
+      final tailLength = '\r\n--$boundary--\r\n'.length;
+      final imageStart = body.length - tailLength - png.length;
+
+      expect(body.sublist(imageStart, imageStart + png.length), png);
+    });
+
+    test('gives every request an unguessable boundary of its own', () {
+      final boundaries = <String>{
+        for (var index = 0; index < 8; index++)
+          request().multipartContentType.split('boundary=').last,
+      };
+
+      expect(boundaries, hasLength(8));
+      for (final boundary in boundaries) {
+        expect(boundary, matches(RegExp(r'^nkstalk[0-9a-f]{32}$')));
+      }
+    });
+
+    test('refuses a type other than the documented PNG and JPEG', () {
+      for (final type in <String>['image/gif', 'image/webp', 'text/plain']) {
+        expect(
+          () => request(contentType: type),
+          _protocolFailure(TalkProtocolErrorCode.invalidRoomSettingsRequest),
+        );
+      }
+      expect(request(contentType: 'image/jpeg').formBody, isNull);
+    });
+
+    test('refuses an empty image and one beyond the memory bound', () {
+      expect(
+        () => request(bytes: Uint8List(0)),
+        _protocolFailure(TalkProtocolErrorCode.invalidRoomSettingsRequest),
+      );
+      expect(
+        () => request(bytes: Uint8List(roomAvatarMaximumBytes + 1)),
+        _protocolFailure(TalkProtocolErrorCode.invalidRoomSettingsRequest),
+      );
+    });
+
+    test('refuses a file name that could break out of the part header', () {
+      for (final name in <String>[
+        '',
+        'a/b.png',
+        r'a\b.png',
+        'a"b.png',
+        'a\nb.png',
+      ]) {
+        expect(
+          () => request(fileName: name),
+          _protocolFailure(TalkProtocolErrorCode.invalidRoomSettingsRequest),
+        );
+      }
+    });
+
+    test('renders neither the bytes nor the file name in diagnostics', () {
+      expect(
+        request(fileName: 'holiday-photo.png').toString(),
+        'SetRoomAvatarRequest(contentType: image/png, bytes: 16)',
+      );
+    });
+  });
+
   group('DeleteRoomAvatarRequest', () {
     test('DELETEs the v1 avatar endpoint', () {
       final request = DeleteRoomAvatarRequest(

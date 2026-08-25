@@ -1276,4 +1276,17 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsBanRejected => 'Server tento ban odmítl.';
+
+  @override
+  String get roomDetailsAvatarPickImage => 'Vybrat obrázek';
+
+  @override
+  String get roomDetailsAvatarTypeRejected =>
+      'Jako obrázek konverzace projde jen čtvercový PNG nebo JPEG.';
+
+  @override
+  String get roomDetailsAvatarTooLarge => 'Tento obrázek je příliš velký.';
+
+  @override
+  String get roomDetailsAvatarRejected => 'Server tento obrázek nepřijal.';
 }

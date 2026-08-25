@@ -1,4 +1,7 @@
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import '../conversations/request.dart' show conversationV4Path;
 import '../identifiers.dart';
@@ -319,6 +322,18 @@ enum RoomReadOnlyState {
 
 final RegExp _hexColorPattern = RegExp(r'^[0-9A-Fa-f]{6}$');
 
+/// 128 bits of hex from a cryptographic source. Used as a multipart boundary,
+/// which must be unguessable so nothing in the uploaded bytes can be made to
+/// look like the end of the part.
+String _randomBoundary() {
+  final random = Random.secure();
+  final buffer = StringBuffer('nkstalk');
+  for (var index = 0; index < 32; index++) {
+    buffer.write(random.nextInt(16).toRadixString(16));
+  }
+  return buffer.toString();
+}
+
 Uri _roomV1Uri(ServerBase server, ConversationToken roomToken, String suffix) {
   return server.uri.replace(
     path: '${server.basePath}$conversationV1Path/${roomToken.value}/$suffix',
@@ -600,6 +615,130 @@ final class SetRoomEmojiAvatarRequest extends RoomAdministrationRequest {
   @override
   String toString() =>
       'SetRoomEmojiAvatarRequest(colored: ${hexColor != null})';
+}
+
+/// The image types Talk `docs/avatar.md` accepts for a conversation avatar:
+/// "Only accept images with mimetype equal to PNG or JPEG and need to be
+/// squared image."
+const Set<String> roomAvatarImageTypes = {'image/png', 'image/jpeg'};
+
+/// The largest avatar this client will read into memory before uploading.
+///
+/// Talk documents "file is too big" as one of the `400` refusals but does not
+/// publish the limit, so this is a client-side memory bound, not the server's
+/// rule. Anything the server dislikes still comes back as a `400` with a
+/// translated `message`.
+const int roomAvatarMaximumBytes = 8 * 1024 * 1024;
+
+/// Uploads an image as the conversation avatar.
+///
+/// `POST /ocs/v2.php/apps/spreed/api/v1/room/{token}/avatar` as
+/// `multipart/form-data` with a single `file` part, from Talk
+/// `docs/avatar.md`, section "Set conversations avatar", which documents the
+/// field as "Blob of image in a multipart/form-data request. Only accept
+/// images with mimetype equal to PNG or JPEG and need to be squared image."
+/// Requires the server's `avatar` capability (`docs/capabilities.md`, Talk
+/// 17).
+///
+/// The server answers `400` "When: is one-to-one, no image, file is too big,
+/// invalid mimetype or resource, isn't square, unknown error" and carries an
+/// "error in user language" in `message`, which this client shows verbatim
+/// rather than second-guessing. `403` is a caller who is not a moderator,
+/// owner or guest moderator; `404` an unknown room.
+///
+/// Squareness is deliberately not checked here: it needs the image decoded,
+/// and the server already refuses a non-square upload with an explanation.
+final class SetRoomAvatarRequest extends RoomAdministrationRequest {
+  SetRoomAvatarRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.imageBytes,
+    required this.contentType,
+    required this.fileName,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    if (imageBytes.isEmpty || imageBytes.length > roomAvatarMaximumBytes) {
+      protocolFailure(_requestCode, r'$.body.file');
+    }
+    if (!roomAvatarImageTypes.contains(contentType)) {
+      protocolFailure(_requestCode, r'$.body.file.contentType');
+    }
+    if (fileName.isEmpty ||
+        fileName.length > 255 ||
+        _hasControlCharacter(fileName) ||
+        fileName.contains('/') ||
+        fileName.contains(r'\') ||
+        fileName.contains('"')) {
+      protocolFailure(_requestCode, r'$.body.file.fileName');
+    }
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final List<int> imageBytes;
+
+  /// `image/png` or `image/jpeg`; nothing else reaches the wire.
+  final String contentType;
+
+  /// The multipart part's file name. Never a path: the constructor refuses
+  /// separators and quotes so it cannot break out of the part header.
+  final String fileName;
+
+  /// The multipart field name Talk reads the blob from.
+  static const String fileField = 'file';
+
+  /// A per-request boundary from a cryptographic source, so a crafted image
+  /// cannot contain a boundary an attacker predicted and split the body.
+  late final String _boundary = _randomBoundary();
+
+  /// The `Content-Type` header that goes with [multipartBody].
+  String get multipartContentType =>
+      'multipart/form-data; boundary=$_boundary';
+
+  /// The encoded `multipart/form-data` body carrying [imageBytes] as the
+  /// single `file` part.
+  ///
+  /// Hand-encoded rather than delegated, so the wire format this contract
+  /// promises is the one that is actually sent and can be asserted on.
+  Uint8List get multipartBody {
+    final head = utf8.encode(
+      '--$_boundary\r\n'
+      'Content-Disposition: form-data; name="$fileField"; '
+      'filename="$fileName"\r\n'
+      'Content-Type: $contentType\r\n'
+      '\r\n',
+    );
+    final tail = utf8.encode('\r\n--$_boundary--\r\n');
+    final body = Uint8List(head.length + imageBytes.length + tail.length);
+    body.setAll(0, head);
+    body.setAll(head.length, imageBytes);
+    body.setAll(head.length + imageBytes.length, tail);
+    return body;
+  }
+
+  @override
+  String get httpMethod => 'POST';
+
+  /// The payload is multipart, not form fields; the transport sends
+  /// [multipartBody] instead.
+  @override
+  Map<String, String>? get formBody => null;
+
+  @override
+  Map<String, String> get headers => UnmodifiableMapView({
+    ...super.headers,
+    'Content-Type': multipartContentType,
+  });
+
+  @override
+  Uri get uri => _roomV1Uri(server, roomToken, 'avatar');
+
+  /// Renders neither the bytes nor the file name, which comes from the user's
+  /// own device and can carry personal detail.
+  @override
+  String toString() =>
+      'SetRoomAvatarRequest(contentType: $contentType, '
+      'bytes: ${imageBytes.length})';
 }
 
 /// Removes a conversation's custom avatar, restoring the generated one.

@@ -409,5 +409,9 @@
   "roomDetailsBansEmpty": "Nikdo není zabanovaný.",
   "roomDetailsBansLoadError": "Bany se nepodařilo načíst.",
   "roomDetailsUnbanAction": "Zrušit ban",
-  "roomDetailsBanRejected": "Server tento ban odmítl."
+  "roomDetailsBanRejected": "Server tento ban odmítl.",
+  "roomDetailsAvatarPickImage": "Vybrat obrázek",
+  "roomDetailsAvatarTypeRejected": "Jako obrázek konverzace projde jen čtvercový PNG nebo JPEG.",
+  "roomDetailsAvatarTooLarge": "Tento obrázek je příliš velký.",
+  "roomDetailsAvatarRejected": "Server tento obrázek nepřijal."
 }

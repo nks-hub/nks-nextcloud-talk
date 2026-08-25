@@ -898,6 +898,38 @@ final class HttpNextcloudApi {
     );
   }
 
+  /// Uploads an image as the conversation avatar. Moderator-only on the
+  /// server, and the only administration endpoint that is `multipart/form-data`
+  /// rather than form fields.
+  Future<RoomAdministrationResponse> uploadRoomAvatar({
+    required SetRoomAvatarRequest avatarRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    // The contract encodes the multipart body itself, including the
+    // `Content-Type` header with its boundary, so the wire format that was
+    // contract-tested is the one that goes out.
+    final request = _request('POST', avatarRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...avatarRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyBytes = avatarRequest.multipartBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+      timeout: const Duration(seconds: 60),
+    );
+    return decodeRoomAdministrationResponse(
+      request: avatarRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Reads every ban on a conversation. Moderator-only on the server.
   Future<RoomBanResponse> listBans({
     required ListBansRequest listRequest,
@@ -1241,8 +1273,11 @@ final class HttpNextcloudApi {
     return ocs['data'];
   }
 
+  /// Sends a request and reads its body. Typed as [http.BaseRequest] rather
+  /// than [http.Request] so a multipart upload — the conversation avatar — can
+  /// use the same status-code, size and timeout handling as everything else.
   Future<_BodyPayload> _sendBody(
-    http.Request request, {
+    http.BaseRequest request, {
     required Set<int> allowedStatusCodes,
     required int maximumBytes,
     Set<int>? readBodyForStatusCodes,

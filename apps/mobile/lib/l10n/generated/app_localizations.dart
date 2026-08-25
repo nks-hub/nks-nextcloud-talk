@@ -2371,6 +2371,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server refused this ban.'**
   String get roomDetailsBanRejected;
+
+  /// Button that opens the gallery to pick a conversation picture.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a picture'**
+  String get roomDetailsAvatarPickImage;
+
+  /// Message shown when the picked file is not a type the server accepts.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a square PNG or JPEG works as a conversation picture.'**
+  String get roomDetailsAvatarTypeRejected;
+
+  /// Message shown when the picked picture exceeds the upload limit.
+  ///
+  /// In en, this message translates to:
+  /// **'That picture is too large.'**
+  String get roomDetailsAvatarTooLarge;
+
+  /// Message shown when the server refuses an avatar upload without an explanation.
+  ///
+  /// In en, this message translates to:
+  /// **'The server would not take this picture.'**
+  String get roomDetailsAvatarRejected;
 }
 
 class _AppLocalizationsDelegate

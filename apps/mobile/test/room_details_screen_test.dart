@@ -14,6 +14,7 @@ import 'package:nextcloudtalk/features/conversations/conversation_presence.dart'
 import 'package:nextcloudtalk/features/rooms/guest_link_sharer.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -1616,6 +1617,185 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a picked picture is uploaded as a multipart avatar', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'avatar'});
+    final picker = _StubImagePicker(_onePixelPng, 'holiday photo.png');
+    String? contentType;
+    List<int>? uploaded;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/avatar')) {
+        contentType = request.headers['Content-Type'];
+        uploaded = request.bodyBytes;
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['isCustomAvatar'] = true,
+        );
+      }
+      return http.Response('', 404);
+    });
+
+    _growViewport(tester, height: 2600);
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: capable,
+          conversation: conversation,
+          linkSharer: _RecordingLinkSharer(),
+          imagePicker: picker,
+        ),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-avatar')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-avatar')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-avatar-pick-image')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-avatar-remove'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(contentType, startsWith('multipart/form-data; boundary=nkstalk'));
+    final body = utf8.decode(uploaded!, allowMalformed: true);
+    expect(
+      body,
+      contains(
+        'Content-Disposition: form-data; name="file"; '
+        'filename="holiday photo.png"',
+      ),
+    );
+    expect(body, contains('Content-Type: image/png'));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a picture the server refuses shows its own explanation', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'avatar'});
+    final picker = _StubImagePicker(_onePixelPng, 'wide.png');
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/avatar')) {
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'ocs': {
+                'meta': {'status': 'failure', 'statuscode': 400},
+                'data': {'message': 'Obrázek musí být čtvercový.'},
+              },
+            }),
+          ),
+          400,
+        );
+      }
+      return http.Response('', 404);
+    });
+
+    _growViewport(tester, height: 2600);
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: capable,
+          conversation: conversation,
+          linkSharer: _RecordingLinkSharer(),
+          imagePicker: picker,
+        ),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-avatar')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-avatar')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-avatar-pick-image')));
+    await _pumpUntil(
+      tester,
+      () => find.text('Obrázek musí být čtvercový.').evaluate().isNotEmpty,
+    );
+
+    expect(
+      find.byKey(const Key('room-details-avatar-remove')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a picture of a type the server rejects never leaves the app', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'avatar'});
+    // A GIF header: a real image, but not one of the two types Talk accepts.
+    final picker = _StubImagePicker(
+      Uint8List.fromList(<int>[0x47, 0x49, 0x46, 0x38, 0x39, 0x61]),
+      'animation.gif',
+    );
+    var uploads = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'POST' && request.url.path.endsWith('/avatar')) {
+        uploads++;
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+
+    _growViewport(tester, height: 2600);
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(
+          account: capable,
+          conversation: conversation,
+          linkSharer: _RecordingLinkSharer(),
+          imagePicker: picker,
+        ),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-avatar')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-avatar')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-avatar-pick-image')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text('Only a square PNG or JPEG works as a conversation picture.')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(uploads, 0);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('removing a custom avatar deletes it and hides the action', (
     tester,
   ) async {
@@ -1915,6 +2095,31 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+}
+
+/// A one-pixel PNG header: enough for the magic-number sniff the upload does.
+final Uint8List _onePixelPng = Uint8List.fromList(<int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+]);
+
+/// Stands in for the gallery, which is a platform channel.
+final class _StubImagePicker implements ImageSelectionBackend {
+  _StubImagePicker(this.bytes, this.displayName);
+
+  final Uint8List bytes;
+  final String displayName;
+
+  @override
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
+    return ImageSelection(
+      displayName: displayName,
+      declaredMimeType: null,
+      byteLength: bytes.length,
+      openRead: ({int? start, int? end}) =>
+          Stream<List<int>>.value(bytes.sublist(start ?? 0, end)),
+    );
+  }
 }
 
 /// Stands in for the system share sheet, which no widget test can reach.

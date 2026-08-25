@@ -536,6 +536,44 @@ final class RoomSettingsService {
     );
   }
 
+  /// Uploads an image as the conversation avatar. Needs the server's `avatar`
+  /// capability, which the caller gates on.
+  ///
+  /// The server refuses a non-square image, an oversized one and a type other
+  /// than PNG or JPEG with a `400` and its own translated explanation, which
+  /// arrives as [RoomSettingsException.message].
+  Future<ConversationRoom?> uploadAvatar({
+    required String accountId,
+    required String roomToken,
+    required List<int> imageBytes,
+    required String contentType,
+    required String fileName,
+  }) async {
+    final context = await _authContext(accountId);
+    final SetRoomAvatarRequest request;
+    try {
+      request = SetRoomAvatarRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(context.account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        imageBytes: imageBytes,
+        contentType: contentType,
+        fileName: fileName,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.rejected);
+    }
+
+    final response = await _call(
+      () => _api.uploadRoomAvatar(
+        avatarRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+    return _classifyAdministration(response);
+  }
+
   /// Removes the conversation's custom avatar. Needs the server's `avatar`
   /// capability, which the caller gates on.
   Future<ConversationRoom?> deleteAvatar({
@@ -582,7 +620,12 @@ final class RoomSettingsService {
         appPassword: context.appPassword,
       ),
     );
+    return _classifyAdministration(response);
+  }
 
+  ConversationRoom? _classifyAdministration(
+    RoomAdministrationResponse response,
+  ) {
     return switch (response) {
       RoomAdministrationSuccess(:final room) => room,
       RoomAdministrationRejected(:final message) => throw RoomSettingsException(

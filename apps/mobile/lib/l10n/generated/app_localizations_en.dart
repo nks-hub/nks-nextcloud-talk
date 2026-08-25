@@ -1275,4 +1275,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roomDetailsBanRejected => 'The server refused this ban.';
+
+  @override
+  String get roomDetailsAvatarPickImage => 'Choose a picture';
+
+  @override
+  String get roomDetailsAvatarTypeRejected =>
+      'Only a square PNG or JPEG works as a conversation picture.';
+
+  @override
+  String get roomDetailsAvatarTooLarge => 'That picture is too large.';
+
+  @override
+  String get roomDetailsAvatarRejected =>
+      'The server would not take this picture.';
 }

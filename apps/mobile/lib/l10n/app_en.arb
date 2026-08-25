@@ -605,5 +605,21 @@
   "roomDetailsBanRejected": "The server refused this ban.",
   "@roomDetailsBanRejected": {
     "description": "Message shown when the server refuses a ban."
+  },
+  "roomDetailsAvatarPickImage": "Choose a picture",
+  "@roomDetailsAvatarPickImage": {
+    "description": "Button that opens the gallery to pick a conversation picture."
+  },
+  "roomDetailsAvatarTypeRejected": "Only a square PNG or JPEG works as a conversation picture.",
+  "@roomDetailsAvatarTypeRejected": {
+    "description": "Message shown when the picked file is not a type the server accepts."
+  },
+  "roomDetailsAvatarTooLarge": "That picture is too large.",
+  "@roomDetailsAvatarTooLarge": {
+    "description": "Message shown when the picked picture exceeds the upload limit."
+  },
+  "roomDetailsAvatarRejected": "The server would not take this picture.",
+  "@roomDetailsAvatarRejected": {
+    "description": "Message shown when the server refuses an avatar upload without an explanation."
   }
 }

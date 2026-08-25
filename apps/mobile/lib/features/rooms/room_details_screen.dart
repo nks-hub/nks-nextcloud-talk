@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mime/mime.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../platform/media/image_attachment_picker.dart';
 import '../chat/chat_participant_avatar.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import 'guest_link_sharer.dart';
@@ -67,6 +69,7 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
     required this.account,
     required this.conversation,
     this.linkSharer = const PlatformGuestLinkSharer(),
+    this.imagePicker = const PlatformAttachmentSelectionBackend(),
   });
 
   final StoredAccount account;
@@ -74,6 +77,9 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 
   /// The system share sheet, which no widget test can reach; replaced there.
   final GuestLinkSharer linkSharer;
+
+  /// The gallery picker, which is a platform channel; replaced in tests.
+  final ImageSelectionBackend imagePicker;
 
   @override
   ConsumerState<RoomDetailsScreen> createState() => _RoomDetailsScreenState();
@@ -652,12 +658,19 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
   }
 
   Future<void> _changeAvatar() async {
-    final emoji = await showDialog<String>(
+    final choice = await showDialog<_AvatarChoice>(
       context: context,
       builder: (dialogContext) =>
           _AvatarDialog(strings: AppLocalizations.of(context)),
     );
-    if (emoji == null || !mounted) {
+    if (choice == null || !mounted) {
+      return;
+    }
+    if (choice.pickImage) {
+      return _uploadAvatarImage();
+    }
+    final emoji = choice.emoji;
+    if (emoji == null) {
       return;
     }
     await _administer(
@@ -669,6 +682,61 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
             emoji: emoji,
           ),
       fallback: () => {'isCustomAvatar': true},
+    );
+  }
+
+  /// Picks a picture and uploads it. Talk only accepts a square PNG or JPEG;
+  /// the type is checked here, and the server explains every other refusal
+  /// (not square, too big) in its own words.
+  Future<void> _uploadAvatarImage() async {
+    final ImageSelection? selection;
+    try {
+      selection = await widget.imagePicker.selectImage(
+        AttachmentPickerSource.gallery,
+      );
+    } on ImageAttachmentPickerException {
+      if (mounted) {
+        _showMessage(AppLocalizations.of(context).roomDetailsAvatarTypeRejected);
+      }
+      return;
+    }
+    if (selection == null || !mounted) {
+      return;
+    }
+    if (selection.byteLength < 1 ||
+        selection.byteLength > roomAvatarMaximumBytes) {
+      _showMessage(AppLocalizations.of(context).roomDetailsAvatarTooLarge);
+      return;
+    }
+
+    final bytes = <int>[];
+    await for (final chunk in selection.openRead()) {
+      bytes.addAll(chunk);
+    }
+    final contentType =
+        lookupMimeType(selection.displayName, headerBytes: bytes) ??
+        selection.declaredMimeType;
+    if (contentType == null || !roomAvatarImageTypes.contains(contentType)) {
+      if (mounted) {
+        _showMessage(AppLocalizations.of(context).roomDetailsAvatarTypeRejected);
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await _administer(
+      () => ref
+          .read(roomSettingsServiceProvider)
+          .uploadAvatar(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            imageBytes: bytes,
+            contentType: contentType,
+            fileName: _safeAvatarFileName(selection!.displayName, contentType),
+          ),
+      fallback: () => {'isCustomAvatar': true},
+      errorMessage: _avatarErrorMessage,
     );
   }
 
@@ -1424,7 +1492,17 @@ final class _LobbyDialogState extends State<_LobbyDialog> {
   }
 }
 
-/// Picks one emoji as the conversation avatar.
+/// What the avatar dialog answers with: either a picked emoji, or a request
+/// to open the gallery instead.
+final class _AvatarChoice {
+  const _AvatarChoice.emoji(this.emoji) : pickImage = false;
+  const _AvatarChoice.image() : emoji = null, pickImage = true;
+
+  final String? emoji;
+  final bool pickImage;
+}
+
+/// Picks an emoji or a picture as the conversation avatar.
 final class _AvatarDialog extends StatefulWidget {
   const _AvatarDialog({required this.strings});
 
@@ -1449,6 +1527,14 @@ final class _AvatarDialogState extends State<_AvatarDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(strings.roomDetailsAvatarDialogMessage),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            key: const Key('room-details-avatar-pick-image'),
+            icon: const Icon(Icons.image_outlined),
+            label: Text(strings.roomDetailsAvatarPickImage),
+            onPressed: () =>
+                Navigator.of(context).pop(const _AvatarChoice.image()),
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
@@ -1498,7 +1584,8 @@ final class _AvatarDialogState extends State<_AvatarDialog> {
         ),
         TextButton(
           key: const Key('room-details-avatar-save'),
-          onPressed: () => Navigator.of(context).pop(_selected),
+          onPressed: () =>
+              Navigator.of(context).pop(_AvatarChoice.emoji(_selected)),
           child: Text(strings.roomDetailsAvatarSetAction),
         ),
       ],
@@ -1775,6 +1862,36 @@ String _passwordErrorMessage(
   return code == RoomSettingsError.rejected
       ? strings.roomDetailsPasswordRejected
       : _actionErrorMessage(strings, code);
+}
+
+/// Same as [_actionErrorMessage], except that a refusal here means Talk would
+/// not take this picture — not square, too big, wrong type. It only runs when
+/// the server sent no explanation of its own.
+String _avatarErrorMessage(AppLocalizations strings, RoomSettingsError code) {
+  return code == RoomSettingsError.rejected
+      ? strings.roomDetailsAvatarRejected
+      : _actionErrorMessage(strings, code);
+}
+
+/// Reduces a device file name to something a multipart part header accepts.
+///
+/// The name comes from the user's own gallery, so it is never treated as a
+/// path: every separator, quote and control character collapses to an
+/// underscore, and an unusable name falls back to a generated one.
+String _safeAvatarFileName(String value, String contentType) {
+  final extension = contentType == 'image/png' ? 'png' : 'jpg';
+  var name = value;
+  for (final separator in const <String>['/', r'\']) {
+    final last = name.lastIndexOf(separator);
+    if (last >= 0) {
+      name = name.substring(last + 1);
+    }
+  }
+  name = name.replaceAll(RegExp(r'["\x00-\x1f\x7f]'), '_').trim();
+  if (name.isEmpty || name == '.' || name == '..' || name.length > 200) {
+    return 'avatar.$extension';
+  }
+  return name;
 }
 
 String _banErrorMessage(
