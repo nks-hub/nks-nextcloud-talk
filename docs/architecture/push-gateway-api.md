@@ -2,16 +2,24 @@
 
 Datum ověření: 23. srpna 2026.
 
-Stav: gateway wire kontrakt, klientský wire kontrakt a pure Dart registrační a
-směrovací runtime jsou spustitelně ověřené. Produkční gateway, datastore,
-Firebase projekt, platformní crypto adapter a runtime doručení zatím
+Stav produktu: historická, spustitelně ověřená varianta Notifications push-v2.
+Pro Android byla nahrazena přímým Notifications Web Push tokem podle
+[D-025](decisions.md#d-025-android-přes-notifications-web-push) a
+[aktuální push analýzy](../research/push-fcm.md). Gateway se neimplementuje ani
+nenasazuje jako povinná součást Android aplikace. Dokument zůstává důkazem
+historické wire kompatibility. Budoucí iOS APNs relay a PushKit větev vyžadují
+samostatný kontrakt a nový výběr stacku; tento kontrakt automaticky nepřebírají.
+
+Stav kontraktu: gateway wire kontrakt, klientský wire kontrakt a pure Dart
+registrační a směrovací runtime jsou spustitelně ověřené. Produkční gateway,
+datastore, Firebase projekt, platformní crypto adapter a runtime doručení zatím
 neexistují.
 
-## Přímá odpověď pro veřejný multi-server klient
+## Historická odpověď původní push-v2 varianty
 
-Každý Nextcloud server nebude mít vlastní Firebase projekt. Jeden veřejný
-podepsaný build používá jeden Firebase projekt a gateway vydavatele pro všechny
-podporované servery.
+Původní push-v2 varianta nepředpokládala Firebase projekt pro každý Nextcloud
+server. Počítala s jedním Firebase projektem a gateway vydavatele pro všechny
+podporované servery; tato topologie už neřídí Android implementaci.
 
 Aplikace si z připojeného Nextcloudu načte pouze capabilities. Firebase
 konfiguraci, service-account credential ani gateway URL ze serveru nestahuje.
@@ -170,5 +178,7 @@ testy.
 
 Kontrakt neprokazuje datastore concurrency, skutečný cloudId request, FCM HTTP
 v1, retry queue, invalid-token cleanup, rate limit ani doručení na zařízení.
-Tyto důkazy vzniknou až v produkční gateway implementaci; OpenAPI a fixture jsou
-její neměnná vstupní brána, ne náhrada runtime testu.
+Tyto důkazy by byly povinné pro původní push-v2 gateway, která se pro Android
+nebude implementovat. OpenAPI a fixture jsou historický wire důkaz, ne aktivní
+runtime brána. Budoucí iOS APNs/PushKit relay musí mít vlastní kontrakt a
+ověření.
