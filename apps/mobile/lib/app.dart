@@ -9,18 +9,19 @@ import 'features/conversations/conversation_shell.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'l10n/generated/app_localizations.dart';
 
-final class NextcloudTalkApp extends StatelessWidget {
+final class NextcloudTalkApp extends ConsumerWidget {
   const NextcloudTalkApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       restorationScopeId: 'nks_nextcloud_talk',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -39,7 +40,6 @@ final class _AppHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(androidPushCoordinatorProvider);
-    ref.watch(deepLinkCoordinatorProvider);
     final accounts = ref.watch(accountsProvider);
     return accounts.when(
       data: (items) =>

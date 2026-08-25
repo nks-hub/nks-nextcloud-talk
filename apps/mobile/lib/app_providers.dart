@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -22,14 +22,11 @@ import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
-import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
-import 'features/newconversation/new_conversation_service.dart';
-import 'features/conversations/deep_link_bridge.dart';
-import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
+import 'features/settings/theme_preference.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -100,14 +97,6 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
   );
 });
 
-final newConversationServiceProvider = Provider<NewConversationService>((ref) {
-  return HttpNewConversationService(
-    accounts: ref.watch(accountRepositoryProvider),
-    credentials: ref.watch(credentialVaultProvider),
-    api: ref.watch(nextcloudApiProvider),
-  );
-});
-
 final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
   if (!Platform.isAndroid) {
     return null;
@@ -129,33 +118,6 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
     platform: platform,
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
-  );
-  ref.onDispose(() => unawaited(coordinator.close()));
-  unawaited(coordinator.start());
-  return coordinator;
-});
-
-final deepLinkPlatformProvider = Provider<DeepLinkPlatform?>((ref) {
-  if (!Platform.isAndroid) {
-    return null;
-  }
-  final bridge = DeepLinkBridge();
-  ref.onDispose(() => unawaited(bridge.dispose()));
-  return bridge;
-});
-
-final deepLinkResolverProvider = Provider<DeepLinkResolver>((ref) {
-  return DeepLinkResolver(ref.watch(accountRepositoryProvider));
-});
-
-final deepLinkCoordinatorProvider = Provider<DeepLinkCoordinator?>((ref) {
-  final platform = ref.watch(deepLinkPlatformProvider);
-  if (platform == null) {
-    return null;
-  }
-  final coordinator = DeepLinkCoordinator(
-    platform: platform,
-    resolver: ref.watch(deepLinkResolverProvider),
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
@@ -352,6 +314,34 @@ final selectedAccountProvider = StreamProvider<StoredAccount?>((ref) {
   return ref.watch(accountRepositoryProvider).watchSelectedAccount();
 });
 
+final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
+  return FileThemePreferenceStore();
+});
+
+final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
+  ThemeModeController.new,
+);
+
+final class ThemeModeController extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() {
+    unawaited(_load());
+    return ThemeMode.system;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(themePreferenceStoreProvider).read();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = mode;
+    await ref.read(themePreferenceStoreProvider).write(mode);
+  }
+}
+
 final conversationsProvider =
     StreamProvider.family<List<CachedConversation>, String>((ref, accountId) {
       return ref.watch(accountRepositoryProvider).watchConversations(accountId);
@@ -384,84 +374,6 @@ final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
         service: service,
         resolver: resolver,
         profile: profile,
-      );
-    });
-
-typedef MentionSuggestionsRoomKey = ({String accountId, String roomToken});
-
-/// Resolves the account, room and freshly fetched capabilities needed to
-/// query `@`-mention suggestions. A failure here (missing account, missing
-/// credentials, capabilities unavailable, mentions unsupported by the room)
-/// just leaves mentions unavailable for this composer session; the chat
-/// pane's own sync error handling already covers the underlying account and
-/// connectivity problems.
-final mentionSuggestionSourceProvider = FutureProvider.autoDispose
-    .family<MentionSuggestionSource, MentionSuggestionsRoomKey>((
-      ref,
-      key,
-    ) async {
-      final accounts = ref.watch(accountRepositoryProvider);
-      final chat = ref.watch(chatRepositoryProvider);
-      final credentials = ref.watch(credentialVaultProvider);
-      final api = ref.watch(nextcloudApiProvider);
-
-      final account = await accounts.getAccount(key.accountId);
-      if (account == null) {
-        throw const MentionSuggestionException(
-          MentionSuggestionError.unsupported,
-        );
-      }
-      final conversation = await chat.getConversation(
-        accountId: key.accountId,
-        roomToken: key.roomToken,
-      );
-      if (conversation == null) {
-        throw const MentionSuggestionException(
-          MentionSuggestionError.unsupported,
-        );
-      }
-      final room = ConversationRoom.fromJson(
-        jsonDecode(conversation.rawJson),
-      );
-      final appPassword = await credentials.readAppPassword(key.accountId);
-      if (appPassword == null || appPassword.isEmpty) {
-        throw const MentionSuggestionException(
-          MentionSuggestionError.unsupported,
-        );
-      }
-      final server = ServerBase.parse(account.serverUrl);
-      final capabilities = await api.getAuthenticatedCapabilities(
-        server: server,
-        loginName: account.loginName,
-        appPassword: appPassword,
-      );
-      if (!capabilities.hasTalk) {
-        throw const MentionSuggestionException(
-          MentionSuggestionError.unsupported,
-        );
-      }
-      final rawSpreed = capabilities.capabilities['spreed'];
-      final spreed = rawSpreed is Map<String, Object?>
-          ? rawSpreed
-          : const <String, Object?>{};
-      final role = participantRoleFor(room.participantType);
-      final profile = RichChatCapabilityProfile.fromTalkFeatures(
-        talkFeatures: spreed['features'] ?? const <Object?>[],
-        talkLocalFeatures: spreed['features-local'] ?? const <Object?>[],
-        federated: room.isFederated,
-        moderator:
-            role == ParticipantRole.moderator ||
-            role == ParticipantRole.guestModerator,
-        participantPermissions: room.attendeePermissions,
-      );
-      return HttpMentionSuggestionSource(
-        accountId: AccountId.parse(key.accountId),
-        server: server,
-        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
-        profile: profile,
-        loginName: account.loginName,
-        appPassword: appPassword,
-        api: api,
       );
     });
 
