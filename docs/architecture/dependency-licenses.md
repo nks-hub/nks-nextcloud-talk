@@ -1,12 +1,12 @@
 # Audit závislostí a assetů
 
-Datum poslední kontroly: 23. srpna 2026.
+Datum poslední kontroly: 25. srpna 2026.
 
 Tento dokument je průběžná distribuční brána pro projekt licencovaný pod
 `GPL-3.0-or-later`. Evidence vychází z konkrétního lockfilu a licenčního souboru
 staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
-## Přímé runtime závislosti
+## Přímé runtime závislosti `talk_protocol`
 
 <!-- markdownlint-disable MD013 -->
 
@@ -17,6 +17,78 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 | [`xml`](https://pub.dev/packages/xml) | 7.0.1; archive SHA-256 `67f0aff7be013d107995e9b75bf4e7f2c3ef2dfdb2c8e68024bba0a7fd5756a4` v `packages/talk_protocol/pubspec.lock`; lokální LICENSE SHA-256 `0be767174b97278f17da4923a74169e8645631f03ea3d8482ec3523c9b1a0dd3` | MIT; Copyright 2006–2026 Lukas Renggli; notice musí zůstat ve všech podstatných kopiích | Namespace-aware WebDAV multistatus parser za vlastní UTF-8, DTD/entity a resource budget hranicí | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
 
 <!-- markdownlint-enable MD013 -->
+
+## Přímé Flutter runtime závislosti
+
+Následujících šestnáct hostovaných balíků je přímo deklarovaných v
+`apps/mobile/pubspec.yaml`. Verze a archive SHA-256 jsou z
+`apps/mobile/pubspec.lock`; licence a jejich SHA-256 byly ověřené v odpovídajícím
+staženém balíku v lokální Pub cache.
+
+<!-- markdownlint-disable MD013 -->
+
+| Komponenta | Verze a integrita | Licence a notice | Použití |
+| --- | --- | --- | --- |
+| [`audioplayers`](https://pub.dev/packages/audioplayers) | 6.8.1; archive SHA-256 `2ba4bb2944baacbdd5372ff8254a8e7feb8c10d7739545e392f5605a8f618745`; LICENSE SHA-256 `d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41` | MIT; Copyright 2017 Blue Fire | Přehrávání lokálně připravených hlasových zpráv |
+| [`crypto`](https://pub.dev/packages/crypto) | 3.0.7; archive SHA-256 `c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf`; LICENSE SHA-256 `ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888` | BSD-3-Clause; Copyright 2015, the Dart project authors | SHA-256 integrita durable kopie přílohy |
+| [`cupertino_icons`](https://pub.dev/packages/cupertino_icons) | 1.0.9; archive SHA-256 `41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd`; LICENSE SHA-256 `310d6ab6483280280c9db122bded0a63c09558bc5743720f61dbcbb494db370a` | MIT; Copyright 2016 Vladimir Kharlampidi | Cupertino icon font pro iOS vzhled |
+| [`file_selector`](https://pub.dev/packages/file_selector) | 1.1.0; archive SHA-256 `bd15e43e9268db636b53eeaca9f56324d1622af30e5c34d6e267649758c84d9a`; LICENSE SHA-256 `420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Platformní výběr obrázkové přílohy |
+| [`flutter_riverpod`](https://pub.dev/packages/flutter_riverpod) | 2.6.1; archive SHA-256 `9532ee6db4a943a1ed8383072a2e3eeda041db5657cdf6d2acecf3c21ecbe7e1`; LICENSE SHA-256 `757d9c09a9a2a701144328c0fd596234ea287ff62952b39cd22f9ad4caed1171` | MIT; Copyright 2020 Remi Rousselet | Account-scoped application a UI state |
+| [`http`](https://pub.dev/packages/http) | 1.6.0; archive SHA-256 `87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412`; LICENSE SHA-256 `3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16` | BSD-3-Clause; Copyright 2014, the Dart project authors | Nextcloud HTTP transport |
+| [`mime`](https://pub.dev/packages/mime) | 2.0.0; archive SHA-256 `41a20518f0cb1256669420fdba0cd90d21561e560ac240f26ef8322e45bb7ed6`; LICENSE SHA-256 `ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73` | BSD-3-Clause; Copyright 2015, the Dart project authors | Ověření MIME typu vybrané přílohy |
+| [`path`](https://pub.dev/packages/path) | 1.9.1; archive SHA-256 `75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5`; LICENSE SHA-256 `3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16` | BSD-3-Clause; Copyright 2014, the Dart project authors | Bezpečná práce s názvy a cestami durable příloh |
+| [`path_provider`](https://pub.dev/packages/path_provider) | 2.1.6; archive SHA-256 `a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825`; LICENSE SHA-256 `420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Aplikační adresář pro durable kopie médií |
+| [`record`](https://pub.dev/packages/record) | 7.1.1; archive SHA-256 `82539d1372e23cf51375fdfcba084f39912bcbf9a953b75d56596691f8f11c0f`; LICENSE SHA-256 `5a21ee0d2585baccfde18aeb045037701172460213db723e9d189ca1922aaf79` | BSD-3-Clause; Copyright 2022 openapi4j authors, jak uvádí balík | Platformní záznam hlasové zprávy |
+| [`url_launcher`](https://pub.dev/packages/url_launcher) | 6.3.2; archive SHA-256 `f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8`; LICENSE SHA-256 `89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Systémové otevření Login Flow a bezpečných odkazů |
+| [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) | 11.0.0; archive SHA-256 `15e8c8fe269fdf7d469b23008ab3df521c8b826ed345820532364c31bdebace6`; LICENSE SHA-256 `55dafb084270616f95b9bea53654adda8bdcad95c022a83c4cf8769073f829fa` | BSD-3-Clause; Copyright 2017 German Saprykin | Keystore/Keychain-backed uložení app passwordu |
+| [`flutter_svg`](https://pub.dev/packages/flutter_svg) | 2.3.0; archive SHA-256 `35882981abcbfb8c15b286f0cd690ff25bac12d95eff3e25ee207f37d4c42e7f`; LICENSE SHA-256 `dc54ae36c905edfbf3c6678ee34d8da5989d7ccc7b993857a9d89db06a67eb18` | MIT; Copyright 2018 Dan Field | Bezpečné zobrazení podporovaných SVG médií |
+| [`drift`](https://pub.dev/packages/drift) | 2.34.3; archive SHA-256 `3a3f1f6f905037d7426e4c445854139fd6a3d592135f7c96d7931682b73d16f4`; LICENSE SHA-256 `31f84e4edff98f0238a5bef1c2ce754e401fbab149782f0ff4dc9b68fd086f75` | MIT; Copyright 2021 Simon Binder | Typované account-scoped SQLite repository a transakce |
+| [`drift_flutter`](https://pub.dev/packages/drift_flutter) | 0.3.1; archive SHA-256 `91acf4bee7c3c84467cba46455aa70e5292a3b889f4582645d74f2e5a8c106f2`; LICENSE SHA-256 `7cf86321e740e4ff631ab6d00962c2d65fa85e4163bdd89334f1d22354ab0306` | MIT; Copyright 2024 Simon Binder | Flutter platformní otevření Drift databáze |
+| [`uuid`](https://pub.dev/packages/uuid) | 4.6.0; archive SHA-256 `9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd`; LICENSE SHA-256 `ad3e5523e51004e94ba9ce728805b1b4242dbccdb65e62b523800e35a8a7cfdc` | MIT; Copyright 2021 Yulian Kuncheff | Náhodné lokální account a operation identity |
+
+<!-- markdownlint-enable MD013 -->
+
+Všechny uvedené licence jsou permisivní a kompatibilní s distribucí aplikace
+pod `GPL-3.0-or-later`; jejich copyright notice a disclaimer musí zůstat ve
+výsledném third-party notice.
+
+Tabulka je úplná pro aktuální přímé hostované Flutter balíky. Audit jejich
+transitivních platformních pluginů a nativních knihoven ještě není úplný a před
+release musí vzniknout z finálních Android/iOS artefaktů; tento stav proto není
+release clearance.
+
+Přímé SDK závislosti `flutter` a `flutter_localizations` jsou z Flutter 3.44.4,
+revision `ad70ec4617166f1c38e5d2bfd388af71fda14f06`. Kořenový Flutter `LICENSE`
+je BSD-3-Clause se SHA-256
+`a3a9fd82f800a47377f7d3f60c60a5c91cae0495be8f329031e1448ce0f5dab9`.
+`talk_protocol` je interní workspace balík pod stejnou projektovou licencí, ne
+cizí distribuční závislost.
+
+## Přímé Android runtime závislosti pro Web Push
+
+Následující artefakty jsou z aktuálního `debugRuntimeClasspath`. SHA-256 patří
+skutečně staženému AAR/JAR v lokální Gradle cache; SHA-256 licence patří souboru
+na přesném upstream tagu.
+
+<!-- markdownlint-disable MD013 -->
+
+| Komponenta | Verze a integrita | Licence a notice | Použití | Stav |
+| --- | --- | --- | --- | --- |
+| [`org.unifiedpush.android:connector`](https://codeberg.org/UnifiedPush/android-connector/src/tag/3.3.3) | 3.3.3; AAR SHA-256 `a843bbd7392bd03ef3c19ce11a4f48d0b5ffd882dd07e29a7b2116d9984a4625`; tag LICENSE SHA-256 `65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa` | Apache-2.0; Maven POM a tag LICENSE se shodují | UnifiedPush registrační a callback API | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
+| [`org.unifiedpush.android:embedded-fcm-distributor`](https://codeberg.org/UnifiedPush/android-embedded_fcm_distributor/src/tag/3.1.0) | 3.1.0; AAR SHA-256 `a2e730e33c54a5d59141ac6657b6969375c91e27f64ae9299fab2275e4707291`; tag LICENSE SHA-256 `620e35bd6e6066ee0376391296ff595459584fe135853d8f60434d38693f06cb` | Tag obsahuje plný LGPL-2.1 text, zatímco publikovaný Maven POM odlišně deklaruje Apache-2.0 | Vestavěné získání FCM Web Push endpointu bez druhé aplikace | LGPL text není sám o sobě v konfliktu s GPL-3.0-or-later, ale před release je povinný explicitní notice, corresponding-source/relink audit a vyřešení rozporu metadat; nelze jej zatím evidovat jako Apache-2.0 |
+| [`com.google.crypto.tink:tink`](https://github.com/tink-crypto/tink-java/tree/v1.21.0) | 1.21.0; JAR SHA-256 `065086dbbd61c95529f782966c3462838cc8a801ba78420223aa319175a444ff`; tag LICENSE SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` | Apache-2.0 | Transitivní Web Push kryptografie connectoru | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
+
+<!-- markdownlint-enable MD013 -->
+
+`flutter_secure_storage` 11.0.0 přivádí nepoužitý `tink-android` 1.23.0. Jeho
+třídy se překrývají s Tink Core 1.21.0 vyžadovaným connectorem a sestavení by
+selhalo na duplicitních třídách. Aplikační Gradle konfigurace proto vylučuje jen
+`tink-android`; aktuální dependency graph potvrzuje jediný Tink Core 1.21.0.
+Zdroj Android části `flutter_secure_storage` Tink API neimportuje.
+
+Úplný artefaktový audit dalších transitivních JVM závislostí connectoru
+(`gson`, `protobuf-java`, `jsr305`, Error Prone annotations) a konečného APK
+notice ještě není hotový. Tento průběžný záznam proto není release clearance.
 
 ## Transitivní runtime závislosti
 
@@ -30,9 +102,32 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 ## Vývojové závislosti
 
-`lints` 6.1.0 a `test` 1.31.2 používají BSD 3-Clause licenci Dart projektu.
-Nejsou runtime součástí aplikace. Jejich lokální `LICENSE` byl při přijetí
-balíku přečtený; přesné transitive verze jsou uzamčené v lockfilu.
+<!-- markdownlint-disable MD013 -->
+
+| Komponenta | Verze a integrita | Licence a notice | Rozsah |
+| --- | --- | --- | --- |
+| [`build_runner`](https://pub.dev/packages/build_runner) | 2.15.1; archive SHA-256 `5367e521935b102bdf1e735d2aab461e36b2edca6517662d088dd04cc39f8d16`; LICENSE SHA-256 `a4b5d7d31626e90b77e8696f1c47643aa31f52e17c1907c1ab60b068110e6e10` | BSD-3-Clause; Copyright 2016, the Dart project authors | Generování Drift kódu; není runtime dependency |
+| [`drift_dev`](https://pub.dev/packages/drift_dev) | 2.34.5; archive SHA-256 `735aad3c34215805c66bd518c8812fa4f83b5534b2c13c4092c970c04a7e9983`; LICENSE SHA-256 `31f84e4edff98f0238a5bef1c2ce754e401fbab149782f0ff4dc9b68fd086f75` | MIT; Copyright 2021 Simon Binder | Drift build-time generátor; není runtime dependency |
+| [`flutter_lints`](https://pub.dev/packages/flutter_lints) | 6.0.0; archive SHA-256 `3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1`; LICENSE SHA-256 `89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Statická pravidla; není runtime dependency |
+
+<!-- markdownlint-enable MD013 -->
+
+`flutter_test` pochází ze stejného Flutter SDK a v aplikaci je pouze dev
+závislost. `lints` 6.1.0 a `test` 1.31.2 z `talk_protocol` používají
+BSD-3-Clause licenci Dart projektu; přesné transitivní verze drží příslušný
+lockfile.
+
+## Nástroj pro pixelovou evidenci
+
+`apps/mobile/tool/requirements.txt` přesně připíná `Pillow==12.1.0`, ale zatím
+neobsahuje hash pin. Ověřený PyPI wheel
+`pillow-12.1.0-cp312-cp312-win_amd64.whl` má SHA-256
+`d70534cea9e7966169ad29a903b99fc507e932069a881d0965a1a84bb57f6c6d`.
+Jeho metadata deklarují `MIT-CMU`; přiložený `LICENSE` má SHA-256
+`926df5f888a7337fd4126a435202edf2847312be81a167df91a6d70cfa3f2ed3`
+a zachovává notices PIL, Secret Labs, Fredrika Lundha a Pillow contributorů.
+Pillow slouží jen host-side screenshot/WCAG harnessu a není součástí mobilního
+ani desktopového runtime artefaktu.
 
 ## Nástroje executable kontraktů
 
@@ -54,10 +149,33 @@ prostředí.
 
 ## Assety a převzatý kód
 
-V tomto milníku nebyl přidán žádný obrázek, font, zvuk ani kód převzatý z
-oficiálních Talk klientů. Implementace používá vlastní typy nad veřejným wire
-kontraktem. Kořenový GPL text se proto nemění a nevznikl nový upstream
-copyright notice.
+Nebyl přidán žádný obrázek, font, zvuk ani implementační kód z oficiálních Talk
+klientů. Platformní scaffold ale obsahuje standardní Flutter assety, které je
+nutné evidovat:
+
+- všech 31 PNG/ICO ikon a launch image v Android, iOS, macOS a Windows targetu
+  je podle SHA-256 byte-for-byte shodných se zdrojem ve Flutter SDK 3.44.4 nebo
+  v jeho přesně připnutém balíku `flutter_template_images` 5.0.0;
+- `flutter_template_images` 5.0.0 má archive SHA-256
+  `0120589a786dbae4e86af1f61748baccd8530abd56a60e7a13479647a75222fe`
+  a BSD-3-Clause `LICENSE` SHA-256
+  `89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9`;
+- Android launch XML, iOS storyboard a ostatní generated platformní soubory
+  pocházejí ze stejné Flutter template revision, nikoli z Talk klientů;
+- zdrojový `CupertinoIcons.ttf` z `cupertino_icons` má SHA-256
+  `67c44fe9183b002e79dde7f6977e2988661c9a3e4a3c5fce968787efdbed823c`
+  a řídí se MIT licencí balíku uvedenou výše;
+- `uses-material-design: true` používá SDK zdroj `MaterialIcons-Regular.otf` se
+  SHA-256
+  `d9865b671a09d683d13a863089d8825e0f61a37696ce5d7d448bc8023aa62453`;
+  přiložený CC-BY-4.0 text má SHA-256
+  `be698262aecd042c0de6f886cc0af622f8def446462026992cc530275d8a9e74`
+  a jeho atribuční podmínky musí release notice zachovat.
+
+Vlastní značka je kreslená aplikačním kódem a nepřidává samostatný binární
+asset. Debug/release build může nepoužité ikony nebo font glyphy tree-shakovat;
+skutečný obsah a notices se proto znovu odvodí z finálních artefaktů. Kořenový
+GPL text se nemění.
 
 ## Brána pro další změny
 

@@ -1,11 +1,13 @@
 # Kontrakt seznamu konverzací
 
-Datum ověření: 22. srpna 2026.
+Datum ověření: 25. srpna 2026.
 
 Stav: OpenAPI, syntetické response fixture, capability a runtime wire scénáře,
 produkční pure Dart parser a merge planner, privacy guard i autentizovaný
-read-only live smoke jsou spustitelně ověřené. Flutter store a UI zatím
-neexistují.
+read-only live smoke jsou spustitelně ověřené. Flutter aplikace nyní obsahuje
+account-scoped Drift store, conversation sync service, cache-first seznam,
+avatar resolver a account-aware adaptivní UI. Aktuální Android APK po skutečném
+přihlášení načetlo živý seznam konverzací a otevřelo room detail.
 
 ## Rozsah
 
@@ -156,7 +158,12 @@ Balík `talk_protocol` nyní implementuje celou platformně neutrální hranici:
   původní request;
 - hlavičky jsou case-insensitive a jejich case varianty se nesmějí opakovat;
 - `ConversationRoom` a `ConversationPreview` typují list, unread, permission,
-  call a preview hodnoty a zachovávají hluboce neměnný wire objekt;
+  call a preview hodnoty a zachovávají hluboce neměnný wire objekt. Room model
+  po validaci zpřístupňuje také `objectType`, `avatarVersion`,
+  `isCustomAvatar`, volitelný `remoteServer` a odvozený `isFederated`;
+- `messageParameters` a `reactions` jsou mapy. Kvůli PHP JSON serializaci se
+  přijme také pouze prázdné pole `[]` a normalizuje se na prázdnou mapu;
+  neprázdné pole se odmítne jako neplatná conversation response;
 - jeden JSON freeze budget platí přes všechny rooms odpovědi, hloubka je
   omezená na 64 a počet rooms na OpenAPI maximum 100 000;
 - diagnostické `toString()` nevypisují account ID, token, název ani zprávu;
@@ -172,7 +179,7 @@ konkrétního účtu.
 
 Primární klíč store je `(accountId, roomToken)`. Pure Dart
 `ConversationMergePlanner` vykonává stejný minimální algoritmus, jehož DB
-operace později atomicky provede Flutter persistence vrstva:
+operace Flutter persistence vrstva atomicky provádí:
 
 - inkrementální response pouze upsertuje vrácené rooms;
 - validní neprázdný full response může odstranit chybějící rooms;
@@ -184,8 +191,27 @@ operace později atomicky provede Flutter persistence vrstva:
 
 Planner vrací neměnné upserty, přesné tokeny k odstranění a nový account stav.
 Sám netvrdí, že persistence proběhla. Test pádu transakce zahodí celý candidate
-plán a ověří původní snapshot i cursor; budoucí Drift adapter musí stejné
-operace provést v jedné skutečné transakci.
+plán a ověří původní snapshot i cursor; současný Drift adapter stejné operace
+provádí v jedné skutečné transakci.
+
+### Foreground delta a ruční full reconciliation
+
+Flutter foreground loop po existenci cursoru používá inkrementální fetch, aby
+každých 15 sekund nestahoval celý seznam. Ruční refresh volá stejnou
+account-scoped službu s `forceFull=true`; request pak neposílá `modifiedSince`
+a validní full response může odstranit lokální room, kterou server už nevrací.
+
+Single-flight je account-scoped a mode-aware. Full požadavek, který přijde za
+probíhajícím incremental flightem, nejprve počká na jeho dokončení a potom
+spustí nebo joinne samostatný full flight. Nemůže se tedy spokojit s delta
+výsledkem. Incremental caller se naopak smí připojit k silnějšímu full flightu.
+Zrušení jednoho waiteru nepřeruší transport, dokud na něm čeká jiný caller.
+
+Regresní test na jedné instanci služby ověřuje sekvenci full → incremental →
+manual full jako `modifiedSince = null → cursor → null`. Chybějící room se
+odstraní pouze z účtu A; stejný token účtu B a pending text-send outbox účtu A
+zůstanou zachované. Další test blokuje rozběhnutou deltu a prokazuje navazující
+full request.
 
 Toto pravidlo odpovídá ověřenému iOS chování na SHA
 [`2d31eda5e2acbf3cef27aa289376942bdf0de25d`](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk/Rooms/NCRoomsManager.swift#L178-L229):
@@ -210,6 +236,12 @@ Po překročení 300 sekund starý důkaz expiruje a nový full-empty jej pouze
 nahradí. Jakákoli mezilehlá neprázdná inkrementální response jej vyvrátí a
 zruší; další full-empty je proto znovu prvním důkazem, ne potvrzením smazání.
 
+`forceFull=true` zůstává full režimem i po prvním
+`confirmationRequired`. Druhý pokus proto používá nové request ID, znovu
+neposílá `modifiedSince` a teprve jeho validní empty response smí odstranit
+rooms a vyčistit potvrzovací stav. Regresní test ověřil tři full requesty v
+pořadí initial full → první empty důkaz → druhý empty důkaz.
+
 ## Spustitelné ověření
 
 Lokální validace z kořene repozitáře:
@@ -230,7 +262,7 @@ Volitelný live smoke načítá credentials pouze z proměnných
 
 ```powershell
 rtk proxy python contracts\conversation-list\validate_contract.py `
-  --live-origin https://cloud.example.invalid
+  --live-origin <NEXTCLOUD_ORIGIN>
 ```
 
 Validátor provádí:
@@ -250,9 +282,18 @@ Validátor provádí:
 Aktuální lokální výsledek: 1 OpenAPI dokument, 9 response fixtures, 7 query
 případů, 12 capability případů a 14 merge případů s 19 kroky prošlo. Navíc
 prošel 1 live-schema redaction guard a 1 IPv6 origin případ. Stejné conversation
-fixtures přímo načítá 71 Dart testů; spolu s bootstrap testy prochází 125 testů.
-Patří mezi ně regrese pro account/origin binding i pro re-auth a deferred profile
-probe; statická analýza je bez nálezu.
+fixtures přímo načítá 74 Dart testů; spolu s bootstrap testy jde o 128 testů.
+Patří mezi ně regrese pro export avatar/federation metadat, PHP prázdná pole,
+rejekci neprázdných polí, account/origin binding i re-auth a deferred profile
+probe. Cílená conversation sada 25. srpna 2026 čerstvě prošla 74/74, celý
+`talk_protocol` po named-thread rozšíření 569/569 a statická analýza je bez
+nálezu.
+
+Čerstvá scoped Flutter sada 25. srpna 2026 prošla 60 testy; 1 read-only live
+test se přeskočil pouze bez environment credentials. Zahrnuje account repository,
+onboarding, HTTP adaptér, databázové migrace, conversation sync, foreground
+loop, shell, avatary a adaptivní layout. Pokrývá manual full, full intent za
+rozběhnutou deltou, guarded-empty, resume a avatar cache/render.
 
 Autentizovaný live smoke provedl přesně dva GET requesty s
 `noStatusUpdate=1`, `includeStatus=false` a `includeLastMessage=false`. Full
@@ -262,8 +303,18 @@ credentials.
 
 ## Co důkaz ještě nepokrývá
 
-Pure Dart runtime není produkční Flutter aplikace. Neprokazuje SQLite migrace,
-cache-first obrazovku, skutečné odstranění room z jiného zařízení, background
-scheduler, room detail, participants, favorite/archive mutace, dva servery v
-jedné app instalaci ani měřený UI kontrast. Tyto důkazy zůstávají v řezu 2 po
-schválení zbývajících platformních voleb a vytvoření scaffoldingu.
+Flutter repository a widget testy pokrývají SQLite migraci, account scope,
+full/delta merge, mode-aware single-flight, ruční stale-room reconciliation a
+cache-first seznam. Debug APK z commitu `5f6e2f4` se SHA-256
+`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
+bylo 25. srpna 2026 aktualizačně nainstalované na `emulator-5554`; po skutečném
+Login Flow zobrazilo živé konverzace, avatary a otevřelo room. Účet přežil
+ukončení a nový start procesu; samostatný důkaz offline conversation cache po
+process death z tohoto běhu nevznikl.
+
+Zbývá live důkaz cross-device full/delta aktualizace bez ručního refresh,
+skutečné odstranění room z jiného zařízení, favorite/archive a participant
+mutace, dva účty na dvou serverech a odpovídající runtime důkaz na
+Apple/Linux platformách. Background a killed-process aktualizace mají
+samostatnou push bránu; connected Android test ji nenahrazuje. Aktuální stav je
+v [Flutter aplikačním základu](flutter-foundation.md).

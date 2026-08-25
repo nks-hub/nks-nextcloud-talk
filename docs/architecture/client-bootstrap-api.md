@@ -1,10 +1,13 @@
 # Kontrakt přidání Nextcloud účtu
 
-Datum ověření: 22. srpna 2026.
+Datum ověření: 25. srpna 2026.
 
 Stav: OpenAPI, syntetické fixture, bezpečnostní scénáře, pure Dart parser a
-read-only živý smoke jsou spustitelně ověřené. Flutter HTTP/UI vrstva, secure
-storage a dokončené přihlášení zatím neexistují.
+read-only živý smoke jsou spustitelně ověřené. Flutter vrstva nyní implementuje
+HTTP/UI onboarding, systémový browser, Login Flow v2, secure storage a atomické
+vytvoření account-scoped Drift záznamu. Aktuální Android APK dokončilo skutečný
+Login Flow v2 včetně druhého faktoru a schválení přístupu, načetlo přihlášené
+capabilities a po restartu procesu zachovalo účet v secure storage.
 
 ## Rozsah
 
@@ -160,7 +163,7 @@ Read-only živý smoke:
 
 ```powershell
 rtk proxy python contracts\client-bootstrap\validate_contract.py `
-  --live-origin https://cloud.example.invalid
+  --live-origin <NEXTCLOUD_ORIGIN>
 ```
 
 Validátor provádí:
@@ -201,8 +204,16 @@ závislost `punycoder` je uzamčená lockfilem a její MIT licence je zaznamenan
 
 ## Co důkaz ještě nepokrývá
 
-Pure Dart parser není náhradou produkčního klienta. Zatím neprokazuje HTTP
-transport, systémový browser lifecycle, secure storage, restart, dokončený
-reálný login, odvolání app passwordu, dva servery v jedné instalaci ani únik
-secretu v platformních crash logách. Tyto důkazy patří do implementačního řezu
-1 po vytvoření platformního scaffoldingu.
+Flutter řez a jeho testy už pokrývají HTTP transport, systémový browser,
+account-scoped secure storage a transakční vytvoření účtu. Debug APK z commitu
+`5f6e2f4` má SHA-256
+`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`.
+Dne 25. srpna 2026 bylo aktualizačně nainstalované na `emulator-5554`; hash
+nainstalovaného `base.apk` je shodný. Skutečný Login Flow v2, druhý faktor,
+schválení přístupu, přihlášený seznam konverzací a otevření room prošly. Účet
+přežil další `adb install -r` i ukončení a nový start procesu.
+
+Stále není doložené vzdálené odvolání app passwordu, dva skutečné servery v jedné
+instalaci, úplná clean-install/upgrade matice, platformní crash-log redakce ani
+přihlášený runtime na iOS/macOS/Linux. Aktuální evidence je v
+[Flutter aplikačním základu](flutter-foundation.md).
