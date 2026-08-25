@@ -13,6 +13,7 @@ import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import '../rooms/room_details_screen.dart';
 import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_service.dart';
@@ -58,6 +59,23 @@ final class ChatRoomScreen extends StatelessWidget {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            key: const Key('open-room-details'),
+            tooltip: AppLocalizations.of(context).roomDetailsOpenTooltip,
+            icon: const Icon(Icons.info_outline_rounded),
+            onPressed: () => unawaited(
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (context) => RoomDetailsScreen(
+                    account: account,
+                    conversation: conversation,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,

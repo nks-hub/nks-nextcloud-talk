@@ -159,5 +159,40 @@
   "presenceOnline": "Online",
   "presenceAway": "Away",
   "presenceBusy": "Busy",
-  "presenceDoNotDisturb": "Do not disturb"
+  "presenceDoNotDisturb": "Do not disturb",
+  "roomDetailsOpenTooltip": "Conversation details",
+  "roomDetailsTitle": "Conversation details",
+  "roomDetailsDescriptionLabel": "Description",
+  "roomDetailsTypeLabel": "Type",
+  "roomDetailsTypeOneToOne": "One-to-one conversation",
+  "roomDetailsTypeGroup": "Group conversation",
+  "roomDetailsTypePublic": "Public channel",
+  "roomDetailsTypeChangelog": "Changelog",
+  "roomDetailsTypeFormerOneToOne": "Former one-to-one conversation",
+  "roomDetailsTypeNoteToSelf": "Note to self",
+  "roomDetailsTypeUnknown": "Unknown",
+  "roomDetailsReadOnlyLabel": "Read-only",
+  "roomDetailsReadOnlyYes": "Yes",
+  "roomDetailsReadOnlyNo": "No",
+  "roomDetailsNotificationLabel": "Notifications",
+  "roomDetailsNotificationDefault": "Default",
+  "roomDetailsNotificationAlways": "All messages",
+  "roomDetailsNotificationMention": "Mentions only",
+  "roomDetailsNotificationNever": "Off",
+  "roomDetailsNotificationUnknown": "Unknown",
+  "roomDetailsParticipantsHeader": "Participants",
+  "roomDetailsParticipantsCount": "{count} participants",
+  "@roomDetailsParticipantsCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "roomDetailsParticipantsEmpty": "No participants found.",
+  "roomDetailsLoadError": "Participants could not be loaded.",
+  "roomDetailsRoleOwner": "Owner",
+  "roomDetailsRoleModerator": "Moderator",
+  "roomDetailsRoleUser": "User",
+  "roomDetailsRoleGuest": "Guest",
+  "roomDetailsRoleGuestModerator": "Guest moderator",
+  "roomDetailsRoleUnknown": "Unknown role"
 }

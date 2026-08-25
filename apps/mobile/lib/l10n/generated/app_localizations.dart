@@ -1015,6 +1015,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Do not disturb'**
   String get presenceDoNotDisturb;
+
+  /// No description provided for @roomDetailsOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation details'**
+  String get roomDetailsOpenTooltip;
+
+  /// No description provided for @roomDetailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation details'**
+  String get roomDetailsTitle;
+
+  /// No description provided for @roomDetailsDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get roomDetailsDescriptionLabel;
+
+  /// No description provided for @roomDetailsTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get roomDetailsTypeLabel;
+
+  /// No description provided for @roomDetailsTypeOneToOne.
+  ///
+  /// In en, this message translates to:
+  /// **'One-to-one conversation'**
+  String get roomDetailsTypeOneToOne;
+
+  /// No description provided for @roomDetailsTypeGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group conversation'**
+  String get roomDetailsTypeGroup;
+
+  /// No description provided for @roomDetailsTypePublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Public channel'**
+  String get roomDetailsTypePublic;
+
+  /// No description provided for @roomDetailsTypeChangelog.
+  ///
+  /// In en, this message translates to:
+  /// **'Changelog'**
+  String get roomDetailsTypeChangelog;
+
+  /// No description provided for @roomDetailsTypeFormerOneToOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Former one-to-one conversation'**
+  String get roomDetailsTypeFormerOneToOne;
+
+  /// No description provided for @roomDetailsTypeNoteToSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Note to self'**
+  String get roomDetailsTypeNoteToSelf;
+
+  /// No description provided for @roomDetailsTypeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get roomDetailsTypeUnknown;
+
+  /// No description provided for @roomDetailsReadOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only'**
+  String get roomDetailsReadOnlyLabel;
+
+  /// No description provided for @roomDetailsReadOnlyYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get roomDetailsReadOnlyYes;
+
+  /// No description provided for @roomDetailsReadOnlyNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get roomDetailsReadOnlyNo;
+
+  /// No description provided for @roomDetailsNotificationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get roomDetailsNotificationLabel;
+
+  /// No description provided for @roomDetailsNotificationDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get roomDetailsNotificationDefault;
+
+  /// No description provided for @roomDetailsNotificationAlways.
+  ///
+  /// In en, this message translates to:
+  /// **'All messages'**
+  String get roomDetailsNotificationAlways;
+
+  /// No description provided for @roomDetailsNotificationMention.
+  ///
+  /// In en, this message translates to:
+  /// **'Mentions only'**
+  String get roomDetailsNotificationMention;
+
+  /// No description provided for @roomDetailsNotificationNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get roomDetailsNotificationNever;
+
+  /// No description provided for @roomDetailsNotificationUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get roomDetailsNotificationUnknown;
+
+  /// No description provided for @roomDetailsParticipantsHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Participants'**
+  String get roomDetailsParticipantsHeader;
+
+  /// No description provided for @roomDetailsParticipantsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} participants'**
+  String roomDetailsParticipantsCount(int count);
+
+  /// No description provided for @roomDetailsParticipantsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No participants found.'**
+  String get roomDetailsParticipantsEmpty;
+
+  /// No description provided for @roomDetailsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Participants could not be loaded.'**
+  String get roomDetailsLoadError;
+
+  /// No description provided for @roomDetailsRoleOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get roomDetailsRoleOwner;
+
+  /// No description provided for @roomDetailsRoleModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderator'**
+  String get roomDetailsRoleModerator;
+
+  /// No description provided for @roomDetailsRoleUser.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get roomDetailsRoleUser;
+
+  /// No description provided for @roomDetailsRoleGuest.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest'**
+  String get roomDetailsRoleGuest;
+
+  /// No description provided for @roomDetailsRoleGuestModerator.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest moderator'**
+  String get roomDetailsRoleGuestModerator;
+
+  /// No description provided for @roomDetailsRoleUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown role'**
+  String get roomDetailsRoleUnknown;
 }
 
 class _AppLocalizationsDelegate
