@@ -2,10 +2,10 @@
 
 Datum ověření: 23. srpna 2026.
 
-Stav: gateway wire kontrakt, klientský wire kontrakt a pure Dart registrační a
-směrovací runtime jsou spustitelně ověřené. Produkční gateway, datastore,
-Firebase projekt, platformní crypto adapter a runtime doručení zatím
-neexistují.
+Stav: gateway wire kontrakt, klientský wire kontrakt, pure Dart registrační a
+směrovací runtime i Go gateway jsou spustitelně ověřené. PostgreSQL datastore,
+Firebase Admin adapter, worker a SSRF runtime existují. Zbývá container smoke,
+Firebase projekt vydavatele, platformní crypto adapter a skutečné doručení.
 
 ## Přímá odpověď pro veřejný multi-server klient
 
@@ -168,7 +168,12 @@ testy.
 
 ## Co tento důkaz ještě nepokrývá
 
-Kontrakt neprokazuje datastore concurrency, skutečný cloudId request, FCM HTTP
-v1, retry queue, invalid-token cleanup, rate limit ani doručení na zařízení.
-Tyto důkazy vzniknou až v produkční gateway implementaci; OpenAPI a fixture jsou
-její neměnná vstupní brána, ne náhrada runtime testu.
+Samotný kontrakt neprokazuje datastore concurrency, skutečný cloudId request,
+FCM HTTP v1, retry queue, invalid-token cleanup ani rate limit. Tyto části nyní
+prokazují testy v `services/push_gateway`, včetně PostgreSQL 18, skutečného
+Firebase Admin HTTP toku a loopback serveru. OpenAPI a fixture zůstávají jejich
+neměnnou vstupní bránou, ne náhradou runtime testu.
+
+Stále není prokázaný container health/restart smoke ani doručení na skutečné
+zařízení přes publisher Firebase projekt. Recording provider ani úspěšný build
+tyto dvě brány nenahrazují.

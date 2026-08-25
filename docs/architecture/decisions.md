@@ -387,7 +387,10 @@ podporu všech historických verzí.
 
 ### Q-007: Gateway implementační stack
 
-Volba přijde po contract prototypu. Kritéria:
+Stav: Go je implementovaný a lokálně ověřený kandidát; finální přijetí čeká na
+container a skutečný FCM runtime důkaz.
+
+Kritéria:
 
 - ověřená FCM HTTP v1 knihovna;
 - RSA/SHA-512 a key parsing;
@@ -398,10 +401,18 @@ Volba přijde po contract prototypu. Kritéria:
 
 Stack se nemá vybrat podle osobní preference bez prototypu kontraktu.
 
-Aktuální [stack evaluation](../research/push-gateway-stack-evaluation.md)
-doporučuje Go jako prvního kandidáta a Node.js jako fallback. Q-007 zůstává
-otevřené, dokud Go 1.25 spike neprokáže celý wire, PostgreSQL frontu, FCM
-adapter, restart, backpressure, SSRF ochranu a container runtime.
+Go 1.25 spike už prokazuje celý wire, PostgreSQL 18 frontu, oficiální Firebase
+Admin adapter, restart/at-least-once crash okno, backpressure, SSRF ochranu,
+health, metriky, Windows/Linux build, race, vulnerability, licence a secret
+gate. Výsledek a známé limity jsou v
+[návrhu runtime](../plans/2026-08-23-go-push-gateway-runtime-design.md) a
+[provozním runbooku](../operations/push-gateway.md).
+
+Q-007 zůstává otevřené pouze proto, že Dockerfile ještě neprošel skutečným
+container health/restart smoke a Firebase adapter neprovedl skutečné doručení na
+fyzické Android zařízení. Recording/test provider tyto důkazy nenahrazuje.
+Node.js zůstává fallback, pokud některá z těchto bran odhalí zásadní provozní
+problém.
 
 ## Odložená rozhodnutí
 

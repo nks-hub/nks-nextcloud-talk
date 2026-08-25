@@ -28,6 +28,37 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 <!-- markdownlint-enable MD013 -->
 
+## Go push gateway
+
+Přesný distribuovaný graf byl 23. srpna 2026 odvozen přes `go list -deps` pro
+`services/push_gateway/cmd/push-gateway`, nikoli ze všech položek v module cache.
+Verze a integrita jsou uzamčené v `go.mod` a `go.sum`; plné lokální licenční
+texty každého modulu byly přečtené z ověřeného module artefaktu.
+
+<!-- markdownlint-disable MD013 -->
+
+| Přímá závislost | Verze a Go checksum | Licence | Role | Stav |
+| --- | --- | --- | --- | --- |
+| `firebase.google.com/go/v4` | 4.21.0; `h1:HBZV4jrLtFYj8EwWyqEZOuRLfkfkV2bpnfyyXHOhPxY=` | Apache-2.0 | Produkční FCM Admin adapter přes ADC | GPL-3.0-or-later kompatibilní; zachovat LICENSE/NOTICE |
+| `github.com/jackc/pgx/v5` | 5.10.0; `h1:VhSvgU2jSli8o3AqIEOTJr7rZwAEUVo4E4XhR94Zfr0=` | MIT | Produkční PostgreSQL pool a transakce | GPL-3.0-or-later kompatibilní; zachovat notice |
+| `golang.org/x/net` | 0.58.0; `h1:ynWG7rqYi4ccpTEuPZ2QGWHktVEM9DMCj9yzDE0Q7To=` | BSD-3-Clause | IDNA a bounded TCP listener | GPL-3.0-or-later kompatibilní; zachovat notice a disclaimer |
+| `google.golang.org/api` | 0.279.0; `h1:hsx2M2OaRcaKtVYK6vXEUnQvdjnend7ZYES+lYaot74=` | BSD-3-Clause | Test skutečného Firebase Admin HTTP toku | Test-only přímý import; GPL-3.0-or-later kompatibilní |
+| `github.com/fergusstrange/embedded-postgres` | 1.34.0; `h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=` | MIT | PostgreSQL 18 integrační test | Test-only; není v produkčním build grafu |
+
+<!-- markdownlint-enable MD013 -->
+
+Produkční build graf obsahuje 55 externích modulů: 37 Apache-2.0, 11
+BSD-3-Clause a 7 MIT. Nebyla nalezena GPL-nekompatibilní, neznámá ani chybějící
+licence. `google.golang.org/protobuf` 1.36.11 byl navíc ručně ověřený z lokálního
+`LICENSE` jako BSD-3-Clause, protože použitý pomocný detektor jej automaticky
+neklasifikoval.
+
+Integrační build přidává pouze `embedded-postgres` a `lib/pq` pod MIT a
+`github.com/xi2/xz`, jehož lokální `LICENSE` dává zdrojové soubory do public
+domain. Tyto tři moduly nejsou součástí produkční binárky. Release third-party
+notice musí zahrnout úplné copyright notices všech 55 skutečně linkovaných
+runtime modulů; tento audit jejich povinnost neruší.
+
 ## Vývojové závislosti
 
 `lints` 6.1.0 a `test` 1.31.2 používají BSD 3-Clause licenci Dart projektu.

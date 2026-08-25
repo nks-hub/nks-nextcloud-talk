@@ -7,8 +7,11 @@ Dokumentace je rozdělená podle stavu poznání:
   synchronizační invarianty a implementační brány.
 - [Návrhy](plans/README.md) rozpracovávají doporučené nebo přijaté provozní
   toky a jejich hranice.
+- [Provoz](operations/README.md) obsahuje ověřené runbooky implementovaných
+  služeb a jejich známá omezení.
 - [Audit dokončení](architecture/completion-audit.md) odděluje doloženou
-  analýzu od dosud neexistující aplikace, gateway a runtime důkazů.
+  analýzu a gateway runtime od dosud neexistující mobilní aplikace, deploymentu
+  a zařízení důkazů.
 - [Push gateway API](architecture/push-gateway-api.md) váže skutečný
   Notifications wire formát na OpenAPI, kryptografické fixture a spustitelnou
   validaci.
@@ -31,6 +34,8 @@ Dokumentace je rozdělená podle stavu poznání:
   vymezuje Talk-inspirovaný vzhled, zlepšení a clean-room hranici.
 - [Audit závislostí a assetů](architecture/dependency-licenses.md) průběžně
   eviduje původ, licenci a distribuční podmínky každé přidané závislosti.
+- [Provoz Go push gateway](operations/push-gateway.md) popisuje konfiguraci,
+  migrace, health, metriky, shutdown a dosud otevřené container/FCM brány.
 
 Výzkumné tvrzení musí být vázané na konkrétní SHA, verzi nebo skutečný runtime
 test. Architektonický návrh musí jasně rozlišovat přijaté rozhodnutí, doporučení

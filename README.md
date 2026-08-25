@@ -36,7 +36,10 @@ Aktuální stav:
   HTTP/WebSocket během a release AOT bez fake WebRTC médií;
 - executable klientský push kontrakt a pure Dart multi-account registrační,
   revokační a exactly-one decrypt runtime;
-- doporučená vlastní FCM gateway kompatibilní se standardní Notifications app;
+- implementovaný Go push-gateway runtime kompatibilní se standardní
+  Notifications app, s PostgreSQL frontou, Firebase Admin adapterem, SSRF
+  ochranou, bounded workery, health a metrikami; container a skutečné FCM
+  doručení ještě čekají na externí runtime brány;
 - přijatý směr vlastní clean-room Flutter implementace s Talk-inspirovanou
   vizuální variací;
 - přijaté Android `applicationId` `com.nkshub.nextcloudtalk`;
@@ -45,7 +48,7 @@ Aktuální stav:
 - Flutter mobilní scaffold ještě nezačal, protože zbývá schválit iOS bundle ID
   a minimální platformy. Platformně nezávislý bootstrap, conversation, chat,
   attachment, signaling preparation a push-client runtime už jsou
-  implementované a testované.
+  implementované a testované. Samotný Flutter scaffold a APK stále neexistují.
 
 Přesný rozdíl mezi hotovou analýzou a chybějícím produktem vede
 [audit dokončení](docs/architecture/completion-audit.md).

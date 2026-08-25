@@ -1,8 +1,8 @@
 # Architektura
 
-Stav: návrh a produkční pure Dart bootstrap, conversation, chat, rich-chat,
-attachment, signaling preparation i push-client runtime. Protokolové kontrakty
-vznikly licenčně neutrálně; nový
+Stav: návrh, produkční pure Dart bootstrap, conversation, chat, rich-chat,
+attachment, signaling preparation a push-client runtime a implementovaný Go
+push-gateway runtime. Protokolové kontrakty vznikly licenčně neutrálně; nový
 mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold dosud
 nevznikl. Android `applicationId` je
 přijaté jako
@@ -38,6 +38,7 @@ nevytváří jako prázdný stub.
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Audit závislostí a assetů](dependency-licenses.md)
+- [Provoz Go push gateway](../operations/push-gateway.md)
 - [Pure Dart talk_protocol](../../packages/talk_protocol/README.md)
 - [Veřejný multi-server push](../plans/2026-08-22-public-multi-server-push-design.md)
 - [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
@@ -50,6 +51,7 @@ nevytváří jako prázdný stub.
 - [Implementace attachment upload runtime](../plans/2026-08-23-attachment-upload-runtime-design.md)
 - [Návrh signaling preparation runtime](../plans/2026-08-23-signaling-preparation-runtime-design.md)
 - [Implementace Dart push-client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
+- [Implementace Go push gateway runtime](../plans/2026-08-23-go-push-gateway-runtime-design.md)
 
 ## Principy
 
