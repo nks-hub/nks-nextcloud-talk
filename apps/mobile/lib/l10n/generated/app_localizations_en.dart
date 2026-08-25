@@ -302,6 +302,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get outboxFailed => 'Message could not be sent';
 
   @override
+  String get messageSent => 'Sent';
+
+  @override
+  String get messageRead => 'Read';
+
+  @override
   String get retrySend => 'Retry sending';
 
   @override

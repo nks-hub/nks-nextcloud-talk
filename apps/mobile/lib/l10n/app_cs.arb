@@ -88,6 +88,8 @@
   "outboxRetryable": "Čeká na připojení",
   "outboxAwaitingConfirmation": "Server už mohl tuto zprávu přijmout.",
   "outboxFailed": "Zprávu se nepodařilo odeslat",
+  "messageSent": "Odesláno",
+  "messageRead": "Přečteno",
   "retrySend": "Zkusit odeslat znovu",
   "resendMessage": "Odeslat zprávu znovu",
   "duplicateRiskTitle": "Odeslat tuto zprávu znovu?",

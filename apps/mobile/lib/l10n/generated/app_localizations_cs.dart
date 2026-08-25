@@ -303,6 +303,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get outboxFailed => 'Zprávu se nepodařilo odeslat';
 
   @override
+  String get messageSent => 'Odesláno';
+
+  @override
+  String get messageRead => 'Přečteno';
+
+  @override
   String get retrySend => 'Zkusit odeslat znovu';
 
   @override

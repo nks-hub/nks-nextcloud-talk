@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -696,6 +697,80 @@ void main() {
 
     expect(find.byKey(const Key('chat-thread-screen-30')), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a confirmed outgoing message shows its server-backed state', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final outgoing = _messageJson(
+      id: 40,
+      actorId: 'fixture-user',
+      actorDisplayName: 'Fixture user',
+      timestamp: 1724300100,
+      message: 'Confirmed outgoing',
+    );
+    await _insertCachedMessage(
+      database,
+      outgoing,
+      displayText: 'Confirmed outgoing',
+    );
+    final operation = StoredTextSendOperation(
+      accountId: account.id,
+      operationId: 'operation-read',
+      roomToken: conversation.token,
+      referenceId: 'reference-40',
+      message: 'Confirmed outgoing',
+      replayContractRevision: 'fixture-r1',
+      enqueueSequence: 1,
+      outboxState: 'completed',
+      attemptCount: 1,
+      messageIdsJson: '[40]',
+      duplicateRiskAcknowledged: false,
+      createdAtMillis: 1,
+      updatedAtMillis: 1,
+    );
+
+    await tester.pumpWidget(
+      app(
+        overrides: [
+          outgoingMessageStatusesProvider.overrideWith(
+            (ref, key) => Stream.value(<OutgoingMessageStatus>[
+              OutgoingMessageStatus(
+                operation: operation,
+                messageId: 40,
+                state: OutgoingMessageDeliveryState.read,
+                confirmationAmbiguous: false,
+              ),
+            ]),
+          ),
+        ],
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-delivery-40')), findsOneWidget);
+    expect(
+      find.byIcon(Icons.done_all_rounded),
+      findsOneWidget,
+      reason: 'read uses the double check, sent uses the single one',
+    );
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.done_all_rounded)).semanticLabel,
+      'Read',
+      reason: 'the mark must not be colour-only for a screen reader',
+    );
+    expect(
+      find.byKey(const Key('chat-delivery-10')),
+      findsNothing,
+      reason: 'an incoming message never carries a delivery mark',
+    );
+
+    semantics.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });

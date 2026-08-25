@@ -16,6 +16,7 @@ import '../conversations/conversation_avatar_widget.dart';
 import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_service.dart';
+import 'outgoing_message_status.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
@@ -743,6 +744,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   Widget build(BuildContext context) {
     final messagesValue = ref.watch(chatMessagesProvider(_key));
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
+    final statusesValue = ref.watch(outgoingMessageStatusesProvider(_key));
     final scopeValue = ref.watch(chatScopeProvider(_key));
     final attachmentDependencies = widget.conversation.readOnly == 0
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
@@ -750,6 +752,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final messages = messagesValue.valueOrNull ?? const <CachedChatMessage>[];
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
+    final deliveryStates = <int, OutgoingMessageDeliveryState>{
+      for (final status in
+          statusesValue.valueOrNull ?? const <OutgoingMessageStatus>[])
+        if (status.messageId != null) status.messageId!: status.state,
+    };
     final pending = operations
         .where((operation) => operation.outboxState != 'completed')
         .toList(growable: false);
@@ -862,6 +869,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   onReply: widget.conversation.readOnly == 0
                       ? _startReply
                       : null,
+                  deliveryStates: deliveryStates,
                 ),
         ),
         _ChatComposer(
@@ -1008,6 +1016,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onResend,
     required this.onOpenThread,
     required this.onReply,
+    required this.deliveryStates,
   });
 
   final StoredAccount account;
@@ -1023,6 +1032,7 @@ final class _ChatTimeline extends StatelessWidget {
   final ValueChanged<StoredTextSendOperation> onResend;
   final ValueChanged<CachedChatMessage> onOpenThread;
   final ValueChanged<CachedChatMessage>? onReply;
+  final Map<int, OutgoingMessageDeliveryState> deliveryStates;
 
   @override
   Widget build(BuildContext context) {
@@ -1096,6 +1106,7 @@ final class _ChatTimeline extends StatelessWidget {
                   showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
                   onOpenThread: threadId == null ? onOpenThread : null,
                   onReply: threadId == null ? onReply : null,
+                  deliveryState: deliveryStates[message.messageId],
                 ),
               ],
             ),
@@ -1126,6 +1137,7 @@ final class _MessageBubble extends StatelessWidget {
     required this.showReplyPreview,
     required this.onOpenThread,
     required this.onReply,
+    required this.deliveryState,
   });
 
   final StoredAccount account;
@@ -1138,6 +1150,7 @@ final class _MessageBubble extends StatelessWidget {
   final bool showReplyPreview;
   final ValueChanged<CachedChatMessage>? onOpenThread;
   final ValueChanged<CachedChatMessage>? onReply;
+  final OutgoingMessageDeliveryState? deliveryState;
 
   @override
   Widget build(BuildContext context) {
@@ -1286,6 +1299,16 @@ final class _MessageBubble extends StatelessWidget {
                                           : scheme.onSurfaceVariant,
                                     ),
                               ),
+                              if (outgoing && deliveryState != null) ...[
+                                const SizedBox(width: 6),
+                                _DeliveryMark(
+                                  key: Key(
+                                    'chat-delivery-${message.messageId}',
+                                  ),
+                                  state: deliveryState!,
+                                  color: scheme.onPrimaryContainer,
+                                ),
+                              ],
                             ],
                           ),
                           if (canOpenThread) ...[
@@ -1653,6 +1676,44 @@ final class _ChatComposer extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Only server-confirmed delivery is rendered. `sent` means the server stored
+/// the message, `read` additionally means it is at or below the common read
+/// marker; neither is inferred from local activity.
+final class _DeliveryMark extends StatelessWidget {
+  const _DeliveryMark({
+    super.key,
+    required this.state,
+    required this.color,
+  });
+
+  final OutgoingMessageDeliveryState state;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final (icon, label) = switch (state) {
+      OutgoingMessageDeliveryState.read => (
+        Icons.done_all_rounded,
+        strings.messageRead,
+      ),
+      OutgoingMessageDeliveryState.sent => (
+        Icons.done_rounded,
+        strings.messageSent,
+      ),
+      OutgoingMessageDeliveryState.failed => (
+        Icons.error_outline_rounded,
+        strings.outboxFailed,
+      ),
+      OutgoingMessageDeliveryState.sending => (
+        Icons.schedule_send_rounded,
+        strings.outboxSending,
+      ),
+    };
+    return Icon(icon, size: 14, color: color, semanticLabel: label);
   }
 }
 

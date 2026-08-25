@@ -626,6 +626,18 @@ abstract class AppLocalizations {
   /// **'Message could not be sent'**
   String get outboxFailed;
 
+  /// No description provided for @messageSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get messageSent;
+
+  /// No description provided for @messageRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get messageRead;
+
   /// No description provided for @retrySend.
   ///
   /// In en, this message translates to:

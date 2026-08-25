@@ -17,6 +17,7 @@ import 'data/conversation_avatar_repository.dart';
 import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_service.dart';
+import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
@@ -403,6 +404,20 @@ final chatMessagesProvider =
       return ref
           .watch(chatRepositoryProvider)
           .watchMessages(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+          );
+    });
+
+final outgoingMessageStatusesProvider =
+    StreamProvider.family<List<OutgoingMessageStatus>, ChatRoomProviderKey>((
+      ref,
+      key,
+    ) {
+      return ref
+          .watch(chatServiceProvider)
+          .watchOutgoingMessageStatuses(
             accountId: key.accountId,
             roomToken: key.roomToken,
             threadId: key.threadId,

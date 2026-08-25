@@ -88,6 +88,8 @@
   "outboxRetryable": "Waiting for a connection",
   "outboxAwaitingConfirmation": "The server may already have received this message.",
   "outboxFailed": "Message could not be sent",
+  "messageSent": "Sent",
+  "messageRead": "Read",
   "retrySend": "Retry sending",
   "resendMessage": "Resend message",
   "duplicateRiskTitle": "Send this message again?",
