@@ -144,73 +144,78 @@ void main() {
     expect(scope?.lastSyncError, isNull);
   });
 
-  test('a poll overtaken by another writer is discarded without an error', () async {
-    // Reproduces the live emulator finding: an attachment confirmation
-    // advances the future cursor while the room poll is still in flight. The
-    // overtaken answer must be dropped silently instead of surfacing as a
-    // rejected chat response.
-    final overtakenPollReached = Completer<void>();
-    final overtakingSyncFinished = Completer<void>();
-    var futureRequests = 0;
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/cloud/capabilities')) {
-          return http.Response(jsonEncode(_chatCapabilities()), 200);
-        }
-        if (request.url.queryParameters['lookIntoFuture'] == '0') {
-          return http.Response('', 304);
-        }
+  test(
+    'a poll overtaken by another writer is discarded without an error',
+    () async {
+      // Reproduces the live emulator finding: an attachment confirmation
+      // advances the future cursor while the room poll is still in flight. The
+      // overtaken answer must be dropped silently instead of surfacing as a
+      // rejected chat response.
+      final overtakenPollReached = Completer<void>();
+      final overtakingSyncFinished = Completer<void>();
+      var futureRequests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(jsonEncode(_chatCapabilities()), 200);
+          }
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            return http.Response('', 304);
+          }
 
-        futureRequests++;
-        if (request.url.queryParameters['lastKnownMessageId'] != '109') {
-          return http.Response('', 304);
-        }
-        final overtaken = futureRequests == 1;
-        if (overtaken) {
-          overtakenPollReached.complete();
-          await overtakingSyncFinished.future;
-        }
-        return http.Response(
-          jsonEncode(
-            readFixtureJson('chat-messages/fixtures/chat-future.response.json'),
-          ),
-          200,
-          headers: const <String, String>{
-            'X-Chat-Last-Given': '114',
-            'X-Chat-Last-Common-Read': '110',
-          },
-        );
-      }),
-    );
-    addTearDown(api.close);
+          futureRequests++;
+          if (request.url.queryParameters['lastKnownMessageId'] != '109') {
+            return http.Response('', 304);
+          }
+          final overtaken = futureRequests == 1;
+          if (overtaken) {
+            overtakenPollReached.complete();
+            await overtakingSyncFinished.future;
+          }
+          return http.Response(
+            jsonEncode(
+              readFixtureJson(
+                'chat-messages/fixtures/chat-future.response.json',
+              ),
+            ),
+            200,
+            headers: const <String, String>{
+              'X-Chat-Last-Given': '114',
+              'X-Chat-Last-Common-Read': '110',
+            },
+          );
+        }),
+      );
+      addTearDown(api.close);
 
-    ChatService service() => ChatService(
-      accounts: accounts,
-      chat: chat,
-      credentials: credentials,
-      api: api,
-    );
+      ChatService service() => ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
 
-    final overtakenSync = service().syncRoom(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-    );
-    await overtakenPollReached.future;
-    await service().syncRoom(accountId: 'account-a', roomToken: 'rooma123');
-    overtakingSyncFinished.complete();
-    await overtakenSync;
+      final overtakenSync = service().syncRoom(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      await overtakenPollReached.future;
+      await service().syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+      overtakingSyncFinished.complete();
+      await overtakenSync;
 
-    final scope = await chat.getRootScope(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-    );
-    final messages = await chat
-        .watchMessages(accountId: 'account-a', roomToken: 'rooma123')
-        .first;
-    expect(scope?.futureCursor, '114');
-    expect(scope?.lastSyncError, isNull);
-    expect(messages.map((message) => message.messageId), contains(112));
-  });
+      final scope = await chat.getRootScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      final messages = await chat
+          .watchMessages(accountId: 'account-a', roomToken: 'rooma123')
+          .first;
+      expect(scope?.futureCursor, '114');
+      expect(scope?.lastSyncError, isNull);
+      expect(messages.map((message) => message.messageId), contains(112));
+    },
+  );
 
   test('completed live cycles release their cancellation wait', () async {
     var futureRequests = 0;
@@ -380,6 +385,37 @@ void main() {
         threadId: 109,
         errorCode: 'invalidResponse',
       );
+      final rootScopes = database.chatScopes.createAlias('root_scopes');
+      final viewScopes = database.chatScopes.createAlias('view_scopes');
+      final projectionStates = <(StoredChatScope, StoredChatScope)>[];
+      final projected = Completer<void>();
+      final projectionQuery =
+          database.select(rootScopes).join([
+            innerJoin(
+              viewScopes,
+              viewScopes.accountId.equalsExp(rootScopes.accountId) &
+                  viewScopes.roomToken.equalsExp(rootScopes.roomToken) &
+                  viewScopes.scopeKey.equals('thread:109'),
+            ),
+          ])..where(
+            rootScopes.accountId.equals('account-a') &
+                rootScopes.roomToken.equals('rooma123') &
+                rootScopes.scopeKey.equals('root'),
+          );
+      final projectionSubscription = projectionQuery.watch().listen((rows) {
+        if (rows.isEmpty) {
+          return;
+        }
+        final state = (
+          rows.single.readTable(rootScopes),
+          rows.single.readTable(viewScopes),
+        );
+        projectionStates.add(state);
+        if (state.$1.futureCursor == '120' && !projected.isCompleted) {
+          projected.complete();
+        }
+      });
+      addTearDown(projectionSubscription.cancel);
 
       var historyRequests = 0;
       var futureRequests = 0;
@@ -449,6 +485,7 @@ void main() {
 
       await binding.synchronize();
       await binding.synchronize();
+      await projected.future;
 
       final messages = await chat
           .watchMessages(
@@ -477,6 +514,28 @@ void main() {
       expect(scope?.hasHistory, isFalse);
       expect(scope?.lastSyncError, isNull);
       expect(rootScope?.futureCursor, '120');
+      expect(scope?.historyCursor, rootScope?.historyCursor);
+      expect(scope?.futureCursor, rootScope?.futureCursor);
+      expect(scope?.lastCommonRead, rootScope?.lastCommonRead);
+      expect(scope?.lastReadMessage, rootScope?.lastReadMessage);
+      expect(scope?.unreadMessages, rootScope?.unreadMessages);
+      expect(scope?.futureConverged, rootScope?.futureConverged);
+      expect(scope?.blocksJson, rootScope?.blocksJson);
+      expect(scope?.lastSyncedAtMillis, rootScope?.lastSyncedAtMillis);
+      expect(
+        projectionStates.where((state) => state.$1.futureCursor == '120'),
+        everyElement(
+          predicate<(StoredChatScope, StoredChatScope)>(
+            (state) =>
+                state.$2.futureCursor == state.$1.futureCursor &&
+                state.$2.blocksJson == state.$1.blocksJson &&
+                state.$2.lastReadMessage == state.$1.lastReadMessage &&
+                state.$2.unreadMessages == state.$1.unreadMessages &&
+                state.$2.futureConverged == state.$1.futureConverged &&
+                state.$2.lastSyncedAtMillis == state.$1.lastSyncedAtMillis,
+          ),
+        ),
+      );
     },
   );
 
@@ -966,15 +1025,23 @@ void main() {
           firstLiveRequest.complete();
         }
         await releaseLiveResponse.future;
+        final response = _sendReplyResponse(
+          referenceId: '88888888-8888-4888-8888-888888888888',
+          message: 'Shared root poll reply',
+          replyTo: 109,
+        );
+        final ocs = response['ocs']! as Map<String, Object?>;
+        final meta = ocs['meta']! as Map<String, Object?>;
+        meta['statuscode'] = 200;
+        final reply = ocs['data']! as Map<String, Object?>;
+        reply['id'] = 120;
+        reply['timestamp'] = 1770000120;
+        final parent = reply['parent']! as Map<String, Object?>;
+        parent['isThread'] = true;
+        parent['threadReplies'] = 1;
+        ocs['data'] = <Object?>[reply];
         return http.Response(
-          jsonEncode(
-            _externalMessageResponse(
-              messageId: 120,
-              timestamp: 1770000120,
-              message: 'Shared root poll reply',
-              threadId: 109,
-            ),
-          ),
+          jsonEncode(response),
           200,
           headers: const <String, String>{
             'X-Chat-Last-Given': '120',
@@ -1005,9 +1072,14 @@ void main() {
     final rootPoll = rootBinding.synchronize();
     final replyPoll = replyBinding.synchronize();
     await firstLiveRequest.future;
+    final replyCatchUp = service.catchUpRoom(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
     await Future<void>.delayed(Duration.zero);
     releaseLiveResponse.complete();
-    await Future.wait([rootPoll, replyPoll]);
+    await Future.wait([rootPoll, replyPoll, replyCatchUp]);
 
     final rootScope = await chat.getRootScope(
       accountId: 'account-a',
@@ -1025,10 +1097,22 @@ void main() {
           threadId: 109,
         )
         .first;
+    final cachedRootIsNamed = await chat.cachedRootIsNamedThread(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
     expect(liveRequests, 1);
     expect(rootScope?.futureCursor, '120');
     expect(rootScope?.lastSyncError, isNull);
     expect(replyScope?.lastSyncError, isNull);
+    expect(cachedRootIsNamed, isTrue);
+    expect(
+      decodeChatScopeBlocks(
+        replyScope!.blocksJson,
+      ).any((block) => block.contains(ChatCursor.parse('120'))),
+      isTrue,
+    );
     expect(replies.map((message) => message.messageId), [109, 120]);
   });
 
@@ -1444,12 +1528,13 @@ void main() {
   );
 
   test(
-    'live binding re-prepares when reply root becomes named thread',
+    'ordinary reply view cursor never advances a new named network scope',
     () async {
       await _cacheThreadRoot(database, storedThreadId: null);
       var capabilityRequests = 0;
       var rootRequests = 0;
       var dedicatedRequests = 0;
+      final dedicatedCursors = <String?>[];
       final api = HttpNextcloudApi(
         client: MockClient((request) async {
           if (request.url.path.endsWith('/cloud/capabilities')) {
@@ -1461,6 +1546,7 @@ void main() {
                     'conversation-v4',
                     'chat-v2',
                     'chat-reference-id',
+                    'chat-replies',
                     'threads',
                   ],
                 ),
@@ -1468,9 +1554,44 @@ void main() {
               200,
             );
           }
+          if (request.method == 'POST') {
+            expect(request.bodyFields['replyTo'], '109');
+            expect(request.bodyFields, isNot(contains('threadId')));
+            return http.Response(
+              jsonEncode(
+                _sendReplyResponse(
+                  referenceId: request.bodyFields['referenceId']!,
+                  message: request.bodyFields['message']!,
+                  replyTo: 109,
+                ),
+              ),
+              201,
+              headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+            );
+          }
           if (request.url.queryParameters.containsKey('threadId')) {
             dedicatedRequests++;
             expect(request.url.queryParameters['threadId'], '109');
+            dedicatedCursors.add(
+              request.url.queryParameters['lastKnownMessageId'],
+            );
+            if (dedicatedRequests == 2) {
+              return http.Response(
+                jsonEncode(
+                  _externalMessageResponse(
+                    messageId: 130,
+                    timestamp: 1770000130,
+                    message: 'Named transition reply',
+                    threadId: 109,
+                  ),
+                ),
+                200,
+                headers: const <String, String>{
+                  'X-Chat-Last-Given': '130',
+                  'X-Chat-Last-Common-Read': '110',
+                },
+              );
+            }
           } else {
             rootRequests++;
           }
@@ -1491,6 +1612,18 @@ void main() {
       );
 
       await binding.synchronize();
+      await service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Synthetic ordinary reply before named transition',
+        threadId: 109,
+      );
+      final ordinaryView = await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 109,
+      );
+      expect(ordinaryView?.futureCursor, '121');
       final cachedRoot =
           await (database.select(database.cachedChatMessages)..where(
                 (message) =>
@@ -1521,7 +1654,58 @@ void main() {
       // the root/dedicated request split is what proves the re-prepare happened.
       expect(capabilityRequests, 1);
       expect(rootRequests, 2);
-      expect(dedicatedRequests, 1);
+      expect(dedicatedRequests, greaterThanOrEqualTo(1));
+      expect(dedicatedCursors.first, '109');
+      final firstNamedRequestCount = dedicatedCursors.length;
+      final firstNamedNetwork = await chat.getNetworkScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 109,
+      );
+      expect(firstNamedNetwork?.futureCursor, '130');
+
+      rawRoot['isThread'] = false;
+      rawRoot['threadId'] = null;
+      await (database.update(database.cachedChatMessages)..where(
+            (message) =>
+                message.accountId.equals('account-a') &
+                message.roomToken.equals('rooma123') &
+                message.messageId.equals(109),
+          ))
+          .write(
+            CachedChatMessagesCompanion(
+              threadId: const Value(null),
+              rawJson: Value(jsonEncode(rawRoot)),
+            ),
+          );
+      await binding.synchronize();
+      await binding.synchronize();
+      expect(
+        await chat.getNetworkScope(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          threadId: 109,
+        ),
+        isNull,
+      );
+
+      rawRoot['isThread'] = true;
+      rawRoot['threadId'] = 109;
+      await (database.update(database.cachedChatMessages)..where(
+            (message) =>
+                message.accountId.equals('account-a') &
+                message.roomToken.equals('rooma123') &
+                message.messageId.equals(109),
+          ))
+          .write(
+            CachedChatMessagesCompanion(
+              threadId: const Value(109),
+              rawJson: Value(jsonEncode(rawRoot)),
+            ),
+          );
+      await binding.synchronize();
+      await binding.synchronize();
+      expect(dedicatedCursors[firstNamedRequestCount], '109');
     },
   );
 
@@ -2132,15 +2316,49 @@ void main() {
     );
   });
 
-  test('confirmed send completes outbox and caches returned message', () async {
+  test('confirmed root send remains visible until network catch-up', () async {
     var sendRequests = 0;
+    var historyRequests = 0;
+    var futureRequests = 0;
+    final futureCursors = <String?>[];
+    String? sentReferenceId;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
           return http.Response(jsonEncode(_chatCapabilities()), 200);
         }
+        if (request.method == 'GET') {
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            historyRequests++;
+            return http.Response('', 304);
+          }
+          futureRequests++;
+          futureCursors.add(request.url.queryParameters['lastKnownMessageId']);
+          if (futureRequests == 1) {
+            return http.Response('', 304);
+          }
+          if (futureRequests == 2) {
+            return http.Response(
+              jsonEncode(
+                _externalMessageResponse(
+                  messageId: 120,
+                  timestamp: 1770000120,
+                  message: 'Synthetic text send',
+                  referenceId: sentReferenceId,
+                ),
+              ),
+              200,
+              headers: const <String, String>{
+                'X-Chat-Last-Given': '120',
+                'X-Chat-Last-Common-Read': '110',
+              },
+            );
+          }
+          return http.Response('', 304);
+        }
         expect(request.method, 'POST');
         sendRequests++;
+        sentReferenceId = request.bodyFields['referenceId'];
         final response = _sendResponse(
           referenceId: request.bodyFields['referenceId']!,
           message: request.bodyFields['message']!,
@@ -2166,6 +2384,33 @@ void main() {
       message: '  Synthetic text send  ',
     );
 
+    final pendingCatchUpView = await chat.getRootScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    final pendingCatchUpNetwork = await chat.getNetworkScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: null,
+    );
+    expect(jsonDecode(pendingCatchUpView!.blocksJson), [
+      ['109', '109'],
+      ['120', '120'],
+    ]);
+    expect(pendingCatchUpNetwork?.futureCursor, '109');
+
+    await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+    final afterNotModified = await chat.getRootScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    expect(jsonDecode(afterNotModified!.blocksJson), [
+      ['109', '109'],
+      ['120', '120'],
+    ]);
+
+    await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
     final operations = await chat
         .watchTextSendOperations(accountId: 'account-a', roomToken: 'rooma123')
         .first;
@@ -2176,6 +2421,14 @@ void main() {
       accountId: 'account-a',
       roomToken: 'rooma123',
     );
+    final networkScope =
+        await (database.select(database.chatScopes)..where(
+              (row) =>
+                  row.accountId.equals('account-a') &
+                  row.roomToken.equals('rooma123') &
+                  row.scopeKey.equals('network-root'),
+            ))
+            .getSingle();
     expect(sendRequests, 1);
     expect(operations, hasLength(1));
     expect(operations.single.message, 'Synthetic text send');
@@ -2185,14 +2438,22 @@ void main() {
     expect(messages.single.messageId, 120);
     expect(messages.single.referenceId, operations.single.referenceId);
     expect(messages.single.displayText, 'Synthetic text send');
-    expect(scope?.futureCursor, '109');
+    expect(historyRequests, 1);
+    expect(futureRequests, 3);
+    expect(futureCursors, ['109', '109', '120']);
+    expect(scope?.futureCursor, '120');
     expect(jsonDecode(scope!.blocksJson), [
-      ['109', '109'],
+      ['109', '120'],
+    ]);
+    expect(networkScope.futureCursor, '120');
+    expect(jsonDecode(networkScope.blocksJson), [
+      ['109', '120'],
     ]);
   });
 
   test('named-thread send persists and restores its threadId', () async {
     await _cacheThreadRoot(database, isThread: true, threadReplies: 0);
+    var getRequests = 0;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
@@ -2209,6 +2470,12 @@ void main() {
             ),
             200,
           );
+        }
+        if (request.method == 'GET') {
+          getRequests++;
+          expect(request.url.queryParameters['threadId'], '109');
+          expect(request.url.queryParameters['lastKnownMessageId'], '109');
+          return http.Response('', 304);
         }
         expect(request.method, 'POST');
         expect(request.bodyFields['threadId'], '109');
@@ -2241,6 +2508,11 @@ void main() {
       message: 'Synthetic named-thread send',
       threadId: 109,
     );
+    await service.syncRoom(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
 
     final threadOperations = await chat
         .watchTextSendOperations(
@@ -2266,18 +2538,384 @@ void main() {
             ))
             .getSingle();
     final cachedRootJson = jsonDecode(cachedRoot.rawJson);
+    final viewScope = await chat.getScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    final networkScope =
+        await (database.select(database.chatScopes)..where(
+              (row) =>
+                  row.accountId.equals('account-a') &
+                  row.roomToken.equals('rooma123') &
+                  row.scopeKey.equals('network-thread:109'),
+            ))
+            .getSingle();
 
     expect(threadOperations, hasLength(1));
+    expect(getRequests, 2);
     expect(threadOperations.single.threadId, 109);
     expect(threadOperations.single.replyTo, isNull);
     expect(rootOperations, isEmpty);
     expect(restoredOperation.threadId, 109);
     expect(restoredOperation.replyTo, isNull);
     expect(cachedRootJson['threadReplies'], 1);
+    expect(jsonDecode(viewScope!.blocksJson), [
+      ['109', '109'],
+      ['123', '123'],
+    ]);
+    expect(viewScope.futureCursor, '123');
+    expect(jsonDecode(networkScope.blocksJson), [
+      ['109', '109'],
+    ]);
+    expect(networkScope.futureCursor, '109');
   });
 
-  test('ordinary reply send keeps replyTo and no named threadId', () async {
+  test(
+    'root scope does not migrate an ordinary reply cursor into a named thread',
+    () async {
+      await _cacheThreadRoot(database, isThread: false);
+      await database
+          .into(database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: 'account-a',
+              roomToken: 'rooma123',
+              scopeKey: 'thread:109',
+              threadId: const Value(109),
+              historyCursor: '140',
+              futureCursor: '150',
+              lastCommonRead: '7',
+              lastReadMessage: 8,
+              unreadMessages: 2,
+              hasHistory: false,
+              futureConverged: true,
+              blocksJson: '[["140","150"]]',
+              lastSyncedAtMillis: const Value(123456),
+            ),
+          );
+      final account = (await accounts.getAccount('account-a'))!;
+      final conversation = (await chat.getConversation(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      ))!;
+
+      await chat.ensureRootScope(account: account, conversation: conversation);
+
+      final ordinaryView = await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 109,
+      );
+      final rootView = await chat.getScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+      );
+      final namedNetwork = await chat.getNetworkScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 109,
+      );
+      final rootNetwork = await chat.getNetworkScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: null,
+      );
+
+      expect(ordinaryView?.historyCursor, '140');
+      expect(ordinaryView?.futureCursor, '150');
+      expect(ordinaryView?.lastCommonRead, '7');
+      expect(ordinaryView?.lastReadMessage, 8);
+      expect(ordinaryView?.unreadMessages, 2);
+      expect(ordinaryView?.hasHistory, isFalse);
+      expect(ordinaryView?.futureConverged, isTrue);
+      expect(jsonDecode(ordinaryView!.blocksJson), [
+        ['140', '150'],
+      ]);
+      expect(ordinaryView.lastSyncedAtMillis, 123456);
+      expect(ordinaryView.lastSyncError, isNull);
+      expect(namedNetwork, isNull);
+      expect(rootNetwork?.historyCursor, rootView?.historyCursor);
+      expect(rootNetwork?.futureCursor, rootView?.futureCursor);
+      expect(rootNetwork?.lastCommonRead, rootView?.lastCommonRead);
+      expect(rootNetwork?.lastReadMessage, rootView?.lastReadMessage);
+      expect(rootNetwork?.unreadMessages, rootView?.unreadMessages);
+      expect(rootNetwork?.hasHistory, rootView?.hasHistory);
+      expect(rootNetwork?.futureConverged, rootView?.futureConverged);
+      expect(rootNetwork?.blocksJson, rootView?.blocksJson);
+      expect(rootNetwork?.lastSyncedAtMillis, rootView?.lastSyncedAtMillis);
+      expect(rootNetwork?.lastSyncError, rootView?.lastSyncError);
+    },
+  );
+
+  test('root worker migrates and completes a queued named send', () async {
+    await _cacheThreadRoot(database, isThread: true, threadReplies: 0);
+    await database
+        .into(database.chatScopes)
+        .insert(
+          ChatScopesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            scopeKey: 'thread:109',
+            threadId: const Value(109),
+            historyCursor: '90',
+            futureCursor: '110',
+            lastCommonRead: '7',
+            lastReadMessage: 8,
+            unreadMessages: 2,
+            hasHistory: false,
+            futureConverged: true,
+            blocksJson: '[["90","110"]]',
+            lastSyncedAtMillis: const Value(123456),
+          ),
+        );
+    await database
+        .into(database.textSendOperations)
+        .insert(
+          TextSendOperationsCompanion.insert(
+            accountId: 'account-a',
+            operationId: '00000000-0000-4000-8000-000000000099',
+            roomToken: 'rooma123',
+            referenceId: '99999999-9999-4999-8999-999999999999',
+            message: 'Queued named send from the previous runtime',
+            replayContractRevision: textSendReplayContractRevision,
+            enqueueSequence: 1,
+            outboxState: 'queued',
+            attemptCount: 0,
+            messageIdsJson: '[]',
+            threadId: const Value(109),
+            duplicateRiskAcknowledged: false,
+            createdAtMillis: 1,
+            updatedAtMillis: 1,
+          ),
+        );
+    var sendRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              _chatCapabilities(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-reference-id',
+                  'threads',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method == 'GET') {
+          expect(request.url.queryParameters, isNot(contains('threadId')));
+          return http.Response('', 304);
+        }
+        sendRequests++;
+        expect(request.bodyFields['threadId'], '109');
+        return http.Response(
+          jsonEncode(
+            _sendResponse(
+              referenceId: request.bodyFields['referenceId']!,
+              message: request.bodyFields['message']!,
+              threadId: 109,
+              threadReplies: 1,
+            ),
+          ),
+          201,
+          headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final service = ChatService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+    final operation = await database
+        .select(database.textSendOperations)
+        .getSingle();
+    final networkScope = await chat.getNetworkScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    final viewScope = await chat.getScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    final confirmed = await chat
+        .watchMessages(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          threadId: 109,
+        )
+        .first;
+
+    expect(sendRequests, 1);
+    expect(operation.outboxState, 'completed');
+    expect(jsonDecode(operation.messageIdsJson), [123]);
+    expect(networkScope?.historyCursor, '90');
+    expect(networkScope?.futureCursor, '110');
+    expect(networkScope?.lastCommonRead, '7');
+    expect(networkScope?.lastReadMessage, 8);
+    expect(networkScope?.unreadMessages, 2);
+    expect(networkScope?.hasHistory, isFalse);
+    expect(networkScope?.futureConverged, isTrue);
+    expect(networkScope?.lastSyncedAtMillis, 123456);
+    expect(jsonDecode(networkScope!.blocksJson), [
+      ['90', '110'],
+    ]);
+    expect(viewScope?.futureCursor, '123');
+    expect(jsonDecode(viewScope!.blocksJson), [
+      ['90', '110'],
+      ['123', '123'],
+    ]);
+    expect(confirmed.map((message) => message.messageId), [109, 123]);
+  });
+
+  test(
+    'confirmed send rolls back outbox and message when view projection fails',
+    () async {
+      await _cacheThreadRoot(database, isThread: true, threadReplies: 0);
+      final account = (await accounts.getAccount('account-a'))!;
+      final conversation = (await chat.getConversation(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      ))!;
+      final capability = await chat.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: const {'chat-v2', 'chat-reference-id', 'threads'},
+        observedAt: DateTime.utc(2026, 1, 1),
+      );
+      await chat.ensureRootScope(account: account, conversation: conversation);
+      await chat.ensureThreadScope(
+        account: account,
+        conversation: conversation,
+        threadId: 109,
+      );
+      await chat.ensureNamedThreadNetworkScope(
+        account: account,
+        conversation: conversation,
+        threadId: 109,
+      );
+      await (database.update(database.chatScopes)..where(
+            (scope) =>
+                scope.accountId.equals('account-a') &
+                scope.roomToken.equals('rooma123') &
+                scope.scopeKey.equals('thread:109'),
+          ))
+          .write(const ChatScopesCompanion(blocksJson: Value('[]')));
+      final profile = ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+        'chat-v2',
+        'chat-reference-id',
+        'threads',
+      ], federated: false);
+      final authority = ChatTextSendAuthority(
+        accountId: AccountId.parse('account-a'),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        capabilityGeneration: capability.generation,
+        profile: profile,
+        replayContractRevision: textSendReplayContractRevision,
+      );
+      final operationId = ChatOperationId.parse(
+        '00000000-0000-4000-8000-000000000098',
+      );
+      await chat.admitTextSend(
+        accountId: 'account-a',
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        authority: authority,
+        operationId: operationId,
+        referenceId: ChatReferenceId.parse(
+          '99999999-9999-4999-8999-999999999998',
+        ),
+        message: 'Synthetic rollback probe',
+        threadId: 109,
+      );
+      final claim = await chat.claimNextTextSend(
+        accountId: 'account-a',
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        authority: authority,
+        requestId: ChatRequestId.parse('projection-rollback'),
+        now: 1,
+      );
+      final response = decodeChatSendResponse(
+        request: claim!.request,
+        statusCode: 201,
+        body: Uint8List.fromList(
+          utf8.encode(
+            jsonEncode(
+              _sendResponse(
+                referenceId: claim.request.referenceId.value,
+                message: claim.request.message,
+                threadId: 109,
+                threadReplies: 1,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        chat.applyTextSendResponse(
+          accountId: 'account-a',
+          operationId: operationId,
+          response: response,
+          now: 2,
+        ),
+        throwsStateError,
+      );
+
+      final operation = await database
+          .select(database.textSendOperations)
+          .getSingle();
+      final confirmedMessage =
+          await (database.select(database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals('account-a') &
+                    message.roomToken.equals('rooma123') &
+                    message.messageId.equals(123),
+              ))
+              .getSingleOrNull();
+      final cachedRoot =
+          await (database.select(database.cachedChatMessages)..where(
+                (message) =>
+                    message.accountId.equals('account-a') &
+                    message.roomToken.equals('rooma123') &
+                    message.messageId.equals(109),
+              ))
+              .getSingle();
+      final networkScope = await chat.getNetworkScope(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 109,
+      );
+
+      expect(operation.outboxState, 'sending');
+      expect(jsonDecode(operation.messageIdsJson), isEmpty);
+      expect(confirmedMessage, isNull);
+      expect(jsonDecode(cachedRoot.rawJson)['threadReplies'], 0);
+      expect(networkScope?.futureCursor, '109');
+      expect(jsonDecode(networkScope!.blocksJson), [
+        ['109', '109'],
+      ]);
+    },
+  );
+
+  test('ordinary reply stays visible from pending through HTTP 201', () async {
     await _cacheThreadRoot(database, isThread: false);
+    final postStarted = Completer<void>();
+    final releasePost = Completer<void>();
+    var futureRequests = 0;
+    final futureCursors = <String?>[];
+    String? sentReferenceId;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
@@ -2295,9 +2933,42 @@ void main() {
             200,
           );
         }
+        if (request.method == 'GET') {
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            return http.Response('', 304);
+          }
+          futureRequests++;
+          futureCursors.add(request.url.queryParameters['lastKnownMessageId']);
+          if (futureRequests == 1) {
+            return http.Response('', 304);
+          }
+          if (futureRequests == 2) {
+            final response = _sendReplyResponse(
+              referenceId: sentReferenceId!,
+              message: 'Synthetic ordinary reply',
+              replyTo: 109,
+            );
+            final ocs = response['ocs']! as Map<String, Object?>;
+            final meta = ocs['meta']! as Map<String, Object?>;
+            meta['statuscode'] = 200;
+            ocs['data'] = <Object?>[ocs['data']];
+            return http.Response(
+              jsonEncode(response),
+              200,
+              headers: const <String, String>{
+                'X-Chat-Last-Given': '121',
+                'X-Chat-Last-Common-Read': '110',
+              },
+            );
+          }
+          return http.Response('', 304);
+        }
         expect(request.method, 'POST');
         expect(request.bodyFields['replyTo'], '109');
         expect(request.bodyFields, isNot(contains('threadId')));
+        sentReferenceId = request.bodyFields['referenceId'];
+        postStarted.complete();
+        await releasePost.future;
         return http.Response(
           jsonEncode(
             _sendReplyResponse(
@@ -2319,10 +2990,87 @@ void main() {
       api: api,
     );
 
-    await service.sendText(
+    final operations = database.textSendOperations;
+    final messages = database.cachedChatMessages;
+    final scopes = database.chatScopes;
+    final visibilityStates = <bool>[];
+    final outboxStates = <String>[];
+    final confirmationObserved = Completer<void>();
+    final visibilityQuery =
+        database.select(operations).join([
+          leftOuterJoin(
+            messages,
+            messages.accountId.equalsExp(operations.accountId) &
+                messages.roomToken.equalsExp(operations.roomToken) &
+                messages.referenceId.equalsExp(operations.referenceId),
+          ),
+          leftOuterJoin(
+            scopes,
+            scopes.accountId.equalsExp(operations.accountId) &
+                scopes.roomToken.equalsExp(operations.roomToken) &
+                scopes.scopeKey.equals('thread:109'),
+          ),
+        ])..where(
+          operations.accountId.equals('account-a') &
+              operations.roomToken.equals('rooma123') &
+              operations.replyTo.equals(109) &
+              operations.threadId.isNull(),
+        );
+    final visibilitySubscription = visibilityQuery.watch().listen((rows) {
+      if (rows.isEmpty) {
+        return;
+      }
+      final row = rows.single;
+      final operation = row.readTable(operations);
+      final message = row.readTableOrNull(messages);
+      final scope = row.readTableOrNull(scopes);
+      final confirmedVisible =
+          message != null &&
+          scope != null &&
+          decodeChatScopeBlocks(scope.blocksJson).any(
+            (block) =>
+                block.contains(ChatCursor.parse(message.messageId.toString())),
+          );
+      visibilityStates.add(
+        operation.outboxState != 'completed' || confirmedVisible,
+      );
+      outboxStates.add(operation.outboxState);
+      if (operation.outboxState == 'completed' &&
+          !confirmationObserved.isCompleted) {
+        confirmationObserved.complete();
+      }
+    });
+    addTearDown(visibilitySubscription.cancel);
+
+    final send = service.sendText(
       accountId: 'account-a',
       roomToken: 'rooma123',
       message: 'Synthetic ordinary reply',
+      threadId: 109,
+    );
+    await postStarted.future;
+    releasePost.complete();
+    await send;
+    await confirmationObserved.future;
+
+    await service.syncRoom(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    final afterNotModified = await chat.getScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    expect(jsonDecode(afterNotModified!.blocksJson), [
+      ['109', '109'],
+      ['121', '121'],
+    ]);
+
+    await service.syncRoom(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
       threadId: 109,
     );
 
@@ -2336,11 +3084,57 @@ void main() {
     final rootOperations = await chat
         .watchTextSendOperations(accountId: 'account-a', roomToken: 'rooma123')
         .first;
+    final replyMessages = await chat
+        .watchMessages(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          threadId: 109,
+        )
+        .first;
+    final viewScope = await chat.getScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      threadId: 109,
+    );
+    final rootScope = await chat.getRootScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    final restored = await chat.loadRuntimeForTesting('account-a');
+    final restoredView =
+        restored.accounts.values.single.scopes[ChatScopeKey(
+          roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+          threadId: 109,
+        )];
+    final restoredNetworkRoot =
+        restored.accounts.values.single.scopes[ChatScopeKey(
+          roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+          threadId: null,
+        )];
 
     expect(threadOperations, hasLength(1));
     expect(threadOperations.single.replyTo, 109);
     expect(threadOperations.single.threadId, isNull);
+    expect(threadOperations.single.outboxState, 'completed');
     expect(rootOperations, isEmpty);
+    expect(replyMessages.map((message) => message.messageId), [109, 121]);
+    expect(jsonDecode(viewScope!.blocksJson), [
+      ['109', '121'],
+    ]);
+    expect(viewScope.historyCursor, '109');
+    expect(viewScope.futureCursor, '121');
+    expect(rootScope?.futureCursor, '121');
+    expect(jsonDecode(rootScope!.blocksJson), [
+      ['109', '121'],
+    ]);
+    expect(restoredView, isNull);
+    expect(restoredNetworkRoot?.messageIds, [109]);
+    expect(restoredNetworkRoot?.futureCursor.value, '121');
+    expect(futureRequests, 3);
+    expect(futureCursors, ['109', '109', '121']);
+    expect(outboxStates, contains('sending'));
+    expect(visibilityStates, isNotEmpty);
+    expect(visibilityStates, everyElement(isTrue));
   });
 
   test('ambiguous transport waits for explicit confirmation', () async {
@@ -2501,7 +3295,9 @@ Map<String, Object?> _sendReplyResponse({
   final parent = data['parent']! as Map<String, Object?>;
   data['referenceId'] = referenceId;
   data['message'] = message;
+  data['threadId'] = replyTo;
   parent['id'] = replyTo;
+  parent['threadId'] = replyTo;
   return response;
 }
 
@@ -2510,6 +3306,7 @@ Map<String, Object?> _externalMessageResponse({
   required int timestamp,
   required String message,
   int? threadId,
+  String? referenceId,
 }) {
   final response =
       jsonDecode(
@@ -2529,6 +3326,9 @@ Map<String, Object?> _externalMessageResponse({
   external['timestamp'] = timestamp;
   external['message'] = message;
   external['messageParameters'] = <String, Object?>{};
+  if (referenceId != null) {
+    external['referenceId'] = referenceId;
+  }
   if (threadId != null) {
     external['threadId'] = threadId;
   }

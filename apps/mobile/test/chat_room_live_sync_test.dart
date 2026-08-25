@@ -283,7 +283,12 @@ Future<void> _verifyLiveBridge(
   expect(scope?.futureCursor, '120');
   expect(scope?.futureConverged, isTrue);
   expect(scope?.lastSyncError, isNull);
-  expect(isolatedScope, isNull);
+  if (threadId == null) {
+    expect(isolatedScope, isNull);
+  } else {
+    expect(isolatedScope?.scopeKey, 'root');
+    expect(isolatedScope?.futureCursor, '109');
+  }
   expect(tester.takeException(), isNull);
 
   await tester.pumpWidget(const SizedBox.shrink());

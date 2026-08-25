@@ -194,13 +194,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final scope = await database.select(database.chatScopes).getSingle();
-    expect(
-      scope.lastSyncError,
-      isNull,
-      reason: 'the history page must merge cleanly',
-    );
-    expect(scope.blocksJson, '[["100","118"]]');
+    final rootView = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('root'))).getSingle();
+    final networkRoot = await (database.select(
+      database.chatScopes,
+    )..where((scope) => scope.scopeKey.equals('network-root'))).getSingle();
+    for (final scope in [rootView, networkRoot]) {
+      expect(
+        scope.lastSyncError,
+        isNull,
+        reason: 'the history page must merge cleanly',
+      );
+      expect(scope.blocksJson, '[["100","118"]]');
+    }
     expect(historyRequests, hasLength(1));
     expect(historyRequests.single.queryParameters['lastKnownMessageId'], '110');
     expect(historyRequests.single.queryParameters['lookIntoFuture'], '0');

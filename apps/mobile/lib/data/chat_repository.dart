@@ -8,6 +8,7 @@ import '../core/giphy_reference.dart';
 import 'app_database.dart';
 
 const String _rootScopeKey = 'root';
+const String _networkRootScopeKey = 'network-root';
 
 final class ClaimedTextSend {
   const ClaimedTextSend({required this.request, required this.operation});
@@ -261,11 +262,11 @@ final class ChatRepository {
     ChatCursor.parse(commonRead);
 
     return _database.transaction(() async {
-      final existing = await _rootScope(
+      var viewScope = await _rootScope(
         accountId: account.id,
         roomToken: conversation.token,
       );
-      if (existing == null) {
+      if (viewScope == null) {
         await _database
             .into(_database.chatScopes)
             .insert(
@@ -301,11 +302,112 @@ final class ChatRepository {
               ),
             );
       }
-      return (await _rootScope(
+      viewScope = (await _rootScope(
         accountId: account.id,
         roomToken: conversation.token,
       ))!;
+
+      final networkScope = await _networkScope(
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: null,
+      );
+      if (networkScope == null) {
+        await _migrateLegacyThreadNetworkScopesInCurrentTransaction(
+          accountId: account.id,
+          roomToken: conversation.token,
+        );
+        await _database
+            .into(_database.chatScopes)
+            .insert(
+              ChatScopesCompanion.insert(
+                accountId: account.id,
+                roomToken: conversation.token,
+                scopeKey: _networkRootScopeKey,
+                threadId: const Value(null),
+                historyCursor: viewScope.historyCursor,
+                futureCursor: viewScope.futureCursor,
+                lastCommonRead: viewScope.lastCommonRead,
+                lastReadMessage: viewScope.lastReadMessage,
+                unreadMessages: viewScope.unreadMessages,
+                hasHistory: viewScope.hasHistory,
+                futureConverged: viewScope.futureConverged,
+                blocksJson: viewScope.blocksJson,
+                lastSyncedAtMillis: Value(viewScope.lastSyncedAtMillis),
+                lastSyncError: Value(viewScope.lastSyncError),
+              ),
+            );
+      } else {
+        await (_database.update(_database.chatScopes)..where(
+              (scope) =>
+                  scope.accountId.equals(account.id) &
+                  scope.roomToken.equals(conversation.token) &
+                  scope.scopeKey.equals(_networkRootScopeKey),
+            ))
+            .write(
+              ChatScopesCompanion(
+                lastCommonRead: Value(commonRead),
+                lastReadMessage: Value(room.lastReadMessage),
+                unreadMessages: Value(room.unreadMessages),
+              ),
+            );
+      }
+      return viewScope;
     });
+  }
+
+  Future<void> _migrateLegacyThreadNetworkScopesInCurrentTransaction({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final legacyScopes =
+        await (_database.select(_database.chatScopes)..where(
+              (scope) =>
+                  scope.accountId.equals(accountId) &
+                  scope.roomToken.equals(roomToken) &
+                  scope.threadId.isNotNull(),
+            ))
+            .get();
+    for (final legacyScope in legacyScopes) {
+      final threadId = legacyScope.threadId!;
+      if (legacyScope.scopeKey != _scopeKey(threadId) ||
+          await _networkScope(
+                accountId: accountId,
+                roomToken: roomToken,
+                threadId: threadId,
+              ) !=
+              null) {
+        continue;
+      }
+      final isNamedThread = await cachedRootIsNamedThread(
+        accountId: accountId,
+        roomToken: roomToken,
+        threadId: threadId,
+      );
+      if (isNamedThread != true) {
+        continue;
+      }
+      await _database
+          .into(_database.chatScopes)
+          .insert(
+            ChatScopesCompanion.insert(
+              accountId: accountId,
+              roomToken: roomToken,
+              scopeKey: _networkScopeKey(threadId),
+              threadId: Value(threadId),
+              historyCursor: legacyScope.historyCursor,
+              futureCursor: legacyScope.futureCursor,
+              lastCommonRead: legacyScope.lastCommonRead,
+              lastReadMessage: legacyScope.lastReadMessage,
+              unreadMessages: legacyScope.unreadMessages,
+              hasHistory: legacyScope.hasHistory,
+              futureConverged: legacyScope.futureConverged,
+              blocksJson: legacyScope.blocksJson,
+              lastSyncedAtMillis: Value(legacyScope.lastSyncedAtMillis),
+              lastSyncError: Value(legacyScope.lastSyncError),
+            ),
+          );
+    }
   }
 
   Future<StoredChatScope> ensureThreadScope({
@@ -360,6 +462,74 @@ final class ChatRepository {
         threadId: threadId,
       ))!;
     });
+  }
+
+  Future<StoredChatScope> ensureNamedThreadNetworkScope({
+    required StoredAccount account,
+    required CachedConversation conversation,
+    required int threadId,
+  }) async {
+    if (threadId < 1) {
+      throw ArgumentError.value(threadId, 'threadId');
+    }
+    if (account.id != conversation.accountId) {
+      throw StateError('Conversation does not belong to the account');
+    }
+    final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+    if (room.token.value != conversation.token) {
+      throw StateError('Conversation token does not match its payload');
+    }
+    final anchor = threadId.toString();
+    ChatCursor.parse(anchor);
+    final scopeKey = _networkScopeKey(threadId);
+    return _database.transaction(() async {
+      final existing = await _networkScope(
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: threadId,
+      );
+      if (existing == null) {
+        await _database
+            .into(_database.chatScopes)
+            .insert(
+              ChatScopesCompanion.insert(
+                accountId: account.id,
+                roomToken: conversation.token,
+                scopeKey: scopeKey,
+                threadId: Value(threadId),
+                historyCursor: anchor,
+                futureCursor: anchor,
+                lastCommonRead: '0',
+                lastReadMessage: 0,
+                unreadMessages: 0,
+                hasHistory: true,
+                futureConverged: false,
+                blocksJson: jsonEncode([
+                  [anchor, anchor],
+                ]),
+              ),
+            );
+      }
+      return (await _networkScope(
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: threadId,
+      ))!;
+    });
+  }
+
+  Future<void> retireNamedThreadNetworkScope({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+  }) {
+    return (_database.delete(_database.chatScopes)..where(
+          (scope) =>
+              scope.accountId.equals(accountId) &
+              scope.roomToken.equals(roomToken) &
+              scope.scopeKey.equals(_networkScopeKey(threadId)),
+        ))
+        .go();
   }
 
   Future<String?> readDraft({
@@ -422,6 +592,16 @@ final class ChatRepository {
     required int? threadId,
   }) => _scope(accountId: accountId, roomToken: roomToken, threadId: threadId);
 
+  Future<StoredChatScope?> getNetworkScope({
+    required String accountId,
+    required String roomToken,
+    required int? threadId,
+  }) => _networkScope(
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+  );
+
   Future<bool> isCapabilityGenerationCurrent({
     required String accountId,
     required int generation,
@@ -449,22 +629,46 @@ final class ChatRepository {
 
   Future<ChatMergeOutcome> applyChatGetResponse(ChatGetResponse response) {
     return _database.transaction(() async {
+      final rootBackedViewThreadIds =
+          response.request.threadId == null &&
+              response.classification == ChatGetClassification.messages
+          ? await _rootBackedViewThreadIdsInCurrentTransaction(
+              accountId: response.request.accountId.value,
+              roomToken: response.request.roomToken.value,
+            )
+          : const <int>{};
       final snapshot = await _loadRuntime(response.request.accountId.value);
       final result = planChatGetMerge(snapshot, response);
       final plan = result.plan;
-      if (plan == null) {
-        return result.outcome;
+      if (plan != null) {
+        final messages = plan.messageUpserts;
+        final candidate = plan.commit(snapshot);
+        await _persistAccount(
+          candidate.accounts[response.request.accountId]!,
+          messages: messages,
+          syncedScope: ChatScopeKey(
+            roomToken: response.request.roomToken,
+            threadId: response.request.threadId,
+          ),
+        );
       }
-      final messages = plan.messageUpserts;
-      final candidate = plan.commit(snapshot);
-      await _persistAccount(
-        candidate.accounts[response.request.accountId]!,
-        messages: messages,
-        syncedScope: ChatScopeKey(
-          roomToken: response.request.roomToken,
-          threadId: response.request.threadId,
-        ),
-      );
+      if (result.outcome != ChatMergeOutcome.rejected &&
+          result.outcome != ChatMergeOutcome.reauthenticationRequired) {
+        final threadId = response.request.threadId;
+        if (threadId == null) {
+          await _projectRootNetworkStateToViewsInCurrentTransaction(
+            accountId: response.request.accountId.value,
+            roomToken: response.request.roomToken.value,
+            preservedViewThreadIds: rootBackedViewThreadIds,
+          );
+        } else {
+          await _projectNamedNetworkStateToViewInCurrentTransaction(
+            accountId: response.request.accountId.value,
+            roomToken: response.request.roomToken.value,
+            threadId: threadId,
+          );
+        }
+      }
       return result.outcome;
     });
   }
@@ -636,6 +840,8 @@ final class ChatRepository {
       if (plan == null) {
         return result.outcome;
       }
+      final sourceAccount = snapshot.accounts[typedAccountId]!;
+      final sourceOperation = sourceAccount.operations[operationId];
       final candidate = plan.commit(snapshot);
       await _persistAccount(
         candidate.accounts[typedAccountId]!,
@@ -643,6 +849,15 @@ final class ChatRepository {
             ? [response.message!]
             : const [],
       );
+      if (result.outcome == ChatOutboxOutcome.completed &&
+          sourceOperation != null &&
+          response.message != null) {
+        await _appendConfirmedMessageToViewInCurrentTransaction(
+          accountId: accountId,
+          operation: sourceOperation,
+          message: response.message!,
+        );
+      }
       return result.outcome;
     });
   }
@@ -768,44 +983,229 @@ final class ChatRepository {
         .write(const ChatScopesCompanion(lastSyncError: Value(null)));
   }
 
-  Future<void> projectNetworkScopeState({
+  Future<void> _projectRootNetworkStateToViewsInCurrentTransaction({
     required String accountId,
     required String roomToken,
-    required int? networkThreadId,
-    required int viewThreadId,
-  }) {
-    if (networkThreadId == viewThreadId) {
-      return Future<void>.value();
+    required Set<int> preservedViewThreadIds,
+  }) async {
+    final networkScope = await _networkScope(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: null,
+    );
+    if (networkScope == null) {
+      throw StateError('Root chat scope projection is missing');
     }
-    return _database.transaction(() async {
-      final networkScope = await _scope(
-        accountId: accountId,
-        roomToken: roomToken,
-        threadId: networkThreadId,
-      );
-      final viewScope = await _scope(
-        accountId: accountId,
-        roomToken: roomToken,
-        threadId: viewThreadId,
-      );
-      if (networkScope == null || viewScope == null) {
-        throw StateError('Chat scope projection is missing');
+    final rootView = await _rootScope(
+      accountId: accountId,
+      roomToken: roomToken,
+    );
+    await _writeNetworkBackedViewScope(
+      networkScope: networkScope,
+      viewThreadId: null,
+      viewScope: rootView,
+    );
+    final viewScopes =
+        await (_database.select(_database.chatScopes)..where(
+              (scope) =>
+                  scope.accountId.equals(accountId) &
+                  scope.roomToken.equals(roomToken) &
+                  scope.threadId.isNotNull(),
+            ))
+            .get();
+    for (final viewScope in viewScopes) {
+      final viewThreadId = viewScope.threadId!;
+      if (viewScope.scopeKey != _scopeKey(viewThreadId)) {
+        continue;
       }
-      await (_database.update(_database.chatScopes)..where(
-            (scope) =>
-                scope.accountId.equals(accountId) &
-                scope.roomToken.equals(roomToken) &
-                scope.scopeKey.equals(_scopeKey(viewThreadId)),
-          ))
-          .write(
-            ChatScopesCompanion(
-              hasHistory: Value(networkScope.hasHistory),
-              futureConverged: Value(networkScope.futureConverged),
-              lastSyncedAtMillis: Value(networkScope.lastSyncedAtMillis),
-              lastSyncError: Value(networkScope.lastSyncError),
-            ),
-          );
-    });
+      if (!preservedViewThreadIds.contains(viewThreadId) &&
+          !await _cachedRootIsOrdinary(
+            accountId: accountId,
+            roomToken: roomToken,
+            messageId: viewThreadId,
+          )) {
+        continue;
+      }
+      await _writeNetworkBackedViewScope(
+        networkScope: networkScope,
+        viewThreadId: viewThreadId,
+        viewScope: viewScope,
+      );
+    }
+  }
+
+  Future<Set<int>> _rootBackedViewThreadIdsInCurrentTransaction({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final viewScopes =
+        await (_database.select(_database.chatScopes)..where(
+              (scope) =>
+                  scope.accountId.equals(accountId) &
+                  scope.roomToken.equals(roomToken) &
+                  scope.threadId.isNotNull(),
+            ))
+            .get();
+    final result = <int>{};
+    for (final viewScope in viewScopes) {
+      final threadId = viewScope.threadId!;
+      if (viewScope.scopeKey != _scopeKey(threadId)) {
+        continue;
+      }
+      final named = await cachedRootIsNamedThread(
+        accountId: accountId,
+        roomToken: roomToken,
+        threadId: threadId,
+      );
+      if (named != true) {
+        result.add(threadId);
+      }
+    }
+    return result;
+  }
+
+  Future<void> _projectNamedNetworkStateToViewInCurrentTransaction({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+  }) async {
+    final networkScope = await _networkScope(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+    );
+    if (networkScope == null) {
+      throw StateError('Named thread network scope projection is missing');
+    }
+    final viewScope = await _scope(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+    );
+    await _writeNetworkBackedViewScope(
+      networkScope: networkScope,
+      viewThreadId: threadId,
+      viewScope: viewScope,
+    );
+  }
+
+  Future<void> _appendConfirmedMessageToViewInCurrentTransaction({
+    required String accountId,
+    required TextSendOutboxOperation operation,
+    required ChatMessage message,
+  }) async {
+    final replyTo = operation.replyTo;
+    final namedThreadId = operation.threadId;
+    if (replyTo != null && namedThreadId != null) {
+      return;
+    }
+    final viewThreadId = namedThreadId ?? replyTo;
+    if (operation.replyToToken != null ||
+        (operation.parentRoomToken != null &&
+            operation.parentRoomToken != operation.roomToken) ||
+        message.roomToken != operation.roomToken) {
+      return;
+    }
+    if (viewThreadId == null) {
+      if (message.threadId != null && message.threadId != message.messageId) {
+        return;
+      }
+    } else if (message.threadId != viewThreadId) {
+      return;
+    }
+    if (replyTo != null) {
+      final parent = _matchingThreadParent(message);
+      if (parent == null || parent.messageId != replyTo) {
+        return;
+      }
+    }
+    final viewScope = await _scope(
+      accountId: accountId,
+      roomToken: operation.roomToken.value,
+      threadId: viewThreadId,
+    );
+    final networkScope = await _networkScope(
+      accountId: accountId,
+      roomToken: operation.roomToken.value,
+      threadId: namedThreadId,
+    );
+    final projectionSource = networkScope ?? viewScope;
+    if (projectionSource == null) {
+      return;
+    }
+    final messageCursor = ChatCursor.parse(message.messageId.toString());
+    await _writeNetworkBackedViewScope(
+      networkScope: projectionSource,
+      viewThreadId: viewThreadId,
+      viewScope: viewScope,
+      extraBlocks: <ChatBlock>[
+        if (viewThreadId != null)
+          ChatBlock(
+            start: ChatCursor.parse(viewThreadId.toString()),
+            end: ChatCursor.parse(viewThreadId.toString()),
+          ),
+        ChatBlock(start: messageCursor, end: messageCursor),
+      ],
+    );
+  }
+
+  Future<void> _writeNetworkBackedViewScope({
+    required StoredChatScope networkScope,
+    required int? viewThreadId,
+    required StoredChatScope? viewScope,
+    Iterable<ChatBlock> extraBlocks = const <ChatBlock>[],
+  }) async {
+    final blocks = mergeChatBlocks(<ChatBlock>[
+      ..._decodeBlocks(networkScope.blocksJson),
+      if (viewScope != null) ..._decodeBlocks(viewScope.blocksJson),
+      ...extraBlocks,
+    ]);
+    await _database
+        .into(_database.chatScopes)
+        .insertOnConflictUpdate(
+          ChatScopesCompanion.insert(
+            accountId: networkScope.accountId,
+            roomToken: networkScope.roomToken,
+            scopeKey: _scopeKey(viewThreadId),
+            threadId: Value(viewThreadId),
+            historyCursor: blocks.first.start.value,
+            futureCursor: blocks.last.end.value,
+            lastCommonRead: networkScope.lastCommonRead,
+            lastReadMessage: networkScope.lastReadMessage,
+            unreadMessages: networkScope.unreadMessages,
+            hasHistory: networkScope.hasHistory,
+            futureConverged: networkScope.futureConverged,
+            blocksJson: _encodeBlocks(blocks),
+            lastSyncedAtMillis: Value(networkScope.lastSyncedAtMillis),
+            lastSyncError: Value(networkScope.lastSyncError),
+          ),
+        );
+  }
+
+  Future<bool> _cachedRootIsOrdinary({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    final row =
+        await (_database.select(_database.cachedChatMessages)..where(
+              (message) =>
+                  message.accountId.equals(accountId) &
+                  message.roomToken.equals(roomToken) &
+                  message.messageId.equals(messageId),
+            ))
+            .getSingleOrNull();
+    if (row == null) {
+      return false;
+    }
+    try {
+      final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
+      return message.messageId == messageId &&
+          message.roomToken.value == roomToken &&
+          message.isThread != true;
+    } on Object {
+      return false;
+    }
   }
 
   @visibleForTesting
@@ -834,26 +1234,44 @@ final class ChatRepository {
     )..where((row) => row.accountId.equals(accountId))).get();
 
     final scopes = <ChatScopeKey, ChatScopeState>{};
+    final roomsWithNetworkRoot = scopeRows
+        .where((row) => row.scopeKey == _networkRootScopeKey)
+        .map((row) => row.roomToken)
+        .toSet();
     for (final row in scopeRows) {
+      final int? networkThreadId;
+      if (row.scopeKey == _networkRootScopeKey && row.threadId == null) {
+        networkThreadId = null;
+      } else if (row.scopeKey == _rootScopeKey &&
+          row.threadId == null &&
+          !roomsWithNetworkRoot.contains(row.roomToken)) {
+        // Upgrade compatibility: before network/view separation the root row
+        // carried both roles. The first persist writes a network-root copy.
+        networkThreadId = null;
+      } else if (row.threadId != null &&
+          row.scopeKey == _networkScopeKey(row.threadId)) {
+        networkThreadId = row.threadId;
+      } else if (row.scopeKey == _scopeKey(row.threadId)) {
+        continue;
+      } else {
+        throw StateError('Stored chat scope key is invalid');
+      }
       final key = ChatScopeKey(
         roomToken: ConversationToken.parse(
           row.roomToken,
           path: r'$.chatScopes.roomToken',
         ),
-        threadId: row.threadId,
+        threadId: networkThreadId,
       );
-      if (row.scopeKey != _scopeKey(row.threadId)) {
-        throw StateError('Stored chat scope key is invalid');
-      }
       final blocks = _decodeBlocks(row.blocksJson);
       final messageIds =
           messageRows
               .where((message) => message.roomToken == row.roomToken)
               .where(
-                (message) => row.threadId == null
+                (message) => networkThreadId == null
                     ? message.threadId == null ||
                           message.threadId == message.messageId
-                    : message.threadId == row.threadId,
+                    : message.threadId == networkThreadId,
               )
               .where((message) {
                 final cursor = ChatCursor.parse(message.messageId.toString());
@@ -954,7 +1372,7 @@ final class ChatRepository {
             ChatScopesCompanion.insert(
               accountId: account.accountId.value,
               roomToken: key.roomToken.value,
-              scopeKey: _scopeKey(key.threadId),
+              scopeKey: _networkScopeKey(key.threadId),
               threadId: Value(key.threadId),
               historyCursor: scope.historyCursor.value,
               futureCursor: scope.futureCursor.value,
@@ -963,11 +1381,7 @@ final class ChatRepository {
               unreadMessages: scope.unreadMessages,
               hasHistory: scope.hasHistory,
               futureConverged: scope.futureConverged,
-              blocksJson: jsonEncode(
-                scope.blocks
-                    .map((block) => [block.start.value, block.end.value])
-                    .toList(growable: false),
-              ),
+              blocksJson: _encodeBlocks(scope.blocks),
               lastSyncedAtMillis: wasSynced
                   ? Value(syncedAt)
                   : const Value.absent(),
@@ -1187,8 +1601,7 @@ final class ChatRepository {
           (row) =>
               row.accountId.equals(accountId) &
               row.roomToken.equals(message.roomToken.value) &
-              row.messageId.equals(threadId) &
-              row.threadId.equals(threadId),
+              row.messageId.equals(threadId),
         ))
         .write(
           CachedChatMessagesCompanion(
@@ -1354,6 +1767,20 @@ final class ChatRepository {
         ))
         .getSingleOrNull();
   }
+
+  Future<StoredChatScope?> _networkScope({
+    required String accountId,
+    required String roomToken,
+    required int? threadId,
+  }) {
+    return (_database.select(_database.chatScopes)..where(
+          (row) =>
+              row.accountId.equals(accountId) &
+              row.roomToken.equals(roomToken) &
+              row.scopeKey.equals(_networkScopeKey(threadId)),
+        ))
+        .getSingleOrNull();
+  }
 }
 
 typedef _ThreadReplyScope = ({
@@ -1444,6 +1871,12 @@ ChatSendRequest _restoreSendRequest({
 /// use this to tell honest contiguous history apart from two cached islands
 /// with a hole in between, instead of gluing them together.
 List<ChatBlock> decodeChatScopeBlocks(String source) => _decodeBlocks(source);
+
+String _encodeBlocks(Iterable<ChatBlock> blocks) => jsonEncode(
+  blocks
+      .map((block) => [block.start.value, block.end.value])
+      .toList(growable: false),
+);
 
 List<ChatBlock> _decodeBlocks(String source) {
   final decoded = jsonDecode(source);
@@ -1536,3 +1969,6 @@ ChatAccountLane _accountLane(String value) {
 
 String _scopeKey(int? threadId) =>
     threadId == null ? _rootScopeKey : 'thread:$threadId';
+
+String _networkScopeKey(int? threadId) =>
+    threadId == null ? _networkRootScopeKey : 'network-thread:$threadId';

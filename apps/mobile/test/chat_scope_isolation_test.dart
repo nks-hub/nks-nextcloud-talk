@@ -89,7 +89,7 @@ void main() {
       );
       await _insertScope(
         database,
-        scopeKey: 'thread:20',
+        scopeKey: 'network-thread:20',
         threadId: 20,
         historyCursor: 20,
         futureCursor: 21,
@@ -144,7 +144,7 @@ void main() {
       );
       await _insertScope(
         database,
-        scopeKey: 'thread:20',
+        scopeKey: 'network-thread:20',
         threadId: 20,
         historyCursor: 20,
         futureCursor: 21,
@@ -316,7 +316,7 @@ void main() {
       );
       await _insertScope(
         database,
-        scopeKey: 'thread:20',
+        scopeKey: 'network-thread:20',
         threadId: 20,
         historyCursor: 20,
         futureCursor: 21,
@@ -491,7 +491,7 @@ void main() {
       );
       await _insertScope(
         database,
-        scopeKey: 'thread:20',
+        scopeKey: 'network-thread:20',
         threadId: 20,
         historyCursor: 20,
         futureCursor: 21,

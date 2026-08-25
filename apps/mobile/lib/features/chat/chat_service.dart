@@ -176,20 +176,39 @@ final class ChatService {
     String roomToken,
     int? threadId,
   ) async {
-    final poll =
-        _liveNetworkPolls[_networkScopeKey(accountId, roomToken, threadId)];
-    if (poll == null ||
-        poll.cancelled ||
-        poll.completed ||
-        poll.abort.isCompleted) {
-      return false;
+    final classification = threadId == null
+        ? null
+        : await _chat.cachedRootIsNamedThread(
+            accountId: accountId,
+            roomToken: roomToken,
+            threadId: threadId,
+          );
+    final candidates = threadId == null || classification == false
+        ? <int?>[null]
+        : classification == true
+        ? <int?>[threadId]
+        : <int?>[threadId, null];
+    for (final networkThreadId in candidates) {
+      final poll =
+          _liveNetworkPolls[_networkScopeKey(
+            accountId,
+            roomToken,
+            networkThreadId,
+          )];
+      if (poll == null ||
+          poll.cancelled ||
+          poll.completed ||
+          poll.abort.isCompleted) {
+        continue;
+      }
+      try {
+        await poll.operation.timeout(_livePollJoinTimeout);
+      } on Object {
+        return false;
+      }
+      return !poll.cancelled;
     }
-    try {
-      await poll.operation.timeout(_livePollJoinTimeout);
-    } on Object {
-      return false;
-    }
-    return !poll.cancelled;
+    return false;
   }
 
   Future<void> loadOlder({
@@ -212,7 +231,7 @@ final class ChatService {
             prepared = await _hydrateUnknownThreadFromRoot(prepared);
           }
           try {
-            final scope = await _chat.getScope(
+            final scope = await _chat.getNetworkScope(
               accountId: accountId,
               roomToken: roomToken,
               threadId: prepared.networkThreadId,
@@ -274,7 +293,9 @@ final class ChatService {
           message: normalized,
           replyTo: effectiveReplyTo,
           threadId: prepared.namedThread == true ? prepared.threadId : null,
-          parentRoomToken: effectiveReplyTo == null ? null : prepared.room.token,
+          parentRoomToken: effectiveReplyTo == null
+              ? null
+              : prepared.room.token,
         );
         await _processPending(prepared);
       }, threadId: threadId);
@@ -396,13 +417,24 @@ final class ChatService {
       talkFeatures: capabilities.talkFeatures,
       observedAt: DateTime.now().toUtc(),
     );
-    if (threadId == null || networkThreadId == null) {
-      await _chat.ensureRootScope(account: account, conversation: conversation);
-    }
+    await _chat.ensureRootScope(account: account, conversation: conversation);
     if (threadId != null) {
       await _chat.ensureThreadScope(
         account: account,
         conversation: conversation,
+        threadId: threadId,
+      );
+    }
+    if (networkThreadId != null) {
+      await _chat.ensureNamedThreadNetworkScope(
+        account: account,
+        conversation: conversation,
+        threadId: networkThreadId,
+      );
+    } else if (threadId != null && namedThread == false) {
+      await _chat.retireNamedThreadNetworkScope(
+        accountId: account.id,
+        roomToken: conversation.token,
         threadId: threadId,
       );
     }
@@ -508,7 +540,7 @@ final class ChatService {
     Future<void>? abortTrigger,
   }) async {
     await _chat.recoverInterruptedTextSends(prepared.account.id);
-    var scope = (await _chat.getScope(
+    var scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,
       threadId: prepared.networkThreadId,
@@ -522,7 +554,7 @@ final class ChatService {
     }
     await _catchUpFuture(prepared, abortTrigger: abortTrigger);
     await _processPending(prepared);
-    scope = (await _chat.getScope(
+    scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,
       threadId: prepared.networkThreadId,
@@ -538,7 +570,7 @@ final class ChatService {
     Future<void>? abortTrigger,
   }) async {
     await _ensurePreparedContextCurrent(prepared);
-    final scope = (await _chat.getScope(
+    final scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,
       threadId: prepared.networkThreadId,
@@ -578,7 +610,7 @@ final class ChatService {
   }) async {
     for (var page = 0; page < _maximumCatchUpPages; page++) {
       await _ensurePreparedContextCurrent(prepared);
-      final scope = (await _chat.getScope(
+      final scope = (await _chat.getNetworkScope(
         accountId: prepared.account.id,
         roomToken: prepared.conversation.token,
         threadId: prepared.networkThreadId,
@@ -706,7 +738,6 @@ final class ChatService {
           }
           probe.ensureActive();
           await _ensureLiveContextCurrent(binding, prepared, probe);
-          await _projectPreparedViewState(prepared);
         },
         threadId: binding.threadId,
       );
@@ -771,7 +802,7 @@ final class ChatService {
     _PreparedChat prepared,
     _SharedLivePoll poll,
   ) async {
-    final scope = (await _chat.getScope(
+    final scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,
       threadId: prepared.networkThreadId,
@@ -905,19 +936,6 @@ final class ChatService {
         if (outcome == ChatMergeOutcome.rejected) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
-    }
-    await _projectPreparedViewState(prepared);
-  }
-
-  Future<void> _projectPreparedViewState(_PreparedChat prepared) async {
-    final viewThreadId = prepared.threadId;
-    if (viewThreadId != null && viewThreadId != prepared.networkThreadId) {
-      await _chat.projectNetworkScopeState(
-        accountId: prepared.account.id,
-        roomToken: prepared.conversation.token,
-        networkThreadId: prepared.networkThreadId,
-        viewThreadId: viewThreadId,
-      );
     }
   }
 
