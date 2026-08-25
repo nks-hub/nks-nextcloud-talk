@@ -51,6 +51,7 @@ final class _AuthenticatedImageViewerState
   final TransformationController _transformation = TransformationController();
   late Future<ChatMediaImage?> _image;
   double _scale = _minimumScale;
+  Size? _viewport;
 
   @override
   void initState() {
@@ -92,10 +93,18 @@ final class _AuthenticatedImageViewerState
     if ((target - current).abs() < 0.001) {
       return;
     }
-    final matrix = _transformation.value.clone();
     final ratio = target / current;
-    matrix.scaleByDouble(ratio, ratio, 1, 1);
-    _transformation.value = matrix;
+    // Scaling the matrix on its own zooms around the child origin, which walks
+    // the picture out of the viewport. The button zoom has no pointer, so the
+    // viewport centre is the anchor.
+    final viewport = _viewport;
+    final anchorX = (viewport?.width ?? 0) / 2;
+    final anchorY = (viewport?.height ?? 0) / 2;
+    final zoom = Matrix4.identity()
+      ..translateByDouble(anchorX, anchorY, 0, 1)
+      ..scaleByDouble(ratio, ratio, 1, 1)
+      ..translateByDouble(-anchorX, -anchorY, 0, 1);
+    _transformation.value = zoom * _transformation.value;
     setState(() {
       _scale = target;
     });
@@ -135,7 +144,10 @@ final class _AuthenticatedImageViewerState
               return Semantics(
                 image: true,
                 label: widget.imageName,
-                child: InteractiveViewer(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    _viewport = constraints.biggest;
+                    return InteractiveViewer(
                   key: const Key('authenticated-image-interactive-viewer'),
                   transformationController: _transformation,
                   minScale: _minimumScale,
@@ -163,6 +175,8 @@ final class _AuthenticatedImageViewerState
                       ),
                     ),
                   ),
+                    );
+                  },
                 ),
               );
             },

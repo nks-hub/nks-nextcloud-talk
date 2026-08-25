@@ -65,6 +65,42 @@ void main() {
     expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
   });
 
+  testWidgets('button zoom keeps the picture centred in the viewport', (
+    tester,
+  ) async {
+    final repository = _repository((request) async => _imageResponse());
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    final viewer = find.byKey(
+      const Key('authenticated-image-interactive-viewer'),
+    );
+    final centreBefore = tester.getCenter(
+      find.byKey(const Key('authenticated-image-fullscreen')),
+    );
+    final viewportCentre = tester.getCenter(viewer);
+    expect(
+      (centreBefore - viewportCentre).distance,
+      lessThan(1),
+      reason: 'the unzoomed picture starts centred',
+    );
+
+    await tester.tap(find.byKey(const Key('authenticated-image-zoom-in')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('authenticated-image-zoom-in')));
+    await tester.pump();
+
+    final centreAfter = tester.getCenter(
+      find.byKey(const Key('authenticated-image-fullscreen')),
+    );
+    expect(
+      (centreAfter - viewportCentre).distance,
+      lessThan(1),
+      reason: 'zooming around the child origin walks the picture off screen',
+    );
+  });
+
   testWidgets('replaces a failed load with the image after retry', (
     tester,
   ) async {
