@@ -66,6 +66,11 @@ final class ChatService {
   static const int _pageSize = 100;
   static const int _maximumCatchUpPages = 12;
 
+  /// Upper bound for [catchUpRoom] joining a live poll. A long poll normally
+  /// answers the moment the room changes, so this only stops a background
+  /// reconciler from waiting out an idle 30 s poll.
+  static const Duration _livePollJoinTimeout = Duration(seconds: 3);
+
   final AccountRepository _accounts;
   final ChatRepository _chat;
   final CredentialVault _credentials;
@@ -138,6 +143,53 @@ final class ChatService {
       }
     }).ignore();
     return operation;
+  }
+
+  /// Brings a room up to date for a background reconciler, such as the
+  /// attachment confirmation loop waiting for its own `file_shared` message.
+  ///
+  /// An open room already polls the same scope, and that poll reads the same
+  /// server state a fresh request would. Racing it costs a second request and
+  /// makes the poll's own answer arrive against a moved cursor, where it is
+  /// discarded as stale and repeated. Joining it costs nothing and observes
+  /// exactly the same messages. Interactive callers keep using [syncRoom],
+  /// which never waits on somebody else's poll.
+  Future<void> catchUpRoom({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+  }) async {
+    if (await _awaitLiveNetworkPoll(accountId, roomToken, threadId)) {
+      return;
+    }
+    return syncRoom(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+    );
+  }
+
+  /// Returns `true` when an in-flight live poll for the scope completed in
+  /// time, so its merge already applied whatever the server had.
+  Future<bool> _awaitLiveNetworkPoll(
+    String accountId,
+    String roomToken,
+    int? threadId,
+  ) async {
+    final poll =
+        _liveNetworkPolls[_networkScopeKey(accountId, roomToken, threadId)];
+    if (poll == null ||
+        poll.cancelled ||
+        poll.completed ||
+        poll.abort.isCompleted) {
+      return false;
+    }
+    try {
+      await poll.operation.timeout(_livePollJoinTimeout);
+    } on Object {
+      return false;
+    }
+    return !poll.cancelled;
   }
 
   Future<void> loadOlder({
