@@ -11,6 +11,7 @@ import 'core/giphy_reference_load_coordinator.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
 import 'data/attachment_repository.dart';
+import 'data/chat_media_cache.dart';
 import 'data/chat_media_repository.dart';
 import 'data/chat_repository.dart';
 import 'data/credential_vault.dart';
@@ -390,11 +391,28 @@ final conversationAvatarProvider = FutureProvider.autoDispose
           .load(account: key.account, uri: key.uri, versioned: key.versioned);
     });
 
+final chatMediaCacheProvider = Provider<ChatMediaCache>((ref) {
+  return ChatMediaCache();
+});
+
 final chatMediaProvider = FutureProvider.autoDispose
-    .family<ChatMediaImage?, ChatMediaProviderKey>((ref, key) {
-      return ref
+    .family<ChatMediaImage?, ChatMediaProviderKey>((ref, key) async {
+      final cache = ref.watch(chatMediaCacheProvider);
+      final cacheKey = ChatMediaCache.keyOf(
+        accountId: key.account.id,
+        uri: key.uri,
+      );
+      final cached = cache.read(cacheKey);
+      if (cached != null) {
+        return cached;
+      }
+      final loaded = await ref
           .watch(chatMediaRepositoryProvider)
           .loadPreview(account: key.account, uri: key.uri);
+      if (loaded != null) {
+        cache.write(cacheKey, loaded);
+      }
+      return loaded;
     });
 
 typedef ChatVoiceProviderKey = ({StoredAccount account, Uri uri, int messageId});
