@@ -32,6 +32,7 @@ import 'features/search/message_search_service.dart';
 import 'features/conversations/deep_link_bridge.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
+import 'features/settings/account_removal_service.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
@@ -562,6 +563,18 @@ final conversationAvatarProvider = FutureProvider.autoDispose
           .load(account: key.account, uri: key.uri, versioned: key.versioned);
     });
 
+final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
+  return AccountRemovalService(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+    mediaCache: ref.watch(chatMediaCacheProvider),
+    mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
+    voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
+    attachmentSources: () => ref.read(attachmentSourceProvider.future),
+  );
+});
+
 final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
   return FileThemePreferenceStore();
 });
@@ -638,25 +651,32 @@ final chatMediaProvider = FutureProvider.autoDispose
 
 typedef ChatVoiceProviderKey = ({StoredAccount account, Uri uri, int messageId});
 
+/// Where downloaded voice messages are materialised. Shared with account
+/// removal so both sides agree on the directory that has to be cleaned.
+final chatVoiceCacheDirectoryProvider = Provider<Future<Directory> Function()>((
+  ref,
+) {
+  return () async => Directory(
+    '${(await getApplicationCacheDirectory()).path}'
+    '${Platform.pathSeparator}voice',
+  );
+});
+
 /// A voice message is fetched once per room visit and materialised in the
 /// app cache directory so a platform player can open it.
 final chatVoiceFileProvider = FutureProvider.autoDispose
     .family<ChatVoiceFile, ChatVoiceProviderKey>((ref, key) async {
-      final directory = Directory(
-        '${(await getApplicationCacheDirectory()).path}'
-        '${Platform.pathSeparator}voice',
-      );
+      final directory = await ref.watch(chatVoiceCacheDirectoryProvider)();
       return ref
           .watch(chatMediaRepositoryProvider)
           .loadVoiceFile(
             account: key.account,
             uri: key.uri,
             directory: directory,
-            cacheKey:
-                '${key.account.id}-${key.messageId}'.replaceAll(
-                  RegExp(r'[^A-Za-z0-9._-]'),
-                  '_',
-                ),
+            cacheKey: chatVoiceCacheKey(
+              accountId: key.account.id,
+              messageId: key.messageId,
+            ),
           );
     });
 

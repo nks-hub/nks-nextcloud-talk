@@ -1364,12 +1364,6 @@ abstract class AppLocalizations {
   /// **'Add account'**
   String get settingsAddAccount;
 
-  /// No description provided for @settingsRemoveAccountUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.'**
-  String get settingsRemoveAccountUnavailable;
-
   /// No description provided for @settingsThemeSection.
   ///
   /// In en, this message translates to:
@@ -1897,6 +1891,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That conversation is not available on this device.'**
   String get jumpToMessageConversationMissing;
+
+  /// No description provided for @settingsRemoveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove account'**
+  String get settingsRemoveAccount;
+
+  /// No description provided for @settingsRemoveAccountDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this account?'**
+  String get settingsRemoveAccountDialogTitle;
+
+  /// No description provided for @settingsRemoveAccountDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{loginName} on {serverUrl} will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.'**
+  String settingsRemoveAccountDialogMessage(Object loginName, Object serverUrl);
+
+  /// No description provided for @settingsRemoveAccountDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get settingsRemoveAccountDialogConfirm;
+
+  /// No description provided for @settingsRemoveAccountDone.
+  ///
+  /// In en, this message translates to:
+  /// **'The account was removed.'**
+  String get settingsRemoveAccountDone;
+
+  /// No description provided for @settingsRemoveAccountDoneNotRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.'**
+  String get settingsRemoveAccountDoneNotRevoked;
 }
 
 class _AppLocalizationsDelegate

@@ -225,7 +225,6 @@
   "settingsAccountSelected": "Active",
   "settingsAccountsLoadFailed": "Accounts could not be loaded.",
   "settingsAddAccount": "Add account",
-  "settingsRemoveAccountUnavailable": "Removing an account isn't supported yet. Sign out of it on the server if you need to revoke access.",
   "settingsThemeSection": "Appearance",
   "settingsThemeSystem": "Match system",
   "settingsThemeLight": "Light",
@@ -348,5 +347,11 @@
   "imageShareFailed": "The image could not be shared.",
   "jumpToOriginalMessage": "Show the original message",
   "jumpToMessageNotFound": "That message is no longer available in this conversation.",
-  "jumpToMessageConversationMissing": "That conversation is not available on this device."
+  "jumpToMessageConversationMissing": "That conversation is not available on this device.",
+  "settingsRemoveAccount": "Remove account",
+  "settingsRemoveAccountDialogTitle": "Remove this account?",
+  "settingsRemoveAccountDialogMessage": "{loginName} on {serverUrl} will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.",
+  "settingsRemoveAccountDialogConfirm": "Remove",
+  "settingsRemoveAccountDone": "The account was removed.",
+  "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server."
 }

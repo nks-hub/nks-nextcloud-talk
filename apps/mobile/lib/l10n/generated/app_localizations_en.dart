@@ -704,10 +704,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAddAccount => 'Add account';
 
   @override
-  String get settingsRemoveAccountUnavailable =>
-      'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.';
-
-  @override
   String get settingsThemeSection => 'Appearance';
 
   @override
@@ -1009,4 +1005,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jumpToMessageConversationMissing =>
       'That conversation is not available on this device.';
+
+  @override
+  String get settingsRemoveAccount => 'Remove account';
+
+  @override
+  String get settingsRemoveAccountDialogTitle => 'Remove this account?';
+
+  @override
+  String settingsRemoveAccountDialogMessage(
+    Object loginName,
+    Object serverUrl,
+  ) {
+    return '$loginName on $serverUrl will be removed from this device. Its conversations, messages, drafts, queued uploads, cached pictures and voice messages, and its stored password are deleted, and the app password is revoked on the server.';
+  }
+
+  @override
+  String get settingsRemoveAccountDialogConfirm => 'Remove';
+
+  @override
+  String get settingsRemoveAccountDone => 'The account was removed.';
+
+  @override
+  String get settingsRemoveAccountDoneNotRevoked =>
+      'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.';
 }

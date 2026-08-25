@@ -1,13 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_media_cache.dart';
+import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 
 import 'test_support.dart';
 
@@ -35,6 +43,25 @@ Future<void> _flushRealAsync(WidgetTester tester) {
   );
 }
 
+/// Lets a multi-step real async chain (Drift plus file I/O plus a mocked HTTP
+/// round trip) finish while the tree keeps rebuilding between steps.
+///
+/// One [_flushRealAsync] only covers a single hop. `pumpAndSettle` is
+/// deliberately not used anywhere here: it budgets in fake time, so against
+/// this tree it spins for ten minutes before giving up.
+Future<void> _settleRealAsync(WidgetTester tester, {int rounds = 24}) async {
+  for (var round = 0; round < rounds; round++) {
+    await _flushRealAsync(tester);
+    await tester.pump();
+  }
+}
+
+/// Opens a route whose transition is bounded, without `pumpAndSettle`.
+Future<void> _pumpRouteTransition(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 Future<List<StoredAccount>> _allAccounts(AppDatabase database) {
   return database.select(database.accounts).get();
 }
@@ -59,7 +86,257 @@ Widget _wrap({
   );
 }
 
+/// A real [AccountRemovalService] wired to test doubles: an in-memory vault,
+/// a mocked server, and temporary directories. Nothing here may touch the
+/// real home directory, so every path lives under one temp root that the
+/// caller's tearDown removes again.
+({AccountRemovalService service, MemoryCredentialVault vault, List<String> calls})
+_removalService(
+  WidgetTester tester,
+  AccountRepository accounts, {
+  bool serverReachable = true,
+}) {
+  final vault = MemoryCredentialVault();
+  final calls = <String>[];
+  final root = Directory.systemTemp.createTempSync('nctalk-settings-removal-');
+  addTearDown(() {
+    if (root.existsSync()) {
+      root.deleteSync(recursive: true);
+    }
+  });
+  final api = HttpNextcloudApi(
+    client: MockClient((request) async {
+      calls.add(request.url.path);
+      if (!serverReachable) {
+        throw const SocketException('offline');
+      }
+      return http.Response(
+        jsonEncode(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <String, Object?>{},
+          },
+        }),
+        200,
+      );
+    }),
+  );
+  return (
+    service: AccountRemovalService(
+      accounts: accounts,
+      credentials: vault,
+      api: api,
+      mediaCache: ChatMediaCache(),
+      mediaDiskCache: ChatMediaDiskCache(
+        rootDirectory: () async =>
+            Directory('${root.path}${Platform.pathSeparator}previews'),
+      ),
+      voiceDirectory: () async =>
+          Directory('${root.path}${Platform.pathSeparator}voice'),
+      attachmentSources: () async => DurableAttachmentSourceStore(
+        root: Directory('${root.path}${Platform.pathSeparator}sources'),
+      ),
+    ),
+    vault: vault,
+    calls: calls,
+  );
+}
+
 void main() {
+  testWidgets('removing an account asks first, and cancelling keeps it', (
+    tester,
+  ) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud-a.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+    final removal = _removalService(tester, accounts);
+    removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+
+    await tester.pumpWidget(
+      _wrap(
+        accountRepository: accounts,
+        accountsStream: Stream.value(initial),
+        overrides: [
+          accountRemovalServiceProvider.overrideWithValue(removal.service),
+        ],
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('account-remove-account-a')));
+    await _pumpRouteTransition(tester);
+
+    expect(find.byKey(const Key('account-remove-dialog')), findsOneWidget);
+    expect(find.text('Remove this account?'), findsOneWidget);
+    // The dialog has to name what is about to be destroyed.
+    expect(find.textContaining('alice'), findsWidgets);
+    expect(
+      find.textContaining('https://cloud-a.example.invalid'),
+      findsWidgets,
+    );
+
+    await tester.tap(find.byKey(const Key('account-remove-cancel')));
+    await _pumpRouteTransition(tester);
+    await _settleRealAsync(tester);
+
+    expect(find.byKey(const Key('account-remove-dialog')), findsNothing);
+    late StoredAccount? survivor;
+    await tester.runAsync(() async {
+      survivor = await accounts.getAccount('account-a');
+    });
+    expect(survivor, isNotNull);
+    expect(removal.vault.values['account-a'], isNotNull);
+    expect(removal.calls, isEmpty);
+  });
+
+  testWidgets('confirming the dialog removes the account and its credential', (
+    tester,
+  ) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud-a.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await accounts.upsertAccount(
+        accountId: 'account-b',
+        serverUrl: 'https://cloud-b.example.invalid',
+        loginName: 'bob',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 2),
+      );
+      initial = await _allAccounts(database);
+    });
+    final removal = _removalService(tester, accounts);
+    removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+    removal.vault.values['account-b'] = 'fixture-app-password-never-use';
+
+    await tester.pumpWidget(
+      _wrap(
+        accountRepository: accounts,
+        accountsStream: Stream.value(initial),
+        overrides: [
+          accountRemovalServiceProvider.overrideWithValue(removal.service),
+        ],
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('account-remove-account-a')));
+    await _pumpRouteTransition(tester);
+    await tester.tap(find.byKey(const Key('account-remove-confirm')));
+    await _pumpRouteTransition(tester);
+    await _settleRealAsync(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    late StoredAccount? removed;
+    late StoredAccount? kept;
+    await tester.runAsync(() async {
+      removed = await accounts.getAccount('account-a');
+      kept = await accounts.getAccount('account-b');
+    });
+    expect(removed, isNull);
+    expect(removal.vault.values.containsKey('account-a'), isFalse);
+    // Removing an account that was not the active one leaves the active one
+    // alone.
+    expect(kept, isNotNull);
+    expect(kept!.selected, isTrue);
+    expect(removal.vault.values['account-b'], isNotNull);
+    expect(find.text('The account was removed.'), findsOneWidget);
+  });
+
+  testWidgets('an unreachable server still removes the account locally and '
+      'says the app password was not revoked', (tester) async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud-a.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await accounts.upsertAccount(
+        accountId: 'account-b',
+        serverUrl: 'https://cloud-b.example.invalid',
+        loginName: 'bob',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 2),
+      );
+      initial = await _allAccounts(database);
+    });
+    final removal = _removalService(tester, accounts, serverReachable: false);
+    removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+
+    await tester.pumpWidget(
+      _wrap(
+        accountRepository: accounts,
+        accountsStream: Stream.value(initial),
+        overrides: [
+          accountRemovalServiceProvider.overrideWithValue(removal.service),
+        ],
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('account-remove-account-a')));
+    await _pumpRouteTransition(tester);
+    await tester.tap(find.byKey(const Key('account-remove-confirm')));
+    await _pumpRouteTransition(tester);
+    await _settleRealAsync(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    late StoredAccount? removed;
+    await tester.runAsync(() async {
+      removed = await accounts.getAccount('account-a');
+    });
+    expect(removed, isNull);
+    expect(removal.vault.values.containsKey('account-a'), isFalse);
+    expect(
+      find.textContaining('did not confirm the app password was revoked'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('lists every stored account with the active one marked', (
     tester,
   ) async {

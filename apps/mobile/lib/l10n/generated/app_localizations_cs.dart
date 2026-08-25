@@ -703,10 +703,6 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsAddAccount => 'Přidat účet';
 
   @override
-  String get settingsRemoveAccountUnavailable =>
-      'Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.';
-
-  @override
   String get settingsThemeSection => 'Vzhled';
 
   @override
@@ -1010,4 +1006,28 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get jumpToMessageConversationMissing =>
       'Tato konverzace není v zařízení dostupná.';
+
+  @override
+  String get settingsRemoveAccount => 'Odebrat účet';
+
+  @override
+  String get settingsRemoveAccountDialogTitle => 'Odebrat tento účet?';
+
+  @override
+  String settingsRemoveAccountDialogMessage(
+    Object loginName,
+    Object serverUrl,
+  ) {
+    return 'Účet $loginName na $serverUrl bude z tohoto zařízení odebrán. Smažou se jeho konverzace, zprávy, rozepsané texty, čekající nahrávání, uložené náhledy i hlasové zprávy a uložené heslo. Aplikační heslo se odvolá na serveru.';
+  }
+
+  @override
+  String get settingsRemoveAccountDialogConfirm => 'Odebrat';
+
+  @override
+  String get settingsRemoveAccountDone => 'Účet byl odebrán.';
+
+  @override
+  String get settingsRemoveAccountDoneNotRevoked =>
+      'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.';
 }
