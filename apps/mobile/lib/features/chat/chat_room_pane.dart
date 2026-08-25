@@ -10,6 +10,7 @@ import '../../app_providers.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
+import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import 'chat_message_content.dart';
@@ -130,6 +131,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _initialAttemptFinished = false;
   bool _giphyRequested = false;
   ChatServiceError? _localError;
+  Timer? _draftTimer;
+  ChatRepository? _draftStore;
 
   ChatRoomProviderKey get _key => (
     accountId: widget.account.id,
@@ -142,9 +145,56 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
+    _composer.addListener(_scheduleDraftSave);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _draftStore = ref.read(chatRepositoryProvider);
+      unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
     });
+  }
+
+  /// Composer text is only durable once the outbox admits it, and admission
+  /// can be refused, so the draft is persisted on its own.
+  void _scheduleDraftSave() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(_flushDraft(_key, _composer.text)),
+    );
+  }
+
+  Future<void> _flushDraft(ChatRoomProviderKey key, String text) async {
+    _draftTimer?.cancel();
+    _draftTimer = null;
+    final store = _draftStore;
+    if (store == null) {
+      return;
+    }
+    await store.saveDraft(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: key.threadId,
+      text: text.trim(),
+    );
+  }
+
+  Future<void> _restoreDraft(ChatRoomProviderKey key) async {
+    final store = _draftStore;
+    if (store == null) {
+      return;
+    }
+    final draft = await store.readDraft(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: key.threadId,
+    );
+    if (draft == null || !mounted || key != _key || _composer.text.isNotEmpty) {
+      return;
+    }
+    _composer.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
   }
 
   @override
@@ -155,6 +205,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         oldWidget.threadId == widget.threadId) {
       return;
     }
+    unawaited(
+      _flushDraft((
+        accountId: oldWidget.account.id,
+        roomToken: oldWidget.conversation.token,
+        threadId: oldWidget.threadId,
+      ), _composer.text),
+    );
     _composer.clear();
     _sendGeneration++;
     _giphyGeneration++;
@@ -163,6 +220,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _initialAttemptFinished = false;
     _giphyRequested = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
     });
   }
@@ -177,10 +235,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     unawaited(_syncLoop?.stop());
     _liveBinding = null;
     _syncLoop = null;
+    _draftTimer?.cancel();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
-    _composer.dispose();
+    _composer
+      ..removeListener(_scheduleDraftSave)
+      ..dispose();
     super.dispose();
   }
 
@@ -190,6 +251,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       unawaited(_restartLiveSync());
       return;
     }
+    // The process can be killed from here on, so the draft cannot wait for
+    // its debounce.
+    unawaited(_flushDraft(_key, _composer.text));
     unawaited(_stopLiveSync());
   }
 

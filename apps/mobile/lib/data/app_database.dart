@@ -258,6 +258,26 @@ class TextSendOperations extends Table {
   ];
 }
 
+/// Composer text that has not been admitted to the outbox yet. A send can be
+/// refused before admission, for example while the device is offline, so the
+/// text has to survive process death on its own.
+@DataClassName('StoredChatDraft')
+class ChatDrafts extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get roomToken => text()();
+
+  TextColumn get scopeKey => text()();
+
+  TextColumn get draftText => text()();
+
+  IntColumn get updatedAtMillis => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, roomToken, scopeKey};
+}
+
 @DataClassName('StoredAttachmentRuntimeAccount')
 class AttachmentRuntimeAccounts extends Table {
   TextColumn get accountId => text().references(Accounts, #id)();
@@ -406,6 +426,7 @@ class AttachmentJobs extends Table {
     ChatScopes,
     CachedChatMessages,
     TextSendOperations,
+    ChatDrafts,
     AttachmentRuntimeAccounts,
     AttachmentJobs,
   ],
@@ -425,7 +446,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -519,6 +540,9 @@ final class AppDatabase extends _$AppDatabase {
           'ON cached_chat_messages '
           '(account_id, room_token, reference_id, message_id)',
         );
+      }
+      if (from < 9) {
+        await migrator.createTable(chatDrafts);
       }
       if (from < 8) {
         await migrator.addColumn(

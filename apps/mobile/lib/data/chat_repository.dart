@@ -362,6 +362,55 @@ final class ChatRepository {
     });
   }
 
+  Future<String?> readDraft({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+  }) async {
+    final row =
+        await (_database.select(_database.chatDrafts)..where(
+              (draft) =>
+                  draft.accountId.equals(accountId) &
+                  draft.roomToken.equals(roomToken) &
+                  draft.scopeKey.equals(_scopeKey(threadId)),
+            ))
+            .getSingleOrNull();
+    final text = row?.draftText;
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  /// Stores composer text that is not admitted to the outbox yet. Empty text
+  /// removes the row so an abandoned draft never resurfaces.
+  Future<void> saveDraft({
+    required String accountId,
+    required String roomToken,
+    required String text,
+    int? threadId,
+  }) async {
+    final scopeKey = _scopeKey(threadId);
+    if (text.isEmpty) {
+      await (_database.delete(_database.chatDrafts)..where(
+            (draft) =>
+                draft.accountId.equals(accountId) &
+                draft.roomToken.equals(roomToken) &
+                draft.scopeKey.equals(scopeKey),
+          ))
+          .go();
+      return;
+    }
+    await _database
+        .into(_database.chatDrafts)
+        .insertOnConflictUpdate(
+          ChatDraftsCompanion.insert(
+            accountId: accountId,
+            roomToken: roomToken,
+            scopeKey: scopeKey,
+            draftText: text,
+            updatedAtMillis: DateTime.now().toUtc().millisecondsSinceEpoch,
+          ),
+        );
+  }
+
   Future<StoredChatScope?> getRootScope({
     required String accountId,
     required String roomToken,

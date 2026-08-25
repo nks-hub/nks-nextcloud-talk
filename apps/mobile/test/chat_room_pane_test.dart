@@ -700,6 +700,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('composer text survives losing the pane', (tester) async {
+    // A send can be refused before the outbox admits it, for example while
+    // offline, so the typed text must not depend on the widget staying alive.
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const Key('chat-composer')),
+      'Draft that must not be lost',
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Draft that must not be lost'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('chat header and composer remain accessible at 200% text', (
     tester,
   ) async {

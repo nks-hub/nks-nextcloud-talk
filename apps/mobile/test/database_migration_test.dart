@@ -11,7 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
-  test('schema v1 to v8 preserves its account and conversation', () async {
+  test('schema v1 to v9 preserves its account and conversation', () async {
     final fixture =
         readFixtureJson(
               'conversation-list/fixtures/conversations-full.response.json',
@@ -51,7 +51,7 @@ void main() {
         .select(database.cachedConversations)
         .getSingle();
 
-    expect(database.schemaVersion, 8);
+    expect(database.schemaVersion, 9);
     expect(account.id, 'account-a');
     expect(account.talkFeaturesJson, '[]');
     expect(room.token, 'synthetic-room-token-a');
@@ -70,7 +70,7 @@ void main() {
   });
 
   test(
-    'schema v2 to v8 preserves rooms and backfills avatar metadata',
+    'schema v2 to v9 preserves rooms and backfills avatar metadata',
     () async {
       final fixture =
           readFixtureJson(
@@ -114,7 +114,7 @@ void main() {
           .getSingle();
       final account = await database.select(database.accounts).getSingle();
 
-      expect(database.schemaVersion, 8);
+      expect(database.schemaVersion, 9);
       expect(room.token, 'synthetic-room-token-a');
       expect(room.roomType, 2);
       expect(room.roomName, 'synthetic-room-a');
@@ -129,7 +129,7 @@ void main() {
     },
   );
 
-  test('schema v3 to v8 clears avatars lacking custom metadata', () async {
+  test('schema v3 to v9 clears avatars lacking custom metadata', () async {
     final database = AppDatabase.forTesting(
       NativeDatabase.memory(
         setup: (raw) {
@@ -158,12 +158,12 @@ void main() {
     );
     addTearDown(database.close);
 
-    expect(database.schemaVersion, 8);
+    expect(database.schemaVersion, 9);
     expect(await database.select(database.conversationAvatars).get(), isEmpty);
   });
 
   test(
-    'schema v4 to v8 preserves outbox rows with no thread binding',
+    'schema v4 to v9 preserves outbox rows with no thread binding',
     () async {
       final database = AppDatabase.forTesting(
         NativeDatabase.memory(
@@ -200,14 +200,14 @@ void main() {
           .select(database.textSendOperations)
           .getSingle();
 
-      expect(database.schemaVersion, 8);
+      expect(database.schemaVersion, 9);
       expect(operation.operationId, 'operation-a');
       expect(operation.threadId, isNull);
     },
   );
 
   test(
-    'schema v5 to v8 preserves thread binding and recovers sending rows',
+    'schema v5 to v9 preserves thread binding and recovers sending rows',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'nctalk-chat-restart-',
@@ -301,7 +301,7 @@ void main() {
     },
   );
 
-  test('schema v6 to v8 preserves chat rows and creates join index', () async {
+  test('schema v6 to v9 preserves chat rows and creates join index', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-confirmation-index-',
     );
@@ -355,7 +355,7 @@ void main() {
           )
           .get();
 
-      expect(database.schemaVersion, 8);
+      expect(database.schemaVersion, 9);
       expect(messages.single.messageId, 101);
       expect(indexes, hasLength(1));
     } finally {
@@ -366,7 +366,7 @@ void main() {
     }
   });
 
-  test('schema v7 to v8 adds nullable peer status columns', () async {
+  test('schema v7 to v9 adds nullable peer status columns', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-presence-migration-',
     );
@@ -409,12 +409,58 @@ void main() {
       final room = await database
           .select(database.cachedConversations)
           .getSingle();
-      expect(database.schemaVersion, 8);
+      expect(database.schemaVersion, 9);
       expect(room.token, 'rooma123');
       expect(room.peerStatus, isNull);
       expect(room.peerStatusIcon, isNull);
       expect(room.peerStatusMessage, isNull);
       expect(room.peerStatusClearAt, isNull);
+    } finally {
+      await database?.close();
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  });
+
+  test('schema v8 to v9 creates the durable draft table', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'nctalk-draft-migration-',
+    );
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}drafts.sqlite',
+    );
+    AppDatabase? database;
+    try {
+      database = AppDatabase.forTesting(NativeDatabase(file));
+      await database
+          .into(database.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: 'account-a',
+              serverUrl: 'https://cloud.example.invalid',
+              loginName: 'fixture-user',
+              serverProductName: 'Nextcloud',
+              createdAtMillis: 1,
+            ),
+          );
+      await database.customStatement('DROP TABLE chat_drafts');
+      await database.customStatement('PRAGMA user_version = 8');
+      await database.close();
+      database = AppDatabase.forTesting(NativeDatabase(file));
+
+      final chat = ChatRepository(database);
+      await chat.saveDraft(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        text: 'Recovered after an upgrade',
+      );
+
+      expect(database.schemaVersion, 9);
+      expect(
+        await chat.readDraft(accountId: 'account-a', roomToken: 'rooma123'),
+        'Recovered after an upgrade',
+      );
     } finally {
       await database?.close();
       if (await directory.exists()) {

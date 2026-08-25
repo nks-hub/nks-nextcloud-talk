@@ -5922,6 +5922,382 @@ class TextSendOperationsCompanion
   }
 }
 
+class $ChatDraftsTable extends ChatDrafts
+    with TableInfo<$ChatDraftsTable, StoredChatDraft> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChatDraftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _roomTokenMeta = const VerificationMeta(
+    'roomToken',
+  );
+  @override
+  late final GeneratedColumn<String> roomToken = GeneratedColumn<String>(
+    'room_token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _scopeKeyMeta = const VerificationMeta(
+    'scopeKey',
+  );
+  @override
+  late final GeneratedColumn<String> scopeKey = GeneratedColumn<String>(
+    'scope_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _draftTextMeta = const VerificationMeta(
+    'draftText',
+  );
+  @override
+  late final GeneratedColumn<String> draftText = GeneratedColumn<String>(
+    'draft_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMillisMeta = const VerificationMeta(
+    'updatedAtMillis',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtMillis = GeneratedColumn<int>(
+    'updated_at_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    roomToken,
+    scopeKey,
+    draftText,
+    updatedAtMillis,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'chat_drafts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredChatDraft> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('room_token')) {
+      context.handle(
+        _roomTokenMeta,
+        roomToken.isAcceptableOrUnknown(data['room_token']!, _roomTokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roomTokenMeta);
+    }
+    if (data.containsKey('scope_key')) {
+      context.handle(
+        _scopeKeyMeta,
+        scopeKey.isAcceptableOrUnknown(data['scope_key']!, _scopeKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeKeyMeta);
+    }
+    if (data.containsKey('draft_text')) {
+      context.handle(
+        _draftTextMeta,
+        draftText.isAcceptableOrUnknown(data['draft_text']!, _draftTextMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftTextMeta);
+    }
+    if (data.containsKey('updated_at_millis')) {
+      context.handle(
+        _updatedAtMillisMeta,
+        updatedAtMillis.isAcceptableOrUnknown(
+          data['updated_at_millis']!,
+          _updatedAtMillisMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMillisMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, roomToken, scopeKey};
+  @override
+  StoredChatDraft map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredChatDraft(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      roomToken: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}room_token'],
+      )!,
+      scopeKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope_key'],
+      )!,
+      draftText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_text'],
+      )!,
+      updatedAtMillis: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_millis'],
+      )!,
+    );
+  }
+
+  @override
+  $ChatDraftsTable createAlias(String alias) {
+    return $ChatDraftsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredChatDraft extends DataClass implements Insertable<StoredChatDraft> {
+  final String accountId;
+  final String roomToken;
+  final String scopeKey;
+  final String draftText;
+  final int updatedAtMillis;
+  const StoredChatDraft({
+    required this.accountId,
+    required this.roomToken,
+    required this.scopeKey,
+    required this.draftText,
+    required this.updatedAtMillis,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['room_token'] = Variable<String>(roomToken);
+    map['scope_key'] = Variable<String>(scopeKey);
+    map['draft_text'] = Variable<String>(draftText);
+    map['updated_at_millis'] = Variable<int>(updatedAtMillis);
+    return map;
+  }
+
+  ChatDraftsCompanion toCompanion(bool nullToAbsent) {
+    return ChatDraftsCompanion(
+      accountId: Value(accountId),
+      roomToken: Value(roomToken),
+      scopeKey: Value(scopeKey),
+      draftText: Value(draftText),
+      updatedAtMillis: Value(updatedAtMillis),
+    );
+  }
+
+  factory StoredChatDraft.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredChatDraft(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      roomToken: serializer.fromJson<String>(json['roomToken']),
+      scopeKey: serializer.fromJson<String>(json['scopeKey']),
+      draftText: serializer.fromJson<String>(json['draftText']),
+      updatedAtMillis: serializer.fromJson<int>(json['updatedAtMillis']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'roomToken': serializer.toJson<String>(roomToken),
+      'scopeKey': serializer.toJson<String>(scopeKey),
+      'draftText': serializer.toJson<String>(draftText),
+      'updatedAtMillis': serializer.toJson<int>(updatedAtMillis),
+    };
+  }
+
+  StoredChatDraft copyWith({
+    String? accountId,
+    String? roomToken,
+    String? scopeKey,
+    String? draftText,
+    int? updatedAtMillis,
+  }) => StoredChatDraft(
+    accountId: accountId ?? this.accountId,
+    roomToken: roomToken ?? this.roomToken,
+    scopeKey: scopeKey ?? this.scopeKey,
+    draftText: draftText ?? this.draftText,
+    updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
+  );
+  StoredChatDraft copyWithCompanion(ChatDraftsCompanion data) {
+    return StoredChatDraft(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      roomToken: data.roomToken.present ? data.roomToken.value : this.roomToken,
+      scopeKey: data.scopeKey.present ? data.scopeKey.value : this.scopeKey,
+      draftText: data.draftText.present ? data.draftText.value : this.draftText,
+      updatedAtMillis: data.updatedAtMillis.present
+          ? data.updatedAtMillis.value
+          : this.updatedAtMillis,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredChatDraft(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('scopeKey: $scopeKey, ')
+          ..write('draftText: $draftText, ')
+          ..write('updatedAtMillis: $updatedAtMillis')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(accountId, roomToken, scopeKey, draftText, updatedAtMillis);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredChatDraft &&
+          other.accountId == this.accountId &&
+          other.roomToken == this.roomToken &&
+          other.scopeKey == this.scopeKey &&
+          other.draftText == this.draftText &&
+          other.updatedAtMillis == this.updatedAtMillis);
+}
+
+class ChatDraftsCompanion extends UpdateCompanion<StoredChatDraft> {
+  final Value<String> accountId;
+  final Value<String> roomToken;
+  final Value<String> scopeKey;
+  final Value<String> draftText;
+  final Value<int> updatedAtMillis;
+  final Value<int> rowid;
+  const ChatDraftsCompanion({
+    this.accountId = const Value.absent(),
+    this.roomToken = const Value.absent(),
+    this.scopeKey = const Value.absent(),
+    this.draftText = const Value.absent(),
+    this.updatedAtMillis = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ChatDraftsCompanion.insert({
+    required String accountId,
+    required String roomToken,
+    required String scopeKey,
+    required String draftText,
+    required int updatedAtMillis,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       roomToken = Value(roomToken),
+       scopeKey = Value(scopeKey),
+       draftText = Value(draftText),
+       updatedAtMillis = Value(updatedAtMillis);
+  static Insertable<StoredChatDraft> custom({
+    Expression<String>? accountId,
+    Expression<String>? roomToken,
+    Expression<String>? scopeKey,
+    Expression<String>? draftText,
+    Expression<int>? updatedAtMillis,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (roomToken != null) 'room_token': roomToken,
+      if (scopeKey != null) 'scope_key': scopeKey,
+      if (draftText != null) 'draft_text': draftText,
+      if (updatedAtMillis != null) 'updated_at_millis': updatedAtMillis,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ChatDraftsCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? roomToken,
+    Value<String>? scopeKey,
+    Value<String>? draftText,
+    Value<int>? updatedAtMillis,
+    Value<int>? rowid,
+  }) {
+    return ChatDraftsCompanion(
+      accountId: accountId ?? this.accountId,
+      roomToken: roomToken ?? this.roomToken,
+      scopeKey: scopeKey ?? this.scopeKey,
+      draftText: draftText ?? this.draftText,
+      updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (roomToken.present) {
+      map['room_token'] = Variable<String>(roomToken.value);
+    }
+    if (scopeKey.present) {
+      map['scope_key'] = Variable<String>(scopeKey.value);
+    }
+    if (draftText.present) {
+      map['draft_text'] = Variable<String>(draftText.value);
+    }
+    if (updatedAtMillis.present) {
+      map['updated_at_millis'] = Variable<int>(updatedAtMillis.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChatDraftsCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('scopeKey: $scopeKey, ')
+          ..write('draftText: $draftText, ')
+          ..write('updatedAtMillis: $updatedAtMillis, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AttachmentRuntimeAccountsTable extends AttachmentRuntimeAccounts
     with
         TableInfo<
@@ -9407,6 +9783,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $CachedChatMessagesTable(this);
   late final $TextSendOperationsTable textSendOperations =
       $TextSendOperationsTable(this);
+  late final $ChatDraftsTable chatDrafts = $ChatDraftsTable(this);
   late final $AttachmentRuntimeAccountsTable attachmentRuntimeAccounts =
       $AttachmentRuntimeAccountsTable(this);
   late final $AttachmentJobsTable attachmentJobs = $AttachmentJobsTable(this);
@@ -9426,6 +9803,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     chatScopes,
     cachedChatMessages,
     textSendOperations,
+    chatDrafts,
     attachmentRuntimeAccounts,
     attachmentJobs,
     cachedChatMessagesAttachmentConfirmation,
@@ -9473,6 +9851,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('text_send_operations', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('chat_drafts', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -9642,6 +10027,24 @@ final class $$AccountsTableReferences
     final cache = $_typedResult.readTableOrNull(
       _textSendOperationsRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ChatDraftsTable, List<StoredChatDraft>>
+  _chatDraftsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.chatDrafts,
+    aliasName: 'accounts__id__chat_drafts__account_id',
+  );
+
+  $$ChatDraftsTableProcessedTableManager get chatDraftsRefs {
+    final manager = $$ChatDraftsTableTableManager(
+      $_db,
+      $_db.chatDrafts,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_chatDraftsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -9889,6 +10292,31 @@ class $$AccountsTableFilterComposer
           }) => $$TextSendOperationsTableFilterComposer(
             $db: $db,
             $table: $db.textSendOperations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> chatDraftsRefs(
+    Expression<bool> Function($$ChatDraftsTableFilterComposer f) f,
+  ) {
+    final $$ChatDraftsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatDrafts,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatDraftsTableFilterComposer(
+            $db: $db,
+            $table: $db.chatDrafts,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -10223,6 +10651,31 @@ class $$AccountsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> chatDraftsRefs<T extends Object>(
+    Expression<T> Function($$ChatDraftsTableAnnotationComposer a) f,
+  ) {
+    final $$ChatDraftsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.chatDrafts,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ChatDraftsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.chatDrafts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> attachmentRuntimeAccountsRefs<T extends Object>(
     Expression<T> Function($$AttachmentRuntimeAccountsTableAnnotationComposer a)
     f,
@@ -10271,6 +10724,7 @@ class $$AccountsTableTableManager
             bool chatScopesRefs,
             bool cachedChatMessagesRefs,
             bool textSendOperationsRefs,
+            bool chatDraftsRefs,
             bool attachmentRuntimeAccountsRefs,
           })
         > {
@@ -10371,6 +10825,7 @@ class $$AccountsTableTableManager
                 chatScopesRefs = false,
                 cachedChatMessagesRefs = false,
                 textSendOperationsRefs = false,
+                chatDraftsRefs = false,
                 attachmentRuntimeAccountsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -10382,6 +10837,7 @@ class $$AccountsTableTableManager
                     if (chatScopesRefs) db.chatScopes,
                     if (cachedChatMessagesRefs) db.cachedChatMessages,
                     if (textSendOperationsRefs) db.textSendOperations,
+                    if (chatDraftsRefs) db.chatDrafts,
                     if (attachmentRuntimeAccountsRefs)
                       db.attachmentRuntimeAccounts,
                   ],
@@ -10514,6 +10970,27 @@ class $$AccountsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (chatDraftsRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          StoredChatDraft
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._chatDraftsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).chatDraftsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (attachmentRuntimeAccountsRefs)
                         await $_getPrefetchedData<
                           StoredAccount,
@@ -10562,6 +11039,7 @@ typedef $$AccountsTableProcessedTableManager =
         bool chatScopesRefs,
         bool cachedChatMessagesRefs,
         bool textSendOperationsRefs,
+        bool chatDraftsRefs,
         bool attachmentRuntimeAccountsRefs,
       })
     >;
@@ -13640,6 +14118,325 @@ typedef $$TextSendOperationsTableProcessedTableManager =
       StoredTextSendOperation,
       PrefetchHooks Function({bool accountId})
     >;
+typedef $$ChatDraftsTableCreateCompanionBuilder =
+    ChatDraftsCompanion Function({
+      required String accountId,
+      required String roomToken,
+      required String scopeKey,
+      required String draftText,
+      required int updatedAtMillis,
+      Value<int> rowid,
+    });
+typedef $$ChatDraftsTableUpdateCompanionBuilder =
+    ChatDraftsCompanion Function({
+      Value<String> accountId,
+      Value<String> roomToken,
+      Value<String> scopeKey,
+      Value<String> draftText,
+      Value<int> updatedAtMillis,
+      Value<int> rowid,
+    });
+
+final class $$ChatDraftsTableReferences
+    extends BaseReferences<_$AppDatabase, $ChatDraftsTable, StoredChatDraft> {
+  $$ChatDraftsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('chat_drafts__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ChatDraftsTableFilterComposer
+    extends Composer<_$AppDatabase, $ChatDraftsTable> {
+  $$ChatDraftsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get scopeKey => $composableBuilder(
+    column: $table.scopeKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get draftText => $composableBuilder(
+    column: $table.draftText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatDraftsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ChatDraftsTable> {
+  $$ChatDraftsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get scopeKey => $composableBuilder(
+    column: $table.scopeKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get draftText => $composableBuilder(
+    column: $table.draftText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatDraftsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ChatDraftsTable> {
+  $$ChatDraftsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get roomToken =>
+      $composableBuilder(column: $table.roomToken, builder: (column) => column);
+
+  GeneratedColumn<String> get scopeKey =>
+      $composableBuilder(column: $table.scopeKey, builder: (column) => column);
+
+  GeneratedColumn<String> get draftText =>
+      $composableBuilder(column: $table.draftText, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => column,
+  );
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ChatDraftsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ChatDraftsTable,
+          StoredChatDraft,
+          $$ChatDraftsTableFilterComposer,
+          $$ChatDraftsTableOrderingComposer,
+          $$ChatDraftsTableAnnotationComposer,
+          $$ChatDraftsTableCreateCompanionBuilder,
+          $$ChatDraftsTableUpdateCompanionBuilder,
+          (StoredChatDraft, $$ChatDraftsTableReferences),
+          StoredChatDraft,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$ChatDraftsTableTableManager(_$AppDatabase db, $ChatDraftsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChatDraftsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChatDraftsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChatDraftsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> roomToken = const Value.absent(),
+                Value<String> scopeKey = const Value.absent(),
+                Value<String> draftText = const Value.absent(),
+                Value<int> updatedAtMillis = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ChatDraftsCompanion(
+                accountId: accountId,
+                roomToken: roomToken,
+                scopeKey: scopeKey,
+                draftText: draftText,
+                updatedAtMillis: updatedAtMillis,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String roomToken,
+                required String scopeKey,
+                required String draftText,
+                required int updatedAtMillis,
+                Value<int> rowid = const Value.absent(),
+              }) => ChatDraftsCompanion.insert(
+                accountId: accountId,
+                roomToken: roomToken,
+                scopeKey: scopeKey,
+                draftText: draftText,
+                updatedAtMillis: updatedAtMillis,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ChatDraftsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable: $$ChatDraftsTableReferences
+                                    ._accountIdTable(db),
+                                referencedColumn: $$ChatDraftsTableReferences
+                                    ._accountIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ChatDraftsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ChatDraftsTable,
+      StoredChatDraft,
+      $$ChatDraftsTableFilterComposer,
+      $$ChatDraftsTableOrderingComposer,
+      $$ChatDraftsTableAnnotationComposer,
+      $$ChatDraftsTableCreateCompanionBuilder,
+      $$ChatDraftsTableUpdateCompanionBuilder,
+      (StoredChatDraft, $$ChatDraftsTableReferences),
+      StoredChatDraft,
+      PrefetchHooks Function({bool accountId})
+    >;
 typedef $$AttachmentRuntimeAccountsTableCreateCompanionBuilder =
     AttachmentRuntimeAccountsCompanion Function({
       required String accountId,
@@ -15223,6 +16020,8 @@ class $AppDatabaseManager {
       $$CachedChatMessagesTableTableManager(_db, _db.cachedChatMessages);
   $$TextSendOperationsTableTableManager get textSendOperations =>
       $$TextSendOperationsTableTableManager(_db, _db.textSendOperations);
+  $$ChatDraftsTableTableManager get chatDrafts =>
+      $$ChatDraftsTableTableManager(_db, _db.chatDrafts);
   $$AttachmentRuntimeAccountsTableTableManager get attachmentRuntimeAccounts =>
       $$AttachmentRuntimeAccountsTableTableManager(
         _db,
