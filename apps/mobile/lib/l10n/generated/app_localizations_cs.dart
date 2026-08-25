@@ -518,4 +518,96 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get presenceDoNotDisturb => 'Nerušit';
+
+  @override
+  String get roomDetailsOpenTooltip => 'Informace o konverzaci';
+
+  @override
+  String get roomDetailsTitle => 'Informace o konverzaci';
+
+  @override
+  String get roomDetailsDescriptionLabel => 'Popis';
+
+  @override
+  String get roomDetailsTypeLabel => 'Typ';
+
+  @override
+  String get roomDetailsTypeOneToOne => 'Soukromá konverzace';
+
+  @override
+  String get roomDetailsTypeGroup => 'Skupinová konverzace';
+
+  @override
+  String get roomDetailsTypePublic => 'Veřejný kanál';
+
+  @override
+  String get roomDetailsTypeChangelog => 'Přehled novinek';
+
+  @override
+  String get roomDetailsTypeFormerOneToOne => 'Bývalá soukromá konverzace';
+
+  @override
+  String get roomDetailsTypeNoteToSelf => 'Poznámky pro sebe';
+
+  @override
+  String get roomDetailsTypeUnknown => 'Neznámý';
+
+  @override
+  String get roomDetailsReadOnlyLabel => 'Pouze pro čtení';
+
+  @override
+  String get roomDetailsReadOnlyYes => 'Ano';
+
+  @override
+  String get roomDetailsReadOnlyNo => 'Ne';
+
+  @override
+  String get roomDetailsNotificationLabel => 'Oznámení';
+
+  @override
+  String get roomDetailsNotificationDefault => 'Výchozí';
+
+  @override
+  String get roomDetailsNotificationAlways => 'Všechny zprávy';
+
+  @override
+  String get roomDetailsNotificationMention => 'Jen zmínky';
+
+  @override
+  String get roomDetailsNotificationNever => 'Vypnuto';
+
+  @override
+  String get roomDetailsNotificationUnknown => 'Neznámé';
+
+  @override
+  String get roomDetailsParticipantsHeader => 'Účastníci';
+
+  @override
+  String roomDetailsParticipantsCount(int count) {
+    return '$count účastníků';
+  }
+
+  @override
+  String get roomDetailsParticipantsEmpty => 'Žádní účastníci.';
+
+  @override
+  String get roomDetailsLoadError => 'Účastníky se nepodařilo načíst.';
+
+  @override
+  String get roomDetailsRoleOwner => 'Vlastník';
+
+  @override
+  String get roomDetailsRoleModerator => 'Moderátor';
+
+  @override
+  String get roomDetailsRoleUser => 'Uživatel';
+
+  @override
+  String get roomDetailsRoleGuest => 'Host';
+
+  @override
+  String get roomDetailsRoleGuestModerator => 'Moderátor (host)';
+
+  @override
+  String get roomDetailsRoleUnknown => 'Neznámá role';
 }

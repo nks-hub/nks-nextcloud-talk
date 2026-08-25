@@ -87,8 +87,17 @@ final class HttpNextcloudApi {
   static const _conversationMaximumBytes = 16 * 1024 * 1024;
   static const _avatarMaximumBytes = 2 * 1024 * 1024;
   static const _webPushMaximumBytes = 64 * 1024;
+  static const _participantsMaximumBytes = 2 * 1024 * 1024;
   static const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
   static const _signalingSettingsAllowedStatusCodes = {200, 401, 404, 500, 503};
+  static const _participantsAllowedStatusCodes = {
+    200,
+    401,
+    403,
+    404,
+    429,
+    503,
+  };
   static final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
     200,
     201,
@@ -341,6 +350,32 @@ final class HttpNextcloudApi {
     );
     return decodeSignalingSettingsResponse(
       request: settingsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Read-only room participant list, including role and (when the server
+  /// returns it) each attendee's user status.
+  Future<ParticipantsResponse> getParticipants({
+    required ParticipantsRequest participantsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', participantsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...participantsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _participantsAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeParticipantsResponse(
+      request: participantsRequest,
       statusCode: payload.statusCode,
       body: payload.body,
     );

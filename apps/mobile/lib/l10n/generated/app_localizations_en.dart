@@ -518,4 +518,96 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get presenceDoNotDisturb => 'Do not disturb';
+
+  @override
+  String get roomDetailsOpenTooltip => 'Conversation details';
+
+  @override
+  String get roomDetailsTitle => 'Conversation details';
+
+  @override
+  String get roomDetailsDescriptionLabel => 'Description';
+
+  @override
+  String get roomDetailsTypeLabel => 'Type';
+
+  @override
+  String get roomDetailsTypeOneToOne => 'One-to-one conversation';
+
+  @override
+  String get roomDetailsTypeGroup => 'Group conversation';
+
+  @override
+  String get roomDetailsTypePublic => 'Public channel';
+
+  @override
+  String get roomDetailsTypeChangelog => 'Changelog';
+
+  @override
+  String get roomDetailsTypeFormerOneToOne => 'Former one-to-one conversation';
+
+  @override
+  String get roomDetailsTypeNoteToSelf => 'Note to self';
+
+  @override
+  String get roomDetailsTypeUnknown => 'Unknown';
+
+  @override
+  String get roomDetailsReadOnlyLabel => 'Read-only';
+
+  @override
+  String get roomDetailsReadOnlyYes => 'Yes';
+
+  @override
+  String get roomDetailsReadOnlyNo => 'No';
+
+  @override
+  String get roomDetailsNotificationLabel => 'Notifications';
+
+  @override
+  String get roomDetailsNotificationDefault => 'Default';
+
+  @override
+  String get roomDetailsNotificationAlways => 'All messages';
+
+  @override
+  String get roomDetailsNotificationMention => 'Mentions only';
+
+  @override
+  String get roomDetailsNotificationNever => 'Off';
+
+  @override
+  String get roomDetailsNotificationUnknown => 'Unknown';
+
+  @override
+  String get roomDetailsParticipantsHeader => 'Participants';
+
+  @override
+  String roomDetailsParticipantsCount(int count) {
+    return '$count participants';
+  }
+
+  @override
+  String get roomDetailsParticipantsEmpty => 'No participants found.';
+
+  @override
+  String get roomDetailsLoadError => 'Participants could not be loaded.';
+
+  @override
+  String get roomDetailsRoleOwner => 'Owner';
+
+  @override
+  String get roomDetailsRoleModerator => 'Moderator';
+
+  @override
+  String get roomDetailsRoleUser => 'User';
+
+  @override
+  String get roomDetailsRoleGuest => 'Guest';
+
+  @override
+  String get roomDetailsRoleGuestModerator => 'Guest moderator';
+
+  @override
+  String get roomDetailsRoleUnknown => 'Unknown role';
 }
