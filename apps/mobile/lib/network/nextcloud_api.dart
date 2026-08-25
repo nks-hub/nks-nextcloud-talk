@@ -88,6 +88,7 @@ final class HttpNextcloudApi {
   static const _avatarMaximumBytes = 2 * 1024 * 1024;
   static const _webPushMaximumBytes = 64 * 1024;
   static const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
+  static const _signalingSettingsAllowedStatusCodes = {200, 401, 404, 500, 503};
   static final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
     200,
     201,
@@ -315,6 +316,33 @@ final class HttpNextcloudApi {
       statusCode: payload.statusCode,
       json: payload.json,
       headers: payload.headers,
+    );
+  }
+
+  /// Resolves how a room's call would be signalled. It is the first step of
+  /// any call and is deliberately separate from media handling.
+  Future<SignalingSettingsResponse> getSignalingSettings({
+    required SignalingSettingsRequest settingsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', settingsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...settingsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _signalingSettingsAllowedStatusCodes,
+      maximumBytes: chatMaximumResponseBytes,
+      timeout: const Duration(seconds: 20),
+    );
+    return decodeSignalingSettingsResponse(
+      request: settingsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
     );
   }
 
