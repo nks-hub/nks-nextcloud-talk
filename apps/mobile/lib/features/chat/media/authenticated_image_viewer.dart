@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import 'chat_image_exporter.dart';
 
 const double _minimumScale = 1;
 const double _maximumScale = 6;
@@ -13,6 +14,7 @@ Future<void> showAuthenticatedImageViewer(
   required Uri previewUri,
   required String imageName,
   required ChatMediaRepository repository,
+  ChatImageExporter exporter = const PlatformChatImageExporter(),
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -22,6 +24,7 @@ Future<void> showAuthenticatedImageViewer(
         previewUri: previewUri,
         imageName: imageName,
         repository: repository,
+        exporter: exporter,
       ),
     ),
   );
@@ -34,12 +37,14 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     required this.previewUri,
     required this.imageName,
     required this.repository,
+    this.exporter = const PlatformChatImageExporter(),
   });
 
   final StoredAccount account;
   final Uri previewUri;
   final String imageName;
   final ChatMediaRepository repository;
+  final ChatImageExporter exporter;
 
   @override
   State<AuthenticatedImageViewer> createState() =>
@@ -52,6 +57,11 @@ final class _AuthenticatedImageViewerState
   late Future<ChatMediaImage?> _image;
   double _scale = _minimumScale;
   Size? _viewport;
+
+  /// Kept outside the [FutureBuilder] because the save and share buttons live
+  /// in a sibling of it and have to enable themselves when the bytes arrive.
+  ChatMediaImage? _loaded;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -76,15 +86,88 @@ final class _AuthenticatedImageViewerState
     super.dispose();
   }
 
-  Future<ChatMediaImage?> _load() => widget.repository.loadPreview(
-    account: widget.account,
-    uri: widget.previewUri,
-  );
+  Future<ChatMediaImage?> _load() async {
+    ChatMediaImage? image;
+    try {
+      image = await widget.repository.loadPreview(
+        account: widget.account,
+        uri: widget.previewUri,
+      );
+      return image;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loaded = image;
+        });
+      }
+    }
+  }
 
   void _retry() {
     setState(() {
+      _loaded = null;
       _image = _load();
     });
+  }
+
+  Future<void> _saveToGallery() async {
+    await _export((image, strings) async {
+      final result = await widget.exporter.saveToGallery(
+        bytes: image.body,
+        fileName: chatImageBaseName(widget.imageName),
+        contentType: image.contentType,
+      );
+      return switch (result) {
+        ChatImageSaveResult.saved => strings.imageSavedToGallery,
+        // A refusal must be spoken out, never swallowed: the picture simply
+        // not appearing in the gallery reads as a broken app.
+        ChatImageSaveResult.permissionDenied =>
+          strings.imageSavePermissionDenied,
+        ChatImageSaveResult.outOfSpace => strings.imageSaveOutOfSpace,
+        ChatImageSaveResult.failed => strings.imageSaveFailed,
+      };
+    });
+  }
+
+  Future<void> _share() async {
+    await _export((image, strings) async {
+      final offered = await widget.exporter.share(
+        bytes: image.body,
+        fileName: chatImageBaseName(widget.imageName),
+        contentType: image.contentType,
+      );
+      return offered ? null : strings.imageShareFailed;
+    });
+  }
+
+  Future<void> _export(
+    Future<String?> Function(ChatMediaImage image, AppLocalizations strings)
+    run,
+  ) async {
+    final image = _loaded;
+    if (image == null || _exporting) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _exporting = true;
+    });
+    final String? message;
+    try {
+      message = await run(image, strings);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exporting = false;
+        });
+      }
+    }
+    if (message != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   void _zoomBy(double factor) {
@@ -228,6 +311,20 @@ final class _AuthenticatedImageViewerState
                       onPressed: _scale >= _maximumScale - 0.001
                           ? null
                           : () => _zoomBy(1.25),
+                    ),
+                    _ViewerIconButton(
+                      key: const Key('authenticated-image-save'),
+                      tooltip: strings.saveImage,
+                      icon: Icons.download_rounded,
+                      onPressed: _loaded == null || _exporting
+                          ? null
+                          : _saveToGallery,
+                    ),
+                    _ViewerIconButton(
+                      key: const Key('authenticated-image-share'),
+                      tooltip: strings.shareImage,
+                      icon: Icons.share_rounded,
+                      onPressed: _loaded == null || _exporting ? null : _share,
                     ),
                   ],
                 ),

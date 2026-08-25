@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NCloudTalk needs microphone access to record voice messages.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>NCloudTalk saves pictures from your conversations to your photo library.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

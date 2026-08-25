@@ -54,6 +54,13 @@ dependencies:
   drift: ^2.34.3
   drift_flutter: ^0.3.1
   uuid: ^4.6.0
+  # Writing to the device gallery goes through MediaStore on Android 10+ and
+  # PHPhotoLibrary on iOS; gal (BSD-3-Clause) covers both plus the pre-Android
+  # 10 storage permission, which no plugin already here does.
+  gal: ^2.3.3
+  # The system share sheet needs ACTION_SEND / UIActivityViewController;
+  # share_plus (BSD-3-Clause) is the Flutter Community plugin for it.
+  share_plus: ^13.3.0
 
 dev_dependencies:
   flutter_test:

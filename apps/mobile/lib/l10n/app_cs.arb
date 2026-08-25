@@ -310,5 +310,12 @@
   "roomDetailsDeleteDialogTitle": "Smazat konverzaci?",
   "roomDetailsDeleteDialogMessage": "Konverzace i všechny její zprávy se smažou všem účastníkům. Akci nelze vzít zpět.",
   "roomDetailsDeleteDialogConfirm": "Smazat",
-  "roomDetailsDeleteRejected": "Tuto konverzaci nelze smazat. Konverzaci jeden na jednoho lze jen opustit."
+  "roomDetailsDeleteRejected": "Tuto konverzaci nelze smazat. Konverzaci jeden na jednoho lze jen opustit.",
+  "saveImage": "Uložit obrázek",
+  "shareImage": "Sdílet obrázek",
+  "imageSavedToGallery": "Obrázek byl uložen do galerie.",
+  "imageSavePermissionDenied": "Uložení vyžaduje přístup do galerie. Povolte ho v nastavení systému a zkuste to znovu.",
+  "imageSaveOutOfSpace": "V zařízení není dost volného místa pro uložení obrázku.",
+  "imageSaveFailed": "Obrázek se nepodařilo uložit.",
+  "imageShareFailed": "Obrázek se nepodařilo sdílet."
 }

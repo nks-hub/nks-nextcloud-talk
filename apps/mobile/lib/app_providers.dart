@@ -594,6 +594,17 @@ final chatMediaCacheProvider = Provider<ChatMediaCache>((ref) {
   return ChatMediaCache();
 });
 
+/// Previews are chat content, so they stay in the private app cache directory
+/// that `allowBackup="false"` and the platform sandbox already cover.
+final chatMediaDiskCacheProvider = Provider<ChatMediaDiskCache>((ref) {
+  return ChatMediaDiskCache(
+    rootDirectory: () async => Directory(
+      '${(await getApplicationCacheDirectory()).path}'
+      '${Platform.pathSeparator}previews',
+    ),
+  );
+});
+
 final chatMediaProvider = FutureProvider.autoDispose
     .family<ChatMediaImage?, ChatMediaProviderKey>((ref, key) async {
       final cache = ref.watch(chatMediaCacheProvider);
@@ -605,11 +616,22 @@ final chatMediaProvider = FutureProvider.autoDispose
       if (cached != null) {
         return cached;
       }
+      final disk = ref.watch(chatMediaDiskCacheProvider);
+      final persisted = await disk.read(accountId: key.account.id, uri: key.uri);
+      if (persisted != null) {
+        cache.write(cacheKey, persisted);
+        return persisted;
+      }
       final loaded = await ref
           .watch(chatMediaRepositoryProvider)
           .loadPreview(account: key.account, uri: key.uri);
       if (loaded != null) {
         cache.write(cacheKey, loaded);
+        await disk.write(
+          accountId: key.account.id,
+          uri: key.uri,
+          image: loaded,
+        );
       }
       return loaded;
     });
