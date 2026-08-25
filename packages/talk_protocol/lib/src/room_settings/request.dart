@@ -179,6 +179,37 @@ final class SetFavoriteRequest {
   String toString() => 'SetFavoriteRequest(favorite: $favorite)';
 }
 
+/// Archives or unarchives a conversation for the caller. This is a personal
+/// preference: any participant may set it for themselves.
+final class SetArchivedRequest {
+  SetArchivedRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.archived,
+    this.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final bool archived;
+  final String userAgent;
+
+  /// `POST` to archive the conversation, `DELETE` to unarchive it.
+  String get httpMethod => archived ? 'POST' : 'DELETE';
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+
+  Uri get uri => _roomUri(server, roomToken, 'archive');
+
+  @override
+  String toString() => 'SetArchivedRequest(archived: $archived)';
+}
+
 /// Removes the caller from a conversation. Irreversible from the client's
 /// point of view: rejoining a non-listable conversation needs a new invite.
 final class LeaveRoomRequest {

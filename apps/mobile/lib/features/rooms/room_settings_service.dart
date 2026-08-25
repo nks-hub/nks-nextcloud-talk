@@ -1,7 +1,10 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app_providers.dart';
 import '../../data/account_repository.dart';
@@ -41,13 +44,16 @@ final class RoomSettingsService {
     required AccountRepository accounts,
     required CredentialVault credentials,
     required HttpNextcloudApi api,
+    Uuid? uuid,
   }) : _accounts = accounts,
        _credentials = credentials,
-       _api = api;
+       _api = api,
+       _uuid = uuid ?? const Uuid();
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
+  final Uuid _uuid;
 
   Future<ConversationRoom> renameRoom({
     required String accountId,
@@ -213,6 +219,114 @@ final class RoomSettingsService {
         throw const RoomSettingsException(RoomSettingsError.roomMissing);
       case SetFavoriteHttpFailure(:final kind):
         throw RoomSettingsException(_mapHttpFailure(kind));
+    }
+  }
+
+  Future<void> setArchived({
+    required String accountId,
+    required String roomToken,
+    required bool archived,
+  }) async {
+    final context = await _authContext(accountId);
+    final SetArchivedRequest request;
+    try {
+      request = SetArchivedRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(context.account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        archived: archived,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+
+    final response = await _call(
+      () => _api.setArchived(
+        archivedRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+
+    switch (response) {
+      case SetArchivedSuccess():
+        return;
+      case SetArchivedReauthenticationRequired():
+        throw const RoomSettingsException(
+          RoomSettingsError.reauthenticationRequired,
+        );
+      case SetArchivedRoomMissing():
+        throw const RoomSettingsException(RoomSettingsError.roomMissing);
+      case SetArchivedHttpFailure(:final kind):
+        throw RoomSettingsException(_mapHttpFailure(kind));
+    }
+  }
+
+  /// Clears the read marker so the conversation shows as unread again in the
+  /// conversation list. Requires the server's `chat-unread` capability.
+  Future<void> markConversationUnread({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final context = await _authContext(accountId);
+    final conversation = await _accounts.getConversation(
+      accountId: accountId,
+      token: roomToken,
+    );
+    if (conversation == null) {
+      throw const RoomSettingsException(RoomSettingsError.roomMissing);
+    }
+
+    final server = ServerBase.parse(context.account.serverUrl);
+    final CapabilitySnapshot capabilities;
+    try {
+      capabilities = await _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      );
+    } on NextcloudApiException catch (error) {
+      throw RoomSettingsException(_mapApiError(error));
+    }
+
+    final ChatMarkUnreadRequest request;
+    try {
+      final room = ConversationRoom.fromJson(
+        jsonDecode(conversation.rawJson),
+      );
+      final profile = ChatCapabilityProfile.fromSnapshot(
+        capabilities,
+        federated: room.isFederated,
+      );
+      request = ChatMarkUnreadRequest(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: profile,
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+
+    final response = await _call(
+      () => _api.markChatUnread(
+        markUnreadRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+
+    switch (response.classification) {
+      case ChatReadClassification.unreadConfirmed:
+        return;
+      case ChatReadClassification.reauthenticationRequired:
+        throw const RoomSettingsException(
+          RoomSettingsError.reauthenticationRequired,
+        );
+      case ChatReadClassification.readConfirmed:
+      case ChatReadClassification.ocsError:
+        throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
   }
 

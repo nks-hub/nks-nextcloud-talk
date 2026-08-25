@@ -485,6 +485,72 @@ void main() {
     });
   });
 
+  group('SetArchivedRequest', () {
+    test('uses POST to archive and DELETE to unarchive', () {
+      final archive = SetArchivedRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        archived: true,
+      );
+      final unarchive = SetArchivedRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        archived: false,
+      );
+
+      expect(archive.httpMethod, 'POST');
+      expect(unarchive.httpMethod, 'DELETE');
+      expect(
+        archive.uri.toString(),
+        'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v4/room/'
+        'rooma123/archive?format=json',
+      );
+      expect(archive.uri, unarchive.uri);
+    });
+  });
+
+  group('decodeSetArchivedResponse', () {
+    SetArchivedRequest request() => SetArchivedRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      archived: true,
+    );
+
+    test('reports success', () {
+      final response = decodeSetArchivedResponse(
+        request: request(),
+        statusCode: 200,
+        body: _ocsBody(status: 'ok', statusCode: 200, data: <Object?>[]),
+      );
+      expect(response, isA<SetArchivedSuccess>());
+    });
+
+    test('classifies 404 as room missing', () {
+      final response = decodeSetArchivedResponse(
+        request: request(),
+        statusCode: 404,
+        body: _ocsBody(status: 'failure', statusCode: 404),
+      );
+      expect(response, isA<SetArchivedRoomMissing>());
+    });
+
+    test('classifies 503 as a recoverable HTTP failure', () {
+      final response = decodeSetArchivedResponse(
+        request: request(),
+        statusCode: 503,
+        body: Uint8List(0),
+      );
+      expect(response, isA<SetArchivedHttpFailure>());
+      expect(
+        (response as SetArchivedHttpFailure).kind,
+        RoomSettingsHttpFailureKind.serviceUnavailable,
+      );
+    });
+  });
+
   group('LeaveRoomRequest', () {
     test('builds the participants/self URI', () {
       final request = LeaveRoomRequest(

@@ -6,12 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../core/brand_mark.dart';
 import '../../core/foreground_sync_loop.dart';
-import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
-import 'conversation_avatar_widget.dart';
+import 'conversation_list_actions.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 
@@ -527,7 +526,7 @@ final class _CompactShell extends StatelessWidget {
           if (account.lastSyncError != null)
             _SyncNotice(errorCode: account.lastSyncError!),
           Expanded(
-            child: _ConversationList(
+            child: ConversationListView(
               account: account,
               conversations: conversations,
               loading: loading,
@@ -613,7 +612,7 @@ final class _ExpandedShell extends StatelessWidget {
                     _SyncNotice(errorCode: account.lastSyncError!),
                   const Divider(),
                   Expanded(
-                    child: _ConversationList(
+                    child: ConversationListView(
                       account: account,
                       conversations: conversations,
                       loading: loading,
@@ -792,257 +791,6 @@ final class _AccountAvatar extends StatelessWidget {
       backgroundColor: scheme.tertiaryContainer,
       foregroundColor: scheme.onTertiaryContainer,
       child: Text(initial),
-    );
-  }
-}
-
-final class _ConversationList extends StatelessWidget {
-  const _ConversationList({
-    required this.account,
-    required this.conversations,
-    required this.loading,
-    required this.onRefresh,
-    required this.onSelect,
-    this.selectedToken,
-  });
-
-  final StoredAccount account;
-  final List<CachedConversation> conversations;
-  final bool loading;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<CachedConversation> onSelect;
-  final String? selectedToken;
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading && conversations.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (conversations.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: onRefresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: const [SizedBox(height: 120), _EmptyConversations()],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: conversations.length,
-        separatorBuilder: (_, _) => const Divider(indent: 84),
-        itemBuilder: (context, index) {
-          final conversation = conversations[index];
-          return _ConversationTile(
-            account: account,
-            conversation: conversation,
-            selected: conversation.token == selectedToken,
-            onTap: () => onSelect(conversation),
-          );
-        },
-      ),
-    );
-  }
-}
-
-final class _ConversationTile extends StatelessWidget {
-  const _ConversationTile({
-    required this.account,
-    required this.conversation,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final StoredAccount account;
-  final CachedConversation conversation;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final preview = normalizeGiphyReferencePreview(
-      conversation.lastMessageText ?? strings.lastMessageUnavailable,
-    );
-    final semanticsValue = [
-      preview,
-      _formatActivity(context, conversation.lastActivity),
-      strings.unreadMessages(conversation.unreadMessages),
-    ].join(', ');
-    return Semantics(
-      key: Key('conversation-tile-${conversation.token}'),
-      container: true,
-      button: true,
-      selected: selected,
-      label: conversation.displayName,
-      value: semanticsValue,
-      onTap: onTap,
-      child: ExcludeSemantics(
-        child: Material(
-          color: selected ? scheme.secondaryContainer : Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 80),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    ConversationAvatar(
-                      account: account,
-                      conversation: conversation,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              if (conversation.favorite) ...[
-                                Icon(
-                                  Icons.star_rounded,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  conversation.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ),
-                              if (ConversationPresence.fromConversation(
-                                    conversation,
-                                  ) !=
-                                  null) ...[
-                                const SizedBox(width: 7),
-                                ConversationPresenceBadge(
-                                  conversation: conversation,
-                                ),
-                              ],
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatActivity(
-                                  context,
-                                  conversation.lastActivity,
-                                ),
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  preview,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ),
-                              if (conversation.unreadMessages > 0) ...[
-                                const SizedBox(width: 8),
-                                _UnreadBadge(
-                                  count: conversation.unreadMessages,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      label: AppLocalizations.of(context).unreadMessages(count),
-      child: ExcludeSemantics(
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-          decoration: BoxDecoration(
-            color: scheme.primary,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            count > 99 ? '99+' : '$count',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: scheme.onPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _EmptyConversations extends StatelessWidget {
-  const _EmptyConversations();
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.all(28),
-      child: Column(
-        children: [
-          Icon(
-            Icons.chat_bubble_outline_rounded,
-            size: 52,
-            color: scheme.primary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            strings.noConversations,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            strings.noConversationsBody,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1262,18 +1010,6 @@ final class _SelectConversationPlaceholder extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatActivity(BuildContext context, int unixSeconds) {
-  final date = DateTime.fromMillisecondsSinceEpoch(
-    unixSeconds * 1000,
-  ).toLocal();
-  final now = DateTime.now();
-  final localizations = MaterialLocalizations.of(context);
-  if (date.year == now.year && date.month == now.month && date.day == now.day) {
-    return localizations.formatTimeOfDay(TimeOfDay.fromDateTime(date));
-  }
-  return localizations.formatCompactDate(date);
 }
 
 String _syncErrorMessage(AppLocalizations strings, String errorCode) {

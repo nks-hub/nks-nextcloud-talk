@@ -127,6 +127,7 @@ final class HttpNextcloudApi {
     429,
     503,
   };
+  static const _chatReadAllowedStatusCodes = {200, 401, 404, 429, 503};
   static final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
     200,
     201,
@@ -565,6 +566,31 @@ final class HttpNextcloudApi {
     );
   }
 
+  /// Archives or unarchives a conversation for the caller.
+  Future<SetArchivedResponse> setArchived({
+    required SetArchivedRequest archivedRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request(archivedRequest.httpMethod, archivedRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...archivedRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetArchivedResponse(
+      request: archivedRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Removes the caller from a conversation. Irreversible from the client's
   /// point of view.
   Future<LeaveRoomResponse> leaveRoom({
@@ -666,6 +692,32 @@ final class HttpNextcloudApi {
     );
     return decodeChatSendResponse(
       request: chatRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
+  /// Clears the read marker so the conversation shows as unread again.
+  Future<ChatReadResponse> markChatUnread({
+    required ChatMarkUnreadRequest markUnreadRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', markUnreadRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...markUnreadRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _chatReadAllowedStatusCodes,
+      maximumBytes: chatMaximumResponseBytes,
+    );
+    return decodeChatReadResponse(
+      request: markUnreadRequest,
       statusCode: payload.statusCode,
       body: payload.body,
       headers: ChatResponseHeaders.fromMap(payload.headers),

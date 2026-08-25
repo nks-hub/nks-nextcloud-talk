@@ -684,4 +684,38 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get roomDetailsLeaveRejected =>
       'You can\'t leave until another moderator is promoted.';
+
+  @override
+  String get conversationActionsTitle => 'Conversation actions';
+
+  @override
+  String get conversationActionMarkUnread => 'Mark as unread';
+
+  @override
+  String get conversationActionArchive => 'Archive conversation';
+
+  @override
+  String get conversationActionUnarchive => 'Unarchive conversation';
+
+  @override
+  String conversationArchivedSectionShow(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Archived ($count)',
+      one: 'Archived (1)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get conversationArchivedSectionHide => 'Back to conversations';
+
+  @override
+  String get conversationActionErrorGeneric =>
+      'The action could not be completed. Please try again.';
+
+  @override
+  String get conversationActionErrorReauth =>
+      'Please sign in again to make this change.';
 }

@@ -455,6 +455,102 @@ SetFavoriteResponse decodeSetFavoriteResponse({
 }
 
 // ---------------------------------------------------------------------------
+// Archive (POST/DELETE .../room/{token}/archive)
+// ---------------------------------------------------------------------------
+
+sealed class SetArchivedResponse {
+  const SetArchivedResponse(this.request);
+
+  final SetArchivedRequest request;
+  int get statusCode;
+}
+
+final class SetArchivedSuccess extends SetArchivedResponse {
+  const SetArchivedSuccess._({required SetArchivedRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 200;
+
+  @override
+  String toString() => 'SetArchivedSuccess()';
+}
+
+final class SetArchivedReauthenticationRequired extends SetArchivedResponse {
+  const SetArchivedReauthenticationRequired._({
+    required SetArchivedRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 401;
+
+  @override
+  String toString() => 'SetArchivedReauthenticationRequired()';
+}
+
+final class SetArchivedRoomMissing extends SetArchivedResponse {
+  const SetArchivedRoomMissing._({required SetArchivedRequest request})
+    : super(request);
+
+  @override
+  int get statusCode => 404;
+
+  @override
+  String toString() => 'SetArchivedRoomMissing()';
+}
+
+final class SetArchivedHttpFailure extends SetArchivedResponse {
+  const SetArchivedHttpFailure._({
+    required SetArchivedRequest request,
+    required this.statusCode,
+    required this.kind,
+  }) : super(request);
+
+  @override
+  final int statusCode;
+  final RoomSettingsHttpFailureKind kind;
+
+  @override
+  String toString() =>
+      'SetArchivedHttpFailure(statusCode: $statusCode, kind: ${kind.name})';
+}
+
+SetArchivedResponse decodeSetArchivedResponse({
+  required SetArchivedRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 401:
+      _decodeOcsEnvelope(body);
+      return SetArchivedReauthenticationRequired._(request: request);
+    case 404:
+      _decodeOcsEnvelope(body);
+      return SetArchivedRoomMissing._(request: request);
+    case 429:
+      return SetArchivedHttpFailure._(
+        request: request,
+        statusCode: 429,
+        kind: RoomSettingsHttpFailureKind.rateLimited,
+      );
+    case 503:
+      return SetArchivedHttpFailure._(
+        request: request,
+        statusCode: 503,
+        kind: RoomSettingsHttpFailureKind.serviceUnavailable,
+      );
+    case 200:
+      _decodeOcsEnvelope(body);
+      return SetArchivedSuccess._(request: request);
+    default:
+      protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Leave (DELETE .../room/{token}/participants/self)
 // ---------------------------------------------------------------------------
 

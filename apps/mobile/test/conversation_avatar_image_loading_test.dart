@@ -58,6 +58,7 @@ const _conversation = CachedConversation(
   lastActivity: 1724300000,
   unreadMessages: 0,
   favorite: false,
+  isArchived: false,
   readOnly: 0,
   roomType: 1,
   roomName: 'openclaw-bot',

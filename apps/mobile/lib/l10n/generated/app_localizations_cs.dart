@@ -683,4 +683,39 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsLeaveRejected =>
       'Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.';
+
+  @override
+  String get conversationActionsTitle => 'Akce konverzace';
+
+  @override
+  String get conversationActionMarkUnread => 'Označit jako nepřečtené';
+
+  @override
+  String get conversationActionArchive => 'Archivovat konverzaci';
+
+  @override
+  String get conversationActionUnarchive => 'Zrušit archivaci konverzace';
+
+  @override
+  String conversationArchivedSectionShow(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Archivováno ($count)',
+      few: 'Archivováno ($count)',
+      one: 'Archivováno (1)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get conversationArchivedSectionHide => 'Zpět na konverzace';
+
+  @override
+  String get conversationActionErrorGeneric =>
+      'Akci se nepodařilo dokončit. Zkuste to prosím znovu.';
+
+  @override
+  String get conversationActionErrorReauth =>
+      'Pro tuto změnu se prosím přihlaste znovu.';
 }
