@@ -30,9 +30,11 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   String? _selectedAccountId;
   ForegroundSyncLoop? _liveSyncLoop;
   StreamSubscription<void>? _pushOpenSubscription;
+  StreamSubscription<void>? _deepLinkSubscription;
   var _liveSyncGeneration = 0;
   var _isForeground = true;
   var _handlingPushOpen = false;
+  var _handlingDeepLink = false;
 
   @override
   void initState() {
@@ -44,6 +46,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _attachPushNavigation();
+        _attachDeepLinkNavigation();
       }
     });
   }
@@ -86,8 +89,49 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     if (open.app != 'spreed' || roomToken == null || roomToken.isEmpty) {
       return;
     }
+    await _openAccountConversation(open.accountId, roomToken);
+  }
+
+  void _attachDeepLinkNavigation() {
+    final coordinator = ref.read(deepLinkCoordinatorProvider);
+    if (coordinator == null || _deepLinkSubscription != null) {
+      return;
+    }
+    _deepLinkSubscription = coordinator.linkAvailable.listen((_) {
+      unawaited(_drainDeepLinks());
+    });
+    unawaited(_drainDeepLinks());
+  }
+
+  Future<void> _drainDeepLinks() async {
+    if (_handlingDeepLink) {
+      return;
+    }
+    final coordinator = ref.read(deepLinkCoordinatorProvider);
+    if (coordinator == null) {
+      return;
+    }
+    _handlingDeepLink = true;
+    try {
+      while (mounted) {
+        final resolved = coordinator.takeNext();
+        if (resolved == null) {
+          return;
+        }
+        await _openAccountConversation(resolved.accountId, resolved.token.value);
+      }
+    } finally {
+      _handlingDeepLink = false;
+    }
+  }
+
+  /// Selects [accountId], resyncs it and opens [token] once it is cached.
+  ///
+  /// A missing account or a room that never lands in the cache leaves the
+  /// app exactly where it was; this never navigates to a guess.
+  Future<void> _openAccountConversation(String accountId, String token) async {
     final accounts = ref.read(accountRepositoryProvider);
-    final account = await accounts.getAccount(open.accountId);
+    final account = await accounts.getAccount(accountId);
     if (account == null) {
       return;
     }
@@ -101,7 +145,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     }
     final conversation = await accounts.getConversation(
       accountId: account.id,
-      token: roomToken,
+      token: token,
     );
     if (!mounted || conversation == null) {
       return;
@@ -234,6 +278,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_pushOpenSubscription?.cancel());
+    unawaited(_deepLinkSubscription?.cancel());
     unawaited(_stopLiveSync());
     super.dispose();
   }

@@ -21,6 +21,8 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
 import 'features/conversations/conversation_sync_service.dart';
+import 'features/conversations/deep_link_bridge.dart';
+import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
@@ -115,6 +117,33 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
     platform: platform,
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
+  );
+  ref.onDispose(() => unawaited(coordinator.close()));
+  unawaited(coordinator.start());
+  return coordinator;
+});
+
+final deepLinkPlatformProvider = Provider<DeepLinkPlatform?>((ref) {
+  if (!Platform.isAndroid) {
+    return null;
+  }
+  final bridge = DeepLinkBridge();
+  ref.onDispose(() => unawaited(bridge.dispose()));
+  return bridge;
+});
+
+final deepLinkResolverProvider = Provider<DeepLinkResolver>((ref) {
+  return DeepLinkResolver(ref.watch(accountRepositoryProvider));
+});
+
+final deepLinkCoordinatorProvider = Provider<DeepLinkCoordinator?>((ref) {
+  final platform = ref.watch(deepLinkPlatformProvider);
+  if (platform == null) {
+    return null;
+  }
+  final coordinator = DeepLinkCoordinator(
+    platform: platform,
+    resolver: ref.watch(deepLinkResolverProvider),
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());

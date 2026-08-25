@@ -15,10 +15,16 @@ import java.util.ArrayDeque
 class AndroidWebPushActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var methodChannel: MethodChannel? = null
+    private var deepLinkChannel: MethodChannel? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val notificationOpenDelivery = AndroidNotificationOpenDelivery { notification ->
         mainHandler.post {
             methodChannel?.invokeMethod("notificationOpened", notification)
+        }
+    }
+    private val deepLinkDelivery = AndroidNotificationOpenDelivery { link ->
+        mainHandler.post {
+            deepLinkChannel?.invokeMethod("linkOpened", link)
         }
     }
     private val notifierListener: (Int) -> Unit = { count ->
@@ -29,6 +35,7 @@ class AndroidWebPushActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         notificationOpen(intent)?.let(notificationOpenDelivery::opened)
+        deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
         super.onCreate(savedInstanceState)
     }
 
@@ -42,13 +49,26 @@ class AndroidWebPushActivity : FlutterActivity() {
         channel.setMethodCallHandler(handler)
         methodChannel = channel
         AndroidWebPushNotifier.attach(notifierListener)
+
+        val deepLink = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DEEP_LINK_CHANNEL_NAME,
+        )
+        deepLink.setMethodCallHandler { call, result ->
+            if (call.method == "getLaunchLink") {
+                result.success(takeLaunchDeepLink())
+            } else {
+                result.notImplemented()
+            }
+        }
+        deepLinkChannel = deepLink
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val notification = notificationOpen(intent) ?: return
-        notificationOpenDelivery.opened(notification)
+        notificationOpen(intent)?.let(notificationOpenDelivery::opened)
+        deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
     }
 
     internal fun registrationPermissionStatus(): Map<String, String> {
@@ -90,6 +110,10 @@ class AndroidWebPushActivity : FlutterActivity() {
         return notificationOpenDelivery.markReadyAndTakeLaunch()
     }
 
+    internal fun takeLaunchDeepLink(): Map<String, Any?>? {
+        return deepLinkDelivery.markReadyAndTakeLaunch()
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -120,6 +144,8 @@ class AndroidWebPushActivity : FlutterActivity() {
         pendingPermissionResult = null
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
+        deepLinkChannel?.setMethodCallHandler(null)
+        deepLinkChannel = null
         super.onDestroy()
     }
 
@@ -132,6 +158,15 @@ class AndroidWebPushActivity : FlutterActivity() {
         }.getOrNull()
     }
 
+    internal fun deepLinkOpen(intent: Intent?): Map<String, Any?>? {
+        val openIntent = intent ?: return null
+        if (openIntent.action != Intent.ACTION_VIEW) {
+            return null
+        }
+        val uri = openIntent.data ?: return null
+        return mapOf("uri" to uri.toString())
+    }
+
     private fun setPermissionAsked(asked: Boolean) {
         getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
             .edit()
@@ -141,6 +176,7 @@ class AndroidWebPushActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/android_web_push"
+        private const val DEEP_LINK_CHANNEL_NAME = "com.nkshub.nextcloudtalk/deep_link"
         internal const val PERMISSION_PREFERENCES = "android_web_push_permission"
         internal const val PERMISSION_ASKED = "asked"
         internal const val NOTIFICATION_PERMISSION_REQUEST = 4107

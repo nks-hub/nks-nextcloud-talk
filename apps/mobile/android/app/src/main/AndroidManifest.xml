@@ -29,6 +29,28 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Account-scoped Talk room links, e.g.
+                 https://<server>/index.php/call/<token> or
+                 https://<server>/call/<token>. Every account's server is
+                 self-hosted and its hostname is unknown at build time, so no
+                 android:host is set here: without one Android matches the
+                 path pattern against any https host (see IntentFilter's
+                 authority matching, which only restricts by host when at
+                 least one android:host is declared). That also rules out
+                 android:autoVerify="true": Android App Links verification
+                 requires a Digital Asset Links file the app cannot publish
+                 on every user's own server, so this intent-filter is offered
+                 as a regular (non-verified) handler alongside the browser.
+                 The Dart layer never trusts the link on its own: it only
+                 opens a room when the link's origin matches an already
+                 signed-in account. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:pathPattern="/index.php/call/.*"/>
+                <data android:scheme="https" android:pathPattern="/call/.*"/>
+            </intent-filter>
         </activity>
         <receiver
             android:name=".push.AndroidWebPushReceiver"
