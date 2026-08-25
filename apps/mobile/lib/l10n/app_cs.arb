@@ -281,5 +281,15 @@
   "roomDetailsRemoveDialogTitle": "Odebrat účastníka?",
   "roomDetailsRemoveDialogMessage": "{name} ztratí přístup do této konverzace, dokud ho někdo znovu nepozve.",
   "roomDetailsRemoveDialogConfirm": "Odebrat",
-  "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl."
+  "roomDetailsParticipantActionRejected": "Server tuto změnu u tohoto účastníka odmítl.",
+  "callBannerTitle": "Probíhá hovor",
+  "callBannerRunningFor": "Běží {duration}",
+  "callBannerJoin": "Připojit se k hovoru",
+  "callBannerJoinUnsupported": "Připojení zatím není implementované (signalizace: {transport}).",
+  "callBannerTransportChecking": "Zjišťuji, jak je hovor signalizován…",
+  "callBannerTransportUnavailable": "Transport hovoru se nepodařilo zjistit.",
+  "callBannerTransportReauth": "Přihlaste se znovu, aby šlo zjistit signalizaci hovoru.",
+  "callBannerTransportRoomUnavailable": "Tato konverzace už na serveru není dostupná.",
+  "callTransportInternal": "interní",
+  "callTransportExternalHpb": "externí HPB"
 }

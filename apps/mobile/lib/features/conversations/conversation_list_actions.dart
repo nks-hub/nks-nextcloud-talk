@@ -5,6 +5,7 @@ import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../calls/call_state.dart';
 import '../rooms/room_settings_service.dart';
 import 'conversation_avatar_widget.dart';
 import 'conversation_presence.dart';
@@ -257,7 +258,10 @@ final class _ConversationTile extends StatelessWidget {
     final preview = normalizeGiphyReferencePreview(
       conversation.lastMessageText ?? strings.lastMessageUnavailable,
     );
+    final hasCall =
+        ConversationCallState.fromConversation(conversation) != null;
     final semanticsValue = [
+      if (hasCall) strings.callBannerTitle,
       preview,
       _formatActivity(context, conversation.lastActivity),
       strings.unreadMessages(conversation.unreadMessages),
@@ -310,6 +314,20 @@ final class _ConversationTile extends StatelessWidget {
                                   Icons.archive_outlined,
                                   size: 18,
                                   color: scheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              if (hasCall) ...[
+                                // Announced through the tile's semantics
+                                // value, which this subtree is excluded from.
+                                Icon(
+                                  Icons.videocam_rounded,
+                                  key: Key(
+                                    'conversation-call-'
+                                    '${conversation.token}',
+                                  ),
+                                  size: 18,
+                                  color: scheme.primary,
                                 ),
                                 const SizedBox(width: 4),
                               ],

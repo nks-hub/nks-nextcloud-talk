@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../calls/call_banner.dart';
 import '../chat/chat_room_pane.dart';
 import '../rooms/room_details_screen.dart';
 import 'conversation_avatar_widget.dart';
@@ -219,7 +220,14 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: ChatRoomPane(account: account, conversation: current),
+        child: Column(
+          children: [
+            OngoingCallBanner(account: account, conversation: current),
+            Expanded(
+              child: ChatRoomPane(account: account, conversation: current),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -285,6 +293,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
             ],
           ),
         ),
+        OngoingCallBanner(account: account, conversation: conversation),
         Expanded(
           child: ChatRoomPane(account: account, conversation: conversation),
         ),
