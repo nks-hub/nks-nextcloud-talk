@@ -782,16 +782,10 @@ abstract class AppLocalizations {
   /// **'Zoom in'**
   String get zoomIn;
 
-  /// No description provided for @attachImage.
-  ///
-  /// In en, this message translates to:
-  /// **'Attach image'**
-  String get attachImage;
-
   /// No description provided for @preparingImage.
   ///
   /// In en, this message translates to:
-  /// **'Preparing image…'**
+  /// **'Preparing attachment…'**
   String get preparingImage;
 
   /// No description provided for @imageUploadQueued.
@@ -803,7 +797,7 @@ abstract class AppLocalizations {
   /// No description provided for @uploadingImage.
   ///
   /// In en, this message translates to:
-  /// **'Uploading image… {percent}%'**
+  /// **'Uploading… {percent}%'**
   String uploadingImage(int percent);
 
   /// No description provided for @confirmingAttachment.
@@ -821,25 +815,25 @@ abstract class AppLocalizations {
   /// No description provided for @imageSent.
   ///
   /// In en, this message translates to:
-  /// **'Image sent'**
+  /// **'Attachment sent'**
   String get imageSent;
 
   /// No description provided for @imageUploadFailed.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent.'**
+  /// **'The attachment could not be sent.'**
   String get imageUploadFailed;
 
   /// No description provided for @imageUploadFailedQuota.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent: storage quota exceeded.'**
+  /// **'The attachment could not be sent: storage quota exceeded.'**
   String get imageUploadFailedQuota;
 
   /// No description provided for @imageUploadFailedPermission.
   ///
   /// In en, this message translates to:
-  /// **'The image could not be sent: you do not have permission to upload files here.'**
+  /// **'The attachment could not be sent: you do not have permission to upload files here.'**
   String get imageUploadFailedPermission;
 
   /// No description provided for @uploadCancelled.
@@ -1897,6 +1891,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That conversation is not available on this device.'**
   String get jumpToMessageConversationMissing;
+
+  /// No description provided for @addAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attachment'**
+  String get addAttachment;
+
+  /// No description provided for @attachFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a picture'**
+  String get attachFromGallery;
+
+  /// No description provided for @attachFromCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a picture'**
+  String get attachFromCamera;
+
+  /// No description provided for @attachFromFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a file'**
+  String get attachFromFile;
+
+  /// No description provided for @attachmentCameraDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking a picture needs camera access. Grant it in the system settings and try again.'**
+  String get attachmentCameraDenied;
+
+  /// No description provided for @attachmentCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No camera is available on this device.'**
+  String get attachmentCameraUnavailable;
+
+  /// No description provided for @attachmentTypeUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'That file type cannot be attached here.'**
+  String get attachmentTypeUnsupported;
 }
 
 class _AppLocalizationsDelegate

@@ -251,8 +251,10 @@ final class AttachmentSubmissionBridge implements VoiceAttachmentSubmitter {
         AttachmentSubmissionFailure.invalidBinding,
       );
     }
-    if (request.metadata.kind != AttachmentMessageKind.file ||
-        !request.source.mimeType.startsWith('image/')) {
+    // Pictures, camera captures and generic files all travel this path, so
+    // only the message kind is constrained here; the concrete MIME type was
+    // already resolved against the real bytes while the durable copy was made.
+    if (request.metadata.kind != AttachmentMessageKind.file) {
       throw const AttachmentSubmissionException(
         AttachmentSubmissionFailure.unsupported,
       );

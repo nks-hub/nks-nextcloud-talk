@@ -1,9 +1,16 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../platform/media/image_attachment_picker.dart';
 import 'image_attachment_upload_controller.dart';
+
+typedef PrepareAttachmentFromSource =
+    Future<ImageAttachmentUploadRequest?> Function(
+      AttachmentPickerSource source,
+    );
 
 final class ImageAttachmentPickerButton extends StatelessWidget {
   const ImageAttachmentPickerButton({
@@ -14,7 +21,7 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
   });
 
   final ImageAttachmentUploadController controller;
-  final PrepareImageAttachment prepare;
+  final PrepareAttachmentFromSource prepare;
   final bool enabled;
 
   @override
@@ -24,16 +31,65 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
       listenable: controller,
       builder: (context, _) => IconButton(
         key: const Key('pick-image-attachment'),
-        tooltip: strings.attachImage,
+        tooltip: strings.addAttachment,
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         onPressed: !enabled || controller.state.isActive
             ? null
-            : () => controller.pickAndStart(prepare),
-        icon: const Icon(Icons.add_photo_alternate_outlined),
+            : () => unawaited(_chooseSource(context)),
+        icon: const Icon(Icons.attach_file_rounded),
       ),
     );
   }
+
+  Future<void> _chooseSource(BuildContext context) async {
+    final source = await showModalBottomSheet<AttachmentPickerSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          key: const Key('attachment-source-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final option in _options(AppLocalizations.of(sheetContext)))
+              ListTile(
+                key: Key('attach-source-${option.source.name}'),
+                leading: Icon(option.icon),
+                title: Text(option.label),
+                onTap: () => Navigator.of(sheetContext).pop(option.source),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || controller.state.isActive) {
+      return;
+    }
+    await controller.pickAndStart(() => prepare(source));
+  }
+
+  List<_SourceOption> _options(AppLocalizations strings) => <_SourceOption>[
+    (
+      source: AttachmentPickerSource.gallery,
+      icon: Icons.image_outlined,
+      label: strings.attachFromGallery,
+    ),
+    (
+      source: AttachmentPickerSource.camera,
+      icon: Icons.photo_camera_outlined,
+      label: strings.attachFromCamera,
+    ),
+    (
+      source: AttachmentPickerSource.file,
+      icon: Icons.insert_drive_file_outlined,
+      label: strings.attachFromFile,
+    ),
+  ];
 }
+
+typedef _SourceOption = ({
+  AttachmentPickerSource source,
+  IconData icon,
+  String label,
+});
 
 final class ImageAttachmentUploadPanel extends StatelessWidget {
   const ImageAttachmentUploadPanel({
@@ -284,6 +340,9 @@ String _statusText(
   ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
     'dav-quota-exceeded' => strings.imageUploadFailedQuota,
     'dav-permission-denied' => strings.imageUploadFailedPermission,
+    'camera-permission-denied' => strings.attachmentCameraDenied,
+    'camera-unavailable' => strings.attachmentCameraUnavailable,
+    'unsupported-attachment-type' => strings.attachmentTypeUnsupported,
     _ => strings.imageUploadFailed,
   },
   ImageAttachmentUploadPhase.cancelled => strings.uploadCancelled,

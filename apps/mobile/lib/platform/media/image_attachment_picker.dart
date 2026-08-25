@@ -2,13 +2,26 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart'
+    show MissingPluginException, PlatformException;
+import 'package:image_picker/image_picker.dart' as camera;
 import 'package:mime/mime.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:talk_protocol/talk_protocol.dart';
 
-enum ImageAttachmentPickerError { unsupportedType, invalidSelection }
+/// Where the bytes of an attachment come from. All three end up in the same
+/// durable copy and follow the identical upload path; only the selection UI
+/// and the accepted MIME types differ.
+enum AttachmentPickerSource { gallery, camera, file }
+
+enum ImageAttachmentPickerError {
+  unsupportedType,
+  invalidSelection,
+  cameraPermissionDenied,
+  cameraUnavailable,
+}
 
 final class ImageAttachmentPickerException implements Exception {
   const ImageAttachmentPickerException(this.code);
@@ -36,10 +49,13 @@ final class ImageSelection {
 }
 
 abstract interface class ImageSelectionBackend {
-  Future<ImageSelection?> selectImage();
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source);
 }
 
-final class FileSelectorImageSelectionBackend implements ImageSelectionBackend {
+/// Gallery and generic file selection run through `file_selector`; the camera
+/// goes through `image_picker`, which is the only one of the two that wraps
+/// `ACTION_IMAGE_CAPTURE` / `UIImagePickerController`.
+final class PlatformAttachmentSelectionBackend implements ImageSelectionBackend {
   static const XTypeGroup _imageTypes = XTypeGroup(
     label: 'Images',
     extensions: <String>[
@@ -67,13 +83,17 @@ final class FileSelectorImageSelectionBackend implements ImageSelectionBackend {
     webWildCards: <String>['image/*'],
   );
 
-  const FileSelectorImageSelectionBackend();
+  const PlatformAttachmentSelectionBackend();
 
   @override
-  Future<ImageSelection?> selectImage() async {
-    final file = await openFile(
-      acceptedTypeGroups: const <XTypeGroup>[_imageTypes],
-    );
+  Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
+    final file = switch (source) {
+      AttachmentPickerSource.gallery => await openFile(
+        acceptedTypeGroups: const <XTypeGroup>[_imageTypes],
+      ),
+      AttachmentPickerSource.file => await openFile(),
+      AttachmentPickerSource.camera => await _capture(),
+    };
     if (file == null) {
       return null;
     }
@@ -83,6 +103,24 @@ final class FileSelectorImageSelectionBackend implements ImageSelectionBackend {
       byteLength: await file.length(),
       openRead: ({int? start, int? end}) => file.openRead(start, end),
     );
+  }
+
+  Future<XFile?> _capture() async {
+    try {
+      return await camera.ImagePicker().pickImage(
+        source: camera.ImageSource.camera,
+      );
+    } on PlatformException catch (error) {
+      throw ImageAttachmentPickerException(
+        error.code == 'camera_access_denied'
+            ? ImageAttachmentPickerError.cameraPermissionDenied
+            : ImageAttachmentPickerError.cameraUnavailable,
+      );
+    } on MissingPluginException {
+      throw const ImageAttachmentPickerException(
+        ImageAttachmentPickerError.cameraUnavailable,
+      );
+    }
   }
 }
 
@@ -106,9 +144,10 @@ final class DurableImageAttachmentPicker {
   final int maximumImageBytes;
 
   Future<PreparedAttachmentSource?> pick({
+    AttachmentPickerSource source = AttachmentPickerSource.gallery,
     AttachmentCancellationSignal? cancellationSignal,
   }) async {
-    final selection = await backend.selectImage();
+    final selection = await backend.selectImage(source);
     if (selection == null) {
       return null;
     }
@@ -122,7 +161,11 @@ final class DurableImageAttachmentPicker {
         DurableAttachmentSourceError.sourceTooLarge,
       );
     }
-    final displayName = _safeDisplayName(selection.displayName);
+    final imageOnly = source != AttachmentPickerSource.file;
+    final displayName = _safeDisplayName(
+      selection.displayName,
+      fallback: imageOnly ? 'image' : 'attachment',
+    );
     final header = await _readPrefix(
       selection.openRead(
         start: 0,
@@ -131,8 +174,8 @@ final class DurableImageAttachmentPicker {
       defaultMagicNumbersMaxLength,
     );
     final detected = lookupMimeType(displayName, headerBytes: header);
-    final mimeType = detected ?? selection.declaredMimeType;
-    if (mimeType == null || !mimeType.startsWith('image/')) {
+    final mimeType = _normalizeMimeType(detected ?? selection.declaredMimeType);
+    if (imageOnly && (mimeType == null || !mimeType.startsWith('image/'))) {
       throw const ImageAttachmentPickerException(
         ImageAttachmentPickerError.unsupportedType,
       );
@@ -140,7 +183,10 @@ final class DurableImageAttachmentPicker {
     return store.copyFromStream(
       stream: selection.openRead(),
       expectedByteLength: selection.byteLength,
-      mimeType: mimeType,
+      // An unrecognised file still has to reach the server with a MIME type
+      // that describes it honestly, so it falls back to the generic one
+      // instead of borrowing whatever the platform guessed.
+      mimeType: mimeType ?? 'application/octet-stream',
       displayName: displayName,
       cancellationSignal: cancellationSignal,
     );
@@ -162,13 +208,31 @@ Future<List<int>> _readPrefix(Stream<List<int>> stream, int maximum) async {
   return bytes;
 }
 
-String _safeDisplayName(String value) {
+final RegExp _mimeTypePattern = RegExp(
+  r'^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$',
+);
+
+/// Drops parameters such as `; charset=utf-8` and rejects anything the
+/// protocol layer would refuse, so a hostile or malformed platform MIME type
+/// can never reach [PreparedAttachmentSource].
+String? _normalizeMimeType(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final essence = value.split(';').first.trim().toLowerCase();
+  if (essence.length > 255 || !_mimeTypePattern.hasMatch(essence)) {
+    return null;
+  }
+  return essence;
+}
+
+String _safeDisplayName(String value, {required String fallback}) {
   var name = p
       .basename(value)
       .trim()
       .replaceAll(RegExp(r'[\\/\x00-\x1f\x7f]'), '_');
   if (name.isEmpty || name == '.' || name == '..') {
-    name = 'image';
+    name = fallback;
   }
   if (name.length <= 255) {
     return name;

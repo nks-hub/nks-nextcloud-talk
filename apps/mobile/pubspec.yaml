@@ -61,6 +61,10 @@ dependencies:
   # The system share sheet needs ACTION_SEND / UIActivityViewController;
   # share_plus (BSD-3-Clause) is the Flutter Community plugin for it.
   share_plus: ^13.3.0
+  # Taking a photo needs ACTION_IMAGE_CAPTURE / UIImagePickerController, which
+  # file_selector does not cover; image_picker (BSD-3-Clause, flutter/packages)
+  # is the first-party plugin for it and is used for the camera source only.
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:

@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>NCloudTalk needs camera access to attach a photo you take to a message.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NCloudTalk needs microphone access to record voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

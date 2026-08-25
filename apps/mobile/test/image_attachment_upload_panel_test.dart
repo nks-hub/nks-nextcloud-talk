@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_controller.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_panel.dart';
+import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -13,7 +14,7 @@ void main() {
     tester,
   ) async {
     final selection = Completer<ImageAttachmentUploadRequest?>();
-    var pickerOpened = false;
+    AttachmentPickerSource? pickedSource;
     final controller = ImageAttachmentUploadController(
       startUpload: (_) async => throw StateError('Upload must not start.'),
     );
@@ -22,17 +23,19 @@ void main() {
     await tester.pumpWidget(
       _app(
         controller,
-        prepare: () {
-          pickerOpened = true;
+        prepare: (source) {
+          pickedSource = source;
           return selection.future;
         },
       ),
     );
 
     await tester.tap(find.byKey(const Key('pick-image-attachment')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('attach-source-gallery')));
+    await tester.pumpAndSettle();
 
-    expect(pickerOpened, isTrue);
+    expect(pickedSource, AttachmentPickerSource.gallery);
     expect(controller.state.phase, ImageAttachmentUploadPhase.preparing);
     expect(
       find.byKey(const Key('image-attachment-upload-panel')),
@@ -94,7 +97,7 @@ void main() {
       find.byKey(const Key('image-attachment-upload-panel')),
       findsOneWidget,
     );
-    expect(find.text('Uploading image… 37%'), findsOneWidget);
+    expect(find.text('Uploading… 37%'), findsOneWidget);
     expect(
       tester
           .widget<LinearProgressIndicator>(
@@ -125,7 +128,7 @@ void main() {
 
     await tester.pumpWidget(_app(controller));
 
-    expect(find.text('The image could not be sent.'), findsOneWidget);
+    expect(find.text('The attachment could not be sent.'), findsOneWidget);
     expect(
       find.byKey(const Key('retry-image-attachment-upload')),
       findsOneWidget,
@@ -164,7 +167,7 @@ void main() {
     await tester.pumpWidget(_app(controller));
 
     expect(
-      find.text('The image could not be sent: storage quota exceeded.'),
+      find.text('The attachment could not be sent: storage quota exceeded.'),
       findsOneWidget,
     );
     expect(
@@ -202,7 +205,7 @@ void main() {
 
       expect(
         find.text(
-          'The image could not be sent: you do not have permission to '
+          'The attachment could not be sent: you do not have permission to '
           'upload files here.',
         ),
         findsOneWidget,
@@ -222,7 +225,7 @@ void main() {
 
 Widget _app(
   ImageAttachmentUploadController controller, {
-  PrepareImageAttachment? prepare,
+  PrepareAttachmentFromSource? prepare,
 }) {
   return localizedTestApp(
     home: MediaQuery(
@@ -240,7 +243,7 @@ Widget _app(
                   alignment: AlignmentDirectional.centerStart,
                   child: ImageAttachmentPickerButton(
                     controller: controller,
-                    prepare: prepare ?? () async => _request,
+                    prepare: prepare ?? (_) async => _request,
                   ),
                 ),
                 ImageAttachmentUploadPanel(controller: controller),

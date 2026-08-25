@@ -114,10 +114,9 @@
   "zoomOut": "Zoom out",
   "resetZoom": "Reset zoom",
   "zoomIn": "Zoom in",
-  "attachImage": "Attach image",
-  "preparingImage": "Preparing image…",
+  "preparingImage": "Preparing attachment…",
   "imageUploadQueued": "Waiting to upload",
-  "uploadingImage": "Uploading image… {percent}%",
+  "uploadingImage": "Uploading… {percent}%",
   "@uploadingImage": {
     "placeholders": {
       "percent": {
@@ -127,10 +126,10 @@
   },
   "confirmingAttachment": "Confirming the attachment…",
   "cancellingUpload": "Cancelling upload…",
-  "imageSent": "Image sent",
-  "imageUploadFailed": "The image could not be sent.",
-  "imageUploadFailedQuota": "The image could not be sent: storage quota exceeded.",
-  "imageUploadFailedPermission": "The image could not be sent: you do not have permission to upload files here.",
+  "imageSent": "Attachment sent",
+  "imageUploadFailed": "The attachment could not be sent.",
+  "imageUploadFailedQuota": "The attachment could not be sent: storage quota exceeded.",
+  "imageUploadFailedPermission": "The attachment could not be sent: you do not have permission to upload files here.",
   "uploadCancelled": "Upload cancelled",
   "participantAvatarGuest": "Guest",
   "participantAvatarBot": "Bot",
@@ -348,5 +347,12 @@
   "imageShareFailed": "The image could not be shared.",
   "jumpToOriginalMessage": "Show the original message",
   "jumpToMessageNotFound": "That message is no longer available in this conversation.",
-  "jumpToMessageConversationMissing": "That conversation is not available on this device."
+  "jumpToMessageConversationMissing": "That conversation is not available on this device.",
+  "addAttachment": "Add attachment",
+  "attachFromGallery": "Choose a picture",
+  "attachFromCamera": "Take a picture",
+  "attachFromFile": "Choose a file",
+  "attachmentCameraDenied": "Taking a picture needs camera access. Grant it in the system settings and try again.",
+  "attachmentCameraUnavailable": "No camera is available on this device.",
+  "attachmentTypeUnsupported": "That file type cannot be attached here."
 }

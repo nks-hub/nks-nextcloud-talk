@@ -392,17 +392,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get zoomIn => 'Zoom in';
 
   @override
-  String get attachImage => 'Attach image';
-
-  @override
-  String get preparingImage => 'Preparing image…';
+  String get preparingImage => 'Preparing attachment…';
 
   @override
   String get imageUploadQueued => 'Waiting to upload';
 
   @override
   String uploadingImage(int percent) {
-    return 'Uploading image… $percent%';
+    return 'Uploading… $percent%';
   }
 
   @override
@@ -412,18 +409,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancellingUpload => 'Cancelling upload…';
 
   @override
-  String get imageSent => 'Image sent';
+  String get imageSent => 'Attachment sent';
 
   @override
-  String get imageUploadFailed => 'The image could not be sent.';
+  String get imageUploadFailed => 'The attachment could not be sent.';
 
   @override
   String get imageUploadFailedQuota =>
-      'The image could not be sent: storage quota exceeded.';
+      'The attachment could not be sent: storage quota exceeded.';
 
   @override
   String get imageUploadFailedPermission =>
-      'The image could not be sent: you do not have permission to upload files here.';
+      'The attachment could not be sent: you do not have permission to upload files here.';
 
   @override
   String get uploadCancelled => 'Upload cancelled';
@@ -1009,4 +1006,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jumpToMessageConversationMissing =>
       'That conversation is not available on this device.';
+
+  @override
+  String get addAttachment => 'Add attachment';
+
+  @override
+  String get attachFromGallery => 'Choose a picture';
+
+  @override
+  String get attachFromCamera => 'Take a picture';
+
+  @override
+  String get attachFromFile => 'Choose a file';
+
+  @override
+  String get attachmentCameraDenied =>
+      'Taking a picture needs camera access. Grant it in the system settings and try again.';
+
+  @override
+  String get attachmentCameraUnavailable =>
+      'No camera is available on this device.';
+
+  @override
+  String get attachmentTypeUnsupported =>
+      'That file type cannot be attached here.';
 }

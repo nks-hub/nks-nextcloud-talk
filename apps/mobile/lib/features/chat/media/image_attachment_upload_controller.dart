@@ -149,6 +149,18 @@ typedef StartImageAttachmentUpload =
 typedef PrepareImageAttachment =
     Future<ImageAttachmentUploadRequest?> Function();
 
+/// Lets [ImageAttachmentUploadController.pickAndStart] report why picking a
+/// source failed instead of collapsing every cause into one generic code.
+/// Anything else thrown by the prepare callback stays generic.
+final class ImageAttachmentPreparationFailure implements Exception {
+  const ImageAttachmentPreparationFailure(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'ImageAttachmentPreparationFailure($code)';
+}
+
 @immutable
 final class ImageAttachmentUploadState {
   const ImageAttachmentUploadState._({
@@ -274,7 +286,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     final ImageAttachmentUploadRequest? request;
     try {
       request = await prepare();
-    } on Object {
+    } on Object catch (error) {
       if (_isCurrent(generation)) {
         if (_cancelRequested) {
           _cancelRequested = false;
@@ -283,7 +295,10 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
           _setState(
             ImageAttachmentUploadState.failed(
               null,
-              'source-preparation-failed',
+              error is ImageAttachmentPreparationFailure &&
+                      _validFailureCode(error.code)
+                  ? error.code
+                  : 'source-preparation-failed',
               retryAllowed: false,
             ),
           );

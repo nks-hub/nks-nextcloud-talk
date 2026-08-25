@@ -60,7 +60,7 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.submissionBridge,
     this.controller,
     this.idleActions = const <Widget>[],
-    this.imageSelectionBackend = const FileSelectorImageSelectionBackend(),
+    this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
     this.createVoiceCaptureBackend,
     this.createVoicePlaybackBackend,
   });
@@ -212,7 +212,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     }
   }
 
-  Future<ImageAttachmentUploadRequest?> _prepareImage() async {
+  Future<ImageAttachmentUploadRequest?> _prepareImage(
+    AttachmentPickerSource pickerSource,
+  ) async {
     if (!_imageSupported) {
       throw const AttachmentSubmissionException(
         AttachmentSubmissionFailure.unsupported,
@@ -222,7 +224,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     _imagePreparationCancellation = cancellation;
     PreparedAttachmentSource? source;
     try {
-      source = await _imagePicker.pick(cancellationSignal: cancellation.signal);
+      source = await _imagePicker.pick(
+        source: pickerSource,
+        cancellationSignal: cancellation.signal,
+      );
       if (source == null) {
         return null;
       }
@@ -238,6 +243,15 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         source: source,
         metadata: _imageMetadata,
       );
+    } on ImageAttachmentPickerException catch (error) {
+      throw ImageAttachmentPreparationFailure(switch (error.code) {
+        ImageAttachmentPickerError.cameraPermissionDenied =>
+          'camera-permission-denied',
+        ImageAttachmentPickerError.cameraUnavailable => 'camera-unavailable',
+        ImageAttachmentPickerError.unsupportedType ||
+        ImageAttachmentPickerError.invalidSelection =>
+          'unsupported-attachment-type',
+      });
     } finally {
       if (identical(_imagePreparationCancellation, cancellation)) {
         _imagePreparationCancellation = null;

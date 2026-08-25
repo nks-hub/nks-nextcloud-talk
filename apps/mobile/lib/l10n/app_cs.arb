@@ -114,10 +114,9 @@
   "zoomOut": "Oddálit",
   "resetZoom": "Obnovit přiblížení",
   "zoomIn": "Přiblížit",
-  "attachImage": "Připojit obrázek",
-  "preparingImage": "Připravuji obrázek…",
+  "preparingImage": "Připravuji přílohu…",
   "imageUploadQueued": "Čeká na nahrání",
-  "uploadingImage": "Nahrávám obrázek… {percent} %",
+  "uploadingImage": "Nahrávám… {percent} %",
   "@uploadingImage": {
     "placeholders": {
       "percent": {
@@ -127,10 +126,10 @@
   },
   "confirmingAttachment": "Potvrzuji přílohu…",
   "cancellingUpload": "Ruším nahrávání…",
-  "imageSent": "Obrázek byl odeslán",
-  "imageUploadFailed": "Obrázek se nepodařilo odeslat.",
-  "imageUploadFailedQuota": "Obrázek se nepodařilo odeslat: úložiště je zaplněné.",
-  "imageUploadFailedPermission": "Obrázek se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.",
+  "imageSent": "Příloha byla odeslána",
+  "imageUploadFailed": "Přílohu se nepodařilo odeslat.",
+  "imageUploadFailedQuota": "Přílohu se nepodařilo odeslat: úložiště je zaplněné.",
+  "imageUploadFailedPermission": "Přílohu se nepodařilo odeslat: nemáte oprávnění sem nahrávat soubory.",
   "uploadCancelled": "Nahrávání bylo zrušeno",
   "participantAvatarGuest": "Host",
   "participantAvatarBot": "Bot",
@@ -320,5 +319,12 @@
   "imageShareFailed": "Obrázek se nepodařilo sdílet.",
   "jumpToOriginalMessage": "Zobrazit původní zprávu",
   "jumpToMessageNotFound": "Tato zpráva už v konverzaci není dostupná.",
-  "jumpToMessageConversationMissing": "Tato konverzace není v zařízení dostupná."
+  "jumpToMessageConversationMissing": "Tato konverzace není v zařízení dostupná.",
+  "addAttachment": "Přidat přílohu",
+  "attachFromGallery": "Vybrat obrázek",
+  "attachFromCamera": "Vyfotit",
+  "attachFromFile": "Vybrat soubor",
+  "attachmentCameraDenied": "Focení vyžaduje přístup ke kameře. Povolte ho v nastavení systému a zkuste to znovu.",
+  "attachmentCameraUnavailable": "Toto zařízení nemá dostupnou kameru.",
+  "attachmentTypeUnsupported": "Tento typ souboru sem nelze připojit."
 }
