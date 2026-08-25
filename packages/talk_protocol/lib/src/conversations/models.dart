@@ -121,6 +121,8 @@ final class ConversationRoom {
     required this.hasPassword,
     required this.notificationCalls,
     required this.notificationLevel,
+    required this.lastPinnedId,
+    required this.hiddenPinnedId,
     required this.hasScheduledMessages,
     required this.lastMessage,
     required this.wire,
@@ -185,6 +187,15 @@ final class ConversationRoom {
   final bool hasPassword;
   final int notificationCalls;
   final int notificationLevel;
+
+  /// Message ID of the conversation's currently pinned message, `0` when
+  /// nothing is pinned. Talk keeps at most one pin per conversation.
+  final int lastPinnedId;
+
+  /// The pinned message ID this account hid for itself, `0` when the pin is
+  /// not hidden. A pin is visible while
+  /// `lastPinnedId > 0 && lastPinnedId != hiddenPinnedId`.
+  final int hiddenPinnedId;
   final int hasScheduledMessages;
   final ConversationPreview? lastMessage;
   final Map<String, Object?> wire;
@@ -318,8 +329,8 @@ ConversationRoom parseConversationRoom(
     path: '$path.tagIds',
     code: _responseCode,
   );
-  _requireInt(room, 'lastPinnedId', path);
-  _requireInt(room, 'hiddenPinnedId', path);
+  final lastPinnedId = _requireInt(room, 'lastPinnedId', path);
+  final hiddenPinnedId = _requireInt(room, 'hiddenPinnedId', path);
   final hasScheduledMessages = _requireInt(
     room,
     'hasScheduledMessages',
@@ -382,6 +393,8 @@ ConversationRoom parseConversationRoom(
     hasPassword: hasPassword,
     notificationCalls: notificationCalls,
     notificationLevel: notificationLevel,
+    lastPinnedId: lastPinnedId,
+    hiddenPinnedId: hiddenPinnedId,
     hasScheduledMessages: hasScheduledMessages,
     lastMessage: lastMessage,
     wire: room,
