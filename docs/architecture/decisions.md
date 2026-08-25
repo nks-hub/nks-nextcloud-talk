@@ -169,6 +169,11 @@ Response se smí commitnout jen při shodě request anchoru s aktuálním cursor
 Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
 se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
 
+Ordinary reply view a named-thread network scope jsou oddělené projekce.
+Přechod z ordinary view do named threadu nesmí migrovat ordinary cursor ani
+posunout nový network scope. Root merge se smí promítnout jen do stejného
+accountu a roomu. Tyto hranice mají automatizované regresní testy.
+
 Full embedded parent z thread response smí obnovit cached thread original jen
 při shodě room tokenu, parent/original ID a thread ID. Explicitní serverové
 `threadReplies` je autoritativní. Když chybí, Flutter repository odvodí počet z
@@ -205,13 +210,17 @@ odmítne.
 Pure Dart single-use plán dokládá společný candidate snapshot pro chat merge a
 outbox confirmation i úplný rollback zahozením plánu. Flutter `ChatRepository`
 načte snapshot, vytvoří plán a uloží message/scope/outbox změny uvnitř jedné
-Drift transakce. Schema v5 ukládá nullable `threadId`; file-backed reopen
-zachová queued i sending named-thread operaci a restart recovery převede
-`sending` na `awaitingConfirmation`. Potvrzená named-thread zpráva, ať jde o
-parentless direct POST nebo autoritativní history/future shape s přesně svázaným
-full či compact deleted rootem, současně obnoví cached root `threadId`,
-`isThread` a `threadReplies`. Zbývá live process-death, fault-injection rollback
-a vzdálená reconciliation.
+Drift transakce. Fault-injection test potvrzuje úplný rollback zprávy i outboxu,
+když selže view projekce. Ordinary reply zůstává viditelná od pending stavu přes
+HTTP 201 a Reply UI vyžaduje vyřešený profil s capability `chat-replies`.
+
+Schema v5 ukládá nullable `threadId`; file-backed reopen zachová queued i
+sending named-thread operaci a restart recovery převede `sending` na
+`awaitingConfirmation`. Legacy schema migrace zachová a dokončí queued named
+send. Potvrzená named-thread zpráva, ať jde o parentless direct POST nebo
+autoritativní history/future shape s přesně svázaným full či compact deleted
+rootem, současně obnoví cached root `threadId`, `isThread` a `threadReplies`.
+Zbývá live process-death a vzdálená reconciliation.
 
 ### D-018: Licence mobilního klienta
 
@@ -546,6 +555,22 @@ zdarma a tato cena je vědomě přijatá výměnou za presence.
 Barvy badge jsou definované pro každý theme zvlášť a každý stav má vlastní
 glyph, aby stav nezávisel jen na barvě. Textová alternativa je povinná, protože
 samotná barevná tečka je pro čtečku obrazovky neviditelná.
+
+### D-030: Atomizace ručně udržovaných souborů
+
+Stav: Přijato uživatelem 26. srpna 2026.
+
+Ručně udržovaný zdrojový nebo testovací soubor má zůstat pod 1000 řádky. Větší
+celek se rozdělí podle odpovědností do menších souborů s úzkým veřejným
+rozhraním; samotné přesunutí řádků bez zmenšení odpovědnosti není dokončení.
+Generated soubory jsou z limitu vyňaté, ale nesmějí se ručně editovat.
+
+Výchozí audit eviduje 24 ručně udržovaných souborů nad limitem: 17 Dart souborů
+a 7 Python/JSON contract validátorů nebo fixtures. Generated výjimky jsou
+`app_database.g.dart` a tři lokalizační soubory
+`lib/l10n/generated/app_localizations*.dart`. Atomizace `chat_repository.dart`,
+`chat_service_integration_test.dart` a `chat_service.dart` jsou dokončené;
+zbývající backlog je vedený v `docs/TODO.md` a nesmí být vydáván za hotový.
 
 ## Vyřešené volby
 
