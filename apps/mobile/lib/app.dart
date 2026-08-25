@@ -39,6 +39,7 @@ final class _AppHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(androidPushCoordinatorProvider);
+    ref.watch(deepLinkCoordinatorProvider);
     final accounts = ref.watch(accountsProvider);
     return accounts.when(
       data: (items) =>
