@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,7 +13,9 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
@@ -256,8 +260,17 @@ void main() {
       expect(openImageSemantics.hasAction(ui.SemanticsAction.tap), isTrue);
       expect(tester.getSize(openImage).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(openImage).height, greaterThanOrEqualTo(48));
-      await tester.ensureVisible(openImage);
-      await tester.tap(openImage);
+      final openAttachment = find.byKey(const Key('chat-open-attachment-20-0'));
+      expect(openAttachment, findsOneWidget);
+      expect(
+        find.descendant(
+          of: openAttachment,
+          matching: find.byIcon(Icons.open_in_new_rounded),
+        ),
+        findsNothing,
+      );
+      await tester.ensureVisible(openAttachment);
+      await tester.tap(openAttachment);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -325,6 +338,255 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+
+  testWidgets('image attachment row opens viewer while thumbnail is loading', (
+    tester,
+  ) async {
+    final thumbnail = Completer<ChatMediaImage?>();
+    addTearDown(() {
+      if (!thumbnail.isCompleted) {
+        thumbnail.complete(null);
+      }
+    });
+    final message = _attachmentMessage(
+      id: 30,
+      fileId: 88,
+      name: 'pending.gif',
+      mimeType: 'image/gif',
+      previewAvailable: 'yes',
+      link: '/index.php/f/88',
+    );
+    final mediaOverride = chatMediaProvider.overrideWith(
+      (ref, key) => thumbnail.future,
+    );
+    late Uri openedPreview;
+    vault.values[account.id] = 'fixture-viewer-password';
+    final viewerRepository = ChatMediaRepository(
+      vault,
+      client: MockClient((request) async {
+        openedPreview = request.url;
+        return http.Response.bytes(
+          base64Decode(_onePixelGif),
+          200,
+          headers: const <String, String>{'content-type': 'image/gif'},
+        );
+      }),
+    );
+    addTearDown(viewerRepository.close);
+
+    await tester.pumpWidget(
+      app(
+        home: Scaffold(
+          body: ChatMessageContent(
+            account: account,
+            message: message,
+            fallbackText: '',
+            foregroundColor: Colors.black,
+          ),
+        ),
+        overrides: [
+          mediaOverride,
+          chatMediaRepositoryProvider.overrideWithValue(viewerRepository),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-image-loading-30-0')), findsOneWidget);
+    final row = find.byKey(const Key('chat-open-attachment-30-0'));
+    expect(row, findsOneWidget);
+    await tester.tap(row);
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
+    expect(openedPreview.queryParameters['fileId'], '88');
+    expect(openedPreview.queryParameters['x'], '2048');
+    expect(openedPreview.queryParameters['y'], '2048');
+  });
+
+  testWidgets('failed image thumbnail retries and keeps internal viewer', (
+    tester,
+  ) async {
+    var thumbnailAttempts = 0;
+    final message = _attachmentMessage(
+      id: 31,
+      fileId: 89,
+      name: 'retry.gif',
+      mimeType: 'image/gif',
+      previewAvailable: 'yes',
+      link: '/index.php/f/89',
+    );
+    final mediaOverride = chatMediaProvider.overrideWith((ref, key) async {
+      thumbnailAttempts++;
+      if (thumbnailAttempts == 1) {
+        throw StateError('synthetic preview failure');
+      }
+      return ChatMediaImage(
+        body: base64Decode(_onePixelGif),
+        contentType: 'image/gif',
+      );
+    });
+    vault.values[account.id] = 'fixture-viewer-password';
+    final viewerRepository = ChatMediaRepository(
+      vault,
+      client: MockClient((request) async {
+        return http.Response.bytes(
+          base64Decode(_onePixelGif),
+          200,
+          headers: const <String, String>{'content-type': 'image/gif'},
+        );
+      }),
+    );
+    addTearDown(viewerRepository.close);
+
+    await tester.pumpWidget(
+      app(
+        home: Scaffold(
+          body: ChatMessageContent(
+            account: account,
+            message: message,
+            fallbackText: '',
+            foregroundColor: Colors.black,
+          ),
+        ),
+        overrides: [
+          mediaOverride,
+          chatMediaRepositoryProvider.overrideWithValue(viewerRepository),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-image-error-31-0')), findsOneWidget);
+    expect(thumbnailAttempts, 1);
+    final attachmentRow = find.byKey(const Key('chat-open-attachment-31-0'));
+    expect(
+      find.descendant(
+        of: attachmentRow,
+        matching: find.byIcon(Icons.open_in_new_rounded),
+      ),
+      findsNothing,
+    );
+    await tester.tap(attachmentRow);
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('authenticated-image-close')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chat-image-retry-31-0')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(thumbnailAttempts, 2);
+    expect(find.byKey(const Key('chat-image-31-0')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: attachmentRow,
+        matching: find.byIcon(Icons.open_in_new_rounded),
+      ),
+      findsNothing,
+    );
+    await tester.tap(attachmentRow);
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
+  });
+
+  testWidgets('unsupported attachment previews keep external fallback', (
+    tester,
+  ) async {
+    const launcherChannel = MethodChannel('plugins.flutter.io/url_launcher');
+    final launched = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      launcherChannel,
+      (call) async {
+        expect(call.method, 'launch');
+        final arguments = call.arguments! as Map<Object?, Object?>;
+        launched.add(arguments['url']! as String);
+        return true;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        launcherChannel,
+        null,
+      ),
+    );
+    final document = _attachmentMessage(
+      id: 32,
+      fileId: 90,
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      previewAvailable: 'yes',
+      link: '/remote.php/dav/files/fixture-user/report.pdf',
+    );
+    final previewDisabledImage = _attachmentMessage(
+      id: 33,
+      fileId: 91,
+      name: 'disabled.gif',
+      mimeType: 'image/gif',
+      previewAvailable: 'no',
+      link: '/index.php/f/91',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: Scaffold(
+          body: Flex(
+            direction: Axis.vertical,
+            children: [
+              ChatMessageContent(
+                account: account,
+                message: document,
+                fallbackText: '',
+                foregroundColor: Colors.black,
+              ),
+              ChatMessageContent(
+                account: account,
+                message: previewDisabledImage,
+                fallbackText: '',
+                foregroundColor: Colors.black,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    for (final messageId in const [32, 33]) {
+      final row = find.byKey(Key('chat-open-attachment-$messageId-0'));
+      expect(row, findsOneWidget);
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byIcon(Icons.open_in_new_rounded),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(row);
+      await tester.pump();
+    }
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+
+    expect(launched, <String>[
+      'https://cloud.example.invalid/remote.php/dav/files/fixture-user/report.pdf',
+      'https://cloud.example.invalid/index.php/f/91',
+    ]);
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
+  });
 
   testWidgets('localizes today, yesterday, and older day separators', (
     tester,
@@ -663,6 +925,37 @@ void main() {
 }
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';
+const _onePixelGif = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
+ChatMessage _attachmentMessage({
+  required int id,
+  required int fileId,
+  required String name,
+  required String mimeType,
+  required Object previewAvailable,
+  required String link,
+}) {
+  return ChatMessage.fromJson(
+    _messageJson(
+      id: id,
+      actorId: 'attachment-author',
+      actorDisplayName: 'Attachment author',
+      timestamp: 1767225600 + id,
+      message: '{file}',
+      markdown: true,
+      messageParameters: <String, Object?>{
+        'file': <String, Object?>{
+          'type': 'file',
+          'id': '$fileId',
+          'name': name,
+          'link': link,
+          'mimetype': mimeType,
+          'preview-available': previewAvailable,
+        },
+      },
+    ),
+  );
+}
 
 Map<String, Object?> _messageJson({
   required int id,

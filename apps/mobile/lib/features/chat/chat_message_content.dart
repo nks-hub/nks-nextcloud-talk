@@ -934,10 +934,13 @@ final class _ChatAttachment extends ConsumerWidget {
     final mimeType = _mimeType(parameter);
     final previewUri = _previewUri(account, parameter, mimeType);
     final link = _safeSameOriginLink(account, parameter.link);
-    final image = previewUri == null
+    final previewProvider = previewUri == null
         ? null
-        : ref.watch(chatMediaProvider((account: account, uri: previewUri)));
+        : chatMediaProvider((account: account, uri: previewUri));
+    final image = previewProvider == null ? null : ref.watch(previewProvider);
     final loadedImage = image?.asData?.value;
+    final imageFailed =
+        image != null && !image.isLoading && loadedImage == null;
     final fullScreenPreviewUri = previewUri == null
         ? null
         : _fullScreenPreviewUri(previewUri);
@@ -952,6 +955,12 @@ final class _ChatAttachment extends ConsumerWidget {
               repository: ref.read(chatMediaRepositoryProvider),
             ),
           );
+    final VoidCallback? openExternal = link == null
+        ? null
+        : () =>
+              unawaited(launchUrl(link, mode: LaunchMode.externalApplication));
+    final openAttachment = openImage ?? openExternal;
+    final opensExternally = openImage == null && openExternal != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1003,17 +1012,46 @@ final class _ChatAttachment extends ConsumerWidget {
             child: const CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(height: 6),
+        ] else if (imageFailed) ...[
+          Container(
+            key: Key('chat-image-error-$messageId-$index'),
+            width: 240,
+            constraints: const BoxConstraints(minHeight: 72),
+            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.broken_image_outlined, color: scheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    strings.imageLoadFailed,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  key: Key('chat-image-retry-$messageId-$index'),
+                  onPressed: previewProvider == null
+                      ? null
+                      : () => ref.invalidate(previewProvider),
+                  tooltip: strings.retry,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
         ],
         Material(
           color: scheme.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
             key: Key('chat-open-attachment-$messageId-$index'),
-            onTap: link == null
-                ? null
-                : () => unawaited(
-                    launchUrl(link, mode: LaunchMode.externalApplication),
-                  ),
+            onTap: openAttachment,
             borderRadius: BorderRadius.circular(10),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48),
@@ -1039,7 +1077,7 @@ final class _ChatAttachment extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (link != null) ...[
+                    if (opensExternally) ...[
                       const SizedBox(width: 8),
                       Icon(
                         Icons.open_in_new_rounded,
