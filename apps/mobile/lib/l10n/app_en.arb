@@ -219,6 +219,7 @@
   "roomDetailsActionErrorForbidden": "You don't have permission to do this.",
   "roomDetailsActionErrorRoomMissing": "This conversation no longer exists.",
   "roomDetailsLeaveRejected": "You can't leave until another moderator is promoted.",
+<<<<<<< HEAD
   "settingsTitle": "Settings",
   "settingsAccountsSection": "Accounts",
   "settingsAccountSelected": "Active",
@@ -229,4 +230,19 @@
   "settingsThemeSystem": "Match system",
   "settingsThemeLight": "Light",
   "settingsThemeDark": "Dark"
+=======
+  "conversationActionsTitle": "Conversation actions",
+  "conversationActionMarkUnread": "Mark as unread",
+  "conversationActionArchive": "Archive conversation",
+  "conversationActionUnarchive": "Unarchive conversation",
+  "conversationArchivedSectionShow": "{count, plural, =1{Archived (1)} other{Archived ({count})}}",
+  "@conversationArchivedSectionShow": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "conversationArchivedSectionHide": "Back to conversations",
+  "conversationActionErrorGeneric": "The action could not be completed. Please try again.",
+  "conversationActionErrorReauth": "Please sign in again to make this change."
+>>>>>>> worktree-agent-a8bf028493589ce92
 }

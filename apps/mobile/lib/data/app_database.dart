@@ -57,6 +57,8 @@ class CachedConversations extends Table {
 
   BoolColumn get favorite => boolean()();
 
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+
   IntColumn get readOnly => integer().withDefault(const Constant(0))();
 
   IntColumn get roomType => integer().withDefault(const Constant(0))();
@@ -446,7 +448,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -543,6 +545,20 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 9) {
         await migrator.createTable(chatDrafts);
+      }
+      if (from < 10) {
+        await migrator.addColumn(
+          cachedConversations,
+          cachedConversations.isArchived,
+        );
+        await customStatement('''
+          UPDATE cached_conversations
+          SET is_archived = CASE
+                WHEN json_valid(raw_json)
+                  THEN COALESCE(json_extract(raw_json, '\$.isArchived'), 0)
+                ELSE 0
+              END
+        ''');
       }
       if (from < 8) {
         await migrator.addColumn(

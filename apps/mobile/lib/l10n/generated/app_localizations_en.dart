@@ -686,33 +686,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t leave until another moderator is promoted.';
 
   @override
-  String get settingsTitle => 'Settings';
+  String get conversationActionsTitle => 'Conversation actions';
 
   @override
-  String get settingsAccountsSection => 'Accounts';
+  String get conversationActionMarkUnread => 'Mark as unread';
 
   @override
-  String get settingsAccountSelected => 'Active';
+  String get conversationActionArchive => 'Archive conversation';
 
   @override
-  String get settingsAccountsLoadFailed => 'Accounts could not be loaded.';
+  String get conversationActionUnarchive => 'Unarchive conversation';
 
   @override
-  String get settingsAddAccount => 'Add account';
+  String conversationArchivedSectionShow(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Archived ($count)',
+      one: 'Archived (1)',
+    );
+    return '$_temp0';
+  }
 
   @override
-  String get settingsRemoveAccountUnavailable =>
-      'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.';
+  String get conversationArchivedSectionHide => 'Back to conversations';
 
   @override
-  String get settingsThemeSection => 'Appearance';
+  String get conversationActionErrorGeneric =>
+      'The action could not be completed. Please try again.';
 
   @override
-  String get settingsThemeSystem => 'Match system';
-
-  @override
-  String get settingsThemeLight => 'Light';
-
-  @override
-  String get settingsThemeDark => 'Dark';
+  String get conversationActionErrorReauth =>
+      'Please sign in again to make this change.';
 }

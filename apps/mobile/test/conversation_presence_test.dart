@@ -22,6 +22,7 @@ void main() {
       lastActivity: 1724300000,
       unreadMessages: 0,
       favorite: false,
+      isArchived: false,
       readOnly: 0,
       roomType: roomType,
       roomName: 'synthetic-room-a',

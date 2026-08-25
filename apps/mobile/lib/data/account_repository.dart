@@ -208,6 +208,7 @@ final class AccountRepository {
                 lastActivity: room.lastActivity,
                 unreadMessages: room.unreadMessages,
                 favorite: room.isFavorite,
+                isArchived: Value(room.isArchived),
                 readOnly: Value(room.readOnly),
                 roomType: Value(room.type),
                 roomName: Value(room.name),

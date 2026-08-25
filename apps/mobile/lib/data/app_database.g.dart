@@ -941,6 +941,21 @@ class $CachedConversationsTable extends CachedConversations
       'CHECK ("favorite" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<bool> isArchived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _readOnlyMeta = const VerificationMeta(
     'readOnly',
   );
@@ -1102,6 +1117,7 @@ class $CachedConversationsTable extends CachedConversations
     lastActivity,
     unreadMessages,
     favorite,
+    isArchived,
     readOnly,
     roomType,
     roomName,
@@ -1195,6 +1211,12 @@ class $CachedConversationsTable extends CachedConversations
       );
     } else if (isInserting) {
       context.missing(_favoriteMeta);
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
     }
     if (data.containsKey('read_only')) {
       context.handle(
@@ -1334,6 +1356,10 @@ class $CachedConversationsTable extends CachedConversations
         DriftSqlType.bool,
         data['${effectivePrefix}favorite'],
       )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
       readOnly: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}read_only'],
@@ -1404,6 +1430,7 @@ class CachedConversation extends DataClass
   final int lastActivity;
   final int unreadMessages;
   final bool favorite;
+  final bool isArchived;
   final int readOnly;
   final int roomType;
   final String roomName;
@@ -1425,6 +1452,7 @@ class CachedConversation extends DataClass
     required this.lastActivity,
     required this.unreadMessages,
     required this.favorite,
+    required this.isArchived,
     required this.readOnly,
     required this.roomType,
     required this.roomName,
@@ -1449,6 +1477,7 @@ class CachedConversation extends DataClass
     map['last_activity'] = Variable<int>(lastActivity);
     map['unread_messages'] = Variable<int>(unreadMessages);
     map['favorite'] = Variable<bool>(favorite);
+    map['is_archived'] = Variable<bool>(isArchived);
     map['read_only'] = Variable<int>(readOnly);
     map['room_type'] = Variable<int>(roomType);
     map['room_name'] = Variable<String>(roomName);
@@ -1486,6 +1515,7 @@ class CachedConversation extends DataClass
       lastActivity: Value(lastActivity),
       unreadMessages: Value(unreadMessages),
       favorite: Value(favorite),
+      isArchived: Value(isArchived),
       readOnly: Value(readOnly),
       roomType: Value(roomType),
       roomName: Value(roomName),
@@ -1527,6 +1557,7 @@ class CachedConversation extends DataClass
       lastActivity: serializer.fromJson<int>(json['lastActivity']),
       unreadMessages: serializer.fromJson<int>(json['unreadMessages']),
       favorite: serializer.fromJson<bool>(json['favorite']),
+      isArchived: serializer.fromJson<bool>(json['isArchived']),
       readOnly: serializer.fromJson<int>(json['readOnly']),
       roomType: serializer.fromJson<int>(json['roomType']),
       roomName: serializer.fromJson<String>(json['roomName']),
@@ -1557,6 +1588,7 @@ class CachedConversation extends DataClass
       'lastActivity': serializer.toJson<int>(lastActivity),
       'unreadMessages': serializer.toJson<int>(unreadMessages),
       'favorite': serializer.toJson<bool>(favorite),
+      'isArchived': serializer.toJson<bool>(isArchived),
       'readOnly': serializer.toJson<int>(readOnly),
       'roomType': serializer.toJson<int>(roomType),
       'roomName': serializer.toJson<String>(roomName),
@@ -1581,6 +1613,7 @@ class CachedConversation extends DataClass
     int? lastActivity,
     int? unreadMessages,
     bool? favorite,
+    bool? isArchived,
     int? readOnly,
     int? roomType,
     String? roomName,
@@ -1602,6 +1635,7 @@ class CachedConversation extends DataClass
     lastActivity: lastActivity ?? this.lastActivity,
     unreadMessages: unreadMessages ?? this.unreadMessages,
     favorite: favorite ?? this.favorite,
+    isArchived: isArchived ?? this.isArchived,
     readOnly: readOnly ?? this.readOnly,
     roomType: roomType ?? this.roomType,
     roomName: roomName ?? this.roomName,
@@ -1643,6 +1677,9 @@ class CachedConversation extends DataClass
           ? data.unreadMessages.value
           : this.unreadMessages,
       favorite: data.favorite.present ? data.favorite.value : this.favorite,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
       readOnly: data.readOnly.present ? data.readOnly.value : this.readOnly,
       roomType: data.roomType.present ? data.roomType.value : this.roomType,
       roomName: data.roomName.present ? data.roomName.value : this.roomName,
@@ -1687,6 +1724,7 @@ class CachedConversation extends DataClass
           ..write('lastActivity: $lastActivity, ')
           ..write('unreadMessages: $unreadMessages, ')
           ..write('favorite: $favorite, ')
+          ..write('isArchived: $isArchived, ')
           ..write('readOnly: $readOnly, ')
           ..write('roomType: $roomType, ')
           ..write('roomName: $roomName, ')
@@ -1705,7 +1743,7 @@ class CachedConversation extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     accountId,
     token,
     displayName,
@@ -1713,6 +1751,7 @@ class CachedConversation extends DataClass
     lastActivity,
     unreadMessages,
     favorite,
+    isArchived,
     readOnly,
     roomType,
     roomName,
@@ -1726,7 +1765,7 @@ class CachedConversation extends DataClass
     lastMessageText,
     lastMessageTimestamp,
     rawJson,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1738,6 +1777,7 @@ class CachedConversation extends DataClass
           other.lastActivity == this.lastActivity &&
           other.unreadMessages == this.unreadMessages &&
           other.favorite == this.favorite &&
+          other.isArchived == this.isArchived &&
           other.readOnly == this.readOnly &&
           other.roomType == this.roomType &&
           other.roomName == this.roomName &&
@@ -1761,6 +1801,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
   final Value<int> lastActivity;
   final Value<int> unreadMessages;
   final Value<bool> favorite;
+  final Value<bool> isArchived;
   final Value<int> readOnly;
   final Value<int> roomType;
   final Value<String> roomName;
@@ -1783,6 +1824,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     this.lastActivity = const Value.absent(),
     this.unreadMessages = const Value.absent(),
     this.favorite = const Value.absent(),
+    this.isArchived = const Value.absent(),
     this.readOnly = const Value.absent(),
     this.roomType = const Value.absent(),
     this.roomName = const Value.absent(),
@@ -1806,6 +1848,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     required int lastActivity,
     required int unreadMessages,
     required bool favorite,
+    this.isArchived = const Value.absent(),
     this.readOnly = const Value.absent(),
     this.roomType = const Value.absent(),
     this.roomName = const Value.absent(),
@@ -1836,6 +1879,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     Expression<int>? lastActivity,
     Expression<int>? unreadMessages,
     Expression<bool>? favorite,
+    Expression<bool>? isArchived,
     Expression<int>? readOnly,
     Expression<int>? roomType,
     Expression<String>? roomName,
@@ -1859,6 +1903,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
       if (lastActivity != null) 'last_activity': lastActivity,
       if (unreadMessages != null) 'unread_messages': unreadMessages,
       if (favorite != null) 'favorite': favorite,
+      if (isArchived != null) 'is_archived': isArchived,
       if (readOnly != null) 'read_only': readOnly,
       if (roomType != null) 'room_type': roomType,
       if (roomName != null) 'room_name': roomName,
@@ -1885,6 +1930,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     Value<int>? lastActivity,
     Value<int>? unreadMessages,
     Value<bool>? favorite,
+    Value<bool>? isArchived,
     Value<int>? readOnly,
     Value<int>? roomType,
     Value<String>? roomName,
@@ -1908,6 +1954,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
       lastActivity: lastActivity ?? this.lastActivity,
       unreadMessages: unreadMessages ?? this.unreadMessages,
       favorite: favorite ?? this.favorite,
+      isArchived: isArchived ?? this.isArchived,
       readOnly: readOnly ?? this.readOnly,
       roomType: roomType ?? this.roomType,
       roomName: roomName ?? this.roomName,
@@ -1948,6 +1995,9 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
     }
     if (favorite.present) {
       map['favorite'] = Variable<bool>(favorite.value);
+    }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<bool>(isArchived.value);
     }
     if (readOnly.present) {
       map['read_only'] = Variable<int>(readOnly.value);
@@ -2004,6 +2054,7 @@ class CachedConversationsCompanion extends UpdateCompanion<CachedConversation> {
           ..write('lastActivity: $lastActivity, ')
           ..write('unreadMessages: $unreadMessages, ')
           ..write('favorite: $favorite, ')
+          ..write('isArchived: $isArchived, ')
           ..write('readOnly: $readOnly, ')
           ..write('roomType: $roomType, ')
           ..write('roomName: $roomName, ')
@@ -11052,6 +11103,7 @@ typedef $$CachedConversationsTableCreateCompanionBuilder =
       required int lastActivity,
       required int unreadMessages,
       required bool favorite,
+      Value<bool> isArchived,
       Value<int> readOnly,
       Value<int> roomType,
       Value<String> roomName,
@@ -11076,6 +11128,7 @@ typedef $$CachedConversationsTableUpdateCompanionBuilder =
       Value<int> lastActivity,
       Value<int> unreadMessages,
       Value<bool> favorite,
+      Value<bool> isArchived,
       Value<int> readOnly,
       Value<int> roomType,
       Value<String> roomName,
@@ -11159,6 +11212,11 @@ class $$CachedConversationsTableFilterComposer
 
   ColumnFilters<bool> get favorite => $composableBuilder(
     column: $table.favorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11290,6 +11348,11 @@ class $$CachedConversationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get readOnly => $composableBuilder(
     column: $table.readOnly,
     builder: (column) => ColumnOrderings(column),
@@ -11413,6 +11476,11 @@ class $$CachedConversationsTableAnnotationComposer
 
   GeneratedColumn<bool> get favorite =>
       $composableBuilder(column: $table.favorite, builder: (column) => column);
+
+  GeneratedColumn<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get readOnly =>
       $composableBuilder(column: $table.readOnly, builder: (column) => column);
@@ -11538,6 +11606,7 @@ class $$CachedConversationsTableTableManager
                 Value<int> lastActivity = const Value.absent(),
                 Value<int> unreadMessages = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
                 Value<int> readOnly = const Value.absent(),
                 Value<int> roomType = const Value.absent(),
                 Value<String> roomName = const Value.absent(),
@@ -11560,6 +11629,7 @@ class $$CachedConversationsTableTableManager
                 lastActivity: lastActivity,
                 unreadMessages: unreadMessages,
                 favorite: favorite,
+                isArchived: isArchived,
                 readOnly: readOnly,
                 roomType: roomType,
                 roomName: roomName,
@@ -11584,6 +11654,7 @@ class $$CachedConversationsTableTableManager
                 required int lastActivity,
                 required int unreadMessages,
                 required bool favorite,
+                Value<bool> isArchived = const Value.absent(),
                 Value<int> readOnly = const Value.absent(),
                 Value<int> roomType = const Value.absent(),
                 Value<String> roomName = const Value.absent(),
@@ -11606,6 +11677,7 @@ class $$CachedConversationsTableTableManager
                 lastActivity: lastActivity,
                 unreadMessages: unreadMessages,
                 favorite: favorite,
+                isArchived: isArchived,
                 readOnly: readOnly,
                 roomType: roomType,
                 roomName: roomName,

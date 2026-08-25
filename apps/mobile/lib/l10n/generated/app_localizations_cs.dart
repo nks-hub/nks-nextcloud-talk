@@ -685,33 +685,37 @@ class AppLocalizationsCs extends AppLocalizations {
       'Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.';
 
   @override
-  String get settingsTitle => 'Nastavení';
+  String get conversationActionsTitle => 'Akce konverzace';
 
   @override
-  String get settingsAccountsSection => 'Účty';
+  String get conversationActionMarkUnread => 'Označit jako nepřečtené';
 
   @override
-  String get settingsAccountSelected => 'Aktivní';
+  String get conversationActionArchive => 'Archivovat konverzaci';
 
   @override
-  String get settingsAccountsLoadFailed => 'Účty se nepodařilo načíst.';
+  String get conversationActionUnarchive => 'Zrušit archivaci konverzace';
 
   @override
-  String get settingsAddAccount => 'Přidat účet';
+  String conversationArchivedSectionShow(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Archivováno ($count)',
+      few: 'Archivováno ($count)',
+      one: 'Archivováno (1)',
+    );
+    return '$_temp0';
+  }
 
   @override
-  String get settingsRemoveAccountUnavailable =>
-      'Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.';
+  String get conversationArchivedSectionHide => 'Zpět na konverzace';
 
   @override
-  String get settingsThemeSection => 'Vzhled';
+  String get conversationActionErrorGeneric =>
+      'Akci se nepodařilo dokončit. Zkuste to prosím znovu.';
 
   @override
-  String get settingsThemeSystem => 'Podle systému';
-
-  @override
-  String get settingsThemeLight => 'Světlý';
-
-  @override
-  String get settingsThemeDark => 'Tmavý';
+  String get conversationActionErrorReauth =>
+      'Pro tuto změnu se prosím přihlaste znovu.';
 }

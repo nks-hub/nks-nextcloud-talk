@@ -1328,65 +1328,53 @@ abstract class AppLocalizations {
   /// **'You can\'t leave until another moderator is promoted.'**
   String get roomDetailsLeaveRejected;
 
-  /// No description provided for @settingsTitle.
+  /// No description provided for @conversationActionsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Settings'**
-  String get settingsTitle;
+  /// **'Conversation actions'**
+  String get conversationActionsTitle;
 
-  /// No description provided for @settingsAccountsSection.
+  /// No description provided for @conversationActionMarkUnread.
   ///
   /// In en, this message translates to:
-  /// **'Accounts'**
-  String get settingsAccountsSection;
+  /// **'Mark as unread'**
+  String get conversationActionMarkUnread;
 
-  /// No description provided for @settingsAccountSelected.
+  /// No description provided for @conversationActionArchive.
   ///
   /// In en, this message translates to:
-  /// **'Active'**
-  String get settingsAccountSelected;
+  /// **'Archive conversation'**
+  String get conversationActionArchive;
 
-  /// No description provided for @settingsAccountsLoadFailed.
+  /// No description provided for @conversationActionUnarchive.
   ///
   /// In en, this message translates to:
-  /// **'Accounts could not be loaded.'**
-  String get settingsAccountsLoadFailed;
+  /// **'Unarchive conversation'**
+  String get conversationActionUnarchive;
 
-  /// No description provided for @settingsAddAccount.
+  /// No description provided for @conversationArchivedSectionShow.
   ///
   /// In en, this message translates to:
-  /// **'Add account'**
-  String get settingsAddAccount;
+  /// **'{count, plural, =1{Archived (1)} other{Archived ({count})}}'**
+  String conversationArchivedSectionShow(int count);
 
-  /// No description provided for @settingsRemoveAccountUnavailable.
+  /// No description provided for @conversationArchivedSectionHide.
   ///
   /// In en, this message translates to:
-  /// **'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.'**
-  String get settingsRemoveAccountUnavailable;
+  /// **'Back to conversations'**
+  String get conversationArchivedSectionHide;
 
-  /// No description provided for @settingsThemeSection.
+  /// No description provided for @conversationActionErrorGeneric.
   ///
   /// In en, this message translates to:
-  /// **'Appearance'**
-  String get settingsThemeSection;
+  /// **'The action could not be completed. Please try again.'**
+  String get conversationActionErrorGeneric;
 
-  /// No description provided for @settingsThemeSystem.
+  /// No description provided for @conversationActionErrorReauth.
   ///
   /// In en, this message translates to:
-  /// **'Match system'**
-  String get settingsThemeSystem;
-
-  /// No description provided for @settingsThemeLight.
-  ///
-  /// In en, this message translates to:
-  /// **'Light'**
-  String get settingsThemeLight;
-
-  /// No description provided for @settingsThemeDark.
-  ///
-  /// In en, this message translates to:
-  /// **'Dark'**
-  String get settingsThemeDark;
+  /// **'Please sign in again to make this change.'**
+  String get conversationActionErrorReauth;
 }
 
 class _AppLocalizationsDelegate

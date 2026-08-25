@@ -67,6 +67,7 @@ const _conversation = CachedConversation(
   lastActivity: 1767225600,
   unreadMessages: 0,
   favorite: false,
+  isArchived: false,
   readOnly: 0,
   roomType: 2,
   roomName: 'fixture-room',
