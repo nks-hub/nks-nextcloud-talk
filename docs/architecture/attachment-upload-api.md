@@ -1,10 +1,13 @@
 # Kontrakt uploadu příloh a voice zpráv
 
-Datum ověření: 23. srpna 2026.
+Datum poslední aktualizace: 25. srpna 2026.
 
 Stav: OpenAPI, syntetické OCS/WebDAV fixture a pure Dart request, parser i
-durable runtime jsou spustitelné. Flutter picker, kamera, recorder, playback,
-HTTP transport, Drift store a platformní background transfer zatím neexistují.
+durable runtime jsou spustitelné. Flutter má OCS/WebDAV transport, account-scoped
+Drift job store, restart-safe orchestraci, durable file picker, image progress,
+retry/cancel, authenticated image viewer a voice record/preview/submit tok.
+Kamera, obecný file picker, platformní background transfer a aktuální live
+image/voice E2E na referenčním serveru zatím doložené nejsou.
 
 ## Rozsah
 
@@ -109,6 +112,52 @@ Resume přijme jen seřazené nepřekrývající se chunky se správnou délkou 
 souvislost ověří klient před sestavením. XML parser přijímá pouze UTF-8, před
 parse odmítne DTD i entity a průběžně vynucuje byte, depth a node limit.
 
+## Flutter HTTP transport
+
+`apps/mobile/lib/network/attachment_transport.dart` provádí skutečný OCS i
+WebDAV request wire přes `package:http`. Každý request před odesláním ověří
+shodu accountu a kanonického originu s autorizací, přidá credentials pouze na
+ověřený stejný origin a odmítne redirect. Response body, connect i idle fáze
+mají pevný limit a výjimka nese jen typovaný kód, krok a stage bez citlivých
+hodnot.
+
+Transport otevře app-owned zdroj jako lease, jednou ověří přesnou délku a
+SHA-256 a stejný immutable snapshot používá pro normal i chunk PUT. Range API
+musí provést efektivní seek na offset a vydat nejvýše požadovanou délku; pozdní
+chunk tedy nesmí znovu lineárně číst a zahazovat předchozí bytes. Upload
+kontroluje exact byte count a předčasný konec i bytes navíc klasifikuje jako
+změnu zdroje.
+
+Caller cancel, idle/connect timeout a `close()` používají společný odpojitelný
+abort signál. Pozdě dokončené otevření zdroje se nesmí přidat mezi ověřené
+leases a jeho lease se zavře. Cleanup má jeden bounded budget, ale selhání
+zrušení iteratoru nesmí přeskočit zavření request sinku ani další kroky. Testy
+používají deterministický HTTP klient a zdroje; neprokazují skutečný socket,
+ContentProvider/NSFileCoordinator ani Nextcloud server.
+
+## Flutter orchestrace a UI
+
+`AttachmentRepository` ukládá account, room, immutable source metadata,
+capability profil a přesnou durable fázi do Drift. `AttachmentService` obnovuje
+rozpracované joby, zachovává room FIFO/single-flight, odděluje bezpečně
+opakovatelný upload od nejednoznačného finalize a potvrzuje dokončení pouze
+autoritativní chat zprávou. Credential se čte až při konkrétním account-scoped
+requestu a v databázi zůstává jen odkaz na účet.
+
+`ChatMediaComposer` používá `file_selector` pro výběr obrázku, vytvoří app-owned
+kopii a po durable admission předá její vlastnictví attachment service. Stavový
+panel rozlišuje přípravu, upload, čekání na potvrzení, dokončení, retry, cancel a
+chybu; krátké potvrzení se po úspěchu samo uklidí. Zprávový renderer načítá
+obrázky autentizovaně ze stejného account originu a tap otevře samostatný viewer,
+nikoli nový upload dialog.
+
+Voice větev používá `record` a `audioplayers`. Ověří capability a mikrofonní
+oprávnění, drží nahrávku jako durable app-owned zdroj, nabízí lokální preview a
+odesílá ji přes stejnou attachment orchestraci s `voice-message` metadaty.
+Automatizované testy pokrývají zamítnuté oprávnění, záznam, preview, cancel,
+retry, durable admission a cleanup. Nejde ještě o live důkaz mikrofonu,
+playbacku a serverového doručení na cílovém zařízení.
+
 ## Stav, retry a cleanup
 
 Durable fáze jsou `localPrepared`, `probing`, `draftResolved`, `uploading`,
@@ -126,8 +175,9 @@ Durable fáze jsou `localPrepared`, `probing`, `draftResolved`, `uploading`,
 - Nula potvrzujících zpráv není důkaz neprovedení. Více shod zůstane explicitně
   ambiguous; jediná shoda dokončí job.
 
-Každá změna vrací jednorázový candidate plán vázaný na identitu source
-snapshotu. Budoucí Drift vrstva jej musí commitnout atomicky, nebo celý zahodit.
+Pure Dart změna vrací jednorázový candidate plán vázaný na identitu source
+snapshotu. Flutter `AttachmentRepository` jej commitne atomicky do Drift, nebo
+celý zahodí.
 
 ## Bezpečnost a diagnostika
 
@@ -144,26 +194,41 @@ caption, message text ani XML obsah.
 ```powershell
 rtk proxy python contracts\attachment-upload\validate_contract.py
 rtk proxy python contracts\attachment-upload\test_validate_contract.py
-rtk proxy C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
-rtk proxy C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
+rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
+rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
+rtk C:\work\sources\flutter-sdk\flutter\bin\flutter.bat test `
+  test\attachment_transport_test.dart `
+  test\attachment_repository_test.dart `
+  test\attachment_service_test.dart `
+  test\attachment_submission_test.dart `
+  test\image_attachment_upload_controller_test.dart `
+  test\image_attachment_upload_panel_test.dart `
+  test\authenticated_image_viewer_test.dart `
+  test\chat_composer_voice_test.dart
 ```
 
 Kontrakt obsahuje 12 OCS fixture, 15 capability případů, 20 wire případů,
 7 DAV plánů s 11 stavovými výsledky, 3 XML fixture a 20 stavových scénářů.
 Python validator má 16 unit testů. Attachment doména prochází 52 Dart testy:
 15 contract, 7 DAV, 17 runtime, 12 security a 1 skutečný release AOT
-executable. Po doplnění signaling řezu celý `talk_protocol` prochází 485 testy
-a analyzer je bez nálezu.
+executable. Po doplnění signaling řezu celý `talk_protocol` prošel 485 testy v
+původním attachment milníku; aktuální celý balík po named-thread rozšíření
+prochází 569/569 a analyzer je bez nálezu.
+
+Původní Flutter `attachment_transport_test.dart` milník prošel 24. srpna 2026
+25/25. Dne 25. srpna prošla společná cílená sada transportu, repository,
+service, submission, image controller/panel/vieweru a voice controlleru 91/91.
+Aktuální plný počet a APK hash je vedený v
+[průběžném stavu vývoje](development-status-2026-08-25.md), aby se zde nemíchal
+historický transportní milník s pozdějšími řezy.
 
 ## Co důkaz nepokrývá
 
-Nebyl spuštěný HTTP/WebDAV transport, Drift commit, skutečný procesní restart,
-picker, kamera, recorder, playback ani live upload na referenční server.
-Repozitář stále nemá Flutter/Android scaffold, takže zatím nelze poctivě
-spustit povinný `chatujmePixel` E2E checklist ani screenshoty a pixelové WCAG
-měření.
-
-Po vzniku APK musí `chatujmePixel` projít malý i chunked soubor, obrázek, kolizi
+Automatizované testy používají deterministický HTTP klient a testovací platformní
+backendy. Neprokazují aktuální live upload do Nextcloudu, skutečný mikrofon a
+playback, ztrátu procesu během každé durable fáze ani dva účty na dvou serverech.
+`chatujmePixel` proto ještě musí projít malý i chunked soubor, obrázek, kolizi
 jména, oprávnění a kvótu, restart mezi každými dvěma fázemi, cancel/cleanup a
-celý voice lifecycle. Skutečné background/killed FCM doručení, background
-recorder a výkon se navíc prokážou na fyzickém Android zařízení.
+celý voice lifecycle. Kamera a obecné soubory nejsou implementované. Skutečný
+background transfer, background recorder a výkon se navíc prokážou na fyzickém
+Android zařízení.
