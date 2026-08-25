@@ -384,7 +384,11 @@ final class ChatMessageActionsService {
             role == ParticipantRole.owner ||
             role == ParticipantRole.moderator ||
             role == ParticipantRole.guestModerator,
-        participantPermissions: room.attendeePermissions,
+        // The effective permission for this user, not the per-attendee
+        // override: `attendeePermissions` is 0 whenever no override is
+        // set, which is the normal case and would gate away every
+        // permission-guarded action, reactions included.
+        participantPermissions: room.permissions,
       );
     } on TalkProtocolException {
       throw const ChatMessageActionException(

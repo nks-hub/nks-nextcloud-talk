@@ -43,6 +43,88 @@ void main() {
 
   tearDown(() => database.close());
 
+  // Nextcloud Talk sends PERMISSIONS_DEFAULT (0) in `attendeePermissions`
+  // whenever a participant has no per-attendee override, which is the normal
+  // case; the effective value lives in `permissions`. Reading the override
+  // instead silently closed every permission-gated action, so reactions were
+  // unreachable for every ordinary user even though the server allowed them.
+  test('the default participant may react', () async {
+    // PERMISSIONS_MAX_DEFAULT: every permission granted without an override.
+    const maxDefaultPermissions = 510;
+    final room = _roomJson()
+      ..['permissions'] = maxDefaultPermissions
+      ..['attendeePermissions'] = 0;
+    await _insertRoom(database, room);
+
+    final api = _api((request) async {
+      expect(request.url.path, endsWith('/capabilities'));
+      return http.Response(
+        jsonEncode(
+          capabilitiesJson(
+            talkFeatures: const [
+              'chat-v2',
+              'reactions',
+              'react-permission',
+            ],
+          ),
+        ),
+        200,
+      );
+    });
+    addTearDown(api.close);
+    final service = ChatMessageActionsService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    final profile = await service.resolveProfile(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    expect(profile.reactions, isTrue);
+    expect(profile.canReact, isTrue);
+  });
+
+  test('a participant whose override withholds the react bit may not react', () async {
+    final room = _roomJson()
+      // PERMISSIONS_CUSTOM plus chat, deliberately without PERMISSIONS_REACT.
+      ..['permissions'] = 1 | 128
+      ..['attendeePermissions'] = 1 | 128;
+    await _insertRoom(database, room);
+
+    final api = _api((request) async {
+      expect(request.url.path, endsWith('/capabilities'));
+      return http.Response(
+        jsonEncode(
+          capabilitiesJson(
+            talkFeatures: const [
+              'chat-v2',
+              'reactions',
+              'react-permission',
+            ],
+          ),
+        ),
+        200,
+      );
+    });
+    addTearDown(api.close);
+    final service = ChatMessageActionsService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    final profile = await service.resolveProfile(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    expect(profile.reactions, isTrue);
+    expect(profile.canReact, isFalse);
+  });
+
   test('edits an own message and persists the authoritative text', () async {
     final api = _api((request) async {
       if (request.url.path.endsWith('/capabilities')) {
