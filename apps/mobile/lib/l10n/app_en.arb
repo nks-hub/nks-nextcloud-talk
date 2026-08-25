@@ -319,5 +319,17 @@
   "callBannerTransportReauth": "Sign in again to see how this call is signalled.",
   "callBannerTransportRoomUnavailable": "This conversation is no longer available on the server.",
   "callTransportInternal": "internal",
-  "callTransportExternalHpb": "external HPB"
+  "callTransportExternalHpb": "external HPB",
+  "messageActionForward": "Forward",
+  "forwardMessageTitle": "Forward to conversation",
+  "forwardNoConversations": "No other conversation is available.",
+  "messageForwarded": "Message forwarded to {conversation}",
+  "@messageForwarded": {
+    "placeholders": {
+      "conversation": {
+        "type": "String"
+      }
+    }
+  },
+  "messageForwardFailed": "The message could not be forwarded."
 }

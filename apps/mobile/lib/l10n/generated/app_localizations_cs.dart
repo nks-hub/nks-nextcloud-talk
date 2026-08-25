@@ -934,4 +934,22 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get callTransportExternalHpb => 'externí HPB';
+
+  @override
+  String get messageActionForward => 'Přeposlat';
+
+  @override
+  String get forwardMessageTitle => 'Přeposlat do konverzace';
+
+  @override
+  String get forwardNoConversations =>
+      'Žádná jiná konverzace není k dispozici.';
+
+  @override
+  String messageForwarded(String conversation) {
+    return 'Zpráva přeposlána do $conversation';
+  }
+
+  @override
+  String get messageForwardFailed => 'Zprávu se nepodařilo přeposlat.';
 }

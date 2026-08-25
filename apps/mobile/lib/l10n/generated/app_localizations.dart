@@ -1765,6 +1765,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'external HPB'**
   String get callTransportExternalHpb;
+
+  /// No description provided for @messageActionForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward'**
+  String get messageActionForward;
+
+  /// No description provided for @forwardMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward to conversation'**
+  String get forwardMessageTitle;
+
+  /// No description provided for @forwardNoConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'No other conversation is available.'**
+  String get forwardNoConversations;
+
+  /// No description provided for @messageForwarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Message forwarded to {conversation}'**
+  String messageForwarded(String conversation);
+
+  /// No description provided for @messageForwardFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The message could not be forwarded.'**
+  String get messageForwardFailed;
 }
 
 class _AppLocalizationsDelegate

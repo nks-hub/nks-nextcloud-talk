@@ -934,4 +934,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callTransportExternalHpb => 'external HPB';
+
+  @override
+  String get messageActionForward => 'Forward';
+
+  @override
+  String get forwardMessageTitle => 'Forward to conversation';
+
+  @override
+  String get forwardNoConversations => 'No other conversation is available.';
+
+  @override
+  String messageForwarded(String conversation) {
+    return 'Message forwarded to $conversation';
+  }
+
+  @override
+  String get messageForwardFailed => 'The message could not be forwarded.';
 }
