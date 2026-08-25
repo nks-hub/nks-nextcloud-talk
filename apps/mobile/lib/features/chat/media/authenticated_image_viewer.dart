@@ -1,0 +1,296 @@
+import 'package:flutter/material.dart';
+
+import '../../../data/app_database.dart';
+import '../../../data/chat_media_repository.dart';
+import '../../../l10n/generated/app_localizations.dart';
+
+const double _minimumScale = 1;
+const double _maximumScale = 6;
+
+Future<void> showAuthenticatedImageViewer(
+  BuildContext context, {
+  required StoredAccount account,
+  required Uri previewUri,
+  required String imageName,
+  required ChatMediaRepository repository,
+}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => AuthenticatedImageViewer(
+        account: account,
+        previewUri: previewUri,
+        imageName: imageName,
+        repository: repository,
+      ),
+    ),
+  );
+}
+
+final class AuthenticatedImageViewer extends StatefulWidget {
+  const AuthenticatedImageViewer({
+    super.key,
+    required this.account,
+    required this.previewUri,
+    required this.imageName,
+    required this.repository,
+  });
+
+  final StoredAccount account;
+  final Uri previewUri;
+  final String imageName;
+  final ChatMediaRepository repository;
+
+  @override
+  State<AuthenticatedImageViewer> createState() =>
+      _AuthenticatedImageViewerState();
+}
+
+final class _AuthenticatedImageViewerState
+    extends State<AuthenticatedImageViewer> {
+  final TransformationController _transformation = TransformationController();
+  late Future<ChatMediaImage?> _image;
+  double _scale = _minimumScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _image = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant AuthenticatedImageViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.account.id != widget.account.id ||
+        oldWidget.previewUri != widget.previewUri ||
+        !identical(oldWidget.repository, widget.repository)) {
+      _resetTransformation();
+      _image = _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _transformation.dispose();
+    super.dispose();
+  }
+
+  Future<ChatMediaImage?> _load() => widget.repository.loadPreview(
+    account: widget.account,
+    uri: widget.previewUri,
+  );
+
+  void _retry() {
+    setState(() {
+      _image = _load();
+    });
+  }
+
+  void _zoomBy(double factor) {
+    final current = _transformation.value.getMaxScaleOnAxis();
+    final target = (current * factor).clamp(_minimumScale, _maximumScale);
+    if ((target - current).abs() < 0.001) {
+      return;
+    }
+    final matrix = _transformation.value.clone();
+    final ratio = target / current;
+    matrix.scaleByDouble(ratio, ratio, 1, 1);
+    _transformation.value = matrix;
+    setState(() {
+      _scale = target;
+    });
+  }
+
+  void _resetTransformation() {
+    final matrix = _transformation.value.clone()..setIdentity();
+    _transformation.value = matrix;
+    _scale = _minimumScale;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    return Scaffold(
+      key: const Key('authenticated-image-viewer'),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          FutureBuilder<ChatMediaImage?>(
+            future: _image,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return Semantics(
+                  liveRegion: true,
+                  label: strings.loadingImage,
+                  child: const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+              }
+              final image = snapshot.data;
+              if (snapshot.hasError || image == null) {
+                return _ImageLoadFailure(onRetry: _retry);
+              }
+              return Semantics(
+                image: true,
+                label: widget.imageName,
+                child: InteractiveViewer(
+                  key: const Key('authenticated-image-interactive-viewer'),
+                  transformationController: _transformation,
+                  minScale: _minimumScale,
+                  maxScale: _maximumScale,
+                  onInteractionUpdate: (_) {
+                    final next = _transformation.value.getMaxScaleOnAxis();
+                    if ((next - _scale).abs() >= 0.01 && mounted) {
+                      setState(() {
+                        _scale = next;
+                      });
+                    }
+                  },
+                  child: SizedBox.expand(
+                    child: Center(
+                      child: Image.memory(
+                        image.body,
+                        key: const Key('authenticated-image-fullscreen'),
+                        cacheWidth: 2048,
+                        cacheHeight: 2048,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                        gaplessPlayback: true,
+                        errorBuilder: (_, _, _) =>
+                            _ImageLoadFailure(onRetry: _retry),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          SafeArea(
+            minimum: const EdgeInsets.all(8),
+            child: Align(
+              alignment: Alignment.topRight,
+              child: _ViewerIconButton(
+                key: const Key('authenticated-image-close'),
+                tooltip: strings.close,
+                icon: Icons.close_rounded,
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+          ),
+          SafeArea(
+            minimum: const EdgeInsets.all(8),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Material(
+                color: const Color(0xcc000000),
+                borderRadius: BorderRadius.circular(28),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _ViewerIconButton(
+                      key: const Key('authenticated-image-zoom-out'),
+                      tooltip: strings.zoomOut,
+                      icon: Icons.remove_rounded,
+                      onPressed: _scale <= _minimumScale + 0.001
+                          ? null
+                          : () => _zoomBy(0.8),
+                    ),
+                    _ViewerIconButton(
+                      key: const Key('authenticated-image-reset-zoom'),
+                      tooltip: strings.resetZoom,
+                      icon: Icons.center_focus_strong_rounded,
+                      onPressed: _scale <= _minimumScale + 0.001
+                          ? null
+                          : () {
+                              setState(_resetTransformation);
+                            },
+                    ),
+                    _ViewerIconButton(
+                      key: const Key('authenticated-image-zoom-in'),
+                      tooltip: strings.zoomIn,
+                      icon: Icons.add_rounded,
+                      onPressed: _scale >= _maximumScale - 0.001
+                          ? null
+                          : () => _zoomBy(1.25),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _ImageLoadFailure extends StatelessWidget {
+  const _ImageLoadFailure({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    return Semantics(
+      liveRegion: true,
+      label: strings.imageLoadFailed,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.broken_image_outlined,
+                color: Colors.white,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                strings.imageLoadFailed,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                key: const Key('authenticated-image-retry'),
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(strings.retry),
+                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _ViewerIconButton extends StatelessWidget {
+  const _ViewerIconButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: Colors.white,
+      disabledColor: const Color(0xff8c8c8c),
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      icon: Icon(icon),
+    );
+  }
+}

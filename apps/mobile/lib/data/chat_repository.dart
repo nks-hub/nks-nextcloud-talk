@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../core/giphy_reference.dart';
 import 'app_database.dart';
 
 const String _rootScopeKey = 'root';
@@ -1104,12 +1105,13 @@ final class ChatRepository {
     if (message.deleted) {
       return '';
     }
-    return renderRichChatMessage(
+    final displayText = renderRichChatMessage(
       message: message.message,
       markdownEnabled: message.markdown ?? false,
       parameters: message.messageParameters,
       server: account.server,
     ).root.flattenedText.trim();
+    return normalizeGiphyReferencePreview(displayText);
   }
 
   Future<void> _persistMessage(
