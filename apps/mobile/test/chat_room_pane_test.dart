@@ -1316,6 +1316,63 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('the edit dialog survives its own closing transition', (
+    tester,
+  ) async {
+    // Regression: the controller used to be disposed as soon as showDialog
+    // returned, while the text field was still mounted for the exit
+    // animation. That tripped the framework assertion `_dependents.isEmpty`
+    // and crashed the running app, not just the test.
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 91,
+        actorId: account.loginName,
+        actorDisplayName: 'Fixture User',
+        timestamp: 1724300700,
+        message: 'Before edit',
+      ),
+      displayText: 'Before edit',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(edit: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-91')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-edit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('edit-message-dialog')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('edit-message-field')),
+      'After edit',
+    );
+    await tester.tap(find.byKey(const Key('confirm-edit-message')));
+
+    // Pump the whole closing transition frame by frame; the crash happened
+    // while the dialog was still on its way out.
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('edit-message-dialog')), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('cancelling delete leaves the message untouched', (
     tester,
   ) async {

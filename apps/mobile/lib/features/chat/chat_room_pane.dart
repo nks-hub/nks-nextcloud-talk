@@ -681,37 +681,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     CachedChatMessage message,
     ChatMessage? parsed,
   ) async {
-    final strings = AppLocalizations.of(context);
-    final controller = TextEditingController(
-      text: parsed?.message ?? message.displayText,
-    );
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        key: const Key('edit-message-dialog'),
-        title: Text(strings.editMessageTitle),
-        content: TextField(
-          key: const Key('edit-message-field'),
-          controller: controller,
-          autofocus: true,
-          minLines: 1,
-          maxLines: 5,
-          maxLength: 32000,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(strings.cancel),
-          ),
-          FilledButton(
-            key: const Key('confirm-edit-message'),
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(strings.editMessageSave),
-          ),
-        ],
+      builder: (dialogContext) => _EditMessageDialog(
+        initialText: parsed?.message ?? message.displayText,
       ),
     );
-    controller.dispose();
     final trimmed = result?.trim();
     if (trimmed == null || trimmed.isEmpty || !mounted) {
       return;
@@ -1984,6 +1959,59 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
           },
         ),
       ),
+    );
+  }
+}
+
+/// The controller has to outlive the closing transition of the dialog, so the
+/// dialog owns it. Disposing it right after `showDialog` returns tears it down
+/// while the still-mounted text field depends on it, which trips the framework
+/// assertion `_dependents.isEmpty` and takes the whole app down.
+final class _EditMessageDialog extends StatefulWidget {
+  const _EditMessageDialog({required this.initialText});
+
+  final String initialText;
+
+  @override
+  State<_EditMessageDialog> createState() => _EditMessageDialogState();
+}
+
+final class _EditMessageDialogState extends State<_EditMessageDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    return AlertDialog(
+      key: const Key('edit-message-dialog'),
+      title: Text(strings.editMessageTitle),
+      content: TextField(
+        key: const Key('edit-message-field'),
+        controller: _controller,
+        autofocus: true,
+        minLines: 1,
+        maxLines: 5,
+        maxLength: 32000,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(
+          key: const Key('confirm-edit-message'),
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: Text(strings.editMessageSave),
+        ),
+      ],
     );
   }
 }
