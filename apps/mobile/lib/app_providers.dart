@@ -20,6 +20,7 @@ import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
 import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_attachment_context.dart';
+import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
@@ -185,6 +186,24 @@ final attachmentUploadPolicyProvider = Provider<AttachmentUploadPolicy>((ref) {
     chunkSizeBytes: 1024000,
   );
 });
+
+final chatMessageActionsServiceProvider = Provider<ChatMessageActionsService>((
+  ref,
+) {
+  return ChatMessageActionsService(
+    accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+final chatMessageActionsProfileProvider = FutureProvider.autoDispose
+    .family<RichChatCapabilityProfile, ChatRoomProviderKey>((ref, key) async {
+      return ref
+          .watch(chatMessageActionsServiceProvider)
+          .resolveProfile(accountId: key.accountId, roomToken: key.roomToken);
+    });
 
 final chatAttachmentContextResolverProvider =
     Provider<ChatAttachmentContextResolver>((ref) {

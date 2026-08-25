@@ -23,6 +23,7 @@ final class ChatMessageContent extends StatelessWidget {
     required this.fallbackText,
     required this.foregroundColor,
     this.showReplyPreview = true,
+    this.onReactionTap,
   });
 
   final StoredAccount account;
@@ -30,6 +31,10 @@ final class ChatMessageContent extends StatelessWidget {
   final String fallbackText;
   final Color foregroundColor;
   final bool showReplyPreview;
+
+  /// Toggles the account's own reaction for the tapped emoji. `null` renders
+  /// the existing reactions read-only (e.g. for a deleted message).
+  final ValueChanged<String>? onReactionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +83,7 @@ final class ChatMessageContent extends StatelessWidget {
         ],
         if (parsed.reactions.isNotEmpty) ...[
           const SizedBox(height: 8),
-          _ReactionSummary(message: parsed),
+          _ReactionSummary(message: parsed, onTap: onReactionTap),
         ],
       ],
     );
@@ -856,9 +861,10 @@ final class _ReplyPreview extends StatelessWidget {
 }
 
 final class _ReactionSummary extends StatelessWidget {
-  const _ReactionSummary({required this.message});
+  const _ReactionSummary({required this.message, this.onTap});
 
   final ChatMessage message;
+  final ValueChanged<String>? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -872,37 +878,44 @@ final class _ReactionSummary extends StatelessWidget {
         for (var index = 0; index < reactions.length; index++)
           Builder(
             builder: (context) {
-              final selected = message.reactionsSelf.contains(
-                reactions[index].key,
-              );
+              final emoji = reactions[index].key;
+              final selected = message.reactionsSelf.contains(emoji);
               final foreground = selected
                   ? scheme.onPrimaryContainer
                   : scheme.onSurface;
-              return Semantics(
-                label: '${reactions[index].key}, ${reactions[index].value}',
-                selected: selected,
-                child: Container(
-                  key: Key('chat-reaction-${message.messageId}-$index'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? scheme.primaryContainer
-                        : scheme.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: selected ? scheme.primary : scheme.outlineVariant,
-                    ),
-                  ),
-                  child: Text(
-                    '${reactions[index].key} ${reactions[index].value}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelMedium?.copyWith(color: foreground),
+              final pill = Container(
+                key: Key('chat-reaction-${message.messageId}-$index'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primaryContainer
+                      : scheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: selected ? scheme.primary : scheme.outlineVariant,
                   ),
                 ),
+                child: Text(
+                  '$emoji ${reactions[index].value}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: foreground),
+                ),
+              );
+              return Semantics(
+                label: '$emoji, ${reactions[index].value}',
+                selected: selected,
+                button: onTap != null,
+                child: onTap == null
+                    ? pill
+                    : InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => onTap!(emoji),
+                        child: pill,
+                      ),
               );
             },
           ),

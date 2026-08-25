@@ -1143,7 +1143,7 @@ final class ChatRepository {
         : accumulator?.resolve(serverCount) ?? serverCount;
     final originalWire = Map<String, Object?>.of(original.wire)
       ..['threadReplies'] = threadReplies;
-    final displayText = _displayText(account, original);
+    final displayText = _displayText(account.server, original);
     await (_database.update(_database.cachedChatMessages)..where(
           (row) =>
               row.accountId.equals(accountId) &
@@ -1168,7 +1168,7 @@ final class ChatRepository {
         );
   }
 
-  String _displayText(ChatAccountState account, ChatMessage message) {
+  String _displayText(ServerBase server, ChatMessage message) {
     if (message.deleted) {
       return '';
     }
@@ -1176,16 +1176,84 @@ final class ChatRepository {
       message: message.message,
       markdownEnabled: message.markdown ?? false,
       parameters: message.messageParameters,
-      server: account.server,
+      server: server,
     ).root.flattenedText.trim();
     return normalizeGiphyReferencePreview(displayText);
+  }
+
+  /// Looks up a single cached message, e.g. to merge a fresh reaction
+  /// aggregate onto it before persisting the result.
+  Future<CachedChatMessage?> getMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) {
+    return (_database.select(_database.cachedChatMessages)..where(
+          (row) =>
+              row.accountId.equals(accountId) &
+              row.roomToken.equals(roomToken) &
+              row.messageId.equals(messageId),
+        ))
+        .getSingleOrNull();
+  }
+
+  /// Persists a message the server returned from an edit, delete, or
+  /// reaction mutation. Unlike [_persistMessage] this is a targeted single
+  /// row update: it does not touch outbox/scope state, and only bumps the
+  /// conversation preview when the message is still the newest one.
+  Future<void> applyMessageMutation({
+    required String accountId,
+    required ServerBase server,
+    required ChatMessage message,
+  }) async {
+    final displayText = _displayText(server, message);
+    await _database
+        .into(_database.cachedChatMessages)
+        .insertOnConflictUpdate(
+          CachedChatMessagesCompanion.insert(
+            accountId: accountId,
+            roomToken: message.roomToken.value,
+            messageId: message.messageId,
+            actorType: message.actorType,
+            actorId: message.actorId,
+            actorDisplayName: message.actorDisplayName,
+            timestamp: message.timestamp,
+            systemMessage: message.systemMessage,
+            messageType: message.messageType,
+            referenceId: message.referenceId,
+            displayText: displayText,
+            deleted: message.deleted,
+            threadId: Value(message.threadId),
+            rawJson: jsonEncode(message.wire),
+          ),
+        );
+    final conversation = await getConversation(
+      accountId: accountId,
+      roomToken: message.roomToken.value,
+    );
+    if (conversation == null ||
+        (conversation.lastMessageTimestamp ?? -1) > message.timestamp) {
+      return;
+    }
+    await (_database.update(_database.cachedConversations)..where(
+          (row) =>
+              row.accountId.equals(accountId) &
+              row.token.equals(message.roomToken.value),
+        ))
+        .write(
+          CachedConversationsCompanion(
+            lastActivity: Value(message.timestamp),
+            lastMessageText: Value(displayText.isEmpty ? null : displayText),
+            lastMessageTimestamp: Value(message.timestamp),
+          ),
+        );
   }
 
   Future<void> _persistMessage(
     ChatAccountState account,
     ChatMessage message,
   ) async {
-    final displayText = _displayText(account, message);
+    final displayText = _displayText(account.server, message);
     await _database
         .into(_database.cachedChatMessages)
         .insertOnConflictUpdate(

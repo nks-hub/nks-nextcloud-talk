@@ -92,6 +92,13 @@ final class HttpNextcloudApi {
   static const _participantsMaximumBytes = 2 * 1024 * 1024;
   static const _mentionsMaximumBytes = 1 * 1024 * 1024;
   static const _mentionsAllowedStatusCodes = {200, 401, 404, 429, 503};
+  static final Set<int> _richChatAllowedStatusCodes = Set.unmodifiable({
+    200,
+    201,
+    202,
+    ...Iterable<int>.generate(200, (index) => 400 + index),
+  });
+
   static const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
   static const _signalingSettingsAllowedStatusCodes = {200, 401, 404, 500, 503};
   static const _participantsAllowedStatusCodes = {
@@ -934,6 +941,45 @@ final class HttpNextcloudApi {
     }
   }
 
+  /// Edits/deletes a message or adds/removes a reaction. Every one of these
+  /// mutations returns an OCS envelope the protocol layer decodes and
+  /// classifies on its own, so the transport only has to accept the wider
+  /// status-code range `decodeRichChatResponse` knows how to interpret.
+  Future<RichChatResponse> sendRichChat({
+    required RichChatRequest richChatRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            _richChatHttpMethod(richChatRequest.method),
+            richChatRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...richChatRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final formBody = richChatRequest.formBody;
+    if (formBody != null) {
+      request.bodyFields = formBody.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    }
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _richChatAllowedStatusCodes,
+      maximumBytes: richChatMaximumResponseBytes,
+    );
+    return decodeRichChatResponse(
+      request: richChatRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   void close() => _client.close();
 
   Duration _chatRequestTimeout(int serverTimeoutSeconds) {
@@ -1040,3 +1086,10 @@ http.Request _request(String method, Uri uri, Future<void>? abortTrigger) {
       ? http.Request(method, uri)
       : http.AbortableRequest(method, uri, abortTrigger: abortTrigger);
 }
+
+String _richChatHttpMethod(RichChatHttpMethod method) => switch (method) {
+  RichChatHttpMethod.get => 'GET',
+  RichChatHttpMethod.post => 'POST',
+  RichChatHttpMethod.put => 'PUT',
+  RichChatHttpMethod.delete => 'DELETE',
+};
