@@ -311,6 +311,11 @@ Proto:
 - obecný merge nesmí mechanicky použít max pro explicit unread event;
 - lokální pending marker má operation kind read nebo markUnread;
 - serverový lastCommonRead se neodvozuje z lokálního lastRead;
+- odchozí `read` projekce je povolená pouze pro vlastní dokončenou operaci se
+  skutečnou cached server confirmation a `messageId <= lastCommonRead` ve
+  stejném account/room/thread scope;
+- nepotvrzený nebo ambiguous send zůstává `sending` a lokální model nevytváří
+  nedoložený stav `delivered`;
 - notification clear se provede až po serverem potvrzeném nebo bezpečně
   odvozeném read stavu.
 

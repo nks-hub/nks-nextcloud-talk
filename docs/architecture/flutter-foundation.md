@@ -12,12 +12,13 @@ hlasovými médii i nativní Android Web Push delivery hranicí. Aktuální APK 
 ověřený build a aktualizační instalaci. Skutečný Login Flow, živý seznam
 konverzací, otevření room a inline animovaný Giphy send patří historickému APK.
 Tento Giphy běh používal nyní nahrazenou wire-reference variantu; nový skutečný
-`image/gif` attachment tok zatím nemá live serverový důkaz.
+`image/gif` attachment tok je od `7ca580e` implementovaný a automatizovaně
+ověřený, ale zatím nemá live serverový důkaz.
 
 Celý Nextcloud Talk klient tím ještě hotový není. Aktuální root/thread
 cross-device refresh, živá příloha a voice matice, skutečné background/killed
-FCM doručení, delivered/read, presence, dva účty na dvou serverech a hovory
-zůstávají otevřené funkční brány.
+FCM doručení, live read přechod, doložené delivered, presence, dva účty na dvou
+serverech a hovory zůstávají otevřené funkční brány.
 
 ## Platformy a identita
 
@@ -235,6 +236,18 @@ nejsou implementované a nesmějí být vydávány za hotové.
   live test přeskočený pouze bez environment credentials a 0 selhání.
 - Historická přesná Giphy wire oprava `5f6e2f4`: 11/11 cílených a 75/75 širších
   chat/Giphy testů. Nejde o důkaz nového attachment toku.
+- Nové Giphy attachment propojení `7ca580e`: celý
+  `chat_composer_integration_test.dart` 4/4, loader/media composer 15/15 a
+  scoped analyze změněných souborů bez nálezu. Test ověřuje nulový Giphy
+  text-send, přesné uploadované bajty a Talk finalize hashovaného `.gif` názvu.
+- Server-backed read a silent background polling `e4840e5` + `02b79eb`:
+  status/live-sync sada 11/11 a scoped analyze pěti změněných souborů bez
+  nálezu. `read` vyžaduje server-confirmed message a common-read cursor;
+  `delivered` se nevytváří.
+- Android Web Push koordinátor `c37bf66`: coordinator 21/21, push/API 39/39,
+  celý Flutter analyze a debug APK build prošly. Retry je account-scoped,
+  exponenciálně omezený a jen pro doložené transientní chyby; skutečný provider
+  delivery tím není prokázaný.
 - Celý `talk_protocol`: 569/569; čerstvá cílená conversation sada 25. srpna
   2026: 74/74.
 - Čerstvá scoped Flutter foundation/conversation sada: 60 PASS, 1 read-only

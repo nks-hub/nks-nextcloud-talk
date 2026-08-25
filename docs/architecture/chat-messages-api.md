@@ -227,9 +227,10 @@ neopakoval celý root/thread/read-unread/outbox runtime.
 Tento wire-reference tok je nyní nahrazený a zůstává pouze pro čtení historie.
 Nový výběr nesmí URL vložit do textové zprávy. Resolver dodá validované
 `image/gif` bajty do durable app-owned zdroje a standardního Talk
-Draft/WebDAV/finalize attachment toku. Přípravu tohoto směru obsahují commity
-`5d49cbb` a `9de5727`; výše uvedený live běh neprokazuje nový upload/finalize
-tok.
+Draft/WebDAV/finalize attachment toku. Commity `5d49cbb`, `9de5727` a `7ca580e`
+tento tok propojují od pickeru po finalize. Composer integration prošel 4/4,
+loader/media composer 15/15 a scoped analyze bez nálezu. Výše uvedený historický
+live běh nový upload/finalize tok stále neprokazuje.
 
 ### Historický reálný thread smoke
 
@@ -357,6 +358,21 @@ room snapshot, ze kterého se atomicky uloží `lastReadMessage`,
 
 Read je monotónní use case; mark-unread záměrně není. Tyto operation kinds se
 nesmějí sloučit do jednoho obecného `max(lastRead)` pravidla ani blind replaye.
+
+Commit `e4840e5` přidává pravdivou Flutter projekci read stavu pro vlastní
+odchozí zprávy. `ChatRepository` joinuje outbox confirmation s přesným
+`(accountId, roomToken, scopeKey)` a reaktivně čte `lastCommonRead`. Stav `read`
+vznikne pouze pro dokončenou outbox operaci se skutečně uloženou serverovou
+zprávou a `messageId <= lastCommonRead`. Nepotvrzená nebo ambiguous operace
+zůstává `sending`; `delivered` se bez serverové semantiky vůbec nevytváří.
+
+Commit `02b79eb` zároveň vynucuje neinteraktivní background catch-up. Profil s
+`backgroundCatchUp` posílá `noStatusUpdate=1` a
+`markNotificationsAsRead=0`; foreground request zůstává interaktivní. Společný
+běh `outgoing_message_status_test.dart` a `chat_room_live_sync_test.dart` prošel
+11/11 a scoped analyze pěti změněných souborů byl bez nálezu. Jde o
+automatizovaný HTTP/Drift/UI důkaz, nikoli reálný serverový read přechod nebo
+background lifecycle.
 
 ## Durable text-send outbox
 

@@ -166,16 +166,18 @@ Aktuální lokální výsledek:
 Historická wire-reference Giphy oprava `5f6e2f4` prošla 11/11 cílenými a 75/75
 širšími chat/Giphy testy. Čerstvý výběr sedmi Flutter chat/Giphy souborů po
 opravě interního image vieweru `8724281` prošel 63/63 a analyzer byl bez nálezu.
-Nový attachment loader a composer admission přidávají `5d49cbb` a `9de5727`;
-tyto commity samy ještě neprokazují room propojení ani live upload.
+Attachment loader a composer admission přidávají `5d49cbb` a `9de5727`.
+Commit `7ca580e` je propojuje s pickerem, durable zdrojem, WebDAV uploadem a Talk
+finalize; composer integration prošel 4/4, loader/media composer 15/15 a scoped
+analyze bez nálezu. Jde o automatizovaný adapter důkaz, ne live upload.
 
 ## Co důkaz nepokrývá
 
 Flutter HTTP/Drift/UI základ existuje. Historické Android APK SHA-256
 `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
 prošlo přihlášením, otevřením room a Giphy wire-reference
-send/inline/process-death scénářem; neprošlo však novým GIF attachment ani rich
-mutation round tripem. Ještě starší Android APK SHA-256
+send/inline/process-death scénářem; neprošlo však novým live GIF attachment ani
+rich mutation round tripem. Ještě starší Android APK SHA-256
 `<fingerprint>`
 prošlo příchozím thread smokem, screenshoty a pixelovým WCAG měřením; tento
 důkaz se nepřenáší na novější build. Nebyl spuštěný live round trip pro

@@ -482,7 +482,9 @@ předstírat existencí generated runneru.
 ### D-028: Giphy jako skutečná Talk GIF příloha
 
 Stav: Původní wire-reference varianta byla 25. srpna 2026 nahrazena výslovným
-uživatelským rozhodnutím. Nový attachment tok je rozpracovaný.
+uživatelským rozhodnutím. Commit `7ca580e` propojuje picker se skutečným
+attachment tokem a má automatizovaný důkaz; live serverový round trip zůstává
+otevřený.
 
 Vybraný `resourceUrl` slouží jen jako vstup do account-scoped Nextcloud
 References resolveru. Klient přijme pouze `integration_giphy_gif`, same-origin
@@ -492,7 +494,8 @@ Do `sendText`, composeru ani outboxu textových zpráv se Giphy URL nikdy nevlo�
 
 Původní renderer skryté wire URL zůstává pouze kvůli kompatibilitě se staršími
 zprávami. Historický Android test této varianty je platným důkazem tehdejšího
-chování, ale neprokazuje nový cílový attachment tok.
+chování, ale neprokazuje nový cílový attachment tok. Nový tok se nesmí při
+žádné chybě vrátit k URL textové zprávě.
 
 ## Vyřešené volby
 
