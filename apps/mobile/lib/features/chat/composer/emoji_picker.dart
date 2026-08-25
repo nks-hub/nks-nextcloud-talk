@@ -24,11 +24,36 @@ final class EmojiChoice {
   final List<String> keywords;
   final EmojiCategory category;
 
+  /// Stable widget-key slug derived from the English name, never localized.
   String get keyName => name
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
+
+  /// Display name for [locale], falling back to the English one.
+  String nameFor(Locale? locale) => locale?.languageCode == 'cs'
+      ? (_czechEmoji[glyph]?.name ?? name)
+      : name;
+
+  /// Every name and keyword in every supported language, so search keeps
+  /// working no matter which language the user types in.
+  List<String> get searchTerms {
+    final czech = _czechEmoji[glyph];
+    return <String>[
+      name,
+      ...keywords,
+      if (czech != null) ...<String>[czech.name, ...czech.keywords],
+    ];
+  }
+}
+
+/// Localized name and keywords for a single glyph.
+final class EmojiTranslation {
+  const EmojiTranslation({required this.name, required this.keywords});
+
+  final String name;
+  final List<String> keywords;
 }
 
 final class EmojiCatalog {
@@ -55,9 +80,8 @@ final class EmojiCatalog {
       choices.where(
         (choice) =>
             choice.glyph == normalized ||
-            choice.name.toLowerCase().contains(normalized) ||
-            choice.keywords.any(
-              (keyword) => keyword.toLowerCase().contains(normalized),
+            choice.searchTerms.any(
+              (term) => term.toLowerCase().contains(normalized),
             ),
       ),
     );
@@ -126,6 +150,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.maybeLocaleOf(context);
     final query = _searchController.text.trim();
     final choices = query.isNotEmpty
         ? _catalog.search(query)
@@ -184,7 +209,7 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                         key: Key('emoji-choice-${choice.keyName}'),
                         container: true,
                         button: true,
-                        label: choice.name,
+                        label: choice.nameFor(locale),
                         onTap: () => widget.onSelected(choice),
                         child: SizedBox.square(
                           dimension: 48,
@@ -400,3 +425,130 @@ const List<EmojiChoice> _standardEmoji = <EmojiChoice>[
     category: EmojiCategory.symbols,
   ),
 ];
+
+// Emoji names stay in Dart instead of the ARB files: they are a fixed data
+// table rather than UI copy, and search has to match every language at once
+// regardless of the active locale, which per-locale ARB lookups cannot do.
+const Map<String, EmojiTranslation> _czechEmoji = <String, EmojiTranslation>{
+  '😀': EmojiTranslation(
+    name: 'Usmívající se obličej',
+    keywords: <String>['úsměv', 'radost', 'smích'],
+  ),
+  '😂': EmojiTranslation(
+    name: 'Obličej se slzami radosti',
+    keywords: <String>['smích', 'sranda', 'vtipné'],
+  ),
+  '🥰': EmojiTranslation(
+    name: 'Usmívající se obličej se srdíčky',
+    keywords: <String>['láska', 'zamilovaný'],
+  ),
+  '🤔': EmojiTranslation(
+    name: 'Přemýšlející obličej',
+    keywords: <String>['přemýšlení', 'otázka'],
+  ),
+  '😢': EmojiTranslation(
+    name: 'Plačící obličej',
+    keywords: <String>['smutek', 'pláč', 'slza'],
+  ),
+  '👋': EmojiTranslation(
+    name: 'Mávající ruka',
+    keywords: <String>['mávání', 'ahoj', 'nashledanou'],
+  ),
+  '👍': EmojiTranslation(
+    name: 'Palec nahoru',
+    keywords: <String>['ano', 'souhlas', 'líbí'],
+  ),
+  '👎': EmojiTranslation(
+    name: 'Palec dolů',
+    keywords: <String>['ne', 'nesouhlas'],
+  ),
+  '🙏': EmojiTranslation(
+    name: 'Sepjaté ruce',
+    keywords: <String>['prosím', 'děkuji', 'díky'],
+  ),
+  '💪': EmojiTranslation(
+    name: 'Napnutý biceps',
+    keywords: <String>['síla', 'svaly'],
+  ),
+  '🐱': EmojiTranslation(
+    name: 'Kočka',
+    keywords: <String>['kočka', 'mazlíček', 'zvíře'],
+  ),
+  '🐶': EmojiTranslation(
+    name: 'Pes',
+    keywords: <String>['pes', 'mazlíček', 'zvíře'],
+  ),
+  '🦊': EmojiTranslation(
+    name: 'Liška',
+    keywords: <String>['liška', 'zvíře'],
+  ),
+  '🐼': EmojiTranslation(
+    name: 'Panda',
+    keywords: <String>['panda', 'zvíře'],
+  ),
+  '🍎': EmojiTranslation(
+    name: 'Červené jablko',
+    keywords: <String>['jablko', 'ovoce'],
+  ),
+  '🍕': EmojiTranslation(
+    name: 'Pizza',
+    keywords: <String>['pizza', 'jídlo'],
+  ),
+  '☕': EmojiTranslation(
+    name: 'Horký nápoj',
+    keywords: <String>['káva', 'čaj', 'nápoj'],
+  ),
+  '🎂': EmojiTranslation(
+    name: 'Narozeninový dort',
+    keywords: <String>['dort', 'narozeniny'],
+  ),
+  '⚽': EmojiTranslation(
+    name: 'Fotbalový míč',
+    keywords: <String>['fotbal', 'sport', 'míč'],
+  ),
+  '🎮': EmojiTranslation(
+    name: 'Videohra',
+    keywords: <String>['hra', 'ovladač'],
+  ),
+  '🎨': EmojiTranslation(
+    name: 'Malířská paleta',
+    keywords: <String>['umění', 'malování'],
+  ),
+  '🚗': EmojiTranslation(name: 'Auto', keywords: <String>['auto', 'cesta']),
+  '✈️': EmojiTranslation(
+    name: 'Letadlo',
+    keywords: <String>['letadlo', 'let', 'cestování'],
+  ),
+  '🌍': EmojiTranslation(
+    name: 'Zeměkoule',
+    keywords: <String>['země', 'svět'],
+  ),
+  '💡': EmojiTranslation(
+    name: 'Žárovka',
+    keywords: <String>['nápad', 'světlo'],
+  ),
+  '📱': EmojiTranslation(
+    name: 'Mobilní telefon',
+    keywords: <String>['telefon', 'mobil'],
+  ),
+  '🔑': EmojiTranslation(
+    name: 'Klíč',
+    keywords: <String>['klíč', 'zabezpečení'],
+  ),
+  '❤️': EmojiTranslation(
+    name: 'Červené srdce',
+    keywords: <String>['srdce', 'láska'],
+  ),
+  '✅': EmojiTranslation(
+    name: 'Zaškrtnutí',
+    keywords: <String>['zaškrtnout', 'hotovo', 'ano'],
+  ),
+  '❌': EmojiTranslation(
+    name: 'Křížek',
+    keywords: <String>['křížek', 'ne', 'chyba'],
+  ),
+  '⚠️': EmojiTranslation(
+    name: 'Varování',
+    keywords: <String>['varování', 'pozor'],
+  ),
+};
