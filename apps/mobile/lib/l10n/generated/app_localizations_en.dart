@@ -610,4 +610,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roomDetailsRoleUnknown => 'Unknown role';
+
+  @override
+  String get messageActionReply => 'Reply';
+
+  @override
+  String get messageActionCopy => 'Copy text';
+
+  @override
+  String get messageActionEdit => 'Edit';
+
+  @override
+  String get messageActionDelete => 'Delete';
+
+  @override
+  String get messageActionReact => 'React';
+
+  @override
+  String get messageCopied => 'Copied to clipboard';
+
+  @override
+  String get editMessageTitle => 'Edit message';
+
+  @override
+  String get editMessageSave => 'Save';
+
+  @override
+  String get deleteMessageConfirmTitle => 'Delete this message?';
+
+  @override
+  String get deleteMessageConfirmBody => 'This cannot be undone.';
+
+  @override
+  String get reactionPickerMore => 'More emoji…';
+
+  @override
+  String get messageActionUnsupported => 'This action isn\'t available here.';
+
+  @override
+  String get messageActionMessageMissing =>
+      'This message is no longer available.';
 }

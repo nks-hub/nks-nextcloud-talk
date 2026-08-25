@@ -610,4 +610,43 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsRoleUnknown => 'Neznámá role';
+
+  @override
+  String get messageActionReply => 'Odpovědět';
+
+  @override
+  String get messageActionCopy => 'Kopírovat text';
+
+  @override
+  String get messageActionEdit => 'Upravit';
+
+  @override
+  String get messageActionDelete => 'Smazat';
+
+  @override
+  String get messageActionReact => 'Reagovat';
+
+  @override
+  String get messageCopied => 'Zkopírováno do schránky';
+
+  @override
+  String get editMessageTitle => 'Upravit zprávu';
+
+  @override
+  String get editMessageSave => 'Uložit';
+
+  @override
+  String get deleteMessageConfirmTitle => 'Smazat tuto zprávu?';
+
+  @override
+  String get deleteMessageConfirmBody => 'Tuto akci nelze vrátit zpět.';
+
+  @override
+  String get reactionPickerMore => 'Další emoji…';
+
+  @override
+  String get messageActionUnsupported => 'Tato akce zde není dostupná.';
+
+  @override
+  String get messageActionMessageMissing => 'Tato zpráva už není dostupná.';
 }

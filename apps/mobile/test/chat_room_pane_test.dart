@@ -888,33 +888,46 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('a long press targets a message for a reply', (tester) async {
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
-    await tester.pump();
+  testWidgets(
+    'long press opens the message actions menu and can start a reply',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
 
-    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+      expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
 
-    await tester.longPress(
-      find.byKey(const Key('chat-message-target-10')),
-    );
-    await tester.pump();
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
-    expect(find.text('Replying to Other person'), findsOneWidget);
-    expect(find.text('Cached hello'), findsNWidgets(2));
+      // Message 10 belongs to someone else and this suite never wires a
+      // message-actions capability profile, so only account-agnostic actions
+      // (reply, copy) are offered.
+      expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-edit')), findsNothing);
+      expect(find.byKey(const Key('message-action-delete')), findsNothing);
+      expect(find.byKey(const Key('message-action-react')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('chat-cancel-reply')));
-    await tester.pump();
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+      expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+      expect(find.text('Replying to Other person'), findsOneWidget);
+      expect(find.text('Cached hello'), findsNWidgets(2));
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  });
+      await tester.tap(find.byKey(const Key('chat-cancel-reply')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
 
   testWidgets('composer text survives losing the pane', (tester) async {
     // A send can be refused before the outbox admits it, for example while
@@ -1180,6 +1193,175 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets(
+    'the actions menu offers edit, delete and react only when both '
+    'ownership and capability allow it',
+    (tester) async {
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 70,
+          actorId: account.loginName,
+          actorDisplayName: 'Fixture User',
+          timestamp: 1724300400,
+          message: 'My own message',
+        ),
+        displayText: 'My own message',
+      );
+
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+          overrides: [
+            chatMessageActionsProfileProvider.overrideWith(
+              (ref, key) async => _capabilityProfile(
+                edit: true,
+                delete: true,
+                react: true,
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.byKey(const Key('chat-message-target-70')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-edit')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-delete')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-react')), findsOneWidget);
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
+
+      // Message 10 belongs to someone else: edit/delete stay hidden even
+      // though this account is fully capable of both.
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('message-action-edit')), findsNothing);
+      expect(find.byKey(const Key('message-action-delete')), findsNothing);
+      expect(find.byKey(const Key('message-action-react')), findsOneWidget);
+      await tester.tapAt(const Offset(1, 1));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets(
+    'without a resolved capability profile only reply and copy are offered',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-edit')), findsNothing);
+      expect(find.byKey(const Key('message-action-delete')), findsNothing);
+      expect(find.byKey(const Key('message-action-react')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets('copy puts the message text on the clipboard', (tester) async {
+    final copiedTexts = <String?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          final arguments = Map<Object?, Object?>.from(
+            call.arguments as Map<Object?, Object?>,
+          );
+          copiedTexts.add(arguments['text'] as String?);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.pumpWidget(
+      app(home: ChatRoomScreen(account: account, conversation: conversation)),
+    );
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-copy')));
+    await tester.pumpAndSettle();
+
+    expect(copiedTexts, ['Cached hello']);
+    expect(find.text('Copied to clipboard'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('cancelling delete leaves the message untouched', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 90,
+        actorId: account.loginName,
+        actorDisplayName: 'Fixture User',
+        timestamp: 1724300600,
+        message: 'Editable text',
+      ),
+      displayText: 'Editable text',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+        overrides: [
+          // Cancelling never reaches the network, so the menu only needs a
+          // capability profile pinned; the default unmocked API (as used by
+          // every other test in this file) is left untouched.
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(delete: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-90')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-delete')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('delete-message-dialog')), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Editable text'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
 }
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';
@@ -1289,3 +1471,23 @@ Key _dayKey(int timestamp) {
 
 int _unixSeconds(DateTime value) =>
     value.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond;
+
+RichChatCapabilityProfile _capabilityProfile({
+  bool edit = false,
+  bool delete = false,
+  bool react = false,
+}) {
+  return RichChatCapabilityProfile.fromTalkFeatures(
+    talkFeatures: <String>[
+      'chat-v2',
+      if (edit) 'edit-messages',
+      if (delete) 'delete-messages',
+      if (react) 'reactions',
+    ],
+    talkLocalFeatures: const <String>[],
+    federated: false,
+    moderator: false,
+    participantPermissions: 0,
+  );
+}
+

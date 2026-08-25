@@ -105,6 +105,12 @@ final class HttpNextcloudApi {
     201,
     ...Iterable<int>.generate(200, (index) => 400 + index),
   });
+  static final Set<int> _richChatAllowedStatusCodes = Set.unmodifiable({
+    200,
+    201,
+    202,
+    ...Iterable<int>.generate(200, (index) => 400 + index),
+  });
 
   final http.Client _client;
   final ServerOriginPolicy originPolicy;
@@ -492,6 +498,45 @@ final class HttpNextcloudApi {
     );
   }
 
+  /// Edits/deletes a message or adds/removes a reaction. Every one of these
+  /// mutations returns an OCS envelope the protocol layer decodes and
+  /// classifies on its own, so the transport only has to accept the wider
+  /// status-code range `decodeRichChatResponse` knows how to interpret.
+  Future<RichChatResponse> sendRichChat({
+    required RichChatRequest richChatRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            _richChatHttpMethod(richChatRequest.method),
+            richChatRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...richChatRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final formBody = richChatRequest.formBody;
+    if (formBody != null) {
+      request.bodyFields = formBody.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    }
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _richChatAllowedStatusCodes,
+      maximumBytes: richChatMaximumResponseBytes,
+    );
+    return decodeRichChatResponse(
+      request: richChatRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   Future<AvatarResponse> getAvatar({
     required ServerBase server,
     required Uri avatarUri,
@@ -808,3 +853,10 @@ http.Request _request(String method, Uri uri, Future<void>? abortTrigger) {
       ? http.Request(method, uri)
       : http.AbortableRequest(method, uri, abortTrigger: abortTrigger);
 }
+
+String _richChatHttpMethod(RichChatHttpMethod method) => switch (method) {
+  RichChatHttpMethod.get => 'GET',
+  RichChatHttpMethod.post => 'POST',
+  RichChatHttpMethod.put => 'PUT',
+  RichChatHttpMethod.delete => 'DELETE',
+};

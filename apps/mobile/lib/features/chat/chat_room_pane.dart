@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_details_screen.dart';
+import 'chat_message_actions_service.dart';
 import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_service.dart';
@@ -134,6 +136,8 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
 
 final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     with WidgetsBindingObserver {
+  static const _quickReactionEmoji = <String>['👍', '❤️', '😂', '😮', '😢', '😡'];
+
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ChatMediaComposerController _mediaComposerController =
@@ -556,20 +560,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           child: SizedBox(
             height: MediaQuery.sizeOf(sheetContext).height * 0.72,
             child: EmojiPicker(
-              labels: EmojiPickerLabels(
-                searchHint: strings.emojiSearchHint,
-                noResults: strings.emojiNoResults,
-                categoryLabels: <EmojiCategory, String>{
-                  EmojiCategory.smileys: strings.emojiCategorySmileys,
-                  EmojiCategory.people: strings.emojiCategoryPeople,
-                  EmojiCategory.animals: strings.emojiCategoryAnimals,
-                  EmojiCategory.food: strings.emojiCategoryFood,
-                  EmojiCategory.activities: strings.emojiCategoryActivities,
-                  EmojiCategory.travel: strings.emojiCategoryTravel,
-                  EmojiCategory.objects: strings.emojiCategoryObjects,
-                  EmojiCategory.symbols: strings.emojiCategorySymbols,
-                },
-              ),
+              labels: _emojiPickerLabels(strings),
               onSelected: (choice) {
                 if (!insertComposerText(_composer, choice.glyph)) {
                   _showComposerLimitError();
@@ -582,6 +573,328 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ),
       ),
     );
+  }
+
+  EmojiPickerLabels _emojiPickerLabels(AppLocalizations strings) {
+    return EmojiPickerLabels(
+      searchHint: strings.emojiSearchHint,
+      noResults: strings.emojiNoResults,
+      categoryLabels: <EmojiCategory, String>{
+        EmojiCategory.smileys: strings.emojiCategorySmileys,
+        EmojiCategory.people: strings.emojiCategoryPeople,
+        EmojiCategory.animals: strings.emojiCategoryAnimals,
+        EmojiCategory.food: strings.emojiCategoryFood,
+        EmojiCategory.activities: strings.emojiCategoryActivities,
+        EmojiCategory.travel: strings.emojiCategoryTravel,
+        EmojiCategory.objects: strings.emojiCategoryObjects,
+        EmojiCategory.symbols: strings.emojiCategorySymbols,
+      },
+    );
+  }
+
+  void _showMessageActions(
+    CachedChatMessage message,
+    ChatMessage? parsed, {
+    required bool canReply,
+    required bool canEdit,
+    required bool canDelete,
+    required bool canReact,
+  }) {
+    final strings = AppLocalizations.of(context);
+    final copyText = message.displayText;
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Wrap(
+            children: [
+              if (canReply)
+                ListTile(
+                  key: const Key('message-action-reply'),
+                  leading: const Icon(Icons.reply_rounded),
+                  title: Text(strings.messageActionReply),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _startReply(message);
+                  },
+                ),
+              if (copyText.isNotEmpty)
+                ListTile(
+                  key: const Key('message-action-copy'),
+                  leading: const Icon(Icons.copy_rounded),
+                  title: Text(strings.messageActionCopy),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_copyMessageText(copyText));
+                  },
+                ),
+              if (canEdit)
+                ListTile(
+                  key: const Key('message-action-edit'),
+                  leading: const Icon(Icons.edit_outlined),
+                  title: Text(strings.messageActionEdit),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_startEditMessage(message, parsed));
+                  },
+                ),
+              if (canDelete)
+                ListTile(
+                  key: const Key('message-action-delete'),
+                  leading: const Icon(Icons.delete_outline_rounded),
+                  title: Text(strings.messageActionDelete),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_confirmDeleteMessage(message));
+                  },
+                ),
+              if (canReact)
+                ListTile(
+                  key: const Key('message-action-react'),
+                  leading: const Icon(Icons.add_reaction_outlined),
+                  title: Text(strings.messageActionReact),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_openReactionPicker(message));
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyMessageText(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(strings.messageCopied)));
+  }
+
+  Future<void> _startEditMessage(
+    CachedChatMessage message,
+    ChatMessage? parsed,
+  ) async {
+    final strings = AppLocalizations.of(context);
+    final controller = TextEditingController(
+      text: parsed?.message ?? message.displayText,
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('edit-message-dialog'),
+        title: Text(strings.editMessageTitle),
+        content: TextField(
+          key: const Key('edit-message-field'),
+          controller: controller,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 5,
+          maxLength: 32000,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            key: const Key('confirm-edit-message'),
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: Text(strings.editMessageSave),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final trimmed = result?.trim();
+    if (trimmed == null || trimmed.isEmpty || !mounted) {
+      return;
+    }
+    final targetKey = _key;
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .editMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+            message: trimmed,
+          );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+    }
+  }
+
+  Future<void> _confirmDeleteMessage(CachedChatMessage message) async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('delete-message-dialog'),
+        title: Text(strings.deleteMessageConfirmTitle),
+        content: Text(strings.deleteMessageConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            key: const Key('confirm-delete-message'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(strings.messageActionDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final targetKey = _key;
+    try {
+      await ref
+          .read(chatMessageActionsServiceProvider)
+          .deleteMessage(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            messageId: message.messageId,
+          );
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+    }
+  }
+
+  Future<void> _toggleReaction(
+    CachedChatMessage message,
+    ChatMessage? parsed,
+    String emoji,
+  ) async {
+    final selfReacted = parsed?.reactionsSelf.contains(emoji) ?? false;
+    final targetKey = _key;
+    try {
+      final service = ref.read(chatMessageActionsServiceProvider);
+      if (selfReacted) {
+        await service.deleteReaction(
+          accountId: targetKey.accountId,
+          roomToken: targetKey.roomToken,
+          messageId: message.messageId,
+          reaction: emoji,
+        );
+      } else {
+        await service.addReaction(
+          accountId: targetKey.accountId,
+          roomToken: targetKey.roomToken,
+          messageId: message.messageId,
+          reaction: emoji,
+        );
+      }
+    } on ChatMessageActionException catch (error) {
+      _showActionError(error.code);
+    } on Object {
+      _showActionError(ChatMessageActionError.invalidResponse);
+    }
+  }
+
+  Future<void> _openReactionPicker(CachedChatMessage message) async {
+    final strings = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final emoji in _quickReactionEmoji)
+                    InkWell(
+                      key: Key('quick-reaction-$emoji'),
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(
+                          _toggleReaction(
+                            message,
+                            _parseCachedMessage(message),
+                            emoji,
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              TextButton.icon(
+                key: const Key('open-full-reaction-picker'),
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_openFullReactionPicker(message));
+                },
+                icon: const Icon(Icons.add_reaction_outlined),
+                label: Text(strings.reactionPickerMore),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFullReactionPicker(CachedChatMessage message) async {
+    final strings = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Align(
+        alignment: Alignment.bottomCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+            child: EmojiPicker(
+              labels: _emojiPickerLabels(strings),
+              onSelected: (choice) {
+                Navigator.of(sheetContext).pop();
+                unawaited(
+                  _toggleReaction(
+                    message,
+                    _parseCachedMessage(message),
+                    choice.glyph,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showActionError(ChatMessageActionError code) {
+    if (!mounted) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(_messageActionErrorMessage(strings, code))),
+      );
   }
 
   Future<void> _requestGiphy({bool refresh = false}) async {
@@ -766,6 +1079,37 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final attachmentDependencies = widget.conversation.readOnly == 0
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
+    final actionsProfile = ref
+        .watch(chatMessageActionsProfileProvider(_key))
+        .valueOrNull;
+    final readOnly = widget.conversation.readOnly != 0;
+    final canReplyToMessage = !readOnly && widget.threadId == null;
+    final profileCanEdit = actionsProfile?.edit ?? false;
+    final profileCanDelete = actionsProfile?.delete ?? false;
+    final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);
+    void handleMessageActions(CachedChatMessage message, ChatMessage? parsed) {
+      final outgoing = message.actorId == widget.account.loginName;
+      _showMessageActions(
+        message,
+        parsed,
+        canReply: canReplyToMessage,
+        canEdit: profileCanEdit && outgoing,
+        canDelete: profileCanDelete && outgoing,
+        canReact: profileCanReact,
+      );
+    }
+
+    void handleReactionTap(
+      CachedChatMessage message,
+      ChatMessage? parsed,
+      String emoji,
+    ) {
+      if (!profileCanReact) {
+        return;
+      }
+      unawaited(_toggleReaction(message, parsed, emoji));
+    }
+
     final messages = messagesValue.valueOrNull ?? const <CachedChatMessage>[];
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
@@ -883,9 +1227,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   onRetry: _sync,
                   onResend: _confirmResend,
                   onOpenThread: _openThread,
-                  onReply: widget.conversation.readOnly == 0
-                      ? _startReply
-                      : null,
+                  onMessageActions: handleMessageActions,
+                  onReactionTap: handleReactionTap,
                   deliveryStates: deliveryStates,
                   lastCommonRead: _cursorValue(scope?.lastCommonRead),
                 ),
@@ -1033,7 +1376,8 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onRetry,
     required this.onResend,
     required this.onOpenThread,
-    required this.onReply,
+    required this.onMessageActions,
+    required this.onReactionTap,
     required this.deliveryStates,
     required this.lastCommonRead,
   });
@@ -1050,7 +1394,10 @@ final class _ChatTimeline extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<StoredTextSendOperation> onResend;
   final ValueChanged<CachedChatMessage> onOpenThread;
-  final ValueChanged<CachedChatMessage>? onReply;
+  final void Function(CachedChatMessage message, ChatMessage? parsed)
+  onMessageActions;
+  final void Function(CachedChatMessage message, ChatMessage? parsed, String emoji)
+  onReactionTap;
   final Map<int, OutgoingMessageDeliveryState> deliveryStates;
   final int? lastCommonRead;
 
@@ -1125,7 +1472,8 @@ final class _ChatTimeline extends StatelessWidget {
                   groupEnd: !groupedWithNext,
                   showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
                   onOpenThread: threadId == null ? onOpenThread : null,
-                  onReply: threadId == null ? onReply : null,
+                  onMessageActions: onMessageActions,
+                  onReactionTap: onReactionTap,
                   deliveryState:
                       deliveryStates[message.messageId] ??
                       _serverDeliveryState(message.messageId, lastCommonRead),
@@ -1158,7 +1506,8 @@ final class _MessageBubble extends StatelessWidget {
     required this.groupEnd,
     required this.showReplyPreview,
     required this.onOpenThread,
-    required this.onReply,
+    required this.onMessageActions,
+    required this.onReactionTap,
     required this.deliveryState,
   });
 
@@ -1171,7 +1520,10 @@ final class _MessageBubble extends StatelessWidget {
   final bool groupEnd;
   final bool showReplyPreview;
   final ValueChanged<CachedChatMessage>? onOpenThread;
-  final ValueChanged<CachedChatMessage>? onReply;
+  final void Function(CachedChatMessage message, ChatMessage? parsed)
+  onMessageActions;
+  final void Function(CachedChatMessage message, ChatMessage? parsed, String emoji)
+  onReactionTap;
   final OutgoingMessageDeliveryState? deliveryState;
 
   @override
@@ -1244,9 +1596,9 @@ final class _MessageBubble extends StatelessWidget {
                   child: GestureDetector(
                     key: Key('chat-message-target-${message.messageId}'),
                     behavior: HitTestBehavior.opaque,
-                    onLongPress: onReply == null
+                    onLongPress: message.deleted
                         ? null
-                        : () => onReply!(message),
+                        : () => onMessageActions(message, parsed),
                     child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: outgoing
@@ -1294,6 +1646,10 @@ final class _MessageBubble extends StatelessWidget {
                                   ? scheme.onPrimaryContainer
                                   : scheme.onSurface,
                               showReplyPreview: showReplyPreview,
+                              onReactionTap: message.deleted
+                                  ? null
+                                  : (emoji) =>
+                                        onReactionTap(message, parsed, emoji),
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -1876,6 +2232,28 @@ String _chatErrorMessage(AppLocalizations strings, ChatServiceError error) {
     ChatServiceError.accountMissing ||
     ChatServiceError.conversationMissing ||
     ChatServiceError.invalidResponse => strings.chatInvalidResponse,
+  };
+}
+
+String _messageActionErrorMessage(
+  AppLocalizations strings,
+  ChatMessageActionError error,
+) {
+  return switch (error) {
+    ChatMessageActionError.credentialMissing ||
+    ChatMessageActionError.reauthenticationRequired =>
+      strings.syncCredentialMissing,
+    ChatMessageActionError.talkUnavailable => strings.talkUnavailable,
+    ChatMessageActionError.actionUnsupported =>
+      strings.messageActionUnsupported,
+    ChatMessageActionError.messageMissing =>
+      strings.messageActionMessageMissing,
+    ChatMessageActionError.rateLimited => strings.syncRateLimited,
+    ChatMessageActionError.serviceUnavailable ||
+    ChatMessageActionError.network => strings.chatUnavailable,
+    ChatMessageActionError.accountMissing ||
+    ChatMessageActionError.conversationMissing ||
+    ChatMessageActionError.invalidResponse => strings.chatInvalidResponse,
   };
 }
 

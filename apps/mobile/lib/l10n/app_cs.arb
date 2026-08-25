@@ -189,5 +189,18 @@
   "roomDetailsRoleUser": "Uživatel",
   "roomDetailsRoleGuest": "Host",
   "roomDetailsRoleGuestModerator": "Moderátor (host)",
-  "roomDetailsRoleUnknown": "Neznámá role"
+  "roomDetailsRoleUnknown": "Neznámá role",
+  "messageActionReply": "Odpovědět",
+  "messageActionCopy": "Kopírovat text",
+  "messageActionEdit": "Upravit",
+  "messageActionDelete": "Smazat",
+  "messageActionReact": "Reagovat",
+  "messageCopied": "Zkopírováno do schránky",
+  "editMessageTitle": "Upravit zprávu",
+  "editMessageSave": "Uložit",
+  "deleteMessageConfirmTitle": "Smazat tuto zprávu?",
+  "deleteMessageConfirmBody": "Tuto akci nelze vrátit zpět.",
+  "reactionPickerMore": "Další emoji…",
+  "messageActionUnsupported": "Tato akce zde není dostupná.",
+  "messageActionMessageMissing": "Tato zpráva už není dostupná."
 }

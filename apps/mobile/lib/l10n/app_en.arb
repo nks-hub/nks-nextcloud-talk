@@ -194,5 +194,18 @@
   "roomDetailsRoleUser": "User",
   "roomDetailsRoleGuest": "Guest",
   "roomDetailsRoleGuestModerator": "Guest moderator",
-  "roomDetailsRoleUnknown": "Unknown role"
+  "roomDetailsRoleUnknown": "Unknown role",
+  "messageActionReply": "Reply",
+  "messageActionCopy": "Copy text",
+  "messageActionEdit": "Edit",
+  "messageActionDelete": "Delete",
+  "messageActionReact": "React",
+  "messageCopied": "Copied to clipboard",
+  "editMessageTitle": "Edit message",
+  "editMessageSave": "Save",
+  "deleteMessageConfirmTitle": "Delete this message?",
+  "deleteMessageConfirmBody": "This cannot be undone.",
+  "reactionPickerMore": "More emoji…",
+  "messageActionUnsupported": "This action isn't available here.",
+  "messageActionMessageMissing": "This message is no longer available."
 }

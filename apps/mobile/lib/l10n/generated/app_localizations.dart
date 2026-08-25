@@ -1195,6 +1195,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unknown role'**
   String get roomDetailsRoleUnknown;
+
+  /// No description provided for @messageActionReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get messageActionReply;
+
+  /// No description provided for @messageActionCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy text'**
+  String get messageActionCopy;
+
+  /// No description provided for @messageActionEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get messageActionEdit;
+
+  /// No description provided for @messageActionDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get messageActionDelete;
+
+  /// No description provided for @messageActionReact.
+  ///
+  /// In en, this message translates to:
+  /// **'React'**
+  String get messageActionReact;
+
+  /// No description provided for @messageCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get messageCopied;
+
+  /// No description provided for @editMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit message'**
+  String get editMessageTitle;
+
+  /// No description provided for @editMessageSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get editMessageSave;
+
+  /// No description provided for @deleteMessageConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this message?'**
+  String get deleteMessageConfirmTitle;
+
+  /// No description provided for @deleteMessageConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This cannot be undone.'**
+  String get deleteMessageConfirmBody;
+
+  /// No description provided for @reactionPickerMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More emoji…'**
+  String get reactionPickerMore;
+
+  /// No description provided for @messageActionUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This action isn\'t available here.'**
+  String get messageActionUnsupported;
+
+  /// No description provided for @messageActionMessageMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This message is no longer available.'**
+  String get messageActionMessageMissing;
 }
 
 class _AppLocalizationsDelegate
