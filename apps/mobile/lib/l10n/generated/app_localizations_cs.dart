@@ -15,7 +15,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get dateHeaderYesterday => 'Včera';
 
   @override
-  String get appTitle => 'NKS Talk';
+  String get appTitle => 'NCloudTalk';
 
   @override
   String get onboardingTitle => 'Všechny konverzace v jedné aplikaci';

@@ -2,7 +2,7 @@
   "@@locale": "cs",
   "dateHeaderToday": "Dnes",
   "dateHeaderYesterday": "Včera",
-  "appTitle": "NKS Talk",
+  "appTitle": "NCloudTalk",
   "onboardingTitle": "Všechny konverzace v jedné aplikaci",
   "onboardingBody": "Připojte libovolný podporovaný Nextcloud server. Účty, mezipaměť i práce na pozadí zůstávají přísně oddělené.",
   "multiServerTitle": "Připraveno pro více serverů",

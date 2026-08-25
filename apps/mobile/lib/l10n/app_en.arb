@@ -2,7 +2,7 @@
   "@@locale": "en",
   "dateHeaderToday": "Today",
   "dateHeaderYesterday": "Yesterday",
-  "appTitle": "NKS Talk",
+  "appTitle": "NCloudTalk",
   "onboardingTitle": "Your conversations, one app",
   "onboardingBody": "Connect any supported Nextcloud server. Accounts, cache and background work stay strictly separated.",
   "multiServerTitle": "Built for multiple servers",

@@ -9,7 +9,7 @@ final class BrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      label: 'NKS Talk',
+      label: 'NCloudTalk',
       image: true,
       child: ExcludeSemantics(
         child: Container(
