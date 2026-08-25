@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/material.dart';
@@ -10,18 +11,22 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/attachment_repository.dart';
+import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
+import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
 void main() {
-  testWidgets('Giphy selection sends without inserting a composer link', (
+  testWidgets('Giphy selection uploads GIF bytes without sending a link', (
     tester,
   ) async {
-    final harness = await _ComposerHarness.create();
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
     final giphy = _giphyRepository();
     addTearDown(giphy.close);
@@ -70,18 +75,23 @@ void main() {
     await tester.pump();
     await tester.tap(gif);
     await _pumpTransition(tester);
-    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+    await _pumpUntil(tester, () => harness.finalizedFileNames.isNotEmpty);
 
     expect(_composer(tester).text, '👋');
-    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave']);
+    expect(harness.sentMessages, isEmpty);
+    expect(harness.uploadedAttachments, <List<int>>[_animatedGif]);
+    expect(
+      harness.finalizedFileNames.single,
+      matches(RegExp(r'^giphy-[0-9a-f]{16}\.gif$')),
+    );
     await _pumpUntil(tester, () => _sendButtonEnabled(tester));
     await tester.tap(find.byKey(const Key('send-message')));
     await _pumpUntil(
       tester,
-      () => harness.sentMessages.length == 2 && _composer(tester).text.isEmpty,
+      () => harness.sentMessages.length == 1 && _composer(tester).text.isEmpty,
     );
 
-    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave', '👋']);
+    expect(harness.sentMessages, <String>['👋']);
     expect(_composer(tester).text, isEmpty);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -91,7 +101,7 @@ void main() {
   testWidgets(
     'unavailable Giphy integration becomes an honest disabled state',
     (tester) async {
-      final harness = await _ComposerHarness.create();
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
       addTearDown(harness.close);
 
       await tester.pumpWidget(
@@ -134,7 +144,7 @@ void main() {
   testWidgets(
     'first Giphy tap keeps the probe alive before the watched frame',
     (tester) async {
-      final harness = await _ComposerHarness.create();
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
       addTearDown(harness.close);
       final probeClient = _ControlledGiphyClient();
       addTearDown(probeClient.close);
@@ -161,6 +171,7 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
+      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
 
       await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await tester.runAsync(() async {
@@ -193,7 +204,7 @@ void main() {
   testWidgets(
     'a completed Giphy probe cannot cross a changed account or room scope',
     (tester) async {
-      final harness = await _ComposerHarness.create();
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
       addTearDown(harness.close);
       final probeClient = _ControlledGiphyClient();
       addTearDown(probeClient.close);
@@ -217,6 +228,7 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
+      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
       await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
 
@@ -268,6 +280,12 @@ bool _sendButtonEnabled(WidgetTester tester) {
       null;
 }
 
+bool _giphyButtonEnabled(WidgetTester tester) {
+  final button = find.byKey(const Key('open-giphy-picker'));
+  return button.evaluate().isNotEmpty &&
+      tester.widget<IconButton>(button).onPressed != null;
+}
+
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
   for (var attempt = 0; attempt < 100; attempt++) {
     await tester.pump(const Duration(milliseconds: 10));
@@ -294,6 +312,12 @@ final class _ComposerHarness {
     required this.vault,
     required this.api,
     required this.sentMessages,
+    required this.sourceStore,
+    required this.attachmentService,
+    required this.attachmentClient,
+    required this.attachmentRoot,
+    required this.uploadedAttachments,
+    required this.finalizedFileNames,
   });
 
   final AppDatabase database;
@@ -302,6 +326,12 @@ final class _ComposerHarness {
   final MemoryCredentialVault vault;
   final HttpNextcloudApi api;
   final List<String> sentMessages;
+  final DurableAttachmentSourceStore sourceStore;
+  final AttachmentService attachmentService;
+  final http.Client attachmentClient;
+  final Directory attachmentRoot;
+  final List<List<int>> uploadedAttachments;
+  final List<String> finalizedFileNames;
 
   static Future<_ComposerHarness> create() async {
     final database = openTestDatabase();
@@ -341,21 +371,47 @@ final class _ComposerHarness {
     final vault = MemoryCredentialVault()
       ..values[account.id] = 'fixture-app-password';
     final sentMessages = <String>[];
+    final uploadedAttachments = <List<int>>[];
+    final finalizedFileNames = <String>[];
+    final attachmentRoot = await Directory.systemTemp.createTemp(
+      'nctalk-composer-attachments-',
+    );
+    final sourceStore = DurableAttachmentSourceStore(root: attachmentRoot);
+    await sourceStore.initialize();
+    final attachmentClient = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        return http.Response.bytes(_attachmentProbeSuccess(), 200);
+      }
+      if (request.method == 'PUT') {
+        uploadedAttachments.add(List<int>.from(request.bodyBytes));
+        return http.Response('', 201);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/attachment')) {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        final fileName = body['fileName']! as String;
+        finalizedFileNames.add(fileName);
+        return http.Response.bytes(_attachmentFinalizeSuccess(fileName), 200);
+      }
+      fail('Unexpected attachment request: ${request.method} ${request.url}');
+    });
+    final attachmentService = AttachmentService(
+      repository: AttachmentRepository(database),
+      credentials: vault,
+      releaseSource: (source) => sourceStore.discard(source.handle),
+      transport: HttpAttachmentTransport(
+        client: attachmentClient,
+        sourceProvider: sourceStore,
+      ),
+      watchConfirmationCandidates: () =>
+          const Stream<AttachmentConfirmationSnapshot>.empty(),
+      confirmationRetryDelays: const <Duration>[Duration(hours: 1)],
+    );
+    await attachmentService.ready;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
-          return http.Response(
-            jsonEncode(
-              capabilitiesJson(
-                talkFeatures: const <String>[
-                  'conversation-v4',
-                  'chat-v2',
-                  'chat-reference-id',
-                ],
-              ),
-            ),
-            200,
-          );
+          return http.Response(jsonEncode(_attachmentCapabilities()), 200);
         }
         if (request.method == 'POST') {
           sentMessages.add(request.bodyFields['message']!);
@@ -392,6 +448,12 @@ final class _ComposerHarness {
       vault: vault,
       api: api,
       sentMessages: sentMessages,
+      sourceStore: sourceStore,
+      attachmentService: attachmentService,
+      attachmentClient: attachmentClient,
+      attachmentRoot: attachmentRoot,
+      uploadedAttachments: uploadedAttachments,
+      finalizedFileNames: finalizedFileNames,
     );
   }
 
@@ -405,6 +467,10 @@ final class _ComposerHarness {
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
         nextcloudApiProvider.overrideWithValue(api),
+        attachmentSourceProvider.overrideWith((ref) async => sourceStore),
+        attachmentServiceProvider.overrideWith(
+          (ref) async => attachmentService,
+        ),
         ...overrides,
       ],
       child: localizedTestApp(
@@ -418,7 +484,12 @@ final class _ComposerHarness {
 
   Future<void> close() async {
     api.close();
+    await attachmentService.close();
+    attachmentClient.close();
     await database.close();
+    if (await attachmentRoot.exists()) {
+      await attachmentRoot.delete(recursive: true);
+    }
   }
 }
 
@@ -459,7 +530,25 @@ HttpGiphyRepository _giphyRepository() {
       }
       if (request.url.path == '/apps/integration_giphy/gif/wave') {
         return http.Response.bytes(
-          base64Decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='),
+          _animatedGif,
+          200,
+          headers: const <String, String>{'content-type': 'image/gif'},
+        );
+      }
+      if (request.url.path.endsWith('/ocs/v2.php/references/resolve')) {
+        return http.Response(
+          _giphyReferenceResponse(Uri.parse('https://giphy.com/gifs/wave')),
+          200,
+          headers: const <String, String>{
+            'content-type': 'application/json; charset=utf-8',
+          },
+        );
+      }
+      if (request.url.path.endsWith(
+        '/index.php/apps/integration_giphy/gif/proxy',
+      )) {
+        return http.Response.bytes(
+          _animatedGif,
           200,
           headers: const <String, String>{'content-type': 'image/gif'},
         );
@@ -476,6 +565,90 @@ HttpGiphyRepository _giphyRepository() {
     }),
   );
 }
+
+Map<String, Object?> _attachmentCapabilities() {
+  final result = capabilitiesJson(
+    talkFeatures: const <String>[
+      'conversation-v4',
+      'chat-v2',
+      'chat-reference-id',
+    ],
+  );
+  final ocs = result['ocs']! as Map<String, Object?>;
+  final data = ocs['data']! as Map<String, Object?>;
+  final capabilities = data['capabilities']! as Map<String, Object?>;
+  final spreed = capabilities['spreed']! as Map<String, Object?>;
+  final config = spreed['config']! as Map<String, Object?>;
+  config['attachments'] = <String, Object?>{
+    'allowed': true,
+    'conversation-subfolders': true,
+  };
+  return result;
+}
+
+List<int> _attachmentProbeSuccess() => utf8.encode(
+  jsonEncode(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <String, Object?>{
+        'folder': 'Talk/Fixture/Draft',
+        'renames': <Object?>[],
+      },
+    },
+  }),
+);
+
+List<int> _attachmentFinalizeSuccess(String fileName) => utf8.encode(
+  jsonEncode(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <String, Object?>{
+        'renames': <Object?>[
+          <String, Object?>{fileName: fileName},
+        ],
+      },
+    },
+  }),
+);
+
+String _giphyReferenceResponse(Uri resourceUrl) => jsonEncode(<String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': 'ok',
+      'statuscode': 200,
+      'message': 'OK',
+    },
+    'data': <String, Object?>{
+      'references': <String, Object?>{
+        resourceUrl.toString(): <String, Object?>{
+          'richObjectType': 'integration_giphy_gif',
+          'richObject': <String, Object?>{
+            'id': 'fixture-wave',
+            'proxied_url':
+                'https://cloud.example.invalid/index.php/apps/'
+                'integration_giphy/gif/proxy',
+            'images': <String, Object?>{
+              'fixed_width': <String, Object?>{'width': '1', 'height': '1'},
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+final _animatedGif = base64Decode(
+  'R0lGODlhAQABAIAAAAAAAP///yH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwA'
+  'AAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAAAICTAEAOw==',
+);
 
 String _giphyResponse() => jsonEncode(<String, Object?>{
   'ocs': <String, Object?>{

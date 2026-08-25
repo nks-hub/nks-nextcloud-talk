@@ -20,6 +20,7 @@ import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/emoji_picker.dart';
 import 'composer/giphy.dart';
+import 'composer/giphy_attachment.dart';
 
 final class ChatRoomScreen extends StatelessWidget {
   const ChatRoomScreen({
@@ -116,6 +117,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     with WidgetsBindingObserver {
   final TextEditingController _composer = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ChatMediaComposerController _mediaComposerController =
+      ChatMediaComposerController();
   ForegroundSyncLoop? _syncLoop;
   ChatLiveRoomBinding? _liveBinding;
   int _syncGeneration = 0;
@@ -359,24 +362,28 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   }
 
   Future<void> _sendGiphyForScope(
-    Uri resourceUrl,
+    GiphyEntry entry,
+    HttpGiphyRepository repository,
     ChatRoomProviderKey targetKey,
     int giphyGeneration,
   ) async {
     if (!_isCurrentGiphyScope(targetKey, giphyGeneration)) {
       return;
     }
-    if (!isSupportedGiphyResource(resourceUrl)) {
+    if (!isSupportedGiphyResource(entry.resourceUrl)) {
       if (mounted) {
         setState(() => _localError = ChatServiceError.invalidResponse);
       }
       return;
     }
-    await _sendMessage(
-      resourceUrl.toString(),
-      clearComposer: false,
-      expectedKey: targetKey,
+    final loader = GiphyAttachmentLoader(repository.loadReference);
+    final started = await _mediaComposerController.submitGiphyAttachment(
+      (cancellationSignal) =>
+          loader.load(entry, cancellationSignal: cancellationSignal),
     );
+    if (!started && _isCurrentGiphyScope(targetKey, giphyGeneration)) {
+      setState(() => _localError = ChatServiceError.serviceUnavailable);
+    }
   }
 
   Future<void> _sendMessage(
@@ -555,7 +562,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   Navigator.of(sheetContext).pop();
                   unawaited(
                     _sendGiphyForScope(
-                      entry.resourceUrl,
+                      entry,
+                      repository,
                       targetKey,
                       generation,
                     ),
@@ -676,9 +684,25 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ? ref.watch(giphyRepositoryProvider(widget.account.id))
         : null;
     final giphyRepository = giphy?.valueOrNull;
+    final giphyAttachmentSupported =
+        attachmentDependencies?.valueOrNull?.profile.supports(
+          AttachmentMetadata(
+            kind: AttachmentMessageKind.file,
+            replyTo: null,
+            threadId: widget.threadId,
+            silent: false,
+          ),
+        ) ??
+        false;
     final String giphyTooltip;
     final VoidCallback? giphyAction;
-    if (giphy == null) {
+    if (attachmentDependencies?.isLoading ?? false) {
+      giphyTooltip = strings.mediaCapabilityChecking;
+      giphyAction = null;
+    } else if (!giphyAttachmentSupported) {
+      giphyTooltip = strings.mediaCapabilityUnavailable;
+      giphyAction = null;
+    } else if (giphy == null) {
       giphyTooltip = strings.openGiphyPicker;
       giphyAction = () => unawaited(_requestGiphy());
     } else if (giphy.isLoading) {
@@ -705,7 +729,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         key: const Key('open-giphy-picker'),
         onPressed: _sending ? null : giphyAction,
         tooltip: giphyTooltip,
-        icon: giphy?.isLoading ?? false
+        icon:
+            (attachmentDependencies?.isLoading ?? false) ||
+                (giphy?.isLoading ?? false)
             ? const SizedBox.square(
                 dimension: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
@@ -799,6 +825,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               widget.threadId,
             )),
             accountId: accountId,
+            controller: _mediaComposerController,
             server: server,
             roomToken: roomToken,
             threadId: widget.threadId,
