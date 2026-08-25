@@ -421,6 +421,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get participantAvatarUnknown => 'Participant';
 
   @override
+  String get cancelReply => 'Cancel reply';
+
+  @override
   String replyingTo(Object name) {
     return 'Replying to $name';
   }

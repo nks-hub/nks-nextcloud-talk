@@ -836,6 +836,12 @@ abstract class AppLocalizations {
   /// **'Participant'**
   String get participantAvatarUnknown;
 
+  /// No description provided for @cancelReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel reply'**
+  String get cancelReply;
+
   /// No description provided for @replyingTo.
   ///
   /// In en, this message translates to:

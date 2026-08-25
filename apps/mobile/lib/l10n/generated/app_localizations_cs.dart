@@ -423,6 +423,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get participantAvatarUnknown => 'Účastník';
 
   @override
+  String get cancelReply => 'Zrušit odpověď';
+
+  @override
   String replyingTo(Object name) {
     return 'Odpověď uživateli $name';
   }

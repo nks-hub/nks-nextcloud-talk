@@ -130,6 +130,7 @@
   "participantAvatarBridge": "Bridge participant",
   "participantAvatarSystem": "System",
   "participantAvatarUnknown": "Participant",
+  "cancelReply": "Cancel reply",
   "replyingTo": "Replying to {name}",
   "mediaCapabilityChecking": "Checking attachment support…",
   "mediaCapabilityUnavailable": "Attachments are temporarily unavailable.",

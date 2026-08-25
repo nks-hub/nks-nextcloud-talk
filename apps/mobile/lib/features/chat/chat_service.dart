@@ -178,11 +178,14 @@ final class ChatService {
     });
   }
 
+  /// [replyTo] answers a specific root message. Talk turns that into a thread,
+  /// so it is mutually exclusive with sending inside an existing [threadId].
   Future<void> sendText({
     required String accountId,
     required String roomToken,
     required String message,
     int? threadId,
+    int? replyTo,
   }) {
     final key = _roomKey(accountId, roomToken);
     return _serializeRoom<void>(key, () {
@@ -191,7 +194,13 @@ final class ChatService {
         if (normalized.isEmpty) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
+        if (replyTo != null && (threadId != null || replyTo < 1)) {
+          throw const ChatServiceException(ChatServiceError.invalidResponse);
+        }
         var prepared = await _prepare(accountId, roomToken, threadId: threadId);
+        if (replyTo != null && !prepared.profile.reply) {
+          throw const ChatServiceException(ChatServiceError.sendUnsupported);
+        }
         if (prepared.room.readOnly != 0) {
           throw const ChatServiceException(ChatServiceError.readOnly);
         }
@@ -201,6 +210,9 @@ final class ChatService {
         if (prepared.threadId != null && prepared.namedThread == null) {
           prepared = await _resolveAndSynchronizePrepared(prepared);
         }
+        final effectiveReplyTo =
+            replyTo ??
+            (prepared.namedThread == true ? null : prepared.threadId);
         await _chat.admitTextSend(
           accountId: accountId,
           roomToken: prepared.room.token,
@@ -208,12 +220,9 @@ final class ChatService {
           operationId: ChatOperationId.parse(_uuid.v4()),
           referenceId: ChatReferenceId.parse(_uuid.v4()),
           message: normalized,
-          replyTo: prepared.namedThread == true ? null : prepared.threadId,
+          replyTo: effectiveReplyTo,
           threadId: prepared.namedThread == true ? prepared.threadId : null,
-          parentRoomToken:
-              prepared.threadId == null || prepared.namedThread == true
-              ? null
-              : prepared.room.token,
+          parentRoomToken: effectiveReplyTo == null ? null : prepared.room.token,
         );
         await _processPending(prepared);
       }, threadId: threadId);

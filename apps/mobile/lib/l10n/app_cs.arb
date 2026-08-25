@@ -130,6 +130,7 @@
   "participantAvatarBridge": "Účastník propojené služby",
   "participantAvatarSystem": "Systém",
   "participantAvatarUnknown": "Účastník",
+  "cancelReply": "Zrušit odpověď",
   "replyingTo": "Odpověď uživateli {name}",
   "mediaCapabilityChecking": "Ověřuji podporu příloh…",
   "mediaCapabilityUnavailable": "Přílohy jsou dočasně nedostupné.",

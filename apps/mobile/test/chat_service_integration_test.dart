@@ -2030,6 +2030,99 @@ void main() {
     expect(scope?.lastSyncError, isNull);
   });
 
+  test('a reply carries its parent to the server and the outbox', () async {
+    String? sentReplyTo;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              _chatCapabilities(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-reference-id',
+                  'chat-replies',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        expect(request.method, 'POST');
+        sentReplyTo = request.bodyFields['replyTo'];
+        return http.Response(
+          jsonEncode(
+            _sendResponse(
+              referenceId: request.bodyFields['referenceId']!,
+              message: request.bodyFields['message']!,
+            ),
+          ),
+          201,
+          headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final service = ChatService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await service.sendText(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      message: 'Synthetic reply',
+      replyTo: 109,
+    );
+
+    final operations = await chat
+        .watchTextSendOperations(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          threadId: 109,
+        )
+        .first;
+    expect(sentReplyTo, '109');
+    expect(operations, hasLength(1));
+    expect(operations.single.replyTo, 109);
+    expect(operations.single.parentRoomToken, 'rooma123');
+    // The fixture answer carries no parent, so the reply stays unconfirmed
+    // instead of being completed on a weaker match.
+    expect(operations.single.outboxState, 'awaitingConfirmation');
+  });
+
+  test('a reply inside a thread scope is refused', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(jsonEncode(_chatCapabilities()), 200);
+        }
+        fail('a refused reply must never reach the server');
+      }),
+    );
+    addTearDown(api.close);
+    final service = ChatService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await expectLater(
+      service.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'Synthetic reply',
+        threadId: 20,
+        replyTo: 109,
+      ),
+      throwsA(isA<ChatServiceException>()),
+    );
+  });
+
   test('confirmed send completes outbox and caches returned message', () async {
     var sendRequests = 0;
     final api = HttpNextcloudApi(

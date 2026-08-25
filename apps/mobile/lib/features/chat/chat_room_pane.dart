@@ -133,6 +133,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   ChatServiceError? _localError;
   Timer? _draftTimer;
   ChatRepository? _draftStore;
+  CachedChatMessage? _replyTo;
 
   ChatRoomProviderKey get _key => (
     accountId: widget.account.id,
@@ -213,6 +214,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ), _composer.text),
     );
     _composer.clear();
+    _replyTo = null;
     _sendGeneration++;
     _giphyGeneration++;
     _sending = false;
@@ -417,6 +419,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
   }
 
+  void _startReply(CachedChatMessage message) {
+    if (message.systemMessage.isNotEmpty || message.deleted) {
+      return;
+    }
+    setState(() => _replyTo = message);
+  }
+
   Future<void> _send() async {
     final message = _composer.text.trim();
     if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
@@ -462,6 +471,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (message.isEmpty || _sending || widget.conversation.readOnly != 0) {
       return;
     }
+    final replyTo = targetKey.threadId == null ? _replyTo : null;
     final generation = ++_sendGeneration;
     setState(() => _sending = true);
     try {
@@ -472,9 +482,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             roomToken: targetKey.roomToken,
             message: message,
             threadId: targetKey.threadId,
+            replyTo: replyTo?.messageId,
           );
       if (!_isCurrentSendScope(targetKey, generation)) {
         return;
+      }
+      if (replyTo != null && _replyTo?.messageId == replyTo.messageId) {
+        setState(() => _replyTo = null);
       }
       if (clearComposer && _composer.text.trim() == message) {
         _composer.clear();
@@ -845,9 +859,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   onRetry: _sync,
                   onResend: _confirmResend,
                   onOpenThread: _openThread,
+                  onReply: widget.conversation.readOnly == 0
+                      ? _startReply
+                      : null,
                 ),
         ),
         _ChatComposer(
+          replyTo: _replyTo,
+          onCancelReply: () => setState(() => _replyTo = null),
           controller: _composer,
           sending: _sending,
           readOnly: widget.conversation.readOnly != 0,
@@ -988,6 +1007,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onRetry,
     required this.onResend,
     required this.onOpenThread,
+    required this.onReply,
   });
 
   final StoredAccount account;
@@ -1002,6 +1022,7 @@ final class _ChatTimeline extends StatelessWidget {
   final VoidCallback onRetry;
   final ValueChanged<StoredTextSendOperation> onResend;
   final ValueChanged<CachedChatMessage> onOpenThread;
+  final ValueChanged<CachedChatMessage>? onReply;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,6 +1095,7 @@ final class _ChatTimeline extends StatelessWidget {
                   groupEnd: !groupedWithNext,
                   showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
                   onOpenThread: threadId == null ? onOpenThread : null,
+                  onReply: threadId == null ? onReply : null,
                 ),
               ],
             ),
@@ -1103,6 +1125,7 @@ final class _MessageBubble extends StatelessWidget {
     required this.groupEnd,
     required this.showReplyPreview,
     required this.onOpenThread,
+    required this.onReply,
   });
 
   final StoredAccount account;
@@ -1114,6 +1137,7 @@ final class _MessageBubble extends StatelessWidget {
   final bool groupEnd;
   final bool showReplyPreview;
   final ValueChanged<CachedChatMessage>? onOpenThread;
+  final ValueChanged<CachedChatMessage>? onReply;
 
   @override
   Widget build(BuildContext context) {
@@ -1182,7 +1206,13 @@ final class _MessageBubble extends StatelessWidget {
                   container: true,
                   explicitChildNodes: true,
                   label: authorLabel,
-                  child: DecoratedBox(
+                  child: GestureDetector(
+                    key: Key('chat-message-target-${message.messageId}'),
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: onReply == null
+                        ? null
+                        : () => onReply!(message),
+                    child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: outgoing
                           ? scheme.primaryContainer
@@ -1282,6 +1312,7 @@ final class _MessageBubble extends StatelessWidget {
                           ],
                         ],
                       ),
+                    ),
                     ),
                   ),
                 ),
@@ -1552,12 +1583,16 @@ final class _ChatComposer extends StatelessWidget {
     required this.sending,
     required this.readOnly,
     required this.mediaComposer,
+    required this.replyTo,
+    required this.onCancelReply,
   });
 
   final TextEditingController controller;
   final bool sending;
   final bool readOnly;
   final Widget mediaComposer;
+  final CachedChatMessage? replyTo;
+  final VoidCallback onCancelReply;
 
   @override
   Widget build(BuildContext context) {
@@ -1586,6 +1621,11 @@ final class _ChatComposer extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (replyTo != null)
+                      _ReplyBanner(
+                        message: replyTo!,
+                        onCancel: onCancelReply,
+                      ),
                     TextField(
                       key: const Key('chat-composer'),
                       controller: controller,
@@ -1611,6 +1651,57 @@ final class _ChatComposer extends StatelessWidget {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+}
+
+final class _ReplyBanner extends StatelessWidget {
+  const _ReplyBanner({required this.message, required this.onCancel});
+
+  final CachedChatMessage message;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      key: const Key('chat-reply-banner'),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(Icons.reply_rounded, size: 18, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings.replyingTo(message.actorDisplayName),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: scheme.primary,
+                  ),
+                ),
+                Text(
+                  message.displayText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            key: const Key('chat-cancel-reply'),
+            tooltip: strings.cancelReply,
+            onPressed: onCancel,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
       ),
     );
   }

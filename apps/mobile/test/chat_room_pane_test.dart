@@ -700,6 +700,34 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a long press targets a message for a reply', (tester) async {
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+
+    await tester.longPress(
+      find.byKey(const Key('chat-message-target-10')),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+    expect(find.text('Replying to Other person'), findsOneWidget);
+    expect(find.text('Cached hello'), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('chat-cancel-reply')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('composer text survives losing the pane', (tester) async {
     // A send can be refused before the outbox admits it, for example while
     // offline, so the typed text must not depend on the widget staying alive.
