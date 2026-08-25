@@ -775,6 +775,70 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('an own attachment also shows its delivery state', (
+    tester,
+  ) async {
+    final attachment = _messageJson(
+      id: 60,
+      actorId: 'fixture-user',
+      actorDisplayName: 'Fixture user',
+      timestamp: 1724300300,
+      message: '{file}',
+      messageParameters: const {
+        'file': {
+          'type': 'file',
+          'id': '99',
+          'name': 'shared.png',
+          'link': '/index.php/f/99',
+          'path': 'Talk/shared.png',
+          'mimetype': 'image/png',
+          'preview-available': 'no',
+        },
+      },
+    );
+    await _insertCachedMessage(database, attachment, displayText: 'shared.png');
+    await database
+        .into(database.chatScopes)
+        .insert(
+          ChatScopesCompanion.insert(
+            accountId: account.id,
+            roomToken: conversation.token,
+            scopeKey: 'root',
+            historyCursor: '60',
+            futureCursor: '60',
+            lastCommonRead: '60',
+            lastReadMessage: 60,
+            unreadMessages: 0,
+            hasHistory: false,
+            futureConverged: true,
+            blocksJson: '[["60","60"]]',
+          ),
+        );
+
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomScreen(account: account, conversation: conversation),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat-delivery-60')),
+      findsOneWidget,
+      reason: 'an attachment never passes through the text outbox',
+    );
+    expect(find.byIcon(Icons.done_all_rounded), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-delivery-10')),
+      findsNothing,
+      reason: 'an incoming message never carries a delivery mark',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a voice message renders a player instead of a file chip', (
     tester,
   ) async {

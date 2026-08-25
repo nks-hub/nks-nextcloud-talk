@@ -870,6 +870,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                       ? _startReply
                       : null,
                   deliveryStates: deliveryStates,
+                  lastCommonRead: _cursorValue(scope?.lastCommonRead),
                 ),
         ),
         _ChatComposer(
@@ -1017,6 +1018,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.onOpenThread,
     required this.onReply,
     required this.deliveryStates,
+    required this.lastCommonRead,
   });
 
   final StoredAccount account;
@@ -1033,6 +1035,7 @@ final class _ChatTimeline extends StatelessWidget {
   final ValueChanged<CachedChatMessage> onOpenThread;
   final ValueChanged<CachedChatMessage>? onReply;
   final Map<int, OutgoingMessageDeliveryState> deliveryStates;
+  final int? lastCommonRead;
 
   @override
   Widget build(BuildContext context) {
@@ -1106,7 +1109,9 @@ final class _ChatTimeline extends StatelessWidget {
                   showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
                   onOpenThread: threadId == null ? onOpenThread : null,
                   onReply: threadId == null ? onReply : null,
-                  deliveryState: deliveryStates[message.messageId],
+                  deliveryState:
+                      deliveryStates[message.messageId] ??
+                      _serverDeliveryState(message.messageId, lastCommonRead),
                 ),
               ],
             ),
@@ -1677,6 +1682,28 @@ final class _ChatComposer extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Every own message the server already returned counts as delivered. The
+/// read step comes from the server's common read marker, never from local
+/// activity, so it also covers attachments and voice messages that never pass
+/// through the text outbox.
+OutgoingMessageDeliveryState? _serverDeliveryState(
+  int messageId,
+  int? lastCommonRead,
+) {
+  if (messageId < 1) {
+    return null;
+  }
+  if (lastCommonRead != null && lastCommonRead >= messageId) {
+    return OutgoingMessageDeliveryState.read;
+  }
+  return OutgoingMessageDeliveryState.sent;
+}
+
+int? _cursorValue(String? raw) {
+  final parsed = raw == null ? null : int.tryParse(raw);
+  return parsed == null || parsed < 0 ? null : parsed;
 }
 
 /// Only server-confirmed delivery is rendered. `sent` means the server stored
