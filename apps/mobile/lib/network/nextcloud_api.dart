@@ -74,6 +74,12 @@ final class PendingLogin {
   String toString() => 'PendingLogin(<redacted>)';
 }
 
+/// Nextcloud derives the device name of the generated app password from the
+/// User-Agent. Without this the server stores the bare Dart default, so the
+/// account owner sees a meaningless entry under security settings and cannot
+/// tell which device to revoke.
+const String loginFlowUserAgent = 'NCloudTalk';
+
 final class HttpNextcloudApi {
   HttpNextcloudApi({
     http.Client? client,
@@ -157,6 +163,7 @@ final class HttpNextcloudApi {
   Future<LoginFlowInitialization> initializeLogin(ServerBase server) async {
     final request = http.Request('POST', server.loginFlowV2Uri)
       ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      ..headers['User-Agent'] = loginFlowUserAgent
       ..body = '';
     final payload = await _sendJson(
       request,
@@ -173,6 +180,7 @@ final class HttpNextcloudApi {
   Future<LoginPollResult> pollLogin(PendingLogin pending) async {
     final request = http.Request('POST', pending.initialization.pollEndpoint)
       ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      ..headers['User-Agent'] = loginFlowUserAgent
       ..body = pending.initialization.pollFormBody;
     final payload = await _sendJson(
       request,

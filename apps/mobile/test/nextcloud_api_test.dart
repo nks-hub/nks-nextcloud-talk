@@ -90,6 +90,12 @@ void main() {
     expect(result, isA<LoginPollSucceeded>());
     expect(requests, hasLength(2));
     expect(requests.last.followRedirects, isFalse);
+    // Nextcloud names the stored app password after the User-Agent, so the
+    // account owner has to be able to recognise this client later.
+    for (final request in requests) {
+      expect(request.headers['User-Agent'], loginFlowUserAgent);
+      expect(request.headers['User-Agent'], isNot(startsWith('Dart/')));
+    }
     expect(
       requests.last.headers['Content-Type'],
       startsWith('application/x-www-form-urlencoded'),
