@@ -10,11 +10,11 @@ Výhoda je nejrychlejší začátek. Nevýhodou je silné riziko, že OCS, WebDA
 signaling a platformní lifecycle prorostou do UI. Pure Dart contract testy a
 pozdější CLI diagnostika by závisely na Flutter runtime.
 
-### Varianta B: modulární klient a samostatná gateway
+### Varianta B: modulární klient a platformní push hranice
 
 Flutter app používá malý pure Dart balík pro wire protokol. Storage a sync
-zůstávají uvnitř aplikace v jasných modulech. Push gateway je samostatná
-služba.
+zůstávají uvnitř aplikace v jasných modulech. Android používá přímo
+Notifications Web Push; iOS APNs relay vznikne samostatně až v příslušném řezu.
 
 To je doporučená varianta. Odděluje skutečné trust a runtime hranice bez
 vytváření balíčku pro každou třídu.
@@ -36,13 +36,14 @@ flowchart LR
     SYNC --> PROTO[Pure Dart Talk protocol]
     PROTO --> NC[Nextcloud OCS and WebDAV]
     PROTO --> HPB[Internal or HPB signaling]
-    PUSH[FCM and APNs platform ingress] --> ROUTER[Push account router]
-    ROUTER --> CRYPTO[Signature verify and decrypt]
-    CRYPTO --> SYNC
-    NC --> GATEWAY[Compatible push gateway]
-    GATEWAY --> FCM[FCM HTTP v1]
-    GATEWAY -. future calls .-> VOIP[APNs VoIP provider]
-    APP --> PLATFORM[Kotlin and Swift platform modules]
+    WEBPUSH[Android Web Push ingress] --> ROUTER[Account-scoped push router]
+    ROUTER --> SYNC
+    NC --> ENDPOINT[Per-account Web Push endpoint]
+    ENDPOINT --> WEBPUSH
+    NC -. future iOS .-> RELAY[Publisher APNs relay]
+    RELAY -. APNs and PushKit .-> IOS[iOS platform ingress]
+    IOS --> ROUTER
+    APP --> PLATFORM[Android, Apple and desktop modules]
     PLATFORM --> MEDIA[Future WebRTC media engine]
 ~~~
 
@@ -55,8 +56,6 @@ apps/
   mobile/                 Flutter aplikace a platformní targety
 packages/
   talk_protocol/          Pure Dart OCS, Talk, WebDAV a wire modely
-services/
-  push_gateway/           Notifications-compatible FCM gateway
 docs/
   research/
   architecture/
@@ -65,7 +64,9 @@ docs/
 
 Další package vznikne jen tehdy, když má vlastní release/test hranici nebo dvě
 reálné implementace. Call signaling může začít jako modul v aplikaci; oddělí se
-až při skutečné implementaci internal i HPB transportu.
+až při skutečné implementaci internal i HPB transportu. Budoucí iOS relay
+dostane vlastní službu nebo repozitářovou hranici až po ověření APNs kontraktu;
+Android ji nepotřebuje.
 
 ## Zodpovědnosti
 
@@ -127,6 +128,10 @@ Feature moduly skládají application use cases a UI:
 - notifications/settings;
 - calls až po signaling řezu.
 
+Kompaktní telefonní a expanded tablet/desktop shell používají stejné use cases
+a route modely. Rozložení nesmí vytvořit druhý desktop repository nebo jiný
+account scope.
+
 Transportní DTO se nevystavuje widgetům. UI dostává doménový read model s
 explicitními loading, stale, pending a failed stavy.
 
@@ -134,7 +139,7 @@ explicitními loading, stale, pending a failed stavy.
 
 Android:
 
-- FCM background entry point;
+- UnifiedPush connector a embedded FCM distributor pro Web Push entry point;
 - notification actions a channels;
 - secure key storage;
 - foreground service pro budoucí call;
@@ -144,40 +149,47 @@ iOS:
 
 - Keychain a App Group;
 - Notification Service Extension;
-- APNs/FCM token lifecycle;
+- APNs token lifecycle a budoucí publisher relay;
 - PushKit token lifecycle až v call řezu;
 - později PushKit, CallKit a ReplayKit Broadcast Extension.
+
+Desktop:
+
+- bezpečné uložení credentials podle OS;
+- resize, focus, hover, klávesové zkratky a file picker/drop;
+- system tray, auto-start a background delivery až v samostatném řezu;
+- žádné použití Android embedded distributoru.
 
 Platformní modul neimplementuje Talk business pravidla. Předává typované
 události do account routeru nebo call coordinatoru.
 
-### Push gateway
+### Push delivery
 
-- kompatibilní POST/DELETE /devices;
-- 409 conflict recovery s ověřením `cloudId` podle push-v2;
-- izolovaný cloudId verifier s přesným parserem, public-HTTPS-only egress,
-  DNS/IP revalidací, zakázanými redirecty a bounded response;
-- kompatibilní POST /notifications;
-- ověření registračních a notification podpisů;
-- mapping deviceIdentifier na jednu nebo více typovaných delivery endpoints;
-- opaque forwarding přes FCM HTTP v1;
-- hranice pro budoucí přímý APNs VoIP provider;
-- invalid-token cleanup, rate limits, retry a redigovaný audit;
-- žádný plaintext chat obsah.
+Android:
 
-Gateway není Talk plugin ani druhý notification engine.
+- authenticated capability `webpush` je jediná feature autorita;
+- server poskytne VAPID public key;
+- connector a embedded distributor vytvoří per-account subscription;
+- klient dokončí register, activation token, activate a unregister lifecycle;
+- Notifications posílá standardní a delete payload přímo na Web Push endpoint;
+- payload pouze probudí account-scoped OCS catch-up.
 
-cloudId verifier nesmí přeposlat app password, push token ani interní header.
-Veřejná gateway odmítá loopback, private, link-local a reserved IPv4/IPv6 i
-DNS rebinding. LAN-only server proto nemá garantovaný 409 recovery; vlastní
-gateway jej smí povolit jen explicitním operátorským allowlistem a oddělenou
-egress politikou.
+Android build nemá publisher Firebase projekt, `google-services.json` ani
+projektovou gateway. Správce Nextcloudu neinstaluje bridge. Nextcloud 33 může
+dostat pouze úplný samostatný AGPL Web Push backport, ne zjednodušený Talk
+listener.
 
-Veřejný store build používá jeden Firebase projekt a gateway vydavatele pro
-všechny podporované Nextcloud servery. `proxyServer` předává klient při runtime
-registraci; správce serveru nedostává Firebase credential a nevytváří vlastní
-mobilní build. Gateway přijímá libovolný validní server až po kryptografickém
-ověření registrace a payloadu, ne podle ručně udržovaného tenant allowlistu.
+iOS:
+
+- APNs token je svázaný s bundle ID, Apple týmem a entitlementem;
+- provider credential zůstává pouze u vydavatele;
+- jeden budoucí publisher relay obslouží podporované servery bez předání Apple
+  klíče jejich správcům;
+- PushKit VoIP používá oddělený token a delivery lifecycle.
+
+Podrobná platformní hranice a testovací matice jsou v
+[push analýze](../research/push-fcm.md). Historický push-v2 gateway kontrakt se
+neimplementuje jako Android služba.
 
 ## Dependency pravidla
 
@@ -188,7 +200,7 @@ UI → application → sync/store/protocol → platformní nebo síťová hranic
 Zakázané směry:
 
 - protocol → Flutter UI;
-- gateway → mobilní databáze;
+- push callback → cizí account partition;
 - widget → Dio/HTTP;
 - platformní notification callback → activeAccount;
 - repository → konkrétní obrazovka;
@@ -250,26 +262,27 @@ nový command admission zůstává bez plného eligibility snapshotu odmítnutý
 
 ### Příchozí push
 
-1. Platformní callback předá opaque envelope.
-2. Standardní payload nemá deviceIdentifier. Router ověří podpis proti
-   omezené sadě user public keys; gateway route hint smí být jen předvýběr.
-3. Pro všechny signature shody zkusí per-account device private key s výchozím
-   OAEP a podle podporované matice s legacy PKCS#1 v1.5 paddingem a validuje
-   plaintext schema.
-4. Právě jeden validní kandidát vybere accountId nezávisle na aktivní
-   obrazovce. Nula nebo více shod nesmí spustit account akci; chyba klíče,
-   paddingu ani schématu se nesmí stát oracle nebo citlivým logem.
-5. Silent delete upraví pouze account-scoped systémovou notifikaci.
-6. Ostatní události probudí account sync lane.
-7. OCS/chat API dodá autoritativní stav.
+1. Android connector předá zprávu spolu s lokální subscription identitou.
+2. Router ověří aktuální account/subscription generaci; aktivní UI účet není
+   autorizační zdroj.
+3. Activation token smí dokončit pouze pending registraci stejného účtu a
+   generace.
+4. Delete payload upraví pouze account-scoped systémovou notifikaci.
+5. Běžný payload probudí account sync lane a deduplikuje lokální zobrazení.
+6. OCS/chat API dodá autoritativní stav.
+
+iOS callback později použije stejný account-scoped výstup, ale vlastní APNs
+registraci a relay wire. Historický RSA push-v2 decrypt runtime není Android
+delivery cesta.
 
 ### Odhlášení
 
 1. Zastaví se account long poll/websocket a nové outbox claims.
 2. Klient zkontroluje queued, ambiguous, failed outbox a upload jobs. Bez
    explicitní volby uživatele je nesmaže.
-3. Online odstraní Nextcloud push registraci.
-4. Odstraní gateway device mapping.
+3. Online odstraní konkrétní Web Push nebo APNs registraci z Nextcloudu.
+4. iOS později odstraní také konkrétní relay mapping; Android další projektový
+   mapping nemá.
 5. Odvolá app password, pokud to server podporuje a uživatel odstraňuje účet.
 6. Až po vzdáleném cleanup smaže secure secrets.
 7. V jedné lokální transakci odstraní account partition a notification routing.
@@ -312,12 +325,12 @@ ztrátu, reconnect a MCU/no-MCU odlišnosti ještě před zapojením kamery.
   interpolací uživatelského názvu souboru.
 - OCS envelope i HTTP status se validují.
 - App password a privátní RSA klíč se neukládají do běžné DB.
-- Gateway origin pochází z důvěryhodné konfigurace aplikace, ne z libovolného
-  připojeného Nextcloud serveru.
+- VAPID public key a Web Push endpoint se vážou na authenticated capability a
+  konkrétní account subscription generaci.
 - Logovací kontext smí obsahovat accountId hash, endpoint template, request id a
   status, nikoli URL s uživatelem, token nebo payload.
-- Push gateway drží FCM service account pouze v secret store.
-- Budoucí APNs provider key zůstává jen v gateway secret store a nikdy na
+- Android build ani server nedrží publisher FCM service account.
+- Budoucí APNs provider key zůstává jen v relay secret store a nikdy na
   Nextcloud serveru nebo v mobilní aplikaci.
 - Custom certificate trust je per server/account a vyžaduje zobrazení
   fingerprintu; nesmí se řešit globálním vypnutím TLS.
@@ -334,11 +347,11 @@ Lokální diagnostika:
 - websocket resume/reconnect stav;
 - upload fáze bez lokální cesty a názvu souboru.
 
-Gateway metriky:
+Budoucí iOS relay metriky:
 
-- accepted/rejected registration;
-- FCM latency a status class;
+- accepted/rejected APNs registrace;
+- APNs latency a status class;
 - queue depth a retry age;
-- unknown devices a invalid tokens;
+- invalid token count;
 - rate-limit rejects;
 - žádné labely s tokenem, user id nebo room id.

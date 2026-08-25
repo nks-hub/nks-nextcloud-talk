@@ -7,6 +7,8 @@ Stavy:
 - **Doporučeno**: analýza má preferovanou variantu, čeká na potvrzení.
 - **Otevřeno**: bez volby se příslušný scaffold nebo feature nesmí uzamknout.
 - **Odloženo**: není v prvním release, ale architektura zachovává hranici.
+- **Nahrazeno**: rozhodnutí zůstává historicky dohledatelné, ale nový řez se
+  jím už neřídí.
 
 ## Přijatá rozhodnutí
 
@@ -41,18 +43,19 @@ Stav: Přijato podle projektových pravidel.
 Call preparation znamená funkční signaling state machine a contract testy, ne
 neaktivní tlačítko nebo interface vracející OK.
 
-### D-005: Jedna veřejná push identita
+### D-005: Jedna veřejná aplikační identita
 
 Stav: Přijato jako důsledek veřejného multi-server produktu.
 
-Jeden store build používá jeden applicationId/bundle ID, Firebase projekt a
-gateway vydavatele pro všechny podporované Nextcloud servery. Klient při
-runtime registraci předá gateway URL do Notifications API v2. Správce serveru
-nepotřebuje Firebase credential ani rebuild.
+Jeden distribuovaný build používá stabilní applicationId/bundle ID pro všechny
+podporované Nextcloud servery. Připojení dalšího serveru nesmí měnit binary,
+signing ani identitu aplikace.
 
-Firebase konfigurace se nesmí načítat z libovolného připojeného Nextcloudu.
-Plně nezávislý Firebase/APNs projekt je možný pouze pro samostatně podepsaný
-vlastní build.
+Push delivery se liší podle platformy. Android podle D-025 vyjedná per-account
+Web Push subscription za běhu a nemá publisher Firebase projekt ani vlastní
+gateway. iOS APNs/PushKit podle Apple identity vyžaduje pozdější
+publisher-owned relay. Firebase nebo APNs credentials se nikdy nestahují z
+libovolného připojeného Nextcloudu.
 
 ### D-006: Outbox jen s ověřeným replay kontraktem
 
@@ -78,16 +81,17 @@ Upstream se používá jako SHA-bound reference chování, wire kompatibility a
 testovacích scénářů. Licence je vyřešená v D-018; původní implementační proces
 zůstává zachovaný.
 
-### D-014: Android applicationId
+### D-014: Identita aplikace
 
 Stav: Přijato uživatelem.
 
-Veřejný Android build používá `com.nkshub.nextcloudtalk`. Identifikátor je
-stabilní součást podpisové, store a Firebase identity aplikace; nemění se podle
-připojeného Nextcloud serveru a nestahuje se za běhu ze serveru.
+Android applicationId, iOS a macOS bundle ID a Linux application ID jsou
+`com.nkshub.nextcloudtalk`. Windows používá stejný produktový název a publisher
+namespace v runner metadatech. Identita se nemění podle připojeného Nextcloud
+serveru a nestahuje se za běhu.
 
-Toto rozhodnutí nezamyká iOS bundle ID ani identitu případného samostatného
-self-hosted buildu s vlastním Firebase projektem.
+Samostatně podepsaná fork distribuce může identitu změnit, ale jde o jiný
+binary a vlastní release/signing odpovědnost.
 
 ### D-015: Bezpečný klientský bootstrap
 
@@ -108,8 +112,9 @@ consumed stav a nesmí se interpretovat přesněji.
 
 ### D-016: Account-scoped conversation merge
 
-Stav: Přijato a implementováno v pure Dart parseru a merge planneru; skutečný
-Drift transakční adapter zůstává součástí řezu 2.
+Stav: Přijato a implementováno v pure Dart parseru, merge planneru i Flutter
+Drift transakčním adapteru. Zbývá úplná multi-server a process-death runtime
+matice.
 
 `conversation-v4` v přihlášeném capability snapshotu volí pouze kandidátní
 endpoint. Aktivní profil `cursor-v4` vznikne až po schema-validní full response
@@ -122,6 +127,12 @@ Request nese `accountId`, lokální request ID a kanonický serverový origin.
 Dekódovaná response zachová tentýž request a planner odvodí celý kontext pouze
 z ní. Uložený account stav nese očekávaný origin a odlišný server odmítne před
 výpočtem upsertů nebo mazání.
+
+Validovaný room model musí předat klientovi `objectType`, `avatarVersion`,
+`isCustomAvatar` a volitelný `remoteServer`; federovaný stav se odvodí pouze z
+neprázdného `remoteServer`. Talk/PHP může prázdné `messageParameters` a
+`reactions` serializovat jako `[]`. Parser tuto jedinou variantu normalizuje na
+prázdnou mapu, ale neprázdné pole odmítne, aby neskrylo schema drift.
 
 Store klíč je `(accountId, roomToken)`. Inkrementální response nikdy nemaže
 chybějící rooms; validní neprázdný full response je může odstranit. První
@@ -136,10 +147,20 @@ validatoru, nikdy hodnotu z response. Změna hash vyžádá account-scoped
 capability/settings refresh, nikoli smazání rooms. O typu merge rozhoduje
 explicitní režim requestu, ne samotná hodnota `modifiedSince`.
 
+Foreground loop používá po získání cursoru levný incremental režim. Ruční
+refresh explicitně požaduje full reconciliation, protože delta nemá removal
+tombstone a pouze full response smí odstranit room, kterou server už nevrací.
+Per-account single-flight je mode-aware: full intent za rozběhnutou deltou musí
+po jejím dokončení spustit nebo joinnout nový full request a nesmí být deltou
+považovaný za splněný. Full-empty ochrana udrží oba potvrzovací pokusy ve full
+režimu a s různými request ID. Odstranění stale conversation cache nesmí smazat
+pending outbox ani stejný room token jiného účtu.
+
 ### D-017: Autoritativní chat cursor a bezpečný text-send outbox
 
-Stav: Přijato a implementováno v pure Dart planneru a outboxu; skutečný
-SQLite commit zůstává neprokázaný.
+Stav: Přijato a implementováno v pure Dart planneru/outboxu i Flutter Drift
+repository. Live restart a vzdálená reconciliation matice zůstávají
+neprokázané.
 
 Chat history a future jsou dva směry stejného account/room/thread scope.
 `X-Chat-Last-Given` je autoritativní hranice i při prázdném viditelném body;
@@ -148,24 +169,49 @@ Response se smí commitnout jen při shodě request anchoru s aktuálním cursor
 Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
 se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
 
+Full embedded parent z thread response smí obnovit cached thread original jen
+při shodě room tokenu, parent/original ID a thread ID. Explicitní serverové
+`threadReplies` je autoritativní. Když chybí, Flutter repository odvodí počet z
+unikátních reply ID daného account/room/thread scope, vynechá original a replay
+a zachová vyšší uložený počet. Neshodný parent nesmí cached original přepsat.
+
 `referenceId` je korelace, ne idempotency key. První povolený durable registry
 kind je pouze `textSend` s revision
-`talk-chat-text-send-f2958bb-f9b9e947-r1`. Request prokazatelně zastavený před
-body může být retryable. Možná odeslané body, přerušený proces, `201 null` nebo
-identity mismatch přejdou do `awaitingConfirmation` a nesmějí se automaticky
-znovu odeslat. Jedna autoritativní shoda dokončí operaci, více shod zůstane
-ambiguous a nula shod neprokazuje neprovedení. Ruční resend vyžaduje varování
-před duplicitou a nesmí pokračovat po nalezené serverové shodě. HTTP 400
-`error=message` a 5xx jsou ambiguous; pouze doložený pre-save 429
-`error=mentions` je retryable podle `Retry-After` nebo lokálního backoffu.
+`talk-chat-text-send-f2958bb-f9b9e947-r2`. Revize r2 přidává explicitní
+`threadId` pro named-thread send; obyčejná zpráva má `replyTo == null` i
+`threadId == null`, reply používá `replyTo` a named-thread zpráva používá pouze
+`threadId`. Named-thread admission a replay navíc vyžadují lokální capability
+`threads`; r1 operace se pod r2 autoritou nesmí automaticky replayovat.
+
+Request a response semantika nejsou totožné. Plain request nemá `threadId`, ale
+plain direct response je parentless a server vrací `threadId == messageId`.
+Same-room reply vrací topmost thread ID z immediate parentu. Cross-room private
+reply vrací lokální copied-parent ID a `parent.threadId == 0`; named-thread
+direct response zůstává parentless s požadovaným thread ID.
+
+Request prokazatelně zastavený před body může být retryable. Možná odeslané
+body, přerušený proces, `201 null` nebo identity mismatch přejdou do
+`awaitingConfirmation` a nesmějí se automaticky znovu odeslat. Jedna
+autoritativní shoda stejného plain/reply/thread kontextu dokončí operaci, více
+shod zůstane ambiguous a nula shod neprokazuje neprovedení. Ruční resend
+vyžaduje varování před duplicitou a nesmí pokračovat po nalezené serverové
+shodě. HTTP 400 `error=message` a 5xx jsou ambiguous; pouze doložený pre-save
+429 `error=mentions` je retryable podle `Retry-After` nebo lokálního backoffu.
 V jedné room platí FIFO a single-flight, různé rooms mohou pokračovat souběžně.
 Cross-room private-reply wire formát je známý, ale command admission zůstává bez
 plného eligibility snapshotu odmítnutý. Neznámý kind nebo revision admission
 odmítne.
 
-Pure Dart single-use plán nyní dokládá společný candidate snapshot pro chat
-merge a outbox confirmation i úplný rollback zahozením plánu. Společná SQLite
-transakce zůstává povinným, ale dosud neprokázaným runtime invariantem.
+Pure Dart single-use plán dokládá společný candidate snapshot pro chat merge a
+outbox confirmation i úplný rollback zahozením plánu. Flutter `ChatRepository`
+načte snapshot, vytvoří plán a uloží message/scope/outbox změny uvnitř jedné
+Drift transakce. Schema v5 ukládá nullable `threadId`; file-backed reopen
+zachová queued i sending named-thread operaci a restart recovery převede
+`sending` na `awaitingConfirmation`. Potvrzená named-thread zpráva, ať jde o
+parentless direct POST nebo autoritativní history/future shape s přesně svázaným
+full či compact deleted rootem, současně obnoví cached root `threadId`,
+`isThread` a `threadReplies`. Zbývá live process-death, fault-injection rollback
+a vzdálená reconciliation.
 
 ### D-018: Licence mobilního klienta
 
@@ -186,15 +232,20 @@ musí být před distribucí kompatibilní s GPL a zaznamenaný v průběžném 
 
 Stav: Přijato pro první implementační baseline 22. srpna 2026.
 
-Pure Dart talk_protocol + Flutter app + samostatná push gateway. Storage a sync
-zůstávají uvnitř app, dokud další skutečná implementace neodůvodní package.
+Pure Dart `talk_protocol` + Flutter app. Storage a sync zůstávají uvnitř app,
+dokud další skutečná implementace neodůvodní package. Android Web Push používá
+embedded distributor bez projektové gateway; budoucí iOS APNs/PushKit relay je
+samostatná Apple platformní hranice, ne součást klientského runtime.
 
 ### D-008: Standardní Notifications app
 
-Stav: Přijato jako kompatibilní serverová hranice.
+Stav: Přijato jako kompatibilní serverová hranice; Android transport zpřesňuje
+D-025.
 
-Vlastní gateway zachová Notifications v2 protokol. Nový Talk event listener se
-nevytváří, protože by nepokryl úplnou notification a markProcessed semantiku.
+Android používá přímo standardní Notifications Web Push. Nový Talk event
+listener ani tenký bridge se nevytváří, protože by nepokryl úplnou notification
+a markProcessed/delete semantiku. Historický Notifications push-v2 gateway
+kontrakt zůstává výzkumným důkazem, ne povinnou službou.
 
 ### D-009: Relační SQLite store
 
@@ -203,8 +254,10 @@ Stav: Přijato pro první implementační baseline 22. srpna 2026.
 Message, thread, parent, room a read marker vyžadují atomické transakce.
 Použije se Drift. Lokální Flutter 3.44.4/Dart 3.12.2 a pub.dev metadata z
 22. srpna 2026 potvrzují kompatibilitu řad Drift 2.34 a `drift_flutter` 0.3.
-Lockfile, migration testy a skutečný Android/iOS build zůstávají povinným
-důkazem konkrétní verze.
+Flutter aplikace nyní uzamyká Drift 2.34.3 a `drift_flutter` 0.3.1, používá
+account-scoped tabulky a transakční conversation merge. Android a Windows
+debug build i repository testy prošly; message/outbox migrace a Apple/Linux
+build zůstávají povinným důkazem dalších řezů.
 
 ### D-010: Riverpod pro application/UI state
 
@@ -215,13 +268,15 @@ providery. Databázový stav však zůstává zdrojem pravdy; provider nesmí du
 sync store. První řez použije ručně definované providery bez code generation;
 generátor se přidá jen tehdy, když sníží skutečnou složitost.
 
-### D-019: Mobilní navigace a form factors
+### D-019: Adaptivní navigace a form factors
 
 Stav: Přijato jako mobilní implementační baseline.
 
 Telefon používá stack `onboarding → conversations → chat → thread`. Bottom
-navigation se nepřidá bez alespoň tří rovnocenných top-level cílů. Tablet a
-foldable použijí nad stejným route modelem adaptivní list-detail. Deep link
+navigation se nepřidá bez alespoň tří rovnocenných top-level cílů. Tablet,
+foldable a desktop použijí nad stejným route modelem adaptivní list-detail.
+Od 720 logical px se zobrazí account rail, seznam a detail; onboarding přechází
+od 900 px do dvou sloupců. Deep link
 nejprve kryptograficky nebo lokálním account mappingem vybere `accountId` a až
 potom sestaví room/thread stack; nesmí implicitně použít právě aktivní účet.
 
@@ -229,6 +284,11 @@ iOS zachová edge-swipe back a Android systémový i predictive back. Gestures
 jsou pouze zkratky s viditelnou alternativou. Touch target má nejméně 44 pt na
 iOS a 48 dp na Androidu. Podrobný checkpoint je v
 [mobilním návrhu](../plans/2026-08-22-original-flutter-client-design.md).
+
+Windows, macOS a Linux nejsou samostatný klient. Stejná Flutter codebase musí
+navíc projít změnou velikosti okna, klávesovou navigací, focus/hover stavy a
+buildem na každém cílovém OS. Aktuální foundation prokazuje rozložení a Windows
+runtime, ne všechny desktop lifecycle funkce.
 
 ### D-020: Rich chat jako typovaná online mutation hranice
 
@@ -257,8 +317,9 @@ vzniknout až samostatným kontraktem pro každý operation kind podle D-006.
 
 ### D-021: Příloha jako potvrzovaný durable dvoufázový job
 
-Stav: Přijato a implementováno v pure Dart runtime; Flutter transport, Drift,
-live server a platformní UI zůstávají součástí řezu 5.
+Stav: Přijato a implementováno v pure Dart runtime a Flutter HTTP transportu;
+Drift job store, orchestrace, live server a platformní UI zůstávají součástí
+řezu 5.
 
 Příloha používá jeden durable job pro Talk OCS Draft probe, WebDAV normal nebo
 chunk upload, Talk finalize a následné potvrzení chatem. Job smí držet pouze
@@ -280,6 +341,13 @@ V jedné room platí FIFO a single-flight pro finalizaci. Cancel před finalize
 uklízí pouze jobem vlastněnou chunk session a Draft temp soubor; po zahájení
 finalize se možný finální soubor automaticky nemaže.
 
+Flutter transport otevře app-owned zdroj jednou, ověří celý snapshot a pro
+jednotlivé chunky vyžaduje efektivní bounded range read bez lineárního zahazování
+předchozích bytes. Cancel, timeout a close jsou odpojitelné a pozdě získaný lease
+se zavře. Cleanup má společný bounded budget, ale po selhání jedné akce pokračuje
+dalšími kroky; žádný tento transportní důkaz zatím neprokazuje Drift resume ani
+skutečný serverový upload.
+
 ### D-022: Oddělené signaling transporty a ephemeral session epoch
 
 Stav: Přijato pro implementaci řezu 10.
@@ -299,8 +367,9 @@ enginem v řezu 11.
 
 ### D-023: Per-account push key handle a společný Dart orchestrátor
 
-Stav: Přijato a implementováno v pure Dart runtime; platformní crypto adapter,
-Flutter persistence, gateway a skutečné delivery zůstávají součástí řezu 7.
+Stav: Nahrazeno pro Android rozhodnutím D-025. Implementovaný pure Dart
+Notifications push-v2 runtime zůstává historickým protokolovým důkazem a
+podkladem pro budoucí iOS relay, ale neřídí Android delivery.
 
 Jeden provider token vydaný Firebase/APNs projektem aplikace smí obsluhovat více
 účtů, ale není jejich identitou. Každý `accountId` má samostatný
@@ -323,7 +392,9 @@ vypnutí push. Druhý účet ani společný provider token se nesmí odstranit.
 
 ### D-024: At-least-once push delivery a idempotentní mobilní zpracování
 
-Stav: Přijato; gateway a platformní persistence zůstávají součástí řezu 7.
+Stav: Nahrazeno pro Android na transportní hranici D-025. Obecný požadavek na
+idempotentní mobilní zpracování duplicit zůstává platný; gateway queue část se
+na Android Web Push nepřenáší.
 
 Opakovaný `/notifications` batch se deduplikuje před durable enqueue podle
 registrace a digestu opaque obálky. Provider worker používá bounded lease a
@@ -340,6 +411,89 @@ Mobil po kryptografickém account routingu deduplikuje podle `accountId`, akce a
 omezeným TTL. Opakování může bezpečně spustit OCS catch-up, ale nesmí vytvořit
 druhou lokální notifikaci ani druhou mutaci.
 
+### D-025: Android přes Notifications Web Push
+
+Stav: Přijato po ověření Nextcloud Notifications 34.0.3 na SHA
+`2a62d472d31b97de522c897c979912cd49b820a9`; P1 platformní příjem a durable
+lifecycle jsou implementované, serverová P2 orchestrace a delivery E2E chybějí.
+
+Android používá capability `webpush`, UnifiedPush connector baseline 3.3.3 a
+embedded FCM distributor 3.1.0. Server dodá VAPID public key, klient získá
+subscription endpoint a dokončí register → activation token → activate tok za
+běhu pro každý `accountId`.
+
+Správce Nextcloudu Web Push výslovně zapne přepínačem v Administration →
+Notifications; nezadává FCM credentials ani gateway. Klient každému účtu přidělí
+vlastní connector instance a subscription generation. Callback se přijme jen
+pro právě aktuální dvojici a poté spustí account-scoped OCS catch-up.
+
+Veřejný Android build nemá publisher Firebase projekt, `google-services.json`,
+vlastní mobilní gateway ani per-server rebuild. Embedded distributor je
+knihovna uvnitř APK, ne další aplikace. Nextcloud 34+ nepotřebuje addon;
+případný Nextcloud 33 backport musí být úplná samostatná AGPL implementace Web
+Push, nikoli tenký bridge.
+
+Duplicitní nebo opožděný payload smí pouze idempotentně probudit account-scoped
+OCS catch-up. Subscription endpoint, auth secret, activation token ani payload
+se nesmějí logovat. Přesný tok a testovací matice jsou v
+[push analýze](../research/push-fcm.md).
+
+Nativní P1 adapter ukládá callback synchronně do AES-GCM obálky chráněné Android
+Keystore a až potom oznamuje Dartu dostupnou událost. Endpoint commit je
+oddělený od event `ack`. Náhrada subscription používá make-before-break:
+starou generaci lze nativně odregistrovat až po potvrzeném serverovém revoke.
+Samovolný distributor unregister nelze znovu otevřít pod stejnou generací.
+Pozdní endpoint ani jeho pozdní commit po `UNREGISTERED` proto nesmí obnovit
+generation nebo přepsat ID posledního serverem potvrzeného endpointu.
+Tyto invarianty mají focused Dart/Kotlin testy a dvoukrokovou instrumentaci po
+ukončení procesu; neprokazují zatím OCS aktivaci, lokální notifikaci ani
+background/killed payload ze skutečného Nextcloudu.
+
+Tato garance začíná až callbackem connectoru. Embedded FCM distributor 3.1.0
+potvrzuje provideru GMS broadcast/RPC dříve, než zprávu předá aplikačnímu
+receiveru; současný build proto neprokazuje durable commit před provider FCM
+ACK. Pád procesu v tomto okně může ztratit wake-up, nikdy však serverová OCS
+data. Klient musí při foreground/resume a v bounded periodické práci provést
+account-scoped OCS reconciliation. Vlastní fork distributoru není podmínkou P1;
+stal by se nutný jen při budoucím požadavku na silnější transportní garanci.
+
+### D-026: Minimální platformní baseline
+
+Stav: Přijato pro existující Flutter 3.44.4/Dart 3.12.2 scaffold.
+
+- Android minSdk 24, targetSdk 36 a compileSdk 37 v ověřeném debug buildu;
+- iOS deployment target 13.0;
+- macOS deployment target 10.15;
+- Windows a Linux podle toolchain baseline Flutter 3.44.4.
+
+Zvýšení minima vyžaduje konkrétní dependency nebo OS API důvod. Snížení minima
+vyžaduje reálný build a runtime test, ne pouze změnu čísla.
+
+### D-027: Desktop jako plnohodnotný produktový cíl
+
+Stav: Přijato uživatelem 23. srpna 2026.
+
+Windows, macOS a Linux používají stejný account, protocol, Drift a feature
+model jako mobil. Expanded shell je třípanelový a reaguje na změnu okna.
+Desktop-specific klávesnice, hover/focus, system tray, auto-start, file drop a
+background delivery vzniknou pouze jako ověřené platformní řezy; nesmí se
+předstírat existencí generated runneru.
+
+### D-028: Giphy jako skutečná Talk GIF příloha
+
+Stav: Původní wire-reference varianta byla 25. srpna 2026 nahrazena výslovným
+uživatelským rozhodnutím. Nový attachment tok je rozpracovaný.
+
+Vybraný `resourceUrl` slouží jen jako vstup do account-scoped Nextcloud
+References resolveru. Klient přijme pouze `integration_giphy_gif`, same-origin
+proxy a validní `image/gif` bajty. Bajty uloží do durable app-owned zdroje a
+odešle přes stejný Talk Draft/WebDAV/finalize tok jako jiný obrázkový attachment.
+Do `sendText`, composeru ani outboxu textových zpráv se Giphy URL nikdy nevloží.
+
+Původní renderer skryté wire URL zůstává pouze kvůli kompatibilitě se staršími
+zprávami. Historický Android test této varianty je platným důkazem tehdejšího
+chování, ale neprokazuje nový cílový attachment tok.
+
 ## Vyřešené volby
 
 ### Q-001: Licence
@@ -349,17 +503,29 @@ Stav: Vyřešeno v D-018.
 Uživatel zvolil `GPL-3.0-or-later`. Audit původu kódu, assetů a závislostí je
 průběžná distribuční brána, nikoli otevřená volba licence.
 
-## Otevřené volby
-
 ### Q-002: Minimální platformy
 
-Je nutné určit Android minSdk a minimální iOS. Upstream minima jsou pouze vstup
-do rozhodnutí, ne automatická volba.
+Stav: Vyřešeno v D-026.
 
-### Q-003: Identita aplikace a signing
+### Q-005: Giphy režim
 
-Android `applicationId` je přijaté v D-014. Zbývá iOS bundle ID, jeden Firebase
-projekt vydavatele, Android signing owner a Apple/APNs signing workflow.
+Stav: Vyřešeno v D-028.
+
+### Q-007: Android gateway implementační stack
+
+Stav: Vyřešeno jako nepotřebné v D-025.
+
+Historické Go/Node porovnání se neimplementuje pro Android. Budoucí iOS relay
+projde novým výběrem až s APNs kontraktem a nemá předem zvolený stack.
+
+## Otevřené volby
+
+### Q-003: Release signing a Apple push
+
+Identita aplikace je vyřešená v D-014. Pro vývoj lze iOS podepsat pro vlastní
+zařízení. Před veřejnou distribucí zbývá Android release key workflow, Apple
+developer tým, store provisioning a APNs/PushKit relay credentials. Android
+publisher Firebase projekt není potřeba.
 
 ### Q-004: Offline scope prvního release
 
@@ -370,38 +536,10 @@ Možnosti:
 
 Architektura podporuje obě, ale acceptance scope a pořadí řezů se liší.
 
-### Q-005: Giphy režim
-
-Možnosti:
-
-1. Poslat URL a použít Talk Reference Provider, stejně jako upstream iOS.
-2. Stáhnout GIF a uložit jako Nextcloud attachment.
-
-První varianta je doporučená kvůli shodě se serverovým web/iOS chováním a menší
-spotřebě úložiště.
-
 ### Q-006: Podporované serverové řady
 
 Je nutné určit minimální Nextcloud/Talk řadu. Multi-server neznamená automaticky
 podporu všech historických verzí.
-
-### Q-007: Gateway implementační stack
-
-Volba přijde po contract prototypu. Kritéria:
-
-- ověřená FCM HTTP v1 knihovna;
-- RSA/SHA-512 a key parsing;
-- bounded concurrency a retry;
-- bezpečný secret management;
-- snadné nasazení a observability;
-- dlouhodobá údržba.
-
-Stack se nemá vybrat podle osobní preference bez prototypu kontraktu.
-
-Aktuální [stack evaluation](../research/push-gateway-stack-evaluation.md)
-doporučuje Go jako prvního kandidáta a Node.js jako fallback. Q-007 zůstává
-otevřené, dokud Go 1.25 spike neprokáže celý wire, PostgreSQL frontu, FCM
-adapter, restart, backpressure, SSRF ochranu a container runtime.
 
 ## Odložená rozhodnutí
 

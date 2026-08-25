@@ -9,9 +9,10 @@ Implementuje řez od přidání serveru po lokálně uložený účet, account-s
 seznam konverzací a první cache-first chat/thread obrazovku s foreground
 pollingem, textovým durable outboxem, emoji a Giphy composerem, obrázkovými a
 hlasovými médii i nativní Android Web Push delivery hranicí. Aktuální APK má
-ověřený build, aktualizační instalaci, shodu lokálního/nainstalovaného hashe,
-skutečný Login Flow, živý seznam konverzací, otevření room a inline animovaný
-Giphy send. Účet i GIF přežily ukončení a nový start procesu.
+ověřený build a aktualizační instalaci. Skutečný Login Flow, živý seznam
+konverzací, otevření room a inline animovaný Giphy send patří historickému APK.
+Tento Giphy běh používal nyní nahrazenou wire-reference variantu; nový skutečný
+`image/gif` attachment tok zatím nemá live serverový důkaz.
 
 Celý Nextcloud Talk klient tím ještě hotový není. Aktuální root/thread
 cross-device refresh, živá příloha a voice matice, skutečné background/killed
@@ -47,9 +48,10 @@ odpovídajícím hostu zatím není runtime důkazem.
 8. Otevřený chat nebo thread spustí scope-bound foreground binding; přijatá
    response se nejdřív commitne do Drift a teprve pak přes Riverpod překreslí
    `ChatRoomPane`.
-9. Giphy URL je pouze interní Talk wire reference. Account-scoped resolver ji
-   přeloží přes Nextcloud reference API a zobrazí animovaný GIF inline bez
-   viditelného nebo klikacího odkazu.
+9. Vybraná Giphy URL je pouze vstup account-scoped References resolveru. Klient
+   přijme validní `image/gif` bajty, uloží je do durable app-owned zdroje a
+   odešle standardním Talk Draft/WebDAV/finalize attachment tokem. URL nevstoupí
+   do textového composeru, `sendText` ani textového outboxu.
 10. Android UnifiedPush callback validuje wake-up payload, uloží ho do šifrované
     account-scoped fronty a tap předá do Flutteru přes jednorázový token. Zdroj
     pravdy po probuzení zůstává OCS, ne push payload.
@@ -77,10 +79,12 @@ stavem a nespustí nepodporovaný endpoint.
 Telefonní route i expanded detail používají stejný `ChatRoomPane`. Produkční
 widget zobrazuje cache-first timeline, GFM/Rich Object obsah, obrázky, reakce,
 reply preview, participant avatary, stav outboxu a composer pro text, emoji,
-Giphy, obrázek a voice. Giphy se po resolve vykreslí jako inline animované
-médium; wire URL se v bublině ani preview nezobrazuje jako odkaz. Root a každý
-thread mají samostatný `(accountId, roomToken, threadId|null)` scope. Platné nové
-vlákno lze otevřít i před první odpovědí.
+Giphy, obrázek a voice. Nový Giphy výběr se po resolve a validaci předá do
+stejného durable attachment toku jako `image/gif`; wire URL se nesmí vytvořit
+jako nová zpráva. Historický URL renderer zůstává pouze pro kompatibilní čtení
+starších zpráv. Root a každý thread mají samostatný
+`(accountId, roomToken, threadId|null)` scope. Platné nové vlákno lze otevřít i
+před první odpovědí.
 
 Dva widget-integration testy používají produkční `ChatService`, HTTP adapter,
 Drift repository a Riverpod projekci s deterministickým `MockClient`. Pro root
@@ -105,7 +109,7 @@ správně svázaná named-thread confirmation atomicky aktualizuje cached root
 history/future confirmation smí nést přesně svázaný full root nebo compact
 deleted root. Tento řez zatím nemá live serverový ani aktuální APK důkaz.
 
-## Aktuální Android runtime
+## Historický Android Giphy wire-reference runtime
 
 Debug APK v
 `apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` má SHA-256
@@ -120,16 +124,21 @@ přístupu, načetl se přihlášený seznam konverzací a otevřel room detail.
 přežil další aktualizační instalaci i ukončení a nový start procesu. Dva měřené
 cold starty skončily za 5 094 ms a 4 587 ms.
 
-Giphy send v otevřené room zobrazil animovaný GIF inline bez viditelné nebo
-klikací URL. Dva časově oddělené cropy měly rozdílné hashe, takže nejde o
-statický náhled. Po ukončení procesu zůstal GIF uložený a znovu se vykreslil.
-Po cold startu trvalo načtení vzdáleného média přibližně osm sekund; krátký
-banner o dočasně nedostupném chatu po retry zmizel. To je známý runtime signál
-pro další diagnostiku, ne ztráta zprávy.
+Giphy wire-reference send v otevřené room zobrazil animovaný GIF inline bez
+viditelné nebo klikací URL. Dva časově oddělené cropy měly rozdílné hashe, takže
+nešlo o statický náhled. Po ukončení procesu zůstala wire-reference zpráva
+uložená a znovu se vykreslila. Po cold startu trvalo načtení vzdáleného média
+přibližně osm sekund; krátký banner o dočasně nedostupném chatu po retry zmizel.
+To je známý runtime signál pro další diagnostiku, ne ztráta zprávy.
 
-Tento běh ještě neprokazuje živý image/voice send a viewer, cross-device
-root/thread refresh ani skutečný Nextcloud → FCM tok v background/killed
-procesu.
+Tento běh je důkazem historického rendereru, nikoli nového Giphy attachment
+toku. Nové odeslání musí skončit skutečnou `image/gif` přílohou přes
+Draft/WebDAV/finalize; commity `5d49cbb` a `9de5727` zatím dokazují pouze
+přípravu bajtů a admission do media composeru.
+
+Tento běh ještě neprokazuje živý Giphy/image/voice attachment send a viewer,
+cross-device root/thread refresh ani skutečný Nextcloud → FCM tok v
+background/killed procesu.
 
 ## Historický post-review Windows release runtime smoke
 
@@ -224,8 +233,8 @@ nejsou implementované a nesmějí být vydávány za hotové.
 - Flutter analyze na commitu `5f6e2f4`: 0 nálezů.
 - Souhrnný Flutter gate na commitu `3c74165`: 354 úspěšných testů, 1 read-only
   live test přeskočený pouze bez environment credentials a 0 selhání.
-- Navazující přesná Giphy wire oprava `5f6e2f4`: 11/11 cílených a 75/75 širších
-  chat/Giphy testů.
+- Historická přesná Giphy wire oprava `5f6e2f4`: 11/11 cílených a 75/75 širších
+  chat/Giphy testů. Nejde o důkaz nového attachment toku.
 - Celý `talk_protocol`: 569/569; čerstvá cílená conversation sada 25. srpna
   2026: 74/74.
 - Čerstvá scoped Flutter foundation/conversation sada: 60 PASS, 1 read-only
@@ -241,9 +250,9 @@ nejsou implementované a nesmějí být vydávány za hotové.
 - Aktuální Android debug APK build a `adb install -r`: úspěšné. Lokální i
   nainstalovaný artefakt mají SHA-256
   `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`.
-- Na aktuálním APK prošel skutečný Login Flow, seznam konverzací, otevření room,
-  inline Giphy send a process-death návrat. Dva cold starty trvaly 5 094 ms a
-  4 587 ms.
+- Na historickém APK prošel skutečný Login Flow, seznam konverzací, otevření
+  room, inline Giphy wire-reference send a process-death návrat. Dva cold starty
+  trvaly 5 094 ms a 4 587 ms.
 - Historický Windows x64 release build a onboarding runtime: úspěšné; EXE
   SHA-256
   `5339f4f0d8caf04da2152a2ca5ddf32cd2ff9f26e259a24660e764c84a43af9e`,

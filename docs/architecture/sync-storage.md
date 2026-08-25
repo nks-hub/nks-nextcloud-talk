@@ -2,10 +2,11 @@
 
 ## Databázová volba
 
-Požadované atomické vztahy jsou relační. Autoritativní lokální store proto má
-být SQLite s foreign keys, transakcemi, WAL a verzovanými migracemi. Drift je
-preferovaný kandidát pro typované Dart dotazy a migrace, ale konkrétní package a
-verze se ověří před scaffoldem.
+Požadované atomické vztahy jsou relační. Autoritativní lokální store proto je
+SQLite s foreign keys, transakcemi a verzovanými migracemi. Flutter aplikace
+používá Drift; aktuální schema v7 drží účty, konverzace, avatary, chat scope,
+zprávy, text-send operace a durable attachment joby. Otevření databáze zapíná a
+kontroluje foreign keys.
 
 Hive může zůstat pouze pro jednoduché neautoritativní preference. Není vhodný
 jako hlavní Talk store, protože message, parent, thread, room a read marker se
@@ -51,8 +52,8 @@ Každý primární nebo unikátní klíč synchronizačních dat začíná accou
 | ReadMarker | accountId + roomToken | lastRead, lastCommonRead a explicit unread state |
 | OutboxOperation | accountId + operationId | Perzistentní lokální mutace, korelace a outcome certainty |
 | UploadJob | accountId + uploadId | Lokální media, WebDAV a Talk share fáze |
-| PushRegistration | accountId | deviceIdentifier, token hash, public key a stav |
-| PushEndpoint | accountId + channel + endpointId | FCM a budoucí APNs VoIP token lifecycle |
+| PushRegistration | accountId + channel | Connector instance, aktuální subscription generation, activation a revocation stav |
+| PushEndpoint | accountId + channel + generation | Reference na Android Web Push subscription secrets nebo iOS APNs/PushKit token |
 | NotificationRoute | accountId + platform tag/id | Server nid, roomToken, messageId a threadId |
 | RevocationTombstone | revocationId | Minimální secure cleanup data po lokálním odebrání účtu |
 | CallSession | accountId + call id | Pouze nutný perzistentní recovery stav, ne media objekty |
@@ -93,6 +94,22 @@ Pravidla:
 Cross-room reply vždy uchovává `replyTo`, `replyToToken` a normalizovaný
 `parentRoomToken`. Outbox i UploadJob musí po restartu rekonstruovat stejný
 request, ne odvodit parent room z právě otevřené konverzace.
+
+Named-thread text send je samostatná větev: ukládá `threadId`, ale žádné
+`replyTo`, `replyToToken` ani `parentRoomToken`. Plain text send nemá ani reply,
+ani thread vazbu. Confirmation a restart recovery musí toto rozlišení zachovat,
+protože stejné serverové ID nesmí převést reply na named thread nebo naopak.
+
+Nový Giphy send nepoužívá textový outbox. Vybranou URL použije pouze
+account-scoped resolver ke stažení validních GIF bajtů. Bajty se před admission
+zkopírují do durable app-owned zdroje a attachment job uloží handle, SHA-256,
+MIME `image/gif`, stabilní `giphy-<sha16>.gif`, account, room a případný thread.
+Další průběh je totožný s obrázkovou přílohou: Draft, WebDAV upload, finalize a
+autoritativní chat confirmation. URL se do serverové textové historie neukládá.
+
+Starší zprávy mohou stále obsahovat původní skrytou wire URL. Jejich renderer ji
+account-scoped vyřeší a skryje, ale tento compatibility read path se nesmí znovu
+použít pro nové odeslání.
 
 ## Chat blocks
 
@@ -271,14 +288,17 @@ upozorněním, že Talk nevynucuje unikátní referenceId a server může vytvo�
 duplicitu, ale pouze dokud není známá žádná serverová shoda.
 
 První executable registry položka je pouze `textSend` revision
-`talk-chat-text-send-f2958bb-f9b9e947-r1`. Admission, claim, chyba před body,
+`talk-chat-text-send-f2958bb-f9b9e947-r2`. Admission, claim, chyba před body,
 ambiguous transport, restart, autoritativní nula/jedna/více shod, relay před
 HTTP response, transakční rollback, re-auth, per-room FIFO/single-flight a
-account izolace jsou vykonané ve 36 případech s 60 kroky. Merge rollback a
-outbox confirmation rollback jsou v harnessu oddělené; společnou SQLite
-transakci musí prokázat Dart runtime. Ostatní operation kinds v tabulce
-zůstávají návrhem a nesmějí se queueovat, dokud nedostanou vlastní stejně silný
-kontrakt.
+account izolace mají executable fixture. R2 přidává named-thread `threadId` a
+vyžaduje pro něj aktuální lokální `threads` capability; r1 operace se pod r2
+autoritou nereplayuje. Flutter schema v5 zavedlo nullable `threadId`; aktuální
+schema v7 jej zachovává. File-backed reopen zachová queued i sending operaci a
+restart recovery převádí přerušený `sending` na `awaitingConfirmation`. Chat
+message/scope/outbox confirmation se commitují jednou Drift transakcí. Ostatní
+operation kinds v tabulce zůstávají návrhem a nesmějí se queueovat, dokud
+nedostanou vlastní stejně silný kontrakt.
 
 ## Read marker
 
@@ -333,18 +353,31 @@ Přechod do `localPrepared` je povolen jen po durable app-owned kopii nebo po
 otevře zdroj a ověří velikost i checksum. Picker temp path nebo dočasný grant
 nesmí být jediným zdrojem pending uploadu.
 
+Flutter HTTP transport je napojený na account-scoped `AttachmentRepository`,
+`AttachmentService` a Drift joby. Chunk používá efektivní bounded seek, nikoli
+nové čtení od byte nula; cancel/timeout/close zavřou i pozdě získaný lease a
+cleanup pokračuje dalšími akcemi v jednom bounded budgetu. Restart obnoví
+rozpracované uploady a nejednoznačné finalize zůstane viditelné pro
+reconciliation. Obrázková příloha s validním preview se od commitu `8724281`
+otevírá v interním autentizovaném vieweru ve success, loading i error stavu;
+externí fallback zůstává jen pro non-image nebo chybějící preview. Automatizace
+neprokazuje aktuální live Nextcloud upload ani tap vieweru na zařízení.
+
 ## Multi-account concurrency
 
 - Každý account má vlastní sync lane a cancellation scope.
 - Globální scheduler omezuje souběžné HTTP/upload operace.
 - DB transakce vždy filtruje accountId i při znalosti globálně vypadajícího
   messageId.
-- Standardní push callback nemá deviceIdentifier. Account router nejdřív ověří
-  signature proti omezené sadě user public keys a poté zkusí decrypt všemi
-  odpovídajícími per-account device keys s výchozím OAEP a podle compatibility
-  matice s legacy PKCS#1 v1.5 paddingem. Právě jeden validní kandidát určí
-  accountId; volitelný route hint je pouze předvýběr a chyby nesmějí tvořit
-  oracle ani citlivé logy.
+- Android Web Push callback se routuje přes aplikací zvolenou connector instance
+  svázanou s `accountId` a právě aktuální subscription generation. Neznámá nebo
+  nahrazená instance/generation se odmítne; payload pouze probudí account-scoped
+  OCS catch-up.
+- Budoucí iOS relay callback nemá důvěryhodný `deviceIdentifier`. Account router
+  nejdřív ověří signature proti omezené sadě user public keys a poté zkusí
+  decrypt odpovídajícími per-account device keys s výchozím OAEP a doloženým
+  legacy PKCS#1 v1.5 paddingem. Právě jeden validní kandidát určí `accountId`;
+  route hint je pouze předvýběr a chyby nesmějí tvořit oracle ani citlivé logy.
 - Deep link nese accountId.
 - Logout nejdřív zastaví lane, aby po smazání partition nepřišel opožděný write.
 
@@ -361,9 +394,9 @@ failed outbox ani rozpracovaný upload. UI nabídne:
 2. exportovat diagnostický seznam bez secretů a explicitně operace zahodit;
 3. zrušit odebrání.
 
-Online tok nejprve zastaví lane, odstraní push registraci z Nextcloudu, smaže
-gateway mapping, odvolá app password a teprve potom odstraní secret a account
-partition.
+Online tok nejprve zastaví lane, odstraní per-account Web Push nebo APNs
+registraci z Nextcloudu a případný iOS relay mapping, odvolá app password a
+teprve potom odstraní secret a account partition.
 
 Při offline odebrání může UI účet skrýt až po explicitním zahození lokálních
 operací. Samostatný RevocationTombstone v secure storage drží jen credential

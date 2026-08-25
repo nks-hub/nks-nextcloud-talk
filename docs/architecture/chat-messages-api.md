@@ -1,10 +1,17 @@
 # Kontrakt chat zpráv
 
-Datum ověření: 22. srpna 2026.
+Datum aktualizace: 25. srpna 2026.
 
 Stav: OpenAPI, syntetické request/response fixture, capability resolver,
 transakční merge, durable text-send outbox a bezpečné live režimy jsou
-spustitelné. Produkční Flutter klient zatím neexistuje.
+spustitelné. Flutter klient má cache-first chat/thread UI a automatizovaný
+foreground HTTP-adapter/Drift/UI bridge, persistentní text-send outbox a
+named-thread send. Historický Android build má ověřený build, update install,
+přihlášení, otevření room a Giphy wire-reference tok včetně návratu po ukončení
+procesu. Nový Giphy attachment tok tento důkaz nahrazuje a zatím nemá live
+server round trip. Skutečný příchozí thread smoke patří předchozímu APK a
+obousměrný E2E ještě staršímu. Named-thread send, root/history, read-unread a
+restart/outbox matice zatím nemají aktuální zařízení E2E.
 
 ## Rozsah
 
@@ -36,6 +43,10 @@ a stable
 [`f9b9e94`](https://github.com/nextcloud/spreed/blob/f9b9e9474e3621b47f74bf8890c4642cb49eed97/lib/Controller/ChatController.php#L1889-L1989).
 Ukládání `referenceId` je ověřené v
 [`ChatManager`](https://github.com/nextcloud/spreed/blob/f2958bb25be6604240c58a3faf9a2033a30d20e5/lib/Chat/ChatManager.php#L383-L524).
+Odvození `threadId` je ověřené v `Message.php` na
+[`f2958bb`](https://github.com/nextcloud/spreed/blob/f2958bb25be6604240c58a3faf9a2033a30d20e5/lib/Model/Message.php#L197-L216)
+i
+[`f9b9e94`](https://github.com/nextcloud/spreed/blob/f9b9e9474e3621b47f74bf8890c4642cb49eed97/lib/Model/Message.php#L197-L216).
 
 Klientské intervaly, catch-up a optimistic-send chování jsou porovnané s iOS
 SHA
@@ -118,8 +129,8 @@ Samostatná změna `X-Chat-Last-Common-Read` nesmí posunout history/future curs
 ## Foreground long-poll runtime
 
 Pure Dart runtime je od 23. srpna 2026 implementovaný v commitu
-`d90a66f5ed9bd79eb6585ccbff903e48d3da580f`. Jde o protokolový a stavový
-kontrakt, ne o hotovou Flutter lifecycle integraci.
+`d90a66f5ed9bd79eb6585ccbff903e48d3da580f`. Tvoří protokolový a stavový
+kontrakt, na který nyní navazuje Flutter foreground integrace popsaná níže.
 
 Poll session je neměnně svázaná s `accountId`, server originem,
 `(roomToken, threadId|null)`, credential generation a capability generation.
@@ -157,6 +168,121 @@ Pozorované chování je porovnané s Talk Android SHA
 - [`NcApiCoroutines.kt` řádky 497 až 502](https://github.com/nextcloud/talk-android/blob/5428960f9d1eca708df1b39a0831141dcbba4729/app/src/main/java/com/nextcloud/talk/api/NcApiCoroutines.kt#L497-L502)
   potvrzují account credential v `Authorization` a typovaný query map GET.
 
+### Flutter foreground bridge
+
+`ChatRoomPane` vytváří přes Riverpod account/room/thread-bound live binding.
+`ChatService` připraví capability profil a request, produkční
+`HttpNextcloudApi` provede HTTP adapter tok a `ChatRepository` commitne message,
+future cursor, konvergenci a bezpečný error stav do Drift. UI změnu publikuje až
+pozorování commitnuté databáze; protilehlý root nebo thread scope se nezmění.
+
+Dva widget-integration testy vykonávají celý řetězec
+`ChatRoomPane → ChatService → HTTP adapter → Drift → Riverpod → UI` zvlášť pro
+root a thread. V obou případech ověřují timeouty `0 → 30 → 0`, přechod cursoru
+109 → 120, zobrazení externí zprávy, následnou konvergenci po `304`, prázdný
+opačný scope a nulovou UI výjimku. HTTP adapter v testu používá deterministický
+`MockClient`; test proto neprokazuje skutečný socket ani Nextcloud server.
+
+Thread response může nést úplný embedded parent. Flutter repository jím
+aktualizuje cached thread original jen při shodě accountu, room tokenu,
+message ID a thread ID. Serverové `threadReplies` je autoritativní. Pokud pole
+chybí, klient odvodí počet z množiny unikátních message ID v daném thread scope
+a právě přijímaných replies, vynechá original a zachová vyšší dříve uložený
+počet. Replay stejného reply ID se proto nezapočítá znovu, batch se přičte
+právě jednou a neshodný embedded parent nesmí přepsat cached original. Celý
+merge proběhne ve stejné Drift transakci a reply dál neunikne do root scope.
+
+Cílená sada `chat_service_integration_test.dart`,
+`chat_scope_isolation_test.dart` a `chat_room_live_sync_test.dart` prošla 24.
+srpna 2026 výsledkem 22/22. Samotný thread repository řez prošel 7/7 včetně
+explicitního serverového počtu, chybějícího počtu, replay/batch odvození a
+neshodného parentu. Samostatné UI sady zahrnují izolovaný thread pane, otevření
+platného vlákna bez replies, bezpečný inline link a interní viewer obrázkových
+příloh. Čerstvý výběr sedmi chat/Giphy testovacích souborů po commitu `8724281`
+prošel 63/63 a `flutter analyze` skončil bez nálezu.
+
+### Historický Android Giphy wire-reference runtime
+
+Commit `5f6e2f4` má debug APK SHA-256
+`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf` a
+velikost 203 683 536 B. Update instalace přes `adb install -r` prošla a
+nainstalovaný `base.apk` měl stejný hash. Na tomto APK proběhl skutečný Login
+Flow, seznam konverzací, otevření room, výběr a odeslání Giphy zprávy i návrat
+po ukončení procesu. Dva cold starty trvaly 5 094 ms a 4 587 ms.
+
+Tehdejší implementace posílala Giphy `resourceUrl` jako interní Talk wire
+reference. Potvrzená message bublina i lokální pending bublina ji přes
+account-scoped References resolver vykreslily jako animovaný inline GIF; URL se
+nezobrazila ani nebyla klikací. Reply preview a náhled konverzace používaly text
+`GIF`. To platilo i pro přesný URL wire tvar s `markdown=false` nebo chybějícím
+polem `markdown`.
+
+Cílená regrese opravy prošla 11/11 a širší chat/Giphy sada 75/75; analyzer byl
+bez nálezu. Dva rozdílné crop hashe stejné bubliny prokázaly změnu snímku
+animace. Po ukončení procesu se stejná zpráva znovu načetla a vykreslila bez
+viditelné URL. První načtení GIFů po cold startu trvalo přibližně osm sekund;
+krátký stav `Chat is temporarily unavailable` zmizel po retry. Tento scénář
+neopakoval celý root/thread/read-unread/outbox runtime.
+
+Tento wire-reference tok je nyní nahrazený a zůstává pouze pro čtení historie.
+Nový výběr nesmí URL vložit do textové zprávy. Resolver dodá validované
+`image/gif` bajty do durable app-owned zdroje a standardního Talk
+Draft/WebDAV/finalize attachment toku. Přípravu tohoto směru obsahují commity
+`5d49cbb` a `9de5727`; výše uvedený live běh neprokazuje nový upload/finalize
+tok.
+
+### Historický reálný thread smoke
+
+Předchozí debug APK SHA-256
+`<fingerprint>`
+bylo aktualizačně nainstalované přes `adb install -r`; cold start zachoval účet.
+Z root timeline se přes `Open thread` otevřel existující thread. Jedna nová
+webová thread reply se ve foreground Flutteru zobrazila za 2,3 s. Thread root
+byl vykreslen právě jednou, redundantní parent preview ani jednou, příchozí
+reply nebyla v root timeline a počítadlo odpovědí u kořene se aktualizovalo na
+4.
+
+Scénář historicky prokazuje příchozí Nextcloud transport, foreground poll,
+Drift/UI aktualizaci a root/thread scope i presentation izolaci. Neprokazuje
+stejné chování na novém post-review APK ani opačný směr z tohoto Flutter
+composeru do webového Talk.
+
+Installed `base.apk` má podle `sha256sum` stejný SHA-256 jako tehdejší lokální
+build. Light, dark a light-200-percent capture zobrazují thread, datum, root,
+4 odpovědi a composer bez layout vady. Explicitní pixelový report prošel 24/24
+s minimem textu 7,2725:1 a UI 3,252078:1. Redigovaný process-scoped logcat nemá
+warning, error, fatal ani známou UI diagnostiku. Po capture se obnovily původní
+hodnoty `night=yes`, `font_scale` unset/null a běžící proces aplikace.
+
+Runtime seznam konverzací ukázal 9 tiles a 9 avatarů: 3 síťové obrázky,
+4 fallback ikony a 2 iniciály. Příchozí skupinová zpráva měla participant
+avatar; outgoing-only testovací thread správně avatary nezobrazil. Avatar
+pixelový report prošel 4/4 s minimem UI ikony 7,2725:1 a textu iniciály
+7,2739:1.
+
+### Historický obousměrný baseline
+
+Starší APK SHA-256
+`1c4372cad3bbf3f7b1d56664c5da9f353be24bb2b456a919b2393cd6879ba861`
+prokázalo dvě webové replies v různých polling cyklech, jejich nepřítomnost v
+root timeline a reply z Flutter thread composeru doručenou do webového Talk.
+Jde o historický transportní baseline, ne o opakování obousměrného scénáře na
+předchozím runtime APK ani aktuálním buildu. Room token a texty zpráv zůstávají
+pouze v ignorovaných lokálních artefaktech. Dočasná room byla 2026-08-24
+odstraněná přes trvalou webovou E2E
+relaci a následný snapshot ověřil její nepřítomnost.
+
+Na tomto starším APK prošly reálné light/dark screenshoty threadu PIL kontrastem
+s minimem 5,03:1 pro text a 3,25:1 pro UI. Při font scale 2,0 se zprávy
+zalomily, header a composer zůstaly viditelné a logcat neměl layout chybu.
+Flutter semantics test potvrzuje právě jeden pojmenovaný editovatelný composer
+node se `setText` a tap akcí. Android AccessibilityBridge mapuje label/hint do
+`AccessibilityNodeInfo.hintText`. Přímá Android runtime sonda našla právě jeden
+editor, vrátila očekávaný hint `Write a message` o délce 15 a potvrdila
+`editable=true` i click akci; text a `contentDescription` zůstaly podle bridge
+prázdné. Runner prošel 1/1. Uiautomator XML `hintText` neserializuje, takže
+`NAF=true` je false positive. Zvukové vyslovení TalkBack nebylo odposlechnuté.
+
 ## ChatBlock a atomický merge
 
 Scope klíč je `(accountId, roomToken, threadId|null)`. Interval znamená serverem
@@ -193,11 +319,19 @@ Potvrzená response musí mít:
 - neprázdnou message;
 - shodný cílový room token;
 - přesně shodný `referenceId`;
-- u reply shodný `replyTo`, `replyToToken` a `parentRoomToken` z durable operace;
+- u same-room reply přesný immediate parent a shodný kladný topmost
+  `threadId` na parentu i nové zprávě;
+- u cross-room private reply původní reply metadata, lokální copied-parent ID
+  jako `threadId` nové zprávy a `parent.threadId == 0`;
+- u named-thread sendu v přímé POST response parentless zprávu se shodným
+  požadovaným `threadId`;
+- u plain sendu parentless zprávu s `threadId == messageId`;
 - platné serverové `messageId`.
 
-`201 null`, jiný token nebo jiná reference jsou nejednoznačné výsledky. Stejná
-pravidla platí pro ztracenou response po možném odeslání body.
+`threadId` v plain response tedy není kopií nullable request pole. Server jej
+odvozuje jako ID nového thread rootu. `201 null`, jiný token nebo jiná reference
+jsou nejednoznačné výsledky. Stejná pravidla platí pro ztracenou response po
+možném odeslání body.
 
 Same-room reply posílá `replyTo`. Ověřený cross-room wire formát posílá také
 `replyToToken`; normalizace již uloženého payloadu zachová i
@@ -205,6 +339,14 @@ Same-room reply posílá `replyTo`. Ověřený cross-room wire formát posílá 
 původní message ID a conversation token. Nový cross-room command admission je
 v tomto řezu záměrně nepodporovaný a federovaný private reply je nepodporovaný
 vždy.
+
+Named-thread send je jiná wire větev než obyčejný reply: posílá `threadId`, ale
+žádné `replyTo`, `replyToToken` ani `parentRoomToken`. Vyžaduje `chat-v2`,
+`chat-reference-id`, lokální `threads` profil a nefederovanou room. Response
+musí zachovat stejný `threadId` a nesmí přidat parent. Flutter před admission
+rozliší cached named-thread root od reply rootu; neznámou klasifikaci nejprve
+dosynchronizuje. Potvrzená zpráva se uloží do thread scope a ve stejné Drift
+transakci aktualizuje cached root `threadId`, `isThread` a `threadReplies`.
 
 ## Read a mark-unread
 
@@ -222,12 +364,14 @@ První povolený registry záznam:
 
 ```text
 operationKind: textSend
-revision: talk-chat-text-send-f2958bb-f9b9e947-r1
+revision: talk-chat-text-send-f2958bb-f9b9e947-r2
 requires: chat-v2, chat-reference-id
 ```
 
 Admission odmítne neznámý kind, jinou revision nebo chybějící capability.
 `operationId` je lokální UUID workeru a neposkytuje serverovou idempotenci.
+Named-thread operace navíc ukládá `threadId` a vyžaduje `threads`; předchozí
+revision r1 se pod r2 autoritou odmítne místo nebezpečného replaye.
 
 <!-- markdownlint-disable MD013 -->
 
@@ -257,6 +401,25 @@ single-flight guardem prochází i ruční resend. HTTP výsledek se smí apliko
 jen na operaci se shodným room, reference a reply kontextem. Prázdný úspěšný
 future výsledek (`200` s cursorem/common-read nebo `304`) ponechá operaci v
 `awaitingConfirmation`.
+
+Named-thread přímá POST response a autoritativní catch-up nemají stejný shape.
+Při shodném outer `threadId == T` smí být přímá POST response bez parentu.
+Autoritativní history/future položka bez parentu se odmítne; musí nést právě
+jednu z těchto podob:
+
+- full root parent s `id == T`, room tokenem operace a `threadId == T`;
+- compact nedostupný parent právě ve tvaru `{id: T, deleted: true}`.
+
+Jiné parent ID, cizí room token nebo jiný parent thread confirmation odmítnou.
+U quoted reply zůstává `parent.id` bezprostřední quoted message `P`, která se
+může lišit od rootu `T`; outer i full-parent `threadId` musí být `T`.
+
+Flutter schema v5 přidalo do `text_send_operations` nullable `threadId` a
+aktuální schema v7 jej zachovává.
+File-backed reopen test zachová queued i sending named-thread operaci a
+`recoverInterruptedTextSends` bezpečně převede přerušený `sending` na
+`awaitingConfirmation` bez ztráty thread vazby. Jde o DB/repository důkaz, ne o
+hotový live process-death nebo background scheduler scénář.
 
 ## Diagnostika a bezpečnost
 
@@ -303,22 +466,38 @@ rtk proxy python contracts\chat-messages\validate_contract.py `
 Credentials jsou v obou případech pouze v `NEXTCLOUD_TALK_USERNAME` a
 `NEXTCLOUD_TALK_APP_PASSWORD`. Mutable příkaz se nesmí spustit v cizí room.
 
-Aktuální lokální výsledek 23. srpna 2026: 1 OpenAPI dokument, 44 fixtures, z
-toho 43 schema-validních a 13 přijatých syntetických messages, 21 query
-případů, 10 capability případů, 23 merge případů s 25 kroky, 36 outbox případů
-s 60 kroky,
-4 unit testy, 1 redaction guard a 1 origin případ prošly. Stejné fixtures
-vykonává pure Dart chat doména. Samostatný foreground polling soubor prošel
-10 testy, všech 165 chat testů prošlo, celý `talk_protocol` prošel 540 testy a
-`dart analyze` skončil bez nálezu.
+Aktuální contract výsledek 24. srpna 2026: 1 OpenAPI dokument, 47 fixtures, z
+toho 46 schema-validních a 14 přijatých syntetických messages, 24 query
+případů, 10 capability případů, 23 merge případů s 25 kroky, 43 outbox případů
+s 83 kroky, 17 unit testů, 1 redaction guard a 1 origin případ prošly. Stejné
+fixtures vykonává pure Dart chat doména. Cílená named-thread/outbox brána prošla
+158/158, celá chat-only sada 194/194 a samostatný foreground polling soubor 10
+testy. Celý `talk_protocol` prošel 569/569 a `dart analyze` skončil bez nálezu.
+
+Čistý Flutter commit `8374f20` obsahuje 354 funkčních testů a jeden live skip
+pouze bez environment credentials; pozdější plný běh stejného funkčního zdroje
+25. srpna 2026 skončil bez selhání. Named-thread service/integration testy a
+file-backed schema v5→v7 reopen/migration jsou součástí této sady. Flutter analyze
+je bez nálezu a celý `talk_protocol` prošel 569/569.
+
+Historický `chatujmePixel` běh prokázal build/install/hash, přihlášení, otevření
+room a výše popsaný Giphy wire-reference tok včetně návratu po ukončení procesu,
+ne však nový GIF attachment upload/finalize, thread, read/unread ani outbox
+restart. Předchozí běh prokázal příchozí thread smoke, UI invarianty,
+light/dark/200% WCAG 24/24 a avatar WCAG 4/4.
+Obousměrný thread E2E
+a přímý Android runtime `getHintText` test jsou historické důkazy ještě staršího
+APK. Zvukové vyslovení TalkBack ještě nebylo ověřené.
 
 ## Co důkaz nepokrývá
 
-Live read/write nebyl v tomto milníku spuštěný bez potvrzených environment
-proměnných a vyhrazené mutable room. Pure Dart model a společný candidate plán
-pro message merge plus outbox reconciliation existují, ale neprokazují SQLite
-migrace ani skutečný společný DB commit. Foreground poll session neprokazuje
-Flutter app lifecycle, skutečný HTTP transport, restart mobilního procesu, HPB
-relay, background scheduler, UI pending/error stavy, `chatujmePixel` E2E,
-multi-server izolaci v jednom procesu ani WCAG kontrast. Tyto části zůstávají v
-implementačním řezu 3.
+Historický serverový důkaz pokrývá jen jednu příchozí thread future reply.
+Historické Giphy APK celý thread scénář neopakovalo a opačný směr je doložený
+pouze ještě starším APK. Neprokazuje ani nový Giphy attachment tok.
+Named-thread request/response/outbox a DB reopen mají automatizovaný důkaz, ale
+ne skutečný serverový ani zařízení round trip. Důkaz neprokazuje root live tok,
+history stránkování, read/unread, queued ani ambiguous outbox přes skutečný
+procesní restart, HPB relay, background scheduler nebo multi-server izolaci.
+Chybí zvukově ověřené vyslovení a širší TalkBack navigace. Dočasná room byla
+odstraněná a její nepřítomnost ověřená; ostatní části zůstávají otevřenou bránou
+řezu 3.

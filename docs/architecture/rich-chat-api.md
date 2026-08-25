@@ -1,10 +1,22 @@
 # Kontrakt rich chatu a vláken
 
-Datum ověření: 23. srpna 2026.
+Datum ověření: 25. srpna 2026.
 
 Stav: OpenAPI, syntetické fixture, pure Dart request/response model, bezpečný
-semantic renderer a account-scoped transakční planner jsou spustitelné.
-Produkční Flutter transport, Drift store, UI a live mutace zatím neexistují.
+semantic renderer a account-scoped transakční planner jsou spustitelné. Flutter
+aplikace už má cache-first root/thread timeline, text send, GFM/Rich Object
+zobrazení, obrázky s interním viewerem, reakce, reply preview a avatary; bohaté
+mutation příkazy z tohoto kontraktu zatím do Flutter runtime zapojené nejsou.
+
+Text send do serverového named threadu je implementovaný v samostatném chat
+kontraktu revision r2. Využívá `threadId` bez `replyTo` a neznamená, že jsou
+implementované rename/notification-level nebo další rich thread mutace níže.
+
+Giphy je pro nové odeslání attachment větev, ne klikací Markdown ani textový
+Reference payload. References API pouze poskytne ověřené GIF bajty, které
+projdou durable Talk Draft/WebDAV/finalize tokem. Původní skrytý wire renderer
+zůstává read-only kompatibilitou starších zpráv. Podrobný kontrakt je v
+[Giphy integraci](../research/giphy-integration.md).
 
 ## Rozsah
 
@@ -136,8 +148,8 @@ podle D-006.
 ```powershell
 rtk proxy python contracts\rich-chat\validate_contract.py
 rtk proxy python contracts\rich-chat\test_validate_contract.py
-rtk proxy C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
-rtk proxy C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
+rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
+rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
 ```
 
 Aktuální lokální výsledek:
@@ -148,13 +160,26 @@ Aktuální lokální výsledek:
 - 8 Python validator unit testů;
 - 95 Dart rich-chat testů: 69 contract, 13 state, 12 security a 1 skutečný
   release AOT executable;
-- celý `talk_protocol` prochází 375 testy a analyzer je bez nálezu.
+- celý `talk_protocol` po named-thread rozšíření prochází 569 testy a analyzer
+  je bez nálezu.
+
+Historická wire-reference Giphy oprava `5f6e2f4` prošla 11/11 cílenými a 75/75
+širšími chat/Giphy testy. Čerstvý výběr sedmi Flutter chat/Giphy souborů po
+opravě interního image vieweru `8724281` prošel 63/63 a analyzer byl bez nálezu.
+Nový attachment loader a composer admission přidávají `5d49cbb` a `9de5727`;
+tyto commity samy ještě neprokazují room propojení ani live upload.
 
 ## Co důkaz nepokrývá
 
-Nebyl spuštěný live rich mutation round trip ani HTTP transport, Drift commit,
-relay reconciliation, restart mobilního procesu nebo UI. Repozitář stále nemá
-Flutter/Android scaffold, proto zatím nelze poctivě spustit ani povinný
-`chatujmePixel` E2E checklist, screenshoty a pixelové WCAG měření. Po vzniku
-scaffoldu musí emulator projít celý rich-chat tok; skutečné background/killed
-FCM doručení a výkon se navíc prokážou na fyzickém Android zařízení.
+Flutter HTTP/Drift/UI základ existuje. Historické Android APK SHA-256
+`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
+prošlo přihlášením, otevřením room a Giphy wire-reference
+send/inline/process-death scénářem; neprošlo však novým GIF attachment ani rich
+mutation round tripem. Ještě starší Android APK SHA-256
+`<fingerprint>`
+prošlo příchozím thread smokem, screenshoty a pixelovým WCAG měřením; tento
+důkaz se nepřenáší na novější build. Nebyl spuštěný live round trip pro
+edit/delete, reaction mutation, pin, reminder nebo schedule ani jejich
+restart/reconciliation tok. Celý rich-chat mutation checklist musí ještě projít
+na `chatujmePixel`; background/killed Web Push a výkon navíc vyžadují fyzické
+Android zařízení.
