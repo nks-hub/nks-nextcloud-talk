@@ -142,7 +142,10 @@ final class HttpNextcloudApi {
     429,
     503,
   };
-  static const _leaveRoomAllowedStatusCodes = {
+  /// Shared by leaving and deleting a conversation: both answer `400` for a
+  /// refusal the caller has to explain and `403` when the participant lacks
+  /// the required role.
+  static const _roomRemovalAllowedStatusCodes = {
     200,
     400,
     401,
@@ -673,6 +676,31 @@ final class HttpNextcloudApi {
     );
   }
 
+  /// Deletes a conversation for everyone. Moderator-only on the server.
+  Future<DeleteRoomResponse> deleteRoom({
+    required DeleteRoomRequest deleteRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('DELETE', deleteRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...deleteRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomRemovalAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeDeleteRoomResponse(
+      request: deleteRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Removes the caller from a conversation. Irreversible from the client's
   /// point of view.
   Future<LeaveRoomResponse> leaveRoom({
@@ -689,7 +717,7 @@ final class HttpNextcloudApi {
       });
     final payload = await _sendBody(
       request,
-      allowedStatusCodes: _leaveRoomAllowedStatusCodes,
+      allowedStatusCodes: _roomRemovalAllowedStatusCodes,
       maximumBytes: _roomSettingsMaximumBytes,
     );
     return decodeLeaveRoomResponse(

@@ -50,6 +50,22 @@ final class AccountRepository {
     return query.getSingleOrNull();
   }
 
+  /// Drops a conversation from the cache once the server no longer has it, so
+  /// the list does not keep showing a room that is gone until the next sync.
+  // ponytail: the conversation row only; cached chat rows for the room are
+  // unreachable without it and the next full merge is what prunes them.
+  Future<void> removeConversation({
+    required String accountId,
+    required String token,
+  }) {
+    return (_database.delete(_database.cachedConversations)..where(
+          (conversation) =>
+              conversation.accountId.equals(accountId) &
+              conversation.token.equals(token),
+        ))
+        .go();
+  }
+
   Future<StoredAccount?> getAccount(String accountId) {
     final query = _database.select(_database.accounts)
       ..where((account) => account.id.equals(accountId));

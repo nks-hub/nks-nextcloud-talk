@@ -551,6 +551,150 @@ void main() {
     });
   });
 
+  group('DeleteRoomRequest', () {
+    test('builds the room URI', () {
+      final request = DeleteRoomRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        canDeleteConversation: true,
+      );
+
+      expect(
+        request.uri.toString(),
+        'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v4/room/'
+        'rooma123?format=json',
+      );
+    });
+
+    test('refuses to build when the server says the room cannot be deleted',
+        () {
+      expect(
+        () => DeleteRoomRequest(
+          accountId: _accountId(),
+          server: _server(),
+          roomToken: _token(),
+          canDeleteConversation: false,
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidRoomSettingsRequest,
+          ),
+        ),
+      );
+    });
+
+    test('keeps the room token out of toString', () {
+      final request = DeleteRoomRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        canDeleteConversation: true,
+      );
+
+      expect(request.toString(), 'DeleteRoomRequest(<redacted>)');
+      expect(request.toString(), isNot(contains('rooma123')));
+    });
+  });
+
+  group('decodeDeleteRoomResponse', () {
+    DeleteRoomRequest request() => DeleteRoomRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      canDeleteConversation: true,
+    );
+
+    test('reports success', () {
+      expect(
+        decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 200,
+          body: _ocsBody(status: 'ok', statusCode: 200, data: <Object?>[]),
+        ),
+        isA<DeleteRoomSuccess>(),
+      );
+    });
+
+    test('classifies 400 as rejected, e.g. a one-to-one conversation', () {
+      expect(
+        decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 400,
+          body: _ocsBody(status: 'failure', statusCode: 400),
+        ),
+        isA<DeleteRoomRejected>(),
+      );
+    });
+
+    test('classifies 401, 403 and 404', () {
+      expect(
+        decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 401,
+          body: _ocsBody(status: 'failure', statusCode: 401),
+        ),
+        isA<DeleteRoomReauthenticationRequired>(),
+      );
+      expect(
+        decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 403,
+          body: _ocsBody(status: 'failure', statusCode: 403),
+        ),
+        isA<DeleteRoomForbidden>(),
+      );
+      expect(
+        decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 404,
+          body: _ocsBody(status: 'failure', statusCode: 404),
+        ),
+        isA<DeleteRoomRoomMissing>(),
+      );
+    });
+
+    test('maps 429 and 503 onto bounded HTTP failures', () {
+      final rateLimited = decodeDeleteRoomResponse(
+        request: request(),
+        statusCode: 429,
+        body: Uint8List(0),
+      );
+      expect(
+        (rateLimited as DeleteRoomHttpFailure).kind,
+        RoomSettingsHttpFailureKind.rateLimited,
+      );
+      final unavailable = decodeDeleteRoomResponse(
+        request: request(),
+        statusCode: 503,
+        body: Uint8List(0),
+      );
+      expect(
+        (unavailable as DeleteRoomHttpFailure).kind,
+        RoomSettingsHttpFailureKind.serviceUnavailable,
+      );
+    });
+
+    test('rejects an undocumented status code', () {
+      expect(
+        () => decodeDeleteRoomResponse(
+          request: request(),
+          statusCode: 418,
+          body: Uint8List(0),
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.unsupportedHttpStatus,
+          ),
+        ),
+      );
+    });
+  });
+
   group('LeaveRoomRequest', () {
     test('builds the participants/self URI', () {
       final request = LeaveRoomRequest(

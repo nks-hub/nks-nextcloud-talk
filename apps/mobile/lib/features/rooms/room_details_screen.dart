@@ -24,8 +24,8 @@ const int _notificationMention = 2;
 const int _notificationNever = 3;
 
 /// Conversation details: room metadata, the moderator-gated settings
-/// actions (rename, description, notification level, favorite, leave) and
-/// the participant list with each attendee's role and status.
+/// actions (rename, description, notification level, favorite, leave, delete)
+/// and the participant list with each attendee's role and status.
 final class RoomDetailsScreen extends ConsumerStatefulWidget {
   const RoomDetailsScreen({
     super.key,
@@ -87,7 +87,19 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
   /// when that could not be determined from the cached room.
   bool get _canLeave => _room?.canLeaveConversation ?? false;
 
-  Future<void> _runAction(Future<void> Function() action) async {
+  /// The server decides who may delete a conversation for everyone: it is
+  /// refused without moderator rights and in one-to-one conversations, and
+  /// reports that as `canDeleteConversation`. Hidden when the cached room
+  /// could not be parsed, and paired with the local moderator check so a
+  /// plain participant never sees the action.
+  bool get _canDelete =>
+      _isModerator && (_room?.canDeleteConversation ?? false);
+
+  Future<void> _runAction(
+    Future<void> Function() action, {
+    String Function(AppLocalizations, RoomSettingsError) errorMessage =
+        _actionErrorMessage,
+  }) async {
     if (_busy) {
       return;
     }
@@ -95,7 +107,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
     try {
       await action();
     } on RoomSettingsException catch (error) {
-      _showActionError(_actionErrorMessage, error.code);
+      _showActionError(errorMessage, error.code);
     } on ParticipantsServiceException catch (error) {
       _showActionError(_participantActionErrorMessage, error.code);
     } finally {
@@ -309,6 +321,48 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('room-details-delete-dialog'),
+        title: Text(strings.roomDetailsDeleteDialogTitle),
+        content: Text(strings.roomDetailsDeleteDialogMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(strings.cancel),
+          ),
+          TextButton(
+            key: const Key('room-details-delete-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(strings.roomDetailsDeleteDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    var deleted = false;
+    await _runAction(() async {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .deleteRoom(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            canDeleteConversation: _room?.canDeleteConversation ?? false,
+          );
+      deleted = true;
+    }, errorMessage: _deleteErrorMessage);
+    if (deleted && mounted) {
+      // Popping once would land on the chat of a conversation that no longer
+      // exists, so unwind to the conversation list instead.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
   /// Runs a moderation change and refetches the list, because the endpoints
   /// answer with an empty payload and the new roles are only visible after a
   /// reload.
@@ -456,6 +510,19 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               onTap: _busy ? null : _confirmLeave,
+            ),
+          if (_canDelete)
+            ListTile(
+              key: const Key('room-details-delete'),
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                strings.roomDetailsDeleteAction,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: _busy ? null : _confirmDelete,
             ),
           const Divider(height: 1),
           Padding(
@@ -768,6 +835,14 @@ String _participantActionErrorMessage(
     ParticipantsServiceError.invalidResponse ||
     ParticipantsServiceError.network => strings.roomDetailsActionErrorGeneric,
   };
+}
+
+/// Same as [_actionErrorMessage], except that a refusal here means the room
+/// itself cannot be deleted rather than that leaving is blocked.
+String _deleteErrorMessage(AppLocalizations strings, RoomSettingsError code) {
+  return code == RoomSettingsError.rejected
+      ? strings.roomDetailsDeleteRejected
+      : _actionErrorMessage(strings, code);
 }
 
 String _actionErrorMessage(AppLocalizations strings, RoomSettingsError code) {

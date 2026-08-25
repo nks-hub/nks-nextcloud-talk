@@ -903,4 +903,21 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get outboxCancelAmbiguous =>
       'Zprávu už nelze zrušit, mohla dorazit na server.';
+
+  @override
+  String get roomDetailsDeleteAction => 'Smazat konverzaci';
+
+  @override
+  String get roomDetailsDeleteDialogTitle => 'Smazat konverzaci?';
+
+  @override
+  String get roomDetailsDeleteDialogMessage =>
+      'Konverzace i všechny její zprávy se smažou všem účastníkům. Akci nelze vzít zpět.';
+
+  @override
+  String get roomDetailsDeleteDialogConfirm => 'Smazat';
+
+  @override
+  String get roomDetailsDeleteRejected =>
+      'Tuto konverzaci nelze smazat. Konverzaci jeden na jednoho lze jen opustit.';
 }
