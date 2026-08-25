@@ -356,7 +356,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         .watch(chatMessageActionsProfileProvider(_key))
         .valueOrNull;
     final readOnly = widget.conversation.readOnly != 0;
-    final canReplyToMessage = !readOnly && widget.threadId == null;
+    final canReplyToMessage =
+        !readOnly &&
+        widget.threadId == null &&
+        (actionsProfile?.reply ?? false);
     final profileCanEdit = actionsProfile?.edit ?? false;
     final profileCanDelete = actionsProfile?.delete ?? false;
     final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);

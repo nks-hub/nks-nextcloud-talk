@@ -7,6 +7,7 @@ const int _reactPermission = 256;
 final class RichChatCapabilityProfile {
   const RichChatCapabilityProfile._({
     required this.federated,
+    required this.reply,
     required this.mentions,
     required this.threadMetadata,
     required this.threadMessageFetch,
@@ -33,6 +34,10 @@ final class RichChatCapabilityProfile {
     final global = _features(talkFeatures, r'$.talkFeatures');
     final local = _features(talkLocalFeatures, r'$.talkLocalFeatures');
     final base = global.contains('chat-v2');
+    final reply =
+        base &&
+        global.contains('chat-reference-id') &&
+        global.contains('chat-replies');
     final threads = base && global.contains('threads');
     final reactions = base && global.contains('reactions');
     final reactionPermission =
@@ -41,6 +46,7 @@ final class RichChatCapabilityProfile {
     final pinned = base && global.contains('pinned-messages');
     return RichChatCapabilityProfile._(
       federated: federated,
+      reply: reply,
       mentions: base,
       threadMetadata: threads,
       threadMessageFetch: threads && !federated,
@@ -56,6 +62,7 @@ final class RichChatCapabilityProfile {
   }
 
   final bool federated;
+  final bool reply;
   final bool mentions;
   final bool threadMetadata;
   final bool threadMessageFetch;
@@ -71,7 +78,7 @@ final class RichChatCapabilityProfile {
   @override
   String toString() =>
       'RichChatCapabilityProfile(federated: $federated, '
-      'mentions: $mentions, threads: $threadMetadata, '
+      'reply: $reply, mentions: $mentions, threads: $threadMetadata, '
       'reactions: $reactions, scheduled: $scheduled)';
 }
 

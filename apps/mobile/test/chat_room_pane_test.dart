@@ -894,6 +894,11 @@ void main() {
       await tester.pumpWidget(
         app(
           home: ChatRoomScreen(account: account, conversation: conversation),
+          overrides: [
+            chatMessageActionsProfileProvider.overrideWith(
+              (ref, key) async => _capabilityProfile(reply: true),
+            ),
+          ],
         ),
       );
       await tester.pump();
@@ -1300,6 +1305,7 @@ void main() {
           overrides: [
             chatMessageActionsProfileProvider.overrideWith(
               (ref, key) async => _capabilityProfile(
+                reply: true,
                 edit: true,
                 delete: true,
                 react: true,
@@ -1338,7 +1344,7 @@ void main() {
   );
 
   testWidgets(
-    'without a resolved capability profile only reply and copy are offered',
+    'without a resolved capability profile reply stays hidden',
     (tester) async {
       await tester.pumpWidget(
         app(
@@ -1351,11 +1357,38 @@ void main() {
       await tester.longPress(find.byKey(const Key('chat-message-target-10')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+      expect(find.byKey(const Key('message-action-reply')), findsNothing);
       expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
       expect(find.byKey(const Key('message-action-edit')), findsNothing);
       expect(find.byKey(const Key('message-action-delete')), findsNothing);
       expect(find.byKey(const Key('message-action-react')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
+  testWidgets(
+    'a resolved profile without chat-replies keeps reply hidden',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          home: ChatRoomScreen(account: account, conversation: conversation),
+          overrides: [
+            chatMessageActionsProfileProvider.overrideWith(
+              (ref, key) async => _capabilityProfile(),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('message-action-reply')), findsNothing);
+      expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));
@@ -1865,6 +1898,7 @@ int _unixSeconds(DateTime value) =>
     value.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond;
 
 RichChatCapabilityProfile _capabilityProfile({
+  bool reply = false,
   bool edit = false,
   bool delete = false,
   bool react = false,
@@ -1872,6 +1906,7 @@ RichChatCapabilityProfile _capabilityProfile({
   return RichChatCapabilityProfile.fromTalkFeatures(
     talkFeatures: <String>[
       'chat-v2',
+      if (reply) ...['chat-reference-id', 'chat-replies'],
       if (edit) 'edit-messages',
       if (delete) 'delete-messages',
       if (react) 'reactions',
@@ -1882,4 +1917,3 @@ RichChatCapabilityProfile _capabilityProfile({
     participantPermissions: 0,
   );
 }
-
