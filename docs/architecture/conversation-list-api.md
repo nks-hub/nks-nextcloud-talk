@@ -59,7 +59,8 @@ když poslal `includeLastMessage=false`.
 Parametry endpointu:
 
 - `noStatusUpdate`: `0` nebo `1`; background fetch vždy posílá `1`;
-- `includeStatus`: boolean; běžný kompaktní refresh posílá `false`;
+- `includeStatus`: boolean; Flutter klient od commitu `85fdb44` posílá `true`,
+  protože presence 1:1 rooms nemá jiný zdroj pravdy;
 - `modifiedSince`: nezáporný timestamp; jeho absence znamená plný fetch;
 - `includeLastMessage`: boolean; kompaktní refresh posílá `false`;
 - `format=json` a `OCS-APIRequest: true` vynucují JSON OCS odpověď.
@@ -67,6 +68,12 @@ Parametry endpointu:
 Při `includeStatus=true` vrací inkrementální fetch všechny 1:1 rooms, aby mohl
 obnovit presence. `includeLastMessage=false` šetří načtení posledních zpráv,
 share a thread preload; plný chat preview bude mít vlastní chat kontrakt.
+
+Room objekt nese `status`, `statusClearAt`, `statusIcon` a `statusMessage`.
+Merge je zpracuje takto: inkrementální odpověď bez klíče `status` předchozí
+hodnotu zachová, plná odpověď je autoritativní a přepíše ji i na prázdnou.
+`offline` a `invisible` se nevykreslují jako presence. Vlastní status se
+prezentuje jen do `statusClearAt`. Detail rozhodnutí je v D-029.
 
 Server zachytí hodnotu `X-Nextcloud-Talk-Modified-Before` jako první operaci
 metody, tedy před eventem, status update i načtením rooms. Další request s tímto

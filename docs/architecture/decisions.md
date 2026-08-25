@@ -497,6 +497,34 @@ zprávami. Historický Android test této varianty je platným důkazem tehdejš
 chování, ale neprokazuje nový cílový attachment tok. Nový tok se nesmí při
 žádné chybě vrátit k URL textové zprávě.
 
+### D-029: Presence pouze ze serverového user status
+
+Stav: Přijato 25. srpna 2026, commit `85fdb44`. Live ověřeno proti referenční
+instanci na `emulator-5554`.
+
+Presence se odvozuje výhradně z pole `status` v conversation v4 room objektu,
+které server dodá po `includeStatus=true`. Klient nesmí presence odhadovat z
+lokální aktivity, doby posledního pollu, otevřeného websocketu ani z
+`lastActivity`. Badge se vykreslí jen pro one-to-one room (`type = 1`);
+`offline`, `invisible` a neznámá hodnota badge nevykreslí vůbec.
+
+`statusIcon` a `statusMessage` jsou vlastní status uživatele. Klient je
+zobrazí jen dokud `statusClearAt` neuplynulo; po expiraci zůstane pouze
+základní stav bez cizího textu.
+
+Inkrementální odpověď, která room vrátí bez klíče `status`, předchozí hodnotu
+zachová. Plná odpověď je autoritativní a hodnotu přepíše i na prázdnou.
+Důvodem je, že delta je částečný pohled, zatímco full fetch reprezentuje
+kompletní serverový stav účtu.
+
+`includeStatus=true` mění povahu inkrementálního fetchu: server v něm vrací
+všechny 1:1 rooms, aby mohl obnovit presence. Kompaktní refresh proto není
+zdarma a tato cena je vědomě přijatá výměnou za presence.
+
+Barvy badge jsou definované pro každý theme zvlášť a každý stav má vlastní
+glyph, aby stav nezávisel jen na barvě. Textová alternativa je povinná, protože
+samotná barevná tečka je pro čtečku obrazovky neviditelná.
+
 ## Vyřešené volby
 
 ### Q-001: Licence
