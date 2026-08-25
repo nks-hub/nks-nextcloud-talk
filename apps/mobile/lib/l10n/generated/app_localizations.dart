@@ -1933,6 +1933,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That file type cannot be attached here.'**
   String get attachmentTypeUnsupported;
+
+  /// No description provided for @pauseVoiceRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause recording'**
+  String get pauseVoiceRecording;
+
+  /// No description provided for @resumeVoiceRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume recording'**
+  String get resumeVoiceRecording;
+
+  /// No description provided for @voiceRecordingLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording level'**
+  String get voiceRecordingLevel;
+
+  /// No description provided for @voicePauseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The recording could not be paused.'**
+  String get voicePauseFailed;
+
+  /// No description provided for @pauseVoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause voice message'**
+  String get pauseVoiceMessage;
+
+  /// No description provided for @voiceMessagePosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback position'**
+  String get voiceMessagePosition;
+
+  /// No description provided for @voiceMessageProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{position} of {duration}'**
+  String voiceMessageProgress(String position, String duration);
 }
 
 class _AppLocalizationsDelegate

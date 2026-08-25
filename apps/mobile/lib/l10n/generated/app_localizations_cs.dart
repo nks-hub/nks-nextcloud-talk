@@ -1031,4 +1031,27 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get attachmentTypeUnsupported =>
       'Tento typ souboru sem nelze připojit.';
+
+  @override
+  String get pauseVoiceRecording => 'Pozastavit nahrávání';
+
+  @override
+  String get resumeVoiceRecording => 'Pokračovat v nahrávání';
+
+  @override
+  String get voiceRecordingLevel => 'Hlasitost nahrávání';
+
+  @override
+  String get voicePauseFailed => 'Nahrávání se nepodařilo pozastavit.';
+
+  @override
+  String get pauseVoiceMessage => 'Pozastavit hlasovou zprávu';
+
+  @override
+  String get voiceMessagePosition => 'Pozice přehrávání';
+
+  @override
+  String voiceMessageProgress(String position, String duration) {
+    return '$position z $duration';
+  }
 }

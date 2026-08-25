@@ -326,5 +326,22 @@
   "attachFromFile": "Vybrat soubor",
   "attachmentCameraDenied": "Focení vyžaduje přístup ke kameře. Povolte ho v nastavení systému a zkuste to znovu.",
   "attachmentCameraUnavailable": "Toto zařízení nemá dostupnou kameru.",
-  "attachmentTypeUnsupported": "Tento typ souboru sem nelze připojit."
+  "attachmentTypeUnsupported": "Tento typ souboru sem nelze připojit.",
+  "pauseVoiceRecording": "Pozastavit nahrávání",
+  "resumeVoiceRecording": "Pokračovat v nahrávání",
+  "voiceRecordingLevel": "Hlasitost nahrávání",
+  "voicePauseFailed": "Nahrávání se nepodařilo pozastavit.",
+  "pauseVoiceMessage": "Pozastavit hlasovou zprávu",
+  "voiceMessagePosition": "Pozice přehrávání",
+  "voiceMessageProgress": "{position} z {duration}",
+  "@voiceMessageProgress": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  }
 }

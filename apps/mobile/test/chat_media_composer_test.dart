@@ -608,6 +608,59 @@ void main() {
     expect(retries, 1);
   });
 
+  testWidgets('recording offers pause, resume and a live waveform', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('voice-record')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,
+    );
+
+    expect(find.byKey(const Key('voice-waveform')), findsOneWidget);
+    final capture = voiceBackends.captureBackends.single;
+    capture
+      ..emitAmplitude(0.8)
+      ..emitAmplitude(0.2);
+    await _pumpUntil(tester, () => _waveformValue(tester) == '20%');
+
+    await tester.tap(find.byKey(const Key('voice-pause')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-resume')).evaluate().isNotEmpty,
+    );
+    expect(capture.pauses, 1);
+    expect(find.byKey(const Key('voice-pause')), findsNothing);
+    expect(find.byKey(const Key('voice-waveform')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('voice-resume')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-pause')).evaluate().isNotEmpty,
+    );
+    expect(capture.resumes, 1);
+
+    await tester.tap(find.byKey(const Key('voice-cancel-recording')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('voice-record')).evaluate().isNotEmpty,
+    );
+    expect(find.byKey(const Key('voice-waveform')), findsNothing);
+  });
+
   testWidgets('a generic file travels the same durable upload path', (
     tester,
   ) async {
@@ -728,6 +781,16 @@ Future<void> _prepareVoicePreview(
     () => find.byKey(const Key('voice-send')).evaluate().isNotEmpty,
   );
 }
+
+String? _waveformValue(WidgetTester tester) => tester
+    .widget<Semantics>(
+      find.descendant(
+        of: find.byKey(const Key('voice-waveform')),
+        matching: find.byType(Semantics),
+      ),
+    )
+    .properties
+    .value;
 
 /// Opens the attachment source sheet and chooses one of its entries, which is
 /// the only way the picker is reachable from the composer toolbar.
@@ -926,9 +989,24 @@ final class _VoiceBackendFactory {
 }
 
 final class _CaptureBackend implements VoiceCaptureBackend {
+  final StreamController<double> _amplitude =
+      StreamController<double>.broadcast();
   String? _path;
   int starts = 0;
+  int pauses = 0;
+  int resumes = 0;
   int disposes = 0;
+
+  @override
+  Future<void> pause() async => pauses++;
+
+  @override
+  Future<void> resume() async => resumes++;
+
+  @override
+  Stream<double> get amplitude => _amplitude.stream;
+
+  void emitAmplitude(double value) => _amplitude.add(value);
 
   @override
   Future<bool> requestPermission() async => true;
@@ -960,7 +1038,10 @@ final class _CaptureBackend implements VoiceCaptureBackend {
   }
 
   @override
-  Future<void> dispose() async => disposes++;
+  Future<void> dispose() async {
+    disposes++;
+    await _amplitude.close();
+  }
 }
 
 final class _PlaybackBackend implements VoicePlaybackBackend {
@@ -982,6 +1063,15 @@ final class _PlaybackBackend implements VoicePlaybackBackend {
 
   @override
   Future<void> playFile(String path, {required String mimeType}) async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> resume() async {}
+
+  @override
+  Future<void> seek(Duration position) async {}
 
   @override
   Future<void> stop() async {}

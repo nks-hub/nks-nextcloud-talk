@@ -1030,4 +1030,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get attachmentTypeUnsupported =>
       'That file type cannot be attached here.';
+
+  @override
+  String get pauseVoiceRecording => 'Pause recording';
+
+  @override
+  String get resumeVoiceRecording => 'Resume recording';
+
+  @override
+  String get voiceRecordingLevel => 'Recording level';
+
+  @override
+  String get voicePauseFailed => 'The recording could not be paused.';
+
+  @override
+  String get pauseVoiceMessage => 'Pause voice message';
+
+  @override
+  String get voiceMessagePosition => 'Playback position';
+
+  @override
+  String voiceMessageProgress(String position, String duration) {
+    return '$position of $duration';
+  }
 }

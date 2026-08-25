@@ -540,6 +540,9 @@ bool _showsIdleToolbar(VoiceMessageState state) =>
 
 VoiceMessageLabels _voiceLabels(AppLocalizations strings) => VoiceMessageLabels(
   record: strings.recordVoiceMessage,
+  pause: strings.pauseVoiceRecording,
+  resume: strings.resumeVoiceRecording,
+  level: strings.voiceRecordingLevel,
   stop: strings.stopVoiceRecording,
   play: strings.playVoicePreview,
   cancel: strings.cancelVoiceMessage,
@@ -553,6 +556,7 @@ VoiceMessageLabels _voiceLabels(AppLocalizations strings) => VoiceMessageLabels(
     VoiceMessageError.permissionRequestFailed =>
       strings.voicePermissionRequestFailed,
     VoiceMessageError.recordingFailed => strings.voiceRecordingFailed,
+    VoiceMessageError.pauseFailed => strings.voicePauseFailed,
     VoiceMessageError.invalidRecording => strings.voiceInvalidRecording,
     VoiceMessageError.playbackFailed => strings.voicePlaybackFailed,
     VoiceMessageError.submitFailed => strings.voiceSendFailed,

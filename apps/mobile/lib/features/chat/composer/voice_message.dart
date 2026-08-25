@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -11,6 +12,14 @@ abstract interface class MicrophonePermissionGateway {
 
 abstract interface class VoiceRecorder {
   Future<void> start();
+
+  Future<void> pause();
+
+  Future<void> resume();
+
+  /// Loudness of the running recording, normalised to 0..1, for the waveform
+  /// the composer draws. Silent while the session is paused.
+  Stream<double> get amplitude;
 
   Future<VoiceRecording> stop();
 
@@ -96,6 +105,7 @@ enum VoiceMessagePhase {
   idle,
   requestingPermission,
   recording,
+  paused,
   preparingPreview,
   ready,
   playing,
@@ -110,6 +120,7 @@ enum VoiceMessageError {
   permissionPermanentlyDenied,
   permissionRequestFailed,
   recordingFailed,
+  pauseFailed,
   invalidRecording,
   playbackFailed,
   submitFailed,
@@ -208,8 +219,53 @@ final class VoiceMessageController extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> stop() async {
+  /// Normalised loudness of the running recording, for the waveform.
+  Stream<double> get amplitude => recorder.amplitude;
+
+  Future<bool> pauseRecording() async {
     if (_closed || _state.phase != VoiceMessagePhase.recording) {
+      return false;
+    }
+    final generation = _operationGeneration;
+    try {
+      await recorder.pause();
+    } on Object {
+      if (_isCurrent(generation)) {
+        _setError(VoiceMessageError.pauseFailed);
+      }
+      return false;
+    }
+    if (!_isCurrent(generation)) {
+      return false;
+    }
+    _setState(const VoiceMessageState(phase: VoiceMessagePhase.paused));
+    return true;
+  }
+
+  Future<bool> resumeRecording() async {
+    if (_closed || _state.phase != VoiceMessagePhase.paused) {
+      return false;
+    }
+    final generation = _operationGeneration;
+    try {
+      await recorder.resume();
+    } on Object {
+      if (_isCurrent(generation)) {
+        _setError(VoiceMessageError.pauseFailed);
+      }
+      return false;
+    }
+    if (!_isCurrent(generation)) {
+      return false;
+    }
+    _setState(const VoiceMessageState(phase: VoiceMessagePhase.recording));
+    return true;
+  }
+
+  Future<bool> stop() async {
+    if (_closed ||
+        (_state.phase != VoiceMessagePhase.recording &&
+            _state.phase != VoiceMessagePhase.paused)) {
       return false;
     }
     final generation = ++_operationGeneration;
@@ -348,7 +404,8 @@ final class VoiceMessageController extends ChangeNotifier {
     if (_closed || _state.phase == VoiceMessagePhase.submitting) {
       return false;
     }
-    if (_state.phase == VoiceMessagePhase.recording) {
+    if (_state.phase == VoiceMessagePhase.recording ||
+        _state.phase == VoiceMessagePhase.paused) {
       ++_operationGeneration;
       try {
         await recorder.cancel();
@@ -404,7 +461,8 @@ final class VoiceMessageController extends ChangeNotifier {
     ++_playGeneration;
     final phase = _state.phase;
     final draft = _state.draft;
-    if (phase == VoiceMessagePhase.recording) {
+    if (phase == VoiceMessagePhase.recording ||
+        phase == VoiceMessagePhase.paused) {
       await _bestEffort(recorder.cancel);
     }
     if (phase == VoiceMessagePhase.playing) {
@@ -453,6 +511,9 @@ final class VoiceMessageController extends ChangeNotifier {
 final class VoiceMessageLabels {
   const VoiceMessageLabels({
     required this.record,
+    required this.pause,
+    required this.resume,
+    required this.level,
     required this.stop,
     required this.play,
     required this.cancel,
@@ -462,6 +523,9 @@ final class VoiceMessageLabels {
   });
 
   final String record;
+  final String pause;
+  final String resume;
+  final String level;
   final String stop;
   final String play;
   final String cancel;
@@ -513,13 +577,33 @@ final class VoiceMessageControls extends StatelessWidget {
         action: controller.start,
       ),
     ],
-    VoiceMessagePhase.recording => <Widget>[
+    VoiceMessagePhase.recording || VoiceMessagePhase.paused => <Widget>[
       _button(
         key: const Key('voice-cancel-recording'),
         tooltip: labels.cancel,
         icon: Icons.delete_outline_rounded,
         action: controller.cancel,
       ),
+      VoiceRecordingWaveform(
+        key: const Key('voice-waveform'),
+        amplitude: controller.amplitude,
+        label: labels.level,
+        live: state.phase == VoiceMessagePhase.recording,
+      ),
+      if (state.phase == VoiceMessagePhase.recording)
+        _button(
+          key: const Key('voice-pause'),
+          tooltip: labels.pause,
+          icon: Icons.pause_rounded,
+          action: controller.pauseRecording,
+        )
+      else
+        _button(
+          key: const Key('voice-resume'),
+          tooltip: labels.resume,
+          icon: Icons.fiber_manual_record_rounded,
+          action: controller.resumeRecording,
+        ),
       _button(
         key: const Key('voice-stop'),
         tooltip: labels.stop,
@@ -596,6 +680,134 @@ final class VoiceMessageControls extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Live loudness bars for a running recording.
+///
+/// Every bar comes from a real amplitude sample, so the widget repaints only
+/// when the recorder reports one and never schedules an animation of its own.
+/// That keeps it out of the way of `pumpAndSettle`.
+final class VoiceRecordingWaveform extends StatefulWidget {
+  const VoiceRecordingWaveform({
+    required this.amplitude,
+    required this.label,
+    required this.live,
+    super.key,
+  });
+
+  static const int barCount = 24;
+
+  final Stream<double> amplitude;
+  final String label;
+
+  /// Paused recordings keep the bars they already collected but stop
+  /// listening, so the platform can shut its amplitude polling down.
+  final bool live;
+
+  @override
+  State<VoiceRecordingWaveform> createState() => _VoiceRecordingWaveformState();
+}
+
+final class _VoiceRecordingWaveformState
+    extends State<VoiceRecordingWaveform> {
+  final List<double> _samples = <double>[];
+  StreamSubscription<double>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _listen();
+  }
+
+  @override
+  void didUpdateWidget(covariant VoiceRecordingWaveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.live == widget.live &&
+        identical(oldWidget.amplitude, widget.amplitude)) {
+      return;
+    }
+    unawaited(_subscription?.cancel());
+    _subscription = null;
+    _listen();
+  }
+
+  void _listen() {
+    if (!widget.live) {
+      return;
+    }
+    _subscription = widget.amplitude.listen((value) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _samples.add(value.clamp(0.0, 1.0));
+        if (_samples.length > VoiceRecordingWaveform.barCount) {
+          _samples.removeAt(0);
+        }
+      });
+    }, onError: (Object _) {});
+  }
+
+  @override
+  void dispose() {
+    unawaited(_subscription?.cancel());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: widget.label,
+      value: '${((_samples.isEmpty ? 0.0 : _samples.last) * 100).round()}%',
+      child: SizedBox(
+        width: 96,
+        height: 32,
+        child: CustomPaint(
+          painter: _WaveformPainter(
+            samples: List<double>.unmodifiable(_samples),
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.samples, required this.color});
+
+  final List<double> samples;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const count = VoiceRecordingWaveform.barCount;
+    final slot = size.width / count;
+    final barWidth = slot * 0.6;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = barWidth
+      ..strokeCap = StrokeCap.round;
+    final centre = size.height / 2;
+    // Newest sample sits on the right, so the bars scroll the way the ear
+    // expects while speaking.
+    final offset = count - samples.length;
+    for (var index = 0; index < samples.length; index++) {
+      final height = (samples[index] * size.height).clamp(2.0, size.height);
+      final x = (offset + index) * slot + slot / 2;
+      canvas.drawLine(
+        Offset(x, centre - height / 2),
+        Offset(x, centre + height / 2),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      !listEquals(oldDelegate.samples, samples);
 }
 
 Future<void> _bestEffort(Future<void> Function() action) async {

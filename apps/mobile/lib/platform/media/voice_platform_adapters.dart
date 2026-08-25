@@ -46,6 +46,15 @@ final class VoicePlatformException implements Exception {
   String toString() => 'VoicePlatformException(${code.name})';
 }
 
+/// How often loudness samples are requested while recording. Roughly eight
+/// samples a second is enough for the waveform to look alive without waking
+/// the platform channel on every frame.
+const Duration voiceAmplitudeInterval = Duration(milliseconds: 120);
+
+/// dBFS window the waveform maps onto its 0..1 bar height. Anything quieter
+/// than [_amplitudeFloorDb] is drawn as silence.
+const double _amplitudeFloorDb = -50;
+
 abstract interface class VoiceCaptureBackend {
   Future<bool> requestPermission();
 
@@ -57,6 +66,15 @@ abstract interface class VoiceCaptureBackend {
     required int channels,
     required int bitRate,
   });
+
+  Future<void> pause();
+
+  Future<void> resume();
+
+  /// Loudness of the running recording, normalised to 0..1. The stream only
+  /// ticks while the session is actually capturing; `record` stops its own
+  /// amplitude monitoring for the duration of a pause.
+  Stream<double> get amplitude;
 
   Future<String?> stop();
 
@@ -103,6 +121,17 @@ final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
   );
 
   @override
+  Future<void> pause() => _recorder.pause();
+
+  @override
+  Future<void> resume() => _recorder.resume();
+
+  @override
+  Stream<double> get amplitude => _recorder
+      .onAmplitudeChanged(voiceAmplitudeInterval)
+      .map((sample) => normalizedVoiceAmplitude(sample.current));
+
+  @override
   Future<String?> stop() => _recorder.stop();
 
   @override
@@ -110,6 +139,16 @@ final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
 
   @override
   Future<void> dispose() => _recorder.dispose();
+}
+
+/// Maps a dBFS reading onto the 0..1 range the waveform draws. Values are
+/// clamped instead of rejected because platforms disagree on their silence
+/// floor (`-160` on Android, `-120` elsewhere).
+double normalizedVoiceAmplitude(double decibels) {
+  if (decibels.isNaN) {
+    return 0;
+  }
+  return ((decibels - _amplitudeFloorDb) / -_amplitudeFloorDb).clamp(0.0, 1.0);
 }
 
 final class RecordMicrophonePermissionGateway
@@ -125,11 +164,11 @@ final class RecordMicrophonePermissionGateway
       : MicrophonePermissionStatus.denied;
 }
 
-/// Tells [RecordVoiceRecorder] when recording started and stopped so it can
-/// derive a duration. Wall-clock elapsed time is a reliable,
-/// container-format-agnostic proxy for audio duration here because a
-/// recording session runs continuously from [start] to [stop] with no
-/// seeking or pausing, and it avoids parsing MP4/AAC container metadata
+/// Tells [RecordVoiceRecorder] when recording started, paused and stopped so
+/// it can derive a duration. Wall-clock elapsed time is a reliable,
+/// container-format-agnostic proxy for audio duration here because the
+/// recorder counts only the stretches it was actually capturing — paused
+/// stretches are excluded — and it avoids parsing MP4/AAC container metadata
 /// just to learn how long a clip is.
 abstract interface class VoiceRecordingClock {
   DateTime now();
@@ -142,7 +181,7 @@ final class SystemVoiceRecordingClock implements VoiceRecordingClock {
   DateTime now() => DateTime.now();
 }
 
-enum _RecorderPhase { idle, starting, recording, stopping, closed }
+enum _RecorderPhase { idle, starting, recording, paused, stopping, closed }
 
 final class RecordVoiceRecorder implements VoiceRecorder {
   RecordVoiceRecorder({
@@ -195,7 +234,11 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   _RecorderPhase _phase = _RecorderPhase.idle;
   DurableAttachmentWriteSession? _session;
   DateTime? _startedAt;
+  Duration _captured = Duration.zero;
   Future<void>? _closeFuture;
+
+  @override
+  Stream<double> get amplitude => backend.amplitude;
 
   @override
   Future<void> start() async {
@@ -224,10 +267,12 @@ final class RecordVoiceRecorder implements VoiceRecorder {
         bitRate: bitRate,
       );
       _startedAt = _clock.now();
+      _captured = Duration.zero;
       _phase = _RecorderPhase.recording;
     } catch (_) {
       _session = null;
       _startedAt = null;
+      _captured = Duration.zero;
       await session?.abort();
       _phase = _RecorderPhase.idle;
       rethrow;
@@ -235,18 +280,53 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   }
 
   @override
-  Future<VoiceRecording> stop() async {
+  Future<void> pause() async {
     if (_phase == _RecorderPhase.closed) {
       throw const VoicePlatformException(VoicePlatformError.closed);
     }
     if (_phase != _RecorderPhase.recording || _session == null) {
       throw const VoicePlatformException(VoicePlatformError.noActiveRecording);
     }
+    await backend.pause();
+    _captured += _clock.now().difference(_startedAt!);
+    _startedAt = null;
+    _phase = _RecorderPhase.paused;
+  }
+
+  @override
+  Future<void> resume() async {
+    if (_phase == _RecorderPhase.closed) {
+      throw const VoicePlatformException(VoicePlatformError.closed);
+    }
+    if (_phase != _RecorderPhase.paused || _session == null) {
+      throw const VoicePlatformException(VoicePlatformError.noActiveRecording);
+    }
+    await backend.resume();
+    _startedAt = _clock.now();
+    _phase = _RecorderPhase.recording;
+  }
+
+  @override
+  Future<VoiceRecording> stop() async {
+    if (_phase == _RecorderPhase.closed) {
+      throw const VoicePlatformException(VoicePlatformError.closed);
+    }
+    if ((_phase != _RecorderPhase.recording &&
+            _phase != _RecorderPhase.paused) ||
+        _session == null) {
+      throw const VoicePlatformException(VoicePlatformError.noActiveRecording);
+    }
+    final startedAt = _startedAt;
+    final captured =
+        _captured +
+        (startedAt == null
+            ? Duration.zero
+            : _clock.now().difference(startedAt));
     _phase = _RecorderPhase.stopping;
     final session = _session!;
-    final startedAt = _startedAt!;
     _session = null;
     _startedAt = null;
+    _captured = Duration.zero;
     PreparedAttachmentSource? source;
     try {
       final returnedPath = await backend.stop();
@@ -262,7 +342,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       // Re-verifies the committed file still matches the recorded size and
       // hash before the recording is handed back to the caller.
       await store.resolveVerifiedPath(source);
-      final duration = _clock.now().difference(startedAt);
+      final duration = captured;
       if (duration <= Duration.zero) {
         throw const VoicePlatformException(
           VoicePlatformError.invalidRecording,
@@ -290,6 +370,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     final session = _session;
     _session = null;
     _startedAt = null;
+    _captured = Duration.zero;
     Object? firstFailure;
     StackTrace? firstStack;
     try {
@@ -359,6 +440,13 @@ abstract interface class VoicePlaybackBackend {
   /// is never played back as if it were something else.
   Future<void> playFile(String path, {required String mimeType});
 
+  Future<void> pause();
+
+  Future<void> resume();
+
+  /// Moves the playhead of the currently loaded file.
+  Future<void> seek(Duration position);
+
   Future<void> stop();
 
   Future<void> dispose();
@@ -382,6 +470,15 @@ final class AudioplayersVoicePlaybackBackend implements VoicePlaybackBackend {
   @override
   Future<void> playFile(String path, {required String mimeType}) =>
       _player.play(DeviceFileSource(path, mimeType: mimeType));
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> resume() => _player.resume();
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
 
   @override
   Future<void> stop() => _player.stop();

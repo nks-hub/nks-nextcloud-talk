@@ -354,5 +354,22 @@
   "attachFromFile": "Choose a file",
   "attachmentCameraDenied": "Taking a picture needs camera access. Grant it in the system settings and try again.",
   "attachmentCameraUnavailable": "No camera is available on this device.",
-  "attachmentTypeUnsupported": "That file type cannot be attached here."
+  "attachmentTypeUnsupported": "That file type cannot be attached here.",
+  "pauseVoiceRecording": "Pause recording",
+  "resumeVoiceRecording": "Resume recording",
+  "voiceRecordingLevel": "Recording level",
+  "voicePauseFailed": "The recording could not be paused.",
+  "pauseVoiceMessage": "Pause voice message",
+  "voiceMessagePosition": "Playback position",
+  "voiceMessageProgress": "{position} of {duration}",
+  "@voiceMessageProgress": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  }
 }
