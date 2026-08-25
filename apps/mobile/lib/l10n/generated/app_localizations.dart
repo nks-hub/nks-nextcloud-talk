@@ -1795,6 +1795,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The message could not be forwarded.'**
   String get messageForwardFailed;
+
+  /// No description provided for @saveImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Save image'**
+  String get saveImage;
+
+  /// No description provided for @shareImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Share image'**
+  String get shareImage;
+
+  /// No description provided for @imageSavedToGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Image saved to your gallery.'**
+  String get imageSavedToGallery;
+
+  /// No description provided for @imageSavePermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving needs access to your gallery. Grant it in the system settings and try again.'**
+  String get imageSavePermissionDenied;
+
+  /// No description provided for @imageSaveOutOfSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'There is not enough free space to save the image.'**
+  String get imageSaveOutOfSpace;
+
+  /// No description provided for @imageSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be saved.'**
+  String get imageSaveFailed;
+
+  /// No description provided for @imageShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The image could not be shared.'**
+  String get imageShareFailed;
 }
 
 class _AppLocalizationsDelegate

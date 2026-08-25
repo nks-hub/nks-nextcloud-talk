@@ -331,5 +331,12 @@
       }
     }
   },
-  "messageForwardFailed": "The message could not be forwarded."
+  "messageForwardFailed": "The message could not be forwarded.",
+  "saveImage": "Save image",
+  "shareImage": "Share image",
+  "imageSavedToGallery": "Image saved to your gallery.",
+  "imageSavePermissionDenied": "Saving needs access to your gallery. Grant it in the system settings and try again.",
+  "imageSaveOutOfSpace": "There is not enough free space to save the image.",
+  "imageSaveFailed": "The image could not be saved.",
+  "imageShareFailed": "The image could not be shared."
 }

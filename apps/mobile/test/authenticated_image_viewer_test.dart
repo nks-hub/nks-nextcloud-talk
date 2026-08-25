@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/authenticated_image_viewer.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_image_exporter.dart';
 
 import 'test_support.dart';
 
@@ -132,6 +134,183 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('saving hands the shown bytes to the gallery and says so', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((_) async => _imageResponse()),
+        exporter: exporter,
+        imageName: 'holiday photo (1).JPG',
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    await tester.tap(find.byKey(const Key('authenticated-image-save')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(exporter.saved, hasLength(1));
+    expect(exporter.saved.single.contentType, 'image/png');
+    expect(
+      exporter.saved.single.bytes,
+      base64Decode(_onePixelPngBase64).length,
+    );
+    expect(
+      exporter.saved.single.fileName,
+      'holiday_photo__1_',
+      reason: 'a peer-supplied name is never passed through as a path',
+    );
+    expect(find.text('Image saved to your gallery.'), findsOneWidget);
+  });
+
+  testWidgets('a refused gallery permission is spoken out, not swallowed', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter(
+      saveResult: ChatImageSaveResult.permissionDenied,
+    );
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((_) async => _imageResponse()),
+        exporter: exporter,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    await tester.tap(find.byKey(const Key('authenticated-image-save')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(
+      find.textContaining('Grant it in the system settings'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('sharing offers the sheet without reporting anything', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((_) async => _imageResponse()),
+        exporter: exporter,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    await tester.tap(find.byKey(const Key('authenticated-image-share')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(exporter.shared, hasLength(1));
+    expect(exporter.shared.single.contentType, 'image/png');
+    expect(
+      exporter.shared.single.bytes,
+      base64Decode(_onePixelPngBase64).length,
+    );
+    expect(
+      find.byType(SnackBar),
+      findsNothing,
+      reason: 'a dismissed sheet is not an error',
+    );
+  });
+
+  testWidgets('an unavailable share sheet is reported', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((_) async => _imageResponse()),
+        exporter: _RecordingExporter(shareOffered: false),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    await tester.tap(find.byKey(const Key('authenticated-image-share')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('The image could not be shared.'), findsOneWidget);
+  });
+
+  testWidgets('save and share stay disabled while there is nothing to export', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      _app(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            const Stream<List<int>>.empty(),
+            503,
+          ),
+        ),
+        exporter: exporter,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    expect(find.byKey(const Key('authenticated-image-retry')), findsOneWidget);
+    for (final key in <String>[
+      'authenticated-image-save',
+      'authenticated-image-share',
+    ]) {
+      final button = tester.widget<IconButton>(
+        find.descendant(
+          of: find.byKey(Key(key)),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(button.onPressed, isNull, reason: key);
+    }
+    expect(exporter.saved, isEmpty);
+    expect(exporter.shared, isEmpty);
+  });
+
+  group('chatImageBaseName', () {
+    test('keeps a plain name and drops the extension', () {
+      expect(chatImageBaseName('sunset.jpeg'), 'sunset');
+    });
+
+    test('never lets a peer name escape into a path', () {
+      expect(chatImageBaseName('../../etc/passwd'), 'passwd');
+      expect(chatImageBaseName(r'C:\Windows\system.ini'), 'system');
+      expect(chatImageBaseName('a/b\\c.png'), 'c');
+    });
+
+    test('falls back when nothing usable is left', () {
+      expect(chatImageBaseName(''), 'image');
+      expect(chatImageBaseName('...'), 'image');
+      expect(chatImageBaseName('/'), 'image');
+    });
+
+    test('bounds the length', () {
+      expect(chatImageBaseName('a' * 200).length, 64);
+    });
+  });
+
+  test('the share file name carries the extension for the content type', () {
+    expect(
+      chatImageFileName(fileName: 'sunset', contentType: 'image/jpeg'),
+      'sunset.jpg',
+    );
+    expect(
+      chatImageFileName(fileName: 'sunset', contentType: 'image/png'),
+      'sunset.png',
+    );
+    expect(
+      chatImageFileName(fileName: 'sunset', contentType: 'application/x-none'),
+      'sunset.img',
+    );
+  });
 }
 
 Future<void> _pumpRouteAndFuture(WidgetTester tester) async {
@@ -146,19 +325,31 @@ Future<void> _pumpRouteAndFuture(WidgetTester tester) async {
 Widget _app({
   required ChatMediaRepository repository,
   TextScaler textScaler = TextScaler.noScaling,
+  ChatImageExporter? exporter,
+  String imageName = 'Synthetic image',
 }) {
   return localizedTestApp(
     home: MediaQuery(
       data: MediaQueryData(size: const Size(320, 640), textScaler: textScaler),
-      child: _ViewerLauncher(repository: repository),
+      child: _ViewerLauncher(
+        repository: repository,
+        exporter: exporter ?? _RecordingExporter(),
+        imageName: imageName,
+      ),
     ),
   );
 }
 
 final class _ViewerLauncher extends StatelessWidget {
-  const _ViewerLauncher({required this.repository});
+  const _ViewerLauncher({
+    required this.repository,
+    required this.exporter,
+    required this.imageName,
+  });
 
   final ChatMediaRepository repository;
+  final ChatImageExporter exporter;
+  final String imageName;
 
   @override
   Widget build(BuildContext context) {
@@ -170,8 +361,9 @@ final class _ViewerLauncher extends StatelessWidget {
             context,
             account: _account,
             previewUri: _previewUri,
-            imageName: 'Synthetic image',
+            imageName: imageName,
             repository: repository,
+            exporter: exporter,
           ),
           child: const SizedBox.square(
             dimension: 96,
@@ -180,6 +372,46 @@ final class _ViewerLauncher extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+final class _RecordingExporter implements ChatImageExporter {
+  _RecordingExporter({
+    this.saveResult = ChatImageSaveResult.saved,
+    this.shareOffered = true,
+  });
+
+  final ChatImageSaveResult saveResult;
+  final bool shareOffered;
+  final List<({String fileName, String contentType, int bytes})> saved = [];
+  final List<({String fileName, String contentType, int bytes})> shared = [];
+
+  @override
+  Future<ChatImageSaveResult> saveToGallery({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+  }) async {
+    saved.add((
+      fileName: fileName,
+      contentType: contentType,
+      bytes: bytes.lengthInBytes,
+    ));
+    return saveResult;
+  }
+
+  @override
+  Future<bool> share({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+  }) async {
+    shared.add((
+      fileName: fileName,
+      contentType: contentType,
+      bytes: bytes.lengthInBytes,
+    ));
+    return shareOffered;
   }
 }
 

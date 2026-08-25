@@ -3,6 +3,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Saving a chat picture to the device gallery. Android 10 and newer go
+         through MediaStore and need no permission at all, so this is capped at
+         API 29; only the minSdk 24 to 29 range still asks the user. A refusal
+         surfaces in the image viewer as a message, never as a silent no-op. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
     <!-- App icon unread badge on launchers that predate Android 8's native
          badges or need a manufacturer-specific API (app_badge_plus). These
          are normal, non-dangerous permissions; a launcher without support

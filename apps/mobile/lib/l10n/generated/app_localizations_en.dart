@@ -951,4 +951,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageForwardFailed => 'The message could not be forwarded.';
+
+  @override
+  String get saveImage => 'Save image';
+
+  @override
+  String get shareImage => 'Share image';
+
+  @override
+  String get imageSavedToGallery => 'Image saved to your gallery.';
+
+  @override
+  String get imageSavePermissionDenied =>
+      'Saving needs access to your gallery. Grant it in the system settings and try again.';
+
+  @override
+  String get imageSaveOutOfSpace =>
+      'There is not enough free space to save the image.';
+
+  @override
+  String get imageSaveFailed => 'The image could not be saved.';
+
+  @override
+  String get imageShareFailed => 'The image could not be shared.';
 }

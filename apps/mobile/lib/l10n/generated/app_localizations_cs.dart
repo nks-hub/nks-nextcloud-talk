@@ -952,4 +952,27 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get messageForwardFailed => 'Zprávu se nepodařilo přeposlat.';
+
+  @override
+  String get saveImage => 'Uložit obrázek';
+
+  @override
+  String get shareImage => 'Sdílet obrázek';
+
+  @override
+  String get imageSavedToGallery => 'Obrázek byl uložen do galerie.';
+
+  @override
+  String get imageSavePermissionDenied =>
+      'Uložení vyžaduje přístup do galerie. Povolte ho v nastavení systému a zkuste to znovu.';
+
+  @override
+  String get imageSaveOutOfSpace =>
+      'V zařízení není dost volného místa pro uložení obrázku.';
+
+  @override
+  String get imageSaveFailed => 'Obrázek se nepodařilo uložit.';
+
+  @override
+  String get imageShareFailed => 'Obrázek se nepodařilo sdílet.';
 }
