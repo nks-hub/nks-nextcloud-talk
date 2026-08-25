@@ -11,10 +11,13 @@ library;
 // Ruled out already: the pane changes themselves (chat_message_jump_test and
 // chat_forward_message_test both still pass against them), the bounded
 // `settle` helper, a missing chat scope, unanswered avatar requests, and both
-// 304 and 403 as the catch-all sync response. The remaining suspects are the
-// room payload edits this file makes (participant type, permissions, dropped
-// `remoteServer`) and the extra mock branches. Rebuilding the setup on
-// chat_message_jump_test's harness is the shortest way to finish this.
+// 304 and 403 as the catch-all sync response. Also ruled out since: seeding
+// the account row with the same talk feature set the capabilities response
+// reports, which would have removed a write-back that re-triggers the
+// accounts stream. The remaining suspects are the room payload edits this
+// file makes (participant type, permissions, dropped `remoteServer`) and the
+// extra mock branches. Rebuilding the setup on chat_message_jump_test's
+// harness is the shortest way to finish this.
 
 import 'dart:convert';
 
