@@ -2395,6 +2395,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server would not take this picture.'**
   String get roomDetailsAvatarRejected;
+
+  /// No description provided for @messageActionPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin message'**
+  String get messageActionPin;
+
+  /// No description provided for @messageActionUnpin.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin message'**
+  String get messageActionUnpin;
+
+  /// No description provided for @messagePinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Message pinned'**
+  String get messagePinned;
+
+  /// No description provided for @messageUnpinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Message unpinned'**
+  String get messageUnpinned;
+
+  /// No description provided for @pinnedMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned message'**
+  String get pinnedMessageLabel;
+
+  /// No description provided for @pinnedMessageOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Show pinned message'**
+  String get pinnedMessageOpen;
+
+  /// No description provided for @pinnedMessageHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide for me'**
+  String get pinnedMessageHide;
+
+  /// No description provided for @messageActionRemind.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind me'**
+  String get messageActionRemind;
+
+  /// No description provided for @reminderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind me about this message'**
+  String get reminderTitle;
+
+  /// No description provided for @reminderLaterToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Later today'**
+  String get reminderLaterToday;
+
+  /// No description provided for @reminderTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow morning'**
+  String get reminderTomorrow;
+
+  /// No description provided for @reminderThisWeekend.
+  ///
+  /// In en, this message translates to:
+  /// **'This weekend'**
+  String get reminderThisWeekend;
+
+  /// No description provided for @reminderNextWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Next week'**
+  String get reminderNextWeek;
+
+  /// No description provided for @reminderCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date and time'**
+  String get reminderCustom;
+
+  /// No description provided for @reminderRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove reminder'**
+  String get reminderRemove;
+
+  /// No description provided for @reminderSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder set for {time}'**
+  String reminderSet(String time);
+
+  /// No description provided for @reminderRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder removed'**
+  String get reminderRemoved;
+
+  /// No description provided for @reminderExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder set for {time}'**
+  String reminderExisting(String time);
+
+  /// No description provided for @scheduleMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send later'**
+  String get scheduleMessage;
+
+  /// No description provided for @scheduleMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this message later'**
+  String get scheduleMessageTitle;
+
+  /// No description provided for @scheduleMessageSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Message scheduled for {time}'**
+  String scheduleMessageSet(String time);
+
+  /// No description provided for @scheduledMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled messages'**
+  String get scheduledMessagesTitle;
+
+  /// No description provided for @scheduledMessagesOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled messages'**
+  String get scheduledMessagesOpen;
+
+  /// No description provided for @scheduledMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is scheduled in this conversation.'**
+  String get scheduledMessagesEmpty;
+
+  /// No description provided for @scheduledMessageDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete scheduled message'**
+  String get scheduledMessageDelete;
+
+  /// No description provided for @scheduledMessageDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled message deleted'**
+  String get scheduledMessageDeleted;
+
+  /// No description provided for @scheduleTimeInPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a time in the future.'**
+  String get scheduleTimeInPast;
 }
 
 class _AppLocalizationsDelegate

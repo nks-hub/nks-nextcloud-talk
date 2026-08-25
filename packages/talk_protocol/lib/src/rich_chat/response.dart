@@ -338,8 +338,22 @@ List<Object?> _list(Object? value, String path, {required int maximum}) {
   return result;
 }
 
+/// Accepts every shape Talk uses for "this operation returned no payload".
+///
+/// The three no-payload operations do not agree on one encoding: hiding a pin
+/// returns `null` (`ChatController::hidePinnedMessage` returns
+/// `new DataResponse(null, Http::STATUS_OK)`), while deleting a reminder or a
+/// scheduled message returns an empty object, which OCS also renders as an
+/// empty array once the PHP array is empty. Requiring only a list here made a
+/// real `{}` response from those two deletes look like a corrupted payload.
 void _requireEmpty(Object? data) {
   if (data == null) {
+    return;
+  }
+  if (data is Map<String, Object?>) {
+    if (data.isNotEmpty) {
+      _responseFailure(r'$.ocs.data');
+    }
     return;
   }
   final list = requireList(

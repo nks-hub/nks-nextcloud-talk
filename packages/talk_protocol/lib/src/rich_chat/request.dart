@@ -386,6 +386,26 @@ final class RichChatRequest {
     );
   }
 
+  /// `POST /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/pin`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:2158-2208`
+  /// (`#[ApiRoute]` at :2177, `pinMessage()` at :2182), exposed as
+  /// `openapi-full.json` operation `chat-pin-message`. Not covered by
+  /// `docs/chat.md`, which has no pin section in `f2958bb` or in upstream
+  /// `main`; the OpenAPI document is generated from the same controller
+  /// PHPDoc that declares the route, and both official clients ship against
+  /// it - Talk Android `ApiUtils.kt` `getUrlForChatMessagePinning`, Talk iOS
+  /// `NCAPIController.swift` `pinMessage`.
+  ///
+  /// `pinUntil` is optional server-side with default `0`, meaning "pinned
+  /// until someone unpins it"; a non-zero value must be in the future or the
+  /// server answers `400 {"error": "until"}`. The route carries
+  /// `#[RequireModeratorParticipant]`, which is why [profile] must report
+  /// [RichChatCapabilityProfile.pin] - capability `pinned-messages`
+  /// (`docs/capabilities.md:206`) *and* moderator.
+  ///
+  /// The `200` body is the system message about the pinning, carrying the
+  /// pinned message itself as its parent.
   factory RichChatRequest.pinMessage({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -417,6 +437,12 @@ final class RichChatRequest {
     );
   }
 
+  /// `DELETE /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/pin`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:2210-2249`
+  /// (`#[ApiRoute]` at :2227, `unpinMessage()` at :2232), OpenAPI operation
+  /// `chat-unpin-message`. Moderator-only like the pin itself, and the `200`
+  /// body has the same system-message-with-parent shape.
   factory RichChatRequest.unpinMessage({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -442,6 +468,18 @@ final class RichChatRequest {
     );
   }
 
+  /// `DELETE /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/pin/self`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:2251-2275`
+  /// (`#[ApiRoute]` at :2267, `hidePinnedMessage()` at :2272), OpenAPI
+  /// operation `chat-hide-pinned-message`.
+  ///
+  /// This one is `#[RequireParticipant]`, not moderator, because it only
+  /// records the hide against the calling attendee - hence the weaker
+  /// [RichChatCapabilityProfile.hidePinned] gate. It answers with
+  /// `data: null`. The hidden ID surfaces as the room's `hiddenPinnedId`, and
+  /// a later pin resets it (`lib/Service/RoomService.php:1007-1020` calls
+  /// `resetHiddenPinnedId`), so a fresh pin reappears for everyone.
   factory RichChatRequest.hidePinnedMessage({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -467,6 +505,12 @@ final class RichChatRequest {
     );
   }
 
+  /// `GET /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/reminder`.
+  ///
+  /// Evidence: spreed `f2958bb` `docs/chat.md:382-405` ("Get a reminder"),
+  /// `lib/Controller/ChatController.php:1656`, OpenAPI operation
+  /// `chat-get-reminder`. `404` is documented as covering "the user has no
+  /// reminder for this message", so it is a state, not a transport failure.
   factory RichChatRequest.getReminder({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -487,6 +531,13 @@ final class RichChatRequest {
     userAgent: userAgent,
   );
 
+  /// `POST /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/reminder`.
+  ///
+  /// Evidence: spreed `f2958bb` `docs/chat.md:353-380` ("Set a reminder"),
+  /// `lib/Controller/ChatController.php:1617`, OpenAPI operation
+  /// `chat-set-reminder`. `timestamp` is the required Unix timestamp at which
+  /// the reminder fires; success is `201`, not `200`. Capability
+  /// `remind-me-later` (`docs/capabilities.md:126`).
   factory RichChatRequest.setReminder({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -514,6 +565,11 @@ final class RichChatRequest {
     );
   }
 
+  /// `DELETE /ocs/v2.php/apps/spreed/api/v1/chat/{token}/{messageId}/reminder`.
+  ///
+  /// Evidence: spreed `f2958bb` `docs/chat.md:407-420` ("Delete a reminder"),
+  /// `lib/Controller/ChatController.php:1695`, OpenAPI operation
+  /// `chat-delete-reminder`. Answers `200` with an empty payload.
   factory RichChatRequest.deleteReminder({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -534,6 +590,17 @@ final class RichChatRequest {
     userAgent: userAgent,
   );
 
+  /// `GET /ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:466-497`
+  /// (capability line at :466-471, `#[ApiRoute]` at :482,
+  /// `getScheduledMessages()` at :486), OpenAPI operation
+  /// `chat-get-scheduled-messages`; Talk Android `ApiUtils.kt`
+  /// `getUrlForScheduledMessages`. Not covered by `docs/chat.md`, which has
+  /// no schedule section.
+  ///
+  /// The result is scoped to this room *and* this participant, so it is also
+  /// the way to settle an ambiguous [createScheduled].
   factory RichChatRequest.getScheduled({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -556,6 +623,23 @@ final class RichChatRequest {
     );
   }
 
+  /// `POST /ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:500-596`
+  /// (capability line at :506, `#[ApiRoute]` at :528, `scheduleMessage()` at
+  /// :532), OpenAPI operation `chat-schedule-message`; Talk Android
+  /// `NcApiCoroutines.kt` `sendScheduleChatMessage` sends exactly `message`,
+  /// `sendAt`, `silent`, `threadTitle`, `threadId` and `replyTo`.
+  ///
+  /// `message` and `sendAt` are required; `threadTitle` and `threadId` need
+  /// the `threads` capability. Success is `201`. The capability is
+  /// `scheduled-messages` and is announced only under `features-local`
+  /// (`docs/capabilities.md:209`), so a federated conversation must never
+  /// offer it - which is what [RichChatCapabilityProfile.scheduled] encodes.
+  ///
+  /// `replyTo` is deliberately not exposed here: scheduling a reply needs the
+  /// same cross-room and thread admission rules as an immediate reply, and
+  /// those live in the chat send contract, not this one.
   factory RichChatRequest.createScheduled({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -601,6 +685,17 @@ final class RichChatRequest {
     );
   }
 
+  /// `POST /ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule/{messageId}`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:601-679`
+  /// (capability line at :603, `#[ApiRoute]` at :622, `editScheduledMessage()`
+  /// at :627, the `202` return at :679), OpenAPI operation
+  /// `chat-edit-scheduled-message`.
+  ///
+  /// `POST`, not `PUT`, and success is `202`. Only `message`, `sendAt`,
+  /// `silent` and `threadTitle` are editable - `replyTo` and `threadId` are
+  /// not. The schedule identifier is a Snowflake **string**, unlike the
+  /// integer `messageId` used everywhere else in the chat API.
   factory RichChatRequest.editScheduled({
     required AccountId accountId,
     required ChatRequestId requestId,
@@ -642,6 +737,12 @@ final class RichChatRequest {
     );
   }
 
+  /// `DELETE /ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule/{messageId}`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php:682-701`
+  /// (PHP method `deleteScheduleMessage`), OpenAPI operation
+  /// `chat-delete-schedule-message`; Talk Android `NcApiCoroutines.kt`
+  /// `deleteScheduleMessage`. Answers `200` with an empty object.
   factory RichChatRequest.deleteScheduled({
     required AccountId accountId,
     required ChatRequestId requestId,
