@@ -70,6 +70,8 @@
   "emojiCategoryTravel": "Cestování",
   "emojiCategoryObjects": "Předměty",
   "emojiCategorySymbols": "Symboly",
+  "mentionSuggestionsEmpty": "Žádné shody",
+  "mentionSuggestionsError": "Návrhy se nepodařilo načíst",
   "openGiphyPicker": "Otevřít výběr GIFů",
   "giphyChecking": "Kontroluji dostupnost GIFů…",
   "giphyRetry": "Zkusit znovu načíst GIFy",

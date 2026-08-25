@@ -70,6 +70,8 @@
   "emojiCategoryTravel": "Travel",
   "emojiCategoryObjects": "Objects",
   "emojiCategorySymbols": "Symbols",
+  "mentionSuggestionsEmpty": "No matches",
+  "mentionSuggestionsError": "Couldn't load suggestions",
   "openGiphyPicker": "Open GIF picker",
   "giphyChecking": "Checking GIF availability…",
   "giphyRetry": "Try GIF integration again",

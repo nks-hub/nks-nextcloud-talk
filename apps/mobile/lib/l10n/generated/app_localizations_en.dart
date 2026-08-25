@@ -247,6 +247,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emojiCategorySymbols => 'Symbols';
 
   @override
+  String get mentionSuggestionsEmpty => 'No matches';
+
+  @override
+  String get mentionSuggestionsError => 'Couldn\'t load suggestions';
+
+  @override
   String get openGiphyPicker => 'Open GIF picker';
 
   @override

@@ -23,6 +23,7 @@ import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/emoji_picker.dart';
 import 'composer/giphy.dart';
+import 'composer/mention_suggestions.dart';
 
 final class ChatRoomScreen extends StatelessWidget {
   const ChatRoomScreen({
@@ -766,6 +767,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final attachmentDependencies = widget.conversation.readOnly == 0
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
+    final mentionSource = widget.conversation.readOnly == 0
+        ? ref.watch(
+            mentionSuggestionSourceProvider((
+              accountId: widget.account.id,
+              roomToken: widget.conversation.token,
+            )),
+          )
+        : null;
     final messages = messagesValue.valueOrNull ?? const <CachedChatMessage>[];
     final operations =
         operationsValue.valueOrNull ?? const <StoredTextSendOperation>[];
@@ -896,6 +905,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           controller: _composer,
           sending: _sending,
           readOnly: widget.conversation.readOnly != 0,
+          mentionSource: mentionSource?.valueOrNull,
           mediaComposer: attachmentDependencies == null
               ? const SizedBox.shrink()
               : _buildMediaComposer(
@@ -1630,6 +1640,7 @@ final class _ChatComposer extends StatelessWidget {
     required this.mediaComposer,
     required this.replyTo,
     required this.onCancelReply,
+    required this.mentionSource,
   });
 
   final TextEditingController controller;
@@ -1638,6 +1649,7 @@ final class _ChatComposer extends StatelessWidget {
   final Widget mediaComposer;
   final CachedChatMessage? replyTo;
   final VoidCallback onCancelReply;
+  final MentionSuggestionSource? mentionSource;
 
   @override
   Widget build(BuildContext context) {
@@ -1671,6 +1683,15 @@ final class _ChatComposer extends StatelessWidget {
                         message: replyTo!,
                         onCancel: onCancelReply,
                       ),
+                    MentionSuggestionsBar(
+                      controller: controller,
+                      source: mentionSource,
+                      enabled: !sending,
+                      labels: MentionSuggestionsLabels(
+                        noResults: strings.mentionSuggestionsEmpty,
+                        error: strings.mentionSuggestionsError,
+                      ),
+                    ),
                     TextField(
                       key: const Key('chat-composer'),
                       controller: controller,

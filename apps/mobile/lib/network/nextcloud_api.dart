@@ -90,6 +90,8 @@ final class HttpNextcloudApi {
   static const _avatarMaximumBytes = 2 * 1024 * 1024;
   static const _webPushMaximumBytes = 64 * 1024;
   static const _participantsMaximumBytes = 2 * 1024 * 1024;
+  static const _mentionsMaximumBytes = 1 * 1024 * 1024;
+  static const _mentionsAllowedStatusCodes = {200, 401, 404, 429, 503};
   static const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
   static const _signalingSettingsAllowedStatusCodes = {200, 401, 404, 500, 503};
   static const _participantsAllowedStatusCodes = {
@@ -458,6 +460,30 @@ final class HttpNextcloudApi {
       statusCode: payload.statusCode,
       body: payload.body,
       headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
+  Future<RichChatResponse> getMentionSuggestions({
+    required RichChatRequest request,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final httpRequest = _request('GET', request.uri, abortTrigger)
+      ..headers.addAll({
+        ...request.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      httpRequest,
+      allowedStatusCodes: _mentionsAllowedStatusCodes,
+      maximumBytes: _mentionsMaximumBytes,
+    );
+    return decodeRichChatResponse(
+      request: request,
+      statusCode: payload.statusCode,
+      body: payload.body,
     );
   }
 

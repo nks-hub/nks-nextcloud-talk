@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,7 @@ import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
+import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/newconversation/new_conversation_service.dart';
 import 'features/conversations/deep_link_bridge.dart';
@@ -382,6 +384,84 @@ final chatAttachmentDependenciesProvider = FutureProvider.autoDispose
         service: service,
         resolver: resolver,
         profile: profile,
+      );
+    });
+
+typedef MentionSuggestionsRoomKey = ({String accountId, String roomToken});
+
+/// Resolves the account, room and freshly fetched capabilities needed to
+/// query `@`-mention suggestions. A failure here (missing account, missing
+/// credentials, capabilities unavailable, mentions unsupported by the room)
+/// just leaves mentions unavailable for this composer session; the chat
+/// pane's own sync error handling already covers the underlying account and
+/// connectivity problems.
+final mentionSuggestionSourceProvider = FutureProvider.autoDispose
+    .family<MentionSuggestionSource, MentionSuggestionsRoomKey>((
+      ref,
+      key,
+    ) async {
+      final accounts = ref.watch(accountRepositoryProvider);
+      final chat = ref.watch(chatRepositoryProvider);
+      final credentials = ref.watch(credentialVaultProvider);
+      final api = ref.watch(nextcloudApiProvider);
+
+      final account = await accounts.getAccount(key.accountId);
+      if (account == null) {
+        throw const MentionSuggestionException(
+          MentionSuggestionError.unsupported,
+        );
+      }
+      final conversation = await chat.getConversation(
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+      );
+      if (conversation == null) {
+        throw const MentionSuggestionException(
+          MentionSuggestionError.unsupported,
+        );
+      }
+      final room = ConversationRoom.fromJson(
+        jsonDecode(conversation.rawJson),
+      );
+      final appPassword = await credentials.readAppPassword(key.accountId);
+      if (appPassword == null || appPassword.isEmpty) {
+        throw const MentionSuggestionException(
+          MentionSuggestionError.unsupported,
+        );
+      }
+      final server = ServerBase.parse(account.serverUrl);
+      final capabilities = await api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      );
+      if (!capabilities.hasTalk) {
+        throw const MentionSuggestionException(
+          MentionSuggestionError.unsupported,
+        );
+      }
+      final rawSpreed = capabilities.capabilities['spreed'];
+      final spreed = rawSpreed is Map<String, Object?>
+          ? rawSpreed
+          : const <String, Object?>{};
+      final role = participantRoleFor(room.participantType);
+      final profile = RichChatCapabilityProfile.fromTalkFeatures(
+        talkFeatures: spreed['features'] ?? const <Object?>[],
+        talkLocalFeatures: spreed['features-local'] ?? const <Object?>[],
+        federated: room.isFederated,
+        moderator:
+            role == ParticipantRole.moderator ||
+            role == ParticipantRole.guestModerator,
+        participantPermissions: room.attendeePermissions,
+      );
+      return HttpMentionSuggestionSource(
+        accountId: AccountId.parse(key.accountId),
+        server: server,
+        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
+        profile: profile,
+        loginName: account.loginName,
+        appPassword: appPassword,
+        api: api,
       );
     });
 

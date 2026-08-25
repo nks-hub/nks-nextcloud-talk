@@ -248,6 +248,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get emojiCategorySymbols => 'Symboly';
 
   @override
+  String get mentionSuggestionsEmpty => 'Žádné shody';
+
+  @override
+  String get mentionSuggestionsError => 'Návrhy se nepodařilo načíst';
+
+  @override
   String get openGiphyPicker => 'Otevřít výběr GIFů';
 
   @override
