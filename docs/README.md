@@ -7,11 +7,25 @@ Dokumentace je rozdělená podle stavu poznání:
   synchronizační invarianty a implementační brány.
 - [Návrhy](plans/README.md) rozpracovávají doporučené nebo přijaté provozní
   toky a jejich hranice.
-- [Audit dokončení](architecture/completion-audit.md) odděluje doloženou
-  analýzu od dosud neexistující aplikace, gateway a runtime důkazů.
-- [Push gateway API](architecture/push-gateway-api.md) váže skutečný
-  Notifications wire formát na OpenAPI, kryptografické fixture a spustitelnou
-  validaci.
+- [Audit dokončení](architecture/completion-audit.md) odděluje spustitelný
+  Flutter základ od stále nedokončené produktové parity.
+- [Stav vývoje k 25. srpnu 2026](architecture/development-status-2026-08-25.md)
+  je aktuální funkční matice, Android how-to, push topologie a prioritní fronta.
+  Snapshot odděluje 354 úspěšných Flutter testů a jeden credential-gated skip,
+  569/569 testů `talk_protocol`, Android push unit 16/16 a emulator connected
+  15/15, skutečné live důkazy a dosud neověřené řezy.
+- [Flutter aplikační základ](architecture/flutter-foundation.md) popisuje
+  implementovaný login, secure storage, Drift, adaptivní layout a runtime
+  důkazy pro Android a Windows.
+- [Push a FCM](research/push-fcm.md) popisuje přímý Android Notifications Web
+  Push bez vlastní gateway a samostatnou APNs/PushKit hranici pro iOS.
+- [Giphy integrace](research/giphy-integration.md) popisuje serverové
+  search/trending, skrytou Talk wire reference a skutečný inline animovaný GIF.
+  Wire URL se nesmí zobrazit jako zpráva a není attachment; jediným viditelným
+  externím odkazem je GIPHY attribution v pickeru.
+- [Historický push-v2 gateway kontrakt](architecture/push-gateway-api.md)
+  zůstává spustitelným protokolovým důkazem, ale není zvolenou Android
+  produktovou topologií.
 - [Přidání Nextcloud účtu](architecture/client-bootstrap-api.md) popisuje
   normalizaci serveru, Login Flow v2, capabilities, spustitelné trust fixture a
   první pure Dart implementaci.

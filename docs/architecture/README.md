@@ -1,21 +1,36 @@
 # Architektura
 
-Stav: návrh a produkční pure Dart bootstrap, conversation, chat, rich-chat,
-attachment, signaling preparation i push-client runtime. Protokolové kontrakty
-vznikly licenčně neutrálně; nový
-mobilní klient je licencovaný pod `GPL-3.0-or-later`. Flutter scaffold dosud
-nevznikl. Android `applicationId` je
-přijaté jako
-`com.nkshub.nextcloudtalk`; iOS bundle ID zůstává otevřené.
+Stav: spustitelný Flutter základ a produkční pure Dart bootstrap, conversation,
+chat, rich-chat, attachment, signaling preparation i historický push-v2
+runtime. Klient je licencovaný pod `GPL-3.0-or-later` a používá identitu
+`com.nkshub.nextcloudtalk` na Androidu, iOS a macOS. Jedna Flutter codebase cílí
+také na Windows a Linux. Platformní runnery uzavírá commit `cf13cce`; jejich
+existence sama neprokazuje podepsaný build ani live lifecycle všech platforem.
+
+Čerstvá automatizovaná brána má `flutter analyze` bez nálezu, 354 úspěšných
+Flutter testů s jedním credential-gated live skipem a 569/569 testů
+`talk_protocol` po opravě `d0660cc`. Android push v `3c74165` navíc prošel 16/16
+Kotlin unit a 15/15 connected testy na `chatujmePixel`. Přesné rozlišení kódu,
+automatizace, live důkazů a otevřených částí vede
+[aktuální stav vývoje](development-status-2026-08-25.md).
 
 ## Výsledek návrhu
 
-Přijatá nejmenší úplná architektura má tři deployovatelné nebo samostatně
-testovatelné části:
+Přijatá nejmenší úplná architektura má dvě povinné samostatně testovatelné
+části:
 
-1. Flutter mobilní aplikaci.
+1. Flutter aplikaci pro mobil i desktop.
 2. Pure Dart Talk protokolový balík bez Flutter závislostí.
-3. Samostatnou Notifications-compatible push gateway.
+
+Android používá přímo Notifications Web Push přes UnifiedPush connector a
+vestavěný FCM distributor; vlastní gateway ani Nextcloud addon nejsou součástí
+základní instalace. iOS APNs a budoucí PushKit vyžadují pozdější
+publisher-owned relay jako samostatnou Apple platformní hranici.
+
+Toto je přijatá topologie, nikoli tvrzení o dokončeném push delivery. Nativní
+Android push řez je po bezpečnostním review implementovaný a automatizovaný v
+`3c74165`. Skutečný Nextcloud → FCM → background/killed běh a fyzické zařízení
+zůstávají otevřené brány.
 
 Uvnitř mobilní aplikace zůstávají storage, sync a feature moduly, dokud reálná
 druhá implementace neodůvodní další package. Call subsystem má od začátku
@@ -25,10 +40,12 @@ nevytváří jako prázdný stub.
 ## Dokumenty
 
 - [Požadavky a důkaz dokončení](requirements.md)
+- [Stav vývoje k 25. srpnu 2026](development-status-2026-08-25.md)
 - [Audit dokončení celého cíle](completion-audit.md)
 - [Systémový návrh](system-design.md)
 - [Synchronizace a lokální data](sync-storage.md)
-- [OpenAPI, fixture a klientský runtime push gateway](push-gateway-api.md)
+- [Flutter aplikační základ](flutter-foundation.md)
+- [Historický OpenAPI a klientský push-v2 runtime](push-gateway-api.md)
 - [OpenAPI a fixture klientského bootstrapu](client-bootstrap-api.md)
 - [OpenAPI, fixture a merge kontrakt seznamu konverzací](conversation-list-api.md)
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
@@ -39,7 +56,7 @@ nevytváří jako prázdný stub.
 - [Rozhodnutí a otevřené volby](decisions.md)
 - [Audit závislostí a assetů](dependency-licenses.md)
 - [Pure Dart talk_protocol](../../packages/talk_protocol/README.md)
-- [Veřejný multi-server push](../plans/2026-08-22-public-multi-server-push-design.md)
+- [Historický veřejný multi-server push-v2 návrh](../plans/2026-08-22-public-multi-server-push-design.md)
 - [Vlastní Talk-inspirovaný Flutter klient](../plans/2026-08-22-original-flutter-client-design.md)
 - [Návrh klientského bootstrap kontraktu](../plans/2026-08-22-client-bootstrap-contract-design.md)
 - [Návrh conversation-list kontraktu](../plans/2026-08-22-conversation-list-contract-design.md)
@@ -49,7 +66,7 @@ nevytváří jako prázdný stub.
 - [Rich chat a vlákna](../plans/2026-08-23-rich-chat-threads-design.md)
 - [Implementace attachment upload runtime](../plans/2026-08-23-attachment-upload-runtime-design.md)
 - [Návrh signaling preparation runtime](../plans/2026-08-23-signaling-preparation-runtime-design.md)
-- [Implementace Dart push-client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
+- [Historický Dart push-v2 client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
 
 ## Principy
 
@@ -60,5 +77,7 @@ nevytváří jako prázdný stub.
   idempotency key.
 - OCS a databázové transakce určují úspěch, ne optimistický UI stav.
 - Push přenáší opaque šifrované probuzení, ne zdroj pravdy.
-- Platformní lifecycle zůstává v Kotlin/Swift vrstvě.
+- Platformní lifecycle zůstává v Kotlin/Swift nebo desktop runner vrstvě.
+- Rozložení se adaptuje podle okna; desktop není samostatný klient ani
+  roztažená telefonní obrazovka.
 - Každý vertikální řez končí reálným během, ne pouze buildem nebo mockem.
