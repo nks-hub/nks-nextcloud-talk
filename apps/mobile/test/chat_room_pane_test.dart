@@ -93,6 +93,15 @@ void main() {
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
+        // This suite covers cached rendering, threads and outbox state, not
+        // attachment transport. Resolving the dependency as unavailable keeps
+        // the media buttons in a settled state instead of an endless spinner.
+        chatAttachmentDependenciesProvider.overrideWith(
+          (ref, key) => Future<ChatAttachmentDependencies>.error(
+            StateError('attachment dependencies are not wired in this suite'),
+            StackTrace.empty,
+          ),
+        ),
         ...overrides,
       ],
       child: localizedTestApp(
