@@ -1583,7 +1583,7 @@ def apply_sync_step(
     anchor = canonical_cursor(step.get("anchor"), "merge anchor")
     expected_anchor = scope[f"{direction}Cursor"]
     if anchor != expected_anchor:
-        return "rejected"
+        return "stale"
     context = require_object(metadata.get("context"), "merge fixture context")
     if (
         context.get("roomToken") != step.get("roomToken")

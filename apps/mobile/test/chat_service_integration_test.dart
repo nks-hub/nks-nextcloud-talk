@@ -144,6 +144,74 @@ void main() {
     expect(scope?.lastSyncError, isNull);
   });
 
+  test('a poll overtaken by another writer is discarded without an error', () async {
+    // Reproduces the live emulator finding: an attachment confirmation
+    // advances the future cursor while the room poll is still in flight. The
+    // overtaken answer must be dropped silently instead of surfacing as a
+    // rejected chat response.
+    final overtakenPollReached = Completer<void>();
+    final overtakingSyncFinished = Completer<void>();
+    var futureRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(jsonEncode(_chatCapabilities()), 200);
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          return http.Response('', 304);
+        }
+
+        futureRequests++;
+        if (request.url.queryParameters['lastKnownMessageId'] != '109') {
+          return http.Response('', 304);
+        }
+        final overtaken = futureRequests == 1;
+        if (overtaken) {
+          overtakenPollReached.complete();
+          await overtakingSyncFinished.future;
+        }
+        return http.Response(
+          jsonEncode(
+            readFixtureJson('chat-messages/fixtures/chat-future.response.json'),
+          ),
+          200,
+          headers: const <String, String>{
+            'X-Chat-Last-Given': '114',
+            'X-Chat-Last-Common-Read': '110',
+          },
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    ChatService service() => ChatService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    final overtakenSync = service().syncRoom(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    await overtakenPollReached.future;
+    await service().syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+    overtakingSyncFinished.complete();
+    await overtakenSync;
+
+    final scope = await chat.getRootScope(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    final messages = await chat
+        .watchMessages(accountId: 'account-a', roomToken: 'rooma123')
+        .first;
+    expect(scope?.futureCursor, '114');
+    expect(scope?.lastSyncError, isNull);
+    expect(messages.map((message) => message.messageId), contains(112));
+  });
+
   test('completed live cycles release their cancellation wait', () async {
     var futureRequests = 0;
     final pendingPollStarted = Completer<void>();

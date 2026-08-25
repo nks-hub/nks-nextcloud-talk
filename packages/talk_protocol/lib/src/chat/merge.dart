@@ -17,6 +17,10 @@ enum ChatMergeOutcome {
   readApplied,
   unreadApplied,
   reauthenticationRequired,
+
+  /// The response answered a cursor the scope has already moved past, so it
+  /// carries no new authority. Discarding it is correct and is not an error.
+  stale,
   rejected,
 }
 
@@ -109,7 +113,10 @@ ChatMergeResult planChatGetMerge(
       ? scope.historyCursor
       : scope.futureCursor;
   if (anchor != response.request.cursor) {
-    return _rejected;
+    // A concurrent writer, for example an attachment confirmation, already
+    // advanced this cursor while the request was in flight. Applying the
+    // answer would reopen a closed block, so it is discarded without error.
+    return _stale;
   }
 
   ChatScopeState candidateScope;
@@ -730,6 +737,11 @@ String _incrementDecimal(String value) {
 
 const ChatMergeResult _rejected = ChatMergeResult._(
   outcome: ChatMergeOutcome.rejected,
+  plan: null,
+);
+
+const ChatMergeResult _stale = ChatMergeResult._(
+  outcome: ChatMergeOutcome.stale,
   plan: null,
 );
 

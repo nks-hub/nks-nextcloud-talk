@@ -881,7 +881,7 @@
           "anchor": "109",
           "fixture": "future-page",
           "transaction": "commit",
-          "expectedOutcome": "rejected",
+          "expectedOutcome": "stale",
           "expectedAccountLane": "ready",
           "expectedScope": {
             "messageIds": [109, 110, 112],

@@ -62,8 +62,14 @@ void main() {
             continue;
           }
 
-          if (step['expectedOutcome'] == 'rejected') {
-            expect(result.outcome, ChatMergeOutcome.rejected);
+          if (step['expectedOutcome'] == 'rejected' ||
+              step['expectedOutcome'] == 'stale') {
+            expect(
+              result.outcome,
+              step['expectedOutcome'] == 'stale'
+                  ? ChatMergeOutcome.stale
+                  : ChatMergeOutcome.rejected,
+            );
             expect(result.plan, isNull);
             expect(identical(snapshot, before), isTrue);
             continue;
