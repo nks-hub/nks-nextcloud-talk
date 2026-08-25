@@ -22,6 +22,7 @@ import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
 import 'features/conversations/conversation_sync_service.dart';
+import 'features/newconversation/new_conversation_service.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
@@ -89,6 +90,14 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
   ref,
 ) {
   return ConversationSyncService(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+final newConversationServiceProvider = Provider<NewConversationService>((ref) {
+  return HttpNewConversationService(
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),

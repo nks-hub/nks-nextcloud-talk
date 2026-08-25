@@ -16,11 +16,15 @@ export 'src/chat/profile.dart';
 export 'src/chat/request.dart';
 export 'src/chat/response.dart';
 export 'src/chat/state.dart';
+export 'src/conversations/create_room_request.dart';
+export 'src/conversations/create_room_response.dart';
 export 'src/conversations/identifiers.dart';
 export 'src/conversations/merge.dart';
 export 'src/conversations/models.dart'
     show ConversationPreview, ConversationRichObjectParameter, ConversationRoom;
 export 'src/conversations/profile.dart';
+export 'src/conversations/recipient_search_request.dart';
+export 'src/conversations/recipient_search_response.dart';
 export 'src/conversations/request.dart';
 export 'src/conversations/response.dart';
 export 'src/protocol_exception.dart';
