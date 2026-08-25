@@ -85,6 +85,8 @@ final class HttpNextcloudApi {
   static const _loginMaximumBytes = 128 * 1024;
   static const _capabilitiesMaximumBytes = 2 * 1024 * 1024;
   static const _conversationMaximumBytes = 16 * 1024 * 1024;
+  static const _recipientSearchMaximumBytes = 1 * 1024 * 1024;
+  static const _createConversationMaximumBytes = 1 * 1024 * 1024;
   static const _avatarMaximumBytes = 2 * 1024 * 1024;
   static const _webPushMaximumBytes = 64 * 1024;
   static const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
@@ -316,6 +318,58 @@ final class HttpNextcloudApi {
       statusCode: payload.statusCode,
       json: payload.json,
       headers: payload.headers,
+    );
+  }
+
+  /// Looks up people and groups that can be invited into a new conversation.
+  Future<RecipientSearchResponse> searchRecipients({
+    required RecipientSearchRequest searchRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', searchRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...searchRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200, 401},
+      maximumBytes: _recipientSearchMaximumBytes,
+    );
+    return decodeRecipientSearchResponse(
+      request: searchRequest,
+      statusCode: payload.statusCode,
+      json: payload.json,
+    );
+  }
+
+  /// Creates a new one-to-one or group conversation for a picked recipient.
+  Future<CreateConversationResponse> createConversation({
+    required CreateConversationRequest createRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', createRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...createRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = createRequest.formBody;
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200, 401, 429, 503},
+      maximumBytes: _createConversationMaximumBytes,
+      parseBodyForStatusCodes: const {200, 401},
+    );
+    return decodeCreateConversationResponse(
+      request: createRequest,
+      statusCode: payload.statusCode,
+      json: payload.json,
     );
   }
 
