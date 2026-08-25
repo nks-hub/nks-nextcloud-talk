@@ -36,9 +36,10 @@ final class ChatMessageContent extends StatelessWidget {
     if (parsed == null) {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));
     }
+    final exactGiphyReference = exactGiphyResource(parsed.message);
     final document = renderRichChatMessage(
       message: parsed.message,
-      markdownEnabled: parsed.markdown ?? false,
+      markdownEnabled: parsed.markdown == true || exactGiphyReference != null,
       parameters: parsed.messageParameters,
       server: ServerBase.parse(account.serverUrl),
     );

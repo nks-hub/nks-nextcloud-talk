@@ -89,6 +89,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'renders an exact confirmed Giphy URL inline when markdown is false',
+    (tester) async {
+      await _expectConfirmedExactGiphyInline(
+        tester,
+        _message(_resourceUrl, messageId: 123, markdown: false),
+      );
+    },
+  );
+
+  testWidgets(
+    'renders an exact confirmed Giphy URL inline when markdown is missing',
+    (tester) async {
+      await _expectConfirmedExactGiphyInline(
+        tester,
+        _message(_resourceUrl, messageId: 124, includeMarkdown: false),
+      );
+    },
+  );
+
   testWidgets('hides the Giphy URL and exposes retry when resolution fails', (
     tester,
   ) async {
@@ -472,8 +492,52 @@ Widget _messageApp(ChatMessage message, {required List<Override> overrides}) {
   );
 }
 
-ChatMessage _message(String text, {required int messageId}) {
-  return ChatMessage.fromJson(<String, Object?>{
+Future<void> _expectConfirmedExactGiphyInline(
+  WidgetTester tester,
+  ChatMessage message,
+) async {
+  GiphyReferenceRequest? observed;
+  await tester.pumpWidget(
+    _messageApp(
+      message,
+      overrides: [
+        giphyReferenceMediaProvider.overrideWith((ref, request) async {
+          observed = request;
+          return GiphyReferenceMedia(
+            resourceUrl: request.resourceUrl,
+            body: _gifBody,
+            contentType: 'image/gif',
+            aspectRatio: 1,
+          );
+        }),
+      ],
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+
+  expect(observed?.accountId, _account.id);
+  expect(observed?.resourceUrl, Uri.parse(_resourceUrl));
+  final memoryImage = find.byWidgetPredicate(
+    (widget) =>
+        widget is Image &&
+        widget.image is ResizeImage &&
+        (widget.image as ResizeImage).imageProvider is MemoryImage,
+  );
+  expect(memoryImage, findsOneWidget);
+  expect(find.textContaining(_resourceUrl), findsNothing);
+  expect(find.textContaining(_resourceUrl, findRichText: true), findsNothing);
+  expect(find.byType(InkWell), findsNothing);
+  expect(tester.takeException(), isNull);
+}
+
+ChatMessage _message(
+  String text, {
+  required int messageId,
+  bool? markdown = true,
+  bool includeMarkdown = true,
+}) {
+  final wire = <String, Object?>{
     'id': messageId,
     'token': 'rooma123',
     'actorType': 'users',
@@ -486,11 +550,14 @@ ChatMessage _message(String text, {required int messageId}) {
     'referenceId': 'reference-$messageId',
     'message': text,
     'messageParameters': <String, Object?>{},
-    'markdown': true,
     'reactions': <String, Object?>{},
     'reactionsSelf': <Object?>[],
     'deleted': null,
-  });
+  };
+  if (includeMarkdown) {
+    wire['markdown'] = markdown;
+  }
+  return ChatMessage.fromJson(wire);
 }
 
 const _account = StoredAccount(
