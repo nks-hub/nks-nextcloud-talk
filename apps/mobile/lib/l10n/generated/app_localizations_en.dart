@@ -789,4 +789,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get messageActionMessageMissing =>
       'This message is no longer available.';
+
+  @override
+  String get searchMessagesTooltip => 'Search messages';
+
+  @override
+  String get searchMessagesTitle => 'Search messages';
+
+  @override
+  String get searchMessagesHint => 'Search messages';
+
+  @override
+  String get searchMessagesPrompt => 'Type to search messages';
+
+  @override
+  String get searchMessagesNoResults => 'No messages found';
+
+  @override
+  String get searchMessagesError => 'Search failed. Try again.';
 }

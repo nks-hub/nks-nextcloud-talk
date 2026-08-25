@@ -1513,6 +1513,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This message is no longer available.'**
   String get messageActionMessageMissing;
+
+  /// No description provided for @searchMessagesTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get searchMessagesTooltip;
+
+  /// No description provided for @searchMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get searchMessagesTitle;
+
+  /// No description provided for @searchMessagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search messages'**
+  String get searchMessagesHint;
+
+  /// No description provided for @searchMessagesPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Type to search messages'**
+  String get searchMessagesPrompt;
+
+  /// No description provided for @searchMessagesNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages found'**
+  String get searchMessagesNoResults;
+
+  /// No description provided for @searchMessagesError.
+  ///
+  /// In en, this message translates to:
+  /// **'Search failed. Try again.'**
+  String get searchMessagesError;
 }
 
 class _AppLocalizationsDelegate

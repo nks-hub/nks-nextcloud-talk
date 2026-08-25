@@ -256,5 +256,11 @@
   "deleteMessageConfirmBody": "This cannot be undone.",
   "reactionPickerMore": "More emoji…",
   "messageActionUnsupported": "This action isn't available here.",
-  "messageActionMessageMissing": "This message is no longer available."
+  "messageActionMessageMissing": "This message is no longer available.",
+  "searchMessagesTooltip": "Search messages",
+  "searchMessagesTitle": "Search messages",
+  "searchMessagesHint": "Search messages",
+  "searchMessagesPrompt": "Type to search messages",
+  "searchMessagesNoResults": "No messages found",
+  "searchMessagesError": "Search failed. Try again."
 }
