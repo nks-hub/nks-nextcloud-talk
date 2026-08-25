@@ -35,6 +35,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   Timer? _debounce;
   int _generation = 0;
   _MessageSearchViewState _viewState = _MessageSearchViewState.idle;
+  MessageSearchError? _error;
   List<MessageSearchResult> _results = const [];
 
   @override
@@ -60,7 +61,10 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
 
   Future<void> _runSearch(String term) async {
     final generation = ++_generation;
-    setState(() => _viewState = _MessageSearchViewState.searching);
+    setState(() {
+      _error = null;
+      _viewState = _MessageSearchViewState.searching;
+    });
     try {
       final results = await widget.service.search(
         accountId: widget.accountId,
@@ -73,11 +77,14 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
         _results = results;
         _viewState = _MessageSearchViewState.results;
       });
-    } on MessageSearchException {
+    } on MessageSearchException catch (failure) {
       if (!mounted || generation != _generation) {
         return;
       }
-      setState(() => _viewState = _MessageSearchViewState.error);
+      setState(() {
+        _error = failure.code;
+        _viewState = _MessageSearchViewState.error;
+      });
     }
   }
 
@@ -139,7 +146,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
       case _MessageSearchViewState.error:
         return Center(
           key: const Key('message-search-error'),
-          child: Text(strings.searchMessagesError),
+          child: Text(_errorMessage(strings, _error)),
         );
       case _MessageSearchViewState.results:
         if (_results.isEmpty) {
@@ -191,4 +198,28 @@ class _MessageSearchResultTile extends StatelessWidget {
             ),
     );
   }
+}
+
+/// A single "Search failed" line hid which of nine failures happened, which
+/// is how a broken response decoder went unnoticed while the server was
+/// answering correctly. Each cause now names itself.
+String _errorMessage(AppLocalizations strings, MessageSearchError? error) {
+  return switch (error) {
+    MessageSearchError.accountMissing =>
+      strings.searchMessagesErrorAccountMissing,
+    MessageSearchError.credentialMissing =>
+      strings.searchMessagesErrorCredentialMissing,
+    MessageSearchError.reauthenticationRequired =>
+      strings.searchMessagesErrorReauthentication,
+    MessageSearchError.providerNotFound =>
+      strings.searchMessagesErrorProviderMissing,
+    MessageSearchError.transientError => strings.searchMessagesErrorTransient,
+    MessageSearchError.ocsFailure => strings.searchMessagesErrorServer,
+    MessageSearchError.invalidResponse =>
+      strings.searchMessagesErrorInvalidResponse,
+    MessageSearchError.network => strings.searchMessagesErrorNetwork,
+    // An empty term never reaches the network, so the generic line is only
+    // ever the fallback for a cause this screen does not model.
+    MessageSearchError.invalidSearchTerm || null => strings.searchMessagesError,
+  };
 }

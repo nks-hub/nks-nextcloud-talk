@@ -1897,6 +1897,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That conversation is not available on this device.'**
   String get jumpToMessageConversationMissing;
+
+  /// No description provided for @searchMessagesErrorAccountMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This account is no longer available.'**
+  String get searchMessagesErrorAccountMissing;
+
+  /// No description provided for @searchMessagesErrorCredentialMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to search messages.'**
+  String get searchMessagesErrorCredentialMissing;
+
+  /// No description provided for @searchMessagesErrorReauthentication.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Sign in again.'**
+  String get searchMessagesErrorReauthentication;
+
+  /// No description provided for @searchMessagesErrorProviderMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not offer message search.'**
+  String get searchMessagesErrorProviderMissing;
+
+  /// No description provided for @searchMessagesErrorTransient.
+  ///
+  /// In en, this message translates to:
+  /// **'The server is busy. Try again in a moment.'**
+  String get searchMessagesErrorTransient;
+
+  /// No description provided for @searchMessagesErrorServer.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected the search.'**
+  String get searchMessagesErrorServer;
+
+  /// No description provided for @searchMessagesErrorInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The server sent a search response this app could not read.'**
+  String get searchMessagesErrorInvalidResponse;
+
+  /// No description provided for @searchMessagesErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server.'**
+  String get searchMessagesErrorNetwork;
 }
 
 class _AppLocalizationsDelegate

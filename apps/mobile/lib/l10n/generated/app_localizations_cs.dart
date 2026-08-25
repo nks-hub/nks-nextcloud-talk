@@ -1010,4 +1010,34 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get jumpToMessageConversationMissing =>
       'Tato konverzace není v zařízení dostupná.';
+
+  @override
+  String get searchMessagesErrorAccountMissing =>
+      'Tento účet už není dostupný.';
+
+  @override
+  String get searchMessagesErrorCredentialMissing =>
+      'Pro hledání ve zprávách se přihlaste znovu.';
+
+  @override
+  String get searchMessagesErrorReauthentication =>
+      'Vaše přihlášení vypršelo. Přihlaste se znovu.';
+
+  @override
+  String get searchMessagesErrorProviderMissing =>
+      'Tento server hledání ve zprávách nenabízí.';
+
+  @override
+  String get searchMessagesErrorTransient =>
+      'Server je vytížený. Zkuste to za chvíli.';
+
+  @override
+  String get searchMessagesErrorServer => 'Server hledání odmítl.';
+
+  @override
+  String get searchMessagesErrorInvalidResponse =>
+      'Server poslal odpověď hledání, které aplikace nerozumí.';
+
+  @override
+  String get searchMessagesErrorNetwork => 'Server je nedostupný.';
 }

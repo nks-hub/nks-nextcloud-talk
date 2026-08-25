@@ -1009,4 +1009,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jumpToMessageConversationMissing =>
       'That conversation is not available on this device.';
+
+  @override
+  String get searchMessagesErrorAccountMissing =>
+      'This account is no longer available.';
+
+  @override
+  String get searchMessagesErrorCredentialMissing =>
+      'Sign in again to search messages.';
+
+  @override
+  String get searchMessagesErrorReauthentication =>
+      'Your session expired. Sign in again.';
+
+  @override
+  String get searchMessagesErrorProviderMissing =>
+      'This server does not offer message search.';
+
+  @override
+  String get searchMessagesErrorTransient =>
+      'The server is busy. Try again in a moment.';
+
+  @override
+  String get searchMessagesErrorServer => 'The server rejected the search.';
+
+  @override
+  String get searchMessagesErrorInvalidResponse =>
+      'The server sent a search response this app could not read.';
+
+  @override
+  String get searchMessagesErrorNetwork => 'Could not reach the server.';
 }

@@ -151,6 +151,44 @@ void main() {
     expect(find.byKey(const Key('message-search-error')), findsOneWidget);
   });
 
+  // A shared "Search failed" line for every cause hid a broken response
+  // decoder behind what looked like a network problem.
+  testWidgets('names the cause of the failure instead of one generic line', (
+    tester,
+  ) async {
+    const cases = <MessageSearchError, String>{
+      MessageSearchError.network: 'Could not reach the server.',
+      MessageSearchError.invalidResponse:
+          'The server sent a search response this app could not read.',
+      MessageSearchError.reauthenticationRequired:
+          'Your session expired. Sign in again.',
+      MessageSearchError.providerNotFound:
+          'This server does not offer message search.',
+    };
+
+    for (final entry in cases.entries) {
+      final service = _FakeMessageSearchService(
+        (_) => throw MessageSearchException(entry.key),
+      );
+      await pumpScreen(tester, service);
+
+      await tester.enterText(
+        find.byKey(const Key('message-search-field')),
+        'hello',
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+
+      expect(
+        find.text(entry.value),
+        findsOneWidget,
+        reason: '${entry.key} must be distinguishable on screen',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    }
+  });
+
   testWidgets('clearing the query returns to the idle state', (tester) async {
     final service = _FakeMessageSearchService((_) async => [_result()]);
     await pumpScreen(tester, service);

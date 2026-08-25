@@ -348,5 +348,13 @@
   "imageShareFailed": "The image could not be shared.",
   "jumpToOriginalMessage": "Show the original message",
   "jumpToMessageNotFound": "That message is no longer available in this conversation.",
-  "jumpToMessageConversationMissing": "That conversation is not available on this device."
+  "jumpToMessageConversationMissing": "That conversation is not available on this device.",
+  "searchMessagesErrorAccountMissing": "This account is no longer available.",
+  "searchMessagesErrorCredentialMissing": "Sign in again to search messages.",
+  "searchMessagesErrorReauthentication": "Your session expired. Sign in again.",
+  "searchMessagesErrorProviderMissing": "This server does not offer message search.",
+  "searchMessagesErrorTransient": "The server is busy. Try again in a moment.",
+  "searchMessagesErrorServer": "The server rejected the search.",
+  "searchMessagesErrorInvalidResponse": "The server sent a search response this app could not read.",
+  "searchMessagesErrorNetwork": "Could not reach the server."
 }
