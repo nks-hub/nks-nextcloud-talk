@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +6,7 @@ import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_room_pane.dart';
+import '../rooms/room_details_screen.dart';
 import 'conversation_avatar_widget.dart';
 
 const int _oneToOneConversationType = 1;
@@ -199,6 +201,21 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
             Expanded(child: ConversationPresenceTitle(conversation: current)),
           ],
         ),
+        actions: [
+          IconButton(
+            key: const Key('open-room-details'),
+            tooltip: AppLocalizations.of(context).roomDetailsOpenTooltip,
+            icon: const Icon(Icons.info_outline_rounded),
+            onPressed: () => unawaited(
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (context) =>
+                      RoomDetailsScreen(account: account, conversation: current),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         top: false,
