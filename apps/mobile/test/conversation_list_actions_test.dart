@@ -17,6 +17,11 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 const _markUnreadTalkFeatures = {'chat-v2', 'chat-read-marker', 'chat-unread'};
+const _archiveTalkFeatures = {'archived-conversations-v2'};
+const _markUnreadAndArchiveTalkFeatures = {
+  ..._markUnreadTalkFeatures,
+  ..._archiveTalkFeatures,
+};
 
 void main() {
   late AppDatabase database;
@@ -138,7 +143,11 @@ void main() {
   testWidgets('mark-unread stays hidden without its capability profile', (
     tester,
   ) async {
-    await setTalkFeatures(const {'chat-v2', 'chat-read-marker'});
+    await setTalkFeatures(const {
+      'chat-v2',
+      'chat-read-marker',
+      'archived-conversations-v2',
+    });
     final conversation = await insertConversation(token: 'roomread');
 
     await tester.pumpWidget(
@@ -166,7 +175,7 @@ void main() {
   testWidgets('mark-unread is offered for a supported read conversation', (
     tester,
   ) async {
-    await setTalkFeatures(_markUnreadTalkFeatures);
+    await setTalkFeatures(_markUnreadAndArchiveTalkFeatures);
     final conversation = await insertConversation(token: 'roomread');
 
     await tester.pumpWidget(
@@ -195,7 +204,7 @@ void main() {
   testWidgets('mark-unread stays hidden for a supported unread conversation', (
     tester,
   ) async {
-    await setTalkFeatures(_markUnreadTalkFeatures);
+    await setTalkFeatures(_markUnreadAndArchiveTalkFeatures);
     final conversation = await insertConversation(
       token: 'roomunread',
       unreadMessages: 3,
@@ -222,6 +231,33 @@ void main() {
       find.byKey(const Key('conversation-action-archive')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('archive stays hidden without archived-conversations-v2', (
+    tester,
+  ) async {
+    await setTalkFeatures(_markUnreadTalkFeatures);
+    final conversation = await insertConversation(token: 'roomactive');
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(
+      find.byKey(const Key('conversation-tile-roomactive')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('conversation-action-mark-unread')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('conversation-action-archive')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -283,10 +319,14 @@ void main() {
     },
   );
 
-  testWidgets('archiving a conversation calls the archive endpoint with POST', (
+  testWidgets('archive remains available when unread and uses POST', (
     tester,
   ) async {
-    final conversation = await insertConversation(token: 'rooma');
+    await setTalkFeatures(_archiveTalkFeatures);
+    final conversation = await insertConversation(
+      token: 'rooma',
+      unreadMessages: 3,
+    );
     var archiveRequests = 0;
 
     await tester.pumpWidget(
@@ -309,6 +349,7 @@ void main() {
 
     await tester.longPress(find.byKey(const Key('conversation-tile-rooma')));
     await tester.pumpAndSettle();
+    expect(find.text('Archive conversation'), findsOneWidget);
     await tester.tap(find.byKey(const Key('conversation-action-archive')));
     await _pumpUntil(tester, () => archiveRequests == 1);
     await _settle(tester);
@@ -320,6 +361,7 @@ void main() {
   testWidgets(
     'archived conversations stay hidden behind a toggle and unarchive with DELETE',
     (tester) async {
+      await setTalkFeatures(_archiveTalkFeatures);
       final active = await insertConversation(token: 'roomactive');
       final archived = await insertConversation(
         token: 'roomarchived',
@@ -385,6 +427,7 @@ void main() {
   testWidgets('a failed archive action surfaces an error without crashing', (
     tester,
   ) async {
+    await setTalkFeatures(_archiveTalkFeatures);
     final conversation = await insertConversation(token: 'rooma');
 
     await tester.pumpWidget(

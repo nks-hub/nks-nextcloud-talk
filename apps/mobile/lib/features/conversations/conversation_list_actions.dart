@@ -50,15 +50,23 @@ final class _ConversationListViewState
   var _showArchived = false;
 
   Future<void> _openActions(CachedConversation conversation) async {
+    final canMarkUnread =
+        _canMarkUnread(widget.account, conversation) &&
+        conversation.unreadMessages == 0;
+    final canToggleArchived = _talkFeatures(
+      widget.account,
+    ).contains('archived-conversations-v2');
+    if (!canMarkUnread && !canToggleArchived) {
+      return;
+    }
     final strings = AppLocalizations.of(context);
-    final canMarkUnread = _canMarkUnread(widget.account, conversation);
     final action = await showModalBottomSheet<_ConversationAction>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (canMarkUnread && conversation.unreadMessages == 0)
+            if (canMarkUnread)
               ListTile(
                 key: const Key('conversation-action-mark-unread'),
                 leading: const Icon(Icons.mark_chat_unread_outlined),
@@ -67,22 +75,23 @@ final class _ConversationListViewState
                   sheetContext,
                 ).pop(_ConversationAction.markUnread),
               ),
-            ListTile(
-              key: const Key('conversation-action-archive'),
-              leading: Icon(
-                conversation.isArchived
-                    ? Icons.unarchive_outlined
-                    : Icons.archive_outlined,
+            if (canToggleArchived)
+              ListTile(
+                key: const Key('conversation-action-archive'),
+                leading: Icon(
+                  conversation.isArchived
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                ),
+                title: Text(
+                  conversation.isArchived
+                      ? strings.conversationActionUnarchive
+                      : strings.conversationActionArchive,
+                ),
+                onTap: () => Navigator.of(
+                  sheetContext,
+                ).pop(_ConversationAction.toggleArchived),
               ),
-              title: Text(
-                conversation.isArchived
-                    ? strings.conversationActionUnarchive
-                    : strings.conversationActionArchive,
-              ),
-              onTap: () => Navigator.of(
-                sheetContext,
-              ).pop(_ConversationAction.toggleArchived),
-            ),
           ],
         ),
       ),
@@ -473,7 +482,7 @@ bool _canMarkUnread(StoredAccount account, CachedConversation conversation) {
   try {
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     final profile = ChatCapabilityProfile.fromTalkFeatures(
-      jsonDecode(account.talkFeaturesJson),
+      _talkFeatures(account),
       federated: room.isFederated,
     );
     return profile.markUnread;
@@ -482,6 +491,21 @@ bool _canMarkUnread(StoredAccount account, CachedConversation conversation) {
   } on TalkProtocolException {
     return false;
   }
+}
+
+List<String> _talkFeatures(StoredAccount account) {
+  try {
+    final decoded = jsonDecode(account.talkFeaturesJson);
+    if (decoded is List<Object?> && decoded.every((value) => value is String)) {
+      final features = decoded.cast<String>();
+      if (features.toSet().length == features.length) {
+        return features;
+      }
+    }
+  } on FormatException {
+    // A corrupt local snapshot must hide gated actions instead of guessing.
+  }
+  return const [];
 }
 
 String _formatActivity(BuildContext context, int unixSeconds) {
