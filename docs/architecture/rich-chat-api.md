@@ -76,11 +76,12 @@ capability profil a dostupný room, message, thread nebo schedule identifikátor
 Account-wide subscribed threads je jediná operace bez room tokenu. Response
 uchovává původní request a planner nesmí merge kontext přijmout bokem.
 
-Notification-level request rozlišuje message target a canonical root: wire URL
-směřuje na `messageId` vybrané reply nebo root zprávy, zatímco povinný
-`threadId` váže response na canonical root. Decoder odmítne chybějící nebo
-nulový root i room/root mismatch a zachová původní request. Merge planner před
-aplikací odmítne account/server snapshot mismatch.
+Notification-level request používá výhradně canonical `threadId`: wire URL i
+response binding míří na root vlákna. Historický název serverového parametru
+`messageId` nemění jeho význam; server jej před mutací ověřuje přes
+`findByThreadId` a oba upstream mobilní klienti posílají canonical root. Decoder
+odmítne chybějící nebo nulový root i room/root mismatch a zachová původní
+request. Merge planner před aplikací odmítne account/server snapshot mismatch.
 
 Nested `first` a `last` jsou přijatelné jen při shodě room tokenu a canonical
 `threadId`. `first.messageId` musí být root threadu, `last.messageId` musí být

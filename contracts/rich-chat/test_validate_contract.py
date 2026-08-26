@@ -83,9 +83,7 @@ class ResponsePolicyTest(unittest.TestCase):
                 case = deepcopy(fixture)
                 case["body"]["ocs"]["data"][field]["threadId"] = 999
 
-                with self.assertRaises(
-                    rich_contract.ResponseSemanticError
-                ) as raised:
+                with self.assertRaises(rich_contract.ResponseSemanticError) as raised:
                     rich_contract.validate_response_cases(document, [case])
 
                 self.assertEqual(
@@ -218,6 +216,23 @@ class ThreadRequestBindingTest(unittest.TestCase):
 
         self.assertEqual(
             "Thread notification canonical id context missing",
+            str(raised.exception),
+        )
+
+    def test_notification_response_rejects_legacy_message_context(self) -> None:
+        document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
+        case = next(
+            deepcopy(case)
+            for case in fixture_cases("responses.cases.json")
+            if case["id"] == "thread-notify-success"
+        )
+        case["context"]["messageId"] = 122
+
+        with self.assertRaises(rich_contract.ResponseSemanticError) as raised:
+            rich_contract.validate_response_cases(document, [case])
+
+        self.assertEqual(
+            "Thread notification legacy message id context is forbidden",
             str(raised.exception),
         )
 

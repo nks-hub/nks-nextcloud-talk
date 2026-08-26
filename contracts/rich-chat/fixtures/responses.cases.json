@@ -103,7 +103,7 @@
       "id": "thread-notify-success",
       "operationId": "setThreadNotificationLevel",
       "status": 200,
-      "context": { "roomToken": "rooma123", "messageId": 122, "threadId": 120 },
+      "context": { "roomToken": "rooma123", "threadId": 120 },
       "expectedClassification": "success",
       "body": {
         "ocs": {
