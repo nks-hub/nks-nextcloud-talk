@@ -159,6 +159,35 @@ void main() {
     expect(mutationRequests, 0);
   });
 
+  test('server rejects an invalid custom status as invalid input', () async {
+    var mutationRequests = 0;
+    final subject = service(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return _jsonResponse(_capabilities(statusEnabled: true));
+        }
+        mutationRequests++;
+        return http.Response('', 400);
+      }),
+    );
+
+    await expectLater(
+      subject.setCustomMessage(
+        accountId: 'account-a',
+        message: 'Working',
+        statusIcon: 'not-an-emoji',
+      ),
+      throwsA(
+        isA<OwnProfileException>().having(
+          (error) => error.code,
+          'code',
+          OwnProfileError.invalidInput,
+        ),
+      ),
+    );
+    expect(mutationRequests, 1);
+  });
+
   test(
     'a response for another user is rejected instead of changing scope',
     () async {

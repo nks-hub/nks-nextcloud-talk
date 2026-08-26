@@ -199,6 +199,8 @@ final class _ProfileStatusContext {
 
 OwnProfileError _mapApiError(NextcloudApiException error) {
   return switch (error.code) {
+    NextcloudApiError.unexpectedStatus when error.statusCode == 400 =>
+      OwnProfileError.invalidInput,
     NextcloudApiError.unexpectedStatus when error.statusCode == 401 =>
       OwnProfileError.reauthenticationRequired,
     NextcloudApiError.unexpectedStatus when error.statusCode == 403 =>
