@@ -801,7 +801,8 @@ Map<String, Object?> _threadRootMessage({required bool namedThread}) {
         )
         ..['id'] = 109
         ..['timestamp'] = 1770000109
-        ..['isThread'] = namedThread;
+        ..['isThread'] = namedThread
+        ..['threadTitle'] = namedThread ? 'Named thread' : null;
   if (!namedThread) {
     message.remove('threadId');
   }
