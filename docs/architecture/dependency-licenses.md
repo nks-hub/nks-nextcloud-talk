@@ -53,10 +53,10 @@ Všechny uvedené licence jsou permisivní a kompatibilní s distribucí aplikac
 pod `GPL-3.0-or-later`; jejich copyright notice a disclaimer musí zůstat ve
 výsledném third-party notice.
 
-Tabulka je úplná pro aktuální přímé hostované Flutter balíky. Audit jejich
-transitivních platformních pluginů a nativních knihoven ještě není úplný a před
-release musí vzniknout z finálních Android/iOS artefaktů; tento stav proto není
-release clearance.
+Tabulka je úplná pro aktuální přímé hostované Flutter balíky. Android release
+artefakt je navíc pokrytý automatickou bránou popsanou níže. Pro iOS musí stejná
+artefaktová evidence teprve vzniknout; tento stav proto ještě není úplná
+multi-platform release clearance.
 
 Přímé SDK závislosti `flutter` a `flutter_localizations` jsou z Flutter 3.44.4,
 revision `ad70ec4617166f1c38e5d2bfd388af71fda14f06`. Kořenový Flutter `LICENSE`
@@ -87,9 +87,26 @@ selhalo na duplicitních třídách. Aplikační Gradle konfigurace proto vyluč
 `tink-android`; aktuální dependency graph potvrzuje jediný Tink Core 1.23.0.
 Zdroj Android části `flutter_secure_storage` Tink API neimportuje.
 
-Úplný artefaktový audit dalších transitivních JVM závislostí connectoru
-(`gson`, `protobuf-java`, `jsr305`, Error Prone annotations) a konečného APK
-notice ještě není hotový. Tento průběžný záznam proto není release clearance.
+Další transitivní JVM závislosti connectoru (`gson`, `protobuf-java`, `jsr305`,
+Error Prone annotations) jsou pokryté přesným Android release classpathem,
+CycloneDX SBOM a notice vloženým do APK. Samotná přítomnost LGPL textu ale
+nenahrazuje finální corresponding-source/relink clearance distributora.
+
+## Android release artefaktová brána
+
+Commit `94a0987` přidal fail-closed generování z přesného
+`releaseRuntimeClasspath` a `pubspec.lock`. Každý Maven artefakt musí být v
+`release-licenses/components.tsv`, každý Pub balík musí být buď v generovaném
+Flutter `NOTICES.Z`, nebo v samostatném manifestu, a každý ručně dodaný notice
+je svázaný SHA-256. Build vloží do release APK CycloneDX 1.6 `SBOM.json` a
+`THIRD_PARTY_NOTICES.txt`; finalizer `assembleRelease` znovu otevře skutečný APK
+a ověří úplnost, SPDX identifikátory, duplicity, integritu notice i shodu s
+plugin metadata.
+
+Čerstvý release APK prošel s 131 Flutter balíky a 58 Android runtime
+komponentami. Validator má 9/9 unit testů, Ruff a C901 jsou čisté a celý
+`assembleRelease` prošel 546 tasky. Brána je Android-only; iOS artefakt a jeho
+nativní dependency graph zatím nepokrývá.
 
 ## Transitivní runtime závislosti
 

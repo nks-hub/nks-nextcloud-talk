@@ -73,7 +73,12 @@ nesmějí spustit. Úspěšný přihlášený capability snapshot jej přepne do
 
 Síťová nebo 5xx chyba ponechá `capabilitiesPending` a dovolí bezpečný retry.
 HTTP 401 přepne účet do `reauthRequired`; anonymní capabilities jej nikdy
-nesmějí přepnout do `ready`.
+nesmějí přepnout do `ready`. Stav je durable a další sync nesmí provést nový
+síťový request, dokud uživatel explicitně nedokončí re-auth. Nový Login Flow je
+svázaný s původním `accountId`, kanonickým server originem, base path a loginem.
+Jiná identita nesmí přepsat credential ani cache; nově vydaný cizí app password
+se best effort odvolá. Úspěšná shoda nahradí secure credential, zachová
+account-scoped cache, smaže sync error a znovu spustí live sync.
 
 ## Message identity
 
@@ -277,7 +282,7 @@ semantiky.
 | HTTP 400/403 `error=reply-to`, 404 `error=actor`, 413 `error=message` | failed; jde o doložené pre-save rejection větve |
 | HTTP 429 `error=mentions` | retryable podle Retry-After nebo lokálního bounded backoff; větev je před save |
 | HTTP 5xx | awaitingConfirmation, pokud contract důkaz neprokáže, že request nebyl commitnutý |
-| HTTP/OCS 401 | pozastavit account lane a ověřit revokovaný app password; stav operace zachovat nebo bezpečně vrátit do retryable podle zdroje eventu |
+| HTTP/OCS 401 | durable přepnout účet do `reauthRequired`, zastavit další requesty a zachovat stav operace; obnovit lane až po explicitním Login Flow se shodným accountId, originem, base path a loginem |
 | Jiná OCS business chyba | awaitingConfirmation, dokud není doložená pre-save větev |
 | Relay dorazí dřív než HTTP response | pending operace se koreluje přes referenceId; HTTP potvrdí konkrétní messageId |
 

@@ -158,6 +158,15 @@ lokální `accountId` a teprve přihlášený capability snapshot se uloží jak
 account-scoped autorita. HTTP 404 poll nerozlišuje pending, invalid, expired ani
 consumed stav a nesmí se interpretovat přesněji.
 
+Autentizační HTTP 401 se ukládá jako durable `reauthRequired` a zastaví další
+account requesty. Re-auth znovu používá Login Flow, ale server je uzamčený na
+původní origin a base path a výsledek musí mít stejný login i `accountId`.
+Cizí credential se nesmí uložit a best effort se odvolá. Teprve úspěšná shoda
+nahradí secure credential, zachová account cache, smaže chybu a obnoví live
+sync. Invalidace capability cache po 401 musí současně odpovídat credential
+fingerprintu, originu a nejkonkrétnější base path; shodný Basic Auth na jiném
+serveru nesmí ztratit svůj zdravý snapshot.
+
 ### D-016: Account-scoped conversation merge
 
 Stav: Přijato a implementováno v pure Dart parseru, merge planneru i Flutter
@@ -573,6 +582,13 @@ Duplicitní nebo opožděný payload smí pouze idempotentně probudit account-s
 OCS catch-up. Subscription endpoint, auth secret, activation token ani payload
 se nesmějí logovat. Přesný tok a testovací matice jsou v
 [push analýze](../research/push-fcm.md).
+
+Pokud přihlášené capabilities `webpush` neobsahují, klient nesmí číst VAPID,
+žádat notification permission ani zahájit registraci. Existující aktivní nebo
+rozpracovaná generace se durable převede do server-revoke-pending a credentialed
+OCS DELETE se smí opakovat pouze idempotentně. Lokální retire/unregister je
+povolen až po HTTP 200/202; transientní chyba ponechá credential i generaci pro
+bounded account retry.
 
 Nativní P1 adapter ukládá callback synchronně do AES-GCM obálky chráněné Android
 Keystore a až potom oznamuje Dartu dostupnou událost. Endpoint commit je
