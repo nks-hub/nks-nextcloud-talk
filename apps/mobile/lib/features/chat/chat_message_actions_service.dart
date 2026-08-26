@@ -83,6 +83,7 @@ final class ChatMessageActionsService {
       accountId: accountId,
       roomToken: roomToken,
     );
+    _requireWritable(context);
     final request = _buildRequest(
       () => RichChatRequest.editMessage(
         accountId: AccountId.parse(accountId),
@@ -115,6 +116,7 @@ final class ChatMessageActionsService {
       accountId: accountId,
       roomToken: roomToken,
     );
+    _requireWritable(context);
     final request = _buildRequest(
       () => RichChatRequest.deleteMessage(
         accountId: AccountId.parse(accountId),
@@ -566,6 +568,20 @@ final class ChatMessageActionsService {
     }
   }
 
+  /// Refuses a write that a read-only room would answer with `403`.
+  ///
+  /// Verified live against Nextcloud 34.0.1 on 2026-08-26: with `readOnly`
+  /// set, edit, delete, react and send all come back `403`. Reactions and the
+  /// composer are already hidden for a read-only room, so this only has to
+  /// cover edit and delete, whose action-sheet entries are not.
+  void _requireWritable(_MessageActionContext context) {
+    if (context.readOnly) {
+      throw const ChatMessageActionException(
+        ChatMessageActionError.actionUnsupported,
+      );
+    }
+  }
+
   Future<_MessageActionContext> _resolve({
     required String accountId,
     required String roomToken,
@@ -663,6 +679,7 @@ final class ChatMessageActionsService {
       server: server,
       appPassword: appPassword,
       profile: profile,
+      readOnly: room.readOnly != 0,
     );
   }
 }
@@ -673,12 +690,17 @@ final class _MessageActionContext {
     required this.server,
     required this.appPassword,
     required this.profile,
+    required this.readOnly,
   });
 
   final StoredAccount account;
   final ServerBase server;
   final String appPassword;
   final RichChatCapabilityProfile profile;
+
+  /// Whether the room currently refuses every write. Talk answers `403` for
+  /// edit, delete, react and send alike once `readOnly` is set.
+  final bool readOnly;
 }
 
 ChatMessageActionError _mapApiError(NextcloudApiException error) {

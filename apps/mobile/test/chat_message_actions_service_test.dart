@@ -120,6 +120,83 @@ void main() {
     },
   );
 
+  // Verified live against Nextcloud 34.0.1 on 2026-08-26: with `readOnly` set,
+  // the server answers edit, delete, react and send alike with `403`. The
+  // composer and the reaction picker already hide themselves for a read-only
+  // room, but the action sheet still offered Edit and Delete, so both requests
+  // were leaving the device only to come back refused.
+  test('a read-only room refuses edit and delete without any request', () async {
+    await _insertRoom(database, _roomJson()..['readOnly'] = 1);
+
+    var mutations = 0;
+    final api = _api((request) async {
+      if (request.url.path.endsWith('/capabilities')) {
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const [
+                'chat-v2',
+                'edit-messages',
+                'delete-messages',
+              ],
+            ),
+          ),
+          200,
+        );
+      }
+      mutations++;
+      return http.Response('{}', 200);
+    });
+    addTearDown(api.close);
+    final service = ChatMessageActionsService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await expectLater(
+      () => service.editMessage(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        messageId: 5,
+        message: 'Updated text',
+      ),
+      throwsA(
+        isA<ChatMessageActionException>().having(
+          (error) => error.code,
+          'code',
+          ChatMessageActionError.actionUnsupported,
+        ),
+      ),
+    );
+    await expectLater(
+      () => service.deleteMessage(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        messageId: 5,
+      ),
+      throwsA(
+        isA<ChatMessageActionException>().having(
+          (error) => error.code,
+          'code',
+          ChatMessageActionError.actionUnsupported,
+        ),
+      ),
+    );
+    expect(mutations, 0);
+
+    // The cached message stays exactly as it was: a refused action must not
+    // leave a locally edited or locally deleted row behind.
+    final stored = await chat.getMessage(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      messageId: 5,
+    );
+    expect(stored!.displayText, 'Original text');
+    expect(stored.deleted, isFalse);
+  });
+
   test('edits an own message and persists the authoritative text', () async {
     final api = _api((request) async {
       if (request.url.path.endsWith('/capabilities')) {
