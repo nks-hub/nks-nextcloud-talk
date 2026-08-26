@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate third-party notices embedded in an Android release APK."""
+"""Validate third-party notices embedded in Android and iOS releases."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from typing import Any
 
 
 FLUTTER_NOTICES = "assets/flutter_assets/NOTICES.Z"
+IOS_FLUTTER_NOTICES = "Frameworks/App.framework/flutter_assets/NOTICES.Z"
 SBOM = "assets/release_licenses/SBOM.json"
 THIRD_PARTY_NOTICES = "assets/release_licenses/THIRD_PARTY_NOTICES.txt"
 NOTICE_HASH_PROPERTY = "com.nkshub.nextcloudtalk.noticeSha256"
@@ -45,6 +46,16 @@ class ComponentEvidence:
     license_expression: str
     notice_hash: str
     artifact_hashes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class IosPubNotice:
+    name: str
+    version: str
+    license_expression: str
+    notice_file: str
+    notice_hash: str
+    archive_hash: str
 
 
 def _require(condition: bool, message: str) -> None:
@@ -157,9 +168,64 @@ def hosted_packages(lockfile: Path) -> set[str]:
     return set(hosted_package_records(lockfile))
 
 
-def android_expected_packages(
+def ios_pub_notices(manifest: Path) -> dict[str, IosPubNotice]:
+    try:
+        payload = manifest.read_bytes()
+    except OSError as error:
+        raise GateError(f"Cannot read iOS Pub notice manifest: {manifest}") from error
+    _require(len(payload) <= 64 * 1024, "iOS Pub notice manifest is too large")
+    try:
+        lines = payload.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise GateError("iOS Pub notice manifest is not UTF-8") from error
+
+    result: dict[str, IosPubNotice] = {}
+    for line_number, line in enumerate(lines, start=1):
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split("\t")
+        _require(
+            len(fields) == 6,
+            f"Invalid iOS Pub notice manifest row {line_number}",
+        )
+        name, version, license_expression, notice_file, notice_hash, archive_hash = fields
+        _require(
+            re.fullmatch(r"[A-Za-z0-9_]+", name) is not None,
+            f"Invalid iOS Pub package name: {name}",
+        )
+        _require(name not in result, f"Duplicate iOS Pub notice: {name}")
+        _require(bool(version), f"Missing iOS Pub package version: {name}")
+        _require(
+            SPDX_EXPRESSION.fullmatch(license_expression) is not None,
+            f"Invalid iOS Pub SPDX expression: {name}",
+        )
+        _require(
+            re.fullmatch(r"[A-Za-z0-9._-]+", notice_file) is not None,
+            f"Invalid iOS Pub notice file: {name}",
+        )
+        _require(
+            SHA256.fullmatch(notice_hash) is not None,
+            f"Invalid iOS Pub notice hash: {name}",
+        )
+        _require(
+            SHA256.fullmatch(archive_hash) is not None,
+            f"Invalid iOS Pub archive hash: {name}",
+        )
+        result[name] = IosPubNotice(
+            name=name,
+            version=version,
+            license_expression=license_expression,
+            notice_file=notice_file,
+            notice_hash=notice_hash,
+            archive_hash=archive_hash,
+        )
+    return result
+
+
+def platform_expected_packages(
     records: dict[str, tuple[str, str]],
     plugin_dependencies: Path,
+    platform: str,
 ) -> set[str]:
     try:
         document = json.loads(plugin_dependencies.read_text(encoding="utf-8"))
@@ -167,19 +233,29 @@ def android_expected_packages(
         raise GateError(f"Cannot read Flutter plugin metadata: {plugin_dependencies}") from error
     plugins = document.get("plugins") if isinstance(document, dict) else None
     _require(isinstance(plugins, dict), "Flutter plugin metadata has no plugins object")
-    android_plugins: set[str] = set()
+    target_plugins: set[str] = set()
     platform_plugins: set[str] = set()
-    for platform, entries in plugins.items():
-        _require(isinstance(entries, list), f"Invalid Flutter plugin list: {platform}")
+    for platform_name, entries in plugins.items():
+        _require(isinstance(entries, list), f"Invalid Flutter plugin list: {platform_name}")
         for entry in entries:
-            _require(isinstance(entry, dict), f"Invalid Flutter plugin entry: {platform}")
+            _require(isinstance(entry, dict), f"Invalid Flutter plugin entry: {platform_name}")
             name = entry.get("name")
-            _require(isinstance(name, str) and name, f"Flutter plugin has no name: {platform}")
+            _require(
+                isinstance(name, str) and name,
+                f"Flutter plugin has no name: {platform_name}",
+            )
             platform_plugins.add(name)
-            if platform == "android":
-                android_plugins.add(name)
-    non_android_plugins = platform_plugins - android_plugins
-    return set(records) - non_android_plugins
+            if platform_name == platform:
+                target_plugins.add(name)
+    non_target_plugins = platform_plugins - target_plugins
+    return set(records) - non_target_plugins
+
+
+def android_expected_packages(
+    records: dict[str, tuple[str, str]],
+    plugin_dependencies: Path,
+) -> set[str]:
+    return platform_expected_packages(records, plugin_dependencies, "android")
 
 
 def flutter_notice_packages(notices: str) -> set[str]:
@@ -423,10 +499,116 @@ def validate_apk(
     }
 
 
+def _ios_app_payloads(
+    artifact: Path,
+    resources: set[str],
+) -> dict[str, bytes]:
+    if artifact.is_dir():
+        result: dict[str, bytes] = {}
+        for resource in resources:
+            source = artifact / resource
+            try:
+                size = source.stat().st_size
+                limit = (
+                    MAX_COMPRESSED_NOTICES
+                    if resource == IOS_FLUTTER_NOTICES
+                    else MAX_ARCHIVE_ENTRY
+                )
+                _require(size <= limit, f"iOS resource exceeds the size limit: {resource}")
+                result[resource] = source.read_bytes()
+            except OSError as error:
+                raise GateError(f"Cannot read iOS resource: {resource}") from error
+        return result
+
+    try:
+        with zipfile.ZipFile(artifact) as archive:
+            suffix = f".app/{IOS_FLUTTER_NOTICES}"
+            candidates = [name for name in archive.namelist() if name.endswith(suffix)]
+            _require(len(candidates) == 1, "iOS archive must contain exactly one app NOTICES.Z")
+            app_prefix = candidates[0][: -len(IOS_FLUTTER_NOTICES)]
+            return {
+                resource: _read_entry(
+                    archive,
+                    f"{app_prefix}{resource}",
+                    size_limit=(
+                        MAX_COMPRESSED_NOTICES
+                        if resource == IOS_FLUTTER_NOTICES
+                        else MAX_ARCHIVE_ENTRY
+                    ),
+                )
+                for resource in resources
+            }
+    except (OSError, zipfile.BadZipFile) as error:
+        raise GateError(f"Cannot read iOS release artifact: {artifact}") from error
+
+
+def validate_ios_app(
+    artifact: Path,
+    lockfile: Path,
+    plugin_dependencies: Path | None = None,
+    pub_notice_manifest: Path | None = None,
+) -> dict[str, int]:
+    records = hosted_package_records(lockfile)
+    plugins_file = plugin_dependencies or lockfile.parent / ".flutter-plugins-dependencies"
+    manifest = pub_notice_manifest or lockfile.parent / "ios/release-licenses/pub-components.tsv"
+    manual_notices = ios_pub_notices(manifest)
+    payloads = _ios_app_payloads(
+        artifact,
+        {IOS_FLUTTER_NOTICES, *(notice.notice_file for notice in manual_notices.values())},
+    )
+    expected_packages = platform_expected_packages(records, plugins_file, "ios")
+    notice_packages = flutter_notice_packages(
+        _decompress_flutter_notices(payloads[IOS_FLUTTER_NOTICES])
+    )
+    missing_packages = expected_packages - notice_packages
+    redundant_packages = set(manual_notices) - missing_packages
+    _require(
+        not redundant_packages,
+        "iOS manifest redundantly covers Flutter-noticed Pub packages: "
+        f"{', '.join(sorted(redundant_packages))}",
+    )
+    uncovered_packages = missing_packages - set(manual_notices)
+    _require(
+        not uncovered_packages,
+        f"Flutter notices miss hosted packages: {', '.join(sorted(uncovered_packages))}",
+    )
+    for package_name, notice in manual_notices.items():
+        _require(package_name in records, f"iOS manifest covers unknown Pub package: {package_name}")
+        locked_version, locked_archive_hash = records[package_name]
+        _require(
+            notice.version == locked_version,
+            f"iOS Pub package version mismatch: {package_name}",
+        )
+        _require(
+            notice.archive_hash == locked_archive_hash,
+            f"iOS Pub package archive hash mismatch: {package_name}",
+        )
+        notice_payload = payloads[notice.notice_file]
+        try:
+            notice_payload.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise GateError(f"iOS Pub notice is not UTF-8: {package_name}") from error
+        _require(bool(notice_payload), f"iOS Pub notice is empty: {package_name}")
+        _require(
+            hashlib.sha256(notice_payload).hexdigest() == notice.notice_hash,
+            f"iOS Pub notice hash mismatch: {package_name}",
+        )
+    return {
+        "flutter_packages": len(expected_packages),
+        "ios_components": len(manual_notices),
+    }
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     mobile_root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("apk", type=Path, help="Release APK to validate")
+    parser.add_argument("artifact", type=Path, help="Release APK, IPA, or .app to validate")
+    parser.add_argument(
+        "--platform",
+        choices=("android", "ios"),
+        default="android",
+        help="Target release platform",
+    )
     parser.add_argument(
         "--lockfile",
         type=Path,
@@ -439,20 +621,39 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=mobile_root / ".flutter-plugins-dependencies",
         help="Flutter platform-plugin metadata used for the release build",
     )
+    parser.add_argument(
+        "--ios-pub-components",
+        type=Path,
+        default=mobile_root / "ios/release-licenses/pub-components.tsv",
+        help="Locked iOS Pub components omitted from Flutter NOTICES.Z",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        counts = validate_apk(args.apk, args.lockfile, args.plugins)
+        counts = (
+            validate_apk(args.artifact, args.lockfile, args.plugins)
+            if args.platform == "android"
+            else validate_ios_app(
+                args.artifact,
+                args.lockfile,
+                args.plugins,
+                args.ios_pub_components,
+            )
+        )
     except GateError as error:
         print(f"release-license gate failed: {error}", file=sys.stderr)
         return 1
     print(
         "release-license gate passed: "
-        f"{counts['flutter_packages']} Flutter packages, "
-        f"{counts['android_components']} Android runtime components"
+        f"{counts['flutter_packages']} Flutter packages"
+        + (
+            f", {counts['android_components']} Android runtime components"
+            if args.platform == "android"
+            else f", {counts['ios_components']} iOS native Pub components"
+        )
     )
     return 0
 

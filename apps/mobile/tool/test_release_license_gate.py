@@ -12,6 +12,7 @@ from release_license_gate import (
     BEGIN_NOTICE,
     END_NOTICE,
     FLUTTER_NOTICES,
+    IOS_FLUTTER_NOTICES,
     NOTICE_HASH_PROPERTY,
     NOTICE_SEPARATOR,
     NOTICE_TEXT,
@@ -19,6 +20,7 @@ from release_license_gate import (
     THIRD_PARTY_NOTICES,
     GateError,
     validate_apk,
+    validate_ios_app,
 )
 
 
@@ -59,6 +61,12 @@ sdks:
         self.plugins = self.root / ".flutter-plugins-dependencies"
         self.plugins.write_text(
             json.dumps({"plugins": {"android": [], "ios": []}}),
+            encoding="utf-8",
+        )
+        self.ios_manifest = self.root / "ios/release-licenses/pub-components.tsv"
+        self.ios_manifest.parent.mkdir(parents=True)
+        self.ios_manifest.write_text(
+            "# package<TAB>version<TAB>SPDX-expression<TAB>notice-file<TAB>notice-SHA256<TAB>archive-SHA256\n",
             encoding="utf-8",
         )
 
@@ -183,12 +191,134 @@ sdks:
                 )
         return apk
 
+    def _write_ios_app(
+        self,
+        *,
+        flutter_packages: list[str] | None = None,
+        archive: bool = False,
+        resources: dict[str, bytes] | None = None,
+    ) -> Path:
+        app = self.root / "Runner.app"
+        notices = app / IOS_FLUTTER_NOTICES
+        notices.parent.mkdir(parents=True)
+        notices.write_bytes(
+            self._flutter_notices(flutter_packages or ["alpha", "beta"])
+        )
+        for name, payload in (resources or {}).items():
+            (app / name).write_bytes(payload)
+        if not archive:
+            return app
+        ipa = self.root / "Runner.ipa"
+        with zipfile.ZipFile(ipa, "w") as output:
+            output.write(notices, f"Payload/Runner.app/{IOS_FLUTTER_NOTICES}")
+            for name in resources or {}:
+                output.write(app / name, f"Payload/Runner.app/{name}")
+        return ipa
+
+    def _write_ios_manifest(
+        self,
+        *,
+        package: str = "beta",
+        version: str = "2.0.0",
+        notice_file: str = "beta-license.txt",
+        notice_hash: str,
+        archive_hash: str = "b" * 64,
+    ) -> None:
+        self.ios_manifest.write_text(
+            "\t".join(
+                (
+                    package,
+                    version,
+                    "BSD-3-Clause",
+                    notice_file,
+                    notice_hash,
+                    archive_hash,
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
     def test_valid_release_artifact_passes(self) -> None:
         counts = validate_apk(self._write_apk(), self.lockfile)
         self.assertEqual(
             counts,
             {"flutter_packages": 2, "android_components": 1},
         )
+
+    def test_valid_ios_app_passes(self) -> None:
+        self.assertEqual(
+            validate_ios_app(self._write_ios_app(), self.lockfile, self.plugins),
+            {"flutter_packages": 2, "ios_components": 0},
+        )
+
+    def test_valid_ios_archive_passes(self) -> None:
+        self.assertEqual(
+            validate_ios_app(
+                self._write_ios_app(archive=True),
+                self.lockfile,
+                self.plugins,
+            ),
+            {"flutter_packages": 2, "ios_components": 0},
+        )
+
+    def test_ios_missing_flutter_notice_fails(self) -> None:
+        app = self._write_ios_app(flutter_packages=["alpha"])
+        with self.assertRaisesRegex(GateError, "beta"):
+            validate_ios_app(app, self.lockfile, self.plugins)
+
+    def test_ios_excludes_plugins_for_other_platforms(self) -> None:
+        self.plugins.write_text(
+            json.dumps(
+                {
+                    "plugins": {
+                        "android": [{"name": "beta"}],
+                        "ios": [],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        app = self._write_ios_app(flutter_packages=["alpha"])
+        self.assertEqual(
+            validate_ios_app(app, self.lockfile, self.plugins),
+            {"flutter_packages": 1, "ios_components": 0},
+        )
+
+    def test_ios_native_plugin_has_locked_embedded_notice(self) -> None:
+        notice = b"Full native plugin license\n"
+        self._write_ios_manifest(
+            notice_hash=hashlib.sha256(notice).hexdigest(),
+        )
+        app = self._write_ios_app(
+            flutter_packages=["alpha"],
+            resources={"beta-license.txt": notice},
+        )
+        self.assertEqual(
+            validate_ios_app(app, self.lockfile, self.plugins),
+            {"flutter_packages": 2, "ios_components": 1},
+        )
+
+    def test_ios_rejects_tampered_native_plugin_notice(self) -> None:
+        notice = b"Full native plugin license\n"
+        self._write_ios_manifest(
+            notice_hash=hashlib.sha256(notice).hexdigest(),
+        )
+        app = self._write_ios_app(
+            flutter_packages=["alpha"],
+            resources={"beta-license.txt": b"tampered\n"},
+        )
+        with self.assertRaisesRegex(GateError, "notice hash mismatch"):
+            validate_ios_app(app, self.lockfile, self.plugins)
+
+    def test_ios_rejects_redundant_manual_notice(self) -> None:
+        notice = b"Full native plugin license\n"
+        self._write_ios_manifest(
+            notice_hash=hashlib.sha256(notice).hexdigest(),
+        )
+        app = self._write_ios_app(resources={"beta-license.txt": notice})
+        with self.assertRaisesRegex(GateError, "redundantly covers"):
+            validate_ios_app(app, self.lockfile, self.plugins)
 
     def test_missing_flutter_notice_fails(self) -> None:
         apk = self._write_apk(flutter_packages=["alpha"])
