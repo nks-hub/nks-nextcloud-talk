@@ -147,6 +147,8 @@ final class VoiceMessageController extends ChangeNotifier {
     required this.previewPlayer,
     required this.submitter,
     required this.submissionContext,
+    this.submissionContextResolver,
+    this.onReplyDurablyAccepted,
   });
 
   final AttachmentCapabilityProfile capabilityProfile;
@@ -155,6 +157,8 @@ final class VoiceMessageController extends ChangeNotifier {
   final VoicePreviewPlayer previewPlayer;
   final VoiceAttachmentSubmitter submitter;
   final VoiceAttachmentContext submissionContext;
+  final VoiceAttachmentContext? Function()? submissionContextResolver;
+  final ValueChanged<int>? onReplyDurablyAccepted;
 
   VoiceMessageState _state = VoiceMessageState.idle;
   VoiceMessageState get state => _state;
@@ -172,8 +176,11 @@ final class VoiceMessageController extends ChangeNotifier {
                 _state.draft == null))) {
       return false;
     }
-    final metadata = submissionContext.toMetadata();
-    if (!capabilityProfile.voice || !capabilityProfile.supports(metadata)) {
+    final context = _resolveSubmissionContext();
+    final metadata = context?.toMetadata();
+    if (!capabilityProfile.voice ||
+        metadata == null ||
+        !capabilityProfile.supports(metadata)) {
       _setError(VoiceMessageError.unsupported);
       return false;
     }
@@ -346,8 +353,10 @@ final class VoiceMessageController extends ChangeNotifier {
             _state.phase != VoiceMessagePhase.error)) {
       return false;
     }
-    final metadata = submissionContext.toMetadata();
-    if (!capabilityProfile.supports(metadata) ||
+    final context = _resolveSubmissionContext();
+    final metadata = context?.toMetadata();
+    if (metadata == null ||
+        !capabilityProfile.supports(metadata) ||
         !metadata.supportsSource(draft.source)) {
       _setState(
         VoiceMessageState(
@@ -385,6 +394,14 @@ final class VoiceMessageController extends ChangeNotifier {
       }
       _ownershipTransferred = true;
       _setState(const VoiceMessageState(phase: VoiceMessagePhase.submitted));
+      final replyTo = metadata.replyTo;
+      if (replyTo != null && !_closed) {
+        try {
+          onReplyDurablyAccepted?.call(replyTo);
+        } on Object {
+          // Durable admission already succeeded; host rendering is separate.
+        }
+      }
       return true;
     } on Object {
       if (_isCurrent(generation)) {
@@ -480,8 +497,9 @@ final class VoiceMessageController extends ChangeNotifier {
         recording.duration > const Duration(hours: 24)) {
       return false;
     }
-    final metadata = submissionContext.toMetadata();
-    return capabilityProfile.supports(metadata) &&
+    final metadata = _resolveSubmissionContext()?.toMetadata();
+    return metadata != null &&
+        capabilityProfile.supports(metadata) &&
         metadata.supportsSource(recording.source) &&
         const <AttachmentSourceOwnership>{
           AttachmentSourceOwnership.appOwnedCopy,
@@ -494,6 +512,15 @@ final class VoiceMessageController extends ChangeNotifier {
 
   bool _isCurrentPlay(int generation) =>
       !_closed && generation == _playGeneration;
+
+  VoiceAttachmentContext? _resolveSubmissionContext() {
+    try {
+      final resolver = submissionContextResolver;
+      return resolver == null ? submissionContext : resolver();
+    } on Object {
+      return null;
+    }
+  }
 
   void _setError(VoiceMessageError error) {
     _setState(VoiceMessageState(phase: VoiceMessagePhase.error, error: error));
@@ -682,7 +709,6 @@ final class VoiceMessageControls extends StatelessWidget {
   }
 }
 
-
 /// Live loudness bars for a running recording.
 ///
 /// Every bar comes from a real amplitude sample, so the widget repaints only
@@ -709,8 +735,7 @@ final class VoiceRecordingWaveform extends StatefulWidget {
   State<VoiceRecordingWaveform> createState() => _VoiceRecordingWaveformState();
 }
 
-final class _VoiceRecordingWaveformState
-    extends State<VoiceRecordingWaveform> {
+final class _VoiceRecordingWaveformState extends State<VoiceRecordingWaveform> {
   final List<double> _samples = <double>[];
   StreamSubscription<double>? _subscription;
 
@@ -806,8 +831,7 @@ final class _WaveformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_WaveformPainter oldDelegate) =>
-      oldDelegate.color != color ||
-      !listEquals(oldDelegate.samples, samples);
+      oldDelegate.color != color || !listEquals(oldDelegate.samples, samples);
 }
 
 Future<void> _bestEffort(Future<void> Function() action) async {

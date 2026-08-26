@@ -103,7 +103,7 @@ void main() {
     );
   });
 
-  test('binds voice, reply and thread metadata to capabilities', () async {
+  test('binds voice replies and named threads to separate scopes', () async {
     final api = _api(
       (_) async => http.Response(jsonEncode(_attachmentCapabilities()), 200),
     );
@@ -116,7 +116,7 @@ void main() {
       uploadPolicy: uploadPolicy,
     );
 
-    final request = await resolver.resolve(
+    final replyRequest = await resolver.resolve(
       accountId: AccountId.parse('account-a'),
       roomToken: _roomToken(),
       source: _source(mimeType: 'audio/mpeg', displayName: 'voice.mp3'),
@@ -124,18 +124,42 @@ void main() {
         kind: AttachmentMessageKind.voice,
         caption: 'Synthetic caption',
         replyTo: 40,
-        threadId: 42,
-        threadTitle: 'Synthetic thread',
         silent: true,
       ),
     );
+    final threadRequest = await resolver.resolve(
+      accountId: AccountId.parse('account-a'),
+      roomToken: _roomToken(),
+      source: _source(handle: 'source-thread'),
+      metadata: _metadata(threadId: 42, threadTitle: 'Synthetic thread'),
+    );
 
-    expect(request.profile.voice, isTrue);
-    expect(request.profile.caption, isTrue);
-    expect(request.profile.reply, isTrue);
-    expect(request.profile.threads, isTrue);
-    expect(request.profile.silent, isTrue);
-    expect(request.metadata.expectedMessageType, 'voice-message');
+    expect(replyRequest.profile.voice, isTrue);
+    expect(replyRequest.profile.caption, isTrue);
+    expect(replyRequest.profile.reply, isTrue);
+    expect(replyRequest.profile.silent, isTrue);
+    expect(replyRequest.metadata.expectedMessageType, 'voice-message');
+    expect(replyRequest.metadata.replyTo, 40);
+    expect(replyRequest.metadata.threadId, isNull);
+    expect(threadRequest.profile.threads, isTrue);
+    expect(threadRequest.metadata.replyTo, isNull);
+    expect(threadRequest.metadata.threadId, 42);
+    expect(threadRequest.metadata.threadTitle, 'Synthetic thread');
+  });
+
+  test('rejects metadata that mixes a reply with a named thread', () {
+    expect(
+      () => _metadata(replyTo: 40, threadId: 42),
+      throwsA(
+        isA<TalkProtocolException>()
+            .having(
+              (error) => error.code,
+              'code',
+              TalkProtocolErrorCode.invalidAttachmentModel,
+            )
+            .having((error) => error.path, 'path', r'$.metadata.scope'),
+      ),
+    );
   });
 
   test('keeps authority and generations isolated between accounts', () async {

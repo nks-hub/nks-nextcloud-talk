@@ -10,6 +10,8 @@ Widget _composerApp({
   ImageSelectionBackend imageSelectionBackend = const _ImageBackend(),
   List<Widget> idleActions = const <Widget>[],
   ChatMediaComposerController? controller,
+  ChatMediaReplyTarget? replyTarget,
+  ValueChanged<int>? onReplyDurablyAccepted,
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -19,6 +21,8 @@ Widget _composerApp({
         server: _server,
         roomToken: _room,
         threadId: threadId,
+        replyTarget: replyTarget,
+        onReplyDurablyAccepted: onReplyDurablyAccepted,
         sourceStore: sourceStore,
         capabilityProfile: profile ?? _profile(),
         submissionBridge: bridge,
@@ -31,6 +35,22 @@ Widget _composerApp({
     ),
   );
 }
+
+ChatMediaReplyTarget _replyTarget({
+  AccountId? accountId,
+  ConversationToken? roomToken,
+  int messageId = 51,
+  int? messageThreadId,
+  bool deleted = false,
+  bool systemMessage = false,
+}) => ChatMediaReplyTarget(
+  accountId: accountId ?? _account,
+  roomToken: roomToken ?? _room,
+  messageId: messageId,
+  messageThreadId: messageThreadId,
+  deleted: deleted,
+  systemMessage: systemMessage,
+);
 
 Future<void> _prepareVoicePreview(
   WidgetTester tester,
@@ -400,6 +420,7 @@ AttachmentCapabilityProfile _profile({bool voice = true}) =>
               'spreed': <String, Object?>{
                 'features': <String>[
                   'chat-reference-id',
+                  'chat-replies',
                   if (voice) 'voice-message-sharing',
                   'threads',
                 ],

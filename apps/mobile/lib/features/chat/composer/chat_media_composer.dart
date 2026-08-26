@@ -22,6 +22,24 @@ typedef LoadGiphyAttachmentPayload =
       AttachmentCancellationSignal cancellationSignal,
     );
 
+final class ChatMediaReplyTarget {
+  const ChatMediaReplyTarget({
+    required this.accountId,
+    required this.roomToken,
+    required this.messageId,
+    required this.messageThreadId,
+    required this.deleted,
+    required this.systemMessage,
+  });
+
+  final AccountId accountId;
+  final ConversationToken roomToken;
+  final int messageId;
+  final int? messageThreadId;
+  final bool deleted;
+  final bool systemMessage;
+}
+
 final class ChatMediaComposerController {
   Object? _owner;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
@@ -55,6 +73,8 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.server,
     required this.roomToken,
     required this.threadId,
+    required this.replyTarget,
+    required this.onReplyDurablyAccepted,
     required this.sourceStore,
     required this.capabilityProfile,
     required this.submissionBridge,
@@ -69,6 +89,8 @@ final class ChatMediaComposer extends StatefulWidget {
   final ServerBase server;
   final ConversationToken roomToken;
   final int? threadId;
+  final ChatMediaReplyTarget? replyTarget;
+  final ValueChanged<int>? onReplyDurablyAccepted;
   final DurableAttachmentSourceStore sourceStore;
   final AttachmentCapabilityProfile capabilityProfile;
   final AttachmentSubmissionBridge submissionBridge;
@@ -97,25 +119,63 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Timer? _voiceResetTimer;
   bool _disposed = false;
 
-  AttachmentMetadata get _imageMetadata => AttachmentMetadata(
-    kind: AttachmentMessageKind.file,
-    replyTo: null,
-    threadId: widget.threadId,
-    silent: false,
-  );
+  AttachmentMetadata? _metadataFor(AttachmentMessageKind kind) {
+    final replyTarget = widget.replyTarget;
+    if (replyTarget == null) {
+      return AttachmentMetadata(
+        kind: kind,
+        replyTo: null,
+        threadId: widget.threadId,
+        silent: false,
+      );
+    }
+    if (widget.threadId != null ||
+        replyTarget.messageId < 1 ||
+        replyTarget.accountId != widget.accountId ||
+        replyTarget.roomToken != widget.roomToken ||
+        (replyTarget.messageThreadId != null &&
+            replyTarget.messageThreadId != replyTarget.messageId) ||
+        replyTarget.deleted ||
+        replyTarget.systemMessage) {
+      return null;
+    }
+    return AttachmentMetadata(
+      kind: kind,
+      replyTo: replyTarget.messageId,
+      threadId: null,
+      silent: false,
+    );
+  }
 
-  AttachmentMetadata get _voiceMetadata => AttachmentMetadata(
-    kind: AttachmentMessageKind.voice,
-    replyTo: null,
-    threadId: widget.threadId,
-    silent: false,
-  );
+  _MediaAdmissionSnapshot? _captureAdmission(AttachmentMessageKind kind) {
+    final metadata = _metadataFor(kind);
+    if (metadata == null || !widget.capabilityProfile.supports(metadata)) {
+      return null;
+    }
+    return _MediaAdmissionSnapshot(
+      accountId: widget.accountId,
+      server: widget.server,
+      roomToken: widget.roomToken,
+      metadata: metadata,
+    );
+  }
 
-  bool get _imageSupported => widget.capabilityProfile.supports(_imageMetadata);
+  bool get _imageSupported =>
+      _captureAdmission(AttachmentMessageKind.file) != null;
 
-  bool get _voiceSupported =>
-      widget.capabilityProfile.voice &&
-      widget.capabilityProfile.supports(_voiceMetadata);
+  bool get _voiceAdmissionSupported =>
+      _captureAdmission(AttachmentMessageKind.voice) != null;
+
+  bool get _voiceSupported {
+    final metadata = AttachmentMetadata(
+      kind: AttachmentMessageKind.voice,
+      replyTo: null,
+      threadId: widget.threadId,
+      silent: false,
+    );
+    return widget.capabilityProfile.voice &&
+        widget.capabilityProfile.supports(metadata);
+  }
 
   @override
   void initState() {
@@ -179,6 +239,17 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       ),
       submitter: _voiceSubmitter,
       submissionContext: VoiceAttachmentContext(threadId: widget.threadId),
+      submissionContextResolver: () {
+        final metadata = _metadataFor(AttachmentMessageKind.voice);
+        if (metadata == null || !widget.capabilityProfile.supports(metadata)) {
+          return null;
+        }
+        return VoiceAttachmentContext(
+          replyTo: metadata.replyTo,
+          threadId: metadata.threadId,
+        );
+      },
+      onReplyDurablyAccepted: _notifyReplyDurablyAccepted,
     );
     controller.addListener(_handleVoiceState);
     return controller;
@@ -189,6 +260,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   ) async {
     final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
     final admissionSourceStore = widget.sourceStore;
+    final acceptedReplyTo = request.metadata.replyTo;
+    final acceptanceCallback = widget.onReplyDurablyAccepted;
     _retainedImageSubmissionBridge = bridge;
     _imageAdmissionPending = true;
     var durablyAccepted = false;
@@ -198,6 +271,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       if (_sameSource(_preparedImageSource, request.source)) {
         _preparedImageSource = null;
       }
+      _notifyReplyDurablyAccepted(
+        acceptedReplyTo,
+        callback: acceptanceCallback,
+      );
       return session;
     } finally {
       _imageAdmissionPending = false;
@@ -215,7 +292,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Future<ImageAttachmentUploadRequest?> _prepareImage(
     AttachmentPickerSource pickerSource,
   ) async {
-    if (!_imageSupported) {
+    final admission = _captureAdmission(AttachmentMessageKind.file);
+    if (admission == null) {
       throw const AttachmentSubmissionException(
         AttachmentSubmissionFailure.unsupported,
       );
@@ -237,11 +315,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       }
       _preparedImageSource = source;
       return ImageAttachmentUploadRequest(
-        accountId: widget.accountId,
-        server: widget.server,
-        roomToken: widget.roomToken,
+        accountId: admission.accountId,
+        server: admission.server,
+        roomToken: admission.roomToken,
         source: source,
-        metadata: _imageMetadata,
+        metadata: admission.metadata,
       );
     } on ImageAttachmentPickerException catch (error) {
       throw ImageAttachmentPreparationFailure(switch (error.code) {
@@ -270,6 +348,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Future<ImageAttachmentUploadRequest?> _prepareGiphyAttachment(
     LoadGiphyAttachmentPayload loader,
   ) async {
+    final admission = _captureAdmission(AttachmentMessageKind.file);
+    if (admission == null) {
+      throw const AttachmentSubmissionException(
+        AttachmentSubmissionFailure.unsupported,
+      );
+    }
     final cancellation = AttachmentCancellationController();
     _imagePreparationCancellation = cancellation;
     PreparedAttachmentSource? source;
@@ -297,11 +381,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       }
       _preparedImageSource = source;
       return ImageAttachmentUploadRequest(
-        accountId: widget.accountId,
-        server: widget.server,
-        roomToken: widget.roomToken,
+        accountId: admission.accountId,
+        server: admission.server,
+        roomToken: admission.roomToken,
         source: source,
-        metadata: _imageMetadata,
+        metadata: admission.metadata,
       );
     } finally {
       if (identical(_imagePreparationCancellation, cancellation)) {
@@ -345,6 +429,20 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       unawaited(controller.close());
       setState(() => _voiceController = _createVoiceController());
     });
+  }
+
+  void _notifyReplyDurablyAccepted(
+    int? messageId, {
+    ValueChanged<int>? callback,
+  }) {
+    if (messageId == null || _disposed || !mounted) {
+      return;
+    }
+    try {
+      (callback ?? widget.onReplyDurablyAccepted)?.call(messageId);
+    } on Object {
+      // Durable admission already succeeded; host rendering cannot undo it.
+    }
   }
 
   void _discardPreparedImage() {
@@ -391,6 +489,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     final voiceController = _voiceController;
     final voiceOwnsToolbar =
         voiceController != null && !_showsIdleToolbar(voiceController.state);
+    final showVoiceUnavailable =
+        voiceController == null ||
+        (!_voiceAdmissionSupported && !voiceOwnsToolbar);
     return Column(
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -417,7 +518,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                     prepare: _prepareImage,
                     enabled: _imageSupported,
                   ),
-                  if (voiceController == null)
+                  if (showVoiceUnavailable)
                     SizedBox.square(
                       dimension: 48,
                       child: IconButton(
@@ -439,6 +540,20 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       ],
     );
   }
+}
+
+final class _MediaAdmissionSnapshot {
+  const _MediaAdmissionSnapshot({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.metadata,
+  });
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final AttachmentMetadata metadata;
 }
 
 final class _CurrentVoiceAttachmentSubmitter

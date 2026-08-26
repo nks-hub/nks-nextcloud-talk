@@ -36,66 +36,72 @@ void main() {
     }
   });
 
-  testWidgets(
-    'root image upload reports real progress and completes without a spinner',
-    (tester) async {
-      final bridge = _RecordingBridge();
-      addTearDown(bridge.close);
-      final voiceBackends = _VoiceBackendFactory();
-      addTearDown(voiceBackends.close);
+  testWidgets('root image reply is accepted before later upload confirmation', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final acceptedReplies = <int>[];
 
-      await tester.pumpWidget(
-        _composerApp(
-          sourceStore: sourceStore,
-          bridge: bridge.bridge,
-          threadId: null,
-          voiceBackends: voiceBackends,
-        ),
-      );
-      await _pickAttachmentSource(tester);
-      await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        replyTarget: _replyTarget(),
+        onReplyDurablyAccepted: (messageId) {
+          acceptedReplies.add(messageId);
+          throw StateError('host callback failures stay outside admission');
+        },
+        voiceBackends: voiceBackends,
+      ),
+    );
+    await _pickAttachmentSource(tester);
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
-      expect(bridge.metadata, hasLength(1));
-      expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
-      expect(bridge.metadata.single.replyTo, isNull);
-      expect(bridge.metadata.single.threadId, isNull);
+    expect(bridge.metadata, hasLength(1));
+    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+    expect(bridge.metadata.single.replyTo, 51);
+    expect(bridge.metadata.single.threadId, isNull);
+    expect(acceptedReplies, <int>[51]);
 
-      bridge.sessions.single.add(
-        _progress(AttachmentJobPhase.uploading, progress: 0.42),
-      );
-      await tester.pump();
-      expect(find.text('Uploading… 42%'), findsOneWidget);
-      expect(
-        tester
-            .widget<LinearProgressIndicator>(
-              find.byKey(const Key('image-attachment-upload-progress')),
-            )
-            .value,
-        0.42,
-      );
+    bridge.sessions.single.add(
+      _progress(AttachmentJobPhase.uploading, progress: 0.42),
+    );
+    await tester.pump();
+    expect(find.text('Uploading… 42%'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byKey(const Key('image-attachment-upload-progress')),
+          )
+          .value,
+      0.42,
+    );
 
-      bridge.sessions.single
-        ..add(_progress(AttachmentJobPhase.awaitingConfirmation, progress: 1))
-        ..add(_progress(AttachmentJobPhase.completed, progress: 1));
-      await tester.pump();
+    bridge.sessions.single
+      ..add(_progress(AttachmentJobPhase.awaitingConfirmation, progress: 1))
+      ..add(_progress(AttachmentJobPhase.completed, progress: 1));
+    await tester.pump();
 
-      expect(
-        find.byKey(const Key('image-attachment-upload-panel')),
-        findsNothing,
-      );
-      expect(find.text('Attachment sent'), findsNothing);
-      expect(
-        find.byKey(const Key('image-attachment-upload-progress')),
-        findsNothing,
-      );
-      expect(
-        tester
-            .widget<IconButton>(find.byKey(const Key('pick-image-attachment')))
-            .onPressed,
-        isNotNull,
-      );
-    },
-  );
+    expect(
+      find.byKey(const Key('image-attachment-upload-panel')),
+      findsNothing,
+    );
+    expect(find.text('Attachment sent'), findsNothing);
+    expect(
+      find.byKey(const Key('image-attachment-upload-progress')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('pick-image-attachment')))
+          .onPressed,
+      isNotNull,
+    );
+  });
 
   testWidgets('Giphy bytes enter the same durable image upload pipeline', (
     tester,
@@ -143,6 +149,7 @@ void main() {
     expect(bridge.sources.single.mimeType, 'image/gif');
     expect(bridge.sources.single.displayName, 'giphy-fixture.gif');
     expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+    expect(bridge.metadata.single.replyTo, isNull);
     expect(bridge.metadata.single.threadId, 73);
 
     await tester.pump();
@@ -274,12 +281,15 @@ void main() {
     addTearDown(bridge.close);
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    final acceptedReplies = <int>[];
 
     await tester.pumpWidget(
       _composerApp(
         sourceStore: sourceStore,
         bridge: bridge.bridge,
         threadId: null,
+        replyTarget: _replyTarget(messageId: 52),
+        onReplyDurablyAccepted: acceptedReplies.add,
         voiceBackends: voiceBackends,
       ),
     );
@@ -290,8 +300,9 @@ void main() {
 
     final metadata = bridge.metadata.single;
     expect(metadata.kind, AttachmentMessageKind.voice);
-    expect(metadata.replyTo, isNull);
+    expect(metadata.replyTo, 52);
     expect(metadata.threadId, isNull);
+    expect(acceptedReplies, <int>[52]);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 901));
@@ -349,12 +360,21 @@ void main() {
     final backend = _PendingImageBackend();
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    var currentReply = _replyTarget(messageId: 61);
+    final acceptedReplies = <int>[];
 
     Widget app() => _composerApp(
       composerKey: ValueKey((_account.value, _room.value, null)),
       sourceStore: sourceStore,
       bridge: bridge.bridge,
       threadId: null,
+      replyTarget: currentReply,
+      onReplyDurablyAccepted: (messageId) {
+        acceptedReplies.add(messageId);
+        if (currentReply.messageId == messageId) {
+          currentReply = _replyTarget(messageId: 0);
+        }
+      },
       imageSelectionBackend: backend,
       voiceBackends: voiceBackends,
     );
@@ -363,11 +383,15 @@ void main() {
     await _pickAttachmentSource(tester);
     await _pumpUntil(tester, () => backend.selectionRequested);
 
+    currentReply = _replyTarget(messageId: 62);
     await tester.pumpWidget(app());
     await backend.complete();
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     expect(bridge.metadata, hasLength(1));
+    expect(bridge.metadata.single.replyTo, 61);
+    expect(acceptedReplies, <int>[61]);
+    expect(currentReply.messageId, 62);
     expect(bridge.sessions, hasLength(1));
   });
 
@@ -381,6 +405,7 @@ void main() {
       addTearDown(durable.close);
       final voiceBackends = _VoiceBackendFactory();
       addTearDown(voiceBackends.close);
+      final acceptedReplies = <int>[];
       PreparedAttachmentSource? preparedSource;
       final bridge = AttachmentSubmissionBridge(
         accountId: _account,
@@ -413,6 +438,8 @@ void main() {
           sourceStore: sourceStore,
           bridge: bridge,
           threadId: null,
+          replyTarget: _replyTarget(messageId: 63),
+          onReplyDurablyAccepted: acceptedReplies.add,
           voiceBackends: voiceBackends,
         ),
       );
@@ -439,6 +466,7 @@ void main() {
       releasePrepare.complete();
       await _pumpUntil(tester, () => enqueueFinished.isCompleted);
       expect(sourceExistsDuringAdmission, isTrue);
+      expect(acceptedReplies, isEmpty);
     },
   );
 
@@ -450,6 +478,7 @@ void main() {
     final prepareSettled = Completer<void>();
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    final acceptedReplies = <int>[];
     PreparedAttachmentSource? preparedSource;
     final bridge = AttachmentSubmissionBridge(
       accountId: _account,
@@ -476,6 +505,8 @@ void main() {
         sourceStore: sourceStore,
         bridge: bridge,
         threadId: null,
+        replyTarget: _replyTarget(messageId: 64),
+        onReplyDurablyAccepted: acceptedReplies.add,
         voiceBackends: voiceBackends,
       ),
     );
@@ -499,6 +530,7 @@ void main() {
       }
     }
     expect(sourceExists, isFalse);
+    expect(acceptedReplies, isEmpty);
   });
 
   testWidgets('narrow idle toolbar keeps all five actions on one baseline', (
@@ -578,6 +610,68 @@ void main() {
     );
     expect(button.onPressed, isNull);
     expect(find.byKey(const Key('voice-record')), findsNothing);
+  });
+
+  testWidgets('invalid reply bindings fail closed for every media action', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final invalidBindings = <({ChatMediaReplyTarget target, int? threadId})>[
+      (
+        target: _replyTarget(accountId: AccountId.parse('account-b')),
+        threadId: null,
+      ),
+      (
+        target: _replyTarget(
+          roomToken: ConversationToken.parse('roomb123', path: r'$.roomToken'),
+        ),
+        threadId: null,
+      ),
+      (target: _replyTarget(messageId: 0), threadId: null),
+      (
+        target: _replyTarget(messageId: 51, messageThreadId: 50),
+        threadId: null,
+      ),
+      (target: _replyTarget(deleted: true), threadId: null),
+      (target: _replyTarget(systemMessage: true), threadId: null),
+      (target: _replyTarget(), threadId: 73),
+    ];
+
+    for (var index = 0; index < invalidBindings.length; index++) {
+      final binding = invalidBindings[index];
+      final controller = ChatMediaComposerController();
+      await tester.pumpWidget(
+        _composerApp(
+          composerKey: ValueKey('invalid-reply-$index'),
+          sourceStore: sourceStore,
+          bridge: bridge.bridge,
+          threadId: binding.threadId,
+          replyTarget: binding.target,
+          voiceBackends: voiceBackends,
+          controller: controller,
+        ),
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('pick-image-attachment')))
+            .onPressed,
+        isNull,
+      );
+      final giphyStarted = await tester.runAsync(
+        () => controller.submitGiphyAttachment(
+          (_) => throw StateError('an invalid binding must not load bytes'),
+        ),
+      );
+      expect(giphyStarted, isFalse);
+      if (find.byKey(const Key('voice-record')).evaluate().isNotEmpty) {
+        await tester.tap(find.byKey(const Key('voice-record')));
+        await tester.pump();
+      }
+      expect(bridge.metadata, isEmpty);
+    }
   });
 
   testWidgets('capability failure replaces loading and exposes retry', (
@@ -670,12 +764,15 @@ void main() {
     addTearDown(bridge.close);
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    final acceptedReplies = <int>[];
 
     await tester.pumpWidget(
       _composerApp(
         sourceStore: sourceStore,
         bridge: bridge.bridge,
         threadId: null,
+        replyTarget: _replyTarget(messageId: 65),
+        onReplyDurablyAccepted: acceptedReplies.add,
         voiceBackends: voiceBackends,
         imageSelectionBackend: const _DocumentBackend(),
       ),
@@ -691,6 +788,9 @@ void main() {
       AttachmentSourceOwnership.appOwnedCopy,
     );
     expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+    expect(bridge.metadata.single.replyTo, 65);
+    expect(bridge.metadata.single.threadId, isNull);
+    expect(acceptedReplies, <int>[65]);
   });
 
   testWidgets('a refused camera reports its own message, not a generic one', (

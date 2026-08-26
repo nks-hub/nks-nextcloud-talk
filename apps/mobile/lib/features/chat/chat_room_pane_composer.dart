@@ -268,6 +268,28 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       );
   }
 
+  void _handleMediaReplyDurablyAccepted(int messageId) {
+    if (!mounted || widget.threadId != null) {
+      return;
+    }
+    final current = _replyTo;
+    if (current == null ||
+        current.messageId != messageId ||
+        current.accountId != widget.account.id ||
+        current.roomToken != widget.conversation.token ||
+        (current.threadId != null && current.threadId != current.messageId)) {
+      return;
+    }
+    _update(() {
+      final latest = _replyTo;
+      if (latest?.messageId == messageId &&
+          latest?.accountId == widget.account.id &&
+          latest?.roomToken == widget.conversation.token) {
+        _replyTo = null;
+      }
+    });
+  }
+
   Future<void> _confirmResend(StoredTextSendOperation operation) async {
     final strings = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
@@ -376,6 +398,20 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             widget.conversation.token,
             path: r'$.roomToken',
           );
+          final cachedReplyTo = widget.threadId == null ? _replyTo : null;
+          final replyTarget = cachedReplyTo == null
+              ? null
+              : ChatMediaReplyTarget(
+                  accountId: AccountId.parse(cachedReplyTo.accountId),
+                  roomToken: ConversationToken.parse(
+                    cachedReplyTo.roomToken,
+                    path: r'$.replyTo.roomToken',
+                  ),
+                  messageId: cachedReplyTo.messageId,
+                  messageThreadId: cachedReplyTo.threadId,
+                  deleted: cachedReplyTo.deleted,
+                  systemMessage: cachedReplyTo.systemMessage.isNotEmpty,
+                );
           return ChatMediaComposer(
             key: ValueKey((
               widget.account.id,
@@ -387,6 +423,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             server: server,
             roomToken: roomToken,
             threadId: widget.threadId,
+            replyTarget: replyTarget,
+            onReplyDurablyAccepted: _handleMediaReplyDurablyAccepted,
             sourceStore: value.source,
             capabilityProfile: value.profile,
             submissionBridge: AttachmentSubmissionBridge.withService(

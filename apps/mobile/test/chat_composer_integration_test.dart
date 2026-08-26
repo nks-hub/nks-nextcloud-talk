@@ -14,7 +14,9 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
+import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -23,6 +25,59 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'media reply reaches finalize and clears its banner on enqueue',
+    (tester) async {
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      addTearDown(harness.close);
+      await tester.runAsync(harness.seedReplyMessage);
+
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(const Key('chat-message-target-109'))
+                .evaluate()
+                .isNotEmpty &&
+            find.byType(ChatMediaComposer).evaluate().isNotEmpty,
+      );
+      await tester.longPress(find.byKey(const Key('chat-message-target-109')));
+      await _pumpTransition(tester);
+      await tester.tap(find.byKey(const Key('message-action-reply')));
+      await _pumpTransition(tester);
+      expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+
+      final controller = tester
+          .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+          .controller!;
+      late Future<bool> acceptedFuture;
+      await tester.runAsync(() async {
+        acceptedFuture = controller.submitGiphyAttachment(
+          (_) async => GiphyAttachmentPayload(
+            body: _animatedGif,
+            mimeType: 'image/gif',
+            displayName: 'reply-fixture.gif',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      });
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-reply-banner')).evaluate().isEmpty,
+      );
+      expect(await tester.runAsync(() => acceptedFuture), isTrue);
+      await _pumpUntil(tester, () => harness.finalizedMetadata.isNotEmpty);
+
+      expect(harness.finalizedMetadata.single['replyTo'], 109);
+      expect(harness.finalizedMetadata.single.containsKey('threadId'), isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+    timeout: const Timeout(Duration(seconds: 20)),
+  );
+
   testWidgets('Giphy selection sends a reference and keeps the composer', (
     tester,
   ) async {
@@ -319,6 +374,7 @@ final class _ComposerHarness {
     required this.attachmentRoot,
     required this.uploadedAttachments,
     required this.finalizedFileNames,
+    required this.finalizedMetadata,
   });
 
   final AppDatabase database;
@@ -333,6 +389,7 @@ final class _ComposerHarness {
   final Directory attachmentRoot;
   final List<List<int>> uploadedAttachments;
   final List<String> finalizedFileNames;
+  final List<Map<String, Object?>> finalizedMetadata;
 
   static Future<_ComposerHarness> create() async {
     final database = openTestDatabase();
@@ -374,6 +431,7 @@ final class _ComposerHarness {
     final sentMessages = <String>[];
     final uploadedAttachments = <List<int>>[];
     final finalizedFileNames = <String>[];
+    final finalizedMetadata = <Map<String, Object?>>[];
     final attachmentRoot = await Directory.systemTemp.createTemp(
       'nctalk-composer-attachments-',
     );
@@ -392,6 +450,11 @@ final class _ComposerHarness {
         final body = jsonDecode(request.body) as Map<String, Object?>;
         final fileName = body['fileName']! as String;
         finalizedFileNames.add(fileName);
+        finalizedMetadata.add(
+          Map<String, Object?>.from(
+            jsonDecode(body['talkMetaData']! as String) as Map<String, Object?>,
+          ),
+        );
         return http.Response.bytes(_attachmentFinalizeSuccess(fileName), 200);
       }
       fail('Unexpected attachment request: ${request.method} ${request.url}');
@@ -455,7 +518,34 @@ final class _ComposerHarness {
       attachmentRoot: attachmentRoot,
       uploadedAttachments: uploadedAttachments,
       finalizedFileNames: finalizedFileNames,
+      finalizedMetadata: finalizedMetadata,
     );
+  }
+
+  Future<void> seedReplyMessage() async {
+    final room = _conversationRoomJson();
+    final message = Map<String, Object?>.from(
+      room['lastMessage']! as Map<String, Object?>,
+    );
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: account.id,
+            roomToken: conversation.token,
+            messageId: message['id']! as int,
+            actorType: message['actorType']! as String,
+            actorId: message['actorId']! as String,
+            actorDisplayName: message['actorDisplayName']! as String,
+            timestamp: message['timestamp']! as int,
+            systemMessage: message['systemMessage']! as String,
+            messageType: message['messageType']! as String,
+            referenceId: message['referenceId']! as String,
+            displayText: message['message']! as String,
+            deleted: false,
+            rawJson: jsonEncode(message),
+          ),
+        );
   }
 
   Widget app({
@@ -573,6 +663,7 @@ Map<String, Object?> _attachmentCapabilities() {
       'conversation-v4',
       'chat-v2',
       'chat-reference-id',
+      'chat-replies',
     ],
   );
   final ocs = result['ocs']! as Map<String, Object?>;
