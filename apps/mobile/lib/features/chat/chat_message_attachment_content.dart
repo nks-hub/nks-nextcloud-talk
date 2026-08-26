@@ -342,7 +342,6 @@ final class _ChatAttachment extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 6),
         ] else if (image?.isLoading ?? false) ...[
           Container(
             key: Key('chat-image-loading-$messageId-$index'),
@@ -355,7 +354,6 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
             child: const CircularProgressIndicator(strokeWidth: 2),
           ),
-          const SizedBox(height: 6),
         ] else if (imageFailed) ...[
           Container(
             key: Key('chat-image-error-$messageId-$index'),
@@ -388,56 +386,56 @@ final class _ChatAttachment extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 6),
         ],
-        // The message text already names the file through its rich object, so
-        // this action stays a compact button instead of repeating the name.
-        Semantics(
-          button: true,
-          label: '${strings.openAttachment}: $name',
-          child: ExcludeSemantics(
-            child: Material(
-              color: scheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                key: Key('chat-open-attachment-$messageId-$index'),
-                onTap: openAttachment,
+        if (previewProvider == null && voiceUri == null)
+          // The message text already names the file through its rich object,
+          // so this fallback stays compact instead of repeating the name.
+          Semantics(
+            button: true,
+            label: '${strings.openAttachment}: $name',
+            child: ExcludeSemantics(
+              child: Material(
+                color: scheme.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(10),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 7,
+                child: InkWell(
+                  key: Key('chat-open-attachment-$messageId-$index'),
+                  onTap: openAttachment,
+                  borderRadius: BorderRadius.circular(10),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          mimeType?.startsWith('image/') == true
-                              ? Icons.image_rounded
-                              : Icons.insert_drive_file_rounded,
-                          color: scheme.primary,
-                        ),
-                        if (opensExternally) ...[
-                          const SizedBox(width: 6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Icon(
-                            Icons.open_in_new_rounded,
-                            size: 18,
+                            mimeType?.startsWith('image/') == true
+                                ? Icons.image_rounded
+                                : Icons.insert_drive_file_rounded,
                             color: scheme.primary,
                           ),
+                          if (opensExternally) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.open_in_new_rounded,
+                              size: 18,
+                              color: scheme.primary,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

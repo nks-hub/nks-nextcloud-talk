@@ -150,17 +150,13 @@ void _registerChatRoomPaneRenderingTests() {
       expect(openImageSemantics.hasAction(ui.SemanticsAction.tap), isTrue);
       expect(tester.getSize(openImage).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(openImage).height, greaterThanOrEqualTo(48));
-      final openAttachment = find.byKey(const Key('chat-open-attachment-20-0'));
-      expect(openAttachment, findsOneWidget);
+      expect(find.byKey(const Key('chat-open-attachment-20-0')), findsNothing);
       expect(
-        find.descendant(
-          of: openAttachment,
-          matching: find.byIcon(Icons.open_in_new_rounded),
-        ),
-        findsNothing,
+        tester.getSize(find.byKey(const Key('chat-attachment-20-0'))).height,
+        lessThanOrEqualTo(64),
       );
-      await tester.ensureVisible(openAttachment);
-      await tester.tap(openAttachment);
+      await tester.ensureVisible(openImage);
+      await tester.tap(openImage);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -229,7 +225,7 @@ void _registerChatRoomPaneRenderingTests() {
     },
   );
 
-  testWidgets('image attachment row opens viewer while thumbnail is loading', (
+  testWidgets('image attachment uses one surface while thumbnail is loading', (
     tester,
   ) async {
     final thumbnail = Completer<ChatMediaImage?>();
@@ -283,9 +279,18 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pump();
 
     expect(find.byKey(const Key('chat-image-loading-30-0')), findsOneWidget);
-    final row = find.byKey(const Key('chat-open-attachment-30-0'));
-    expect(row, findsOneWidget);
-    await tester.tap(row);
+    expect(find.byKey(const Key('chat-open-attachment-30-0')), findsNothing);
+    thumbnail.complete(
+      ChatMediaImage(
+        body: base64Decode(_onePixelGif),
+        contentType: 'image/gif',
+      ),
+    );
+    await tester.pump();
+
+    final openImage = find.byKey(const Key('chat-open-image-30-0'));
+    expect(openImage, findsOneWidget);
+    await tester.tap(openImage);
     await tester.pump();
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -354,23 +359,7 @@ void _registerChatRoomPaneRenderingTests() {
 
     expect(find.byKey(const Key('chat-image-error-31-0')), findsOneWidget);
     expect(thumbnailAttempts, 1);
-    final attachmentRow = find.byKey(const Key('chat-open-attachment-31-0'));
-    expect(
-      find.descendant(
-        of: attachmentRow,
-        matching: find.byIcon(Icons.open_in_new_rounded),
-      ),
-      findsNothing,
-    );
-    await tester.tap(attachmentRow);
-    await tester.pump();
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 20)),
-    );
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('authenticated-image-close')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-open-attachment-31-0')), findsNothing);
 
     await tester.tap(find.byKey(const Key('chat-image-retry-31-0')));
     await tester.pump();
@@ -378,14 +367,10 @@ void _registerChatRoomPaneRenderingTests() {
 
     expect(thumbnailAttempts, 2);
     expect(find.byKey(const Key('chat-image-31-0')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: attachmentRow,
-        matching: find.byIcon(Icons.open_in_new_rounded),
-      ),
-      findsNothing,
-    );
-    await tester.tap(attachmentRow);
+    expect(find.byKey(const Key('chat-open-attachment-31-0')), findsNothing);
+    final openImage = find.byKey(const Key('chat-open-image-31-0'));
+    expect(openImage, findsOneWidget);
+    await tester.tap(openImage);
     await tester.pump();
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -739,6 +724,7 @@ void _registerChatRoomPaneRenderingTests() {
 
     expect(find.byKey(const Key('chat-voice-50')), findsOneWidget);
     expect(find.byKey(const Key('chat-voice-toggle-50')), findsOneWidget);
+    expect(find.byKey(const Key('chat-open-attachment-50-0')), findsNothing);
     expect(
       tester.widget<Icon>(find.byIcon(Icons.play_arrow_rounded)).semanticLabel,
       'Play voice message',
