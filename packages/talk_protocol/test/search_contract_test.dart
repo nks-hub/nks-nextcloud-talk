@@ -49,6 +49,7 @@ void main() {
     String conversation = 'fixtureroom1',
     String messageId = '42',
     int? timestamp = 1770000000,
+    String? threadId,
     String resourceUrl =
         'https://cloud.example.invalid/call/fixtureroom1#message_42',
   }) => {
@@ -61,6 +62,7 @@ void main() {
     'attributes': {
       'conversation': conversation,
       'messageId': messageId,
+      'threadId': ?threadId,
       'timestamp': ?timestamp,
     },
   };
@@ -237,6 +239,26 @@ void main() {
         response.results.single.timestamp,
         DateTime.fromMillisecondsSinceEpoch(1770000000 * 1000, isUtc: true),
       );
+    });
+
+    test('preserves the canonical thread id a live provider sends', () {
+      final response = decodeMessageSearchResponse(
+        request: globalRequest(),
+        statusCode: 200,
+        json: successBody(entries: [searchEntry(threadId: '40')]),
+      );
+
+      expect(response.results.single.threadId, 40);
+    });
+
+    test('leaves thread id null for a root result outside a thread', () {
+      final response = decodeMessageSearchResponse(
+        request: globalRequest(),
+        statusCode: 200,
+        json: successBody(entries: [searchEntry()]),
+      );
+
+      expect(response.results.single.threadId, isNull);
     });
 
     test('rejects a timestamp that is neither a number nor digits', () {
@@ -435,6 +457,25 @@ void main() {
         ),
         throwsA(isA<TalkProtocolException>()),
       );
+    });
+
+    test('rejects an invalid canonical threadId', () {
+      for (final threadId in <String>['0', '-1', 'not-a-number']) {
+        expect(
+          () => decodeMessageSearchResponse(
+            request: globalRequest(),
+            statusCode: 200,
+            json: successBody(entries: [searchEntry(threadId: threadId)]),
+          ),
+          throwsA(
+            isA<TalkProtocolException>().having(
+              (error) => error.path,
+              'path',
+              r'$.ocs.data.entries[0].attributes.threadId',
+            ),
+          ),
+        );
+      }
     });
 
     test('rejects more entries than the maximum result cap', () {

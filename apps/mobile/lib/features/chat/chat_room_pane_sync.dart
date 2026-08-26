@@ -352,23 +352,62 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       if (!_isCurrentJump(key, generation)) {
         return;
       }
-      final blocks = _decodeScopeBlocks(scope);
-      if (blocks != null && _blockIndexOf(blocks, messageId) != -1) {
-        if (await _revealMessage(messageId, key, generation)) {
+      final cachedProbe = await _revealCoveredMessage(
+        scope,
+        messageId,
+        key,
+        generation,
+      );
+      if (cachedProbe != null) {
+        if (cachedProbe) {
           return;
         }
-        // The id sits inside a confirmed range but has no visible row: it is
-        // hidden, expired or deleted server-side. Paging further back cannot
-        // produce it.
         break;
       }
       if (scope?.hasHistory != true || !await _loadOlder()) {
+        break;
+      }
+      final loadedScope = await chat.getScope(
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+        threadId: key.threadId,
+      );
+      if (!_isCurrentJump(key, generation)) {
+        return;
+      }
+      final loadedProbe = await _revealCoveredMessage(
+        loadedScope,
+        messageId,
+        key,
+        generation,
+      );
+      if (loadedProbe != null) {
+        if (loadedProbe) {
+          return;
+        }
         break;
       }
     }
     if (mounted && _isCurrentJump(key, generation)) {
       _reportJumpFailed();
     }
+  }
+
+  /// Returns `null` while the target is still outside fetched blocks, `true`
+  /// after revealing it, and `false` when a confirmed block contains no
+  /// visible row. The last case is terminal: another history page cannot
+  /// restore a hidden, expired or deleted message inside an existing block.
+  Future<bool?> _revealCoveredMessage(
+    StoredChatScope? scope,
+    int messageId,
+    ChatRoomProviderKey key,
+    int generation,
+  ) async {
+    final blocks = _decodeScopeBlocks(scope);
+    if (blocks == null || _blockIndexOf(blocks, messageId) == -1) {
+      return null;
+    }
+    return _revealMessage(messageId, key, generation);
   }
 
   /// Scrolls the target into view and highlights it. Returns `false` only

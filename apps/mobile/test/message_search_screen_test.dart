@@ -13,6 +13,7 @@ MessageSearchResult _result({
   String excerpt = 'Hello there',
   String roomToken = 'abcd1234',
   int messageId = 42,
+  int? threadId,
 }) => parseMessageSearchResult(<String, Object?>{
   'title': author,
   'subline': excerpt,
@@ -21,6 +22,7 @@ MessageSearchResult _result({
   'attributes': <String, Object?>{
     'conversation': roomToken,
     'messageId': '$messageId',
+    if (threadId != null) 'threadId': '$threadId',
   },
 }, path: r'$');
 
@@ -45,23 +47,20 @@ void main() {
   Future<void> pumpScreen(
     WidgetTester tester,
     MessageSearchService service, {
-    void Function(ConversationToken roomToken, int messageId)?
-    onResultSelected,
+    ValueChanged<MessageSearchResult>? onResultSelected,
   }) async {
     await tester.pumpWidget(
       localizedTestApp(
         home: MessageSearchScreen(
           accountId: 'account-a',
           service: service,
-          onResultSelected: onResultSelected ?? (_, _) {},
+          onResultSelected: onResultSelected ?? (_) {},
         ),
       ),
     );
   }
 
-  testWidgets('shows the empty-query prompt before any typing', (
-    tester,
-  ) async {
+  testWidgets('shows the empty-query prompt before any typing', (tester) async {
     final service = _FakeMessageSearchService((_) async => const []);
     await pumpScreen(tester, service);
 
@@ -90,16 +89,14 @@ void main() {
   testWidgets('shows results with author, excerpt and tap callback', (
     tester,
   ) async {
-    final service = _FakeMessageSearchService((_) async => [_result()]);
-    ConversationToken? tappedToken;
-    int? tappedMessageId;
+    final service = _FakeMessageSearchService(
+      (_) async => [_result(threadId: 40)],
+    );
+    MessageSearchResult? tappedResult;
     await pumpScreen(
       tester,
       service,
-      onResultSelected: (roomToken, messageId) {
-        tappedToken = roomToken;
-        tappedMessageId = messageId;
-      },
+      onResultSelected: (result) => tappedResult = result,
     );
 
     await tester.enterText(
@@ -115,8 +112,9 @@ void main() {
     await tester.tap(find.text('Alice'));
     await tester.pump();
 
-    expect(tappedToken?.value, 'abcd1234');
-    expect(tappedMessageId, 42);
+    expect(tappedResult?.roomToken.value, 'abcd1234');
+    expect(tappedResult?.messageId, 42);
+    expect(tappedResult?.threadId, 40);
   });
 
   testWidgets('shows the no-results state for an empty result list', (

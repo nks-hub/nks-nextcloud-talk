@@ -2,17 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:talk_protocol/talk_protocol.dart' show ConversationToken;
+import 'package:talk_protocol/talk_protocol.dart' show MessageSearchResult;
 
 import '../../app_providers.dart';
 import '../../core/brand_mark.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../chat/chat_room_pane.dart' show ChatThreadContext;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import '../search/message_search_screen.dart';
+import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
 import 'conversation_list_actions.dart';
 import 'conversation_presence.dart';
@@ -382,9 +384,8 @@ void _openMessageSearch(BuildContext context, String accountId) {
         builder: (context, ref, _) => MessageSearchScreen(
           accountId: accountId,
           service: ref.watch(messageSearchServiceProvider),
-          onResultSelected: (roomToken, messageId) => unawaited(
-            _openSearchResult(context, ref, accountId, roomToken, messageId),
-          ),
+          onResultSelected: (result) =>
+              unawaited(_openSearchResult(context, ref, accountId, result)),
         ),
       ),
     ),
@@ -398,8 +399,7 @@ Future<void> _openSearchResult(
   BuildContext context,
   WidgetRef ref,
   String accountId,
-  ConversationToken roomToken,
-  int messageId,
+  MessageSearchResult result,
 ) async {
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
@@ -410,10 +410,10 @@ Future<void> _openSearchResult(
       ? null
       : await accounts.getConversation(
           accountId: accountId,
-          token: roomToken.value,
+          token: result.roomToken.value,
         );
-  navigator.pop();
   if (account == null || conversation == null) {
+    navigator.pop();
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -424,12 +424,52 @@ Future<void> _openSearchResult(
       );
     return;
   }
+
+  final threadId = result.threadId;
+  ChatThreadContext? threadContext;
+  if (threadId != null && threadId != result.messageId) {
+    try {
+      threadContext = await resolveMessageSearchThread(
+        repository: ref.read(chatRepositoryProvider),
+        accountId: accountId,
+        result: result,
+        synchronizeThread: () => ref
+            .read(chatServiceProvider)
+            .syncRoom(
+              accountId: accountId,
+              roomToken: result.roomToken.value,
+              threadId: threadId,
+            ),
+      );
+    } on MessageSearchThreadException catch (error) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('search-thread-unavailable'),
+            content: Text(switch (error.code) {
+              MessageSearchThreadError.unavailable =>
+                strings.jumpToMessageNotFound,
+              MessageSearchThreadError.credential =>
+                strings.syncCredentialMissing,
+              MessageSearchThreadError.rateLimited => strings.syncRateLimited,
+              MessageSearchThreadError.serviceUnavailable ||
+              MessageSearchThreadError.network => strings.chatUnavailable,
+            }),
+          ),
+        );
+      return;
+    }
+  }
+
+  navigator.pop();
   await navigator.push<void>(
     MaterialPageRoute<void>(
-      builder: (context) => PresenceChatRoomScreen(
+      builder: (context) => buildMessageSearchDestination(
         account: account,
         conversation: conversation,
-        jumpToMessageId: messageId,
+        result: result,
+        threadContext: threadContext,
       ),
     ),
   );

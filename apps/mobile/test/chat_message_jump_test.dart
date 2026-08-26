@@ -221,6 +221,80 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('rechecks a target fetched on the final allowed history page', (
+    tester,
+  ) async {
+    for (var id = 1101; id <= 1108; id++) {
+      await _insertMessage(database, account.id, id);
+    }
+    await _insertScope(
+      database,
+      account.id,
+      historyCursor: '1101',
+      futureCursor: '1108',
+      hasHistory: true,
+      blocksJson: '[["1101","1108"]]',
+    );
+    var historyRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        final capabilities = _capabilitiesResponse(request);
+        if (capabilities != null) {
+          return capabilities;
+        }
+        if (request.url.queryParameters['lookIntoFuture'] == '0') {
+          historyRequests++;
+          final anchor = int.parse(
+            request.url.queryParameters['lastKnownMessageId']!,
+          );
+          final newest = anchor - 1;
+          final oldest = (anchor - 100).clamp(1, newest);
+          return http.Response(
+            jsonEncode(_historyPage(newest: newest, oldest: oldest)),
+            200,
+            headers: <String, String>{
+              'X-Chat-Last-Given': '$oldest',
+              'X-Chat-Last-Common-Read': '1101',
+            },
+          );
+        }
+        return http.Response('', 304);
+      }),
+    );
+    addTearDown(api.close);
+
+    await tester.pumpWidget(
+      _app(
+        database: database,
+        vault: vault,
+        api: api,
+        home: PresenceChatRoomScreen(
+          account: account,
+          conversation: conversation,
+          jumpToMessageId: 42,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('chat-message-target-42'))
+              .evaluate()
+              .isNotEmpty ||
+          find.byKey(const Key('chat-jump-not-found')).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+
+    expect(historyRequests, 11);
+    expect(find.byKey(const Key('chat-message-target-42')), findsOneWidget);
+    expect(find.byKey(const Key('chat-jump-not-found')), findsNothing);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('says so instead of failing silently when nothing can be found', (
     tester,
   ) async {

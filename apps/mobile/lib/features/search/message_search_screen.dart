@@ -10,9 +10,8 @@ const Duration _searchDebounce = Duration(milliseconds: 400);
 
 enum _MessageSearchViewState { idle, searching, error, results }
 
-/// Full-screen message search. Tapping a result hands `(roomToken,
-/// messageId)` to [onResultSelected] and does not navigate anywhere itself —
-/// opening the target conversation is the caller's responsibility.
+/// Full-screen message search. Tapping a result hands the complete validated
+/// result to [onResultSelected] and leaves navigation to the caller.
 final class MessageSearchScreen extends StatefulWidget {
   const MessageSearchScreen({
     super.key,
@@ -23,8 +22,7 @@ final class MessageSearchScreen extends StatefulWidget {
 
   final String accountId;
   final MessageSearchService service;
-  final void Function(ConversationToken roomToken, int messageId)
-  onResultSelected;
+  final ValueChanged<MessageSearchResult> onResultSelected;
 
   @override
   State<MessageSearchScreen> createState() => _MessageSearchScreenState();
@@ -162,8 +160,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
             final result = _results[index];
             return _MessageSearchResultTile(
               result: result,
-              onTap: () =>
-                  widget.onResultSelected(result.roomToken, result.messageId),
+              onTap: () => widget.onResultSelected(result),
             );
           },
         );

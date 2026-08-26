@@ -14,6 +14,7 @@ const String _searchTruncationSuffix = '…';
 final class MessageSearchResult {
   MessageSearchResult._({
     required this.messageId,
+    required this.threadId,
     required this.roomToken,
     required this.author,
     required this.excerpt,
@@ -23,6 +24,7 @@ final class MessageSearchResult {
   });
 
   final int messageId;
+  final int? threadId;
   final ConversationToken roomToken;
   final String author;
   final String excerpt;
@@ -109,6 +111,21 @@ MessageSearchResult parseMessageSearchResult(
     protocolFailure(_responseCode, '$path.attributes.messageId');
   }
 
+  int? threadId;
+  if (attributes['threadId'] != null) {
+    final rawThreadId = requireString(
+      attributes['threadId'],
+      path: '$path.attributes.threadId',
+      code: _responseCode,
+      minLength: 1,
+      maxLength: 20,
+    );
+    threadId = int.tryParse(rawThreadId);
+    if (threadId == null || threadId < 1) {
+      protocolFailure(_responseCode, '$path.attributes.threadId');
+    }
+  }
+
   DateTime? timestamp;
   if (attributes['timestamp'] != null) {
     // A live unified search provider serialises every attribute as a string,
@@ -137,6 +154,7 @@ MessageSearchResult parseMessageSearchResult(
 
   return MessageSearchResult._(
     messageId: messageId,
+    threadId: threadId,
     roomToken: roomToken,
     author: title,
     excerpt: excerpt,
