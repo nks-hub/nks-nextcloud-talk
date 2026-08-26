@@ -4,6 +4,17 @@ import XCTest
 @testable import nextcloudtalk
 
 class RunnerTests: XCTestCase {
+  func testApplicationLifecycleDoesNotForwardOptionalDelegateSelectors() {
+    let delegate = AppDelegate()
+
+    delegate.applicationDidFinishLaunching(
+      Notification(name: NSApplication.didFinishLaunchingNotification)
+    )
+    delegate.applicationWillTerminate(
+      Notification(name: NSApplication.willTerminateNotification)
+    )
+  }
+
   func testColdLaunchLinkIsReturnedOnlyOnce() throws {
     let delivery = AppleDeepLinkDelivery()
     let wrapped = try XCTUnwrap(

@@ -90,7 +90,6 @@ class AppDelegate: FlutterAppDelegate {
       forEventClass: AEEventClass(kInternetEventClass),
       andEventID: AEEventID(kAEGetURL)
     )
-    super.applicationDidFinishLaunching(notification)
   }
 
   override func applicationWillTerminate(_ notification: Notification) {
@@ -98,7 +97,6 @@ class AppDelegate: FlutterAppDelegate {
       forEventClass: AEEventClass(kInternetEventClass),
       andEventID: AEEventID(kAEGetURL)
     )
-    super.applicationWillTerminate(notification)
   }
 
   @objc private func handleGetURLEvent(
