@@ -503,6 +503,14 @@ manifestem a responsivním runtime na samostatné Windows 11 VM. Inspector captu
 prokazuje Flutter render, ne skutečné pixely release DirectComposition okna;
 přihlášený desktop E2E proto zůstává samostatná brána.
 
+Apple důkaz ze source `83078cd` prošel na macOS 15.7.4 arm64 přes analyze,
+čistý debug i universal release build, codesign verify a živé okno 800×628.
+Skutečný Flutter inspector render prokazuje debug UI; nativní window capture
+selhal a není důkazem. Stejný source prošel čistým iOS Simulator buildem,
+instalací, spuštěním a framebuffer capture na iPhone 16 Pro s iOS 18.6. Ad-hoc
+podpis ani simulátor neprokazují distribuční signing, fyzické zařízení,
+Keychain login, APNs/PushKit nebo background lifecycle.
+
 ### D-028: Giphy jako renderovaná reference
 
 Stav: Přepsáno 25. srpna 2026 výslovným uživatelským rozhodnutím. Předchozí
