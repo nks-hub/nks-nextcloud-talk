@@ -38,6 +38,7 @@ const _roomDetailUpdateAllowedStatusCodes = {200, 401, 403, 404, 429, 503};
 const _roomSettingsMutationAllowedStatusCodes = {200, 401, 404, 429, 503};
 const _roomSensitivityAllowedStatusCodes = {200, 400, 401, 404, 429, 503};
 const _callNotificationAllowedStatusCodes = {200, 400, 401, 404, 429, 503};
+const _clearHistoryAllowedStatusCodes = {200, 202, 401, 403, 404, 429, 503};
 
 /// Shared by leaving and deleting a conversation: both answer `400` for a
 /// refusal the caller has to explain and `403` when the participant lacks

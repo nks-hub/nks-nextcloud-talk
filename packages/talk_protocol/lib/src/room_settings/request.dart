@@ -4,12 +4,14 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import '../bootstrap/capabilities.dart';
+import '../chat/request.dart' show chatV1Path;
 import '../conversations/request.dart' show conversationV4Path;
 import '../identifiers.dart';
 import '../protocol_exception.dart';
 import '../server_base.dart';
 
 part 'request_call_notifications.dart';
+part 'request_clear_history.dart';
 part 'request_importance_sensitivity.dart';
 part 'request_message_expiration.dart';
 

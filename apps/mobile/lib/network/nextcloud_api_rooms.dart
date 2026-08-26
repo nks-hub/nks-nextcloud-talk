@@ -221,6 +221,34 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  /// Clears every server chat message in one room and returns the replacement
+  /// system message. This destructive call is direct and never retried here.
+  Future<ClearRoomHistoryResponse> clearRoomHistory({
+    required ClearRoomHistoryRequest clearRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(clearRequest.httpMethod, clearRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...clearRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _clearHistoryAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeClearRoomHistoryResponse(
+      request: clearRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
   /// Marks or unmarks a conversation as one of the caller's favorites.
   Future<SetFavoriteResponse> setFavorite({
     required SetFavoriteRequest favoriteRequest,

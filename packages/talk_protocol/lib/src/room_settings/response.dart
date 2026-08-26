@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../chat/identifiers.dart';
+import '../chat/models.dart';
+import '../chat/response.dart' show ChatResponseHeaders;
 import '../conversations/models.dart';
 import '../json_value.dart';
 import '../protocol_exception.dart';
@@ -9,6 +12,7 @@ import 'request.dart';
 part 'response_updates.dart';
 part 'response_administration.dart';
 part 'response_call_notifications.dart';
+part 'response_clear_history.dart';
 part 'response_importance_sensitivity.dart';
 part 'response_message_expiration.dart';
 

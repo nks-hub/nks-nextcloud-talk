@@ -8,6 +8,7 @@ import '../core/giphy_reference.dart';
 import 'app_database.dart';
 
 part 'chat_repository_models.dart';
+part 'chat_repository_clear_history.dart';
 part 'chat_repository_projection.dart';
 part 'chat_repository_queries.dart';
 part 'chat_repository_read_markers.dart';
