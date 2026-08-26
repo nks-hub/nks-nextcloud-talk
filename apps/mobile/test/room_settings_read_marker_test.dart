@@ -241,6 +241,80 @@ void main() {
     expect(scope?.unreadMessages, 1);
   });
 
+  test('serializes mark-unread before a later read in the same room', () async {
+    await insertRoom(
+      accountId: 'account-a',
+      token: 'rooma123',
+      lastMessageId: 20,
+    );
+    final unreadStarted = Completer<void>();
+    final unreadResponse = Completer<http.Response>();
+    final operations = <String>[];
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                  'chat-unread',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method == 'DELETE') {
+          operations.add('unread');
+          unreadStarted.complete();
+          return unreadResponse.future;
+        }
+        if (request.method == 'POST') {
+          final target = int.parse(
+            Uri.splitQueryString(request.body)['lastReadMessage']!,
+          );
+          operations.add('read:$target');
+          return http.Response(
+            jsonEncode(_readOcs(lastReadMessage: target)),
+            200,
+          );
+        }
+        return http.Response('', 404);
+      }),
+    );
+
+    final unread = service.markConversationUnread(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    await unreadStarted.future;
+    final read = service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      lastReadMessage: 20,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(operations, ['unread']);
+
+    unreadResponse.complete(
+      http.Response(
+        jsonEncode(_readOcs(lastReadMessage: 19, unreadMessages: 1)),
+        200,
+      ),
+    );
+    await Future.wait([unread, read]);
+    expect(operations, ['unread', 'read:20']);
+    final scope = await ChatRepository(
+      database,
+    ).getScope(accountId: 'account-a', roomToken: 'rooma123', threadId: null);
+    expect(scope?.lastReadMessage, 20);
+    expect(scope?.unreadMessages, 0);
+  });
+
   test('does not serialize read markers across account boundaries', () async {
     for (final accountId in <String>['account-a', 'account-b']) {
       await insertRoom(
@@ -295,6 +369,68 @@ void main() {
       http.Response(jsonEncode(_readOcs(lastReadMessage: 20)), 200),
     );
     await accountARead;
+  });
+
+  test('does not serialize different rooms on the same account', () async {
+    for (final roomToken in <String>['rooma123', 'roomb123']) {
+      await insertRoom(
+        accountId: 'account-a',
+        token: roomToken,
+        lastMessageId: 20,
+      );
+    }
+    final roomAStarted = Completer<void>();
+    final roomAResponse = Completer<http.Response>();
+    final rooms = <String>[];
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        final roomToken = request.url.path.contains('/chat/rooma123/read')
+            ? 'rooma123'
+            : 'roomb123';
+        rooms.add(roomToken);
+        if (roomToken == 'rooma123') {
+          roomAStarted.complete();
+          return roomAResponse.future;
+        }
+        return http.Response(
+          jsonEncode(_readOcs(lastReadMessage: 20, roomToken: roomToken)),
+          200,
+        );
+      }),
+    );
+
+    final roomARead = service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      lastReadMessage: 20,
+    );
+    await roomAStarted.future;
+    await service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'roomb123',
+      lastReadMessage: 20,
+    );
+    expect(rooms, ['rooma123', 'roomb123']);
+
+    roomAResponse.complete(
+      http.Response(jsonEncode(_readOcs(lastReadMessage: 20)), 200),
+    );
+    await roomARead;
   });
 
   test('maps a database write failure and releases the room lane', () async {
@@ -357,6 +493,79 @@ void main() {
     );
     expect(reads, 2);
   });
+
+  test(
+    'propagates programming errors and still releases the room lane',
+    () async {
+      await insertRoom(
+        accountId: 'account-a',
+        token: 'rooma123',
+        lastMessageId: 12,
+      );
+      var reads = 0;
+      final service = serviceWith(
+        MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-read-marker',
+                    'chat-read-last',
+                  ],
+                ),
+              ),
+              200,
+            );
+          }
+          reads++;
+          if (reads == 1) {
+            await (database.update(database.chatScopes)..where(
+                  (scope) =>
+                      scope.accountId.equals('account-a') &
+                      scope.roomToken.equals('rooma123') &
+                      scope.scopeKey.equals('network-root'),
+                ))
+                .write(
+                  const ChatScopesCompanion(scopeKey: Value('invalid-scope')),
+                );
+          }
+          return http.Response(jsonEncode(_readOcs(lastReadMessage: 12)), 200);
+        }),
+      );
+
+      await expectLater(
+        service.markConversationRead(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          lastReadMessage: 12,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Stored chat scope key is invalid',
+          ),
+        ),
+      );
+      await (database.delete(database.chatScopes)..where(
+            (scope) =>
+                scope.accountId.equals('account-a') &
+                scope.roomToken.equals('rooma123') &
+                scope.scopeKey.equals('invalid-scope'),
+          ))
+          .go();
+
+      await service.markConversationRead(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        lastReadMessage: 12,
+      );
+      expect(reads, 2);
+    },
+  );
 
   test('refuses a room whose cache has no last message', () async {
     await insertRoom(accountId: 'account-a', token: 'rooma123');
@@ -555,6 +764,7 @@ Map<String, Object?> _roomJson() {
 Map<String, Object?> _readOcs({
   required int lastReadMessage,
   int unreadMessages = 0,
+  String roomToken = 'rooma123',
 }) {
   return <String, Object?>{
     'ocs': <String, Object?>{
@@ -564,7 +774,7 @@ Map<String, Object?> _readOcs({
         'message': 'OK',
       },
       'data': <String, Object?>{
-        'token': 'rooma123',
+        'token': roomToken,
         'lastReadMessage': lastReadMessage,
         'lastCommonReadMessage': lastReadMessage,
         'unreadMessages': unreadMessages,

@@ -819,7 +819,7 @@ final class RoomSettingsService {
   ) async {
     try {
       return await _chat.applyChatReadResponse(response);
-    } on Object {
+    } on Exception {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
   }
