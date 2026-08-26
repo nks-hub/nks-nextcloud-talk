@@ -33,16 +33,35 @@ void main() {
     await _verifyLiveBridge(tester, threadId: 109);
   });
 
-  testWidgets('ordinary thread pane never moves the root read marker', (
+  testWidgets('ordinary thread pane marks its visible child read', (
     tester,
   ) async {
-    await _verifyThreadReadSuppressed(tester, namedThread: false);
+    await _verifyThreadRead(
+      tester,
+      namedThread: false,
+      includeVisibleChild: true,
+      expectedReadTargets: const [120],
+    );
   });
 
-  testWidgets('named thread pane never moves the root read marker', (
+  testWidgets('named thread pane marks its visible child read', (tester) async {
+    await _verifyThreadRead(
+      tester,
+      namedThread: true,
+      includeVisibleChild: true,
+      expectedReadTargets: const [120],
+    );
+  });
+
+  testWidgets('thread pane never marks a root without a visible child read', (
     tester,
   ) async {
-    await _verifyThreadReadSuppressed(tester, namedThread: true);
+    await _verifyThreadRead(
+      tester,
+      namedThread: true,
+      includeVisibleChild: false,
+      expectedReadTargets: const [],
+    );
   });
 
   testWidgets('paused root pane never moves the read marker', (tester) async {
@@ -76,9 +95,11 @@ void main() {
   _registerReadMarkerSerializationTest();
 }
 
-Future<void> _verifyThreadReadSuppressed(
+Future<void> _verifyThreadRead(
   WidgetTester tester, {
   required bool namedThread,
+  required bool includeVisibleChild,
+  required List<int> expectedReadTargets,
 }) async {
   final database = openTestDatabase();
   addTearDown(database.close);
@@ -136,6 +157,31 @@ Future<void> _verifyThreadReadSuppressed(
           rawJson: jsonEncode(messageWire),
         ),
       );
+  if (includeVisibleChild) {
+    final childWire = _threadChildMessage(namedThread: namedThread);
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: account.id,
+            roomToken: room.token.value,
+            messageId: 120,
+            actorType: 'users',
+            actorId: 'recipient-user',
+            actorDisplayName: 'Recipient User',
+            timestamp: 1770000120,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'thread-child-120',
+            displayText: namedThread
+                ? 'Named thread child'
+                : 'Ordinary thread child',
+            deleted: false,
+            threadId: const Value(109),
+            rawJson: jsonEncode(childWire),
+          ),
+        );
+  }
   const features = {
     'chat-v2',
     'chat-read-marker',
@@ -160,6 +206,20 @@ Future<void> _verifyThreadReadSuppressed(
       conversation: conversation,
       threadId: 109,
     );
+  }
+  if (includeVisibleChild) {
+    await (database.update(database.chatScopes)..where(
+          (row) =>
+              row.accountId.equals(account.id) &
+              row.roomToken.equals(room.token.value) &
+              row.threadId.equals(109),
+        ))
+        .write(
+          const ChatScopesCompanion(
+            futureCursor: Value('120'),
+            blocksJson: Value(r'[["109","120"]]'),
+          ),
+        );
   }
 
   final readTargets = <int>[];
@@ -228,9 +288,24 @@ Future<void> _verifyThreadReadSuppressed(
         .evaluate()
         .isNotEmpty,
   );
+  if (includeVisibleChild) {
+    await _pumpUntil(
+      tester,
+      () => find
+          .text(
+            namedThread ? 'Named thread child' : 'Ordinary thread child',
+            findRichText: true,
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+  }
   await _pumpUntil(tester, () => longPollStarted);
   await tester.pump(const Duration(milliseconds: 100));
-  expect(readTargets, isEmpty);
+  if (expectedReadTargets.isNotEmpty) {
+    await _pumpUntil(tester, () => readTargets.isNotEmpty);
+  }
+  expect(readTargets, expectedReadTargets);
   await tester.pumpWidget(const SizedBox.shrink());
   if (!longPollResponse.isCompleted) {
     longPollResponse.complete(http.Response('', 304));
@@ -644,12 +719,8 @@ Future<void> _verifyLiveBridge(
 
   expect(futureTimeouts, ['0', '30', '0', '0', '30']);
   expect(find.text(messageText, findRichText: true), findsOneWidget);
-  if (threadId == null) {
-    await _pumpUntil(tester, () => readTargets.isNotEmpty);
-    expect(readTargets, [120]);
-  } else {
-    expect(readTargets, isEmpty);
-  }
+  await _pumpUntil(tester, () => readTargets.isNotEmpty);
+  expect(readTargets, [120]);
 
   late List<CachedChatMessage> activeMessages;
   late List<CachedChatMessage> isolatedMessages;
@@ -808,6 +879,12 @@ Map<String, Object?> _threadRootMessage({required bool namedThread}) {
   }
   return message;
 }
+
+Map<String, Object?> _threadChildMessage({required bool namedThread}) =>
+    _externalMessageResponse(
+      message: namedThread ? 'Named thread child' : 'Ordinary thread child',
+      threadId: 109,
+    );
 
 Map<String, Object?> _readMarkerResponse(int messageId) => {
   'ocs': {

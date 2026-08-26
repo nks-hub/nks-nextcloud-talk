@@ -129,31 +129,34 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       _localError = null;
     });
     _startPendingJump();
-    _scheduleVisibleRootReadMarker(generation);
+    _scheduleVisibleReadMarker(generation);
   }
 
-  void _scheduleVisibleRootReadMarker(int generation) {
-    if (!_canMarkVisibleRootRead(generation, _key)) {
+  void _scheduleVisibleReadMarker(int generation) {
+    if (!_canMarkVisibleRead(generation, _key)) {
       return;
     }
     final key = _key;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_markVisibleRootRead(key, generation));
+      unawaited(_markVisibleRead(key, generation));
     });
   }
 
-  Future<void> _markVisibleRootRead(
-    ChatRoomProviderKey key,
-    int generation,
-  ) async {
-    if (!_canMarkVisibleRootRead(generation, key)) {
+  Future<void> _markVisibleRead(ChatRoomProviderKey key, int generation) async {
+    if (!_canMarkVisibleRead(generation, key)) {
       return;
     }
     final messages = _visibleMessages();
-    if (messages.isEmpty) {
+    final threadId = widget.threadId;
+    final readableMessages = threadId == null
+        ? messages
+        : messages
+              .where((message) => message.messageId != threadId)
+              .toList(growable: false);
+    if (readableMessages.isEmpty) {
       return;
     }
-    final messageId = messages.last.messageId;
+    final messageId = readableMessages.last.messageId;
     if (!_isMessageActuallyVisible(messageId) ||
         (_lastAutoReadKey == key && _lastAutoReadMessageId == messageId) ||
         (_autoReadInFlightKey == key &&
@@ -197,11 +200,10 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     }
   }
 
-  bool _canMarkVisibleRootRead(int generation, ChatRoomProviderKey key) {
+  bool _canMarkVisibleRead(int generation, ChatRoomProviderKey key) {
     return mounted &&
         generation == _syncGeneration &&
         key == _key &&
-        widget.threadId == null &&
         widget.jumpToMessageId == null &&
         _pendingJumpMessageId == null &&
         _jumpTargetId == null &&
