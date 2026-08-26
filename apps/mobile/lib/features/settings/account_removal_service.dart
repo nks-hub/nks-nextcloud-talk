@@ -11,6 +11,8 @@ import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 import '../../platform/media/durable_attachment_source_store.dart';
 
+typedef AccountRemovalStarted = Future<void> Function(String accountId);
+
 /// What a finished removal managed to do on the server.
 ///
 /// The local wipe is unconditional, so there is no failure state for it: if
@@ -51,13 +53,15 @@ final class AccountRemovalService {
     required ChatMediaDiskCache mediaDiskCache,
     required Future<Directory> Function() voiceDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
+    AccountRemovalStarted? onRemovalStarted,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _mediaCache = mediaCache,
        _mediaDiskCache = mediaDiskCache,
        _voiceDirectory = voiceDirectory,
-       _attachmentSources = attachmentSources;
+       _attachmentSources = attachmentSources,
+       _onRemovalStarted = onRemovalStarted;
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -66,6 +70,7 @@ final class AccountRemovalService {
   final ChatMediaDiskCache _mediaDiskCache;
   final Future<Directory> Function() _voiceDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
+  final AccountRemovalStarted? _onRemovalStarted;
 
   Future<AccountRemovalOutcome> removeAccount(String accountId) async {
     final account = await _accounts.getAccount(accountId);
@@ -75,6 +80,8 @@ final class AccountRemovalService {
         appPasswordRevoked: false,
       );
     }
+
+    await _onRemovalStarted?.call(accountId);
 
     final appPassword = await _credentials.readAppPassword(accountId);
     var appPasswordRevoked = false;

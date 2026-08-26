@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -46,6 +47,22 @@ import 'platform/media/durable_attachment_source_store.dart';
 final connectivityWakeEventsProvider = Provider<Stream<void>>(
   (ref) => ConnectivityWakeSource().events,
 );
+
+final appLifecycleResumeEventsProvider = Provider<Stream<void>>((ref) {
+  final controller = StreamController<void>.broadcast(sync: true);
+  final listener = AppLifecycleListener(
+    onResume: () {
+      if (!controller.isClosed) {
+        controller.add(null);
+      }
+    },
+  );
+  ref.onDispose(() {
+    listener.dispose();
+    unawaited(controller.close());
+  });
+  return controller.stream;
+});
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -169,6 +186,18 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
     onNotificationAction: (action) => _runNotificationAction(ref, action),
+    reconciliationWakeEvents: <Stream<void>>[
+      ref.watch(connectivityWakeEventsProvider),
+      ref.watch(appLifecycleResumeEventsProvider),
+    ],
+    retryableError: (error) =>
+        error is ConversationSyncException &&
+        switch (error.code) {
+          ConversationSyncError.network ||
+          ConversationSyncError.rateLimited ||
+          ConversationSyncError.serviceUnavailable => true,
+          _ => false,
+        },
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
@@ -537,9 +566,7 @@ final mentionSuggestionSourceProvider = FutureProvider.autoDispose
           MentionSuggestionError.unsupported,
         );
       }
-      final room = ConversationRoom.fromJson(
-        jsonDecode(conversation.rawJson),
-      );
+      final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
       final appPassword = await credentials.readAppPassword(key.accountId);
       if (appPassword == null || appPassword.isEmpty) {
         throw const MentionSuggestionException(
@@ -639,6 +666,9 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
+    onRemovalStarted: (accountId) async {
+      await ref.read(androidPushCoordinatorProvider)?.suspendAccount(accountId);
+    },
   );
 });
 
@@ -697,7 +727,10 @@ final chatMediaProvider = FutureProvider.autoDispose
         return cached;
       }
       final disk = ref.watch(chatMediaDiskCacheProvider);
-      final persisted = await disk.read(accountId: key.account.id, uri: key.uri);
+      final persisted = await disk.read(
+        accountId: key.account.id,
+        uri: key.uri,
+      );
       if (persisted != null) {
         cache.write(cacheKey, persisted);
         return persisted;
@@ -716,7 +749,11 @@ final chatMediaProvider = FutureProvider.autoDispose
       return loaded;
     });
 
-typedef ChatVoiceProviderKey = ({StoredAccount account, Uri uri, int messageId});
+typedef ChatVoiceProviderKey = ({
+  StoredAccount account,
+  Uri uri,
+  int messageId,
+});
 
 /// Player a chat bubble uses for a voice message. Injected so widget tests can
 /// drive playback without a platform audio session.

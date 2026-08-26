@@ -14,11 +14,13 @@ import 'test_support.dart';
 
 part 'android_push_coordinator_actions_test.part.dart';
 part 'android_push_coordinator_registration_test.part.dart';
+part 'android_push_coordinator_reconciliation_test.part.dart';
 part 'android_push_coordinator_retry_routing_test.part.dart';
 part 'android_push_coordinator_test_support.part.dart';
 
 void main() {
   _registerAndroidPushRegistrationTests();
+  _registerAndroidPushReconciliationTests();
   _registerAndroidPushRetryRoutingTests();
   _registerAndroidPushActionTests();
 }

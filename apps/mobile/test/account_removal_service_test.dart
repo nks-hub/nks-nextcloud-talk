@@ -54,7 +54,10 @@ void main() {
     }
   });
 
-  AccountRemovalService buildService(HttpNextcloudApi api) {
+  AccountRemovalService buildService(
+    HttpNextcloudApi api, {
+    AccountRemovalStarted? onRemovalStarted,
+  }) {
     return AccountRemovalService(
       accounts: accounts,
       credentials: vault,
@@ -63,8 +66,34 @@ void main() {
       mediaDiskCache: mediaDiskCache,
       voiceDirectory: () async => voiceRoot,
       attachmentSources: () async => sources,
+      onRemovalStarted: onRemovalStarted,
     );
   }
+
+  test('suspends account push before remote revocation starts', () async {
+    final steps = <String>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        steps.add('${request.method} ${request.url.path}');
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    addTearDown(api.close);
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+    await buildService(
+      api,
+      onRemovalStarted: (accountId) async {
+        steps.add('suspend $accountId');
+      },
+    ).removeAccount('account-a');
+
+    expect(steps, <String>[
+      'suspend account-a',
+      'DELETE /ocs/v2.php/apps/notifications/api/v2/webpush',
+      'DELETE /ocs/v2.php/core/apppassword',
+    ]);
+  });
 
   test('leaves nothing of a removed account in the database or the vault, '
       'and touches nothing of the account that stays', () async {
@@ -97,7 +126,11 @@ void main() {
     // Guards the guard: if this ever finds nothing, the assertion below would
     // pass vacuously.
     expect(before.length, greaterThanOrEqualTo(10));
-    expect(before.values.every((count) => count > 0), isTrue, reason: '$before');
+    expect(
+      before.values.every((count) => count > 0),
+      isTrue,
+      reason: '$before',
+    );
 
     final outcome = await buildService(api).removeAccount('account-a');
 
@@ -163,18 +196,21 @@ void main() {
     expect(vault.values.containsKey('account-a'), isFalse);
   });
 
-  test('a server that rejects the revocation still loses the local copy', () async {
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async => http.Response('{}', 401)),
-    );
-    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+  test(
+    'a server that rejects the revocation still loses the local copy',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async => http.Response('{}', 401)),
+      );
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
 
-    final outcome = await buildService(api).removeAccount('account-a');
+      final outcome = await buildService(api).removeAccount('account-a');
 
-    expect(outcome.appPasswordRevoked, isFalse);
-    expect(await accounts.getAccount('account-a'), isNull);
-    expect(vault.values.containsKey('account-a'), isFalse);
-  });
+      expect(outcome.appPasswordRevoked, isFalse);
+      expect(await accounts.getAccount('account-a'), isNull);
+      expect(vault.values.containsKey('account-a'), isFalse);
+    },
+  );
 
   test('removing the active account promotes the oldest survivor', () async {
     final api = HttpNextcloudApi(

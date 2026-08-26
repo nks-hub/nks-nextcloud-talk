@@ -16,6 +16,9 @@ import 'android_web_push_bridge.dart';
 typedef AndroidPushWakeUp = Future<void> Function(String accountId);
 typedef AndroidPushRetryTimerFactory =
     Timer Function(Duration duration, void Function() callback);
+typedef AndroidPushPeriodicTimerFactory =
+    Timer Function(Duration duration, void Function() callback);
+typedef AndroidPushRetryClassifier = bool Function(Object error);
 
 /// How a notification action ended. [retry] keeps the durable native record so
 /// the next drain tries again; nothing is ever dropped on the floor.
@@ -35,20 +38,35 @@ final class AndroidPushCoordinator {
     required AndroidWebPushPlatform platform,
     required AndroidPushWakeUp onWakeUp,
     AndroidPushActionHandler? onNotificationAction,
+    Iterable<Stream<void>> reconciliationWakeEvents = const <Stream<void>>[],
+    this.reconciliationInterval = const Duration(hours: 6),
     this.retryDelay = const Duration(seconds: 30),
     this.retryMaximumDelay = const Duration(hours: 1),
     double Function()? randomDouble,
     AndroidPushRetryTimerFactory? createRetryTimer,
+    AndroidPushPeriodicTimerFactory? createPeriodicTimer,
+    AndroidPushRetryClassifier? retryableError,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _platform = platform,
        _onWakeUp = onWakeUp,
        _onNotificationAction = onNotificationAction,
+       _reconciliationWakeEvents = List<Stream<void>>.unmodifiable(
+         reconciliationWakeEvents,
+       ),
        _randomDouble = randomDouble ?? Random().nextDouble,
-       _createRetryTimer = createRetryTimer ?? Timer.new {
+       _createRetryTimer = createRetryTimer ?? Timer.new,
+       _createPeriodicTimer =
+           createPeriodicTimer ??
+           ((duration, callback) =>
+               Timer.periodic(duration, (_) => callback())),
+       _retryableError = retryableError ?? ((_) => false) {
     if (retryDelay <= Duration.zero || retryMaximumDelay < retryDelay) {
       throw ArgumentError('Invalid Android push retry timing');
+    }
+    if (reconciliationInterval <= Duration.zero) {
+      throw ArgumentError('Invalid Android push reconciliation timing');
     }
   }
 
@@ -63,16 +81,23 @@ final class AndroidPushCoordinator {
   final AndroidWebPushPlatform _platform;
   final AndroidPushWakeUp _onWakeUp;
   final AndroidPushActionHandler? _onNotificationAction;
+  final List<Stream<void>> _reconciliationWakeEvents;
+  final Duration reconciliationInterval;
   final Duration retryDelay;
   final Duration retryMaximumDelay;
   final double Function() _randomDouble;
   final AndroidPushRetryTimerFactory _createRetryTimer;
+  final AndroidPushPeriodicTimerFactory _createPeriodicTimer;
+  final AndroidPushRetryClassifier _retryableError;
 
   final Map<String, StoredAccount> _knownAccounts = {};
   final Map<String, Future<void>> _accountTails = {};
+  final Map<String, Future<void>> _reconciliationFlights = {};
   final Map<String, Timer> _retryTimers = {};
   final Map<String, int> _retryFailures = {};
   final Map<String, int> _retryRequestSequences = {};
+  final Map<String, int> _accountEpochs = {};
+  final Set<String> _suspendedAccounts = {};
   final ListQueue<AndroidNotificationOpen> _pendingOpens = ListQueue();
   final StreamController<void> _notificationOpenedController =
       StreamController<void>.broadcast();
@@ -80,7 +105,10 @@ final class AndroidPushCoordinator {
   StreamSubscription<List<StoredAccount>>? _accountsSubscription;
   StreamSubscription<int>? _eventsSubscription;
   StreamSubscription<AndroidNotificationOpen>? _openSubscription;
+  final List<StreamSubscription<void>> _reconciliationSubscriptions = [];
+  Timer? _periodicReconciliationTimer;
   Future<void>? _startFuture;
+  Future<void>? _reconcileAllFuture;
   Future<void>? _permissionFuture;
   var _permissionChecked = false;
   var _closed = false;
@@ -98,6 +126,18 @@ final class AndroidPushCoordinator {
     if (_closed || !availability.available) {
       return;
     }
+    for (final events in _reconciliationWakeEvents) {
+      _reconciliationSubscriptions.add(
+        events.listen(
+          (_) => _runDetached(reconcileAll()),
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
+    }
+    _periodicReconciliationTimer = _createPeriodicTimer(
+      reconciliationInterval,
+      () => _runDetached(reconcileAll()),
+    );
     _eventsSubscription = _platform.eventsAvailable.listen((_) {
       for (final accountId in _knownAccounts.keys.toList(growable: false)) {
         _runDetached(drainAccount(accountId));
@@ -107,6 +147,14 @@ final class AndroidPushCoordinator {
       _runDetached(_acceptNotificationOpen(open));
     });
     _accountsSubscription = _accounts.watchAccounts().listen((accounts) {
+      final previousIds = _knownAccounts.keys.toSet();
+      final nextIds = accounts.map((account) => account.id).toSet();
+      for (final accountId in previousIds.difference(nextIds)) {
+        _deactivateAccount(accountId);
+      }
+      for (final accountId in nextIds.difference(previousIds)) {
+        _activateAccount(accountId);
+      }
       _knownAccounts
         ..clear()
         ..addEntries(accounts.map((account) => MapEntry(account.id, account)));
@@ -120,28 +168,87 @@ final class AndroidPushCoordinator {
     }
   }
 
-  Future<void> reconcileAll() async {
+  Future<void> reconcileAll() {
+    if (_closed) {
+      return Future<void>.value();
+    }
+    final existing = _reconcileAllFuture;
+    if (existing != null) {
+      return existing;
+    }
+    late final Future<void> current;
+    current = _reconcileAll().whenComplete(() {
+      if (identical(_reconcileAllFuture, current)) {
+        _reconcileAllFuture = null;
+      }
+    });
+    _reconcileAllFuture = current;
+    return current;
+  }
+
+  Future<void> _reconcileAll() async {
     final accounts = await _accounts.watchAccounts().first;
+    if (_closed) {
+      return;
+    }
     await Future.wait(accounts.map((account) => reconcileAccount(account.id)));
   }
 
   Future<void> reconcileAccount(String accountId) {
-    return _serialize(
-      accountId,
-      () => _runAccountOperation(accountId, () => _reconcileAccount(accountId)),
-    );
+    if (_closed || _suspendedAccounts.contains(accountId)) {
+      return Future<void>.value();
+    }
+    final existing = _reconciliationFlights[accountId];
+    if (existing != null) {
+      return existing;
+    }
+    final epoch = _accountEpochs[accountId] ?? 0;
+    late final Future<void> current;
+    current =
+        _serialize(
+          accountId,
+          () => _runAccountOperation(
+            accountId,
+            () => _reconcileAccount(accountId, epoch),
+          ),
+        ).whenComplete(() {
+          if (identical(_reconciliationFlights[accountId], current)) {
+            _reconciliationFlights.remove(accountId);
+          }
+        });
+    _reconciliationFlights[accountId] = current;
+    return current;
   }
 
   Future<void> drainAccount(String accountId) {
+    if (_closed || _suspendedAccounts.contains(accountId)) {
+      return Future<void>.value();
+    }
     return _serialize(
       accountId,
       () => _runAccountOperation(accountId, () => _drainAccount(accountId)),
     );
   }
 
-  Future<void> _reconcileAccount(String accountId) async {
+  /// Stops new push work for [accountId] and waits for its current serialized
+  /// operation before logout revokes the server registration and credential.
+  Future<void> suspendAccount(String accountId) async {
+    if (_closed) {
+      return;
+    }
+    _deactivateAccount(accountId);
+    final tail = _accountTails[accountId];
+    if (tail != null) {
+      await tail.catchError((Object _) {});
+    }
+  }
+
+  Future<void> _reconcileAccount(String accountId, int epoch) async {
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
     final context = await _loadContext(accountId);
-    if (context == null) {
+    if (context == null || !_isAccountActive(accountId, epoch)) {
       return;
     }
     final capabilities = await _api.getAuthenticatedCapabilities(
@@ -149,16 +256,26 @@ final class AndroidPushCoordinator {
       loginName: context.account.loginName,
       appPassword: context.appPassword,
     );
-    if (!capabilities.supportsNotificationPush('webpush')) {
+    if (!capabilities.supportsNotificationPush('webpush') ||
+        !_isAccountActive(accountId, epoch)) {
       return;
     }
     await _ensureNotificationPermission();
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
     final vapid = await _api.getWebPushVapid(
       server: context.server,
       loginName: context.account.loginName,
       appPassword: context.appPassword,
     );
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
     final state = await _platform.getRegistrationState(accountId: accountId);
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
     final generation = switch (state.phase) {
       AndroidWebPushRegistrationPhase.registering ||
       AndroidWebPushRegistrationPhase.active =>
@@ -170,7 +287,13 @@ final class AndroidPushCoordinator {
       generation: generation,
       vapidPublicKey: vapid,
     );
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
     await _drainAccount(accountId, context: context);
+    if (_isAccountActive(accountId, epoch)) {
+      await _onWakeUp(accountId);
+    }
   }
 
   Future<void> _drainAccount(
@@ -353,7 +476,7 @@ final class AndroidPushCoordinator {
       await _onWakeUp(context.account.id);
       await _acknowledge(context.account.id, event.id);
     } on Object catch (error) {
-      if (_isRetryable(error)) {
+      if (_shouldRetry(error)) {
         _scheduleRetry(context.account.id);
         return;
       }
@@ -440,6 +563,26 @@ final class AndroidPushCoordinator {
     );
   }
 
+  bool _isAccountActive(String accountId, int epoch) {
+    return !_closed &&
+        !_suspendedAccounts.contains(accountId) &&
+        (_accountEpochs[accountId] ?? 0) == epoch;
+  }
+
+  void _activateAccount(String accountId) {
+    if (_suspendedAccounts.contains(accountId)) {
+      return;
+    }
+    _accountEpochs.putIfAbsent(accountId, () => 0);
+  }
+
+  void _deactivateAccount(String accountId) {
+    _suspendedAccounts.add(accountId);
+    _accountEpochs[accountId] = (_accountEpochs[accountId] ?? 0) + 1;
+    _pendingOpens.removeWhere((open) => open.accountId == accountId);
+    _resetRetry(accountId);
+  }
+
   Future<void> _ensureNotificationPermission() {
     if (_permissionChecked) {
       return Future<void>.value();
@@ -465,21 +608,29 @@ final class AndroidPushCoordinator {
     return current;
   }
 
-  Future<void> _acceptNotificationOpen(AndroidNotificationOpen open) async {
-    if (_closed || await _accounts.getAccount(open.accountId) == null) {
-      return;
+  Future<void> _acceptNotificationOpen(AndroidNotificationOpen open) {
+    if (_closed || _suspendedAccounts.contains(open.accountId)) {
+      return Future<void>.value();
     }
-    _pendingOpens.add(open);
-    _notificationOpenedController.add(null);
-    try {
-      await _onWakeUp(open.accountId);
-    } on Object catch (error) {
-      if (_isRetryable(error)) {
-        _scheduleRetry(open.accountId);
+    return _serialize(open.accountId, () async {
+      if (_closed ||
+          _suspendedAccounts.contains(open.accountId) ||
+          await _accounts.getAccount(open.accountId) == null ||
+          _suspendedAccounts.contains(open.accountId)) {
         return;
       }
-      rethrow;
-    }
+      _pendingOpens.add(open);
+      _notificationOpenedController.add(null);
+      try {
+        await _onWakeUp(open.accountId);
+      } on Object catch (error) {
+        if (_shouldRetry(error)) {
+          _scheduleRetry(open.accountId);
+          return;
+        }
+        rethrow;
+      }
+    });
   }
 
   Future<void> _acknowledge(String accountId, String eventId) async {
@@ -515,7 +666,7 @@ final class AndroidPushCoordinator {
         _resetRetry(accountId);
       }
     } on Object catch (error) {
-      if (_isRetryable(error)) {
+      if (_shouldRetry(error)) {
         _scheduleRetry(accountId);
       } else {
         _resetRetry(accountId);
@@ -525,7 +676,7 @@ final class AndroidPushCoordinator {
   }
 
   void _scheduleRetry(String accountId, {bool immediate = false}) {
-    if (_closed) {
+    if (_closed || _suspendedAccounts.contains(accountId)) {
       return;
     }
     _retryRequestSequences[accountId] =
@@ -582,6 +733,10 @@ final class AndroidPushCoordinator {
     _retryRequestSequences.remove(accountId);
   }
 
+  bool _shouldRetry(Object error) {
+    return _isRetryableApiError(error) || _retryableError(error);
+  }
+
   void _runDetached(Future<void> task) {
     unawaited(task.catchError((Object _) {}));
   }
@@ -591,18 +746,31 @@ final class AndroidPushCoordinator {
       return;
     }
     _closed = true;
+    _periodicReconciliationTimer?.cancel();
+    _periodicReconciliationTimer = null;
     for (final timer in _retryTimers.values) {
       timer.cancel();
     }
     _retryTimers.clear();
     _retryFailures.clear();
     _retryRequestSequences.clear();
+    for (final subscription in _reconciliationSubscriptions) {
+      await subscription.cancel();
+    }
+    _reconciliationSubscriptions.clear();
     await _accountsSubscription?.cancel();
     await _eventsSubscription?.cancel();
     await _openSubscription?.cancel();
+    final reconcileAll = _reconcileAllFuture;
+    if (reconcileAll != null) {
+      await reconcileAll.catchError((Object _) {});
+    }
     await Future.wait(
       _accountTails.values.map((tail) => tail.catchError((Object _) {})),
     );
+    _reconciliationFlights.clear();
+    _suspendedAccounts.clear();
+    _accountEpochs.clear();
     await _notificationOpenedController.close();
   }
 }
@@ -614,7 +782,7 @@ final RegExp _uuidV4Pattern = RegExp(
 
 bool _validNotificationId(Object? value) => value is int && value > 0;
 
-bool _isRetryable(Object error) {
+bool _isRetryableApiError(Object error) {
   if (error is! NextcloudApiException) {
     return false;
   }

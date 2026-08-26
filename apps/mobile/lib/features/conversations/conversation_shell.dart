@@ -280,10 +280,6 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
         }
       });
     }
-    final pushCoordinator = ref.read(androidPushCoordinatorProvider);
-    if (pushCoordinator != null) {
-      unawaited(pushCoordinator.reconcileAll());
-    }
   }
 
   @override

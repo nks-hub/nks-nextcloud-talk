@@ -109,6 +109,7 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   int? generation;
   Object? drainFailure;
   AndroidNotificationOpen? launchNotification;
+  Future<AndroidWebPushAvailability>? availabilityFuture;
   var emitEndpointOnRegister = true;
   var permission = AndroidNotificationPermission.notDetermined;
   var permissionRequests = 0;
@@ -122,6 +123,10 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
 
   @override
   Future<AndroidWebPushAvailability> getAvailability() async {
+    final configured = availabilityFuture;
+    if (configured != null) {
+      return configured;
+    }
     return const AndroidWebPushAvailability(
       available: true,
       playServicesAvailable: true,
@@ -328,6 +333,34 @@ final class _ManualRetryTimer implements Timer {
     }
     _active = false;
     _tick = 1;
+    _callback();
+  }
+
+  @override
+  void cancel() {
+    _active = false;
+  }
+}
+
+final class _ManualPeriodicTimer implements Timer {
+  _ManualPeriodicTimer(this.duration, this._callback);
+
+  final Duration duration;
+  final void Function() _callback;
+  var _active = true;
+  var _tick = 0;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => _tick;
+
+  void fire() {
+    if (!_active) {
+      return;
+    }
+    _tick++;
     _callback();
   }
 

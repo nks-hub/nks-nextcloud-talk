@@ -75,6 +75,7 @@ void _registerAndroidPushRegistrationTests() {
         requests.any((request) => request.url.path.endsWith('/webpush')),
         isTrue,
       );
+      expect(wakeUps, <String>[accountId]);
 
       platform.events.add(
         _messageEvent(
@@ -108,7 +109,7 @@ void _registerAndroidPushRegistrationTests() {
       );
       await coordinator.drainAccount(accountId);
 
-      expect(wakeUps, <String>[accountId]);
+      expect(wakeUps, <String>[accountId, accountId]);
       expect(platform.acknowledgedEventIds, contains('message-1'));
     },
   );
