@@ -374,8 +374,6 @@ def validate_response_binding(
         thread_infos = [require_object(data, f"{operation_id} data")]
     else:
         thread_infos = []
-    if operation_id == "setThreadNotificationLevel" and "threadId" not in context:
-        raise ResponseSemanticError("Thread notification canonical id context missing")
     for index, raw_thread_info in enumerate(thread_infos):
         thread_info = require_object(raw_thread_info, f"{operation_id}[{index}]")
         thread = require_object(
@@ -398,7 +396,7 @@ def validate_response_binding(
         )
         if "roomToken" in context and room_token != context["roomToken"]:
             raise ResponseSemanticError("Thread response room binding mismatch")
-        expected_thread_id = context.get("threadId", context.get("messageId"))
+        expected_thread_id = context.get("threadId")
         if expected_thread_id is not None and thread_id != expected_thread_id:
             raise ResponseSemanticError("Thread response id binding mismatch")
         for field, expected_message_id in (
@@ -413,13 +411,9 @@ def validate_response_binding(
                 f"{operation_id}[{index}].{field}",
             )
             if message.get("token") != room_token:
-                raise ResponseSemanticError(
-                    f"Thread {field} message room mismatch"
-                )
+                raise ResponseSemanticError(f"Thread {field} message room mismatch")
             if message.get("id") != expected_message_id:
-                raise ResponseSemanticError(
-                    f"Thread {field} message id mismatch"
-                )
+                raise ResponseSemanticError(f"Thread {field} message id mismatch")
             if message.get("threadId") != thread_id:
                 raise ResponseSemanticError(
                     f"Thread {field} message thread id mismatch"
@@ -480,6 +474,15 @@ def validate_response_cases(
             f"response {case_id}.context",
         )
         validate_context(context, f"response {case_id}.context")
+        if operation_id == "setThreadNotificationLevel":
+            if "messageId" in context:
+                raise ResponseSemanticError(
+                    "Thread notification legacy message id context is forbidden"
+                )
+            if "threadId" not in context:
+                raise ResponseSemanticError(
+                    "Thread notification canonical id context missing"
+                )
         body = require_object(case.get("body"), f"response {case_id}.body")
         schema = schema_for_response(document, operation_id, status)
         validate_schema_instance(schema, body, f"response {case_id}")

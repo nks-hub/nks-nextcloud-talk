@@ -21,6 +21,15 @@ if MODULE_SPEC is None or MODULE_SPEC.loader is None:
 rich_contract = importlib.util.module_from_spec(MODULE_SPEC)
 sys.modules[MODULE_SPEC.name] = rich_contract
 MODULE_SPEC.loader.exec_module(rich_contract)
+rich_protocol = sys.modules["validator_rich_protocol"]
+RUNNER_SPEC = importlib.util.spec_from_file_location(
+    "rich_chat_validator_runner_direct",
+    CONTRACT_ROOT / "validator_rich_runner.py",
+)
+if RUNNER_SPEC is None or RUNNER_SPEC.loader is None:
+    raise RuntimeError("Unable to load the direct rich-chat validator runner")
+direct_runner = importlib.util.module_from_spec(RUNNER_SPEC)
+RUNNER_SPEC.loader.exec_module(direct_runner)
 
 
 def fixture_cases(name: str) -> list[dict[str, object]]:
@@ -34,6 +43,23 @@ def response_records() -> dict[str, dict[str, object]]:
         document,
         fixture_cases("responses.cases.json"),
     )
+
+
+def thread_notification_case(
+    *,
+    include_thread_id: bool = True,
+    include_legacy_message_id: bool = False,
+) -> dict[str, object]:
+    case = next(
+        deepcopy(case)
+        for case in fixture_cases("responses.cases.json")
+        if case["id"] == "thread-notify-success"
+    )
+    if not include_thread_id:
+        case["context"].pop("threadId")
+    if include_legacy_message_id:
+        case["context"]["messageId"] = 122
+    return case
 
 
 class CompleteContractTest(unittest.TestCase):
@@ -221,12 +247,7 @@ class ThreadRequestBindingTest(unittest.TestCase):
 
     def test_notification_response_rejects_legacy_message_context(self) -> None:
         document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
-        case = next(
-            deepcopy(case)
-            for case in fixture_cases("responses.cases.json")
-            if case["id"] == "thread-notify-success"
-        )
-        case["context"]["messageId"] = 122
+        case = thread_notification_case(include_legacy_message_id=True)
 
         with self.assertRaises(rich_contract.ResponseSemanticError) as raised:
             rich_contract.validate_response_cases(document, [case])
@@ -235,6 +256,72 @@ class ThreadRequestBindingTest(unittest.TestCase):
             "Thread notification legacy message id context is forbidden",
             str(raised.exception),
         )
+
+    def test_protocol_entrypoint_requires_canonical_notification_context(self) -> None:
+        document = rich_protocol.load_json(CONTRACT_ROOT / "openapi.json")
+
+        invalid_cases = (
+            (
+                "legacy",
+                thread_notification_case(include_legacy_message_id=True),
+                "Thread notification legacy message id context is forbidden",
+            ),
+            (
+                "missing-canonical",
+                thread_notification_case(include_thread_id=False),
+                "Thread notification canonical id context missing",
+            ),
+        )
+        for label, case, expected_error in invalid_cases:
+            with (
+                self.subTest(label=label),
+                self.assertRaises(rich_protocol.ResponseSemanticError) as raised,
+            ):
+                rich_protocol.validate_response_cases(document, [case])
+
+            self.assertEqual(expected_error, str(raised.exception))
+
+    def test_runner_entrypoint_requires_canonical_notification_context(self) -> None:
+        original_load_cases = direct_runner.load_cases
+        invalid_cases = (
+            (
+                "legacy",
+                thread_notification_case(include_legacy_message_id=True),
+                "Thread notification legacy message id context is forbidden",
+            ),
+            (
+                "missing-canonical",
+                thread_notification_case(include_thread_id=False),
+                "Thread notification canonical id context missing",
+            ),
+        )
+        for label, invalid_case, expected_error in invalid_cases:
+
+            def load_cases(
+                manifest: dict[str, object],
+                file_field: str,
+                count_field: str,
+            ) -> tuple[Path, list[object]]:
+                path, cases = original_load_cases(manifest, file_field, count_field)
+                if file_field != "responsesFile":
+                    return path, cases
+                mutated = deepcopy(cases)
+                index = next(
+                    index
+                    for index, item in enumerate(mutated)
+                    if item["id"] == "thread-notify-success"
+                )
+                mutated[index] = deepcopy(invalid_case)
+                return path, mutated
+
+            with (
+                self.subTest(label=label),
+                patch.object(direct_runner, "load_cases", new=load_cases),
+                self.assertRaises(rich_protocol.ResponseSemanticError) as raised,
+            ):
+                direct_runner.validate_contract()
+
+            self.assertEqual(expected_error, str(raised.exception))
 
     def test_notification_response_rejects_reply_identity_as_root(self) -> None:
         document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
