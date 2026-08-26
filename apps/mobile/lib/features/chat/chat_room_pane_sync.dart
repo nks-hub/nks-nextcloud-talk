@@ -3,6 +3,34 @@ part of 'chat_room_pane.dart';
 extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _sync() => _restartLiveSync();
 
+  void _handleConnectivityWake() {
+    if (!mounted ||
+        !_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
+      return;
+    }
+    final binding = _liveBinding;
+    if (binding == null) {
+      return;
+    }
+    unawaited(_runConnectivityWake(binding, _syncGeneration));
+  }
+
+  Future<void> _runConnectivityWake(
+    ChatLiveRoomBinding binding,
+    int generation,
+  ) async {
+    try {
+      await binding.wakeAfterConnectivity();
+      if (_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
+        _setSyncSuccess(generation);
+      }
+    } on ChatServiceException catch (error) {
+      _setSyncError(generation, error);
+    } on Object catch (error) {
+      _setSyncError(generation, error);
+    }
+  }
+
   Future<void> _restartLiveSync() async {
     final generation = ++_syncGeneration;
     final previousBinding = _liveBinding;

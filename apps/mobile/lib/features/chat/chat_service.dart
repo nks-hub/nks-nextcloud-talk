@@ -309,6 +309,7 @@ final class ChatService {
     int? threadId,
     Future<void>? abortTrigger,
     bool allowPersistedCapabilitiesForSend = false,
+    bool forceCapabilityNetworkRead = false,
   }) async {
     if (threadId != null && threadId < 1) {
       throw const ChatServiceException(ChatServiceError.invalidResponse);
@@ -335,6 +336,7 @@ final class ChatService {
       appPassword: appPassword,
       abortTrigger: abortTrigger,
       allowPersistedCapabilitiesForSend: allowPersistedCapabilitiesForSend,
+      forceNetworkRead: forceCapabilityNetworkRead,
     );
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     final profile = ChatCapabilityProfile.fromTalkFeatures(
@@ -407,6 +409,7 @@ final class ChatService {
     required String appPassword,
     required Future<void>? abortTrigger,
     required bool allowPersistedCapabilitiesForSend,
+    required bool forceNetworkRead,
   }) async {
     try {
       final capabilityRead = await _api.getAuthenticatedCapabilitiesWithSource(
@@ -414,7 +417,7 @@ final class ChatService {
         loginName: account.loginName,
         appPassword: appPassword,
         abortTrigger: abortTrigger,
-        forceRefresh: allowPersistedCapabilitiesForSend,
+        forceRefresh: allowPersistedCapabilitiesForSend || forceNetworkRead,
       );
       final capabilities = capabilityRead.snapshot;
       if (!capabilities.hasTalk) {

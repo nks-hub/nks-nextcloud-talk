@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'core/giphy_reference_load_coordinator.dart';
+import 'core/connectivity_wake_source.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
 import 'data/attachment_repository.dart';
@@ -41,6 +42,10 @@ import 'features/push/android_web_push_bridge.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
+
+final connectivityWakeEventsProvider = Provider<Stream<void>>(
+  (ref) => ConnectivityWakeSource().events,
+);
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();

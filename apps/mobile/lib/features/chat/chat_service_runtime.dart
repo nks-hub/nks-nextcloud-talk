@@ -82,6 +82,7 @@ extension _ChatServiceLiveRuntime on ChatService {
           binding.roomToken,
           threadId: binding.threadId,
           abortTrigger: probe.abortTrigger,
+          forceCapabilityNetworkRead: binding._requiresCapabilityNetworkRead,
         );
         probe.ensureActive();
         prepared = await _initializePreparedLiveBinding(
@@ -94,6 +95,7 @@ extension _ChatServiceLiveRuntime on ChatService {
     );
     probe.ensureActive();
     binding._prepared = prepared;
+    binding._requiresCapabilityNetworkRead = false;
   }
 
   Future<_PreparedChat> _initializePreparedLiveBinding(
@@ -325,7 +327,9 @@ final class ChatLiveRoomBinding {
   Future<void>? _inFlight;
   _LiveSynchronizationCancellation? _activeCancellationCycle;
   Future<void>? _externalCancellation;
+  Future<void>? _connectivityWakeInFlight;
   bool _closed = false;
+  bool _requiresCapabilityNetworkRead = false;
   int _generation = 0;
 
   Future<void> synchronize({Future<void>? abortTrigger}) {
@@ -352,6 +356,42 @@ final class ChatLiveRoomBinding {
           }
         });
     _inFlight = operation;
+    return operation;
+  }
+
+  /// Cancels an idle or active poll and revalidates capabilities before any
+  /// queued send can be claimed. Connectivity is only a wake signal: a false
+  /// positive still fails the network read and leaves the outbox untouched.
+  Future<void> wakeAfterConnectivity() {
+    if (_closed) {
+      return Future<void>.value();
+    }
+    final existing = _connectivityWakeInFlight;
+    if (existing != null) {
+      return existing;
+    }
+    _requiresCapabilityNetworkRead = true;
+    _prepared = null;
+    _generation++;
+    _activeCancellationCycle?.cancel();
+
+    late final Future<void> operation;
+    operation =
+        () async {
+          final active = _inFlight;
+          if (active != null) {
+            await active;
+          }
+          if (_closed) {
+            return;
+          }
+          await synchronize();
+        }().whenComplete(() {
+          if (identical(_connectivityWakeInFlight, operation)) {
+            _connectivityWakeInFlight = null;
+          }
+        });
+    _connectivityWakeInFlight = operation;
     return operation;
   }
 

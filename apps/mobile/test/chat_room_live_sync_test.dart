@@ -17,6 +17,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'chat_room_connectivity_wake_test.part.dart';
+
 void main() {
   testWidgets('root pane keeps background long poll silent and converges', (
     tester,
@@ -29,6 +31,8 @@ void main() {
   ) async {
     await _verifyLiveBridge(tester, threadId: 109);
   });
+
+  _registerConnectivityWakeTest();
 }
 
 Future<void> _verifyLiveBridge(
@@ -165,6 +169,9 @@ Future<void> _verifyLiveBridge(
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
         nextcloudApiProvider.overrideWithValue(api),
+        connectivityWakeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
       ],
       child: localizedTestApp(
         home: ChatRoomPane(

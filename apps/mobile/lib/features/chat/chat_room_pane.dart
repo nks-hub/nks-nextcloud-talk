@@ -182,6 +182,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ChatMediaComposerController();
   ForegroundSyncLoop? _syncLoop;
   ChatLiveRoomBinding? _liveBinding;
+  StreamSubscription<void>? _connectivityWakeSubscription;
   int _syncGeneration = 0;
   int _sendGeneration = 0;
   int _giphyGeneration = 0;
@@ -215,6 +216,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
     _composer.addListener(_scheduleDraftSave);
+    _connectivityWakeSubscription = ref
+        .read(connectivityWakeEventsProvider)
+        .listen(
+          (_) => _handleConnectivityWake(),
+          // Connectivity is only an accelerator. The foreground retry loop
+          // remains authoritative when a platform event source is absent.
+          onError: (Object _, StackTrace _) {},
+        );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _draftStore = ref.read(chatRepositoryProvider);
       unawaited(_restoreDraft(_key));
@@ -310,6 +319,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _jumpGeneration++;
     _liveBinding?.close();
     unawaited(_syncLoop?.stop());
+    unawaited(_connectivityWakeSubscription?.cancel());
+    _connectivityWakeSubscription = null;
     _liveBinding = null;
     _syncLoop = null;
     _draftTimer?.cancel();
