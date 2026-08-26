@@ -674,4 +674,124 @@ void _registerAttachmentServiceRecoveryTests() {
       expect(await fixture.sourceFile.exists(), isFalse);
     },
   );
+
+  test(
+    'ambiguous reply finalize survives database reopen and exact catch-up',
+    () async {
+      final fixture = await _Fixture.create(fileBacked: true);
+      addTearDown(fixture.close);
+      var initialRequestCount = 0;
+      final initialService = fixture.service(
+        MockClient((request) async {
+          initialRequestCount++;
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            throw http.ClientException('Synthetic post-dispatch failure');
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+      );
+      addTearDown(initialService.close);
+
+      final session = await initialService.enqueue(
+        fixture.request(normalMaximum: 32, replyTo: 42),
+      );
+      final ambiguous = await session.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+      );
+
+      expect(ambiguous.errorClass, 'ambiguous-finalize-transport');
+      expect(initialRequestCount, 3);
+      expect(await fixture.sourceFile.exists(), isTrue);
+      await initialService.close();
+      await fixture.reopenDatabase();
+
+      final exactCatchUpStarted = Completer<void>();
+      final allowExactCatchUp = Completer<void>();
+      var catchUpCalls = 0;
+      var releaseCalls = 0;
+      final resumedService = fixture.service(
+        _unexpectedClient(),
+        watchConfirmationCandidates: () => const Stream.empty(),
+        confirmationRetryDelays: const <Duration>[Duration.zero],
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              expect(accountId.value, 'account-a');
+              expect(roomToken.value, 'rooma123');
+              expect(threadId, isNull);
+              catchUpCalls++;
+              if (catchUpCalls == 1) {
+                await fixture.cacheConfirmation(
+                  messageId: 120,
+                  deletedParentMessageId: 41,
+                );
+                return;
+              }
+              if (!exactCatchUpStarted.isCompleted) {
+                exactCatchUpStarted.complete();
+              }
+              await allowExactCatchUp.future;
+              await fixture.cacheConfirmation(
+                messageId: 121,
+                deletedParentMessageId: 42,
+              );
+            },
+        releaseSource: (source) async {
+          releaseCalls++;
+          final file = File.fromUri(Uri.parse(source.handle.value));
+          if (await file.exists()) {
+            await file.delete();
+          }
+        },
+      );
+      addTearDown(() async {
+        if (!allowExactCatchUp.isCompleted) {
+          allowExactCatchUp.complete();
+        }
+        await resumedService.close();
+      });
+
+      await resumedService.ready;
+      await exactCatchUpStarted.future.timeout(const Duration(seconds: 2));
+      final wrongParent = await fixture.repository.getStoredJob(
+        accountId: session.accountId.value,
+        jobId: session.jobId.value,
+      );
+
+      expect(wrongParent?.phase, AttachmentJobPhase.awaitingConfirmation.name);
+      expect(wrongParent?.messageIdsJson, '[]');
+      expect(wrongParent?.sourceReleased, isFalse);
+      expect(await fixture.sourceFile.exists(), isTrue);
+      allowExactCatchUp.complete();
+
+      final completed = await resumedService
+          .watchJob(accountId: session.accountId, jobId: session.jobId)
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed)
+          .timeout(const Duration(seconds: 2));
+      await _expectFileRemoved(fixture.sourceFile);
+      await pumpEventQueue(times: 10);
+      final stored = await fixture.repository.getStoredJob(
+        accountId: session.accountId.value,
+        jobId: session.jobId.value,
+      );
+
+      expect(completed.messageIds, [121]);
+      expect(stored?.phase, AttachmentJobPhase.completed.name);
+      expect(stored?.messageIdsJson, '[121]');
+      expect(stored?.sourceReleased, isTrue);
+      expect(catchUpCalls, 2);
+      expect(releaseCalls, 1);
+    },
+  );
 }

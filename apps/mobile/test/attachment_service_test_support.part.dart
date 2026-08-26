@@ -16,11 +16,12 @@ final class _Fixture {
     required this.sourceFile,
     required this.bytes,
     required this.database,
+    required this.databaseFile,
     required this.credentials,
     required this.repository,
   });
 
-  static Future<_Fixture> create() async {
+  static Future<_Fixture> create({bool fileBacked = false}) async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-attachment-service-',
     );
@@ -29,7 +30,14 @@ final class _Fixture {
       '${directory.path}${Platform.pathSeparator}source.bin',
     );
     await sourceFile.writeAsBytes(bytes, flush: true);
-    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    final databaseFile = fileBacked
+        ? File('${directory.path}${Platform.pathSeparator}attachments.sqlite')
+        : null;
+    final database = AppDatabase.forTesting(
+      databaseFile == null
+          ? NativeDatabase.memory()
+          : NativeDatabase(databaseFile),
+    );
     await database
         .into(database.accounts)
         .insert(
@@ -48,6 +56,7 @@ final class _Fixture {
       sourceFile: sourceFile,
       bytes: bytes,
       database: database,
+      databaseFile: databaseFile,
       credentials: credentials,
       repository: AttachmentRepository(database),
     );
@@ -56,9 +65,20 @@ final class _Fixture {
   final Directory directory;
   final File sourceFile;
   final List<int> bytes;
-  final AppDatabase database;
+  AppDatabase database;
+  final File? databaseFile;
   final MemoryCredentialVault credentials;
-  final AttachmentRepository repository;
+  AttachmentRepository repository;
+
+  Future<void> reopenDatabase() async {
+    final file = databaseFile;
+    if (file == null) {
+      throw StateError('Fixture database is not file-backed');
+    }
+    await database.close();
+    database = AppDatabase.forTesting(NativeDatabase(file));
+    repository = AttachmentRepository(database);
+  }
 
   AttachmentService service(
     http.Client client, {
