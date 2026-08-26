@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
+import 'package:nextcloudtalk/features/conversations/deep_link_bridge.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_coordinator.dart';
 
 import 'test_support.dart';
@@ -163,4 +167,41 @@ void main() {
     expect(matching?.accountId, subpathAccount.id);
     expect(mismatched, isNull);
   });
+
+  test('a missing native bridge leaves the coordinator idle', () async {
+    final coordinator = DeepLinkCoordinator(
+      platform: _ThrowingDeepLinkPlatform(MissingPluginException()),
+      resolver: DeepLinkResolver(accounts),
+    );
+    addTearDown(coordinator.close);
+
+    await expectLater(coordinator.start(), completes);
+
+    expect(coordinator.takeNext(), isNull);
+  });
+
+  test('an unexpected native bridge error remains visible', () async {
+    final coordinator = DeepLinkCoordinator(
+      platform: _ThrowingDeepLinkPlatform(StateError('bridge failed')),
+      resolver: DeepLinkResolver(accounts),
+    );
+    addTearDown(coordinator.close);
+
+    await expectLater(coordinator.start(), throwsStateError);
+  });
+}
+
+final class _ThrowingDeepLinkPlatform implements DeepLinkPlatform {
+  const _ThrowingDeepLinkPlatform(this.error);
+
+  final Object error;
+
+  @override
+  Stream<Uri> get linkOpened => const Stream.empty();
+
+  @override
+  Future<Uri?> getLaunchLink() => Future<Uri?>.error(error);
+
+  @override
+  Future<void> dispose() async {}
 }

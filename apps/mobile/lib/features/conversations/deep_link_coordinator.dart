@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/services.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
@@ -96,7 +97,12 @@ final class DeepLinkCoordinator {
   Future<void> start() => _startFuture ??= _start();
 
   Future<void> _start() async {
-    final launchLink = await _platform.getLaunchLink();
+    final Uri? launchLink;
+    try {
+      launchLink = await _platform.getLaunchLink();
+    } on MissingPluginException {
+      return;
+    }
     if (launchLink != null) {
       await _accept(launchLink);
     }
