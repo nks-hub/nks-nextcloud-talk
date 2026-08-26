@@ -190,6 +190,9 @@ final class AccountRepository {
         _database.cachedChatMessages,
       )..where((message) => message.accountId.equals(accountId))).go();
       await (_database.delete(
+        _database.cachedThreads,
+      )..where((thread) => thread.accountId.equals(accountId))).go();
+      await (_database.delete(
         _database.chatScopes,
       )..where((scope) => scope.accountId.equals(accountId))).go();
       await (_database.delete(

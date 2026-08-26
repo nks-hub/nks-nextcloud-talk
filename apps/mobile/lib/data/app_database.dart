@@ -209,6 +209,37 @@ class CachedChatMessages extends Table {
   Set<Column<Object>> get primaryKey => {accountId, roomToken, messageId};
 }
 
+@DataClassName('CachedThread')
+class CachedThreads extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get roomToken => text()();
+
+  IntColumn get threadId => integer()();
+
+  TextColumn get title => text()();
+
+  IntColumn get lastMessageId => integer()();
+
+  IntColumn get lastActivity => integer()();
+
+  IntColumn get numReplies => integer()();
+
+  IntColumn get notificationLevel => integer()();
+
+  BoolColumn get recent => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get subscribed => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get detailed => boolean().withDefault(const Constant(false))();
+
+  TextColumn get rawJson => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, roomToken, threadId};
+}
+
 @DataClassName('StoredTextSendOperation')
 class TextSendOperations extends Table {
   TextColumn get accountId =>
@@ -499,6 +530,7 @@ class CallLifecycleSessions extends Table {
     ChatCapabilities,
     ChatScopes,
     CachedChatMessages,
+    CachedThreads,
     TextSendOperations,
     ChatDrafts,
     AttachmentRuntimeAccounts,
@@ -522,7 +554,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -696,6 +728,9 @@ final class AppDatabase extends _$AppDatabase {
                   ELSE 0
                 END
         ''');
+      }
+      if (from < 14) {
+        await migrator.createTable(cachedThreads);
       }
     },
     beforeOpen: (_) async {

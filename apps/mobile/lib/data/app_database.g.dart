@@ -4815,6 +4815,736 @@ class CachedChatMessagesCompanion extends UpdateCompanion<CachedChatMessage> {
   }
 }
 
+class $CachedThreadsTable extends CachedThreads
+    with TableInfo<$CachedThreadsTable, CachedThread> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedThreadsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _roomTokenMeta = const VerificationMeta(
+    'roomToken',
+  );
+  @override
+  late final GeneratedColumn<String> roomToken = GeneratedColumn<String>(
+    'room_token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _threadIdMeta = const VerificationMeta(
+    'threadId',
+  );
+  @override
+  late final GeneratedColumn<int> threadId = GeneratedColumn<int>(
+    'thread_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastMessageIdMeta = const VerificationMeta(
+    'lastMessageId',
+  );
+  @override
+  late final GeneratedColumn<int> lastMessageId = GeneratedColumn<int>(
+    'last_message_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastActivityMeta = const VerificationMeta(
+    'lastActivity',
+  );
+  @override
+  late final GeneratedColumn<int> lastActivity = GeneratedColumn<int>(
+    'last_activity',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _numRepliesMeta = const VerificationMeta(
+    'numReplies',
+  );
+  @override
+  late final GeneratedColumn<int> numReplies = GeneratedColumn<int>(
+    'num_replies',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _notificationLevelMeta = const VerificationMeta(
+    'notificationLevel',
+  );
+  @override
+  late final GeneratedColumn<int> notificationLevel = GeneratedColumn<int>(
+    'notification_level',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _recentMeta = const VerificationMeta('recent');
+  @override
+  late final GeneratedColumn<bool> recent = GeneratedColumn<bool>(
+    'recent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("recent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _subscribedMeta = const VerificationMeta(
+    'subscribed',
+  );
+  @override
+  late final GeneratedColumn<bool> subscribed = GeneratedColumn<bool>(
+    'subscribed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("subscribed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _detailedMeta = const VerificationMeta(
+    'detailed',
+  );
+  @override
+  late final GeneratedColumn<bool> detailed = GeneratedColumn<bool>(
+    'detailed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("detailed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _rawJsonMeta = const VerificationMeta(
+    'rawJson',
+  );
+  @override
+  late final GeneratedColumn<String> rawJson = GeneratedColumn<String>(
+    'raw_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    roomToken,
+    threadId,
+    title,
+    lastMessageId,
+    lastActivity,
+    numReplies,
+    notificationLevel,
+    recent,
+    subscribed,
+    detailed,
+    rawJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_threads';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedThread> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('room_token')) {
+      context.handle(
+        _roomTokenMeta,
+        roomToken.isAcceptableOrUnknown(data['room_token']!, _roomTokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roomTokenMeta);
+    }
+    if (data.containsKey('thread_id')) {
+      context.handle(
+        _threadIdMeta,
+        threadId.isAcceptableOrUnknown(data['thread_id']!, _threadIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_threadIdMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('last_message_id')) {
+      context.handle(
+        _lastMessageIdMeta,
+        lastMessageId.isAcceptableOrUnknown(
+          data['last_message_id']!,
+          _lastMessageIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastMessageIdMeta);
+    }
+    if (data.containsKey('last_activity')) {
+      context.handle(
+        _lastActivityMeta,
+        lastActivity.isAcceptableOrUnknown(
+          data['last_activity']!,
+          _lastActivityMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastActivityMeta);
+    }
+    if (data.containsKey('num_replies')) {
+      context.handle(
+        _numRepliesMeta,
+        numReplies.isAcceptableOrUnknown(data['num_replies']!, _numRepliesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_numRepliesMeta);
+    }
+    if (data.containsKey('notification_level')) {
+      context.handle(
+        _notificationLevelMeta,
+        notificationLevel.isAcceptableOrUnknown(
+          data['notification_level']!,
+          _notificationLevelMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_notificationLevelMeta);
+    }
+    if (data.containsKey('recent')) {
+      context.handle(
+        _recentMeta,
+        recent.isAcceptableOrUnknown(data['recent']!, _recentMeta),
+      );
+    }
+    if (data.containsKey('subscribed')) {
+      context.handle(
+        _subscribedMeta,
+        subscribed.isAcceptableOrUnknown(data['subscribed']!, _subscribedMeta),
+      );
+    }
+    if (data.containsKey('detailed')) {
+      context.handle(
+        _detailedMeta,
+        detailed.isAcceptableOrUnknown(data['detailed']!, _detailedMeta),
+      );
+    }
+    if (data.containsKey('raw_json')) {
+      context.handle(
+        _rawJsonMeta,
+        rawJson.isAcceptableOrUnknown(data['raw_json']!, _rawJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rawJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, roomToken, threadId};
+  @override
+  CachedThread map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedThread(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      roomToken: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}room_token'],
+      )!,
+      threadId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}thread_id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      lastMessageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_message_id'],
+      )!,
+      lastActivity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_activity'],
+      )!,
+      numReplies: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}num_replies'],
+      )!,
+      notificationLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}notification_level'],
+      )!,
+      recent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}recent'],
+      )!,
+      subscribed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}subscribed'],
+      )!,
+      detailed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}detailed'],
+      )!,
+      rawJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}raw_json'],
+      )!,
+    );
+  }
+
+  @override
+  $CachedThreadsTable createAlias(String alias) {
+    return $CachedThreadsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedThread extends DataClass implements Insertable<CachedThread> {
+  final String accountId;
+  final String roomToken;
+  final int threadId;
+  final String title;
+  final int lastMessageId;
+  final int lastActivity;
+  final int numReplies;
+  final int notificationLevel;
+  final bool recent;
+  final bool subscribed;
+  final bool detailed;
+  final String rawJson;
+  const CachedThread({
+    required this.accountId,
+    required this.roomToken,
+    required this.threadId,
+    required this.title,
+    required this.lastMessageId,
+    required this.lastActivity,
+    required this.numReplies,
+    required this.notificationLevel,
+    required this.recent,
+    required this.subscribed,
+    required this.detailed,
+    required this.rawJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['room_token'] = Variable<String>(roomToken);
+    map['thread_id'] = Variable<int>(threadId);
+    map['title'] = Variable<String>(title);
+    map['last_message_id'] = Variable<int>(lastMessageId);
+    map['last_activity'] = Variable<int>(lastActivity);
+    map['num_replies'] = Variable<int>(numReplies);
+    map['notification_level'] = Variable<int>(notificationLevel);
+    map['recent'] = Variable<bool>(recent);
+    map['subscribed'] = Variable<bool>(subscribed);
+    map['detailed'] = Variable<bool>(detailed);
+    map['raw_json'] = Variable<String>(rawJson);
+    return map;
+  }
+
+  CachedThreadsCompanion toCompanion(bool nullToAbsent) {
+    return CachedThreadsCompanion(
+      accountId: Value(accountId),
+      roomToken: Value(roomToken),
+      threadId: Value(threadId),
+      title: Value(title),
+      lastMessageId: Value(lastMessageId),
+      lastActivity: Value(lastActivity),
+      numReplies: Value(numReplies),
+      notificationLevel: Value(notificationLevel),
+      recent: Value(recent),
+      subscribed: Value(subscribed),
+      detailed: Value(detailed),
+      rawJson: Value(rawJson),
+    );
+  }
+
+  factory CachedThread.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedThread(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      roomToken: serializer.fromJson<String>(json['roomToken']),
+      threadId: serializer.fromJson<int>(json['threadId']),
+      title: serializer.fromJson<String>(json['title']),
+      lastMessageId: serializer.fromJson<int>(json['lastMessageId']),
+      lastActivity: serializer.fromJson<int>(json['lastActivity']),
+      numReplies: serializer.fromJson<int>(json['numReplies']),
+      notificationLevel: serializer.fromJson<int>(json['notificationLevel']),
+      recent: serializer.fromJson<bool>(json['recent']),
+      subscribed: serializer.fromJson<bool>(json['subscribed']),
+      detailed: serializer.fromJson<bool>(json['detailed']),
+      rawJson: serializer.fromJson<String>(json['rawJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'roomToken': serializer.toJson<String>(roomToken),
+      'threadId': serializer.toJson<int>(threadId),
+      'title': serializer.toJson<String>(title),
+      'lastMessageId': serializer.toJson<int>(lastMessageId),
+      'lastActivity': serializer.toJson<int>(lastActivity),
+      'numReplies': serializer.toJson<int>(numReplies),
+      'notificationLevel': serializer.toJson<int>(notificationLevel),
+      'recent': serializer.toJson<bool>(recent),
+      'subscribed': serializer.toJson<bool>(subscribed),
+      'detailed': serializer.toJson<bool>(detailed),
+      'rawJson': serializer.toJson<String>(rawJson),
+    };
+  }
+
+  CachedThread copyWith({
+    String? accountId,
+    String? roomToken,
+    int? threadId,
+    String? title,
+    int? lastMessageId,
+    int? lastActivity,
+    int? numReplies,
+    int? notificationLevel,
+    bool? recent,
+    bool? subscribed,
+    bool? detailed,
+    String? rawJson,
+  }) => CachedThread(
+    accountId: accountId ?? this.accountId,
+    roomToken: roomToken ?? this.roomToken,
+    threadId: threadId ?? this.threadId,
+    title: title ?? this.title,
+    lastMessageId: lastMessageId ?? this.lastMessageId,
+    lastActivity: lastActivity ?? this.lastActivity,
+    numReplies: numReplies ?? this.numReplies,
+    notificationLevel: notificationLevel ?? this.notificationLevel,
+    recent: recent ?? this.recent,
+    subscribed: subscribed ?? this.subscribed,
+    detailed: detailed ?? this.detailed,
+    rawJson: rawJson ?? this.rawJson,
+  );
+  CachedThread copyWithCompanion(CachedThreadsCompanion data) {
+    return CachedThread(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      roomToken: data.roomToken.present ? data.roomToken.value : this.roomToken,
+      threadId: data.threadId.present ? data.threadId.value : this.threadId,
+      title: data.title.present ? data.title.value : this.title,
+      lastMessageId: data.lastMessageId.present
+          ? data.lastMessageId.value
+          : this.lastMessageId,
+      lastActivity: data.lastActivity.present
+          ? data.lastActivity.value
+          : this.lastActivity,
+      numReplies: data.numReplies.present
+          ? data.numReplies.value
+          : this.numReplies,
+      notificationLevel: data.notificationLevel.present
+          ? data.notificationLevel.value
+          : this.notificationLevel,
+      recent: data.recent.present ? data.recent.value : this.recent,
+      subscribed: data.subscribed.present
+          ? data.subscribed.value
+          : this.subscribed,
+      detailed: data.detailed.present ? data.detailed.value : this.detailed,
+      rawJson: data.rawJson.present ? data.rawJson.value : this.rawJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedThread(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('threadId: $threadId, ')
+          ..write('title: $title, ')
+          ..write('lastMessageId: $lastMessageId, ')
+          ..write('lastActivity: $lastActivity, ')
+          ..write('numReplies: $numReplies, ')
+          ..write('notificationLevel: $notificationLevel, ')
+          ..write('recent: $recent, ')
+          ..write('subscribed: $subscribed, ')
+          ..write('detailed: $detailed, ')
+          ..write('rawJson: $rawJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    roomToken,
+    threadId,
+    title,
+    lastMessageId,
+    lastActivity,
+    numReplies,
+    notificationLevel,
+    recent,
+    subscribed,
+    detailed,
+    rawJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedThread &&
+          other.accountId == this.accountId &&
+          other.roomToken == this.roomToken &&
+          other.threadId == this.threadId &&
+          other.title == this.title &&
+          other.lastMessageId == this.lastMessageId &&
+          other.lastActivity == this.lastActivity &&
+          other.numReplies == this.numReplies &&
+          other.notificationLevel == this.notificationLevel &&
+          other.recent == this.recent &&
+          other.subscribed == this.subscribed &&
+          other.detailed == this.detailed &&
+          other.rawJson == this.rawJson);
+}
+
+class CachedThreadsCompanion extends UpdateCompanion<CachedThread> {
+  final Value<String> accountId;
+  final Value<String> roomToken;
+  final Value<int> threadId;
+  final Value<String> title;
+  final Value<int> lastMessageId;
+  final Value<int> lastActivity;
+  final Value<int> numReplies;
+  final Value<int> notificationLevel;
+  final Value<bool> recent;
+  final Value<bool> subscribed;
+  final Value<bool> detailed;
+  final Value<String> rawJson;
+  final Value<int> rowid;
+  const CachedThreadsCompanion({
+    this.accountId = const Value.absent(),
+    this.roomToken = const Value.absent(),
+    this.threadId = const Value.absent(),
+    this.title = const Value.absent(),
+    this.lastMessageId = const Value.absent(),
+    this.lastActivity = const Value.absent(),
+    this.numReplies = const Value.absent(),
+    this.notificationLevel = const Value.absent(),
+    this.recent = const Value.absent(),
+    this.subscribed = const Value.absent(),
+    this.detailed = const Value.absent(),
+    this.rawJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CachedThreadsCompanion.insert({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+    required String title,
+    required int lastMessageId,
+    required int lastActivity,
+    required int numReplies,
+    required int notificationLevel,
+    this.recent = const Value.absent(),
+    this.subscribed = const Value.absent(),
+    this.detailed = const Value.absent(),
+    required String rawJson,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       roomToken = Value(roomToken),
+       threadId = Value(threadId),
+       title = Value(title),
+       lastMessageId = Value(lastMessageId),
+       lastActivity = Value(lastActivity),
+       numReplies = Value(numReplies),
+       notificationLevel = Value(notificationLevel),
+       rawJson = Value(rawJson);
+  static Insertable<CachedThread> custom({
+    Expression<String>? accountId,
+    Expression<String>? roomToken,
+    Expression<int>? threadId,
+    Expression<String>? title,
+    Expression<int>? lastMessageId,
+    Expression<int>? lastActivity,
+    Expression<int>? numReplies,
+    Expression<int>? notificationLevel,
+    Expression<bool>? recent,
+    Expression<bool>? subscribed,
+    Expression<bool>? detailed,
+    Expression<String>? rawJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (roomToken != null) 'room_token': roomToken,
+      if (threadId != null) 'thread_id': threadId,
+      if (title != null) 'title': title,
+      if (lastMessageId != null) 'last_message_id': lastMessageId,
+      if (lastActivity != null) 'last_activity': lastActivity,
+      if (numReplies != null) 'num_replies': numReplies,
+      if (notificationLevel != null) 'notification_level': notificationLevel,
+      if (recent != null) 'recent': recent,
+      if (subscribed != null) 'subscribed': subscribed,
+      if (detailed != null) 'detailed': detailed,
+      if (rawJson != null) 'raw_json': rawJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CachedThreadsCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? roomToken,
+    Value<int>? threadId,
+    Value<String>? title,
+    Value<int>? lastMessageId,
+    Value<int>? lastActivity,
+    Value<int>? numReplies,
+    Value<int>? notificationLevel,
+    Value<bool>? recent,
+    Value<bool>? subscribed,
+    Value<bool>? detailed,
+    Value<String>? rawJson,
+    Value<int>? rowid,
+  }) {
+    return CachedThreadsCompanion(
+      accountId: accountId ?? this.accountId,
+      roomToken: roomToken ?? this.roomToken,
+      threadId: threadId ?? this.threadId,
+      title: title ?? this.title,
+      lastMessageId: lastMessageId ?? this.lastMessageId,
+      lastActivity: lastActivity ?? this.lastActivity,
+      numReplies: numReplies ?? this.numReplies,
+      notificationLevel: notificationLevel ?? this.notificationLevel,
+      recent: recent ?? this.recent,
+      subscribed: subscribed ?? this.subscribed,
+      detailed: detailed ?? this.detailed,
+      rawJson: rawJson ?? this.rawJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (roomToken.present) {
+      map['room_token'] = Variable<String>(roomToken.value);
+    }
+    if (threadId.present) {
+      map['thread_id'] = Variable<int>(threadId.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (lastMessageId.present) {
+      map['last_message_id'] = Variable<int>(lastMessageId.value);
+    }
+    if (lastActivity.present) {
+      map['last_activity'] = Variable<int>(lastActivity.value);
+    }
+    if (numReplies.present) {
+      map['num_replies'] = Variable<int>(numReplies.value);
+    }
+    if (notificationLevel.present) {
+      map['notification_level'] = Variable<int>(notificationLevel.value);
+    }
+    if (recent.present) {
+      map['recent'] = Variable<bool>(recent.value);
+    }
+    if (subscribed.present) {
+      map['subscribed'] = Variable<bool>(subscribed.value);
+    }
+    if (detailed.present) {
+      map['detailed'] = Variable<bool>(detailed.value);
+    }
+    if (rawJson.present) {
+      map['raw_json'] = Variable<String>(rawJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedThreadsCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('threadId: $threadId, ')
+          ..write('title: $title, ')
+          ..write('lastMessageId: $lastMessageId, ')
+          ..write('lastActivity: $lastActivity, ')
+          ..write('numReplies: $numReplies, ')
+          ..write('notificationLevel: $notificationLevel, ')
+          ..write('recent: $recent, ')
+          ..write('subscribed: $subscribed, ')
+          ..write('detailed: $detailed, ')
+          ..write('rawJson: $rawJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TextSendOperationsTable extends TextSendOperations
     with TableInfo<$TextSendOperationsTable, StoredTextSendOperation> {
   @override
@@ -11491,6 +12221,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ChatScopesTable chatScopes = $ChatScopesTable(this);
   late final $CachedChatMessagesTable cachedChatMessages =
       $CachedChatMessagesTable(this);
+  late final $CachedThreadsTable cachedThreads = $CachedThreadsTable(this);
   late final $TextSendOperationsTable textSendOperations =
       $TextSendOperationsTable(this);
   late final $ChatDraftsTable chatDrafts = $ChatDraftsTable(this);
@@ -11515,6 +12246,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     chatCapabilities,
     chatScopes,
     cachedChatMessages,
+    cachedThreads,
     textSendOperations,
     chatDrafts,
     attachmentRuntimeAccounts,
@@ -11559,6 +12291,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('cached_chat_messages', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('cached_threads', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -11732,6 +12471,24 @@ final class $$AccountsTableReferences
     final cache = $_typedResult.readTableOrNull(
       _cachedChatMessagesRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CachedThreadsTable, List<CachedThread>>
+  _cachedThreadsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.cachedThreads,
+    aliasName: 'accounts__id__cached_threads__account_id',
+  );
+
+  $$CachedThreadsTableProcessedTableManager get cachedThreadsRefs {
+    final manager = $$CachedThreadsTableTableManager(
+      $_db,
+      $_db.cachedThreads,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_cachedThreadsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -12039,6 +12796,31 @@ class $$AccountsTableFilterComposer
           }) => $$CachedChatMessagesTableFilterComposer(
             $db: $db,
             $table: $db.cachedChatMessages,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> cachedThreadsRefs(
+    Expression<bool> Function($$CachedThreadsTableFilterComposer f) f,
+  ) {
+    final $$CachedThreadsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cachedThreads,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CachedThreadsTableFilterComposer(
+            $db: $db,
+            $table: $db.cachedThreads,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12448,6 +13230,31 @@ class $$AccountsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> cachedThreadsRefs<T extends Object>(
+    Expression<T> Function($$CachedThreadsTableAnnotationComposer a) f,
+  ) {
+    final $$CachedThreadsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.cachedThreads,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CachedThreadsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.cachedThreads,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> textSendOperationsRefs<T extends Object>(
     Expression<T> Function($$TextSendOperationsTableAnnotationComposer a) f,
   ) {
@@ -12597,6 +13404,7 @@ class $$AccountsTableTableManager
             bool chatCapabilitiesRefs,
             bool chatScopesRefs,
             bool cachedChatMessagesRefs,
+            bool cachedThreadsRefs,
             bool textSendOperationsRefs,
             bool chatDraftsRefs,
             bool attachmentRuntimeAccountsRefs,
@@ -12700,6 +13508,7 @@ class $$AccountsTableTableManager
                 chatCapabilitiesRefs = false,
                 chatScopesRefs = false,
                 cachedChatMessagesRefs = false,
+                cachedThreadsRefs = false,
                 textSendOperationsRefs = false,
                 chatDraftsRefs = false,
                 attachmentRuntimeAccountsRefs = false,
@@ -12714,6 +13523,7 @@ class $$AccountsTableTableManager
                     if (chatCapabilitiesRefs) db.chatCapabilities,
                     if (chatScopesRefs) db.chatScopes,
                     if (cachedChatMessagesRefs) db.cachedChatMessages,
+                    if (cachedThreadsRefs) db.cachedThreads,
                     if (textSendOperationsRefs) db.textSendOperations,
                     if (chatDraftsRefs) db.chatDrafts,
                     if (attachmentRuntimeAccountsRefs)
@@ -12823,6 +13633,27 @@ class $$AccountsTableTableManager
                                 table,
                                 p0,
                               ).cachedChatMessagesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (cachedThreadsRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          CachedThread
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._cachedThreadsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).cachedThreadsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.accountId == item.id,
@@ -12960,6 +13791,7 @@ typedef $$AccountsTableProcessedTableManager =
         bool chatCapabilitiesRefs,
         bool chatScopesRefs,
         bool cachedChatMessagesRefs,
+        bool cachedThreadsRefs,
         bool textSendOperationsRefs,
         bool chatDraftsRefs,
         bool attachmentRuntimeAccountsRefs,
@@ -15434,6 +16266,470 @@ typedef $$CachedChatMessagesTableProcessedTableManager =
       $$CachedChatMessagesTableUpdateCompanionBuilder,
       (CachedChatMessage, $$CachedChatMessagesTableReferences),
       CachedChatMessage,
+      PrefetchHooks Function({bool accountId})
+    >;
+typedef $$CachedThreadsTableCreateCompanionBuilder =
+    CachedThreadsCompanion Function({
+      required String accountId,
+      required String roomToken,
+      required int threadId,
+      required String title,
+      required int lastMessageId,
+      required int lastActivity,
+      required int numReplies,
+      required int notificationLevel,
+      Value<bool> recent,
+      Value<bool> subscribed,
+      Value<bool> detailed,
+      required String rawJson,
+      Value<int> rowid,
+    });
+typedef $$CachedThreadsTableUpdateCompanionBuilder =
+    CachedThreadsCompanion Function({
+      Value<String> accountId,
+      Value<String> roomToken,
+      Value<int> threadId,
+      Value<String> title,
+      Value<int> lastMessageId,
+      Value<int> lastActivity,
+      Value<int> numReplies,
+      Value<int> notificationLevel,
+      Value<bool> recent,
+      Value<bool> subscribed,
+      Value<bool> detailed,
+      Value<String> rawJson,
+      Value<int> rowid,
+    });
+
+final class $$CachedThreadsTableReferences
+    extends BaseReferences<_$AppDatabase, $CachedThreadsTable, CachedThread> {
+  $$CachedThreadsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('cached_threads__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CachedThreadsTableFilterComposer
+    extends Composer<_$AppDatabase, $CachedThreadsTable> {
+  $$CachedThreadsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastMessageId => $composableBuilder(
+    column: $table.lastMessageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastActivity => $composableBuilder(
+    column: $table.lastActivity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get numReplies => $composableBuilder(
+    column: $table.numReplies,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get notificationLevel => $composableBuilder(
+    column: $table.notificationLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get recent => $composableBuilder(
+    column: $table.recent,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get subscribed => $composableBuilder(
+    column: $table.subscribed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get detailed => $composableBuilder(
+    column: $table.detailed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rawJson => $composableBuilder(
+    column: $table.rawJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CachedThreadsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CachedThreadsTable> {
+  $$CachedThreadsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastMessageId => $composableBuilder(
+    column: $table.lastMessageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastActivity => $composableBuilder(
+    column: $table.lastActivity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get numReplies => $composableBuilder(
+    column: $table.numReplies,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get notificationLevel => $composableBuilder(
+    column: $table.notificationLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get recent => $composableBuilder(
+    column: $table.recent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get subscribed => $composableBuilder(
+    column: $table.subscribed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get detailed => $composableBuilder(
+    column: $table.detailed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rawJson => $composableBuilder(
+    column: $table.rawJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CachedThreadsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CachedThreadsTable> {
+  $$CachedThreadsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get roomToken =>
+      $composableBuilder(column: $table.roomToken, builder: (column) => column);
+
+  GeneratedColumn<int> get threadId =>
+      $composableBuilder(column: $table.threadId, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<int> get lastMessageId => $composableBuilder(
+    column: $table.lastMessageId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lastActivity => $composableBuilder(
+    column: $table.lastActivity,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get numReplies => $composableBuilder(
+    column: $table.numReplies,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get notificationLevel => $composableBuilder(
+    column: $table.notificationLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get recent =>
+      $composableBuilder(column: $table.recent, builder: (column) => column);
+
+  GeneratedColumn<bool> get subscribed => $composableBuilder(
+    column: $table.subscribed,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get detailed =>
+      $composableBuilder(column: $table.detailed, builder: (column) => column);
+
+  GeneratedColumn<String> get rawJson =>
+      $composableBuilder(column: $table.rawJson, builder: (column) => column);
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CachedThreadsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CachedThreadsTable,
+          CachedThread,
+          $$CachedThreadsTableFilterComposer,
+          $$CachedThreadsTableOrderingComposer,
+          $$CachedThreadsTableAnnotationComposer,
+          $$CachedThreadsTableCreateCompanionBuilder,
+          $$CachedThreadsTableUpdateCompanionBuilder,
+          (CachedThread, $$CachedThreadsTableReferences),
+          CachedThread,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$CachedThreadsTableTableManager(_$AppDatabase db, $CachedThreadsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedThreadsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedThreadsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedThreadsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> roomToken = const Value.absent(),
+                Value<int> threadId = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<int> lastMessageId = const Value.absent(),
+                Value<int> lastActivity = const Value.absent(),
+                Value<int> numReplies = const Value.absent(),
+                Value<int> notificationLevel = const Value.absent(),
+                Value<bool> recent = const Value.absent(),
+                Value<bool> subscribed = const Value.absent(),
+                Value<bool> detailed = const Value.absent(),
+                Value<String> rawJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CachedThreadsCompanion(
+                accountId: accountId,
+                roomToken: roomToken,
+                threadId: threadId,
+                title: title,
+                lastMessageId: lastMessageId,
+                lastActivity: lastActivity,
+                numReplies: numReplies,
+                notificationLevel: notificationLevel,
+                recent: recent,
+                subscribed: subscribed,
+                detailed: detailed,
+                rawJson: rawJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String roomToken,
+                required int threadId,
+                required String title,
+                required int lastMessageId,
+                required int lastActivity,
+                required int numReplies,
+                required int notificationLevel,
+                Value<bool> recent = const Value.absent(),
+                Value<bool> subscribed = const Value.absent(),
+                Value<bool> detailed = const Value.absent(),
+                required String rawJson,
+                Value<int> rowid = const Value.absent(),
+              }) => CachedThreadsCompanion.insert(
+                accountId: accountId,
+                roomToken: roomToken,
+                threadId: threadId,
+                title: title,
+                lastMessageId: lastMessageId,
+                lastActivity: lastActivity,
+                numReplies: numReplies,
+                notificationLevel: notificationLevel,
+                recent: recent,
+                subscribed: subscribed,
+                detailed: detailed,
+                rawJson: rawJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CachedThreadsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable: $$CachedThreadsTableReferences
+                                    ._accountIdTable(db),
+                                referencedColumn: $$CachedThreadsTableReferences
+                                    ._accountIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CachedThreadsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CachedThreadsTable,
+      CachedThread,
+      $$CachedThreadsTableFilterComposer,
+      $$CachedThreadsTableOrderingComposer,
+      $$CachedThreadsTableAnnotationComposer,
+      $$CachedThreadsTableCreateCompanionBuilder,
+      $$CachedThreadsTableUpdateCompanionBuilder,
+      (CachedThread, $$CachedThreadsTableReferences),
+      CachedThread,
       PrefetchHooks Function({bool accountId})
     >;
 typedef $$TextSendOperationsTableCreateCompanionBuilder =
@@ -18960,6 +20256,8 @@ class $AppDatabaseManager {
       $$ChatScopesTableTableManager(_db, _db.chatScopes);
   $$CachedChatMessagesTableTableManager get cachedChatMessages =>
       $$CachedChatMessagesTableTableManager(_db, _db.cachedChatMessages);
+  $$CachedThreadsTableTableManager get cachedThreads =>
+      $$CachedThreadsTableTableManager(_db, _db.cachedThreads);
   $$TextSendOperationsTableTableManager get textSendOperations =>
       $$TextSendOperationsTableTableManager(_db, _db.textSendOperations);
   $$ChatDraftsTableTableManager get chatDrafts =>

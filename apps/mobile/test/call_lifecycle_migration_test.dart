@@ -6,7 +6,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 
 void main() {
-  test('schema v11 migrates to v13 without losing accounts', () async {
+  test('schema v11 migrates to v14 without losing accounts', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-call-lifecycle-migration-',
     );
@@ -41,7 +41,7 @@ void main() {
           .customSelect('PRAGMA table_info(call_lifecycle_sessions)')
           .get();
 
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(
         columns.map((row) => row.read<String>('name')),
         containsAll(<String>[

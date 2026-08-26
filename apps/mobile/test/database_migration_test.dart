@@ -11,7 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
-  test('schema v1 to v13 preserves its account and conversation', () async {
+  test('schema v1 to v14 preserves its account and conversation', () async {
     final fixture =
         readFixtureJson(
               'conversation-list/fixtures/conversations-full.response.json',
@@ -51,7 +51,7 @@ void main() {
         .select(database.cachedConversations)
         .getSingle();
 
-    expect(database.schemaVersion, 13);
+    expect(database.schemaVersion, 14);
     expect(account.id, 'account-a');
     expect(account.talkFeaturesJson, '[]');
     expect(room.token, 'synthetic-room-token-a');
@@ -70,7 +70,7 @@ void main() {
   });
 
   test(
-    'schema v2 to v13 preserves rooms and backfills avatar metadata',
+    'schema v2 to v14 preserves rooms and backfills avatar metadata',
     () async {
       final fixture =
           readFixtureJson(
@@ -114,7 +114,7 @@ void main() {
           .getSingle();
       final account = await database.select(database.accounts).getSingle();
 
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(room.token, 'synthetic-room-token-a');
       expect(room.roomType, 2);
       expect(room.roomName, 'synthetic-room-a');
@@ -129,7 +129,7 @@ void main() {
     },
   );
 
-  test('schema v3 to v13 clears avatars lacking custom metadata', () async {
+  test('schema v3 to v14 clears avatars lacking custom metadata', () async {
     final database = AppDatabase.forTesting(
       NativeDatabase.memory(
         setup: (raw) {
@@ -158,12 +158,12 @@ void main() {
     );
     addTearDown(database.close);
 
-    expect(database.schemaVersion, 13);
+    expect(database.schemaVersion, 14);
     expect(await database.select(database.conversationAvatars).get(), isEmpty);
   });
 
   test(
-    'schema v4 to v13 preserves outbox rows with no thread binding',
+    'schema v4 to v14 preserves outbox rows with no thread binding',
     () async {
       final database = AppDatabase.forTesting(
         NativeDatabase.memory(
@@ -200,14 +200,14 @@ void main() {
           .select(database.textSendOperations)
           .getSingle();
 
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(operation.operationId, 'operation-a');
       expect(operation.threadId, isNull);
     },
   );
 
   test(
-    'schema v5 to v13 preserves thread binding and recovers sending rows',
+    'schema v5 to v14 preserves thread binding and recovers sending rows',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'nctalk-chat-restart-',
@@ -301,7 +301,7 @@ void main() {
     },
   );
 
-  test('schema v6 to v13 preserves chat rows and creates join index', () async {
+  test('schema v6 to v14 preserves chat rows and creates join index', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-confirmation-index-',
     );
@@ -358,7 +358,7 @@ void main() {
           )
           .get();
 
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(messages.single.messageId, 101);
       expect(indexes, hasLength(1));
     } finally {
@@ -369,7 +369,7 @@ void main() {
     }
   });
 
-  test('schema v7 to v13 adds nullable peer status columns', () async {
+  test('schema v7 to v14 adds nullable peer status columns', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-presence-columns-migration-',
     );
@@ -415,7 +415,7 @@ void main() {
       final room = await database
           .select(database.cachedConversations)
           .getSingle();
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(room.token, 'rooma123');
       expect(room.peerStatus, isNull);
       expect(room.peerStatusIcon, isNull);
@@ -429,7 +429,7 @@ void main() {
     }
   });
 
-  test('schema v8 to v13 creates the durable draft table', () async {
+  test('schema v8 to v14 creates the durable draft table', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-draft-migration-',
     );
@@ -465,7 +465,7 @@ void main() {
         text: 'Recovered after an upgrade',
       );
 
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(
         await chat.readDraft(accountId: 'account-a', roomToken: 'rooma123'),
         'Recovered after an upgrade',
@@ -478,7 +478,7 @@ void main() {
     }
   });
 
-  test('schema v9 to v13 backfills isArchived from raw_json', () async {
+  test('schema v9 to v14 backfills isArchived from raw_json', () async {
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-archive-migration-',
     );
@@ -523,9 +523,63 @@ void main() {
       final room = await database
           .select(database.cachedConversations)
           .getSingle();
-      expect(database.schemaVersion, 13);
+      expect(database.schemaVersion, 14);
       expect(room.token, 'rooma123');
       expect(room.isArchived, isTrue);
+    } finally {
+      await database?.close();
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  });
+
+  test('schema v13 to v14 creates the account-scoped thread cache', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'nctalk-thread-cache-migration-',
+    );
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}threads.sqlite',
+    );
+    AppDatabase? database;
+    try {
+      database = AppDatabase.forTesting(NativeDatabase(file));
+      await database
+          .into(database.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              id: 'account-a',
+              serverUrl: 'https://cloud.example.invalid',
+              loginName: 'fixture-user',
+              serverProductName: 'Nextcloud',
+              createdAtMillis: 1,
+            ),
+          );
+      await database.customStatement('DROP TABLE cached_threads');
+      await database.customStatement('PRAGMA user_version = 13');
+      await database.close();
+      database = AppDatabase.forTesting(NativeDatabase(file));
+
+      expect(database.schemaVersion, 14);
+      expect(
+        (await database.select(database.accounts).getSingle()).id,
+        'account-a',
+      );
+      expect(await database.select(database.cachedThreads).get(), isEmpty);
+      final columns = await database
+          .customSelect('PRAGMA table_info(cached_threads)')
+          .get();
+      expect(
+        columns.map((row) => row.read<String>('name')),
+        containsAll(<String>[
+          'account_id',
+          'room_token',
+          'thread_id',
+          'recent',
+          'subscribed',
+          'detailed',
+        ]),
+      );
     } finally {
       await database?.close();
       if (await directory.exists()) {
@@ -550,7 +604,7 @@ void main() {
       await database.customStatement(
         "INSERT INTO future_schema_probe (value) VALUES ('preserve-me')",
       );
-      await database.customStatement('PRAGMA user_version = 14');
+      await database.customStatement('PRAGMA user_version = 15');
       await database.close();
       database = null;
 
@@ -588,7 +642,7 @@ void main() {
         database.customSelect('SELECT 1').get(),
         throwsA(isA<_DatabaseInspectionComplete>()),
       );
-      expect(observedVersion, 14);
+      expect(observedVersion, 15);
       expect(observedValue, 'preserve-me');
     } finally {
       await database?.close();
