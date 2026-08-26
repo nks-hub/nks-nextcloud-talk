@@ -522,7 +522,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -662,6 +662,40 @@ final class AppDatabase extends _$AppDatabase {
           cachedConversations,
           cachedConversations.peerStatusClearAt,
         );
+      }
+      if (from < 13) {
+        await customStatement(r'''
+          UPDATE cached_conversations
+          SET peer_status = CASE
+                WHEN json_valid(raw_json)
+                  THEN json_extract(raw_json, '$.status')
+                ELSE NULL
+              END,
+              peer_status_icon = CASE
+                WHEN json_valid(raw_json)
+                  THEN json_extract(raw_json, '$.statusIcon')
+                ELSE NULL
+              END,
+              peer_status_message = CASE
+                WHEN json_valid(raw_json)
+                  THEN json_extract(raw_json, '$.statusMessage')
+                ELSE NULL
+              END,
+              peer_status_clear_at = CASE
+                WHEN json_valid(raw_json)
+                  THEN json_extract(raw_json, '$.statusClearAt')
+                ELSE NULL
+              END
+          WHERE peer_status IS NULL
+            AND peer_status_icon IS NULL
+            AND peer_status_message IS NULL
+            AND peer_status_clear_at IS NULL
+            AND CASE
+                  WHEN json_valid(raw_json)
+                    THEN json_type(raw_json, '$.status') = 'text'
+                  ELSE 0
+                END
+        ''');
       }
     },
     beforeOpen: (_) async {
