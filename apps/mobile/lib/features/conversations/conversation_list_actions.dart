@@ -286,10 +286,13 @@ final class _ConversationTile extends StatelessWidget {
     final preview = normalizeGiphyReferencePreview(
       conversation.lastMessageText ?? strings.lastMessageUnavailable,
     );
+    final presence = ConversationPresence.fromConversation(conversation);
+    final statusMessage = presence?.message;
     final hasCall =
         ConversationCallState.fromConversation(conversation) != null;
     final semanticsValue = [
       if (hasCall) strings.callBannerTitle,
+      if (presence != null) presence.description(strings),
       preview,
       _formatActivity(context, conversation.lastActivity),
       strings.unreadMessages(conversation.unreadMessages),
@@ -369,10 +372,7 @@ final class _ConversationTile extends StatelessWidget {
                                   ).textTheme.titleMedium,
                                 ),
                               ),
-                              if (ConversationPresence.fromConversation(
-                                    conversation,
-                                  ) !=
-                                  null) ...[
+                              if (presence != null) ...[
                                 const SizedBox(width: 7),
                                 ConversationPresenceBadge(
                                   conversation: conversation,
@@ -389,6 +389,20 @@ final class _ConversationTile extends StatelessWidget {
                               ),
                             ],
                           ),
+                          if (statusMessage != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              statusMessage,
+                              key: Key(
+                                'conversation-presence-message-'
+                                '${conversation.token}',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Row(
                             children: [
