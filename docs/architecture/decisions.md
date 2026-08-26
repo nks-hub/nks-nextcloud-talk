@@ -44,6 +44,12 @@ Každá mutace musí ověřit přihlášený account-scoped snapshot v odpovědn
 nebo protokolové vrstvě, ne jen skrýt tlačítko v UI. Archivace například nesmí
 vydat request bez jednoznačné capability `archived-conversations-v2`.
 
+Thread request musí oddělit cílovou zprávu od identity canonical rootu. Notify
+nad reply používá `messageId` reply ve wire URL, ale response se váže na povinný
+canonical `threadId` původního requestu. Decoder odmítá room/root mismatch a
+zachová původní request; merge planner odmítá account/server snapshot mismatch.
+Libovolný serverem vrácený root se nepřijímá.
+
 ### D-004: Žádné fake subsystémy
 
 Stav: Přijato podle projektových pravidel.

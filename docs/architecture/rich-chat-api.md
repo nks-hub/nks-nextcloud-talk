@@ -1,6 +1,6 @@
 # Kontrakt rich chatu a vláken
 
-Datum ověření: 25. srpna 2026.
+Datum ověření: 26. srpna 2026.
 
 Stav: OpenAPI, syntetické fixture, pure Dart request/response model, bezpečný
 semantic renderer a account-scoped transakční planner jsou spustitelné. Flutter
@@ -12,11 +12,10 @@ Text send do serverového named threadu je implementovaný v samostatném chat
 kontraktu revision r2. Využívá `threadId` bez `replyTo` a neznamená, že jsou
 implementované rename/notification-level nebo další rich thread mutace níže.
 
-Giphy je pro nové odeslání attachment větev, ne klikací Markdown ani textový
-Reference payload. References API pouze poskytne ověřené GIF bajty, které
-projdou durable Talk Draft/WebDAV/finalize tokem. Původní skrytý wire renderer
-zůstává read-only kompatibilitou starších zpráv. Podrobný kontrakt je v
-[Giphy integraci](../research/giphy-integration.md).
+Giphy se podle D-028 odesílá jako textová `resourceUrl` reference a bublina ji
+skryje a vykreslí inline přes account-scoped Nextcloud References resolver.
+Historická attachment varianta D-028a už není produktový tok. Podrobný kontrakt
+je v [Giphy integraci](../research/giphy-integration.md).
 
 ## Rozsah
 
@@ -56,7 +55,7 @@ Resolver vychází jen z unikátních Talk features, nikdy z čísla release.
 | --- | --- |
 | Mentions | `chat-v2` |
 | Metadata vláken | `chat-v2` + `threads` |
-| Zprávy vlákna | metadata vláken a nefederovaná room |
+| Zprávy vlákna | metadata vláken |
 | Reakce | `chat-v2` + `reactions` |
 | Odeslání reakce | reakce a při `react-permission` participant bit 256 |
 | Editace | `chat-v2` + `edit-messages` |
@@ -67,8 +66,8 @@ Resolver vychází jen z unikátních Talk features, nikdy z čísla release.
 | Schedule | lokální `scheduled-messages` a nefederovaná room |
 
 `scheduled-messages` z globálních features se záměrně nepřijímá. Federovaný
-profil zachová thread metadata, ale odmítne nepodporované lokální message fetch
-a schedule operace.
+profil zachová thread metadata i capability-bound detail zpráv vlákna; odmítne
+jen nepodporované lokální schedule operace.
 
 ## Request a trust hranice
 
@@ -76,6 +75,12 @@ Každý request nese `accountId`, lokální request ID, kanonický `ServerBase`,
 capability profil a dostupný room, message, thread nebo schedule identifikátor.
 Account-wide subscribed threads je jediná operace bez room tokenu. Response
 uchovává původní request a planner nesmí merge kontext přijmout bokem.
+
+Notification-level request rozlišuje message target a canonical root: wire URL
+směřuje na `messageId` vybrané reply nebo root zprávy, zatímco povinný
+`threadId` váže response na canonical root. Decoder odmítne chybějící nebo
+nulový root i room/root mismatch a zachová původní request. Merge planner před
+aplikací odmítne account/server snapshot mismatch.
 
 Request builder vždy používá `format=json`, `OCS-APIRequest: true` a stabilní
 `User-Agent`. Query, form body a headers jsou immutable. Diagnostika nevypisuje
@@ -157,27 +162,27 @@ Aktuální lokální výsledek:
 - 1 OpenAPI dokument a 21 operací;
 - 23 response, 28 request, 8 capability, 9 render a 7 state fixture s
   8 transakčními kroky;
-- 8 Python validator unit testů;
-- 95 Dart rich-chat testů: 69 contract, 13 state, 12 security a 1 skutečný
+- 10 Python validator unit testů;
+- 98 Dart rich-chat testů: 69 contract, 13 state, 15 security a 1 skutečný
   release AOT executable;
-- celý `talk_protocol` po named-thread rozšíření prochází 569 testy a analyzer
+- celý `talk_protocol` po thread binding opravě prochází 774 testy a analyzer
   je bez nálezu.
 
-Historická wire-reference Giphy oprava `5f6e2f4` prošla 11/11 cílenými a 75/75
-širšími chat/Giphy testy. Čerstvý výběr sedmi Flutter chat/Giphy souborů po
-opravě interního image vieweru `8724281` prošel 63/63 a analyzer byl bez nálezu.
-Attachment loader a composer admission přidávají `5d49cbb` a `9de5727`.
-Commit `7ca580e` je propojuje s pickerem, durable zdrojem, WebDAV uploadem a Talk
-finalize; composer integration prošel 4/4, loader/media composer 15/15 a scoped
-analyze bez nálezu. Jde o automatizovaný adapter důkaz, ne live upload.
+Historická attachment větev vznikla v `5d49cbb`, `9de5727` a `7ca580e`, ale
+uživatelské rozhodnutí D-028 ji nahradilo. Commit `2af2430` přepnul picker na
+renderovanou `resourceUrl` přes text-send/outbox a zachoval account-scoped
+References validaci i inline renderer; pozdější `4cc3594` a `236e3c4` změnu
+pouze atomizovaly. Jde o automatizovaný adapter důkaz, ne aktuální živý
+sender/recipient round trip.
 
 ## Co důkaz nepokrývá
 
 Flutter HTTP/Drift/UI základ existuje. Historické Android APK SHA-256
 `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
 prošlo přihlášením, otevřením room a Giphy wire-reference
-send/inline/process-death scénářem; neprošlo však novým live GIF attachment ani
-rich mutation round tripem. Ještě starší Android APK SHA-256
+send/inline/process-death scénářem. Neprokazuje aktuální source, samostatný
+sender/recipient round trip ani rich mutation round trip. Ještě starší Android
+APK SHA-256
 `<fingerprint>`
 prošlo příchozím thread smokem, screenshoty a pixelovým WCAG měřením; tento
 důkaz se nepřenáší na novější build. Nebyl spuštěný live round trip pro
