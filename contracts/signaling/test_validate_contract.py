@@ -26,6 +26,7 @@ simulate_runtime = signaling_contract.simulate_runtime
 validate_contract = signaling_contract.validate_contract
 validate_hpb_case = signaling_contract.validate_hpb_case
 validate_settings_case = signaling_contract.validate_settings_case
+validate_peer_message = sys.modules["validator_signaling_hpb"].validate_peer_message
 
 
 class SignalingContractValidatorTest(unittest.TestCase):
@@ -120,6 +121,24 @@ class SignalingContractValidatorTest(unittest.TestCase):
             }
         )
 
+    def test_payload_free_typing_messages_are_valid(self) -> None:
+        for message_type in ("startedTyping", "stoppedTyping"):
+            with self.subTest(message_type=message_type):
+                validate_peer_message(
+                    {"type": message_type},
+                    "message.data",
+                )
+
+    def test_non_typing_message_without_payload_is_rejected(self) -> None:
+        with self.assertRaisesRegex(
+            ContractValidationError,
+            "message.data.payload",
+        ):
+            validate_peer_message(
+                {"type": "offer"},
+                "message.data",
+            )
+
     def test_failed_federation_resume_preserves_local_peers_only(self) -> None:
         state = simulate_runtime(
             {
@@ -155,7 +174,7 @@ class SignalingContractValidatorTest(unittest.TestCase):
                 "runtimeSteps": 33,
                 "http": 15,
                 "settings": 9,
-                "hpb": 28,
+                "hpb": 31,
                 "runtime": 21,
             },
         )

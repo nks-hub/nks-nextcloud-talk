@@ -22,6 +22,9 @@ from validator_signaling_common import (
 )
 
 
+PAYLOAD_FREE_PEER_MESSAGE_TYPES = frozenset({"startedTyping", "stoppedTyping"})
+
+
 def validate_request_id(value: Any, label: str = "frame.id") -> str:
     request_id = require_string(value, label, maximum=128)
     if SAFE_IDENTIFIER.fullmatch(request_id) is None:
@@ -58,7 +61,8 @@ def validate_peer_message(value: Any, label: str) -> None:
             peer = require_string(message[member], f"{label}.{member}", maximum=512)
             if SAFE_IDENTIFIER.fullmatch(peer) is None:
                 raise ContractValidationError(f"{label}.{member} has an unsafe shape")
-    require_object(message.get("payload"), f"{label}.payload")
+    if "payload" in message or message_type not in PAYLOAD_FREE_PEER_MESSAGE_TYPES:
+        require_object(message.get("payload"), f"{label}.payload")
 
 
 def validate_client_hello(frame: dict[str, Any]) -> None:

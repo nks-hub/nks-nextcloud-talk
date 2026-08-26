@@ -130,6 +130,25 @@
     "expectedType": "message"
   },
   {
+    "id": "client-message-started-typing",
+    "direction": "client",
+    "valid": true,
+    "frame": {
+      "id": "request-011",
+      "type": "message",
+      "message": {
+        "recipient": {
+          "type": "session",
+          "sessionid": "peer-b"
+        },
+        "data": {
+          "type": "startedTyping"
+        }
+      }
+    },
+    "expectedType": "message"
+  },
+  {
     "id": "client-control",
     "direction": "client",
     "valid": true,
@@ -424,6 +443,24 @@
     "expectedType": "message"
   },
   {
+    "id": "server-message-stopped-typing",
+    "direction": "server",
+    "valid": true,
+    "frame": {
+      "type": "message",
+      "message": {
+        "sender": {
+          "type": "session",
+          "sessionid": "peer-a"
+        },
+        "data": {
+          "type": "stoppedTyping"
+        }
+      }
+    },
+    "expectedType": "message"
+  },
+  {
     "id": "server-control",
     "direction": "server",
     "valid": true,
@@ -495,5 +532,25 @@
       }
     },
     "error": "event.update.all"
+  },
+  {
+    "id": "invalid-client-offer-missing-payload",
+    "direction": "client",
+    "valid": false,
+    "frame": {
+      "id": "request-012",
+      "type": "message",
+      "message": {
+        "recipient": {
+          "type": "session",
+          "sessionid": "peer-b"
+        },
+        "data": {
+          "type": "offer",
+          "roomType": "video"
+        }
+      }
+    },
+    "error": "message.data.payload"
   }
 ]
