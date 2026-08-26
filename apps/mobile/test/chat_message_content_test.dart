@@ -75,6 +75,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a fully shaped deleted parent uses the deleted preview', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _deletedParentReplyMessage),
+    );
+
+    expect(find.text('Message deleted'), findsOneWidget);
+    expect(find.text('Fixture author'), findsNothing);
+    expect(find.bySemanticsLabel('Message deleted'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   testWidgets('a voice message exposes its length, position and seeking', (
     tester,
   ) async {
@@ -82,7 +98,10 @@ void main() {
     addTearDown(backend.dispose);
 
     await tester.pumpWidget(
-      _voiceApp(backend, const ChatVoiceFile(path: 'a.m4a', contentType: 'audio/mp4')),
+      _voiceApp(
+        backend,
+        const ChatVoiceFile(path: 'a.m4a', contentType: 'audio/mp4'),
+      ),
     );
 
     expect(find.byKey(const Key('chat-voice-44')), findsOneWidget);
@@ -283,6 +302,16 @@ final _replyMessage = ChatMessage.fromJson(<String, Object?>{
   'deleted': null,
   'threadId': 42,
   'parent': _message.wire,
+});
+
+final _deletedParentReplyMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._replyMessage.wire,
+  'parent': <String, Object?>{
+    ..._message.wire,
+    'message': '',
+    'systemMessage': 'message_deleted',
+    'deleted': true,
+  },
 });
 
 final _voiceMessage = ChatMessage.fromJson(<String, Object?>{

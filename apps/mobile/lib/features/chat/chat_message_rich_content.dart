@@ -454,7 +454,7 @@ final class _ReplyPreview extends StatelessWidget {
     final String author;
     final String text;
     int? parentId;
-    if (parent is ChatFullParent) {
+    if (parent is ChatFullParent && !parent.message.deleted) {
       parentId = parent.message.messageId;
       author = parent.message.actorDisplayName;
       final rendered = renderRichChatMessage(
