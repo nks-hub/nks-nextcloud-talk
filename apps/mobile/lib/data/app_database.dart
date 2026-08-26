@@ -566,7 +566,8 @@ final class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 2) {
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.readOnly,
         );
@@ -576,24 +577,33 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(textSendOperations);
       }
       if (from < 3) {
-        await _addColumnIfMissing(migrator,accounts, accounts.talkFeaturesJson);
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
+          accounts,
+          accounts.talkFeaturesJson,
+        );
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.roomType,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.roomName,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.objectType,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.avatarVersion,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.isCustomAvatar,
         );
@@ -628,7 +638,8 @@ final class AppDatabase extends _$AppDatabase {
         ''');
       }
       if (from >= 3 && from < 4) {
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           conversationAvatars,
           conversationAvatars.isCustomAvatar,
         );
@@ -637,7 +648,8 @@ final class AppDatabase extends _$AppDatabase {
         await customStatement('DELETE FROM conversation_avatars');
       }
       if (from >= 2 && from < 5) {
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           textSendOperations,
           textSendOperations.threadId,
         );
@@ -658,7 +670,8 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(chatDrafts);
       }
       if (from < 10) {
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.isArchived,
         );
@@ -678,19 +691,23 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(callLifecycleSessions);
       }
       if (from < 8) {
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.peerStatus,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.peerStatusIcon,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.peerStatusMessage,
         );
-        await _addColumnIfMissing(migrator,
+        await _addColumnIfMissing(
+          migrator,
           cachedConversations,
           cachedConversations.peerStatusClearAt,
         );
@@ -750,6 +767,13 @@ final class AppDatabase extends _$AppDatabase {
   /// created with `IF NOT EXISTS` and the backfills recompute from
   /// `raw_json` — which left `addColumn` as the only step that could fail
   /// and lock the app out of its own database for good.
+  ///
+  /// This makes the upgrade recoverable, not atomic: a half-finished
+  /// migration still commits its DDL without moving `user_version`, and the
+  /// next start replays it as a no-op instead of failing. Wrapping the
+  /// migration in a transaction would prevent that half state, but it does
+  /// nothing for databases already stuck in it, so replay-safety is what
+  /// buys the fix back.
   Future<void> _addColumnIfMissing(
     Migrator migrator,
     TableInfo<Table, dynamic> table,

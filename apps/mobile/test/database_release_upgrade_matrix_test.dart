@@ -39,6 +39,16 @@ Future<void> _verifyInterruptedUpgrade() async {
     await _seedSentinelData(database);
     await _downgradeToReleaseSchema(database, 11);
     await database.customStatement('PRAGMA user_version = 7');
+
+    // The replay from 7 has to walk over work that is already there: tables
+    // from steps 9 and 11 and columns from steps 8 and 10.
+    final ahead = await database
+        .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .get();
+    expect(
+      ahead.map((row) => row.read<String>('name')).toSet(),
+      containsAll(<String>{'chat_drafts', 'call_sessions'}),
+    );
     await database.close();
     database = null;
 
