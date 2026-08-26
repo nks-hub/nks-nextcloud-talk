@@ -329,7 +329,7 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
 }
 
 final deepLinkPlatformProvider = Provider<DeepLinkPlatform?>((ref) {
-  if (!Platform.isAndroid) {
+  if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
     return null;
   }
   final bridge = DeepLinkBridge();

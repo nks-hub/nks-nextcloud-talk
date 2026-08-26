@@ -2,6 +2,8 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
+  private var deepLinkChannel: FlutterMethodChannel?
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -10,6 +12,36 @@ class MainFlutterWindow: NSWindow {
     self.title = "NKS Talk"
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    let deepLinkChannel = FlutterMethodChannel(
+      name: "com.nkshub.nextcloudtalk/deep_link",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    if let appDelegate = NSApp.delegate as? AppDelegate {
+      deepLinkChannel.setMethodCallHandler { [weak appDelegate] call, result in
+        guard call.method == "getLaunchLink" else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        let payload = appDelegate?.deepLinks.takeLaunchLink()
+        #if DEBUG
+          if payload != nil {
+            NSLog("Launch deep link returned to Flutter")
+          }
+        #endif
+        result(payload)
+      }
+      appDelegate.deepLinks.attach { [weak deepLinkChannel] payload in
+        deepLinkChannel?.invokeMethod("linkOpened", arguments: payload) { response in
+          #if DEBUG
+            if response == nil {
+              NSLog("Warm deep link acknowledged by Flutter")
+            }
+          #endif
+        }
+      }
+    }
+    self.deepLinkChannel = deepLinkChannel
 
     super.awakeFromNib()
   }
