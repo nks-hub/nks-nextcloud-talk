@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
@@ -539,13 +542,70 @@ class CallLifecycleSessions extends Table {
     CallLifecycleSessions,
   ],
 )
+const _databaseName = 'nks_nextcloud_talk';
+
+/// Every file SQLite keeps for one database, including the write-ahead log.
+/// Moving the main file alone would drop transactions still sitting in `-wal`.
+const _databaseFileSuffixes = <String>['.sqlite', '.sqlite-wal', '.sqlite-shm'];
+
+/// Moves a database left in [from] over to [to], keeping its WAL intact.
+///
+/// Returns the names it moved, so callers and tests can tell a migration from
+/// a no-op. A file already present in [to] is never overwritten — two
+/// databases are recoverable, a clobbered one is not.
+Future<List<String>> moveLegacyDatabaseFiles(
+  Directory from,
+  Directory to,
+) async {
+  if (from.path == to.path) {
+    return const <String>[];
+  }
+  final moved = <String>[];
+  for (final suffix in _databaseFileSuffixes) {
+    final name = '$_databaseName$suffix';
+    final legacy = File('${from.path}${Platform.pathSeparator}$name');
+    final target = File('${to.path}${Platform.pathSeparator}$name');
+    if (!legacy.existsSync() || target.existsSync()) {
+      continue;
+    }
+    try {
+      await legacy.rename(target.path);
+    } on FileSystemException {
+      // ponytail: rename covers same-volume moves, which is the normal case;
+      // a redirected Documents folder on another volume needs copy + delete.
+      await legacy.copy(target.path);
+      await legacy.delete();
+    }
+    moved.add(name);
+  }
+  return moved;
+}
+
+/// Resolves where the database lives, migrating installs that predate it.
+///
+/// `drift_flutter` defaults to `getApplicationDocumentsDirectory()`, which on
+/// Windows and Linux resolves to the user's real Documents folder — cloud
+/// synced, user-visible, and untouched by an uninstall that offers to keep
+/// application data. Application support is the right home, so older installs
+/// get their file moved before the database is opened.
+Future<Directory> _resolveDatabaseDirectory() async {
+  final support = await getApplicationSupportDirectory();
+  await support.create(recursive: true);
+  await moveLegacyDatabaseFiles(
+    await getApplicationDocumentsDirectory(),
+    support,
+  );
+  return support;
+}
+
 final class AppDatabase extends _$AppDatabase {
   AppDatabase()
     : super(
         driftDatabase(
-          name: 'nks_nextcloud_talk',
+          name: _databaseName,
           native: DriftNativeOptions(
             shareAcrossIsolates: true,
+            databaseDirectory: _resolveDatabaseDirectory,
             setup: (database) => database.execute('PRAGMA foreign_keys = ON'),
           ),
         ),
