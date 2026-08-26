@@ -29,12 +29,20 @@ Stav: Přijato jako nutný důsledek multi-server produktu.
 Credentials, cache, push identity, connections, badge a deep links se scopují
 accountId.
 
+Asynchronní UI akce zachytí accountId objektu při otevření a používají jej po
+celý request i následný sync. Pozdější změna globálně vybraného účtu nesmí akci
+přesměrovat; account-specific filtry pohledu se při přepnutí resetují.
+
 ### D-003: Capability-first
 
 Stav: Přijato jako protokolová invarianta.
 
 Číslo Talk release není feature flag. Resolver kombinuje globální,
 features-local a room-scoped capabilities.
+
+Každá mutace musí ověřit přihlášený account-scoped snapshot v odpovědné service
+nebo protokolové vrstvě, ne jen skrýt tlačítko v UI. Archivace například nesmí
+vydat request bez jednoznačné capability `archived-conversations-v2`.
 
 ### D-004: Žádné fake subsystémy
 
@@ -490,6 +498,11 @@ Desktop-specific klávesnice, hover/focus, system tray, auto-start, file drop a
 background delivery vzniknou pouze jako ověřené platformní řezy; nesmí se
 předstírat existencí generated runneru.
 
+Windows důkaz ze source `0be4c88` prošel release buildem, 29/29 bundle
+manifestem a responsivním runtime na samostatné Windows 11 VM. Inspector capture
+prokazuje Flutter render, ne skutečné pixely release DirectComposition okna;
+přihlášený desktop E2E proto zůstává samostatná brána.
+
 ### D-028: Giphy jako renderovaná reference
 
 Stav: Přepsáno 25. srpna 2026 výslovným uživatelským rozhodnutím. Předchozí
@@ -567,12 +580,34 @@ celek se rozdělí podle odpovědností do menších souborů s úzkým veřejn�
 rozhraním; samotné přesunutí řádků bez zmenšení odpovědnosti není dokončení.
 Generated soubory jsou z limitu vyňaté, ale nesmějí se ručně editovat.
 
-Výchozí audit eviduje 24 ručně udržovaných souborů nad limitem: 17 Dart souborů
-a 7 Python/JSON contract validátorů nebo fixtures. Generated výjimky jsou
-`app_database.g.dart` a tři lokalizační soubory
-`lib/l10n/generated/app_localizations*.dart`. Atomizace `chat_repository.dart`,
-`chat_service_integration_test.dart` a `chat_service.dart` jsou dokončené;
-zbývající backlog je vedený v `docs/TODO.md` a nesmí být vydáván za hotový.
+Výchozí audit evidoval 24 ručně udržovaných souborů nad limitem. Čerstvý audit
+na `83078cd` už nenašel žádný; největší ručně udržované soubory mají 977 řádků.
+Nad limitem zůstávají pouze generated `app_database.g.dart` a lokalizační
+`lib/l10n/generated/app_localizations*.dart`. Limit zůstává průběžnou bránou,
+aby další změny atomizaci nevrátily zpět.
+
+### D-031: Offline admission textové zprávy z persistentního snapshotu
+
+Stav: Přijato 26. srpna 2026, commity `47ec902` a `83078cd`.
+
+Pouze `sendText` smí při transientním selhání načtení capabilities použít
+persistentní account-scoped snapshot. Snapshot musí mít lane `ready`, jeho
+fingerprint se musí přesně shodovat s kanonickým `talkFeaturesJson` účtu a profil
+musí stále povolovat text send. Chybějící, poškozený nebo neshodný snapshot,
+401, cancellation a neplatná odpověď zůstávají fail-closed.
+
+Offline větev pouze připustí durable operaci ve stavu `queued`. Nesmí ji claimnout
+ani vydat POST, protože bez síťového důkazu by transport vytvořil falešný
+ambiguous stav. In-memory capability cache není online důkaz: API vrací
+provenanci `network` nebo `memoryCache` a send admission vynutí fresh request.
+Neúspěšný fresh read odstraní nahrazenou hot cache a teprve potom smí použít
+persistentní fallback. Fresh foreground sync znovu načte autoritativní
+capabilities; pouze při stále platné generation/replay autoritě operaci odešle
+právě jednou. Android E2E na `83078cd` ale ukázalo, že samotný reconnect tento
+sync neprobudí: operace zůstala přes 65 sekund `queued` s attempt 0 a dokončila
+se až po cold restartu a otevření roomu. Rozhodnutí proto nezavádí platformní
+scheduler ani connectivity/lifecycle wake-up a neuzavírá live
+process-death/offline matici.
 
 ## Vyřešené volby
 
