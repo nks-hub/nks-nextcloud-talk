@@ -1160,6 +1160,18 @@ abstract class AppLocalizations {
   /// **'Unknown'**
   String get roomDetailsNotificationUnknown;
 
+  /// No description provided for @roomDetailsCallNotificationsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Call notifications'**
+  String get roomDetailsCallNotificationsLabel;
+
+  /// No description provided for @roomDetailsCallNotificationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me when a call starts'**
+  String get roomDetailsCallNotificationsSubtitle;
+
   /// No description provided for @roomDetailsParticipantsHeader.
   ///
   /// In en, this message translates to:

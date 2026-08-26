@@ -184,6 +184,8 @@
   "roomDetailsNotificationMention": "Mentions only",
   "roomDetailsNotificationNever": "Off",
   "roomDetailsNotificationUnknown": "Unknown",
+  "roomDetailsCallNotificationsLabel": "Call notifications",
+  "roomDetailsCallNotificationsSubtitle": "Notify me when a call starts",
   "roomDetailsParticipantsHeader": "Participants",
   "roomDetailsParticipantsCount": "{count} participants",
   "@roomDetailsParticipantsCount": {

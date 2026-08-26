@@ -594,6 +594,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsNotificationUnknown => 'Unknown';
 
   @override
+  String get roomDetailsCallNotificationsLabel => 'Call notifications';
+
+  @override
+  String get roomDetailsCallNotificationsSubtitle =>
+      'Notify me when a call starts';
+
+  @override
   String get roomDetailsParticipantsHeader => 'Participants';
 
   @override

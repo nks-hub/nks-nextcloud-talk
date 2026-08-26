@@ -5,6 +5,7 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
   late ConversationRoom? _room;
   late bool _isFavorite;
   late int _notificationLevel;
+  late bool _callNotificationsEnabled;
   bool _busy = false;
 
   late Set<String> _talkFeatures;
@@ -16,6 +17,7 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     _room = _parseCachedRoom(widget.conversation);
     _isFavorite = widget.conversation.favorite;
     _notificationLevel = _room?.notificationLevel ?? _notificationDefault;
+    _callNotificationsEnabled = _room?.notificationCalls == 1;
     _talkFeatures = _decodeTalkFeatures(widget.account.talkFeaturesJson);
   }
 
@@ -332,6 +334,26 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
           );
       if (mounted) {
         setState(() => _notificationLevel = selected.wireValue);
+      }
+    });
+  }
+
+  Future<void> _toggleCallNotifications(bool enabled) async {
+    await _runAction(() async {
+      final room = await ref
+          .read(roomSettingsServiceProvider)
+          .setCallNotificationLevel(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            level: enabled
+                ? RoomCallNotificationLevel.on
+                : RoomCallNotificationLevel.off,
+          );
+      if (mounted) {
+        setState(() {
+          _room = room;
+          _callNotificationsEnabled = room.notificationCalls == 1;
+        });
       }
     });
   }

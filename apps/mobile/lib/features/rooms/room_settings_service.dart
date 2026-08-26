@@ -14,6 +14,8 @@ import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
+part 'room_settings_call_notifications.part.dart';
+
 enum RoomSettingsError {
   accountMissing,
   credentialMissing,

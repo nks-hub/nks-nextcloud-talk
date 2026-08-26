@@ -8,6 +8,7 @@ import 'request.dart';
 
 part 'response_updates.dart';
 part 'response_administration.dart';
+part 'response_call_notifications.dart';
 
 const TalkProtocolErrorCode _responseCode =
     TalkProtocolErrorCode.invalidRoomSettingsResponse;

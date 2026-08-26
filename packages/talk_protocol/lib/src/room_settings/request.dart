@@ -9,6 +9,8 @@ import '../identifiers.dart';
 import '../protocol_exception.dart';
 import '../server_base.dart';
 
+part 'request_call_notifications.dart';
+
 const String roomSettingsContractUserAgent =
     'com.nkshub.nextcloudtalk room-settings-contract/0.1';
 

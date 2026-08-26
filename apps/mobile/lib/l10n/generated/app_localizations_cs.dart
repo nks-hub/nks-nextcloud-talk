@@ -594,6 +594,13 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsNotificationUnknown => 'Neznámé';
 
   @override
+  String get roomDetailsCallNotificationsLabel => 'Oznámení hovorů';
+
+  @override
+  String get roomDetailsCallNotificationsSubtitle =>
+      'Upozornit při zahájení hovoru';
+
+  @override
   String get roomDetailsParticipantsHeader => 'Účastníci';
 
   @override

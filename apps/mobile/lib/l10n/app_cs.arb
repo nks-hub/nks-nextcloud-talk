@@ -184,6 +184,8 @@
   "roomDetailsNotificationMention": "Jen zmínky",
   "roomDetailsNotificationNever": "Vypnuto",
   "roomDetailsNotificationUnknown": "Neznámé",
+  "roomDetailsCallNotificationsLabel": "Oznámení hovorů",
+  "roomDetailsCallNotificationsSubtitle": "Upozornit při zahájení hovoru",
   "roomDetailsParticipantsHeader": "Účastníci",
   "roomDetailsParticipantsCount": "{count} účastníků",
   "roomDetailsParticipantsEmpty": "Žádní účastníci.",

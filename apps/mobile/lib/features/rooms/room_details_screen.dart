@@ -137,6 +137,15 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
             ),
             onTap: _busy ? null : _changeNotificationLevel,
           ),
+          if (_room != null)
+            SwitchListTile(
+              key: const Key('room-details-call-notifications-toggle'),
+              secondary: const Icon(Icons.call_outlined),
+              title: Text(strings.roomDetailsCallNotificationsLabel),
+              subtitle: Text(strings.roomDetailsCallNotificationsSubtitle),
+              value: _callNotificationsEnabled,
+              onChanged: _busy ? null : _toggleCallNotifications,
+            ),
           SwitchListTile(
             key: const Key('room-details-favorite-toggle'),
             secondary: const Icon(Icons.star_outline),

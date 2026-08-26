@@ -164,6 +164,32 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  /// Enables or disables call notifications for the current participant.
+  Future<UpdateCallNotificationLevelResponse> updateCallNotificationLevel({
+    required UpdateCallNotificationLevelRequest updateRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', updateRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...updateRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = updateRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _callNotificationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeUpdateCallNotificationLevelResponse(
+      request: updateRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Marks or unmarks a conversation as one of the caller's favorites.
   Future<SetFavoriteResponse> setFavorite({
     required SetFavoriteRequest favoriteRequest,
