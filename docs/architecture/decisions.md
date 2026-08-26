@@ -335,6 +335,12 @@ account-scoped tabulky a transakční conversation merge. Android a Windows
 debug build i repository testy prošly; message/outbox migrace a Apple/Linux
 build zůstávají povinným důkazem dalších řezů.
 
+Drift volá `onUpgrade` také při downgrade. Migrační strategie proto jako první
+odmítne `versionBefore > schemaVersion`; starší build nesmí přepsat
+`PRAGMA user_version` novější databáze ani nad neznámým schématem pokračovat.
+File-backed test kontroluje nejen chybu při open, ale také zachování původní
+verze a dat po odmítnutém rollbacku.
+
 Talk neposkytuje seznam identit čtenářů. `lastCommonReadMessage` je room-wide
 minimum markerů pouze public user actors; guesté do něj nevstupují. Klient smí
 agregovaný stav ukázat jen u vlastní serverem potvrzené zprávy, pokud současný

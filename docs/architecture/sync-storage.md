@@ -4,9 +4,11 @@
 
 Požadované atomické vztahy jsou relační. Autoritativní lokální store proto je
 SQLite s foreign keys, transakcemi a verzovanými migracemi. Flutter aplikace
-používá Drift; aktuální schema v7 drží účty, konverzace, avatary, chat scope,
-zprávy, text-send operace a durable attachment joby. Otevření databáze zapíná a
-kontroluje foreign keys.
+používá Drift; aktuální schema v10 drží účty, konverzace, avatary, chat scope,
+zprávy, text-send operace, drafty a durable attachment joby. Otevření databáze
+zapíná a kontroluje foreign keys. Novější `user_version` se před jakoukoli
+migrací fail-closed odmítne, takže rollback aplikace neoznačí neznámé schema
+svou starší verzí.
 
 Hive může zůstat pouze pro jednoduché neautoritativní preference. Není vhodný
 jako hlavní Talk store, protože message, parent, thread, room a read marker se
