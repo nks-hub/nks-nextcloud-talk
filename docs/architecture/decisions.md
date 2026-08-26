@@ -806,6 +806,94 @@ zachování account/conversation dat, presence, archivace, nové tabulky,
 odmítá bez změny verze nebo dat. Budoucí release schema musí do stejné matice
 přibýt současně se zvýšením `schemaVersion`.
 
+### D-034: Desktopová hustota podle vstupního zařízení, ne podle šířky okna
+
+Stav: Přijato 27. srpna 2026, commity `7cde8ca`, `520c88e`, `289a6ee`
+a `539a776`.
+
+Rozměry ovládacích prvků se odvozují od `defaultTargetPlatform`. Windows, macOS
+a Linux dostávají hustotu pro myš a klávesnici, ostatní platformy zůstávají
+beze změny na dotykovém minimu 48 dp. Hranicí je platforma, protože zúžené okno
+na desktopu se pořád ovládá myší a rozšířený tablet prstem — šířka okna
+o vstupním zařízení nevypovídá.
+
+Změřeno widget testem při 1400×900 a `devicePixelRatio` 1: před opravou měl
+standardní interaktivní prvek 48 px proti 34 px v Nextcloudu, řádek konverzace
+80 px proti 53 px a hlavička panelu 76 px proti 44 px. Po opravě je na desktopu
+`IconButton` 36, `FilledButton` 38, `TextField` 40, řádek konverzace 56,
+avatar 40, hlavička 52 a šířka seznamu 300, což je `$navigation-width`
+z `nextcloud/server`.
+
+Příčinou NENÍ `ThemeData.visualDensity`. Flutter ho podle platformy dopočítá
+sám (`theme_data.dart:412`), na desktopu tedy compact hustota už platí — ale
+ubere jen 8 px u widgetů založených na `minimumSize` a na `contentPadding`,
+zaoblení ani typografii nedosáhne vůbec. Skutečné příčiny byly dvě: téma
+vnucovalo dotykové minimum všem platformám, a rozměry natvrdo zapsané ve
+widgetech, na které hustota nemá vliv.
+
+Dvě zjištění, která z návrhu neplynula a vyšla až z měření. `IconButton` na
+`minimumSize` nereaguje, protože se řídí paddingem kolem ikony a v Material 3
+si pinuje `VisualDensity.standard`; skutečným knoflíkem je `padding`
+a `tapTargetSize`. A `minimumSize` se musí zadávat o osm větší, než má být
+výsledek, protože desktopová compact hustota osm bodů odečte.
+
+Guard test `desktop_density_test.dart` drží mobilní minimum 48 dp i spodní mez
+24 px, aby se hustota nedala snižovat donekonečna.
+
+### D-035: Přerušená migrace databáze se zotavuje, neprovádí se atomicky
+
+Stav: Přijato 27. srpna 2026, commity `04528c3`, `0b3c201` a `5c7cd96`.
+
+Každý krok `onUpgrade` musí být idempotentní, aby ho šlo bezpečně zopakovat.
+Migrace se záměrně neobaluje do jedné transakce.
+
+Důvodem je stav doložený na vyhrazené Windows VM: `user_version` zůstalo 7,
+ale schéma bylo už po krok 10, takže každý další start replayoval kroky, které
+schéma mělo, a skončil na `duplicate column name: is_archived`. Aplikace se
+neotevřela, tlačítko pro nový pokus jen zopakovalo tutéž migraci a z UI
+nevedla cesta ven.
+
+Atomicita by tento stav nikdy neuzdravila, pouze zabránila vzniku nových.
+Navíc by sama o sobě nestačila: `user_version` zapisuje drift až po dokončení
+`onUpgrade`, takže pád v tom okně vyrobí tentýž rozejitý stav a bookkeeping by
+se musel obcházet ručně.
+
+Idempotentní musel být jediný krok. `migrator.createTable` drift generuje jako
+`CREATE TABLE IF NOT EXISTS`, indexy mají `IF NOT EXISTS` ručně a backfilly
+přepočítávají z `raw_json`. Neidempotentní byl pouze `migrator.addColumn`,
+který nyní prochází přes kontrolu `PRAGMA table_info`.
+
+Databáze také přestala vznikat v uživatelské složce Dokumenty. Nešlo o problém
+jediné platformy: `drift_flutter` má výchozí adresář
+`getApplicationDocumentsDirectory()` všude, takže na Windows šlo o složku
+synchronizovanou OneDrivem, na Linuxu o `~/Documents`, na macOS bez sandboxu
+totéž a na iOS o sandbox viditelný ve Files a zálohovaný do iCloud; jen Android
+mířil do app-private adresáře. Přesun stěhuje i `-wal` a `-shm`, protože
+samotný hlavní soubor by zahodil transakce ve write-ahead logu, a existující
+soubor v cíli nikdy nepřepíše.
+
+### D-036: Chat providery se uvolňují se zavřením místnosti
+
+Stav: Přijato 27. srpna 2026, commit `142d5c6`.
+
+Rodinné providery držící zprávy, stavy odeslání, outbox operace a scope jsou
+`autoDispose`. Bez toho si každá kdy otevřená místnost natrvalo držela živý
+drift subscription i poslední kompletní seznam zpráv a zavření místnosti
+neuvolnilo nic.
+
+Změřeno na produkční widget cestě: 2,9 kB rezidentní paměti na cachovanou
+zprávu, tedy zhruba 58 MB pro místnost s dvaceti tisíci zprávami. Průchod
+dvanácti místnostmi po dvou tisících zprávách vyrostl před opravou o 57,9 MB
+a po ní o 16,3 MB, což je o 72 % méně.
+
+Dvě související změny byly posouzeny a zamítnuty, obě s měřením. Okno nad
+dotazem na zprávy nemá co opravovat, protože místnost s dvaceti tisíci
+nacachovanými zprávami se otevře za 231 ms a po `autoDispose` se drží jen jedna
+otevřená; navíc by tiše rozbilo skok na zprávu, protože bloky popisují, co je
+stažené, a ne co dotaz vydává. Evikce nacachovaných zpráv nemá co odříznout,
+protože z 1 199 B na řádek je 714 B samotná zpráva — mazala by uživatelskou
+historii, ne režii.
+
 ## Vyřešené volby
 
 ### Q-001: Licence
