@@ -18,6 +18,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_composer_giphy_test_capabilities.dart';
+part 'chat_composer_giphy_test_controller.dart';
 part 'chat_composer_giphy_test_repository.dart';
 part 'chat_composer_giphy_test_support.dart';
 
@@ -30,4 +31,5 @@ void main() {
 
   _registerGiphyCapabilityTests();
   _registerGiphyRepositoryTests(server, authorization);
+  _registerGiphyControllerTests();
 }

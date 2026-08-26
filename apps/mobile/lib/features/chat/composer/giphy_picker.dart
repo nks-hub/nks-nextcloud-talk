@@ -2,6 +2,8 @@ part of 'giphy.dart';
 
 enum GiphyLoadPhase { idle, loading, ready, error }
 
+const _coldTrendingRetryDelays = <Duration>[Duration(milliseconds: 500)];
+
 final class GiphyController extends ChangeNotifier {
   GiphyController({required this.repository, this.pageSize = 20});
 
@@ -23,18 +25,34 @@ final class GiphyController extends ChangeNotifier {
   String? get term => _term;
   int get cursor => _cursor;
 
-  Future<bool> loadTrending() => _load(term: null, append: false);
+  Future<bool> loadTrending() {
+    final isColdLoad = _phase == GiphyLoadPhase.idle && _entries.isEmpty;
+    return _load(
+      term: null,
+      append: false,
+      retryDelays: isColdLoad ? _coldTrendingRetryDelays : const <Duration>[],
+    );
+  }
 
   Future<bool> search(String term) {
     final normalized = term.trim();
     return normalized.isEmpty
         ? loadTrending()
-        : _load(term: normalized, append: false);
+        : _load(
+            term: normalized,
+            append: false,
+            retryDelays: const <Duration>[],
+          );
   }
 
-  Future<bool> loadMore() => _load(term: _term, append: true);
+  Future<bool> loadMore() =>
+      _load(term: _term, append: true, retryDelays: const <Duration>[]);
 
-  Future<bool> _load({required String? term, required bool append}) async {
+  Future<bool> _load({
+    required String? term,
+    required bool append,
+    required List<Duration> retryDelays,
+  }) async {
     if (_disposed ||
         pageSize < 1 ||
         pageSize > 50 ||
@@ -51,47 +69,74 @@ final class GiphyController extends ChangeNotifier {
       _term = term;
     }
     notifyListeners();
-    try {
-      final page = term == null
-          ? await repository.trending(
-              cursor: requestedCursor,
-              limit: pageSize,
-              abortTrigger: abort.future,
-            )
-          : await repository.search(
-              term: term,
-              cursor: requestedCursor,
-              limit: pageSize,
-              abortTrigger: abort.future,
-            );
-      if (_disposed || generation != _generation) {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        final page = term == null
+            ? await repository.trending(
+                cursor: requestedCursor,
+                limit: pageSize,
+                abortTrigger: abort.future,
+              )
+            : await repository.search(
+                term: term,
+                cursor: requestedCursor,
+                limit: pageSize,
+                abortTrigger: abort.future,
+              );
+        if (_disposed || generation != _generation) {
+          return false;
+        }
+        _entries = List<GiphyEntry>.unmodifiable(
+          append ? <GiphyEntry>[..._entries, ...page.entries] : page.entries,
+        );
+        _cursor = page.cursor;
+        _phase = GiphyLoadPhase.ready;
+        notifyListeners();
+        return true;
+      } on GiphyException catch (error) {
+        if (_disposed || generation != _generation) {
+          return false;
+        }
+        if (attempt < retryDelays.length && _isTransient(error.error)) {
+          await Future.any<void>(<Future<void>>[
+            Future<void>.delayed(retryDelays[attempt]),
+            abort.future,
+          ]);
+          if (_disposed || generation != _generation) {
+            return false;
+          }
+          continue;
+        }
+        _phase = GiphyLoadPhase.error;
+        _error = error.error;
+        notifyListeners();
+        return false;
+      } on Object {
+        if (_disposed || generation != _generation) {
+          return false;
+        }
+        if (attempt < retryDelays.length) {
+          await Future.any<void>(<Future<void>>[
+            Future<void>.delayed(retryDelays[attempt]),
+            abort.future,
+          ]);
+          if (_disposed || generation != _generation) {
+            return false;
+          }
+          continue;
+        }
+        _phase = GiphyLoadPhase.error;
+        _error = GiphyError.network;
+        notifyListeners();
         return false;
       }
-      _entries = List<GiphyEntry>.unmodifiable(
-        append ? <GiphyEntry>[..._entries, ...page.entries] : page.entries,
-      );
-      _cursor = page.cursor;
-      _phase = GiphyLoadPhase.ready;
-      notifyListeners();
-      return true;
-    } on GiphyException catch (error) {
-      if (_disposed || generation != _generation) {
-        return false;
-      }
-      _phase = GiphyLoadPhase.error;
-      _error = error.error;
-      notifyListeners();
-      return false;
-    } on Object {
-      if (_disposed || generation != _generation) {
-        return false;
-      }
-      _phase = GiphyLoadPhase.error;
-      _error = GiphyError.network;
-      notifyListeners();
-      return false;
     }
   }
+
+  bool _isTransient(GiphyError error) =>
+      error == GiphyError.network ||
+      error == GiphyError.timeout ||
+      error == GiphyError.unexpectedStatus;
 
   @override
   void dispose() {
