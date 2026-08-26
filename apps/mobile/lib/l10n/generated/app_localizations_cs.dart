@@ -1364,6 +1364,32 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBanRejected => 'Server tento ban odmítl.';
 
   @override
+  String get roomDetailsClearHistoryAction => 'Vymazat historii konverzace';
+
+  @override
+  String get roomDetailsClearHistoryDialogTitle =>
+      'Vymazat historii konverzace?';
+
+  @override
+  String get roomDetailsClearHistoryDialogMessage =>
+      'Tímto trvale smažete zprávy a vlákna všem v této konverzaci. Akci nelze vrátit zpět.';
+
+  @override
+  String get roomDetailsClearHistoryConfirm => 'Vymazat historii';
+
+  @override
+  String get roomDetailsClearHistorySucceeded =>
+      'Historie konverzace byla vymazána.';
+
+  @override
+  String get roomDetailsClearHistoryExternalCopiesWarning =>
+      'Historie konverzace zde byla vymazána. Externí služby mohou stále uchovávat kopie.';
+
+  @override
+  String get roomDetailsClearHistoryRefreshFailed =>
+      'Historie konverzace byla vymazána, ale aktuální stav se zatím nepodařilo načíst. Pro obnovení konverzaci znovu otevřete.';
+
+  @override
   String get roomDetailsAvatarPickImage => 'Vybrat obrázek';
 
   @override

@@ -2522,6 +2522,48 @@ abstract class AppLocalizations {
   /// **'The server refused this ban.'**
   String get roomDetailsBanRejected;
 
+  /// Destructive moderator action that clears the conversation history for everyone.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear conversation history'**
+  String get roomDetailsClearHistoryAction;
+
+  /// Title of the dialog confirming conversation history clearing.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear conversation history?'**
+  String get roomDetailsClearHistoryDialogTitle;
+
+  /// Warning shown before conversation history is cleared.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes messages and threads for everyone in this conversation. This cannot be undone.'**
+  String get roomDetailsClearHistoryDialogMessage;
+
+  /// Button that confirms conversation history clearing.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear history'**
+  String get roomDetailsClearHistoryConfirm;
+
+  /// Confirmation shown after conversation history was cleared and refreshed.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation history was cleared.'**
+  String get roomDetailsClearHistorySucceeded;
+
+  /// Warning shown after a 202 clear-history success.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation history was cleared here. External services may still retain copies.'**
+  String get roomDetailsClearHistoryExternalCopiesWarning;
+
+  /// Success message shown when the destructive request succeeded but its follow-up refresh failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.'**
+  String get roomDetailsClearHistoryRefreshFailed;
+
   /// Button that opens the gallery to pick a conversation picture.
   ///
   /// In en, this message translates to:

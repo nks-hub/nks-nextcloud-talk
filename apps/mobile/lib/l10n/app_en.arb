@@ -636,6 +636,34 @@
   "@roomDetailsBanRejected": {
     "description": "Message shown when the server refuses a ban."
   },
+  "roomDetailsClearHistoryAction": "Clear conversation history",
+  "@roomDetailsClearHistoryAction": {
+    "description": "Destructive moderator action that clears the conversation history for everyone."
+  },
+  "roomDetailsClearHistoryDialogTitle": "Clear conversation history?",
+  "@roomDetailsClearHistoryDialogTitle": {
+    "description": "Title of the dialog confirming conversation history clearing."
+  },
+  "roomDetailsClearHistoryDialogMessage": "This permanently deletes messages and threads for everyone in this conversation. This cannot be undone.",
+  "@roomDetailsClearHistoryDialogMessage": {
+    "description": "Warning shown before conversation history is cleared."
+  },
+  "roomDetailsClearHistoryConfirm": "Clear history",
+  "@roomDetailsClearHistoryConfirm": {
+    "description": "Button that confirms conversation history clearing."
+  },
+  "roomDetailsClearHistorySucceeded": "Conversation history was cleared.",
+  "@roomDetailsClearHistorySucceeded": {
+    "description": "Confirmation shown after conversation history was cleared and refreshed."
+  },
+  "roomDetailsClearHistoryExternalCopiesWarning": "Conversation history was cleared here. External services may still retain copies.",
+  "@roomDetailsClearHistoryExternalCopiesWarning": {
+    "description": "Warning shown after a 202 clear-history success."
+  },
+  "roomDetailsClearHistoryRefreshFailed": "Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.",
+  "@roomDetailsClearHistoryRefreshFailed": {
+    "description": "Success message shown when the destructive request succeeded but its follow-up refresh failed."
+  },
   "roomDetailsAvatarPickImage": "Choose a picture",
   "@roomDetailsAvatarPickImage": {
     "description": "Button that opens the gallery to pick a conversation picture."

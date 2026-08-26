@@ -1363,6 +1363,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsBanRejected => 'The server refused this ban.';
 
   @override
+  String get roomDetailsClearHistoryAction => 'Clear conversation history';
+
+  @override
+  String get roomDetailsClearHistoryDialogTitle =>
+      'Clear conversation history?';
+
+  @override
+  String get roomDetailsClearHistoryDialogMessage =>
+      'This permanently deletes messages and threads for everyone in this conversation. This cannot be undone.';
+
+  @override
+  String get roomDetailsClearHistoryConfirm => 'Clear history';
+
+  @override
+  String get roomDetailsClearHistorySucceeded =>
+      'Conversation history was cleared.';
+
+  @override
+  String get roomDetailsClearHistoryExternalCopiesWarning =>
+      'Conversation history was cleared here. External services may still retain copies.';
+
+  @override
+  String get roomDetailsClearHistoryRefreshFailed =>
+      'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.';
+
+  @override
   String get roomDetailsAvatarPickImage => 'Choose a picture';
 
   @override

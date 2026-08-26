@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mime/mime.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
@@ -15,6 +16,7 @@ import 'participants_service.dart';
 import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
+part 'room_details_clear_history.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
 part 'room_details_support.part.dart';
@@ -41,6 +43,7 @@ const String _readOnlyCapability = 'read-only-rooms';
 const String _lobbyCapability = 'webinary-lobby';
 const String _banCapability = 'ban-v1';
 const String _messageExpirationCapability = 'message-expiration';
+const String _clearHistoryCapability = 'clear-history';
 const String _importantCapability = 'important-conversations';
 const String _sensitiveCapability = 'sensitive-conversations';
 const int _classifiedRoomAttribute = 4;
@@ -98,6 +101,10 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with _RoomDetailsStateLogic, _RoomImportanceSensitivityStateLogic {
+  void _setBusy(bool value) {
+    setState(() => _busy = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -281,6 +288,19 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               leading: const Icon(Icons.block_outlined),
               title: Text(strings.roomDetailsBansAction),
               onTap: _busy ? null : _showBans,
+            ),
+          if (_canClearHistory)
+            ListTile(
+              key: const Key('room-details-clear-history'),
+              leading: Icon(
+                Icons.delete_sweep_outlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                strings.roomDetailsClearHistoryAction,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: _busy ? null : _confirmClearHistory,
             ),
           if (_canLeave)
             ListTile(
