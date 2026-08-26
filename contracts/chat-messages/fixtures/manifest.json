@@ -2,7 +2,11 @@
   "contract": "../openapi.json",
   "queryCasesFile": "query.cases.json",
   "capabilityCasesFile": "capability.cases.json",
-  "mergeCasesFile": "merge.cases.json",
+  "mergeCasesFiles": [
+    "merge.cases.json",
+    "merge.state.cases.json",
+    "merge.failures.cases.json"
+  ],
   "outboxCasesFiles": [
     "outbox-delivery.cases.json",
     "outbox-account-failures.cases.json",

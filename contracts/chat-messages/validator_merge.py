@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -358,12 +359,15 @@ def apply_merge_step(
 
 
 def validate_merge_cases(
-    path: Path,
+    paths: Sequence[Path],
     records: dict[str, dict[str, Any]],
 ) -> tuple[int, int]:
-    root = require_object(load_json(path), path.name)
+    raw_cases: list[Any] = []
+    for path in paths:
+        root = require_object(load_json(path), path.name)
+        raw_cases.extend(require_list(root.get("cases"), "merge cases"))
     cases = require_unique_ids(
-        require_list(root.get("cases"), "merge cases"),
+        raw_cases,
         REQUIRED_MERGE_IDS,
         "merge case",
     )

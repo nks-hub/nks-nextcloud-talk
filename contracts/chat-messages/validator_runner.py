@@ -530,11 +530,14 @@ def main() -> int:
 
         query_path = resolve_case_path(manifest, "queryCasesFile")
         capability_path = resolve_case_path(manifest, "capabilityCasesFile")
-        merge_path = resolve_case_path(manifest, "mergeCasesFile")
+        merge_field = (
+            "mergeCasesFiles" if "mergeCasesFiles" in manifest else "mergeCasesFile"
+        )
+        merge_paths = resolve_case_paths(manifest, merge_field)
         outbox_paths = resolve_case_paths(manifest, "outboxCasesFiles")
         query_count = validate_query_cases(document, query_path)
         capability_count = validate_capability_cases(capability_path)
-        merge_count, merge_steps = validate_merge_cases(merge_path, records)
+        merge_count, merge_steps = validate_merge_cases(merge_paths, records)
         outbox_count, outbox_steps = validate_outbox_cases(outbox_paths, records)
         redaction_fixture = next(
             fixture for fixture in fixtures if fixture["id"] == "history-page"
@@ -546,7 +549,12 @@ def main() -> int:
         )
         origin_count = validate_origin_normalization()
 
-        case_paths = {query_path, capability_path, merge_path, *outbox_paths}
+        case_paths = {
+            query_path,
+            capability_path,
+            *merge_paths,
+            *outbox_paths,
+        }
         listed_paths = listed_fixture_paths | case_paths
         actual_paths = {
             path.resolve()

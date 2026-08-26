@@ -15,13 +15,16 @@ void main() {
   final headerSets = _object(
     manifest['headerSets'],
   ).map((key, value) => MapEntry(key, _stringMap(value)));
-  final cases =
-      (_readObject(
-                'contracts/chat-messages/fixtures/merge.cases.json',
-              )['cases']!
-              as List<Object?>)
-          .map(_object)
-          .toList(growable: false);
+  final cases = (manifest['mergeCasesFiles']! as List<Object?>)
+      .expand(
+        (file) =>
+            (_readObject(
+                      'contracts/chat-messages/fixtures/${file! as String}',
+                    )['cases']!
+                    as List<Object?>)
+                .map(_object),
+      )
+      .toList(growable: false);
 
   test('covers all executable merge scenarios', () {
     expect(cases.length, 23);

@@ -1,0 +1,216 @@
+{
+  "cases": [
+    {
+      "id": "rate-limited-get-keeps-state",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [109],
+              "historyCursor": "109",
+              "futureCursor": "109",
+              "lastCommonRead": "100",
+              "lastReadMessage": 109,
+              "unreadMessages": 0,
+              "hasHistory": true,
+              "futureConverged": false,
+              "blocks": [["109", "109"]]
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "kind": "sync",
+          "accountId": "account-a",
+          "roomToken": "rooma123",
+          "threadId": null,
+          "direction": "future",
+          "anchor": "109",
+          "fixture": "chat-rate-limited",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedScope": {
+            "messageIds": [109],
+            "historyCursor": "109",
+            "futureCursor": "109",
+            "lastCommonRead": "100",
+            "lastReadMessage": 109,
+            "unreadMessages": 0,
+            "hasHistory": true,
+            "futureConverged": false,
+            "blocks": [["109", "109"]]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unavailable-get-keeps-state",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [109],
+              "historyCursor": "109",
+              "futureCursor": "109",
+              "lastCommonRead": "100",
+              "lastReadMessage": 109,
+              "unreadMessages": 0,
+              "hasHistory": true,
+              "futureConverged": false,
+              "blocks": [["109", "109"]]
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "kind": "sync",
+          "accountId": "account-a",
+          "roomToken": "rooma123",
+          "threadId": null,
+          "direction": "future",
+          "anchor": "109",
+          "fixture": "chat-unavailable",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedScope": {
+            "messageIds": [109],
+            "historyCursor": "109",
+            "futureCursor": "109",
+            "lastCommonRead": "100",
+            "lastReadMessage": 109,
+            "unreadMessages": 0,
+            "hasHistory": true,
+            "futureConverged": false,
+            "blocks": [["109", "109"]]
+          }
+        }
+      ]
+    },
+    {
+      "id": "read-unauthorized-pauses-only-target-account",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [109, 112, 114],
+              "historyCursor": "109",
+              "futureCursor": "114",
+              "lastCommonRead": "109",
+              "lastReadMessage": 109,
+              "unreadMessages": 5,
+              "hasHistory": true,
+              "futureConverged": true,
+              "blocks": [["109", "114"]]
+            }
+          }
+        },
+        "account-b": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [900],
+              "historyCursor": "900",
+              "futureCursor": "900",
+              "lastCommonRead": "800",
+              "lastReadMessage": 800,
+              "unreadMessages": 3,
+              "hasHistory": true,
+              "futureConverged": true,
+              "blocks": [["900", "900"]]
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "kind": "read",
+          "accountId": "account-a",
+          "roomToken": "rooma123",
+          "threadId": null,
+          "fixture": "read-marker-unauthorized",
+          "transaction": "commit",
+          "expectedOutcome": "reauth-required",
+          "expectedAccountLane": "reauthRequired",
+          "expectedScope": {
+            "messageIds": [109, 112, 114],
+            "historyCursor": "109",
+            "futureCursor": "114",
+            "lastCommonRead": "109",
+            "lastReadMessage": 109,
+            "unreadMessages": 5,
+            "hasHistory": true,
+            "futureConverged": true,
+            "blocks": [["109", "114"]]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unread-unauthorized-pauses-only-target-account",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [109, 112, 114],
+              "historyCursor": "109",
+              "futureCursor": "114",
+              "lastCommonRead": "109",
+              "lastReadMessage": 114,
+              "unreadMessages": 0,
+              "hasHistory": true,
+              "futureConverged": true,
+              "blocks": [["109", "114"]]
+            }
+          }
+        },
+        "account-b": {
+          "laneState": "ready",
+          "scopes": {
+            "rooma123#root": {
+              "messageIds": [900],
+              "historyCursor": "900",
+              "futureCursor": "900",
+              "lastCommonRead": "800",
+              "lastReadMessage": 800,
+              "unreadMessages": 3,
+              "hasHistory": true,
+              "futureConverged": true,
+              "blocks": [["900", "900"]]
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "kind": "unread",
+          "accountId": "account-a",
+          "roomToken": "rooma123",
+          "threadId": null,
+          "fixture": "mark-unread-unauthorized",
+          "transaction": "commit",
+          "expectedOutcome": "reauth-required",
+          "expectedAccountLane": "reauthRequired",
+          "expectedScope": {
+            "messageIds": [109, 112, 114],
+            "historyCursor": "109",
+            "futureCursor": "114",
+            "lastCommonRead": "109",
+            "lastReadMessage": 114,
+            "unreadMessages": 0,
+            "hasHistory": true,
+            "futureConverged": true,
+            "blocks": [["109", "114"]]
+          }
+        }
+      ]
+    }
+  ]
+}
