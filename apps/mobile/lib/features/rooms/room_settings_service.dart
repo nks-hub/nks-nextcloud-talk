@@ -15,6 +15,7 @@ import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
 part 'room_settings_call_notifications.part.dart';
+part 'room_settings_message_expiration.part.dart';
 
 enum RoomSettingsError {
   accountMissing,

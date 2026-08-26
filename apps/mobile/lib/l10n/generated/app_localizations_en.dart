@@ -601,6 +601,44 @@ class AppLocalizationsEn extends AppLocalizations {
       'Notify me when a call starts';
 
   @override
+  String get roomDetailsMessageExpirationLabel => 'Message expiration';
+
+  @override
+  String get roomDetailsMessageExpirationDialogTitle =>
+      'Set message expiration';
+
+  @override
+  String get roomDetailsMessageExpirationHint =>
+      'Shared files will no longer be shared in this conversation, but the owner\'s files will not be deleted.';
+
+  @override
+  String get roomDetailsMessageExpirationOff => 'Off';
+
+  @override
+  String get roomDetailsMessageExpirationOneHour => '1 hour';
+
+  @override
+  String get roomDetailsMessageExpirationEightHours => '8 hours';
+
+  @override
+  String get roomDetailsMessageExpirationOneDay => '1 day';
+
+  @override
+  String get roomDetailsMessageExpirationOneWeek => '1 week';
+
+  @override
+  String get roomDetailsMessageExpirationFourWeeks => '4 weeks';
+
+  @override
+  String roomDetailsMessageExpirationCustom(int seconds) {
+    return 'Custom ($seconds seconds)';
+  }
+
+  @override
+  String get roomDetailsMessageExpirationRejected =>
+      'The server rejected this expiration setting.';
+
+  @override
   String get roomDetailsParticipantsHeader => 'Participants';
 
   @override

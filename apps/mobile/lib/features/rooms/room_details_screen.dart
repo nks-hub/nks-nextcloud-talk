@@ -15,6 +15,7 @@ import 'participants_service.dart';
 import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
+part 'room_details_message_expiration.part.dart';
 part 'room_details_support.part.dart';
 part 'room_details_widgets.part.dart';
 
@@ -38,6 +39,7 @@ const String _avatarCapability = 'avatar';
 const String _readOnlyCapability = 'read-only-rooms';
 const String _lobbyCapability = 'webinary-lobby';
 const String _banCapability = 'ban-v1';
+const String _messageExpirationCapability = 'message-expiration';
 
 /// The emoji the avatar picker offers. Talk accepts any single emoji; this is
 /// a short, keyboard-free shortlist rather than a full picker.
@@ -65,8 +67,9 @@ enum ParticipantAction { promote, demote, remove, ban }
 
 /// Conversation details: room metadata, the moderator-gated settings
 /// actions (rename, description, notification level, favorite, avatar,
-/// public/private, password, lobby, read-only, leave, delete) and the
-/// participant list with each attendee's role, status and moderation menu.
+/// public/private, password, message expiration, lobby, read-only, leave,
+/// delete) and the participant list with each attendee's role, status and
+/// moderation menu.
 final class RoomDetailsScreen extends ConsumerStatefulWidget {
   const RoomDetailsScreen({
     super.key,
@@ -145,6 +148,17 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               subtitle: Text(strings.roomDetailsCallNotificationsSubtitle),
               value: _callNotificationsEnabled,
               onChanged: _busy ? null : _toggleCallNotifications,
+            ),
+          if (_canSetMessageExpiration)
+            ListTile(
+              key: const Key('room-details-message-expiration'),
+              leading: const Icon(Icons.auto_delete_outlined),
+              title: Text(strings.roomDetailsMessageExpirationLabel),
+              subtitle: Text(
+                _messageExpirationLabel(strings, _messageExpirationSeconds),
+                key: const Key('room-details-message-expiration-subtitle'),
+              ),
+              onTap: _busy ? null : _changeMessageExpiration,
             ),
           SwitchListTile(
             key: const Key('room-details-favorite-toggle'),

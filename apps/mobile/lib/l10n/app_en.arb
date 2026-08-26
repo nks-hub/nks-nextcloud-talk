@@ -186,6 +186,22 @@
   "roomDetailsNotificationUnknown": "Unknown",
   "roomDetailsCallNotificationsLabel": "Call notifications",
   "roomDetailsCallNotificationsSubtitle": "Notify me when a call starts",
+  "roomDetailsMessageExpirationLabel": "Message expiration",
+  "roomDetailsMessageExpirationDialogTitle": "Set message expiration",
+  "roomDetailsMessageExpirationHint": "Shared files will no longer be shared in this conversation, but the owner's files will not be deleted.",
+  "roomDetailsMessageExpirationOff": "Off",
+  "roomDetailsMessageExpirationOneHour": "1 hour",
+  "roomDetailsMessageExpirationEightHours": "8 hours",
+  "roomDetailsMessageExpirationOneDay": "1 day",
+  "roomDetailsMessageExpirationOneWeek": "1 week",
+  "roomDetailsMessageExpirationFourWeeks": "4 weeks",
+  "roomDetailsMessageExpirationCustom": "Custom ({seconds} seconds)",
+  "@roomDetailsMessageExpirationCustom": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "roomDetailsMessageExpirationRejected": "The server rejected this expiration setting.",
   "roomDetailsParticipantsHeader": "Participants",
   "roomDetailsParticipantsCount": "{count} participants",
   "@roomDetailsParticipantsCount": {

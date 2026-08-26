@@ -186,6 +186,22 @@
   "roomDetailsNotificationUnknown": "Neznámé",
   "roomDetailsCallNotificationsLabel": "Oznámení hovorů",
   "roomDetailsCallNotificationsSubtitle": "Upozornit při zahájení hovoru",
+  "roomDetailsMessageExpirationLabel": "Expirace zpráv",
+  "roomDetailsMessageExpirationDialogTitle": "Nastavit expiraci zpráv",
+  "roomDetailsMessageExpirationHint": "Sdílené soubory už nebudou v této konverzaci dostupné, ale vlastníkovi se nesmažou.",
+  "roomDetailsMessageExpirationOff": "Vypnuto",
+  "roomDetailsMessageExpirationOneHour": "1 hodina",
+  "roomDetailsMessageExpirationEightHours": "8 hodin",
+  "roomDetailsMessageExpirationOneDay": "1 den",
+  "roomDetailsMessageExpirationOneWeek": "1 týden",
+  "roomDetailsMessageExpirationFourWeeks": "4 týdny",
+  "roomDetailsMessageExpirationCustom": "Vlastní ({seconds} sekund)",
+  "@roomDetailsMessageExpirationCustom": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "roomDetailsMessageExpirationRejected": "Server toto nastavení expirace odmítl.",
   "roomDetailsParticipantsHeader": "Účastníci",
   "roomDetailsParticipantsCount": "{count} účastníků",
   "roomDetailsParticipantsEmpty": "Žádní účastníci.",

@@ -601,6 +601,44 @@ class AppLocalizationsCs extends AppLocalizations {
       'Upozornit při zahájení hovoru';
 
   @override
+  String get roomDetailsMessageExpirationLabel => 'Expirace zpráv';
+
+  @override
+  String get roomDetailsMessageExpirationDialogTitle =>
+      'Nastavit expiraci zpráv';
+
+  @override
+  String get roomDetailsMessageExpirationHint =>
+      'Sdílené soubory už nebudou v této konverzaci dostupné, ale vlastníkovi se nesmažou.';
+
+  @override
+  String get roomDetailsMessageExpirationOff => 'Vypnuto';
+
+  @override
+  String get roomDetailsMessageExpirationOneHour => '1 hodina';
+
+  @override
+  String get roomDetailsMessageExpirationEightHours => '8 hodin';
+
+  @override
+  String get roomDetailsMessageExpirationOneDay => '1 den';
+
+  @override
+  String get roomDetailsMessageExpirationOneWeek => '1 týden';
+
+  @override
+  String get roomDetailsMessageExpirationFourWeeks => '4 týdny';
+
+  @override
+  String roomDetailsMessageExpirationCustom(int seconds) {
+    return 'Vlastní ($seconds sekund)';
+  }
+
+  @override
+  String get roomDetailsMessageExpirationRejected =>
+      'Server toto nastavení expirace odmítl.';
+
+  @override
   String get roomDetailsParticipantsHeader => 'Účastníci';
 
   @override

@@ -1172,6 +1172,72 @@ abstract class AppLocalizations {
   /// **'Notify me when a call starts'**
   String get roomDetailsCallNotificationsSubtitle;
 
+  /// No description provided for @roomDetailsMessageExpirationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message expiration'**
+  String get roomDetailsMessageExpirationLabel;
+
+  /// No description provided for @roomDetailsMessageExpirationDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set message expiration'**
+  String get roomDetailsMessageExpirationDialogTitle;
+
+  /// No description provided for @roomDetailsMessageExpirationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared files will no longer be shared in this conversation, but the owner\'s files will not be deleted.'**
+  String get roomDetailsMessageExpirationHint;
+
+  /// No description provided for @roomDetailsMessageExpirationOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get roomDetailsMessageExpirationOff;
+
+  /// No description provided for @roomDetailsMessageExpirationOneHour.
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour'**
+  String get roomDetailsMessageExpirationOneHour;
+
+  /// No description provided for @roomDetailsMessageExpirationEightHours.
+  ///
+  /// In en, this message translates to:
+  /// **'8 hours'**
+  String get roomDetailsMessageExpirationEightHours;
+
+  /// No description provided for @roomDetailsMessageExpirationOneDay.
+  ///
+  /// In en, this message translates to:
+  /// **'1 day'**
+  String get roomDetailsMessageExpirationOneDay;
+
+  /// No description provided for @roomDetailsMessageExpirationOneWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'1 week'**
+  String get roomDetailsMessageExpirationOneWeek;
+
+  /// No description provided for @roomDetailsMessageExpirationFourWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'4 weeks'**
+  String get roomDetailsMessageExpirationFourWeeks;
+
+  /// No description provided for @roomDetailsMessageExpirationCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom ({seconds} seconds)'**
+  String roomDetailsMessageExpirationCustom(int seconds);
+
+  /// No description provided for @roomDetailsMessageExpirationRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected this expiration setting.'**
+  String get roomDetailsMessageExpirationRejected;
+
   /// No description provided for @roomDetailsParticipantsHeader.
   ///
   /// In en, this message translates to:
