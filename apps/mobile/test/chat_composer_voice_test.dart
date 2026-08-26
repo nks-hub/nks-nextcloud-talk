@@ -207,6 +207,58 @@ void main() {
       },
     );
 
+    test('close does not discard a durably accepted pending submit', () async {
+      final acceptedReplies = <int>[];
+      final fixture = _VoiceFixture(
+        profile: _attachmentProfile(reply: true),
+        controlledSubmit: true,
+        submissionContext: const VoiceAttachmentContext(replyTo: 42),
+        onReplyDurablyAccepted: acceptedReplies.add,
+      );
+      await fixture.preparePreview();
+
+      final submit = fixture.controller.submit();
+      await Future<void>.delayed(Duration.zero);
+      expect(fixture.controller.state.phase, VoiceMessagePhase.submitting);
+
+      await fixture.controller.close();
+      fixture.submitter.complete(
+        const VoiceAttachmentAcceptance(durablyAccepted: true),
+      );
+
+      expect(await submit, isFalse);
+      expect(fixture.recorder.discarded, isEmpty);
+      expect(acceptedReplies, isEmpty);
+    });
+
+    test('close discards a pending submit after durable rejection', () async {
+      final fixture = _VoiceFixture(controlledSubmit: true);
+      await fixture.preparePreview();
+
+      final submit = fixture.controller.submit();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.close();
+      fixture.submitter.complete(
+        const VoiceAttachmentAcceptance(durablyAccepted: false),
+      );
+
+      expect(await submit, isFalse);
+      expect(fixture.recorder.discarded, hasLength(1));
+    });
+
+    test('close discards a pending submit after admission failure', () async {
+      final fixture = _VoiceFixture(controlledSubmit: true);
+      await fixture.preparePreview();
+
+      final submit = fixture.controller.submit();
+      await Future<void>.delayed(Duration.zero);
+      await fixture.controller.close();
+      fixture.submitter.completeError(StateError('offline'));
+
+      expect(await submit, isFalse);
+      expect(fixture.recorder.discarded, hasLength(1));
+    });
+
     test('close is idempotent and cleans an unsubmitted preview', () async {
       final fixture = _VoiceFixture();
       await fixture.preparePreview();
@@ -221,11 +273,15 @@ void main() {
   });
 }
 
-AttachmentCapabilityProfile _attachmentProfile({bool voice = true}) {
+AttachmentCapabilityProfile _attachmentProfile({
+  bool voice = true,
+  bool reply = false,
+}) {
   final payload = capabilitiesJson(
     talkFeatures: <String>[
       'chat-reference-id',
       if (voice) 'voice-message-sharing',
+      if (reply) 'chat-replies',
     ],
   );
   final ocs = payload['ocs']! as Map<String, Object?>;
@@ -269,6 +325,8 @@ final class _VoiceFixture {
     Object? submitError,
     bool controlledPlayback = false,
     bool controlledSubmit = false,
+    VoiceAttachmentContext submissionContext = const VoiceAttachmentContext(),
+    void Function(int)? onReplyDurablyAccepted,
   }) : permission = permission ?? _FakePermission(permissionStatus),
        recorder = _FakeRecorder(recording ?? _recording()),
        player = _FakePlayer(controlled: controlledPlayback),
@@ -282,7 +340,8 @@ final class _VoiceFixture {
       recorder: recorder,
       previewPlayer: player,
       submitter: submitter,
-      submissionContext: const VoiceAttachmentContext(),
+      submissionContext: submissionContext,
+      onReplyDurablyAccepted: onReplyDurablyAccepted,
     );
   }
 
@@ -424,4 +483,6 @@ final class _FakeSubmitter implements VoiceAttachmentSubmitter {
 
   void complete(VoiceAttachmentAcceptance result) =>
       _submission?.complete(result);
+
+  void completeError(Object error) => _submission?.completeError(error);
 }

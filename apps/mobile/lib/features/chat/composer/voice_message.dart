@@ -165,6 +165,8 @@ final class VoiceMessageController extends ChangeNotifier {
 
   bool _closed = false;
   bool _ownershipTransferred = false;
+  bool _admissionPending = false;
+  bool _discardDraftAfterAdmission = false;
   int _operationGeneration = 0;
   int _playGeneration = 0;
   Future<void>? _closeFuture;
@@ -368,6 +370,8 @@ final class VoiceMessageController extends ChangeNotifier {
       return false;
     }
     final generation = ++_operationGeneration;
+    _admissionPending = true;
+    var durablyAccepted = false;
     _setState(
       VoiceMessageState(phase: VoiceMessagePhase.submitting, draft: draft),
     );
@@ -379,10 +383,14 @@ final class VoiceMessageController extends ChangeNotifier {
           metadata: metadata,
         ),
       );
+      durablyAccepted = acceptance.durablyAccepted;
+      if (durablyAccepted) {
+        _ownershipTransferred = true;
+      }
       if (!_isCurrent(generation)) {
         return false;
       }
-      if (!acceptance.durablyAccepted) {
+      if (!durablyAccepted) {
         _setState(
           VoiceMessageState(
             phase: VoiceMessagePhase.error,
@@ -392,7 +400,6 @@ final class VoiceMessageController extends ChangeNotifier {
         );
         return false;
       }
-      _ownershipTransferred = true;
       _setState(const VoiceMessageState(phase: VoiceMessagePhase.submitted));
       final replyTo = metadata.replyTo;
       if (replyTo != null && !_closed) {
@@ -414,6 +421,13 @@ final class VoiceMessageController extends ChangeNotifier {
         );
       }
       return false;
+    } finally {
+      _admissionPending = false;
+      final discardAfterAdmission = _discardDraftAfterAdmission;
+      _discardDraftAfterAdmission = false;
+      if (!durablyAccepted && discardAfterAdmission) {
+        await _bestEffort(() => recorder.discard(draft.source));
+      }
     }
   }
 
@@ -486,7 +500,11 @@ final class VoiceMessageController extends ChangeNotifier {
       await _bestEffort(previewPlayer.stop);
     }
     if (draft != null && !_ownershipTransferred) {
-      await _bestEffort(() => recorder.discard(draft.source));
+      if (_admissionPending) {
+        _discardDraftAfterAdmission = true;
+      } else {
+        await _bestEffort(() => recorder.discard(draft.source));
+      }
     }
     await _bestEffort(previewPlayer.close);
     await _bestEffort(recorder.close);
