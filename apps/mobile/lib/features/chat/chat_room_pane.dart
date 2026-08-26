@@ -37,29 +37,132 @@ part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
 
+enum ChatThreadKind { ordinary, named }
+
+final class ChatThreadContext {
+  ChatThreadContext._({
+    required this.accountId,
+    required this.roomToken,
+    required this.rootMessageId,
+    required this.kind,
+    required this.title,
+  });
+
+  static ChatThreadContext? fromCachedRoot({
+    required String accountId,
+    required String roomToken,
+    required CachedChatMessage root,
+  }) {
+    if (root.accountId != accountId ||
+        root.roomToken != roomToken ||
+        root.messageId < 1 ||
+        (root.threadId != null &&
+            root.threadId != 0 &&
+            root.threadId != root.messageId)) {
+      return null;
+    }
+    try {
+      final message = ChatMessage.fromJson(jsonDecode(root.rawJson));
+      if (message.messageId != root.messageId ||
+          message.roomToken.value != roomToken ||
+          (message.threadId != null &&
+              message.threadId != 0 &&
+              message.threadId != message.messageId)) {
+        return null;
+      }
+      if (message.isThread == true) {
+        final title = message.threadTitle?.trim();
+        if (message.threadId != message.messageId ||
+            title == null ||
+            title.isEmpty) {
+          return null;
+        }
+        return ChatThreadContext._(
+          accountId: accountId,
+          roomToken: roomToken,
+          rootMessageId: message.messageId,
+          kind: ChatThreadKind.named,
+          title: title,
+        );
+      }
+      return ChatThreadContext._(
+        accountId: accountId,
+        roomToken: roomToken,
+        rootMessageId: message.messageId,
+        kind: ChatThreadKind.ordinary,
+        title: null,
+      );
+    } on FormatException {
+      return null;
+    } on TalkProtocolException {
+      return null;
+    }
+  }
+
+  final String accountId;
+  final String roomToken;
+  final int rootMessageId;
+  final ChatThreadKind kind;
+  final String? title;
+
+  bool get isNamed => kind == ChatThreadKind.named;
+  int? get replyTo => isNamed ? null : rootMessageId;
+  int? get networkThreadId => isNamed ? rootMessageId : null;
+
+  bool matches({
+    required String accountId,
+    required String roomToken,
+    required int? rootMessageId,
+  }) =>
+      this.accountId == accountId &&
+      this.roomToken == roomToken &&
+      this.rootMessageId == rootMessageId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChatThreadContext &&
+      other.accountId == accountId &&
+      other.roomToken == roomToken &&
+      other.rootMessageId == rootMessageId &&
+      other.kind == kind &&
+      other.title == title;
+
+  @override
+  int get hashCode =>
+      Object.hash(accountId, roomToken, rootMessageId, kind, title);
+}
+
 final class ChatThreadScreen extends StatelessWidget {
   const ChatThreadScreen({
     super.key,
     required this.account,
     required this.conversation,
-    required this.threadId,
-  }) : assert(threadId > 0);
+    required this.threadContext,
+  });
 
   final StoredAccount account;
   final CachedConversation conversation;
-  final int threadId;
+  final ChatThreadContext threadContext;
 
   @override
   Widget build(BuildContext context) {
+    final threadId = threadContext.rootMessageId;
     return Scaffold(
       key: Key('chat-thread-screen-$threadId'),
-      appBar: AppBar(title: Text(AppLocalizations.of(context).thread)),
+      appBar: AppBar(
+        title: Text(
+          threadContext.isNamed
+              ? threadContext.title!
+              : AppLocalizations.of(context).thread,
+        ),
+      ),
       body: SafeArea(
         top: false,
         child: ChatRoomPane(
           account: account,
           conversation: conversation,
           threadId: threadId,
+          threadContext: threadContext,
         ),
       ),
     );
@@ -73,14 +176,17 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
     required this.conversation,
     this.showHeader = false,
     this.threadId,
+    this.threadContext,
     this.jumpToMessageId,
   }) : assert(threadId == null || threadId > 0),
+       assert(threadContext == null || threadId != null),
        assert(jumpToMessageId == null || jumpToMessageId > 0);
 
   final StoredAccount account;
   final CachedConversation conversation;
   final bool showHeader;
   final int? threadId;
+  final ChatThreadContext? threadContext;
 
   /// A message to reveal once the first synchronization settles, instead of
   /// opening at the newest message. Used by message search and by tapping a
@@ -151,6 +257,19 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     roomToken: widget.conversation.token,
     threadId: widget.threadId,
   );
+
+  ChatThreadContext? get _currentThreadContext {
+    final threadContext = widget.threadContext;
+    if (threadContext == null ||
+        !threadContext.matches(
+          accountId: widget.account.id,
+          roomToken: widget.conversation.token,
+          rootMessageId: widget.threadId,
+        )) {
+      return null;
+    }
+    return threadContext;
+  }
 
   void _update(VoidCallback callback) => setState(callback);
 
@@ -225,7 +344,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id == widget.account.id &&
         oldWidget.conversation.token == widget.conversation.token &&
-        oldWidget.threadId == widget.threadId) {
+        oldWidget.threadId == widget.threadId &&
+        oldWidget.threadContext == widget.threadContext) {
       return;
     }
     unawaited(
@@ -387,16 +507,26 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         ? ref.watch(giphyRepositoryProvider(widget.account.id))
         : null;
     final giphyRepository = giphy?.valueOrNull;
-    final giphyAttachmentSupported =
-        attachmentDependencies?.valueOrNull?.profile.supports(
-          AttachmentMetadata(
+    final threadContext = _currentThreadContext;
+    final giphyMetadata = widget.threadId == null
+        ? AttachmentMetadata(
             kind: AttachmentMessageKind.file,
-            replyTo: null,
-            threadId: widget.threadId,
+            replyTo: _replyTo?.messageId,
+            threadId: null,
             silent: false,
-          ),
-        ) ??
-        false;
+          )
+        : threadContext == null
+        ? null
+        : AttachmentMetadata(
+            kind: AttachmentMessageKind.file,
+            replyTo: threadContext.replyTo,
+            threadId: threadContext.networkThreadId,
+            silent: false,
+          );
+    final giphyAttachmentSupported =
+        giphyMetadata != null &&
+        (attachmentDependencies?.valueOrNull?.profile.supports(giphyMetadata) ??
+            false);
     final String giphyTooltip;
     final VoidCallback? giphyAction;
     if (attachmentDependencies?.isLoading ?? false) {

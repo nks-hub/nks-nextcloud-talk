@@ -17,12 +17,14 @@ import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
 part 'chat_room_pane_interactions.part.dart';
 part 'chat_room_pane_rendering.part.dart';
+part 'chat_room_pane_thread_context.part.dart';
 
 late AppDatabase database;
 late AccountRepository accounts;
@@ -91,6 +93,7 @@ void main() {
 
   _registerChatRoomPaneRenderingTests();
   _registerChatRoomPaneInteractionTests();
+  _registerChatRoomPaneThreadContextTests();
 }
 
 Widget app({

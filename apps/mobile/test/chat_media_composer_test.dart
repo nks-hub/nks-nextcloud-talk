@@ -16,6 +16,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_media_composer_test_support.dart';
+part 'chat_media_composer_thread_context_test.part.dart';
 
 void main() {
   late Directory root;
@@ -35,6 +36,8 @@ void main() {
       await root.delete(recursive: true);
     }
   });
+
+  _registerChatMediaComposerThreadContextTests(() => sourceStore);
 
   testWidgets('root image reply is accepted before later upload confirmation', (
     tester,
@@ -103,7 +106,7 @@ void main() {
     );
   });
 
-  testWidgets('Giphy bytes enter the same durable image upload pipeline', (
+  testWidgets('ordinary thread Giphy keeps reply-specific notification scope', (
     tester,
   ) async {
     final bridge = _RecordingBridge();
@@ -113,10 +116,14 @@ void main() {
     final controller = ChatMediaComposerController();
 
     await tester.pumpWidget(
-      _composerApp(
+      _threadComposerApp(
         sourceStore: sourceStore,
         bridge: bridge.bridge,
-        threadId: 73,
+        threadBinding: ChatMediaThreadBinding.ordinary(
+          accountId: _account,
+          roomToken: _room,
+          rootMessageId: 73,
+        ),
         voiceBackends: voiceBackends,
         controller: controller,
       ),
@@ -149,8 +156,8 @@ void main() {
     expect(bridge.sources.single.mimeType, 'image/gif');
     expect(bridge.sources.single.displayName, 'giphy-fixture.gif');
     expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
-    expect(bridge.metadata.single.replyTo, isNull);
-    expect(bridge.metadata.single.threadId, 73);
+    expect(bridge.metadata.single.replyTo, 73);
+    expect(bridge.metadata.single.threadId, isNull);
 
     await tester.pump();
     bridge.sessions.single.add(
@@ -165,7 +172,7 @@ void main() {
     );
   });
 
-  testWidgets('thread image retry and cancellation keep standalone threadId', (
+  testWidgets('ordinary thread image retry keeps replyTo scope', (
     tester,
   ) async {
     final bridge = _RecordingBridge();
@@ -174,10 +181,14 @@ void main() {
     addTearDown(voiceBackends.close);
 
     await tester.pumpWidget(
-      _composerApp(
+      _threadComposerApp(
         sourceStore: sourceStore,
         bridge: bridge.bridge,
-        threadId: 73,
+        threadBinding: ChatMediaThreadBinding.ordinary(
+          accountId: _account,
+          roomToken: _room,
+          rootMessageId: 73,
+        ),
         voiceBackends: voiceBackends,
       ),
     );
@@ -186,8 +197,8 @@ void main() {
 
     final metadata = bridge.metadata.single;
     expect(metadata.kind, AttachmentMessageKind.file);
-    expect(metadata.replyTo, isNull);
-    expect(metadata.threadId, 73);
+    expect(metadata.replyTo, 73);
+    expect(metadata.threadId, isNull);
 
     final session = bridge.sessions.single;
     session.add(
@@ -320,10 +331,14 @@ void main() {
       addTearDown(voiceBackends.close);
 
       await tester.pumpWidget(
-        _composerApp(
+        _threadComposerApp(
           sourceStore: sourceStore,
           bridge: firstBridge.bridge,
-          threadId: 90210,
+          threadBinding: ChatMediaThreadBinding.named(
+            accountId: _account,
+            roomToken: _room,
+            rootMessageId: 90210,
+          ),
           voiceBackends: voiceBackends,
         ),
       );
@@ -331,10 +346,14 @@ void main() {
       expect(voiceBackends.captureBackends, hasLength(1));
 
       await tester.pumpWidget(
-        _composerApp(
+        _threadComposerApp(
           sourceStore: sourceStore,
           bridge: currentBridge.bridge,
-          threadId: 90210,
+          threadBinding: ChatMediaThreadBinding.named(
+            accountId: _account,
+            roomToken: _room,
+            rootMessageId: 90210,
+          ),
           voiceBackends: voiceBackends,
         ),
       );

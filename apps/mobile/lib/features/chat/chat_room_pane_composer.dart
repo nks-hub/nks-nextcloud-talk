@@ -55,7 +55,18 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (message.isEmpty || _sending || _isReadOnlyNow()) {
       return;
     }
-    final replyTo = targetKey.threadId == null ? _replyTo : null;
+    final threadContext = _currentThreadContext;
+    if (targetKey.threadId != null && threadContext == null) {
+      _update(() => _localError = ChatServiceError.invalidResponse);
+      return;
+    }
+    final rootReply = targetKey.threadId == null ? _replyTo : null;
+    final replyTo = targetKey.threadId == null
+        ? rootReply?.messageId
+        : threadContext!.replyTo;
+    final networkThreadId = targetKey.threadId == null
+        ? null
+        : threadContext!.networkThreadId;
     final generation = ++_sendGeneration;
     _update(() => _sending = true);
     try {
@@ -65,13 +76,13 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             message: message,
-            threadId: targetKey.threadId,
-            replyTo: replyTo?.messageId,
+            threadId: networkThreadId,
+            replyTo: replyTo,
           );
       if (!_isCurrentSendScope(targetKey, generation)) {
         return;
       }
-      if (replyTo != null && _replyTo?.messageId == replyTo.messageId) {
+      if (rootReply != null && _replyTo?.messageId == rootReply.messageId) {
         _update(() => _replyTo = null);
       }
       if (clearComposer && _composer.text.trim() == message) {
@@ -365,13 +376,21 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (widget.threadId != null || message.messageId < 1) {
       return;
     }
+    final threadContext = ChatThreadContext.fromCachedRoot(
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+      root: message,
+    );
+    if (threadContext == null) {
+      return;
+    }
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (context) => ChatThreadScreen(
             account: widget.account,
             conversation: widget.conversation,
-            threadId: message.messageId,
+            threadContext: threadContext,
           ),
         ),
       ),
@@ -398,6 +417,20 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             widget.conversation.token,
             path: r'$.roomToken',
           );
+          final threadContext = _currentThreadContext;
+          final threadBinding = threadContext == null
+              ? null
+              : threadContext.isNamed
+              ? ChatMediaThreadBinding.named(
+                  accountId: accountId,
+                  roomToken: roomToken,
+                  rootMessageId: threadContext.rootMessageId,
+                )
+              : ChatMediaThreadBinding.ordinary(
+                  accountId: accountId,
+                  roomToken: roomToken,
+                  rootMessageId: threadContext.rootMessageId,
+                );
           final cachedReplyTo = widget.threadId == null ? _replyTo : null;
           final replyTarget = cachedReplyTo == null
               ? null
@@ -417,12 +450,14 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               widget.account.id,
               widget.conversation.token,
               widget.threadId,
+              threadContext?.kind,
             )),
             accountId: accountId,
             controller: _mediaComposerController,
             server: server,
             roomToken: roomToken,
             threadId: widget.threadId,
+            threadBinding: threadBinding,
             replyTarget: replyTarget,
             onReplyDurablyAccepted: _handleMediaReplyDurablyAccepted,
             sourceStore: value.source,

@@ -40,6 +40,61 @@ final class ChatMediaReplyTarget {
   final bool systemMessage;
 }
 
+enum ChatMediaThreadKind { ordinary, named }
+
+final class ChatMediaThreadBinding {
+  ChatMediaThreadBinding.ordinary({
+    required this.accountId,
+    required this.roomToken,
+    required this.rootMessageId,
+  }) : kind = ChatMediaThreadKind.ordinary {
+    _validateRootMessageId(rootMessageId);
+  }
+
+  ChatMediaThreadBinding.named({
+    required this.accountId,
+    required this.roomToken,
+    required this.rootMessageId,
+  }) : kind = ChatMediaThreadKind.named {
+    _validateRootMessageId(rootMessageId);
+  }
+
+  final AccountId accountId;
+  final ConversationToken roomToken;
+  final int rootMessageId;
+  final ChatMediaThreadKind kind;
+
+  int? get replyTo =>
+      kind == ChatMediaThreadKind.ordinary ? rootMessageId : null;
+  int? get threadId => kind == ChatMediaThreadKind.named ? rootMessageId : null;
+
+  bool matches({
+    required AccountId accountId,
+    required ConversationToken roomToken,
+    required int rootMessageId,
+  }) =>
+      this.accountId == accountId &&
+      this.roomToken == roomToken &&
+      this.rootMessageId == rootMessageId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is ChatMediaThreadBinding &&
+      other.accountId == accountId &&
+      other.roomToken == roomToken &&
+      other.rootMessageId == rootMessageId &&
+      other.kind == kind;
+
+  @override
+  int get hashCode => Object.hash(accountId, roomToken, rootMessageId, kind);
+
+  static void _validateRootMessageId(int value) {
+    if (value < 1) {
+      throw ArgumentError.value(value, 'rootMessageId');
+    }
+  }
+}
+
 final class ChatMediaComposerController {
   Object? _owner;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
@@ -73,6 +128,7 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.server,
     required this.roomToken,
     required this.threadId,
+    this.threadBinding,
     required this.replyTarget,
     required this.onReplyDurablyAccepted,
     required this.sourceStore,
@@ -89,6 +145,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final ServerBase server;
   final ConversationToken roomToken;
   final int? threadId;
+  final ChatMediaThreadBinding? threadBinding;
   final ChatMediaReplyTarget? replyTarget;
   final ValueChanged<int>? onReplyDurablyAccepted;
   final DurableAttachmentSourceStore sourceStore;
@@ -122,14 +179,36 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   AttachmentMetadata? _metadataFor(AttachmentMessageKind kind) {
     final replyTarget = widget.replyTarget;
     if (replyTarget == null) {
+      final threadId = widget.threadId;
+      final threadBinding = widget.threadBinding;
+      if (threadId == null) {
+        if (threadBinding != null) {
+          return null;
+        }
+        return AttachmentMetadata(
+          kind: kind,
+          replyTo: null,
+          threadId: null,
+          silent: false,
+        );
+      }
+      if (threadBinding == null ||
+          !threadBinding.matches(
+            accountId: widget.accountId,
+            roomToken: widget.roomToken,
+            rootMessageId: threadId,
+          )) {
+        return null;
+      }
       return AttachmentMetadata(
         kind: kind,
-        replyTo: null,
-        threadId: widget.threadId,
+        replyTo: threadBinding.replyTo,
+        threadId: threadBinding.threadId,
         silent: false,
       );
     }
     if (widget.threadId != null ||
+        widget.threadBinding != null ||
         replyTarget.messageId < 1 ||
         replyTarget.accountId != widget.accountId ||
         replyTarget.roomToken != widget.roomToken ||
@@ -167,13 +246,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       _captureAdmission(AttachmentMessageKind.voice) != null;
 
   bool get _voiceSupported {
-    final metadata = AttachmentMetadata(
-      kind: AttachmentMessageKind.voice,
-      replyTo: null,
-      threadId: widget.threadId,
-      silent: false,
-    );
-    return widget.capabilityProfile.voice &&
+    final metadata = _metadataFor(AttachmentMessageKind.voice);
+    return metadata != null &&
+        widget.capabilityProfile.voice &&
         widget.capabilityProfile.supports(metadata);
   }
 
@@ -198,6 +273,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         oldWidget.server == widget.server &&
         oldWidget.roomToken == widget.roomToken &&
         oldWidget.threadId == widget.threadId &&
+        oldWidget.threadBinding == widget.threadBinding &&
         identical(oldWidget.sourceStore, widget.sourceStore) &&
         _sameProfile(oldWidget.capabilityProfile, widget.capabilityProfile)) {
       return;
@@ -219,6 +295,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   }
 
   VoiceMessageController _createVoiceController() {
+    final initialMetadata = _metadataFor(AttachmentMessageKind.voice);
+    if (initialMetadata == null) {
+      throw StateError('Voice controller requires a valid media binding');
+    }
     final captureBackend =
         widget.createVoiceCaptureBackend?.call() ??
         RecordPluginVoiceCaptureBackend();
@@ -238,7 +318,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         store: widget.sourceStore,
       ),
       submitter: _voiceSubmitter,
-      submissionContext: VoiceAttachmentContext(threadId: widget.threadId),
+      submissionContext: VoiceAttachmentContext(
+        replyTo: initialMetadata.replyTo,
+        threadId: initialMetadata.threadId,
+      ),
       submissionContextResolver: () {
         final metadata = _metadataFor(AttachmentMessageKind.voice);
         if (metadata == null || !widget.capabilityProfile.supports(metadata)) {
