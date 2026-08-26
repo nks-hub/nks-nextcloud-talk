@@ -812,6 +812,126 @@ abstract class AppLocalizations {
   /// **'Open thread'**
   String get openThread;
 
+  /// No description provided for @threadManagementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads'**
+  String get threadManagementTitle;
+
+  /// No description provided for @threadManagementOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage threads'**
+  String get threadManagementOpenTooltip;
+
+  /// No description provided for @threadManagementRecentTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get threadManagementRecentTab;
+
+  /// No description provided for @threadManagementSubscribedTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribed'**
+  String get threadManagementSubscribedTab;
+
+  /// No description provided for @threadManagementRecentEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent threads'**
+  String get threadManagementRecentEmpty;
+
+  /// No description provided for @threadManagementRecentEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads used in this conversation will appear here.'**
+  String get threadManagementRecentEmptyBody;
+
+  /// No description provided for @threadManagementSubscribedEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscribed threads'**
+  String get threadManagementSubscribedEmpty;
+
+  /// No description provided for @threadManagementSubscribedEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Threads you follow across this account will appear here.'**
+  String get threadManagementSubscribedEmptyBody;
+
+  /// No description provided for @threadManagementConversationMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation is not available in the local cache yet.'**
+  String get threadManagementConversationMissing;
+
+  /// No description provided for @threadManagementDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Thread details'**
+  String get threadManagementDetailTitle;
+
+  /// No description provided for @threadManagementRenameDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename thread'**
+  String get threadManagementRenameDialogTitle;
+
+  /// No description provided for @threadManagementRenameAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename thread'**
+  String get threadManagementRenameAction;
+
+  /// No description provided for @threadManagementNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Thread name'**
+  String get threadManagementNameLabel;
+
+  /// No description provided for @threadManagementNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a thread name.'**
+  String get threadManagementNameRequired;
+
+  /// No description provided for @threadManagementActionsNeedConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to the server to check which thread actions are available.'**
+  String get threadManagementActionsNeedConnection;
+
+  /// No description provided for @threadManagementUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not support thread management.'**
+  String get threadManagementUnsupported;
+
+  /// No description provided for @threadManagementPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to change this thread.'**
+  String get threadManagementPermissionDenied;
+
+  /// No description provided for @threadManagementNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The thread is no longer available on the server.'**
+  String get threadManagementNotFound;
+
+  /// No description provided for @threadManagementAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'The server may have applied the change. Refresh the thread before trying again.'**
+  String get threadManagementAmbiguous;
+
+  /// No description provided for @threadManagementOpenUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The thread could not be opened from the validated server response.'**
+  String get threadManagementOpenUnavailable;
+
   /// No description provided for @edited.
   ///
   /// In en, this message translates to:

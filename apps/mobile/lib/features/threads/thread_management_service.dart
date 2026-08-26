@@ -192,7 +192,7 @@ final class ThreadManagementService {
       roomToken: roomToken,
     );
     final current = await _fetchDetail(context, threadId);
-    if (!_canRename(context, current)) {
+    if (!_canRename(context, current.firstMessage)) {
       throw const ThreadManagementException(
         ThreadManagementError.permissionDenied,
       );
@@ -211,7 +211,7 @@ final class ThreadManagementService {
     final response = await _send(context.account, request);
     final updated = _singleThread(response);
     await _persistDetail(context, updated);
-    return _access(context, updated);
+    return _access(context, updated, authorizationRoot: current.firstMessage);
   }
 
   Future<ThreadDetailAccess> setNotificationLevel({
@@ -233,6 +233,11 @@ final class ThreadManagementService {
         ThreadManagementError.permissionDenied,
       );
     }
+    final authorizationRoot = await _cachedRoot(
+      accountId: accountId,
+      roomToken: roomToken,
+      threadId: threadId,
+    );
     final request = _build(
       () => RichChatRequest.setThreadNotificationLevel(
         accountId: AccountId.parse(accountId),
@@ -247,7 +252,7 @@ final class ThreadManagementService {
     final response = await _send(context.account, request);
     final updated = _singleThread(response);
     await _persistDetail(context, updated);
-    return _access(context, updated);
+    return _access(context, updated, authorizationRoot: authorizationRoot);
   }
 
   Future<_ThreadRoomContext> _resolveRoom({
@@ -406,22 +411,48 @@ final class ThreadManagementService {
     );
   }
 
+  Future<ChatMessage?> _cachedRoot({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+  }) async {
+    final cached = await _chat.getMessage(
+      accountId: accountId,
+      roomToken: roomToken,
+      messageId: threadId,
+    );
+    if (cached == null) {
+      return null;
+    }
+    try {
+      final root = ChatMessage.fromJson(jsonDecode(cached.rawJson));
+      if (root.messageId != threadId || root.roomToken.value != roomToken) {
+        return null;
+      }
+      return root;
+    } on FormatException {
+      return null;
+    } on TalkProtocolException {
+      return null;
+    }
+  }
+
   ThreadDetailAccess _access(
     _ThreadRoomContext context,
-    RichChatThread thread,
-  ) {
+    RichChatThread thread, {
+    ChatMessage? authorizationRoot,
+  }) {
     return ThreadDetailAccess(
       thread: thread,
-      canRename: _canRename(context, thread),
+      canRename: _canRename(context, thread.firstMessage ?? authorizationRoot),
       canChangeNotifications: _canChangeNotifications(context),
     );
   }
 
-  bool _canRename(_ThreadRoomContext context, RichChatThread thread) {
+  bool _canRename(_ThreadRoomContext context, ChatMessage? root) {
     if (context.moderator) {
       return true;
     }
-    final root = thread.firstMessage;
     return root != null &&
         root.actorType == 'users' &&
         root.actorId == context.account.stored.loginName;

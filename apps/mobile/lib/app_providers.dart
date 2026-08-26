@@ -21,6 +21,7 @@ import 'data/chat_repository.dart';
 import 'data/call_session_repository.dart';
 import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
+import 'data/thread_repository.dart';
 import 'features/calls/call_lifecycle_controller.dart';
 import 'features/calls/call_lifecycle_service.dart';
 import 'features/calls/call_transport_service.dart';
@@ -43,6 +44,7 @@ import 'features/profile/profile_service.dart';
 import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
 import 'features/settings/theme_preference.dart';
+import 'features/threads/thread_management_service.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
 import 'network/attachment_transport.dart';
@@ -81,6 +83,10 @@ final accountRepositoryProvider = Provider<AccountRepository>((ref) {
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return ChatRepository(ref.watch(appDatabaseProvider));
+});
+
+final threadRepositoryProvider = Provider<ThreadRepository>((ref) {
+  return ThreadRepository(ref.watch(appDatabaseProvider));
 });
 
 final attachmentRepositoryProvider = Provider<AttachmentRepository>((ref) {
@@ -364,6 +370,18 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   );
 });
 
+final threadManagementServiceProvider = Provider<ThreadManagementService>((
+  ref,
+) {
+  return ThreadManagementService(
+    accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
+    threads: ref.watch(threadRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
 final attachmentSourceProvider = FutureProvider<DurableAttachmentSourceStore>((
   ref,
 ) {
@@ -574,6 +592,37 @@ typedef ChatRoomProviderKey = ({
   int? threadId,
 });
 
+typedef ThreadRoomProviderKey = ({String accountId, String roomToken});
+
+typedef ThreadProviderKey = ({
+  String accountId,
+  String roomToken,
+  int threadId,
+});
+
+final recentThreadsProvider = StreamProvider.autoDispose
+    .family<List<CachedThread>, ThreadRoomProviderKey>((ref, key) {
+      return ref
+          .watch(threadRepositoryProvider)
+          .watchRecent(accountId: key.accountId, roomToken: key.roomToken);
+    });
+
+final subscribedThreadsProvider = StreamProvider.autoDispose
+    .family<List<CachedThread>, String>((ref, accountId) {
+      return ref.watch(threadRepositoryProvider).watchSubscribed(accountId);
+    });
+
+final threadDetailProvider = StreamProvider.autoDispose
+    .family<CachedThread?, ThreadProviderKey>((ref, key) {
+      return ref
+          .watch(threadRepositoryProvider)
+          .watch(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            threadId: key.threadId,
+          );
+    });
+
 typedef ChatAttachmentDependencies = ({
   DurableAttachmentSourceStore source,
   AttachmentService service,
@@ -731,6 +780,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
     emojiUsage: ref.watch(emojiUsageStoreProvider),
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
+    chatAttachmentDirectory: getApplicationCacheDirectory,
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
     onRemovalStarted: (accountId) async {
       await ref.read(androidPushCoordinatorProvider)?.suspendAccount(accountId);

@@ -408,6 +408,75 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openThread => 'Open thread';
 
   @override
+  String get threadManagementTitle => 'Threads';
+
+  @override
+  String get threadManagementOpenTooltip => 'Manage threads';
+
+  @override
+  String get threadManagementRecentTab => 'Recent';
+
+  @override
+  String get threadManagementSubscribedTab => 'Subscribed';
+
+  @override
+  String get threadManagementRecentEmpty => 'No recent threads';
+
+  @override
+  String get threadManagementRecentEmptyBody =>
+      'Threads used in this conversation will appear here.';
+
+  @override
+  String get threadManagementSubscribedEmpty => 'No subscribed threads';
+
+  @override
+  String get threadManagementSubscribedEmptyBody =>
+      'Threads you follow across this account will appear here.';
+
+  @override
+  String get threadManagementConversationMissing =>
+      'This conversation is not available in the local cache yet.';
+
+  @override
+  String get threadManagementDetailTitle => 'Thread details';
+
+  @override
+  String get threadManagementRenameDialogTitle => 'Rename thread';
+
+  @override
+  String get threadManagementRenameAction => 'Rename thread';
+
+  @override
+  String get threadManagementNameLabel => 'Thread name';
+
+  @override
+  String get threadManagementNameRequired => 'Enter a thread name.';
+
+  @override
+  String get threadManagementActionsNeedConnection =>
+      'Connect to the server to check which thread actions are available.';
+
+  @override
+  String get threadManagementUnsupported =>
+      'This server does not support thread management.';
+
+  @override
+  String get threadManagementPermissionDenied =>
+      'You do not have permission to change this thread.';
+
+  @override
+  String get threadManagementNotFound =>
+      'The thread is no longer available on the server.';
+
+  @override
+  String get threadManagementAmbiguous =>
+      'The server may have applied the change. Refresh the thread before trying again.';
+
+  @override
+  String get threadManagementOpenUnavailable =>
+      'The thread could not be opened from the validated server response.';
+
+  @override
   String get edited => 'edited';
 
   @override

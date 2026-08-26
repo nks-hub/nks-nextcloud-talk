@@ -8,6 +8,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_banner.dart';
 import '../chat/chat_room_pane.dart';
 import '../rooms/room_details_screen.dart';
+import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
 
 const int _oneToOneConversationType = 1;
@@ -45,9 +46,7 @@ final class ConversationPresence {
         clearAt == null || observedNow.millisecondsSinceEpoch ~/ 1000 < clearAt;
     return ConversationPresence(
       kind: kind,
-      icon: customStatusActive
-          ? _nonEmpty(conversation.peerStatusIcon)
-          : null,
+      icon: customStatusActive ? _nonEmpty(conversation.peerStatusIcon) : null,
       message: customStatusActive
           ? _nonEmpty(conversation.peerStatusMessage)
           : null,
@@ -67,8 +66,7 @@ final class ConversationPresence {
       ConversationPresenceKind.online => strings.presenceOnline,
       ConversationPresenceKind.away => strings.presenceAway,
       ConversationPresenceKind.busy => strings.presenceBusy,
-      ConversationPresenceKind.doNotDisturb =>
-        strings.presenceDoNotDisturb,
+      ConversationPresenceKind.doNotDisturb => strings.presenceDoNotDisturb,
     };
   }
 }
@@ -129,7 +127,8 @@ final class ConversationPresenceTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final presence = ConversationPresence.fromConversation(conversation);
-    final subtitle = presence?.description(AppLocalizations.of(context)) ??
+    final subtitle =
+        presence?.description(AppLocalizations.of(context)) ??
         _nonEmpty(fallbackSubtitle);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -208,14 +207,31 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
+            key: const Key('open-thread-management'),
+            tooltip: AppLocalizations.of(context).threadManagementOpenTooltip,
+            icon: const Icon(Icons.forum_outlined),
+            onPressed: () => unawaited(
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (context) => ThreadManagementScreen(
+                    account: account,
+                    conversation: current,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
             key: const Key('open-room-details'),
             tooltip: AppLocalizations.of(context).roomDetailsOpenTooltip,
             icon: const Icon(Icons.info_outline_rounded),
             onPressed: () => unawaited(
               Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(
-                  builder: (context) =>
-                      RoomDetailsScreen(account: account, conversation: current),
+                  builder: (context) => RoomDetailsScreen(
+                    account: account,
+                    conversation: current,
+                  ),
                 ),
               ),
             ),
@@ -284,6 +300,21 @@ final class PresenceChatRoomPane extends StatelessWidget {
                 ),
               ),
               IconButton(
+                key: const Key('open-thread-management'),
+                tooltip: strings.threadManagementOpenTooltip,
+                icon: const Icon(Icons.forum_outlined),
+                onPressed: () => unawaited(
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (context) => ThreadManagementScreen(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
                 key: const Key('open-room-details'),
                 tooltip: strings.roomDetailsOpenTooltip,
                 icon: const Icon(Icons.info_outline_rounded),
@@ -335,18 +366,14 @@ String? _nonEmpty(String? value) {
 Color presenceColor(ConversationPresenceKind kind, Brightness brightness) {
   final isDark = brightness == Brightness.dark;
   return switch (kind) {
-    ConversationPresenceKind.online => isDark
-        ? const Color(0xFF66BB6A)
-        : const Color(0xFF2E7D32),
-    ConversationPresenceKind.away => isDark
-        ? const Color(0xFFFFB74D)
-        : const Color(0xFFA15C00),
-    ConversationPresenceKind.busy => isDark
-        ? const Color(0xFFFF8A65)
-        : const Color(0xFFB3400F),
-    ConversationPresenceKind.doNotDisturb => isDark
-        ? const Color(0xFFEF5350)
-        : const Color(0xFFC62828),
+    ConversationPresenceKind.online =>
+      isDark ? const Color(0xFF66BB6A) : const Color(0xFF2E7D32),
+    ConversationPresenceKind.away =>
+      isDark ? const Color(0xFFFFB74D) : const Color(0xFFA15C00),
+    ConversationPresenceKind.busy =>
+      isDark ? const Color(0xFFFF8A65) : const Color(0xFFB3400F),
+    ConversationPresenceKind.doNotDisturb =>
+      isDark ? const Color(0xFFEF5350) : const Color(0xFFC62828),
   };
 }
 

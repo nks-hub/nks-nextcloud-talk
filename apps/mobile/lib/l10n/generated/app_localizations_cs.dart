@@ -411,6 +411,74 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openThread => 'Otevřít vlákno';
 
   @override
+  String get threadManagementTitle => 'Vlákna';
+
+  @override
+  String get threadManagementOpenTooltip => 'Spravovat vlákna';
+
+  @override
+  String get threadManagementRecentTab => 'Nedávná';
+
+  @override
+  String get threadManagementSubscribedTab => 'Sledovaná';
+
+  @override
+  String get threadManagementRecentEmpty => 'Žádná nedávná vlákna';
+
+  @override
+  String get threadManagementRecentEmptyBody =>
+      'Vlákna použitá v této konverzaci se zobrazí tady.';
+
+  @override
+  String get threadManagementSubscribedEmpty => 'Žádná sledovaná vlákna';
+
+  @override
+  String get threadManagementSubscribedEmptyBody =>
+      'Vlákna sledovaná v tomto účtu se zobrazí tady.';
+
+  @override
+  String get threadManagementConversationMissing =>
+      'Tato konverzace ještě není v místní mezipaměti.';
+
+  @override
+  String get threadManagementDetailTitle => 'Detail vlákna';
+
+  @override
+  String get threadManagementRenameDialogTitle => 'Přejmenovat vlákno';
+
+  @override
+  String get threadManagementRenameAction => 'Přejmenovat vlákno';
+
+  @override
+  String get threadManagementNameLabel => 'Název vlákna';
+
+  @override
+  String get threadManagementNameRequired => 'Zadejte název vlákna.';
+
+  @override
+  String get threadManagementActionsNeedConnection =>
+      'Připojte se k serveru, aby aplikace ověřila dostupné akce vlákna.';
+
+  @override
+  String get threadManagementUnsupported =>
+      'Tento server nepodporuje správu vláken.';
+
+  @override
+  String get threadManagementPermissionDenied =>
+      'Nemáte oprávnění toto vlákno změnit.';
+
+  @override
+  String get threadManagementNotFound => 'Vlákno už na serveru není dostupné.';
+
+  @override
+  String get threadManagementAmbiguous =>
+      'Server mohl změnu provést. Před dalším pokusem vlákno obnovte.';
+
+  @override
+  String get threadManagementOpenUnavailable =>
+      'Vlákno se nepodařilo otevřít z ověřené odpovědi serveru.';
+
+  @override
   String get edited => 'upraveno';
 
   @override
