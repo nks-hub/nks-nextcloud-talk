@@ -239,11 +239,13 @@ final class RichChatRequest {
     required ConversationToken roomToken,
     required RichChatCapabilityProfile profile,
     required int messageId,
+    required int threadId,
     required int level,
     String userAgent = richChatContractUserAgent,
   }) {
     _requireCapability(profile.threadMetadata, r'$.capabilities.threads');
     _requirePositive(messageId, r'$.messageId');
+    _requirePositive(threadId, r'$.threadId');
     _requireRange(level, 0, 3, r'$.body.level');
     return RichChatRequest._wire(
       accountId: accountId,
@@ -256,6 +258,7 @@ final class RichChatRequest {
       body: <String, Object?>{'level': level},
       roomToken: roomToken,
       messageId: messageId,
+      threadId: threadId,
       userAgent: userAgent,
     );
   }

@@ -49,7 +49,7 @@ final class RichChatCapabilityProfile {
       reply: reply,
       mentions: base,
       threadMetadata: threads,
-      threadMessageFetch: threads && !federated,
+      threadMessageFetch: threads,
       reactions: reactions,
       canReact: reactions && reactionPermission,
       edit: base && global.contains('edit-messages'),

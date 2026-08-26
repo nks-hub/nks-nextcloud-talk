@@ -16,7 +16,7 @@
       "federated": true,
       "moderator": true,
       "participantPermissions": 256,
-      "expected": { "mentions": true, "threadMetadata": true, "threadMessageFetch": false, "reactions": true, "canReact": true, "edit": true, "delete": true, "pin": true, "hidePinned": true, "reminders": true, "scheduled": false }
+      "expected": { "mentions": true, "threadMetadata": true, "threadMessageFetch": true, "reactions": true, "canReact": true, "edit": true, "delete": true, "pin": true, "hidePinned": true, "reminders": true, "scheduled": false }
     },
     {
       "id": "react-permission-granted",

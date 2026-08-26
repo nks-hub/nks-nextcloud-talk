@@ -137,6 +137,7 @@ def build_wire_request(
         require_capability(capabilities, "threadMetadata", request_kind)
         token = room()
         target = message_id()
+        require_integer(values.get("threadId"), "threadId", minimum=1)
         level = require_integer(values.get("level"), "level", minimum=0, maximum=3)
         return base_request(
             "setThreadNotificationLevel",

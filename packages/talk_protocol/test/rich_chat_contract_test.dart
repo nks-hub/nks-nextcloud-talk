@@ -53,6 +53,17 @@ void main() {
         expect(request.queryParameters, _object(expected['query']));
         expect(request.headers, _object(expected['headers']));
         expect(request.formBody, expected['body']);
+        final input = _object(testCase['input']);
+        if (input.containsKey('messageId')) {
+          expect(request.messageId, input['messageId']);
+        }
+        if (<Object?>{
+          'getThread',
+          'renameThread',
+          'notifyThread',
+        }.contains(testCase['kind'])) {
+          expect(request.threadId, input['threadId']);
+        }
         expect(jsonEncode(testCase), before);
       });
     }
@@ -262,6 +273,7 @@ RichChatRequest _requestFromCase(String id, Map<String, Object?> testCase) {
       roomToken: room(),
       profile: profile,
       messageId: input['messageId']! as int,
+      threadId: input['threadId']! as int,
       level: input['level']! as int,
     ),
     'getReactions' => RichChatRequest.getReactions(
@@ -471,6 +483,7 @@ RichChatRequest _responseRequest(String id, Map<String, Object?> testCase) {
         roomToken: room!,
         profile: _fullProfile(),
         messageId: messageId,
+        threadId: context['threadId']! as int,
         level: 3,
       ),
     RichChatOperation.getMessageReactions => RichChatRequest.getReactions(

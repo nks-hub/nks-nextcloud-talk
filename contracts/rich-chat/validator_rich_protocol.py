@@ -374,6 +374,8 @@ def validate_response_binding(
         thread_infos = [require_object(data, f"{operation_id} data")]
     else:
         thread_infos = []
+    if operation_id == "setThreadNotificationLevel" and "threadId" not in context:
+        raise ResponseSemanticError("Thread notification canonical id context missing")
     for index, raw_thread_info in enumerate(thread_infos):
         thread_info = require_object(raw_thread_info, f"{operation_id}[{index}]")
         thread = require_object(
@@ -510,7 +512,7 @@ def resolve_capabilities(
     return {
         "mentions": base,
         "threadMetadata": threads,
-        "threadMessageFetch": threads and not is_federated,
+        "threadMessageFetch": threads,
         "reactions": reactions,
         "canReact": reactions and reaction_permission,
         "edit": base and "edit-messages" in global_features,

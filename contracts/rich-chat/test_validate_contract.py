@@ -137,6 +137,49 @@ class RequestPrivacyTest(unittest.TestCase):
         self.assertNotIn(private_message, str(raised.exception))
 
 
+class ThreadRequestBindingTest(unittest.TestCase):
+    def test_notification_requires_positive_canonical_thread_id(self) -> None:
+        profile = {
+            "talkFeatures": ["chat-v2", "threads"],
+            "talkLocalFeatures": [],
+            "federated": True,
+            "moderator": False,
+            "participantPermissions": 0,
+        }
+        for invalid_thread_id in (None, 0):
+            values = {
+                "roomToken": "rooma123",
+                "messageId": 122,
+                "level": 3,
+            }
+            if invalid_thread_id is not None:
+                values["threadId"] = invalid_thread_id
+
+            with (
+                self.subTest(thread_id=invalid_thread_id),
+                self.assertRaises(rich_contract.ContractValidationError),
+            ):
+                rich_contract.build_wire_request("notifyThread", values, profile)
+
+    def test_notification_response_requires_canonical_thread_context(self) -> None:
+        document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
+        case = next(
+            deepcopy(case)
+            for case in fixture_cases("responses.cases.json")
+            if case["id"] == "thread-notify-success"
+        )
+        case["context"].pop("threadId")
+        case["body"]["ocs"]["data"]["thread"]["id"] = 122
+
+        with self.assertRaises(rich_contract.ResponseSemanticError) as raised:
+            rich_contract.validate_response_cases(document, [case])
+
+        self.assertEqual(
+            "Thread notification canonical id context missing",
+            str(raised.exception),
+        )
+
+
 class RenderPolicyTest(unittest.TestCase):
     def test_code_placeholder_and_unsafe_link_remain_inert(self) -> None:
         result = rich_contract.render_contract(

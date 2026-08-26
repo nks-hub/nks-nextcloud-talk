@@ -113,6 +113,82 @@ void main() {
     );
   });
 
+  test('keeps thread notification responses account and request scoped', () {
+    final fixture = _fixture('thread-notify-success');
+    final requestA = _notifyRequest(
+      accountId: 'account-a',
+      requestId: 'notify-account-a',
+    );
+    final requestB = _notifyRequest(
+      accountId: 'account-b',
+      requestId: 'notify-account-b',
+    );
+
+    final responseA = decodeRichChatResponse(
+      request: requestA,
+      statusCode: fixture['status']! as int,
+      body: Uint8List.fromList(utf8.encode(jsonEncode(fixture['body']))),
+    );
+    final responseB = decodeRichChatResponse(
+      request: requestB,
+      statusCode: fixture['status']! as int,
+      body: Uint8List.fromList(utf8.encode(jsonEncode(fixture['body']))),
+    );
+
+    expect(identical(responseA.request, requestA), isTrue);
+    expect(identical(responseB.request, requestB), isTrue);
+    expect(identical(responseA.request, responseB.request), isFalse);
+    expect(responseA.request.accountId, isNot(responseB.request.accountId));
+    expect(requestA.messageId, 122);
+    expect(requestA.threadId, 120);
+    expect(requestA.requestPath, endsWith('/threads/122/notify'));
+    expect(responseA.threads.single.threadId, 120);
+  });
+
+  test('rejects thread notification room and canonical root mismatches', () {
+    final wrongRoom = _object(_fixture('thread-notify-success')['body']);
+    final wrongRoomThread = _object(
+      _object(_object(wrongRoom['ocs'])['data'])['thread'],
+    );
+    wrongRoomThread['roomToken'] = 'roomb456';
+
+    final wrongRoot = _object(_fixture('thread-notify-success')['body']);
+    final wrongRootThread = _object(
+      _object(_object(wrongRoot['ocs'])['data'])['thread'],
+    );
+    wrongRootThread['id'] = 121;
+
+    for (final body in <Map<String, Object?>>[wrongRoom, wrongRoot]) {
+      expect(
+        () => decodeRichChatResponse(
+          request: _notifyRequest(),
+          statusCode: 200,
+          body: Uint8List.fromList(utf8.encode(jsonEncode(body))),
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidRichChatResponse,
+          ),
+        ),
+      );
+    }
+  });
+
+  test('rejects an invalid canonical root before notification dispatch', () {
+    expect(
+      () => _notifyRequest(threadId: 0),
+      throwsA(
+        isA<TalkProtocolException>().having(
+          (error) => error.code,
+          'code',
+          TalkProtocolErrorCode.invalidRichChatRequest,
+        ),
+      ),
+    );
+  });
+
   test('rejects duplicate thread and scheduled message identities', () {
     final threadFixture = _fixture('recent-threads-success');
     final threadBody = _object(threadFixture['body']);
@@ -387,6 +463,22 @@ RichChatRequest _recentThreadsRequest() => RichChatRequest.recentThreads(
   roomToken: _token('rooma123'),
   profile: _profile(),
   limit: 20,
+);
+
+RichChatRequest _notifyRequest({
+  String accountId = 'account-a',
+  String requestId = 'security-notify-thread',
+  int messageId = 122,
+  int threadId = 120,
+}) => RichChatRequest.setThreadNotificationLevel(
+  accountId: AccountId.parse(accountId),
+  requestId: ChatRequestId.parse(requestId),
+  server: ServerBase.parse('https://cloud.example.invalid'),
+  roomToken: _token('rooma123'),
+  profile: _profile(),
+  messageId: messageId,
+  threadId: threadId,
+  level: 3,
 );
 
 RichChatRequest _scheduledRequest() => RichChatRequest.getScheduled(

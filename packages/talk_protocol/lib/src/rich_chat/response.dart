@@ -301,8 +301,9 @@ void _validateThreadBinding(
 ) {
   final expectedThreadId = switch (request.operation) {
     RichChatOperation.getThread ||
-    RichChatOperation.renameThread => request.threadId,
-    RichChatOperation.setThreadNotificationLevel => request.messageId,
+    RichChatOperation.renameThread ||
+    RichChatOperation.setThreadNotificationLevel =>
+      request.threadId ?? _responseFailure(r'$.request.threadId'),
     _ => null,
   };
   final identities = <(Object, int)>{};
