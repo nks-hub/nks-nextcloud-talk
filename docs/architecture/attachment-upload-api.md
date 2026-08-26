@@ -1,13 +1,14 @@
 # Kontrakt uploadu příloh a voice zpráv
 
-Datum poslední aktualizace: 25. srpna 2026.
+Datum poslední aktualizace: 26. srpna 2026.
 
 Stav: OpenAPI, syntetické OCS/WebDAV fixture a pure Dart request, parser i
 durable runtime jsou spustitelné. Flutter má OCS/WebDAV transport, account-scoped
 Drift job store, restart-safe orchestraci, durable file picker, image progress,
-retry/cancel, authenticated image viewer a voice record/preview/submit tok.
-Kamera, obecný file picker, platformní background transfer a aktuální live
-image/voice E2E na referenčním serveru zatím doložené nejsou.
+retry/cancel, authenticated image viewer, kameru, obecný file picker a voice
+record/preview/submit tok. Same-room reply pro obrázek, obecný soubor a hlasovou
+zprávu má automatizovaný test a build, ne sender/recipient live důkaz.
+Platformní background transfer a úplná lifecycle matice zůstávají otevřené.
 
 ## Rozsah
 
@@ -18,8 +19,8 @@ Kontrakt pokrývá dvoufázový Draft upload:
    `MKCOL` → `PROPFIND` → chybějící `PUT` → `MOVE`.
 3. Talk OCS finalize přesune Draft soubor a vytvoří attachment zprávu.
 4. Teprve právě jedna autoritativní `file_shared` chat zpráva se shodným
-   účtem, serverem, room, `referenceId`, message typem a file rich objektem
-   dokončí lokální job.
+   účtem, serverem, room, `referenceId`, message typem, file rich objektem a
+   očekávaným reply/thread scope dokončí lokální job.
 
 OpenAPI 3.1 pro dva Talk OCS endpointy je v
 [`contracts/attachment-upload/openapi.json`](../../contracts/attachment-upload/openapi.json).
@@ -61,6 +62,10 @@ Další metadata se povolí jen při přesné feature:
 | Thread metadata | `threads` |
 | Silent send | `silent-send` |
 
+`replyTo` a `threadId` jsou vzájemně výlučné. Same-room root reply používá jen
+`replyTo`; named thread používá jen `threadId` a jeho canonical root. Kombinace
+obou hodnot se odmítne už v modelu, request builderu i fixture validatoru.
+
 Číslo serverové verze není fallback. Každý příkaz je fail-closed svázaný s
 `accountId`, kanonickým serverem, capability generation, room oprávněním a
 revision attachment replay kontraktu. Změna účtu, originu, generace nebo
@@ -79,6 +84,12 @@ aby se pod původním `referenceId` neposlal jiný obsah.
 Běžná příloha očekává `messageType=comment`, voice přesně
 `messageType=voice-message`. Hodnota je odvozená z neměnných metadata jobu a
 finalize builder ji nemůže přepsat samostatným parametrem.
+
+Composer před prvním asynchronním krokem snapshotuje account, room a metadata
+obrázku nebo souboru; voice kontext snapshotuje při stisku Send. Durable
+admission tak nepřevezme novější reply vybranou během pickeru, načítání bytes
+nebo odesílání. Reply banner se smí odstranit až po úspěšném durable admission
+a jen pokud stále ukazuje na právě přijatý parent.
 
 ## Talk OCS wire
 
@@ -144,12 +155,21 @@ opakovatelný upload od nejednoznačného finalize a potvrzuje dokončení pouze
 autoritativní chat zprávou. Credential se čte až při konkrétním account-scoped
 requestu a v databázi zůstává jen odkaz na účet.
 
-`ChatMediaComposer` používá `file_selector` pro výběr obrázku, vytvoří app-owned
-kopii a po durable admission předá její vlastnictví attachment service. Stavový
-panel rozlišuje přípravu, upload, čekání na potvrzení, dokončení, retry, cancel a
-chybu; krátké potvrzení se po úspěchu samo uklidí. Zprávový renderer načítá
-obrázky autentizovaně ze stejného account originu a tap otevře samostatný viewer,
-nikoli nový upload dialog.
+Confirmation join v Drift je omezený na stejný account, server, room a
+`referenceId`. Cached payload se znovu dekóduje a musí souhlasit s indexovaným
+message ID, room, reference, system message a message typem. Runtime navíc
+vyžaduje kladné message ID, prázdný system message, file rich object a přesný
+`messageType`; reply job musí mít shodný parent, named-thread job shodný parent
+i `threadId` rovný canonical rootu. Nula shod zůstává pending a více shod je
+ambiguous.
+
+`ChatMediaComposer` používá `file_selector` pro galerii a obecný soubor a
+`image_picker` pro kameru, vytvoří app-owned kopii a po durable admission předá
+její vlastnictví attachment service. Stavový panel rozlišuje přípravu,
+upload, čekání na potvrzení, dokončení, retry, cancel a chybu; krátké potvrzení
+se po úspěchu samo uklidí. Zprávový renderer načítá obrázky autentizovaně ze
+stejného account originu a tap otevře samostatný viewer, nikoli nový upload
+dialog.
 
 Voice větev používá `record` a `audioplayers`. Ověří capability a mikrofonní
 oprávnění, drží nahrávku jako durable app-owned zdroj, nabízí lokální preview a
@@ -204,16 +224,18 @@ rtk C:\work\sources\flutter-sdk\flutter\bin\flutter.bat test `
   test\image_attachment_upload_controller_test.dart `
   test\image_attachment_upload_panel_test.dart `
   test\authenticated_image_viewer_test.dart `
-  test\chat_composer_voice_test.dart
+  test\chat_composer_voice_test.dart `
+  test\chat_media_composer_test.dart `
+  test\chat_composer_integration_test.dart `
+  test\chat_attachment_context_test.dart
 ```
 
 Kontrakt obsahuje 12 OCS fixture, 15 capability případů, 20 wire případů,
 7 DAV plánů s 11 stavovými výsledky, 3 XML fixture a 20 stavových scénářů.
-Python validator má 16 unit testů. Attachment doména prochází 52 Dart testy:
-15 contract, 7 DAV, 17 runtime, 12 security a 1 skutečný release AOT
-executable. Po doplnění signaling řezu celý `talk_protocol` prošel 485 testy v
-původním attachment milníku; aktuální celý balík po named-thread rozšíření
-prochází 569/569 a analyzer je bez nálezu.
+Python validator má 16 unit testů. Dne 26. srpna 2026 prošla aktuální kombinovaná
+pure Dart attachment sada contract, DAV, runtime, security a release AOT
+58/58. Aktuální počet celého `talk_protocol` je vedený v požadavkové matici,
+aby zde nezůstal historický součet z dřívějšího attachment milníku.
 
 Původní Flutter `attachment_transport_test.dart` milník prošel 24. srpna 2026
 25/25. Dne 25. srpna prošla společná cílená sada transportu, repository,
@@ -222,6 +244,13 @@ Aktuální plný počet a APK hash je vedený v
 [průběžném stavu vývoje](development-status-2026-08-25.md), aby se zde nemíchal
 historický transportní milník s pozdějšími řezy.
 
+Scope binding je doložený commity `d518694`, `4b4e61b` a `cd22bdb`.
+Repository recovery test zachová oddělený reply a named-thread scope; runtime
+testy odmítnou chybný parent nebo thread root. Integrační widget test vede
+media reply z produkčního pane přes durable enqueue až do finalize s
+`replyTo=109` a bez `threadId`; focused media/composer sada prošla 49/49.
+Tento důkaz je automatizovaný a buildový, nikoli live běh proti serveru.
+
 ## Co důkaz nepokrývá
 
 Automatizované testy používají deterministický HTTP klient a testovací platformní
@@ -229,6 +258,7 @@ backendy. Neprokazují aktuální live upload do Nextcloudu, skutečný mikrofon
 playback, ztrátu procesu během každé durable fáze ani dva účty na dvou serverech.
 `chatujmePixel` proto ještě musí projít malý i chunked soubor, obrázek, kolizi
 jména, oprávnění a kvótu, restart mezi každými dvěma fázemi, cancel/cleanup a
-celý voice lifecycle. Kamera a obecné soubory nejsou implementované. Skutečný
+celý voice lifecycle včetně media reply sender/recipient toku. Kamera a obecné
+soubory mají automatizované pokrytí, ale ne aktuální live důkaz. Skutečný
 background transfer, background recorder a výkon se navíc prokážou na fyzickém
 Android zařízení.
