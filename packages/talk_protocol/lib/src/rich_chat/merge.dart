@@ -235,17 +235,11 @@ RichChatMergeResult _mergeThreads(
 }
 
 ChatMessage? _projectThreadTitle(RichChatThread thread, ChatMessage? message) {
-  if (message == null ||
-      message.roomToken != thread.roomToken ||
-      message.threadId != thread.threadId ||
-      (message.threadTitle == thread.title &&
-          message.wire['threadTitle'] == thread.title)) {
-    return message;
-  }
-  return ChatMessage.fromJson(<String, Object?>{
-    ...message.wire,
-    'threadTitle': thread.title,
-  });
+  return message?.projectThreadTitle(
+    roomToken: thread.roomToken,
+    threadId: thread.threadId,
+    threadTitle: thread.title,
+  );
 }
 
 RichChatScheduledMessage _projectScheduledThreadTitle(

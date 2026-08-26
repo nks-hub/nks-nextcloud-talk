@@ -255,6 +255,38 @@ final class ChatMessage {
     return _copyWith(
       reactions: immutableReactions,
       reactionsSelf: immutableSelf,
+      threadTitle: threadTitle,
+      parent: parent,
+      wire: updatedWire,
+    );
+  }
+
+  /// Projects a canonical thread title only within the exact room and thread.
+  ChatMessage projectThreadTitle({
+    required ConversationToken roomToken,
+    required int threadId,
+    required String threadTitle,
+  }) {
+    if (this.roomToken != roomToken ||
+        this.threadId != threadId ||
+        (this.threadTitle == threadTitle &&
+            wire['threadTitle'] == threadTitle)) {
+      return this;
+    }
+    final updatedWire = requireObject(
+      JsonFreezeSession(
+        maximumDepth: chatJsonMaximumDepth,
+        maximumNodes: chatJsonMaximumNodes,
+        errorCode: TalkProtocolErrorCode.invalidChatState,
+        errorPath: r'$.messages.threadTitle',
+      ).freeze(<String, Object?>{...wire, 'threadTitle': threadTitle}),
+      path: r'$.messages',
+      code: TalkProtocolErrorCode.invalidChatState,
+    );
+    return _copyWith(
+      reactions: reactions,
+      reactionsSelf: reactionsSelf,
+      threadTitle: threadTitle,
       parent: parent,
       wire: updatedWire,
     );
@@ -281,6 +313,7 @@ final class ChatMessage {
     return _copyWith(
       reactions: reactions,
       reactionsSelf: reactionsSelf,
+      threadTitle: threadTitle,
       parent: ChatFullParent(message: authoritative),
       wire: updatedWire,
     );
@@ -289,6 +322,7 @@ final class ChatMessage {
   ChatMessage _copyWith({
     required Map<String, int> reactions,
     required List<String> reactionsSelf,
+    required String? threadTitle,
     required ChatMessageParent? parent,
     required Map<String, Object?> wire,
   }) => ChatMessage._(
