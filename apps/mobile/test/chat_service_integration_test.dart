@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNotNull, isNull;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -22,6 +24,7 @@ part 'chat_service_integration_connectivity_cases.dart';
 part 'chat_service_integration_offline_outbox_cases.dart';
 part 'chat_service_integration_outbox_cases.dart';
 part 'chat_service_integration_thread_admission_cases.dart';
+part 'chat_service_integration_private_reply_cases.dart';
 
 void main() {
   final suite = _ChatServiceIntegrationSuite();
@@ -36,4 +39,5 @@ void main() {
   suite.registerOfflineOutboxCases();
   suite.registerOutboxCases();
   suite.registerThreadAdmissionCases();
+  suite.registerPrivateReplyCases();
 }

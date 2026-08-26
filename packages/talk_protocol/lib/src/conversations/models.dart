@@ -79,6 +79,8 @@ final class ConversationRoom {
     required this.token,
     required this.sessionId,
     required this.id,
+    required this.actorType,
+    required this.actorId,
     required this.type,
     required this.name,
     required this.objectType,
@@ -126,6 +128,7 @@ final class ConversationRoom {
     required this.lastPinnedId,
     required this.hiddenPinnedId,
     required this.hasScheduledMessages,
+    required this.attributes,
     required this.lastMessage,
     required this.wire,
   });
@@ -145,6 +148,8 @@ final class ConversationRoom {
   final ConversationToken token;
   final ConversationSessionId sessionId;
   final int id;
+  final String actorType;
+  final String actorId;
   final int type;
   final String name;
   final String objectType;
@@ -207,6 +212,7 @@ final class ConversationRoom {
   /// `lastPinnedId > 0 && lastPinnedId != hiddenPinnedId`.
   final int hiddenPinnedId;
   final int hasScheduledMessages;
+  final int attributes;
   final ConversationPreview? lastMessage;
   final Map<String, Object?> wire;
 
@@ -248,9 +254,9 @@ ConversationRoom parseConversationRoom(
   final frozen = session.freeze(json);
   final room = requireObject(frozen, path: path, code: _responseCode);
 
-  _requireString(room, 'actorId', path);
+  final actorId = _requireString(room, 'actorId', path);
   _optionalString(room, 'invitedActorId', path);
-  _requireString(room, 'actorType', path);
+  final actorType = _requireString(room, 'actorType', path);
   _requireInt(room, 'attendeeId', path);
   final attendeePermissions = _requireInt(room, 'attendeePermissions', path);
   _requireNullableString(room, 'attendeePin', path, required: true);
@@ -348,7 +354,7 @@ ConversationRoom parseConversationRoom(
     minimum: 0,
     maximum: 1,
   );
-  _requireInt(room, 'attributes', path);
+  final attributes = _requireInt(room, 'attributes', path, minimum: 0);
 
   if (lastMessage != null && lastMessage.token != token) {
     protocolFailure(
@@ -361,6 +367,8 @@ ConversationRoom parseConversationRoom(
     token: token,
     sessionId: sessionId,
     id: id,
+    actorType: actorType,
+    actorId: actorId,
     type: type,
     name: name,
     objectType: objectType,
@@ -408,6 +416,7 @@ ConversationRoom parseConversationRoom(
     lastPinnedId: lastPinnedId,
     hiddenPinnedId: hiddenPinnedId,
     hasScheduledMessages: hasScheduledMessages,
+    attributes: attributes,
     lastMessage: lastMessage,
     wire: room,
   );

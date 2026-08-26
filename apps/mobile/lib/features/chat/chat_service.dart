@@ -15,6 +15,7 @@ import '../../network/nextcloud_api.dart';
 import 'outgoing_message_status.dart';
 
 part 'chat_service_models.dart';
+part 'chat_service_private_reply.dart';
 part 'chat_service_runtime.dart';
 
 enum ChatServiceError {
@@ -206,12 +207,18 @@ final class ChatService {
     required String message,
     int? threadId,
     int? replyTo,
+    String? replyToToken,
+    PrivateReplyEligibilitySnapshot? privateReplyEligibility,
   }) {
     final key = _roomKey(accountId, roomToken);
     return _serializeRoom<void>(key, () {
       return _withRoomErrorPersistence(accountId, roomToken, () async {
         final normalized = message.trim();
         if (normalized.isEmpty) {
+          throw const ChatServiceException(ChatServiceError.invalidResponse);
+        }
+        if (replyTo == null &&
+            (replyToToken != null || privateReplyEligibility != null)) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
         if (replyTo != null && (threadId != null || replyTo < 1)) {
@@ -241,6 +248,30 @@ final class ChatService {
         final effectiveReplyTo =
             replyTo ??
             (prepared.namedThread == true ? null : prepared.threadId);
+        final parentRoomToken = effectiveReplyTo == null
+            ? null
+            : replyToToken == null
+            ? prepared.room.token
+            : ConversationToken.parse(replyToToken, path: r'$.replyToToken');
+        final crossRoomReply =
+            parentRoomToken != null && parentRoomToken != prepared.room.token;
+        if (crossRoomReply) {
+          final eligibility = privateReplyEligibility;
+          if (!prepared.profile.privateReply ||
+              eligibility == null ||
+              !eligibility.matchesAdmission(
+                accountId: prepared.authority.accountId,
+                server: prepared.authority.server,
+                capabilityGeneration: prepared.authority.capabilityGeneration,
+                sourceRoomToken: parentRoomToken,
+                targetRoomToken: prepared.room.token,
+                parentMessageId: effectiveReplyTo!,
+              )) {
+            throw const ChatServiceException(ChatServiceError.sendUnsupported);
+          }
+        } else if (replyToToken != null || privateReplyEligibility != null) {
+          throw const ChatServiceException(ChatServiceError.invalidResponse);
+        }
         await _chat.admitTextSend(
           accountId: accountId,
           roomToken: prepared.room.token,
@@ -250,9 +281,9 @@ final class ChatService {
           message: normalized,
           replyTo: effectiveReplyTo,
           threadId: prepared.namedThread == true ? prepared.threadId : null,
-          parentRoomToken: effectiveReplyTo == null
-              ? null
-              : prepared.room.token,
+          replyToToken: crossRoomReply ? parentRoomToken : null,
+          parentRoomToken: parentRoomToken,
+          privateReplyEligibility: privateReplyEligibility,
         );
         if (prepared.capabilitiesVerifiedOnline) {
           await _processPending(prepared);

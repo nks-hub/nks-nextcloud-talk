@@ -4,6 +4,7 @@ import '../server_base.dart';
 import 'confirmation_scope.dart';
 import 'identifiers.dart';
 import 'models.dart';
+import 'private_reply.dart';
 import 'profile.dart';
 import 'response.dart';
 import 'state.dart';
@@ -165,6 +166,7 @@ final class TextSendOutboxDraft {
     required this.threadId,
     required this.replyToToken,
     required this.parentRoomToken,
+    this.privateReplyEligibility,
   }) {
     if (operationKind.isEmpty ||
         operationKind.length > 128 ||
@@ -191,6 +193,10 @@ final class TextSendOutboxDraft {
     if (threadId != null && (threadId! < 1 || replyTo != null)) {
       _outboxFailure(r'$.operation.threadId');
     }
+    if (privateReplyEligibility != null &&
+        (replyTo == null || parentRoomToken == roomToken)) {
+      _outboxFailure(r'$.operation.privateReplyEligibility');
+    }
   }
 
   final ChatOperationId operationId;
@@ -204,6 +210,7 @@ final class TextSendOutboxDraft {
   final int? threadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
+  final PrivateReplyEligibilitySnapshot? privateReplyEligibility;
 
   @override
   String toString() =>
@@ -234,8 +241,9 @@ ChatOutboxResult admitTextSendOperation(
             operation.enqueueSequence >= draft.enqueueSequence,
       ) ||
       (draft.replyTo != null &&
-          (!authority.profile.reply ||
-              draft.parentRoomToken != draft.roomToken)) ||
+          (draft.parentRoomToken == draft.roomToken
+              ? !authority.profile.reply || draft.replyToToken != null
+              : !_privateReplyAdmissionMatches(authority, draft))) ||
       (draft.threadId != null && !authority.profile.threadFetch)) {
     return _result(ChatOutboxOutcome.rejected);
   }
@@ -263,6 +271,28 @@ ChatOutboxResult admitTextSendOperation(
     operation,
     ChatOutboxOutcome.queued,
   );
+}
+
+bool _privateReplyAdmissionMatches(
+  ChatTextSendAuthority authority,
+  TextSendOutboxDraft draft,
+) {
+  final eligibility = draft.privateReplyEligibility;
+  final sourceRoomToken = draft.parentRoomToken;
+  final parentMessageId = draft.replyTo;
+  return authority.profile.privateReply &&
+      eligibility != null &&
+      sourceRoomToken != null &&
+      parentMessageId != null &&
+      draft.replyToToken == sourceRoomToken &&
+      eligibility.matchesAdmission(
+        accountId: authority.accountId,
+        server: authority.server,
+        capabilityGeneration: authority.capabilityGeneration,
+        sourceRoomToken: sourceRoomToken,
+        targetRoomToken: draft.roomToken,
+        parentMessageId: parentMessageId,
+      );
 }
 
 ChatOutboxResult claimTextSendOperation(

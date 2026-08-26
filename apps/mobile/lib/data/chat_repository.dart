@@ -599,7 +599,9 @@ final class ChatRepository {
     required String message,
     int? replyTo,
     int? threadId,
+    ConversationToken? replyToToken,
     ConversationToken? parentRoomToken,
+    PrivateReplyEligibilitySnapshot? privateReplyEligibility,
   }) {
     return _database.transaction(() async {
       final snapshot = await _loadRuntime(accountId);
@@ -630,8 +632,9 @@ final class ChatRepository {
           enqueueSequence: sequence,
           replyTo: replyTo,
           threadId: threadId,
-          replyToToken: null,
+          replyToToken: replyToToken,
           parentRoomToken: parentRoomToken,
+          privateReplyEligibility: privateReplyEligibility,
         ),
       );
       final plan = result.plan;

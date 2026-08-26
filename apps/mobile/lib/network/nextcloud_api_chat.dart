@@ -1,6 +1,31 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiChat on _HttpNextcloudApiBase {
+  Future<PrivateReplyParentContextResponse> getPrivateReplyParentContext({
+    required PrivateReplyParentContextRequest contextRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', contextRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...contextRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 304, 401, 403, 404, 429, 503},
+      maximumBytes: chatMaximumResponseBytes,
+    );
+    return decodePrivateReplyParentContextResponse(
+      request: contextRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
   Future<ChatGetResponse> getChat({
     required ChatFetchRequest chatRequest,
     required String loginName,
