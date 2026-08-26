@@ -234,12 +234,26 @@ final class RoomSettingsService {
     required bool archived,
   }) async {
     final context = await _authContext(accountId);
+    final ServerBase server;
+    try {
+      server = ServerBase.parse(context.account.serverUrl);
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+    final capabilities = await _call(
+      () => _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
     final SetArchivedRequest request;
     try {
       request = SetArchivedRequest(
         accountId: AccountId.parse(accountId),
-        server: ServerBase.parse(context.account.serverUrl),
+        server: server,
         roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        capabilities: capabilities,
         archived: archived,
       );
     } on TalkProtocolException {
@@ -745,6 +759,8 @@ final class RoomSettingsService {
 
   RoomSettingsError _mapApiError(NextcloudApiException error) {
     return switch (error.code) {
+      NextcloudApiError.unexpectedStatus when error.statusCode == 401 =>
+        RoomSettingsError.reauthenticationRequired,
       NextcloudApiError.network ||
       NextcloudApiError.timeout ||
       NextcloudApiError.cancelled => RoomSettingsError.network,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../bootstrap/capabilities.dart';
 import '../conversations/request.dart' show conversationV4Path;
 import '../identifiers.dart';
 import '../protocol_exception.dart';
@@ -195,9 +196,17 @@ final class SetArchivedRequest {
     required this.accountId,
     required this.server,
     required this.roomToken,
+    required CapabilitySnapshot capabilities,
     required this.archived,
     this.userAgent = roomSettingsContractUserAgent,
   }) {
+    if (capabilities.context != CapabilityContext.authenticated ||
+        !capabilities.supportsTalk('archived-conversations-v2')) {
+      protocolFailure(
+        _requestCode,
+        r'$.capabilities.archived-conversations-v2',
+      );
+    }
     _validateUserAgent(userAgent, r'$.headers.userAgent');
   }
 

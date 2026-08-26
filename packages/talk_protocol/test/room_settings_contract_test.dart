@@ -9,6 +9,34 @@ ServerBase _server() => ServerBase.parse('https://cloud.example.invalid');
 ConversationToken _token() =>
     ConversationToken.parse('rooma123', path: r'$.roomToken');
 
+CapabilitySnapshot _capabilities({
+  CapabilityContext context = CapabilityContext.authenticated,
+  Object? talkFeatures = const <Object?>['archived-conversations-v2'],
+}) {
+  return CapabilitySnapshot.fromJson(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <String, Object?>{
+        'version': <String, Object?>{
+          'major': 34,
+          'minor': 0,
+          'micro': 1,
+          'string': '34.0.1',
+          'edition': '',
+          'extendedSupport': false,
+        },
+        'capabilities': <String, Object?>{
+          'spreed': <String, Object?>{'features': talkFeatures},
+        },
+      },
+    },
+  }, context: context);
+}
+
 Uint8List _ocsBody({
   required String status,
   required int statusCode,
@@ -491,12 +519,14 @@ void main() {
         accountId: _accountId(),
         server: _server(),
         roomToken: _token(),
+        capabilities: _capabilities(),
         archived: true,
       );
       final unarchive = SetArchivedRequest(
         accountId: _accountId(),
         server: _server(),
         roomToken: _token(),
+        capabilities: _capabilities(),
         archived: false,
       );
 
@@ -509,6 +539,51 @@ void main() {
       );
       expect(archive.uri, unarchive.uri);
     });
+
+    test('requires an authenticated archived-conversations-v2 snapshot', () {
+      for (final capabilities in <CapabilitySnapshot>[
+        _capabilities(talkFeatures: const <Object?>[]),
+        _capabilities(context: CapabilityContext.anonymous),
+      ]) {
+        expect(
+          () => SetArchivedRequest(
+            accountId: _accountId(),
+            server: _server(),
+            roomToken: _token(),
+            capabilities: capabilities,
+            archived: true,
+          ),
+          throwsA(
+            isA<TalkProtocolException>().having(
+              (error) => error.code,
+              'code',
+              TalkProtocolErrorCode.invalidRoomSettingsRequest,
+            ),
+          ),
+        );
+      }
+    });
+
+    test('rejects malformed and duplicate capability feature lists', () {
+      for (final features in <Object?>[
+        const <Object?>['archived-conversations-v2', 7],
+        const <Object?>[
+          'archived-conversations-v2',
+          'archived-conversations-v2',
+        ],
+      ]) {
+        expect(
+          () => _capabilities(talkFeatures: features),
+          throwsA(
+            isA<TalkProtocolException>().having(
+              (error) => error.code,
+              'code',
+              TalkProtocolErrorCode.invalidCapabilities,
+            ),
+          ),
+        );
+      }
+    });
   });
 
   group('decodeSetArchivedResponse', () {
@@ -516,6 +591,7 @@ void main() {
       accountId: _accountId(),
       server: _server(),
       roomToken: _token(),
+      capabilities: _capabilities(),
       archived: true,
     );
 
