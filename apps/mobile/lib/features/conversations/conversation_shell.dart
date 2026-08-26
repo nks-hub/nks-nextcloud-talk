@@ -163,14 +163,11 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     if (!mounted || conversation == null) {
       return;
     }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (context) => PresenceChatRoomScreen(
-          account: account,
-          conversation: conversation,
-        ),
-      ),
-    );
+    // The link can arrive while the user is on any screen, so unwind back to
+    // the shell and then select. Selecting alone would leave them looking at
+    // whatever was on top.
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() => _selectedConversationToken = conversation.token);
   }
 
   void _scheduleInitialSync(StoredAccount account) {
@@ -380,22 +377,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onSelectAccount: _selectAccount,
           onAddAccount: _addAccount,
           onOpenConversation: (conversation) {
-            // Both layouts record the open conversation in the same place, so
-            // widening the window can show it beside the list again.
             setState(() => _selectedConversationToken = conversation.token);
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (context) => PopWhenExpanded(
-                  child: PresenceChatRoomScreen(
-                    account: selected,
-                    conversation: conversation,
-                  ),
-                ),
-              ),
-            );
           },
           onSelectConversation: (conversation) {
             setState(() => _selectedConversationToken = conversation.token);
+          },
+          onCloseConversation: () {
+            setState(() => _selectedConversationToken = null);
           },
           onOpenCreatedConversation: (token) {
             unawaited(_openAccountConversation(selected.id, token));
@@ -582,35 +570,6 @@ final class _MessageSearchRouteState
           }),
         ),
       );
-  }
-}
-
-/// Sends the conversation back to the two-pane layout once the window is wide
-/// enough for it. The workspace underneath is not built while this route
-/// covers it, so the route has to notice the resize itself.
-final class PopWhenExpanded extends StatelessWidget {
-  const PopWhenExpanded({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= kExpandedShellBreakpoint) {
-          final route = ModalRoute.of(context);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Only when nothing was opened on top; a dialog or the room
-            // details keeps this route alive until the user closes it, and
-            // this runs again when it becomes visible.
-            if (route != null && route.isActive && route.isCurrent) {
-              Navigator.of(context).pop();
-            }
-          });
-        }
-        return child;
-      },
-    );
   }
 }
 
