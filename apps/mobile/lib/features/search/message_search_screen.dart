@@ -218,8 +218,8 @@ String _errorMessage(AppLocalizations strings, MessageSearchError? error) {
     MessageSearchError.invalidResponse =>
       strings.searchMessagesErrorInvalidResponse,
     MessageSearchError.network => strings.searchMessagesErrorNetwork,
-    // An empty term never reaches the network, so the generic line is only
-    // ever the fallback for a cause this screen does not model.
-    MessageSearchError.invalidSearchTerm || null => strings.searchMessagesError,
+    MessageSearchError.invalidSearchTerm =>
+      strings.newConversationErrorInvalidSearchTerm,
+    null => strings.searchMessagesError,
   };
 }

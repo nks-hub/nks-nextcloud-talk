@@ -157,14 +157,23 @@ void main() {
     tester,
   ) async {
     const cases = <MessageSearchError, String>{
-      MessageSearchError.network: 'Could not reach the server.',
-      MessageSearchError.invalidResponse:
-          'The server sent a search response this app could not read.',
+      MessageSearchError.accountMissing: 'This account is no longer available.',
+      MessageSearchError.credentialMissing: 'Sign in again to search messages.',
+      MessageSearchError.invalidSearchTerm: 'Enter a search term.',
       MessageSearchError.reauthenticationRequired:
           'Your session expired. Sign in again.',
       MessageSearchError.providerNotFound:
           'This server does not offer message search.',
+      MessageSearchError.transientError:
+          'The server is busy. Try again in a moment.',
+      MessageSearchError.ocsFailure: 'The server rejected the search.',
+      MessageSearchError.network: 'Could not reach the server.',
+      MessageSearchError.invalidResponse:
+          'The server sent a search response this app could not read.',
     };
+
+    expect(cases.keys, unorderedEquals(MessageSearchError.values));
+    expect(cases.values.toSet(), hasLength(MessageSearchError.values.length));
 
     for (final entry in cases.entries) {
       final service = _FakeMessageSearchService(
