@@ -617,11 +617,12 @@ provenanci `network` nebo `memoryCache` a send admission vynutí fresh request.
 Neúspěšný fresh read odstraní nahrazenou hot cache a teprve potom smí použít
 persistentní fallback. Fresh foreground sync znovu načte autoritativní
 capabilities; pouze při stále platné generation/replay autoritě operaci odešle
-právě jednou. Android E2E na `83078cd` ale ukázalo, že samotný reconnect tento
-sync neprobudí: operace zůstala přes 65 sekund `queued` s attempt 0 a dokončila
-se až po cold restartu a otevření roomu. Rozhodnutí proto nezavádí platformní
-scheduler ani connectivity/lifecycle wake-up a neuzavírá live
-process-death/offline matici.
+právě jednou. Commit `924f44c` probudí room binding přes coalesced
+connectivity/lifecycle signál, zruší aktivní poll bez zavření bindingu a před
+claimem znovu vynutí fresh capability read. Falešný signál nic neclaimne.
+Android E2E potvrdilo bez restartu přechod z `queued`, attempt 0 do `completed`,
+attempt 1 s jedinou serverovou i cached zprávou. Rozhodnutí stále nezavádí
+background scheduler a neuzavírá live process-death/offline matici.
 
 ## Vyřešené volby
 
