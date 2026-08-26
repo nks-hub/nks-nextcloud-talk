@@ -151,3 +151,116 @@ final class CallSessionRepository {
         .go();
   }
 }
+
+/// Durable boundary for Talk's v4 call REST lifecycle.
+///
+/// Unlike [CallSessionRepository], this store survives signaling lane release.
+/// It contains only authority, mutation phase and flags; credentials, peers,
+/// HPB material and media state are never persisted.
+final class CallLifecycleSessionRepository {
+  const CallLifecycleSessionRepository(this._database);
+
+  final AppDatabase _database;
+
+  Future<void> persist(CallLifecycleState state) {
+    return _database
+        .into(_database.callLifecycleSessions)
+        .insertOnConflictUpdate(
+          CallLifecycleSessionsCompanion.insert(
+            accountId: state.authority.accountId.value,
+            roomToken: state.authority.roomToken.value,
+            serverUrl: state.authority.server.uri.toString(),
+            nextcloudSessionId: state.authority.nextcloudSessionId.value,
+            credentialGeneration: state.authority.credentialGeneration,
+            capabilityGeneration: state.authority.capabilityGeneration,
+            capabilityRevision: state.authority.capabilityRevision,
+            phase: state.phase.name,
+            confirmedFlags: Value(state.confirmedFlags?.value),
+            requestedFlags: Value(state.requestedFlags?.value),
+            endForEveryone: Value(state.endForEveryone),
+            mutationSequence: state.mutationSequence,
+            updatedAtMillis: state.updatedAt.millisecondsSinceEpoch,
+          ),
+        );
+  }
+
+  /// Loads state only when every authority component still matches.
+  ///
+  /// A malformed row or drift in server, session, credential or capability
+  /// authority is deleted instead of being replayed under a different login.
+  Future<CallLifecycleState?> load({
+    required CallLifecycleAuthority authority,
+    bool afterRestart = false,
+    DateTime? now,
+  }) async {
+    final accountId = authority.accountId.value;
+    final roomToken = authority.roomToken.value;
+    final query = _database.select(_database.callLifecycleSessions)
+      ..where(
+        (row) =>
+            row.accountId.equals(accountId) & row.roomToken.equals(roomToken),
+      );
+    final stored = await query.getSingleOrNull();
+    if (stored == null) {
+      return null;
+    }
+
+    try {
+      final storedAuthority = CallLifecycleAuthority(
+        accountId: AccountId.parse(stored.accountId),
+        server: ServerBase.parse(stored.serverUrl),
+        roomToken: ConversationToken.parse(
+          stored.roomToken,
+          path: r'$.roomToken',
+        ),
+        nextcloudSessionId: ConversationSessionId.parse(
+          stored.nextcloudSessionId,
+        ),
+        credentialGeneration: stored.credentialGeneration,
+        capabilityGeneration: stored.capabilityGeneration,
+        capabilityRevision: stored.capabilityRevision,
+      );
+      if (!storedAuthority.matches(authority) || stored.updatedAtMillis < 0) {
+        throw const FormatException('Call lifecycle authority drift');
+      }
+      final phase = CallLifecyclePhase.values.byName(stored.phase);
+      var state = CallLifecycleState(
+        authority: storedAuthority,
+        phase: phase,
+        confirmedFlags: stored.confirmedFlags == null
+            ? null
+            : CallInCallFlags.parse(stored.confirmedFlags, requireJoined: true),
+        requestedFlags: stored.requestedFlags == null
+            ? null
+            : CallInCallFlags.parse(stored.requestedFlags, requireJoined: true),
+        endForEveryone: stored.endForEveryone,
+        mutationSequence: stored.mutationSequence,
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(
+          stored.updatedAtMillis,
+          isUtc: true,
+        ),
+      );
+      if (afterRestart) {
+        final recovered = state.afterRestart(
+          updatedAt: (now ?? DateTime.now()).toUtc(),
+        );
+        if (!identical(recovered, state)) {
+          state = recovered;
+          await persist(state);
+        }
+      }
+      return state;
+    } on Object {
+      await delete(accountId: accountId, roomToken: roomToken);
+      return null;
+    }
+  }
+
+  Future<void> delete({required String accountId, required String roomToken}) {
+    return (_database.delete(_database.callLifecycleSessions)..where(
+          (row) =>
+              row.accountId.equals(accountId) & row.roomToken.equals(roomToken),
+        ))
+        .go();
+  }
+}

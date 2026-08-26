@@ -169,6 +169,9 @@ final class AccountRepository {
       final wasSelected = (await getAccount(accountId))?.selected ?? false;
 
       await (_database.delete(
+        _database.callLifecycleSessions,
+      )..where((session) => session.accountId.equals(accountId))).go();
+      await (_database.delete(
         _database.callSessions,
       )..where((session) => session.accountId.equals(accountId))).go();
       await (_database.delete(

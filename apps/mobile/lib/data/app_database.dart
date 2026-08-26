@@ -455,6 +455,42 @@ class CallSessions extends Table {
   Set<Column<Object>> get primaryKey => {accountId, roomToken};
 }
 
+/// Durable non-secret intent and confirmation state for Talk's v4 call REST
+/// lifecycle. This is deliberately separate from [CallSessions]: releasing a
+/// signaling lane must not erase an ambiguous REST join, flag update or leave.
+@DataClassName('StoredCallLifecycleSession')
+class CallLifecycleSessions extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get roomToken => text()();
+
+  TextColumn get serverUrl => text()();
+
+  TextColumn get nextcloudSessionId => text()();
+
+  IntColumn get credentialGeneration => integer()();
+
+  IntColumn get capabilityGeneration => integer()();
+
+  TextColumn get capabilityRevision => text()();
+
+  TextColumn get phase => text()();
+
+  IntColumn get confirmedFlags => integer().nullable()();
+
+  IntColumn get requestedFlags => integer().nullable()();
+
+  BoolColumn get endForEveryone => boolean().nullable()();
+
+  IntColumn get mutationSequence => integer()();
+
+  IntColumn get updatedAtMillis => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, roomToken};
+}
+
 @DriftDatabase(
   tables: [
     Accounts,
@@ -468,6 +504,7 @@ class CallSessions extends Table {
     AttachmentRuntimeAccounts,
     AttachmentJobs,
     CallSessions,
+    CallLifecycleSessions,
   ],
 )
 final class AppDatabase extends _$AppDatabase {
@@ -485,7 +522,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -604,6 +641,9 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 11) {
         await migrator.createTable(callSessions);
+      }
+      if (from < 12) {
+        await migrator.createTable(callLifecycleSessions);
       }
       if (from < 8) {
         await migrator.addColumn(

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
 
 part 'nextcloud_api_account.dart';
+part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_profile.dart';
 part 'nextcloud_api_rooms.dart';
@@ -106,6 +107,7 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiAccount,
         _NextcloudApiRooms,
         _NextcloudApiChat,
+        _NextcloudApiCall,
         _NextcloudApiProfile {
   HttpNextcloudApi({
     super.client,

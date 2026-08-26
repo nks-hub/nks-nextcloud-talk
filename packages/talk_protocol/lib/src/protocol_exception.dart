@@ -59,6 +59,10 @@ enum TalkProtocolErrorCode {
   invalidSignalingFrame,
   invalidSignalingState,
   invalidSignalingRuntime,
+  invalidCallProfile,
+  invalidCallRequest,
+  invalidCallResponse,
+  invalidCallState,
   invalidPushIdentifier,
   invalidPushOrigin,
   invalidPushCryptoMaterial,
@@ -73,6 +77,7 @@ enum TalkProtocolErrorCode {
   unsupportedChatOperation,
   unsupportedAttachmentOperation,
   unsupportedSignalingOperation,
+  unsupportedCallOperation,
   unsupportedPushOperation,
   unsupportedHttpStatus,
 }

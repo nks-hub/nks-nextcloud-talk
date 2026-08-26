@@ -198,7 +198,7 @@ void main() {
     },
   );
 
-  test('schema v10 migrates to v11 and creates call sessions', () async {
+  test('schema v10 migrates through v12 and creates call sessions', () async {
     await database.close();
     final directory = await Directory.systemTemp.createTemp(
       'nctalk-call-session-migration-',
@@ -232,7 +232,7 @@ void main() {
           .customSelect('PRAGMA table_info(call_sessions)')
           .get();
 
-      expect(migrated.schemaVersion, 11);
+      expect(migrated.schemaVersion, 12);
       expect(
         columns.map((row) => row.read<String>('name')),
         contains('room_token'),

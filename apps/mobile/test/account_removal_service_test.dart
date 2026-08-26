@@ -371,6 +371,23 @@ Future<void> _seedAccount(
         ),
       );
   await database
+      .into(database.callLifecycleSessions)
+      .insert(
+        CallLifecycleSessionsCompanion.insert(
+          accountId: accountId,
+          roomToken: roomToken,
+          serverUrl: serverUrl,
+          nextcloudSessionId: 'fixture-session',
+          credentialGeneration: 1,
+          capabilityGeneration: 1,
+          capabilityRevision: 'call-v4:1:1:1:2',
+          phase: 'joined',
+          confirmedFlags: const Value(7),
+          mutationSequence: 1,
+          updatedAtMillis: 1770000000,
+        ),
+      );
+  await database
       .into(database.cachedConversations)
       .insert(
         CachedConversationsCompanion.insert(
