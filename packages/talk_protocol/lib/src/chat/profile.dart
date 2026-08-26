@@ -13,15 +13,32 @@ final class ChatCapabilityProfile {
     required this.threadFetch,
     required this.setReadMarker,
     required this.markUnread,
+    required this.commonReadStatus,
   });
 
   factory ChatCapabilityProfile.fromSnapshot(
     CapabilitySnapshot snapshot, {
     required bool federated,
   }) {
-    return ChatCapabilityProfile.fromTalkFeatures(
+    final profile = ChatCapabilityProfile.fromTalkFeatures(
       snapshot.talkFeatures.toList(growable: false),
       federated: federated,
+    );
+    return ChatCapabilityProfile._(
+      federated: profile.federated,
+      read: profile.read,
+      sendText: profile.sendText,
+      reply: profile.reply,
+      privateReply: profile.privateReply,
+      backgroundCatchUp: profile.backgroundCatchUp,
+      threadFetch: profile.threadFetch,
+      setReadMarker: profile.setReadMarker,
+      markUnread: profile.markUnread,
+      commonReadStatus:
+          snapshot.context == CapabilityContext.authenticated &&
+          snapshot.supportsTalk('chat-read-status') &&
+          snapshot.chatReadPrivacy == ChatReadPrivacy.public &&
+          !federated,
     );
   }
 
@@ -59,6 +76,7 @@ final class ChatCapabilityProfile {
       threadFetch: read && features.contains('threads') && !federated,
       setReadMarker: marker && features.contains('chat-read-last'),
       markUnread: marker && features.contains('chat-unread'),
+      commonReadStatus: false,
     );
   }
 
@@ -71,6 +89,7 @@ final class ChatCapabilityProfile {
   final bool threadFetch;
   final bool setReadMarker;
   final bool markUnread;
+  final bool commonReadStatus;
 
   @override
   String toString() =>

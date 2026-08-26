@@ -6,6 +6,9 @@ import '../protocol_exception.dart';
 /// Whether a capability snapshot was fetched before or after authentication.
 enum CapabilityContext { anonymous, authenticated }
 
+/// User privacy policy for exposing chat read status.
+enum ChatReadPrivacy { public, private }
+
 /// Version fields from the OCS capability response.
 final class NextcloudVersion {
   const NextcloudVersion({
@@ -78,6 +81,7 @@ final class CapabilitySnapshot {
     required this.version,
     required Map<String, Object?> capabilities,
     required Set<String> talkFeatures,
+    required this.chatReadPrivacy,
     required Set<String> notificationPushFeatures,
   }) : capabilities = UnmodifiableMapView(capabilities),
        namespaces = Set<String>.unmodifiable(capabilities.keys),
@@ -125,6 +129,7 @@ final class CapabilitySnapshot {
     final capabilities = frozen;
 
     var talkFeatures = const <String>{};
+    ChatReadPrivacy? chatReadPrivacy;
     final rawSpreed = capabilities['spreed'];
     if (rawSpreed != null) {
       final spreed = requireObject(
@@ -139,6 +144,36 @@ final class CapabilitySnapshot {
           path: r'$.ocs.data.capabilities.spreed.features',
           code: code,
         );
+      }
+
+      final rawConfig = spreed['config'];
+      if (rawConfig != null) {
+        final config = requireObject(
+          rawConfig,
+          path: r'$.ocs.data.capabilities.spreed.config',
+          code: code,
+        );
+        final rawChat = config['chat'];
+        if (rawChat != null) {
+          final chat = requireObject(
+            rawChat,
+            path: r'$.ocs.data.capabilities.spreed.config.chat',
+            code: code,
+          );
+          if (chat.containsKey('read-privacy')) {
+            final path =
+                r'$.ocs.data.capabilities.spreed.config.chat.read-privacy';
+            chatReadPrivacy = switch (requireInt(
+              chat['read-privacy'],
+              path: path,
+              code: code,
+            )) {
+              0 => ChatReadPrivacy.public,
+              1 => ChatReadPrivacy.private,
+              _ => protocolFailure(code, path),
+            };
+          }
+        }
       }
     }
 
@@ -165,6 +200,7 @@ final class CapabilitySnapshot {
       version: version,
       capabilities: capabilities,
       talkFeatures: talkFeatures,
+      chatReadPrivacy: chatReadPrivacy,
       notificationPushFeatures: notificationPushFeatures,
     );
   }
@@ -174,6 +210,7 @@ final class CapabilitySnapshot {
   final Map<String, Object?> capabilities;
   final Set<String> namespaces;
   final Set<String> talkFeatures;
+  final ChatReadPrivacy? chatReadPrivacy;
   final Set<String> notificationPushFeatures;
 
   bool get hasTalk => namespaces.contains('spreed');
