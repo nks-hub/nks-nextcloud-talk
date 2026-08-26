@@ -718,6 +718,12 @@ zachová. Plná odpověď je autoritativní a hodnotu přepíše i na prázdnou.
 Důvodem je, že delta je částečný pohled, zatímco full fetch reprezentuje
 kompletní serverový stav účtu.
 
+Původní schema v8 přidalo projekční sloupce bez backfillu starého `raw_json`.
+Schema v13 proto jednorázově opraví databáze v8–v12 pouze tehdy, když je celá
+presence čtveřice NULL a `raw_json` obsahuje validní textový `status`. Nikdy
+nepřepisuje existující projekci a malformed nebo status-absent payload je
+bezpečný no-op; repair je idempotentní.
+
 `includeStatus=true` mění povahu inkrementálního fetchu: server v něm vrací
 všechny 1:1 rooms, aby mohl obnovit presence. Kompaktní refresh proto není
 zdarma a tato cena je vědomě přijatá výměnou za presence.
