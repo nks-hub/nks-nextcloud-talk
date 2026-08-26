@@ -5,6 +5,7 @@ import 'identifiers.dart';
 
 const int attachmentMaximumSourceBytes = 1 << 50;
 const int attachmentMaximumChunkCount = 100000;
+const int attachmentMaximumTemporaryDestinationCandidates = 16;
 
 /// MIME types a voice-message source may legitimately carry. `audio/mp4` is
 /// the compressed AAC-LC/M4A format the Flutter client records by default
@@ -213,7 +214,17 @@ final class AttachmentJobDraft {
 
   String get expectedMessageType => metadata.expectedMessageType;
 
-  String get stableTemporaryName => '${jobId.value}.upload';
+  String get stableTemporaryName => temporaryDestinationName(0);
+
+  String temporaryDestinationName(int candidateIndex) {
+    if (candidateIndex < 0 ||
+        candidateIndex >= attachmentMaximumTemporaryDestinationCandidates) {
+      _modelFailure(r'$.draft.temporaryDestination');
+    }
+    return candidateIndex == 0
+        ? '${jobId.value}.upload'
+        : '${jobId.value}-$candidateIndex.upload';
+  }
 
   @override
   String toString() =>

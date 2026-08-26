@@ -32,6 +32,7 @@ enum AttachmentFinalizeClassification {
 
 enum AttachmentDavClassification {
   success,
+  destinationCollision,
   deterministicFailure,
   quotaExceeded,
   permissionDenied,
@@ -286,7 +287,14 @@ AttachmentDavResponse decodeAttachmentDavResponse({
       manifest: manifest,
     );
   }
-  final classification = statusCode == 401
+  final classification =
+      statusCode == 412 &&
+          <AttachmentRequestStep>{
+            AttachmentRequestStep.normalPut,
+            AttachmentRequestStep.chunkMove,
+          }.contains(request.step)
+      ? AttachmentDavClassification.destinationCollision
+      : statusCode == 401
       ? AttachmentDavClassification.reauthenticationRequired
       : statusCode == 507
       ? AttachmentDavClassification.quotaExceeded

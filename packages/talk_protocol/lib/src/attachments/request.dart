@@ -244,6 +244,7 @@ final class AttachmentDavRequest extends AttachmentRequest {
     headers: <String, String>{
       'Content-Length': source.byteLength.toString(),
       'Content-Type': source.mimeType,
+      'If-None-Match': '*',
     },
     body: AttachmentSourceBody(
       handle: source.handle,
@@ -347,7 +348,7 @@ final class AttachmentDavRequest extends AttachmentRequest {
       headers: <String, String>{
         'Destination': destination.toString(),
         'OC-Total-Length': totalLength.toString(),
-        'Overwrite': 'T',
+        'Overwrite': 'F',
       },
       body: null,
       remotePath: remotePath,

@@ -494,7 +494,7 @@ AttachmentRuntimeResult requestAttachmentCancel(
   final cleanupChunk =
       job.draft.uploadMode == AttachmentUploadMode.chunked &&
       job.remoteTemporaryPath != null;
-  final cleanupDraft = job.remoteTemporaryPath != null;
+  final cleanupDraft = _remoteDraftFileOwned(job);
   if (!cleanupChunk && !cleanupDraft) {
     return _replaceJob(
       snapshot,

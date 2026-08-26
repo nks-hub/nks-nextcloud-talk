@@ -152,6 +152,8 @@ AttachmentRuntimeResult _applyDavResponse(
   AttachmentDavResponse response,
 ) {
   switch (response.classification) {
+    case AttachmentDavClassification.destinationCollision:
+      return _rotateTemporaryDestination(snapshot, account, job);
     case AttachmentDavClassification.reauthenticationRequired:
       return _reauthenticationRequired(
         snapshot,
@@ -314,6 +316,54 @@ AttachmentRuntimeResult _applyDavResponse(
   }
 }
 
+AttachmentRuntimeResult _rotateTemporaryDestination(
+  AttachmentRuntimeSnapshot snapshot,
+  AttachmentAccountState account,
+  AttachmentJob job,
+) {
+  final currentIndex = job.temporaryDestinationCandidateIndex;
+  if (currentIndex == null) {
+    _runtimeFailure(r'$.jobs.remotePath');
+  }
+  DavRelativePath? nextPath;
+  final nextIndex = currentIndex + 1;
+  if (nextIndex < attachmentMaximumTemporaryDestinationCandidates) {
+    try {
+      nextPath = job.remoteDraftFolder!.append(
+        job.draft.temporaryDestinationName(nextIndex),
+      );
+    } on TalkProtocolException {
+      nextPath = null;
+    }
+  }
+  if (nextPath != null) {
+    return _replaceJob(
+      snapshot,
+      account,
+      job.copyWith(
+        phase: AttachmentJobPhase.draftResolved,
+        remoteTemporaryPath: nextPath,
+        inFlightRequest: null,
+        cleanupDraftFile: false,
+        errorClass: 'dav-destination-collision',
+      ),
+      AttachmentRuntimeOutcome.draftResolved,
+    );
+  }
+  return _replaceJob(
+    snapshot,
+    account,
+    job.copyWith(
+      phase: AttachmentJobPhase.failed,
+      inFlightRequest: null,
+      cleanupChunkSession: job.draft.uploadMode == AttachmentUploadMode.chunked,
+      cleanupDraftFile: false,
+      errorClass: 'dav-destination-collision-exhausted',
+    ),
+    AttachmentRuntimeOutcome.failed,
+  );
+}
+
 AttachmentRuntimeResult _applyFinalizeResponse(
   AttachmentRuntimeSnapshot snapshot,
   AttachmentAccountState account,
@@ -428,9 +478,15 @@ AttachmentJob _sourceMismatch(AttachmentJob job) => job.copyWith(
   cleanupChunkSession:
       job.draft.uploadMode == AttachmentUploadMode.chunked &&
       job.remoteTemporaryPath != null,
-  cleanupDraftFile: job.remoteTemporaryPath != null,
+  cleanupDraftFile: _remoteDraftFileOwned(job),
   errorClass: 'source-mismatch',
 );
+
+bool _remoteDraftFileOwned(AttachmentJob job) =>
+    job.cleanupDraftFile ||
+    job.phase == AttachmentJobPhase.uploaded ||
+    (job.phase == AttachmentJobPhase.retryable &&
+        job.resumePhase == AttachmentJobPhase.uploaded);
 
 DavChunkRange? _firstMissingChunk(AttachmentJob job) {
   var lower = 0;

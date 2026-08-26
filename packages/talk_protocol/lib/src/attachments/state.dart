@@ -78,6 +78,25 @@ final class AttachmentJob {
 
   AttachmentJobId get jobId => draft.jobId;
 
+  int? get temporaryDestinationCandidateIndex {
+    final folder = remoteDraftFolder;
+    final path = remoteTemporaryPath;
+    if (folder == null || path == null) {
+      return null;
+    }
+    for (
+      var index = 0;
+      index < attachmentMaximumTemporaryDestinationCandidates;
+      index++
+    ) {
+      if (path.value ==
+          '${folder.value}/${draft.temporaryDestinationName(index)}') {
+        return index;
+      }
+    }
+    return null;
+  }
+
   AttachmentJob copyWith({
     AttachmentJobPhase? phase,
     Object? resumePhase = _unchanged,
@@ -138,8 +157,7 @@ final class AttachmentJob {
       _stateFailure(r'$.jobs.remotePath');
     }
     if (remoteDraftFolder != null &&
-        remoteDraftFolder!.append(draft.stableTemporaryName) !=
-            remoteTemporaryPath) {
+        temporaryDestinationCandidateIndex == null) {
       _stateFailure(r'$.jobs.remotePath');
     }
     if (resumePhase != null &&

@@ -6,6 +6,8 @@ import 'package:test/test.dart';
 
 import 'support/attachment_test_support.dart';
 
+part 'attachment_runtime_collision_test.part.dart';
+
 void main() {
   group('attachment runtime lifecycle', () {
     test('normal upload completes only after one typed file confirmation', () {
@@ -311,7 +313,7 @@ void main() {
       expect(result.outcome, AttachmentRuntimeOutcome.sourceMismatch);
       expect(result.request, isNull);
       expect(_state(snapshot, operation).phase, AttachmentJobPhase.failed);
-      expect(_state(snapshot, operation).cleanupDraftFile, isTrue);
+      expect(_state(snapshot, operation).cleanupDraftFile, isFalse);
     });
 
     test(
@@ -374,6 +376,8 @@ void main() {
       expect(job.resumePhase, isNull);
       expect(job.cleanupDraftFile, isTrue);
     });
+
+    _registerAttachmentRuntimeCollisionTests();
 
     test('chunk resume uploads only missing chunks then moves .file', () {
       final prepared = source(size: 2048000);
@@ -719,7 +723,7 @@ void main() {
       expect(retry.request!.step, AttachmentRequestStep.cleanupDraftFile);
     });
 
-    test('cleanup 401 pauses and resumes both DELETE steps', () {
+    test('cleanup 401 resumes without deleting an unowned destination', () {
       final operation = draft(
         preparedSource: source(size: 2),
         uploadPolicy: policy(normalMaximum: 1, chunkSize: 1),
@@ -778,34 +782,11 @@ void main() {
         ),
       );
 
+      expect(_state(snapshot, operation).phase, AttachmentJobPhase.cancelled);
+      expect(_state(snapshot, operation).cleanupDraftFile, isFalse);
       cleanup = _plan(snapshot, operation, 132);
-      snapshot = commit(snapshot, cleanup);
-      expect(cleanup.request!.step, AttachmentRequestStep.cleanupDraftFile);
-      snapshot = _apply(
-        snapshot,
-        operation,
-        decodeAttachmentDavResponse(
-          request: cleanup.request! as AttachmentDavRequest,
-          statusCode: 401,
-          body: Uint8List(0),
-        ),
-      );
-      expect(
-        snapshot.accounts[accountA]!.lane,
-        AttachmentAccountLane.reauthenticationRequired,
-      );
-
-      snapshot = commit(
-        snapshot,
-        completeAttachmentAccountReauthentication(
-          snapshot,
-          accountId: accountA,
-          credentialGeneration: 5,
-          capabilityGeneration: 7,
-        ),
-      );
-      final resumed = _plan(snapshot, operation, 133);
-      expect(resumed.request!.step, AttachmentRequestStep.cleanupDraftFile);
+      expect(cleanup.request, isNull);
+      expect(cleanup.outcome, AttachmentRuntimeOutcome.unchanged);
     });
 
     test('cancel is rejected once finalization may have been dispatched', () {

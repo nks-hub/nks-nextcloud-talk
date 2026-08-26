@@ -249,6 +249,7 @@ void main() {
       );
       expect(request.headers['Content-Length'], '1024');
       expect(request.headers['Content-Type'], 'image/jpeg');
+      expect(request.headers['If-None-Match'], '*');
       final body = request.body! as AttachmentSourceBody;
       expect(body.offset, 0);
       expect(body.length, 1024);
@@ -294,7 +295,7 @@ void main() {
       );
       expect(request.uri.pathSegments.last, '.file');
       expect(request.headers['OC-Total-Length'], '2500000');
-      expect(request.headers['Overwrite'], 'T');
+      expect(request.headers['Overwrite'], 'F');
       expect(
         Uri.parse(request.headers['Destination']!).origin,
         request.uri.origin,

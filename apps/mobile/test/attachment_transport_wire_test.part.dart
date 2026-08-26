@@ -204,6 +204,7 @@ void _registerWireTests() {
     expect(captured.bodyBytes, _normalBytes);
     expect(captured.contentLength, _normalBytes.length);
     expect(captured.headers['content-type'], 'application/octet-stream');
+    expect(captured.headers['if-none-match'], '*');
     expect(provider.openCount, 1);
     expect(provider.lastLease!.readCount, 2);
     expect(provider.lastLease!.closeCount, 1);
@@ -324,7 +325,7 @@ void _registerWireTests() {
             expect(destination.query, isEmpty);
             expect(destination.fragment, isEmpty);
             expect(request.headers['oc-total-length'], '16');
-            expect(request.headers['overwrite'], 'T');
+            expect(request.headers['overwrite'], 'F');
             return http.Response('', 201);
           case 'DELETE':
             expect(request.bodyBytes, isEmpty);

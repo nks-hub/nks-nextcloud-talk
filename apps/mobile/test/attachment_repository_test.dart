@@ -84,6 +84,52 @@ void main() {
     },
   );
 
+  test('persists a rotated upload destination across reopen', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'nctalk-attachment-collision-',
+    );
+    final databaseFile = File(
+      '${directory.path}${Platform.pathSeparator}attachments.sqlite',
+    );
+    AppDatabase? database;
+    try {
+      database = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      await _insertAccount(database, 'account-a');
+      final initial = _runtime(
+        accountId: 'account-a',
+        sourceHandle: 'nctalk-media-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
+      final rotatedPath = initial.job.remoteDraftFolder!.append(
+        '${initial.job.jobId.value}-3.upload',
+      );
+      final rotated = initial.job.copyWith(remoteTemporaryPath: rotatedPath);
+      final account = initial.snapshot.accounts.values.single.copyWith(
+        jobs: <AttachmentJobId, AttachmentJob>{rotated.jobId: rotated},
+      );
+      await AttachmentRepository(database).persistAdmission(
+        account: account,
+        job: rotated,
+        metadata: initial.metadata,
+        updatedAt: DateTime.utc(2026, 8, 26),
+      );
+      await database.close();
+
+      database = AppDatabase.forTesting(NativeDatabase(databaseFile));
+      final reopened = await AttachmentRepository(database).loadRuntime();
+      final restored =
+          reopened.snapshot.accounts.values.single.jobs.values.single;
+
+      expect(restored.remoteTemporaryPath, rotatedPath);
+      expect(restored.chunkCollectionReady, isTrue);
+      expect(restored.chunkManifestLoaded, isTrue);
+    } finally {
+      await database?.close();
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  });
+
   test('keeps attachment runtime isolated by account', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);

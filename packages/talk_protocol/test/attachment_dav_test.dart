@@ -125,6 +125,34 @@ void main() {
       );
     });
 
+    test('classifies destination precondition failures as collisions', () {
+      final normalPut = AttachmentDavRequest.normalPut(
+        context: attachmentContext(8),
+        davUserId: davUserA,
+        remotePath: DavRelativePath.parse('Talk/Draft/job.upload'),
+        source: prepared,
+      );
+      final chunkMove = AttachmentDavRequest.chunkMove(
+        context: attachmentContext(9),
+        davUserId: davUserA,
+        uploadSessionId: session,
+        remotePath: DavRelativePath.parse('Talk/Draft/job.upload'),
+        totalLength: prepared.byteLength,
+      );
+
+      for (final request in <AttachmentDavRequest>[normalPut, chunkMove]) {
+        expect(
+          decodeAttachmentDavResponse(
+            request: request,
+            statusCode: 412,
+            body: Uint8List(0),
+          ).classification.name,
+          'destinationCollision',
+          reason: request.step.name,
+        );
+      }
+    });
+
     test('classifies quota exceeded (507) as non-retryable, not transient', () {
       final request = AttachmentDavRequest.normalPut(
         context: attachmentContext(9),
