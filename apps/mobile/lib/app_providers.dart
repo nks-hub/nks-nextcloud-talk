@@ -894,7 +894,7 @@ final chatVoiceCacheDirectoryProvider = Provider<Future<Directory> Function()>((
 final chatVoiceFileProvider = FutureProvider.autoDispose
     .family<ChatVoiceFile, ChatVoiceProviderKey>((ref, key) async {
       final directory = await ref.watch(chatVoiceCacheDirectoryProvider)();
-      return ref
+      final file = await ref
           .watch(chatMediaRepositoryProvider)
           .loadVoiceFile(
             account: key.account,
@@ -905,14 +905,18 @@ final chatVoiceFileProvider = FutureProvider.autoDispose
               messageId: key.messageId,
             ),
           );
+      // The file just written is the newest, so the bound never drops the one
+      // about to play. Nothing else evicts this directory outside account
+      // removal, so without this it grows for as long as the account exists.
+      await pruneAccountVoiceFiles(
+        directory: directory,
+        accountId: key.account.id,
+      );
+      return file;
     });
 
-final chatMessagesProvider =
-    StreamProvider.autoDispose
-        .family<List<CachedChatMessage>, ChatRoomProviderKey>((
-      ref,
-      key,
-    ) {
+final chatMessagesProvider = StreamProvider.autoDispose
+    .family<List<CachedChatMessage>, ChatRoomProviderKey>((ref, key) {
       return ref
           .watch(chatRepositoryProvider)
           .watchMessages(
@@ -922,12 +926,8 @@ final chatMessagesProvider =
           );
     });
 
-final outgoingMessageStatusesProvider =
-    StreamProvider.autoDispose
-        .family<List<OutgoingMessageStatus>, ChatRoomProviderKey>((
-      ref,
-      key,
-    ) {
+final outgoingMessageStatusesProvider = StreamProvider.autoDispose
+    .family<List<OutgoingMessageStatus>, ChatRoomProviderKey>((ref, key) {
       return ref
           .watch(chatServiceProvider)
           .watchOutgoingMessageStatuses(
@@ -937,12 +937,8 @@ final outgoingMessageStatusesProvider =
           );
     });
 
-final textSendOperationsProvider =
-    StreamProvider.autoDispose
-        .family<List<StoredTextSendOperation>, ChatRoomProviderKey>((
-      ref,
-      key,
-    ) {
+final textSendOperationsProvider = StreamProvider.autoDispose
+    .family<List<StoredTextSendOperation>, ChatRoomProviderKey>((ref, key) {
       return ref
           .watch(chatRepositoryProvider)
           .watchTextSendOperations(
@@ -952,9 +948,8 @@ final textSendOperationsProvider =
           );
     });
 
-final chatScopeProvider =
-    StreamProvider.autoDispose
-        .family<StoredChatScope?, ChatRoomProviderKey>((ref, key) {
+final chatScopeProvider = StreamProvider.autoDispose
+    .family<StoredChatScope?, ChatRoomProviderKey>((ref, key) {
       return ref
           .watch(chatRepositoryProvider)
           .watchScope(
