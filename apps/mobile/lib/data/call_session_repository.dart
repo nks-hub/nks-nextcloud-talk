@@ -162,6 +162,19 @@ final class CallLifecycleSessionRepository {
 
   final AppDatabase _database;
 
+  Future<bool> exists({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final query = _database.select(_database.callLifecycleSessions)
+      ..where(
+        (row) =>
+            row.accountId.equals(accountId) & row.roomToken.equals(roomToken),
+      )
+      ..limit(1);
+    return await query.getSingleOrNull() != null;
+  }
+
   Future<void> persist(CallLifecycleState state) {
     return _database
         .into(_database.callLifecycleSessions)

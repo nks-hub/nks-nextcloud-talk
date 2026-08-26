@@ -9,10 +9,15 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/call_session_repository.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/calls/call_banner.dart';
+import 'package:nextcloudtalk/features/calls/call_lifecycle_controller.dart';
+import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
 import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_list_actions.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
@@ -72,12 +77,17 @@ void main() {
     required CachedConversation room,
     required CallTransport transport,
     required DateTime Function() now,
+    void Function()? onLifecycleRead,
   }) {
     return ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
         callTransportProvider.overrideWith((ref, key) async => transport),
+        callLifecycleStatusProvider.overrideWith((ref, key) async {
+          onLifecycleRead?.call();
+          return _readyLifecycle(key);
+        }),
       ],
       child: localizedTestApp(
         home: Scaffold(
@@ -92,16 +102,19 @@ void main() {
   }
 
   testWidgets('no banner without a server-reported call', (tester) async {
+    var lifecycleReads = 0;
     await tester.pumpWidget(
       banner(
         room: conversation(hasCall: false),
         transport: CallTransport.internal,
         now: () => callStart,
+        onLifecycleRead: () => lifecycleReads++,
       ),
     );
     await tester.pump();
 
     expect(find.byKey(const Key('call-banner')), findsNothing);
+    expect(lifecycleReads, 0);
   });
 
   testWidgets('the duration keeps counting while the call runs', (
@@ -153,15 +166,18 @@ void main() {
   testWidgets('a resolved transport offers an explicitly disabled join', (
     tester,
   ) async {
+    var lifecycleReads = 0;
     await tester.pumpWidget(
       banner(
         room: conversation(),
         transport: CallTransport.externalHpb,
         now: () => callStart,
+        onLifecycleRead: () => lifecycleReads++,
       ),
     );
     await tester.pump();
 
+    expect(lifecycleReads, 1);
     final join = find.byKey(const Key('call-banner-join'));
     expect(join, findsOneWidget);
     expect(
@@ -203,6 +219,9 @@ void main() {
           callTransportProvider.overrideWith(
             (ref, key) => Completer<CallTransport>().future,
           ),
+          callLifecycleStatusProvider.overrideWith(
+            (ref, key) async => _readyLifecycle(key),
+          ),
         ],
         child: localizedTestApp(
           home: Scaffold(
@@ -218,6 +237,374 @@ void main() {
     await tester.pump();
 
     expect(find.text('Checking how this call is signalled…'), findsOneWidget);
+  });
+
+  testWidgets('a lifecycle failure is localized and retry reloads the room', (
+    tester,
+  ) async {
+    var transportAttempts = 0;
+    var lifecycleAttempts = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(vault),
+          callTransportProvider.overrideWith((ref, key) async {
+            transportAttempts++;
+            return transportAttempts == 1
+                ? CallTransport.unavailable
+                : CallTransport.internal;
+          }),
+          callLifecycleStatusProvider.overrideWith((ref, key) async {
+            lifecycleAttempts++;
+            if (lifecycleAttempts == 1) {
+              throw const CallLifecycleException(
+                CallLifecycleError.credentialMissing,
+              );
+            }
+            return _readyLifecycle(key);
+          }),
+        ],
+        child: localizedTestApp(
+          home: Scaffold(
+            body: OngoingCallBanner(
+              account: account,
+              conversation: conversation(),
+              now: () => callStart,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.text('Sign in again to see how this call is signalled.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('call-banner-join')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('call-banner-lifecycle-retry')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(transportAttempts, 2);
+    expect(lifecycleAttempts, 2);
+    expect(find.byKey(const Key('call-banner-join')), findsOneWidget);
+    expect(find.byKey(const Key('call-banner-lifecycle-retry')), findsNothing);
+  });
+
+  testWidgets('a mismatched lifecycle result fails closed for the room', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(vault),
+          callTransportProvider.overrideWith(
+            (ref, key) async => CallTransport.internal,
+          ),
+          callLifecycleStatusProvider.overrideWith(
+            (ref, key) async => _readyLifecycle((
+              accountId: key.accountId,
+              roomToken: 'another-room',
+            )),
+          ),
+        ],
+        child: localizedTestApp(
+          home: Scaffold(
+            body: OngoingCallBanner(
+              account: account,
+              conversation: conversation(),
+              now: () => callStart,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('call-banner-join')), findsNothing);
+    expect(
+      find.text('The call transport could not be resolved.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('call-banner-lifecycle-retry')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'the banner runs durable recovery through the production provider',
+    (tester) async {
+      const features = <String>{
+        'conversation-v4',
+        'conversation-permissions',
+        'in-call-flags',
+        'silent-call',
+        'recording-consent',
+      };
+      final conversationResponse = readFixtureJson(
+        'conversation-list/fixtures/conversations-full.response.json',
+      )!;
+      var capabilityReads = 0;
+      var conversationReads = 0;
+      var callReads = 0;
+      var callMutations = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            capabilityReads++;
+            return http.Response(jsonEncode(_callCapabilities(features)), 200);
+          }
+          if (request.url.path.contains('/apps/spreed/api/v4/call/')) {
+            if (request.method == 'GET') {
+              callReads++;
+            } else {
+              callMutations++;
+            }
+            return _ocsResponse(<Object?>[
+              <String, Object?>{
+                'actorType': 'users',
+                'actorId': 'fixture-user',
+                'displayName': 'Fixture User',
+                'token': 'rooma123',
+                'lastPing': 1770000000,
+                'sessionId': 'fixture-session-a',
+              },
+            ]);
+          }
+          if (request.url.path.contains('/apps/spreed/api/v4/room')) {
+            conversationReads++;
+            return http.Response(
+              jsonEncode(conversationResponse),
+              200,
+              headers: const <String, String>{
+                'X-Nextcloud-Talk-Hash': 'fixture-hash-call-banner',
+                'X-Nextcloud-Talk-Modified-Before': '1724300001',
+                'X-Nextcloud-Talk-Federation-Invites': '0',
+              },
+            );
+          }
+          fail('Unexpected request ${request.method} ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+
+      final chat = ChatRepository(database);
+      final capability = await chat.recordCapabilities(
+        accountId: account.id,
+        talkFeatures: features,
+        observedAt: DateTime.utc(2026, 8, 25, 9),
+      );
+      final sessions = CallLifecycleSessionRepository(database);
+      final authority = CallLifecycleAuthority(
+        accountId: AccountId.parse(account.id),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        nextcloudSessionId: ConversationSessionId.parse('fixture-session-a'),
+        credentialGeneration: capability.credentialGeneration,
+        capabilityGeneration: capability.generation,
+        capabilityRevision: 'call-v4:1:1:1:0',
+      );
+      await sessions.persist(
+        CallLifecycleState.beginJoin(
+          authority: authority,
+          flags: CallInCallFlags.audioVideo(),
+          updatedAt: DateTime.utc(2026, 8, 25, 9, 30),
+        ).confirm(updatedAt: DateTime.utc(2026, 8, 25, 9, 30, 1)),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(database),
+            credentialVaultProvider.overrideWithValue(vault),
+            nextcloudApiProvider.overrideWithValue(api),
+            callTransportProvider.overrideWith(
+              (ref, key) async => CallTransport.internal,
+            ),
+          ],
+          child: localizedTestApp(
+            home: Scaffold(
+              body: OngoingCallBanner(
+                account: account,
+                conversation: conversation(withStart: false),
+                now: () => callStart,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final key = (accountId: account.id, roomToken: 'rooma123');
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OngoingCallBanner)),
+      );
+      for (var attempt = 0; attempt < 40; attempt++) {
+        final value = container.read(callLifecycleStatusProvider(key));
+        if (value.hasValue || value.hasError) {
+          break;
+        }
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump();
+      }
+      await tester.pump();
+
+      final lifecycle = container.read(callLifecycleStatusProvider(key));
+      expect(
+        callReads,
+        1,
+        reason:
+            'lifecycle=$lifecycle capabilities=$capabilityReads '
+            'conversations=$conversationReads',
+      );
+      expect(callMutations, 0);
+      expect(find.byKey(const Key('call-banner-join')), findsOneWidget);
+      expect(
+        (await database.select(database.callLifecycleSessions).getSingle())
+            .phase,
+        CallLifecyclePhase.joined.name,
+      );
+    },
+  );
+
+  testWidgets('a hidden banner recovers durable state before a later join', (
+    tester,
+  ) async {
+    const features = <String>{
+      'conversation-v4',
+      'conversation-permissions',
+      'in-call-flags',
+      'silent-call',
+      'recording-consent',
+    };
+    final conversationResponse = readFixtureJson(
+      'conversation-list/fixtures/conversations-full.response.json',
+    )!;
+    final callMethods = <String>[];
+    var callReadCount = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(jsonEncode(_callCapabilities(features)), 200);
+        }
+        if (request.url.path.contains('/apps/spreed/api/v4/call/')) {
+          callMethods.add(request.method);
+          if (request.method == 'GET') {
+            callReadCount++;
+            if (callReadCount == 1) {
+              return _ocsResponse(<Object?>[]);
+            }
+            return _ocsResponse(<Object?>[
+              <String, Object?>{
+                'actorType': 'users',
+                'actorId': 'fixture-user',
+                'displayName': 'Fixture User',
+                'token': 'rooma123',
+                'lastPing': 1770000000,
+                'sessionId': 'fixture-session-a',
+              },
+            ]);
+          }
+          return _ocsResponse(<String, Object?>{});
+        }
+        if (request.url.path.contains('/apps/spreed/api/v4/room')) {
+          return http.Response(
+            jsonEncode(conversationResponse),
+            200,
+            headers: const <String, String>{
+              'X-Nextcloud-Talk-Hash': 'fixture-hash-hidden-call-banner',
+              'X-Nextcloud-Talk-Modified-Before': '1724300001',
+              'X-Nextcloud-Talk-Federation-Invites': '0',
+            },
+          );
+        }
+        fail('Unexpected request ${request.method} ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+
+    final chat = ChatRepository(database);
+    final capability = await chat.recordCapabilities(
+      accountId: account.id,
+      talkFeatures: features,
+      observedAt: DateTime.utc(2026, 8, 25, 9),
+    );
+    final sessions = CallLifecycleSessionRepository(database);
+    final authority = CallLifecycleAuthority(
+      accountId: AccountId.parse(account.id),
+      server: ServerBase.parse(account.serverUrl),
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+      nextcloudSessionId: ConversationSessionId.parse('fixture-session-a'),
+      credentialGeneration: capability.credentialGeneration,
+      capabilityGeneration: capability.generation,
+      capabilityRevision: 'call-v4:1:1:1:0',
+    );
+    await sessions.persist(
+      CallLifecycleState.beginJoin(
+        authority: authority,
+        flags: CallInCallFlags.audioVideo(),
+        updatedAt: DateTime.utc(2026, 8, 25, 9, 30),
+      ).confirm(updatedAt: DateTime.utc(2026, 8, 25, 9, 30, 1)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(vault),
+          nextcloudApiProvider.overrideWithValue(api),
+        ],
+        child: localizedTestApp(
+          home: Scaffold(
+            body: OngoingCallBanner(
+              account: account,
+              conversation: conversation(hasCall: false),
+              now: () => callStart,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    var recovered = false;
+    for (var attempt = 0; attempt < 80 && !recovered; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+      await tester.pump();
+      recovered =
+          (await database.select(database.callLifecycleSessions).get()).isEmpty;
+    }
+
+    expect(find.byKey(const Key('call-banner')), findsNothing);
+    expect(callMethods, <String>['GET']);
+    expect(recovered, isTrue);
+
+    final joinService = CallLifecycleService(
+      accounts: accounts,
+      chat: chat,
+      sessions: sessions,
+      credentials: vault,
+      api: api,
+      refreshConversationSession: (_, _) async =>
+          ConversationSessionId.parse('fixture-session-a'),
+    );
+    final joined = await tester.runAsync(
+      () => joinService
+          .join(accountId: account.id, roomToken: 'rooma123')
+          .timeout(const Duration(seconds: 5)),
+    );
+
+    expect(callMethods, <String>['GET', 'POST']);
+    expect(joined?.phase, CallLifecyclePhase.joined);
   });
 
   testWidgets('the conversation list marks a room with a running call', (
@@ -255,14 +642,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(
-      find.byKey(const Key('conversation-call-rooma123')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('conversation-call-roomquiet')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('conversation-call-rooma123')), findsOneWidget);
+    expect(find.byKey(const Key('conversation-call-roomquiet')), findsNothing);
     expect(
       tester
           .getSemantics(find.byKey(const Key('conversation-tile-rooma123')))
@@ -273,3 +654,40 @@ void main() {
     handle.dispose();
   });
 }
+
+CallLifecycleRoomStatus _readyLifecycle(CallRoomKey key) {
+  return CallLifecycleRoomStatus(
+    key: key,
+    status: CallLifecycleStatus(
+      ownSessionPresent: false,
+      peers: const <CallPeer>[],
+      state: null,
+    ),
+  );
+}
+
+Map<String, Object?> _callCapabilities(Set<String> features) {
+  final root = capabilitiesJson(talkFeatures: features);
+  final ocs = root['ocs']! as Map<String, Object?>;
+  final data = ocs['data']! as Map<String, Object?>;
+  final capabilities = data['capabilities']! as Map<String, Object?>;
+  final spreed = capabilities['spreed']! as Map<String, Object?>;
+  spreed['config'] = <String, Object?>{
+    'call': <String, Object?>{'enabled': true, 'recording-consent': 0},
+  };
+  return root;
+}
+
+http.Response _ocsResponse(Object? data) => http.Response(
+  jsonEncode(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': data,
+    },
+  }),
+  200,
+);

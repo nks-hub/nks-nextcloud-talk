@@ -158,6 +158,17 @@ final class CallLifecycleService {
     operation: () => _status(accountId: accountId, roomToken: roomToken),
   );
 
+  /// Reconciles durable state after a process restart and returns the same
+  /// authoritative peer snapshot without issuing a second GET.
+  Future<CallLifecycleStatus> recoverStatus({
+    required String accountId,
+    required String roomToken,
+  }) => _serialize(
+    accountId: accountId,
+    roomToken: roomToken,
+    operation: () => _recoverStatus(accountId: accountId, roomToken: roomToken),
+  );
+
   Future<CallLifecycleState?> recover({
     required String accountId,
     required String roomToken,
@@ -383,11 +394,45 @@ final class CallLifecycleService {
     return state == null ? null : _recoverPrepared(context, state);
   }
 
+  Future<CallLifecycleStatus> _recoverStatus({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final context = await _prepare(accountId, roomToken);
+    final state = await _sessions.load(
+      authority: context.authority,
+      afterRestart: true,
+      now: _utcNow(),
+    );
+    var response = await _readPeers(context, state?.mutationSequence ?? 0);
+    CallLifecycleState? recoveredState;
+    if (state != null) {
+      final recovery = await _applyRecovery(context, state, response);
+      recoveredState = recovery.state;
+      if (recovery.readAgain) {
+        response = await _readPeers(context, state.mutationSequence);
+      }
+    }
+    return CallLifecycleStatus(
+      ownSessionPresent: response.ownSessionPresent,
+      peers: response.peers,
+      state: recoveredState,
+    );
+  }
+
   Future<CallLifecycleState?> _recoverPrepared(
     _CallContext context,
     CallLifecycleState state,
   ) async {
     final response = await _readPeers(context, state.mutationSequence);
+    return (await _applyRecovery(context, state, response)).state;
+  }
+
+  Future<_CallRecoveryResult> _applyRecovery(
+    _CallContext context,
+    CallLifecycleState state,
+    CallRestResponse response,
+  ) async {
     final decision = reconcileCallLifecycle(
       state: state,
       peersResponse: response,
@@ -399,15 +444,15 @@ final class CallLifecycleService {
           accountId: context.authority.accountId.value,
           roomToken: context.authority.roomToken.value,
         );
-        return null;
+        return const (state: null, readAgain: false);
       case CallRecoveryAction.joinedConfirmed:
       case CallRecoveryAction.stillUncertain:
         await _sessions.persist(decision.state!);
-        return decision.state;
+        return (state: decision.state, readAgain: false);
       case CallRecoveryAction.retryLeave:
         await _sessions.persist(decision.state!);
         await _retryLeave(context, decision.state!);
-        return null;
+        return const (state: null, readAgain: true);
     }
   }
 
@@ -542,10 +587,18 @@ final class CallLifecycleService {
       throw const CallLifecycleException(CallLifecycleError.invalidResponse);
     }
 
-    final refreshedSessionId = await _refreshConversationSession(
-      accountId,
-      roomToken,
-    );
+    final ConversationSessionId? refreshedSessionId;
+    try {
+      refreshedSessionId = await _refreshConversationSession(
+        accountId,
+        roomToken,
+      );
+    } on CallLifecycleException catch (error) {
+      if (error.code == CallLifecycleError.reauthenticationRequired) {
+        await _dropForReauthentication(accountId, roomToken);
+      }
+      rethrow;
+    }
     if (refreshedSessionId == null) {
       throw const CallLifecycleException(CallLifecycleError.roomMissing);
     }
@@ -560,7 +613,9 @@ final class CallLifecycleService {
     final ConversationRoom room;
     try {
       room = ConversationRoom.fromJson(jsonDecode(cached.rawJson));
-      if (room.token != typedRoomToken || cached.accountId != accountId) {
+      if (room.token != typedRoomToken ||
+          room.sessionId != refreshedSessionId ||
+          cached.accountId != accountId) {
         throw const FormatException('Conversation authority mismatch');
       }
     } on Object {
@@ -667,6 +722,8 @@ final class CallLifecycleService {
     }
   }
 }
+
+typedef _CallRecoveryResult = ({CallLifecycleState? state, bool readAgain});
 
 final class _CallContext {
   const _CallContext({

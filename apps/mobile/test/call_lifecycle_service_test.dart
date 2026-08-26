@@ -88,6 +88,20 @@ void main() {
     },
   );
 
+  test('rejects a room snapshot that drifted after session refresh', () async {
+    final harness = await _CallHarness.create(
+      refresh: (_, _) async => ConversationSessionId.parse('stale-session'),
+      onCall: (_, _) async => _ocsResponse(200, <Object?>[]),
+    );
+    addTearDown(harness.dispose);
+
+    await expectLater(
+      harness.service.status(accountId: 'account-a', roomToken: 'rooma123'),
+      _lifecycleFailure(CallLifecycleError.invalidResponse),
+    );
+    expect(harness.server.callMethods, isEmpty);
+  });
+
   test('recovers an ambiguous join by GET without repeating POST', () async {
     final harness = await _CallHarness.create(
       onCall: (request, index) async {
@@ -120,6 +134,112 @@ void main() {
     );
     expect(recovered!.phase, CallLifecyclePhase.joined);
     expect(harness.server.callMethods, <String>['POST', 'GET']);
+  });
+
+  test(
+    'recoverStatus reuses its recovery GET for the visible snapshot',
+    () async {
+      final harness = await _CallHarness.create(
+        onCall: (request, _) async {
+          expect(request.method, 'GET');
+          return _ocsResponse(200, <Object?>[]);
+        },
+      );
+      addTearDown(harness.dispose);
+
+      final status = await harness.service.recoverStatus(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+
+      expect(status.ownSessionPresent, isFalse);
+      expect(status.peers, isEmpty);
+      expect(status.state, isNull);
+      expect(harness.server.callMethods, <String>['GET']);
+    },
+  );
+
+  test(
+    'recoverStatus refreshes peers after retrying an uncertain leave',
+    () async {
+      final harness = await _CallHarness.create(
+        onCall: (request, index) async {
+          if (request.method == 'GET' && index == 1) {
+            return _ocsResponse(200, <Object?>[
+              _peer(token: 'rooma123', sessionId: 'session-rooma123'),
+            ]);
+          }
+          if (request.method == 'GET') {
+            return _ocsResponse(200, <Object?>[]);
+          }
+          return _ocsResponse(200, <String, Object?>{});
+        },
+      );
+      addTearDown(harness.dispose);
+      final joined = await harness.service.join(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      await harness.sessions.persist(
+        joined
+            .beginLeave(
+              endForEveryone: false,
+              updatedAt: DateTime.utc(2026, 8, 26, 12, 1),
+            )
+            .markUncertain(updatedAt: DateTime.utc(2026, 8, 26, 12, 1, 1)),
+      );
+
+      final status = await harness.newService().recoverStatus(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+
+      expect(status.ownSessionPresent, isFalse);
+      expect(status.state, isNull);
+      expect(harness.server.callMethods, <String>[
+        'POST',
+        'GET',
+        'DELETE',
+        'GET',
+      ]);
+    },
+  );
+
+  test('session refresh reauthentication purges durable call state', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+    await harness.service.join(accountId: 'account-a', roomToken: 'rooma123');
+    final service = CallLifecycleService(
+      accounts: harness.accounts,
+      chat: harness.chat,
+      sessions: harness.sessions,
+      credentials: harness.credentials,
+      api: harness.api,
+      refreshConversationSession: (_, _) async =>
+          throw const CallLifecycleException(
+            CallLifecycleError.reauthenticationRequired,
+          ),
+      now: _now,
+    );
+
+    await expectLater(
+      service.recoverStatus(accountId: 'account-a', roomToken: 'rooma123'),
+      _lifecycleFailure(CallLifecycleError.reauthenticationRequired),
+    );
+
+    expect(
+      await harness.database
+          .select(harness.database.callLifecycleSessions)
+          .get(),
+      isEmpty,
+    );
+    expect(
+      (await harness.database
+              .select(harness.database.chatCapabilities)
+              .getSingle())
+          .lane,
+      ChatAccountLane.reauthenticationRequired.name,
+    );
   });
 
   test(

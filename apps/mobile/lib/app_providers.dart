@@ -18,8 +18,11 @@ import 'data/attachment_repository.dart';
 import 'data/chat_media_cache.dart';
 import 'data/chat_media_repository.dart';
 import 'data/chat_repository.dart';
+import 'data/call_session_repository.dart';
 import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
+import 'features/calls/call_lifecycle_controller.dart';
+import 'features/calls/call_lifecycle_service.dart';
 import 'features/calls/call_transport_service.dart';
 import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_attachment_context.dart';
@@ -160,6 +163,54 @@ final callTransportProvider = FutureProvider.autoDispose
       return ref
           .watch(callTransportServiceProvider)
           .resolve(accountId: key.accountId, roomToken: key.roomToken);
+    });
+
+final callLifecycleSessionRepositoryProvider =
+    Provider<CallLifecycleSessionRepository>((ref) {
+      return CallLifecycleSessionRepository(ref.watch(appDatabaseProvider));
+    });
+
+final callLifecyclePersistedProvider = FutureProvider.autoDispose
+    .family<bool, CallRoomKey>((ref, key) {
+      return ref
+          .watch(callLifecycleSessionRepositoryProvider)
+          .exists(accountId: key.accountId, roomToken: key.roomToken);
+    });
+
+final callConversationSessionResolverProvider =
+    Provider<CallConversationSessionResolver>((ref) {
+      return CallConversationSessionResolver(
+        accounts: ref.watch(accountRepositoryProvider),
+        conversations: ref.watch(conversationSyncServiceProvider),
+      );
+    });
+
+final callLifecycleServiceProvider = Provider<CallLifecycleService>((ref) {
+  return CallLifecycleService(
+    accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
+    sessions: ref.watch(callLifecycleSessionRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+    refreshConversationSession: ref
+        .watch(callConversationSessionResolverProvider)
+        .refresh,
+  );
+});
+
+final callLifecycleControllerProvider = Provider<CallLifecycleController>((
+  ref,
+) {
+  return CallLifecycleController(ref.watch(callLifecycleServiceProvider));
+});
+
+final callLifecycleStatusProvider = FutureProvider.autoDispose
+    .family<CallLifecycleRoomStatus, CallRoomKey>((ref, key) async {
+      try {
+        return await ref.watch(callLifecycleControllerProvider).load(key);
+      } finally {
+        ref.invalidate(callLifecyclePersistedProvider(key));
+      }
     });
 
 final newConversationServiceProvider = Provider<NewConversationService>((ref) {

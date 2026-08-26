@@ -6,15 +6,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'call_lifecycle_service.dart';
 import 'call_state.dart';
 import 'call_transport_service.dart';
 
 /// Banner shown above a chat while the server reports a running call.
 ///
-/// The join button is deliberately inert: WebRTC media is not implemented
-/// yet, so the banner only resolves how the call would be signalled and says
-/// that joining is not available. A transport that cannot be resolved hides
-/// the button entirely instead of offering a dead control.
+/// The banner recovers and reads the room's durable call REST state before it
+/// exposes any call action. The join button remains inert until WebRTC media
+/// exists; registering a server-side participant without media would create a
+/// false presence in the call.
 final class OngoingCallBanner extends ConsumerStatefulWidget {
   const OngoingCallBanner({
     super.key,
@@ -59,7 +60,15 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
 
   @override
   Widget build(BuildContext context) {
+    final key = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
     final call = ConversationCallState.fromConversation(widget.conversation);
+    final persistedLifecycle = ref.watch(callLifecyclePersistedProvider(key));
+    final lifecycle = call != null || persistedLifecycle.valueOrNull == true
+        ? ref.watch(callLifecycleStatusProvider(key))
+        : null;
     final elapsed = call?.elapsed(now: widget.now());
     _syncTicker(running: elapsed != null);
     if (call == null) {
@@ -68,40 +77,49 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
 
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final transport = ref.watch(
-      callTransportProvider((
-        accountId: widget.account.id,
-        roomToken: widget.conversation.token,
-      )),
-    );
+    final transport = ref.watch(callTransportProvider(key));
     final resolved = transport.valueOrNull;
-    final (String status, bool joinable) = switch (resolved) {
-      CallTransport.internal => (
-        strings.callBannerJoinUnsupported(strings.callTransportInternal),
-        true,
-      ),
-      CallTransport.externalHpb => (
-        strings.callBannerJoinUnsupported(strings.callTransportExternalHpb),
-        true,
-      ),
-      CallTransport.reauthenticationRequired => (
-        strings.callBannerTransportReauth,
-        false,
-      ),
-      CallTransport.roomUnavailable => (
-        strings.callBannerTransportRoomUnavailable,
-        false,
-      ),
-      CallTransport.unavailable => (
-        strings.callBannerTransportUnavailable,
-        false,
-      ),
-      null when transport.hasError => (
-        strings.callBannerTransportUnavailable,
-        false,
-      ),
-      null => (strings.callBannerTransportChecking, false),
-    };
+    final boundLifecycle = lifecycle?.valueOrNull;
+    final lifecycleReady = boundLifecycle?.matches(key) ?? false;
+    final lifecycleFailed =
+        (lifecycle?.hasError ?? false) ||
+        (boundLifecycle != null && !lifecycleReady);
+    final (String status, bool joinable) = !lifecycleReady
+        ? (
+            lifecycleFailed
+                ? _callLifecycleErrorText(lifecycle?.error, strings)
+                : strings.callBannerTransportChecking,
+            false,
+          )
+        : switch (resolved) {
+            CallTransport.internal => (
+              strings.callBannerJoinUnsupported(strings.callTransportInternal),
+              true,
+            ),
+            CallTransport.externalHpb => (
+              strings.callBannerJoinUnsupported(
+                strings.callTransportExternalHpb,
+              ),
+              true,
+            ),
+            CallTransport.reauthenticationRequired => (
+              strings.callBannerTransportReauth,
+              false,
+            ),
+            CallTransport.roomUnavailable => (
+              strings.callBannerTransportRoomUnavailable,
+              false,
+            ),
+            CallTransport.unavailable => (
+              strings.callBannerTransportUnavailable,
+              false,
+            ),
+            null when transport.hasError => (
+              strings.callBannerTransportUnavailable,
+              false,
+            ),
+            null => (strings.callBannerTransportChecking, false),
+          };
 
     return Container(
       key: const Key('call-banner'),
@@ -165,11 +183,38 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
               onPressed: null,
               child: Text(strings.callBannerJoin),
             ),
+          ] else if (lifecycleFailed) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              key: const Key('call-banner-lifecycle-retry'),
+              tooltip: strings.retry,
+              color: scheme.onPrimaryContainer,
+              onPressed: () {
+                ref.invalidate(callTransportProvider(key));
+                ref.invalidate(callLifecycleStatusProvider(key));
+              },
+              icon: const Icon(Icons.refresh_rounded),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+String _callLifecycleErrorText(Object? error, AppLocalizations strings) {
+  if (error is! CallLifecycleException) {
+    return strings.callBannerTransportUnavailable;
+  }
+  return switch (error.code) {
+    CallLifecycleError.accountMissing ||
+    CallLifecycleError.credentialMissing ||
+    CallLifecycleError.reauthenticationRequired =>
+      strings.callBannerTransportReauth,
+    CallLifecycleError.roomMissing ||
+    CallLifecycleError.forbidden => strings.callBannerTransportRoomUnavailable,
+    _ => strings.callBannerTransportUnavailable,
+  };
 }
 
 /// `h:mm:ss` once a call passes an hour, `mm:ss` before that.
