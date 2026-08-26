@@ -192,6 +192,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('time to first painted timeline against cached history size', (
+    tester,
+  ) async {
+    for (final messages in const <int>[500, 5000, 20000]) {
+      final conversation = await seedRoom('open$messages', messages);
+      final elapsed = Stopwatch()..start();
+      await tester.pumpWidget(
+        app(
+          PresenceChatRoomScreen(account: account, conversation: conversation),
+        ),
+      );
+      await tester.pump();
+      elapsed.stop();
+      final key = keyFor(conversation);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ChatRoomPane)),
+      );
+      final emitted = container.read(chatMessagesProvider(key)).valueOrNull;
+      // ignore: avoid_print
+      print(
+        'OPEN cached=$messages emitted=${emitted?.length} '
+        'first_paint=${elapsed.elapsedMilliseconds}ms',
+      );
+      expect(emitted, hasLength(messages));
+      // Measured at 90/140/231ms for 500/5000/20000 in a debug VM run, so the
+      // query is not what makes a deep room slow to open and no windowing is
+      // warranted. Generous bound: this only fires if that stops being true.
+      expect(
+        elapsed.elapsed,
+        lessThan(const Duration(seconds: 2)),
+        reason: 'opening a deep room must not stall on the message query',
+      );
+      await tester.pumpWidget(app(const SizedBox.shrink()));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('visiting many rooms does not accumulate their message lists', (
     tester,
   ) async {
