@@ -42,6 +42,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get addServerTitle => 'Přidat Nextcloud server';
 
   @override
+  String get reauthenticateAccountTitle => 'Znovu se přihlásit k tomuto účtu';
+
+  @override
   String get serverAddressLabel => 'Adresa serveru';
 
   @override
@@ -49,6 +52,9 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get connect => 'Pokračovat';
+
+  @override
+  String get reauthenticateAccountAction => 'Přihlásit se znovu';
 
   @override
   String get checkingServer => 'Kontroluji server…';
@@ -101,6 +107,10 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get talkUnavailable => 'Nextcloud Talk není pro tento účet dostupný.';
+
+  @override
+  String get reauthenticateAccountMismatch =>
+      'Přihlaste se ke stejnému účtu. Uložený účet nebyl změněn.';
 
   @override
   String get localPersistenceFailed =>

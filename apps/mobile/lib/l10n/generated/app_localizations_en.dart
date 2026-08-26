@@ -42,6 +42,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addServerTitle => 'Add a Nextcloud server';
 
   @override
+  String get reauthenticateAccountTitle => 'Sign in to this account again';
+
+  @override
   String get serverAddressLabel => 'Server address';
 
   @override
@@ -49,6 +52,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get connect => 'Continue';
+
+  @override
+  String get reauthenticateAccountAction => 'Sign in again';
 
   @override
   String get checkingServer => 'Checking the server…';
@@ -101,6 +107,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get talkUnavailable =>
       'Nextcloud Talk is not available for this account.';
+
+  @override
+  String get reauthenticateAccountMismatch =>
+      'Sign in with the same account. The stored account was not changed.';
 
   @override
   String get localPersistenceFailed =>

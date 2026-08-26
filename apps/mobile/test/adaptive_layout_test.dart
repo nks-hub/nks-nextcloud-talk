@@ -58,6 +58,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('reauthentication locks the stored server identity', (
+    tester,
+  ) async {
+    const account = StoredAccount(
+      id: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeaturesJson: '[]',
+      selected: true,
+      createdAtMillis: 1767225600000,
+      lastSyncError: 'reauthenticationRequired',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        child: localizedTestApp(
+          home: const OnboardingScreen(reauthenticateAccount: account),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final serverField = tester.widget<TextField>(find.byType(TextField));
+    expect(serverField.controller?.text, account.serverUrl);
+    expect(serverField.enabled, isFalse);
+    expect(find.text('Sign in to this account again'), findsOneWidget);
+    expect(find.text('Sign in again'), findsOneWidget);
+  });
+
+  testWidgets('reauthentication notice exposes an explicit recovery action', (
+    tester,
+  ) async {
+    await _setViewport(tester, const Size(390, 844));
+    var calls = 0;
+    const account = StoredAccount(
+      id: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeaturesJson: '[]',
+      selected: true,
+      createdAtMillis: 1767225600000,
+      lastSyncError: 'reauthenticationRequired',
+    );
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: ConversationWorkspace(
+          account: account,
+          accounts: const [account],
+          conversations: const [],
+          selectedConversationToken: null,
+          loading: false,
+          syncing: false,
+          onRefresh: _completedRefresh,
+          onReauthenticate: () async {
+            calls++;
+          },
+          onSelectAccount: _ignoreString,
+          onAddAccount: _ignore,
+          onOpenConversation: _ignoreConversation,
+          onSelectConversation: _ignoreConversation,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('reauthenticate-account')));
+    await tester.pump();
+
+    expect(calls, 1);
+    expect(find.text('This account must be signed in again.'), findsOneWidget);
+  });
+
   testWidgets('conversation shell switches between desktop and compact modes', (
     tester,
   ) async {

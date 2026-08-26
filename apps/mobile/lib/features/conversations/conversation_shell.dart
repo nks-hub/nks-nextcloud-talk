@@ -324,6 +324,29 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     );
   }
 
+  Future<void> _reauthenticate(StoredAccount account) async {
+    var completed = false;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => OnboardingScreen(
+          reauthenticateAccount: account,
+          onAccountAdded: (updated) {
+            if (updated.id != account.id) {
+              return;
+            }
+            completed = true;
+            Navigator.of(routeContext).pop();
+          },
+        ),
+      ),
+    );
+    if (!mounted || !completed || _selectedAccountId != account.id) {
+      return;
+    }
+    _scheduledAccountId = account.id;
+    await _replaceLiveSync(account.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(appIconBadgeSyncProvider);
@@ -352,6 +375,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           loading: conversationsValue.isLoading,
           syncing: _syncingAccountId == selected.id,
           onRefresh: () => _refresh(selected.id),
+          onReauthenticate: () => _reauthenticate(selected),
           onSelectAccount: _selectAccount,
           onAddAccount: _addAccount,
           onOpenConversation: (conversation) {

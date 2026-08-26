@@ -11,6 +11,7 @@ final class ConversationWorkspace extends StatelessWidget {
     required this.loading,
     required this.syncing,
     required this.onRefresh,
+    this.onReauthenticate,
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onOpenConversation,
@@ -29,6 +30,7 @@ final class ConversationWorkspace extends StatelessWidget {
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
+  final Future<void> Function()? onReauthenticate;
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onOpenConversation;
@@ -47,6 +49,7 @@ final class ConversationWorkspace extends StatelessWidget {
             loading: loading,
             syncing: syncing,
             onRefresh: onRefresh,
+            onReauthenticate: onReauthenticate,
             onSelectAccount: onSelectAccount,
             onAddAccount: onAddAccount,
             onOpenConversation: onOpenConversation,
@@ -66,6 +69,7 @@ final class ConversationWorkspace extends StatelessWidget {
           loading: loading,
           syncing: syncing,
           onRefresh: onRefresh,
+          onReauthenticate: onReauthenticate,
           onSelectAccount: onSelectAccount,
           onAddAccount: onAddAccount,
           onSelectConversation: onSelectConversation,
@@ -93,6 +97,7 @@ final class _CompactShell extends StatelessWidget {
     required this.loading,
     required this.syncing,
     required this.onRefresh,
+    this.onReauthenticate,
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onOpenConversation,
@@ -105,6 +110,7 @@ final class _CompactShell extends StatelessWidget {
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
+  final Future<void> Function()? onReauthenticate;
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onOpenConversation;
@@ -164,7 +170,10 @@ final class _CompactShell extends StatelessWidget {
         children: [
           if (syncing) const LinearProgressIndicator(minHeight: 3),
           if (account.lastSyncError != null)
-            _SyncNotice(errorCode: account.lastSyncError!),
+            _SyncNotice(
+              errorCode: account.lastSyncError!,
+              onReauthenticate: onReauthenticate,
+            ),
           Expanded(
             child: ConversationListView(
               account: account,
@@ -196,6 +205,7 @@ final class _ExpandedShell extends StatelessWidget {
     required this.loading,
     required this.syncing,
     required this.onRefresh,
+    this.onReauthenticate,
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onSelectConversation,
@@ -209,6 +219,7 @@ final class _ExpandedShell extends StatelessWidget {
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
+  final Future<void> Function()? onReauthenticate;
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onSelectConversation;
@@ -275,7 +286,10 @@ final class _ExpandedShell extends StatelessWidget {
                   ),
                   if (syncing) const LinearProgressIndicator(minHeight: 3),
                   if (account.lastSyncError != null)
-                    _SyncNotice(errorCode: account.lastSyncError!),
+                    _SyncNotice(
+                      errorCode: account.lastSyncError!,
+                      onReauthenticate: onReauthenticate,
+                    ),
                   const Divider(),
                   Expanded(
                     child: ConversationListView(
@@ -308,15 +322,23 @@ final class _ExpandedShell extends StatelessWidget {
 }
 
 final class _SyncNotice extends StatelessWidget {
-  const _SyncNotice({required this.errorCode});
+  const _SyncNotice({required this.errorCode, this.onReauthenticate});
 
   final String errorCode;
+  final Future<void> Function()? onReauthenticate;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final message = _syncErrorMessage(strings, errorCode);
+    final error = ConversationSyncError.values
+        .where((value) => value.name == errorCode)
+        .firstOrNull;
+    final canReauthenticate =
+        onReauthenticate != null &&
+        (error == ConversationSyncError.credentialMissing ||
+            error == ConversationSyncError.reauthenticationRequired);
     return Semantics(
       liveRegion: true,
       child: Container(
@@ -333,6 +355,15 @@ final class _SyncNotice extends StatelessWidget {
                 style: TextStyle(color: scheme.onErrorContainer),
               ),
             ),
+            if (canReauthenticate)
+              TextButton(
+                key: const Key('reauthenticate-account'),
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onErrorContainer,
+                ),
+                onPressed: onReauthenticate,
+                child: Text(strings.reauthenticateAccountAction),
+              ),
           ],
         ),
       ),

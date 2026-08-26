@@ -148,6 +148,12 @@ final class ConversationSyncService {
         ConversationSyncError.accountMissing,
       );
     }
+    if (account.lastSyncError ==
+        ConversationSyncError.reauthenticationRequired.name) {
+      throw const ConversationSyncException(
+        ConversationSyncError.reauthenticationRequired,
+      );
+    }
     final appPassword = await _credentials.readAppPassword(accountId);
     if (appPassword == null) {
       await _fail(accountId, ConversationSyncError.credentialMissing);

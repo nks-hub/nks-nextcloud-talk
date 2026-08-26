@@ -158,6 +158,12 @@ abstract class AppLocalizations {
   /// **'Add a Nextcloud server'**
   String get addServerTitle;
 
+  /// No description provided for @reauthenticateAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to this account again'**
+  String get reauthenticateAccountTitle;
+
   /// No description provided for @serverAddressLabel.
   ///
   /// In en, this message translates to:
@@ -175,6 +181,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue'**
   String get connect;
+
+  /// No description provided for @reauthenticateAccountAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again'**
+  String get reauthenticateAccountAction;
 
   /// No description provided for @checkingServer.
   ///
@@ -265,6 +277,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nextcloud Talk is not available for this account.'**
   String get talkUnavailable;
+
+  /// No description provided for @reauthenticateAccountMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with the same account. The stored account was not changed.'**
+  String get reauthenticateAccountMismatch;
 
   /// No description provided for @localPersistenceFailed.
   ///

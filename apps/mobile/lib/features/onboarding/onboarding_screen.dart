@@ -12,16 +12,21 @@ import 'onboarding_coordinator.dart';
 enum _OnboardingPhase { entry, checking, openingLogin, waitingForLogin }
 
 final class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key, this.onAccountAdded});
+  const OnboardingScreen({
+    super.key,
+    this.onAccountAdded,
+    this.reauthenticateAccount,
+  });
 
   final ValueChanged<StoredAccount>? onAccountAdded;
+  final StoredAccount? reauthenticateAccount;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final TextEditingController _serverController = TextEditingController();
+  late final TextEditingController _serverController;
   final FocusNode _serverFocus = FocusNode();
   _OnboardingPhase _phase = _OnboardingPhase.entry;
   Object? _error;
@@ -29,6 +34,14 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   CancellationSignal? _cancellation;
 
   bool get _busy => _phase != _OnboardingPhase.entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _serverController = TextEditingController(
+      text: widget.reauthenticateAccount?.serverUrl,
+    );
+  }
 
   @override
   void dispose() {
@@ -64,7 +77,11 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final cancellation = CancellationSignal();
       _cancellation = cancellation;
       setState(() => _phase = _OnboardingPhase.waitingForLogin);
-      final account = await coordinator.waitForAccount(pending, cancellation);
+      final account = await coordinator.waitForAccount(
+        pending,
+        cancellation,
+        expectedAccountId: widget.reauthenticateAccount?.id,
+      );
       if (!mounted) {
         return;
       }
@@ -126,6 +143,7 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     serverFocus: _serverFocus,
                     busy: _busy,
                     phase: _phase,
+                    reauthentication: widget.reauthenticateAccount != null,
                     errorMessage: _errorMessage(strings, _error),
                     onConnect: _connect,
                   ),
@@ -143,6 +161,7 @@ final class _OnboardingContent extends StatelessWidget {
     required this.serverFocus,
     required this.busy,
     required this.phase,
+    required this.reauthentication,
     required this.errorMessage,
     required this.onConnect,
   });
@@ -151,6 +170,7 @@ final class _OnboardingContent extends StatelessWidget {
   final FocusNode serverFocus;
   final bool busy;
   final _OnboardingPhase phase;
+  final bool reauthentication;
   final String? errorMessage;
   final VoidCallback onConnect;
 
@@ -179,6 +199,7 @@ final class _OnboardingContent extends StatelessWidget {
                       focusNode: serverFocus,
                       busy: busy,
                       phase: phase,
+                      reauthentication: reauthentication,
                       errorMessage: errorMessage,
                       onConnect: onConnect,
                     ),
@@ -199,6 +220,7 @@ final class _OnboardingContent extends StatelessWidget {
                     focusNode: serverFocus,
                     busy: busy,
                     phase: phase,
+                    reauthentication: reauthentication,
                     errorMessage: errorMessage,
                     onConnect: onConnect,
                   ),
@@ -316,6 +338,7 @@ final class _ServerCard extends StatelessWidget {
     required this.focusNode,
     required this.busy,
     required this.phase,
+    required this.reauthentication,
     required this.errorMessage,
     required this.onConnect,
   });
@@ -324,6 +347,7 @@ final class _ServerCard extends StatelessWidget {
   final FocusNode focusNode;
   final bool busy;
   final _OnboardingPhase phase;
+  final bool reauthentication;
   final String? errorMessage;
   final VoidCallback onConnect;
 
@@ -337,14 +361,16 @@ final class _ServerCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              strings.addServerTitle,
+              reauthentication
+                  ? strings.reauthenticateAccountTitle
+                  : strings.addServerTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 20),
             TextField(
               controller: controller,
               focusNode: focusNode,
-              enabled: !busy,
+              enabled: !busy && !reauthentication,
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.url],
@@ -382,7 +408,8 @@ final class _ServerCard extends StatelessWidget {
   }
 
   String _buttonLabel(AppLocalizations strings) => switch (phase) {
-    _OnboardingPhase.entry => strings.connect,
+    _OnboardingPhase.entry =>
+      reauthentication ? strings.reauthenticateAccountAction : strings.connect,
     _OnboardingPhase.checking => strings.checkingServer,
     _OnboardingPhase.openingLogin => strings.openingLogin,
     _OnboardingPhase.waitingForLogin => strings.waitingForLogin,
@@ -494,6 +521,8 @@ String? _errorMessage(AppLocalizations strings, Object? error) {
       OnboardingFailureCode.browserUnavailable => strings.browserUnavailable,
       OnboardingFailureCode.loginTimedOut => strings.loginTimedOut,
       OnboardingFailureCode.talkUnavailable => strings.talkUnavailable,
+      OnboardingFailureCode.accountIdentityMismatch =>
+        strings.reauthenticateAccountMismatch,
       OnboardingFailureCode.localPersistence => strings.localPersistenceFailed,
     },
     NextcloudApiException(:final code) => switch (code) {

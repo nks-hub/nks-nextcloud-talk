@@ -154,8 +154,7 @@ void main() {
 
       Map<String, Object?> firstRoom(Map<String, Object?> response) {
         final ocs = response['ocs']! as Map<String, Object?>;
-        return (ocs['data']! as List<Object?>).first!
-            as Map<String, Object?>;
+        return (ocs['data']! as List<Object?>).first! as Map<String, Object?>;
       }
 
       final statusFull = response();
@@ -636,8 +635,10 @@ void main() {
   );
 
   test('capabilities 401 enters the reauthentication lane', () async {
+    var requests = 0;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
+        requests++;
         expect(request.url.path, endsWith('/cloud/capabilities'));
         return http.Response('', 401);
       }),
@@ -665,6 +666,17 @@ void main() {
       account?.lastSyncError,
       ConversationSyncError.reauthenticationRequired.name,
     );
+    await expectLater(
+      service.sync('account-a'),
+      throwsA(
+        isA<ConversationSyncException>().having(
+          (error) => error.code,
+          'code',
+          ConversationSyncError.reauthenticationRequired,
+        ),
+      ),
+    );
+    expect(requests, 1, reason: 'durable re-auth state must stop retry loops');
   });
 
   test('transport cancellation stops without persisting an error', () async {

@@ -19,6 +19,7 @@ enum OnboardingFailureCode {
   browserUnavailable,
   loginTimedOut,
   talkUnavailable,
+  accountIdentityMismatch,
   localPersistence,
 }
 
@@ -170,8 +171,9 @@ final class OnboardingCoordinator {
 
   Future<StoredAccount> waitForAccount(
     PendingLogin pending,
-    CancellationSignal cancellation,
-  ) async {
+    CancellationSignal cancellation, {
+    String? expectedAccountId,
+  }) async {
     final deadline = DateTime.now().toUtc().add(loginTimeout);
     while (DateTime.now().toUtc().isBefore(deadline)) {
       cancellation.throwIfCancelled();
@@ -182,6 +184,7 @@ final class OnboardingCoordinator {
           pending: pending,
           loginCredentials: credentials,
           cancellation: cancellation,
+          expectedAccountId: expectedAccountId,
         );
       }
       await Future.any<void>([
@@ -197,7 +200,30 @@ final class OnboardingCoordinator {
     required PendingLogin pending,
     required LoginFlowCredentials loginCredentials,
     required CancellationSignal cancellation,
+    required String? expectedAccountId,
   }) async {
+    final expected = expectedAccountId == null
+        ? null
+        : await _accounts.getAccount(expectedAccountId);
+    if (expectedAccountId != null &&
+        (expected == null ||
+            expected.serverUrl != pending.server.value ||
+            expected.loginName != loginCredentials.loginName)) {
+      try {
+        await _api.revokeAppPassword(
+          server: pending.server,
+          loginName: loginCredentials.loginName,
+          appPassword: loginCredentials.appPassword,
+        );
+      } on Object {
+        // The identity mismatch remains authoritative and no credential is
+        // persisted even when the server cannot confirm cleanup.
+      }
+      throw const OnboardingFailure(
+        OnboardingFailureCode.accountIdentityMismatch,
+      );
+    }
+
     final capabilities = await _api.getAuthenticatedCapabilities(
       server: pending.server,
       loginName: loginCredentials.loginName,
@@ -208,10 +234,12 @@ final class OnboardingCoordinator {
       throw const OnboardingFailure(OnboardingFailureCode.talkUnavailable);
     }
 
-    final existing = await _accounts.findByIdentity(
-      serverUrl: pending.server.value,
-      loginName: loginCredentials.loginName,
-    );
+    final existing =
+        expected ??
+        await _accounts.findByIdentity(
+          serverUrl: pending.server.value,
+          loginName: loginCredentials.loginName,
+        );
     final accountId = existing?.id ?? _uuid.v4();
     final String? previousPassword;
     try {

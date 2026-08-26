@@ -109,6 +109,7 @@ final class AccountRepository {
               talkFeaturesJson: Value(jsonEncode(sortedTalkFeatures)),
               selected: const Value(true),
               createdAtMillis: createdAt.toUtc().millisecondsSinceEpoch,
+              lastSyncError: const Value(null),
             ),
           );
       final account = await getAccount(accountId);

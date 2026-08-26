@@ -107,6 +107,28 @@ void main() {
     expect(account.selected, isTrue);
     expect(interceptor.rejectedSelects, 0);
   });
+
+  test('authenticated account upsert clears a durable sync error', () async {
+    await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    await repository.recordSyncError('account-a', 'reauthenticationRequired');
+
+    final account = await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      createdAt: DateTime.utc(2026, 1, 1),
+      talkFeatures: const {'conversation-v4'},
+    );
+
+    expect(account.lastSyncError, null);
+  });
 }
 
 final class _RejectOutsideTransactionAccountSelects extends QueryInterceptor {

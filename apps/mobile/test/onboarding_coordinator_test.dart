@@ -111,6 +111,92 @@ void main() {
     },
   );
 
+  test('reauthenticates only the requested stored account identity', () async {
+    await repository.upsertAccount(
+      accountId: 'existing-account',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    await repository.recordSyncError(
+      'existing-account',
+      'reauthenticationRequired',
+    );
+    vault.values['existing-account'] = 'expired-app-password';
+    final api = _onboardingApi(withTalk: true);
+    addTearDown(api.close);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final pending = await coordinator.start('https://cloud.example.invalid');
+    final account = await coordinator.waitForAccount(
+      pending,
+      CancellationSignal(),
+      expectedAccountId: 'existing-account',
+    );
+
+    expect(account.id, 'existing-account');
+    expect(account.lastSyncError, null);
+    expect(vault.values['existing-account'], 'fixture-app-password-never-use');
+    expect(await repository.watchAccounts().first, hasLength(1));
+  });
+
+  test(
+    'wrong reauthentication identity never replaces the credential',
+    () async {
+      await repository.upsertAccount(
+        accountId: 'existing-account',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'different-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      await repository.recordSyncError(
+        'existing-account',
+        'reauthenticationRequired',
+      );
+      vault.values['existing-account'] = 'expired-app-password';
+      var revokeCalls = 0;
+      final api = _onboardingApi(withTalk: true, onRevoke: () => revokeCalls++);
+      addTearDown(api.close);
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+        pollInterval: Duration.zero,
+      );
+
+      final pending = await coordinator.start('https://cloud.example.invalid');
+      await expectLater(
+        coordinator.waitForAccount(
+          pending,
+          CancellationSignal(),
+          expectedAccountId: 'existing-account',
+        ),
+        throwsA(
+          isA<OnboardingFailure>().having(
+            (error) => error.code,
+            'code',
+            OnboardingFailureCode.accountIdentityMismatch,
+          ),
+        ),
+      );
+
+      expect(vault.values['existing-account'], 'expired-app-password');
+      final account = await repository.getAccount('existing-account');
+      expect(account?.lastSyncError, 'reauthenticationRequired');
+      expect(await repository.watchAccounts().first, hasLength(1));
+      expect(revokeCalls, 1);
+    },
+  );
+
   test('cancellation during login poll does not persist the account', () async {
     final pollStarted = Completer<void>();
     final releasePoll = Completer<void>();
@@ -322,6 +408,7 @@ HttpNextcloudApi _onboardingApi({
   Future<void>? pollGate,
   VoidCallback? onCapabilities,
   Future<void>? capabilitiesGate,
+  VoidCallback? onRevoke,
 }) {
   return HttpNextcloudApi(
     client: MockClient((request) async {
@@ -342,6 +429,23 @@ HttpNextcloudApi _onboardingApi({
         expect(request.headers['Authorization'], startsWith('Basic '));
         return http.Response(
           jsonEncode(capabilitiesJson(withTalk: withTalk)),
+          200,
+        );
+      }
+      if (request.method == 'DELETE' &&
+          request.url.path.endsWith('/core/apppassword')) {
+        onRevoke?.call();
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'ocs': <String, Object?>{
+              'meta': <String, Object?>{
+                'status': 'ok',
+                'statuscode': 200,
+                'message': 'OK',
+              },
+              'data': <String, Object?>{},
+            },
+          }),
           200,
         );
       }
