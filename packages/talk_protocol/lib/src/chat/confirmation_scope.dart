@@ -75,6 +75,13 @@ bool matchesAuthoritativeChatConfirmationScope({
         confirmation.parentRoomToken == null;
   }
   if (replyToToken == null) {
+    if (confirmation.parentDeleted) {
+      return confirmation.parentMessageId == replyTo &&
+          confirmation.parentRoomToken == null &&
+          confirmation.parentThreadId == null &&
+          confirmation.threadId != null &&
+          confirmation.threadId! > 0;
+    }
     return confirmation.parentMessageId == replyTo &&
         confirmation.parentRoomToken == parentRoomToken &&
         confirmation.parentThreadId != null &&

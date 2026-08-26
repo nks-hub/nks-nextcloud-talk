@@ -314,6 +314,77 @@ class FinalizeMessageTypeBindingTest(unittest.TestCase):
 
 
 class StateSafetyTest(unittest.TestCase):
+    def test_reply_deleted_parent_scope_is_exact(self) -> None:
+        operation = base_operation()
+        operation.update(
+            {
+                "replyTo": 42,
+                "phase": "awaitingConfirmation",
+                "remoteTempPath": "Talk/room-a/upload.bin",
+                "finalizationDispatched": True,
+                "lastOutcome": "awaiting-confirmation",
+            }
+        )
+        binding = operation_binding(operation)
+
+        def confirmation(
+            message_id: int,
+            *,
+            parent_id: int = 42,
+            parent_room: str | None = None,
+            parent_thread: int | None = None,
+            thread_id: int = 77,
+        ) -> dict[str, object]:
+            return {
+                **binding,
+                "referenceId": operation["referenceId"],
+                "systemMessage": "",
+                "messageType": "comment",
+                "messageId": message_id,
+                "hasFileRichObject": True,
+                "parentMessageId": parent_id,
+                "parentRoomToken": parent_room,
+                "parentThreadId": parent_thread,
+                "parentDeleted": True,
+                "replyToMessageId": None,
+                "replyToRoomToken": None,
+                "threadId": thread_id,
+            }
+
+        invalid_scopes = (
+            confirmation(601, parent_id=41),
+            confirmation(602, thread_id=0),
+            confirmation(603, parent_room="rooma123"),
+            confirmation(604, parent_thread=77),
+        )
+        for candidate in invalid_scopes:
+            with self.subTest(message_id=candidate["messageId"]):
+                attempt = deepcopy(operation)
+                self.assertEqual(
+                    "no-match",
+                    attachment_contract.apply_state_step(
+                        attempt,
+                        {
+                            "action": "confirm",
+                            "binding": binding,
+                            "matches": [candidate],
+                        },
+                    ),
+                )
+
+        self.assertEqual(
+            "completed",
+            attachment_contract.apply_state_step(
+                operation,
+                {
+                    "action": "confirm",
+                    "binding": binding,
+                    "matches": [confirmation(605)],
+                },
+            ),
+        )
+        self.assertEqual([605], operation["messageIds"])
+
     def test_operation_rejects_mixed_reply_and_named_thread_scope(self) -> None:
         operation = base_operation()
         operation.update({"replyTo": 42, "threadId": 84})

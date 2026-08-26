@@ -312,21 +312,67 @@ List<AttachmentMessageConfirmation> invalidReplyConfirmations(
   for (final scope
       in <
         ({
+          int parent,
           ConversationToken? room,
           int? parentThread,
           int childThread,
           bool deleted,
         })
       >[
-        (room: roomA, parentThread: 77, childThread: 78, deleted: false),
-        (room: roomA, parentThread: 76, childThread: 77, deleted: false),
-        (room: roomB, parentThread: 77, childThread: 77, deleted: false),
-        (room: null, parentThread: null, childThread: 77, deleted: true),
+        (
+          parent: 42,
+          room: roomA,
+          parentThread: 77,
+          childThread: 78,
+          deleted: false,
+        ),
+        (
+          parent: 42,
+          room: roomA,
+          parentThread: 76,
+          childThread: 77,
+          deleted: false,
+        ),
+        (
+          parent: 42,
+          room: roomB,
+          parentThread: 77,
+          childThread: 77,
+          deleted: false,
+        ),
+        (
+          parent: 41,
+          room: null,
+          parentThread: null,
+          childThread: 77,
+          deleted: true,
+        ),
+        (
+          parent: 42,
+          room: null,
+          parentThread: null,
+          childThread: 0,
+          deleted: true,
+        ),
+        (
+          parent: 42,
+          room: roomA,
+          parentThread: null,
+          childThread: 77,
+          deleted: true,
+        ),
+        (
+          parent: 42,
+          room: null,
+          parentThread: 77,
+          childThread: 77,
+          deleted: true,
+        ),
       ])
     confirmation(
       operation,
       530 + scope.childThread,
-      parentMessageId: 42,
+      parentMessageId: scope.parent,
       parentRoomToken: scope.room,
       parentThreadId: scope.parentThread,
       parentDeleted: scope.deleted,

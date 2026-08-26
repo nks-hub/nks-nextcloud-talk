@@ -170,6 +170,26 @@ void main() {
         expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
       }
 
+      final deletedParent = reconcileAttachmentConfirmation(
+        snapshot,
+        accountId: accountA,
+        jobId: operation.jobId,
+        confirmations: <AttachmentMessageConfirmation>[
+          confirmation(
+            operation,
+            561,
+            parentMessageId: 42,
+            parentDeleted: true,
+            threadId: 77,
+          ),
+        ],
+      );
+      expect(deletedParent.outcome, AttachmentRuntimeOutcome.completed);
+      expect(
+        _state(commit(snapshot, deletedParent), operation).messageIds,
+        <int>[561],
+      );
+
       final complete = reconcileAttachmentConfirmation(
         snapshot,
         accountId: accountA,

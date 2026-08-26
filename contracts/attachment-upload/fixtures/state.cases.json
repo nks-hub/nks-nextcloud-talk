@@ -770,16 +770,39 @@
             }
           ],
           "expectedOutcome": "no-match"
+        },
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 606,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": true,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 77
+            }
+          ],
+          "expectedOutcome": "completed"
         }
       ],
       "expected": {
-        "phase": "awaitingConfirmation",
+        "phase": "completed",
         "lane": "ready",
         "resumePhase": null,
         "finalizationDispatched": true,
         "cleanupRequired": false,
-        "messageIds": [],
-        "lastOutcome": "no-match"
+        "messageIds": [606],
+        "lastOutcome": "completed"
       }
     },
     {

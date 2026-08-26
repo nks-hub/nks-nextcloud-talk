@@ -168,6 +168,70 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test(
+    'deleted reply parent completes and releases its durable source once',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      var releaseCalls = 0;
+      var catchUpCalls = 0;
+      final sourceReleased = Completer<void>();
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        releaseSource: (_) async {
+          releaseCalls++;
+          sourceReleased.complete();
+        },
+        watchConfirmationCandidates: () => const Stream.empty(),
+        catchUpConfirmation:
+            ({
+              required accountId,
+              required roomToken,
+              required threadId,
+            }) async {
+              catchUpCalls++;
+              await fixture.cacheConfirmation(
+                messageId: 121,
+                deletedParentMessageId: 42,
+                threadId: 77,
+              );
+            },
+      );
+      addTearDown(service.close);
+
+      final session = await service.enqueue(
+        fixture.request(normalMaximum: 32, replyTo: 42),
+      );
+      final completed = await session.events
+          .firstWhere((event) => event.phase == AttachmentJobPhase.completed)
+          .timeout(const Duration(seconds: 2));
+      await sourceReleased.future.timeout(const Duration(seconds: 2));
+
+      final stored = await fixture.repository.getStoredJob(
+        accountId: session.accountId.value,
+        jobId: session.jobId.value,
+      );
+      expect(stored?.phase, AttachmentJobPhase.completed.name);
+      expect(stored?.messageIdsJson, '[121]');
+      expect(completed.messageIds, [121]);
+      expect(catchUpCalls, 1);
+      expect(releaseCalls, 1);
+    },
+  );
+
   test('ambiguous finalize waits for authoritative confirmation', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

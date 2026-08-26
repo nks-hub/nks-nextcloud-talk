@@ -323,6 +323,8 @@ final class _Fixture {
   Future<void> cacheConfirmation({
     required int messageId,
     bool hasFileRichObject = true,
+    int? deletedParentMessageId,
+    int? threadId,
   }) {
     final wire = <String, Object?>{
       'id': messageId,
@@ -350,7 +352,12 @@ final class _Fixture {
       'reactions': <String, Object?>{},
       'reactionsSelf': <Object?>[],
       'deleted': null,
-      'threadId': messageId,
+      if (deletedParentMessageId != null)
+        'parent': <String, Object?>{
+          'id': deletedParentMessageId,
+          'deleted': true,
+        },
+      'threadId': threadId ?? messageId,
       'isThread': false,
       'threadTitle': null,
       'threadReplies': 0,

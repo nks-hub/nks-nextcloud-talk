@@ -291,6 +291,14 @@ def _confirmation_scope_matches(
             and parent_message_id is None
             and parent_room_token is None
         )
+    if confirmation["parentDeleted"]:
+        return (
+            parent_message_id == operation["replyTo"]
+            and parent_room_token is None
+            and parent_thread_id is None
+            and thread_id is not None
+            and thread_id > 0
+        )
     return (
         parent_message_id == operation["replyTo"]
         and parent_room_token == operation["roomToken"]
