@@ -359,6 +359,14 @@ room snapshot, ze kterého se atomicky uloží `lastReadMessage`,
 Read je monotónní use case; mark-unread záměrně není. Tyto operation kinds se
 nesmějí sloučit do jednoho obecného `max(lastRead)` pravidla ani blind replaye.
 
+Commity `67026a0` a `df9d608` serializují obě mutace pouze v lane
+`(accountId, roomToken)`. Read → unread i unread → read proto zachovají pořadí
+v jedné room, zatímco jiná room nebo účet pokračují souběžně. DB a jiné
+očekávané runtime výjimky se mapují na `RoomSettingsError.invalidResponse`, ale
+programátorský `StateError` se propaguje; lane se po obou druzích chyby uvolní.
+Čerstvý společný běh `room_settings_read_marker_test.dart` a
+`chat_room_live_sync_test.dart` na `df9d608` prošel 21/21.
+
 Commit `e4840e5` přidává pravdivou Flutter projekci read stavu pro vlastní
 odchozí zprávy. `ChatRepository` joinuje outbox confirmation s přesným
 `(accountId, roomToken, scopeKey)` a reaktivně čte `lastCommonRead`. Stav `read`
@@ -417,6 +425,13 @@ single-flight guardem prochází i ruční resend. HTTP výsledek se smí apliko
 jen na operaci se shodným room, reference a reply kontextem. Prázdný úspěšný
 future výsledek (`200` s cursorem/common-read nebo `304`) ponechá operaci v
 `awaitingConfirmation`.
+
+Ordinary same-room reply může autoritativní history/future potvrdit také přes
+compact deleted parent. Ten musí mít přesně `parent.id == replyTo`, nesmí nést
+`parentRoomToken` ani `parentThreadId` a outer `threadId` musí být kladný. Tato
+výjimka platí po ambiguous POST i po restartu; nespouští nový POST a právě jedna
+shoda dokončí operaci. Jiný parent, doplněná parent metadata nebo nulový outer
+thread zůstávají bez shody.
 
 Named-thread přímá POST response a autoritativní catch-up nemají stejný shape.
 Při shodném outer `threadId == T` smí být přímá POST response bez parentu.
@@ -514,6 +529,8 @@ Named-thread request/response/outbox a DB reopen mají automatizovaný důkaz, a
 ne skutečný serverový ani zařízení round trip. Důkaz neprokazuje root live tok,
 history stránkování, read/unread, queued ani ambiguous outbox přes skutečný
 procesní restart, HPB relay, background scheduler nebo multi-server izolaci.
+Ani čerstvá read/unread brána 21/21 a deleted-parent reconciliation testy nejsou
+kombinovaným live-server + process-death důkazem.
 Chybí zvukově ověřené vyslovení a širší TalkBack navigace. Dočasná room byla
 odstraněná a její nepřítomnost ověřená; ostatní části zůstávají otevřenou bránou
 řezu 3.

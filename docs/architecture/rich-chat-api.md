@@ -82,6 +82,11 @@ směřuje na `messageId` vybrané reply nebo root zprávy, zatímco povinný
 nulový root i room/root mismatch a zachová původní request. Merge planner před
 aplikací odmítne account/server snapshot mismatch.
 
+Nested `first` a `last` jsou přijatelné jen při shodě room tokenu a canonical
+`threadId`. `first.messageId` musí být root threadu, `last.messageId` musí být
+rovný `lastMessageId` a obě zprávy musí nést `threadId == thread.id`. Neshoda
+se odmítne před vznikem merge candidate.
+
 Request builder vždy používá `format=json`, `OCS-APIRequest: true` a stabilní
 `User-Agent`. Query, form body a headers jsou immutable. Diagnostika nevypisuje
 room token, message text, hledaný text, emoji, rich parameters ani uživatelský
@@ -141,6 +146,8 @@ zahodí celý candidate.
   thread first/last i room preview. Aktualizuje se také immutable `wire` parenta.
 - Metadata vlákna s novým `lastMessageId`, ale bez těla nové zprávy, nezachová
   staré `lastMessage` pod nesprávným ID.
+- Metadata-only rename reprojektuje nový title do thread first/last/root,
+  všech room a parent kopií i jejich immutable wire v jednom candidate.
 - Reminder a schedule stav je klíčovaný uvnitř účtu a room.
 - Ambiguous schedule response stav nemění a nevytváří replay.
 
@@ -162,11 +169,10 @@ Aktuální lokální výsledek:
 - 1 OpenAPI dokument a 21 operací;
 - 23 response, 28 request, 8 capability, 9 render a 7 state fixture s
   8 transakčními kroky;
-- 10 Python validator unit testů;
-- 98 Dart rich-chat testů: 69 contract, 13 state, 15 security a 1 skutečný
+- 13 Python validator unit testů;
+- 102 Dart rich-chat testů pokrývajících contract, state, security a skutečný
   release AOT executable;
-- celý `talk_protocol` po thread binding opravě prochází 774 testy a analyzer
-  je bez nálezu.
+- scoped analyzer je bez nálezu.
 
 Historická attachment větev vznikla v `5d49cbb`, `9de5727` a `7ca580e`, ale
 uživatelské rozhodnutí D-028 ji nahradilo. Commit `2af2430` přepnul picker na
@@ -187,6 +193,7 @@ APK SHA-256
 prošlo příchozím thread smokem, screenshoty a pixelovým WCAG měřením; tento
 důkaz se nepřenáší na novější build. Nebyl spuštěný live round trip pro
 edit/delete, reaction mutation, pin, reminder nebo schedule ani jejich
-restart/reconciliation tok. Celý rich-chat mutation checklist musí ještě projít
-na `chatujmePixel`; background/killed Web Push a výkon navíc vyžadují fyzické
-Android zařízení.
+restart/reconciliation tok. Automatizovaný thread binding a rename důkaz nemá
+aktuální kombinovaný live-server + process-death protějšek. Celý rich-chat
+mutation checklist musí ještě projít na `chatujmePixel`; background/killed Web
+Push a výkon navíc vyžadují fyzické Android zařízení.

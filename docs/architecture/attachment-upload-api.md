@@ -163,6 +163,12 @@ vyžaduje kladné message ID, prázdný system message, file rich object a přes
 i `threadId` rovný canonical rootu. Nula shod zůstává pending a více shod je
 ambiguous.
 
+Ordinary reply smí přijmout compact deleted parent jen při přesném
+`parent.id == replyTo`, `parentRoomToken == null`, `parentThreadId == null` a
+kladném outer `threadId`. Stejný invariant platí po ambiguous finalize i při
+restart reconciliation. Klient finalize POST neopakuje; právě jedna
+autoritativní shoda dokončí job a jeho durable source se uvolní právě jednou.
+
 `ChatMediaComposer` používá `file_selector` pro galerii a obecný soubor a
 `image_picker` pro kameru, vytvoří app-owned kopii a po durable admission předá
 její vlastnictví attachment service. Stavový panel rozlišuje přípravu,
@@ -231,11 +237,16 @@ rtk C:\work\sources\flutter-sdk\flutter\bin\flutter.bat test `
 ```
 
 Kontrakt obsahuje 12 OCS fixture, 15 capability případů, 20 wire případů,
-7 DAV plánů s 11 stavovými výsledky, 3 XML fixture a 20 stavových scénářů.
-Python validator má 16 unit testů. Dne 26. srpna 2026 prošla aktuální kombinovaná
+7 DAV plánů s 11 stavovými výsledky, 3 XML fixture a 25 stavových scénářů.
+Python validator má 18 unit testů. Dne 26. srpna 2026 prošla aktuální kombinovaná
 pure Dart attachment sada contract, DAV, runtime, security a release AOT
 58/58. Aktuální počet celého `talk_protocol` je vedený v požadavkové matici,
 aby zde nezůstal historický součet z dřívějšího attachment milníku.
+
+Čerstvý scoped běh na aktuálním HEAD prošel 22/22 v
+`attachment_runtime_test.dart` a 27/27 v `attachment_service_test.dart`.
+Deleted ordinary-reply parent je pokrytý také po catch-upu/restartu včetně
+jediného uvolnění durable source.
 
 Původní Flutter `attachment_transport_test.dart` milník prošel 24. srpna 2026
 25/25. Dne 25. srpna prošla společná cílená sada transportu, repository,
@@ -256,6 +267,9 @@ Tento důkaz je automatizovaný a buildový, nikoli live běh proti serveru.
 Automatizované testy používají deterministický HTTP klient a testovací platformní
 backendy. Neprokazují aktuální live upload do Nextcloudu, skutečný mikrofon a
 playback, ztrátu procesu během každé durable fáze ani dva účty na dvou serverech.
+Zvlášť chybí kombinovaný live Nextcloud + process-death průchod pro ambiguous
+finalize a deleted-parent confirmation; automatizované restart testy jej
+nenahrazují.
 `chatujmePixel` proto ještě musí projít malý i chunked soubor, obrázek, kolizi
 jména, oprávnění a kvótu, restart mezi každými dvěma fázemi, cancel/cleanup a
 celý voice lifecycle včetně media reply sender/recipient toku. Kamera a obecné

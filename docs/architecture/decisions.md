@@ -183,6 +183,13 @@ Response se smí commitnout jen při shodě request anchoru s aktuálním cursor
 Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
 se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
 
+Read a mark-unread mutace se pořadově serializují pouze v lane
+`(accountId, roomToken)`. Zachová se tedy skutečné pořadí read → unread i
+unread → read v jedné room, zatímco jiné rooms a účty mohou pokračovat
+souběžně. Očekávané runtime a DB výjimky se na hranici služby mapují na
+`invalidResponse`, programátorský `StateError` se neskrývá a lane se po obou
+druzích chyby vždy uvolní. Žádná z těchto mutací nedostává blind replay.
+
 Ordinary reply view a named-thread network scope jsou oddělené projekce.
 Přechod z ordinary view do named threadu nesmí migrovat ordinary cursor ani
 posunout nový network scope. Root merge se smí promítnout jen do stejného
@@ -324,6 +331,12 @@ response je svázaný s účtem, kanonickým serverem a dostupným room/message/
 kontextem. Rich stav je account-scoped vrstva nad existujícím chat snapshotem a
 mění se jen přes single-use candidate plán.
 
+Nested `first` a `last` zprávy thread metadata jsou důvěryhodné jen při shodě
+room tokenu a canonical `threadId`. `first.id` musí být root threadu a
+`last.id` musí odpovídat `lastMessageId`; obě zprávy musí nést stejný canonical
+`threadId`. Metadata-only rename v jednom candidate reprojektuje nový title do
+cached first/last/root, všech jejich parent kopií a immutable wire reprezentací.
+
 Markdown se nepropouští přímo do Flutter widgetů. Balíček `markdown` vytvoří
 AST a vlastní renderer jej převede na bounded semantic tree s typovanými Rich
 Object Strings, neaktivním raw HTML a same-origin link policy. Plaintext i
@@ -340,9 +353,9 @@ vzniknout až samostatným kontraktem pro každý operation kind podle D-006.
 
 ### D-021: Příloha jako potvrzovaný durable dvoufázový job
 
-Stav: Přijato a implementováno v pure Dart runtime a Flutter HTTP transportu;
-Drift job store, orchestrace, live server a platformní UI zůstávají součástí
-řezu 5.
+Stav: Přijato a implementováno v pure Dart runtime, Flutter HTTP transportu,
+Drift job store a orchestraci; kombinovaný live-server/process-death a
+platformní lifecycle důkaz zůstávají součástí řezu 5.
 
 Příloha používá jeden durable job pro Talk OCS Draft probe, WebDAV normal nebo
 chunk upload, Talk finalize a následné potvrzení chatem. Job smí držet pouze
@@ -359,6 +372,13 @@ odeslané body i restart ve `finalizing` vedou do `awaitingConfirmation`, nikdy
 k blind POSTu. Job dokončí právě jedna account/server/room/reference-bound
 `file_shared` zpráva se správným `comment` nebo `voice-message` typem a file
 rich objektem. Nula shod není důkaz neprovedení a více shod zůstává ambiguous.
+
+Ordinary reply smí po ambiguous finalize nebo restartu přijmout compact deleted
+parent jen při přesném `parent.id == replyTo`, chybějících parent room/thread
+metadatech a kladném outer `threadId`. Named thread má oddělený deleted-root
+shape svázaný s canonical rootem. Klient po restartu neopakuje finalize POST;
+čeká na autoritativní catch-up a právě jedna shoda dokončí job i jednorázový
+cleanup jeho durable source.
 
 V jedné room platí FIFO a single-flight pro finalizaci. Cancel před finalize
 uklízí pouze jobem vlastněnou chunk session a Draft temp soubor; po zahájení
