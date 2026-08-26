@@ -189,7 +189,260 @@ void main() {
       );
     },
   );
+
+  test(
+    'private policy clears persisted common read until the server restores it',
+    () async {
+      final accountA = await _prepareAccount(
+        database: database,
+        accounts: accounts,
+        chat: chat,
+        accountId: 'account-a',
+        serverUrl: 'https://a.example.invalid',
+      );
+      final accountB = await _prepareAccount(
+        database: database,
+        accounts: accounts,
+        chat: chat,
+        accountId: 'account-b',
+        serverUrl: 'https://b.example.invalid',
+      );
+      await _prepareThreadViews(database, chat, accountA);
+
+      expect(
+        await chat.applyChatGetResponse(
+          await _chatGetResponse(
+            chat,
+            accountA,
+            profile: _commonReadProfile(readPrivacy: 1),
+          ),
+        ),
+        ChatMergeOutcome.converged,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountA.id,
+        threadId: null,
+        lastReadMessage: 108,
+        lastCommonRead: '0',
+        unreadMessages: 3,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountA.id,
+        threadId: 50,
+        lastReadMessage: 108,
+        lastCommonRead: '0',
+        unreadMessages: 3,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountB.id,
+        threadId: null,
+        lastReadMessage: 108,
+        lastCommonRead: '106',
+        unreadMessages: 3,
+      );
+      await _expectConversationMarker(
+        database,
+        accountId: accountA.id,
+        lastReadMessage: 108,
+        lastCommonReadMessage: 0,
+        unreadMessages: 3,
+      );
+
+      expect(
+        await chat.applyChatGetResponse(
+          await _chatGetResponse(
+            chat,
+            accountA,
+            profile: _commonReadProfile(readPrivacy: 0),
+          ),
+        ),
+        ChatMergeOutcome.converged,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountA.id,
+        threadId: null,
+        lastReadMessage: 108,
+        lastCommonRead: '0',
+        unreadMessages: 3,
+      );
+
+      expect(
+        await chat.applyChatGetResponse(
+          await _chatGetResponse(
+            chat,
+            accountA,
+            profile: _commonReadProfile(readPrivacy: 0),
+            marker: '118',
+          ),
+        ),
+        ChatMergeOutcome.commonReadUpdated,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountA.id,
+        threadId: null,
+        lastReadMessage: 108,
+        lastCommonRead: '118',
+        unreadMessages: 3,
+      );
+      await _expectMarkers(
+        chat,
+        accountId: accountA.id,
+        threadId: 50,
+        lastReadMessage: 108,
+        lastCommonRead: '118',
+        unreadMessages: 3,
+      );
+      await _expectConversationMarker(
+        database,
+        accountId: accountA.id,
+        lastReadMessage: 108,
+        lastCommonReadMessage: 118,
+        unreadMessages: 3,
+      );
+    },
+  );
+
+  test(
+    'common read invalidation rolls back with conversation persistence',
+    () async {
+      final account = await _prepareAccount(
+        database: database,
+        accounts: accounts,
+        chat: chat,
+        accountId: 'account-a',
+        serverUrl: 'https://a.example.invalid',
+      );
+      await database.customStatement('''
+      CREATE TRIGGER fail_common_read_invalidation
+      BEFORE UPDATE ON cached_conversations
+      BEGIN
+        SELECT RAISE(ABORT, 'forced common read rollback');
+      END
+    ''');
+
+      await expectLater(
+        chat.applyChatGetResponse(
+          await _chatGetResponse(
+            chat,
+            account,
+            profile: _commonReadProfile(readPrivacy: 1),
+          ),
+        ),
+        throwsA(anything),
+      );
+
+      await _expectMarkers(
+        chat,
+        accountId: account.id,
+        threadId: null,
+        lastReadMessage: 108,
+        lastCommonRead: '106',
+        unreadMessages: 3,
+      );
+      await _expectConversationMarker(
+        database,
+        accountId: account.id,
+        lastReadMessage: 108,
+        lastCommonReadMessage: 106,
+        unreadMessages: 3,
+      );
+    },
+  );
 }
+
+Future<ChatGetResponse> _chatGetResponse(
+  ChatRepository chat,
+  StoredAccount account, {
+  required ChatCapabilityProfile profile,
+  String? marker,
+}) async {
+  final scope = (await chat.getNetworkScope(
+    accountId: account.id,
+    roomToken: 'rooma123',
+    threadId: null,
+  ))!;
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse(account.id),
+    requestId: ChatRequestId.parse('common-read-${marker ?? 'absent'}'),
+    server: ServerBase.parse(account.serverUrl),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: profile,
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse(scope.futureCursor),
+    lastCommonRead: ChatCursor.parse(scope.lastCommonRead),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+    futureConverged: true,
+  );
+  if (marker == null) {
+    return decodeChatGetResponse(
+      request: request,
+      statusCode: 304,
+      body: Uint8List(0),
+    );
+  }
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 200,
+              'message': 'OK',
+            },
+            'data': <Object?>[],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(<String, String>{
+      'X-Chat-Last-Common-Read': marker,
+    }),
+  );
+}
+
+ChatCapabilityProfile _commonReadProfile({required int readPrivacy}) =>
+    ChatCapabilityProfile.fromSnapshot(
+      CapabilitySnapshot.fromJson(<String, Object?>{
+        'ocs': <String, Object?>{
+          'meta': <String, Object?>{
+            'status': 'ok',
+            'statuscode': 200,
+            'message': 'OK',
+          },
+          'data': <String, Object?>{
+            'version': <String, Object?>{
+              'major': 34,
+              'minor': 0,
+              'micro': 1,
+              'string': '34.0.1',
+              'edition': '',
+              'extendedSupport': false,
+            },
+            'capabilities': <String, Object?>{
+              'spreed': <String, Object?>{
+                'features': <Object?>['chat-v2', 'chat-read-status'],
+                'config': <String, Object?>{
+                  'chat': <String, Object?>{'read-privacy': readPrivacy},
+                },
+                'version': '24.0.2',
+              },
+            },
+          },
+        },
+      }, context: CapabilityContext.authenticated),
+      federated: false,
+    );
 
 Future<StoredAccount> _prepareAccount({
   required AppDatabase database,
@@ -349,7 +602,9 @@ Map<String, Object?> _messageWire({
     ..['messageParameters'] = <String, Object?>{}
     ..['isThread'] = namedThread;
   if (namedThread) {
-    message['threadId'] = messageId;
+    message
+      ..['threadId'] = messageId
+      ..['threadTitle'] = 'Named thread';
   } else {
     message.remove('threadId');
   }

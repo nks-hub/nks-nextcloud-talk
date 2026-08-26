@@ -557,15 +557,11 @@ final class ChatRepository {
       final result = planChatGetMerge(snapshot, response);
       final plan = result.plan;
       if (plan != null) {
-        final messages = plan.messageUpserts;
-        final candidate = plan.commit(snapshot);
-        await _persistAccount(
-          candidate.accounts[response.request.accountId]!,
-          messages: messages,
-          syncedScope: ChatScopeKey(
-            roomToken: response.request.roomToken,
-            threadId: response.request.threadId,
-          ),
+        await _persistChatGetCandidate(
+          response: response,
+          outcome: result.outcome,
+          candidate: plan.commit(snapshot),
+          messages: plan.messageUpserts,
         );
       }
       if (result.outcome != ChatMergeOutcome.rejected &&

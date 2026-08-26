@@ -145,7 +145,7 @@ void main() {
     expect(statuses.single.state, OutgoingMessageDeliveryState.sent);
   });
 
-  test('live common-read scope update advances sent status to read', () async {
+  test('live common-read update toggles sent and read status', () async {
     final database = openTestDatabase();
     addTearDown(database.close);
     final accounts = AccountRepository(database);
@@ -200,6 +200,20 @@ void main() {
       isTrue,
     );
     expect(iterator.current.single.state, OutgoingMessageDeliveryState.read);
+
+    await (database.update(database.chatScopes)..where(
+          (scope) =>
+              scope.accountId.equals('account-a') &
+              scope.roomToken.equals('rooma123') &
+              scope.scopeKey.equals('root'),
+        ))
+        .write(const ChatScopesCompanion(lastCommonRead: Value('0')));
+
+    expect(
+      await iterator.moveNext().timeout(const Duration(seconds: 2)),
+      isTrue,
+    );
+    expect(iterator.current.single.state, OutgoingMessageDeliveryState.sent);
   });
 }
 

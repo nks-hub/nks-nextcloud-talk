@@ -121,6 +121,9 @@ ChatMergeResult planChatGetMerge(
 
   ChatScopeState candidateScope;
   ChatMergeOutcome outcome;
+  final lastCommonRead = response.request.profile.commonReadStatus
+      ? response.lastCommonRead ?? scope.lastCommonRead
+      : null;
   switch (response.classification) {
     case ChatGetClassification.messages:
     case ChatGetClassification.invisibleCursorAdvance:
@@ -139,7 +142,7 @@ ChatMergeResult planChatGetMerge(
         futureCursor: response.request.direction == ChatFetchDirection.future
             ? cursor
             : null,
-        lastCommonRead: response.lastCommonRead,
+        lastCommonRead: lastCommonRead,
         futureConverged: response.request.direction == ChatFetchDirection.future
             ? false
             : null,
@@ -147,14 +150,20 @@ ChatMergeResult planChatGetMerge(
       );
       outcome = ChatMergeOutcome.applied;
     case ChatGetClassification.commonReadOnly:
-      candidateScope = scope.copyWith(lastCommonRead: response.lastCommonRead);
+      candidateScope = scope.copyWith(lastCommonRead: lastCommonRead);
       outcome = ChatMergeOutcome.commonReadUpdated;
     case ChatGetClassification.notModified:
       if (response.request.direction == ChatFetchDirection.history) {
-        candidateScope = scope.copyWith(hasHistory: false);
+        candidateScope = scope.copyWith(
+          lastCommonRead: lastCommonRead,
+          hasHistory: false,
+        );
         outcome = ChatMergeOutcome.historyExhausted;
       } else {
-        candidateScope = scope.copyWith(futureConverged: true);
+        candidateScope = scope.copyWith(
+          lastCommonRead: lastCommonRead,
+          futureConverged: true,
+        );
         outcome = ChatMergeOutcome.converged;
       }
     case ChatGetClassification.reauthenticationRequired:
@@ -461,7 +470,7 @@ ChatForegroundPollRequestPlan? planNextChatForegroundPoll(
     profile: session.profile,
     direction: ChatFetchDirection.future,
     cursor: binding.scope.futureCursor,
-    lastCommonRead: binding.scope.lastCommonRead,
+    lastCommonRead: binding.scope.lastCommonRead ?? ChatCursor.parse('0'),
     limit: 200,
     includeLastKnown: false,
     timeoutSeconds: isInitialCatchUp ? 0 : 30,

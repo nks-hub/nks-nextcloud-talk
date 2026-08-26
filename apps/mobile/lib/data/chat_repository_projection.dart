@@ -297,7 +297,9 @@ extension _ChatRepositoryProjection on ChatRepository {
         messageIds: messageIds,
         historyCursor: ChatCursor.parse(row.historyCursor),
         futureCursor: ChatCursor.parse(row.futureCursor),
-        lastCommonRead: ChatCursor.parse(row.lastCommonRead),
+        lastCommonRead: row.lastCommonRead == '0'
+            ? null
+            : ChatCursor.parse(row.lastCommonRead),
         lastReadMessage: row.lastReadMessage,
         unreadMessages: row.unreadMessages,
         hasHistory: row.hasHistory,
@@ -389,7 +391,7 @@ extension _ChatRepositoryProjection on ChatRepository {
               threadId: Value(key.threadId),
               historyCursor: scope.historyCursor.value,
               futureCursor: scope.futureCursor.value,
-              lastCommonRead: scope.lastCommonRead.value,
+              lastCommonRead: scope.lastCommonRead?.value ?? '0',
               lastReadMessage: scope.lastReadMessage,
               unreadMessages: scope.unreadMessages,
               hasHistory: scope.hasHistory,

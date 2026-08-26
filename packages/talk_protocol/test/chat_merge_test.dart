@@ -123,6 +123,118 @@ void main() {
     }
   });
 
+  group('common read invalidation', () {
+    for (final policy in <String>[
+      'private privacy',
+      'missing capability',
+      'federated room',
+    ]) {
+      test('$policy clears only the bound scope marker', () {
+        final snapshot = _commonReadSnapshot();
+        final accountA = snapshot.accounts[AccountId.parse('account-a')]!;
+        final otherRoomKey = ChatScopeKey(
+          roomToken: _token('roomb123'),
+          threadId: null,
+        );
+        final otherRoom = accountA.scopes[otherRoomKey]!;
+        final accountB = snapshot.accounts[AccountId.parse('account-b')]!;
+        final profile = switch (policy) {
+          'private privacy' => _commonReadProfile(readPrivacy: 1),
+          'missing capability' => _commonReadProfile(
+            readPrivacy: 0,
+            commonReadFeature: false,
+          ),
+          'federated room' => _commonReadProfile(
+            readPrivacy: 0,
+            federated: true,
+          ),
+          _ => throw StateError('Unknown policy'),
+        };
+
+        final result = planChatGetMerge(
+          snapshot,
+          _notModifiedResponse(_commonReadRequest(snapshot, profile: profile)),
+        );
+        final candidate = result.plan!.commit(snapshot);
+
+        expect(result.outcome, ChatMergeOutcome.converged);
+        expect(
+          candidate
+              .accounts[AccountId.parse('account-a')]!
+              .scopes[ChatScopeKey(
+                roomToken: _token('rooma123'),
+                threadId: null,
+              )]!
+              .lastCommonRead,
+          isNull,
+        );
+        expect(
+          identical(
+            candidate
+                .accounts[AccountId.parse('account-a')]!
+                .scopes[otherRoomKey],
+            otherRoom,
+          ),
+          isTrue,
+        );
+        expect(
+          identical(candidate.accounts[AccountId.parse('account-b')], accountB),
+          isTrue,
+        );
+      });
+    }
+
+    test('public policy restores only an authoritative server marker', () {
+      var snapshot = _commonReadSnapshot();
+      final privateRequest = _commonReadRequest(
+        snapshot,
+        profile: _commonReadProfile(readPrivacy: 1),
+      );
+      snapshot = planChatGetMerge(
+        snapshot,
+        _notModifiedResponse(privateRequest),
+      ).plan!.commit(snapshot);
+
+      final publicProfile = _commonReadProfile(readPrivacy: 0);
+      final markerlessRequest = _commonReadRequest(
+        snapshot,
+        profile: publicProfile,
+      );
+      snapshot = planChatGetMerge(
+        snapshot,
+        _notModifiedResponse(markerlessRequest),
+      ).plan!.commit(snapshot);
+      final key = ChatScopeKey(roomToken: _token('rooma123'), threadId: null);
+      expect(
+        snapshot
+            .accounts[AccountId.parse('account-a')]!
+            .scopes[key]!
+            .lastCommonRead,
+        isNull,
+      );
+
+      final authoritativeRequest = _commonReadRequest(
+        snapshot,
+        profile: publicProfile,
+      );
+      final result = planChatGetMerge(
+        snapshot,
+        _commonReadResponse(authoritativeRequest, marker: '95'),
+      );
+      snapshot = result.plan!.commit(snapshot);
+
+      expect(result.outcome, ChatMergeOutcome.commonReadUpdated);
+      expect(
+        snapshot
+            .accounts[AccountId.parse('account-a')]!
+            .scopes[key]!
+            .lastCommonRead
+            ?.value,
+        '95',
+      );
+    });
+  });
+
   test('merge plan is single-use and bound to its source snapshot', () {
     final snapshot = _snapshot(_object(cases.first['initialAccounts']));
     final step = _object((cases.first['steps']! as List<Object?>).first);
@@ -144,6 +256,133 @@ void main() {
   });
 }
 
+ChatRuntimeSnapshot _commonReadSnapshot() => _snapshot(<String, Object?>{
+  'account-a': <String, Object?>{
+    'laneState': 'ready',
+    'scopes': <String, Object?>{
+      'rooma123#root': _rawCommonReadScope('90'),
+      'roomb123#root': _rawCommonReadScope('70'),
+    },
+  },
+  'account-b': <String, Object?>{
+    'laneState': 'ready',
+    'scopes': <String, Object?>{'rooma123#root': _rawCommonReadScope('80')},
+  },
+});
+
+Map<String, Object?> _rawCommonReadScope(String lastCommonRead) =>
+    <String, Object?>{
+      'messageIds': <Object?>[100],
+      'historyCursor': '100',
+      'futureCursor': '100',
+      'lastCommonRead': lastCommonRead,
+      'lastReadMessage': 90,
+      'unreadMessages': 0,
+      'hasHistory': true,
+      'futureConverged': true,
+      'blocks': <Object?>[
+        <Object?>['100', '100'],
+      ],
+    };
+
+ChatFetchRequest _commonReadRequest(
+  ChatRuntimeSnapshot snapshot, {
+  required ChatCapabilityProfile profile,
+}) {
+  final account = snapshot.accounts[AccountId.parse('account-a')]!;
+  final roomToken = _token('rooma123');
+  final scope =
+      account.scopes[ChatScopeKey(roomToken: roomToken, threadId: null)]!;
+  return ChatFetchRequest(
+    accountId: account.accountId,
+    requestId: ChatRequestId.parse('common-read-request'),
+    server: account.server,
+    roomToken: roomToken,
+    profile: profile,
+    direction: ChatFetchDirection.future,
+    cursor: scope.futureCursor,
+    lastCommonRead: scope.lastCommonRead ?? ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+    futureConverged: true,
+  );
+}
+
+ChatGetResponse _notModifiedResponse(ChatFetchRequest request) =>
+    decodeChatGetResponse(
+      request: request,
+      statusCode: 304,
+      body: Uint8List(0),
+    );
+
+ChatGetResponse _commonReadResponse(
+  ChatFetchRequest request, {
+  required String marker,
+}) => decodeChatGetResponse(
+  request: request,
+  statusCode: 200,
+  body: Uint8List.fromList(
+    utf8.encode(
+      jsonEncode(<String, Object?>{
+        'ocs': <String, Object?>{
+          'meta': <String, Object?>{
+            'status': 'ok',
+            'statuscode': 200,
+            'message': 'OK',
+          },
+          'data': <Object?>[],
+        },
+      }),
+    ),
+  ),
+  headers: ChatResponseHeaders.fromMap(<String, String>{
+    'X-Chat-Last-Common-Read': marker,
+  }),
+);
+
+ChatCapabilityProfile _commonReadProfile({
+  required int readPrivacy,
+  bool commonReadFeature = true,
+  bool federated = false,
+  bool threads = false,
+}) => ChatCapabilityProfile.fromSnapshot(
+  CapabilitySnapshot.fromJson(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <String, Object?>{
+        'version': <String, Object?>{
+          'major': 34,
+          'minor': 0,
+          'micro': 1,
+          'string': '34.0.1',
+          'edition': '',
+          'extendedSupport': false,
+        },
+        'capabilities': <String, Object?>{
+          'spreed': <String, Object?>{
+            'features': <Object?>[
+              'chat-v2',
+              if (commonReadFeature) 'chat-read-status',
+              if (threads) 'threads',
+            ],
+            'config': <String, Object?>{
+              'chat': <String, Object?>{'read-privacy': readPrivacy},
+            },
+            'version': '24.0.2',
+          },
+        },
+      },
+    },
+  }, context: CapabilityContext.authenticated),
+  federated: federated,
+);
+
 ChatGetResponse _getResponse(
   Map<String, Object?> step,
   ChatAccountState account,
@@ -160,10 +399,7 @@ ChatGetResponse _getResponse(
     requestId: ChatRequestId.parse('merge-${step['fixture']}'),
     server: account.server,
     roomToken: _token(step['roomToken']),
-    profile: ChatCapabilityProfile.fromTalkFeatures(<Object?>[
-      'chat-v2',
-      if (threadId != null) 'threads',
-    ], federated: false),
+    profile: _commonReadProfile(readPrivacy: 0, threads: threadId != null),
     direction: direction,
     cursor: ChatCursor.parse(step['anchor']),
     lastCommonRead: ChatCursor.parse('0'),
@@ -277,7 +513,7 @@ void _expectScope(ChatScopeState actual, Map<String, Object?> expected) {
   expect(actual.messageIds, expected['messageIds']);
   expect(actual.historyCursor.value, expected['historyCursor']);
   expect(actual.futureCursor.value, expected['futureCursor']);
-  expect(actual.lastCommonRead.value, expected['lastCommonRead']);
+  expect(actual.lastCommonRead?.value, expected['lastCommonRead']);
   expect(actual.lastReadMessage, expected['lastReadMessage']);
   expect(actual.unreadMessages, expected['unreadMessages']);
   expect(actual.hasHistory, expected['hasHistory']);

@@ -82,7 +82,7 @@ final class ChatScopeState {
   final List<int> messageIds;
   final ChatCursor historyCursor;
   final ChatCursor futureCursor;
-  final ChatCursor lastCommonRead;
+  final ChatCursor? lastCommonRead;
   final int lastReadMessage;
   final int unreadMessages;
   final bool hasHistory;
@@ -93,7 +93,7 @@ final class ChatScopeState {
     Iterable<int>? messageIds,
     ChatCursor? historyCursor,
     ChatCursor? futureCursor,
-    ChatCursor? lastCommonRead,
+    Object? lastCommonRead = _unchanged,
     int? lastReadMessage,
     int? unreadMessages,
     bool? hasHistory,
@@ -103,7 +103,9 @@ final class ChatScopeState {
     messageIds: messageIds ?? this.messageIds,
     historyCursor: historyCursor ?? this.historyCursor,
     futureCursor: futureCursor ?? this.futureCursor,
-    lastCommonRead: lastCommonRead ?? this.lastCommonRead,
+    lastCommonRead: identical(lastCommonRead, _unchanged)
+        ? this.lastCommonRead
+        : lastCommonRead as ChatCursor?,
     lastReadMessage: lastReadMessage ?? this.lastReadMessage,
     unreadMessages: unreadMessages ?? this.unreadMessages,
     hasHistory: hasHistory ?? this.hasHistory,
