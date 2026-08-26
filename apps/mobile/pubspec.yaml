@@ -54,6 +54,7 @@ dependencies:
   flutter_svg: ^2.3.0
   drift: ^2.34.3
   drift_flutter: ^0.3.1
+  emojis: ^3.2.0
   uuid: ^4.6.0
   # Writing to the device gallery goes through MediaStore on Android 10+ and
   # PHPhotoLibrary on iOS; gal (BSD-3-Clause) covers both plus the pre-Android

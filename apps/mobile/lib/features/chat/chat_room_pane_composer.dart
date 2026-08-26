@@ -127,7 +127,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
           child: SizedBox(
             height: MediaQuery.sizeOf(sheetContext).height * 0.72,
             child: EmojiPicker(
+              accountId: AccountId.parse(_key.accountId),
+              usageStore: ref.read(emojiUsageStoreProvider),
               labels: _emojiPickerLabels(strings),
+              onClose: () => Navigator.of(sheetContext).pop(),
               onSelected: (choice) {
                 if (!mounted || _isReadOnlyNow()) {
                   Navigator.of(sheetContext).pop();
@@ -148,9 +151,20 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
 
   EmojiPickerLabels _emojiPickerLabels(AppLocalizations strings) {
     return EmojiPickerLabels(
+      title: strings.emojiPickerTitle,
+      closeTooltip: strings.emojiPickerCloseTooltip,
+      manageFavorites: strings.emojiManageFavorites,
+      finishManagingFavorites: strings.emojiFinishManagingFavorites,
+      favoriteModeHint: strings.emojiFavoriteModeHint,
+      addFavoriteLabel: strings.emojiAddFavoriteLabel,
+      removeFavoriteLabel: strings.emojiRemoveFavoriteLabel,
       searchHint: strings.emojiSearchHint,
       noResults: strings.emojiNoResults,
+      noRecents: strings.emojiNoRecents,
+      noFavorites: strings.emojiNoFavorites,
       categoryLabels: <EmojiCategory, String>{
+        EmojiCategory.favorites: strings.emojiCategoryFavorites,
+        EmojiCategory.recent: strings.emojiCategoryRecent,
         EmojiCategory.smileys: strings.emojiCategorySmileys,
         EmojiCategory.people: strings.emojiCategoryPeople,
         EmojiCategory.animals: strings.emojiCategoryAnimals,
@@ -159,6 +173,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         EmojiCategory.travel: strings.emojiCategoryTravel,
         EmojiCategory.objects: strings.emojiCategoryObjects,
         EmojiCategory.symbols: strings.emojiCategorySymbols,
+        EmojiCategory.flags: strings.emojiCategoryFlags,
       },
     );
   }

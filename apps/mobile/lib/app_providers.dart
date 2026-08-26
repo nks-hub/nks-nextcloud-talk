@@ -27,6 +27,7 @@ import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
+import 'features/chat/composer/emoji_usage_store.dart';
 import 'features/chat/composer/mention_suggestions.dart';
 import 'features/conversations/conversation_sync_service.dart';
 import 'features/newconversation/new_conversation_service.dart';
@@ -85,6 +86,10 @@ final attachmentRepositoryProvider = Provider<AttachmentRepository>((ref) {
 
 final credentialVaultProvider = Provider<CredentialVault>((ref) {
   return SecureCredentialVault();
+});
+
+final emojiUsageStoreProvider = Provider<EmojiUsageStore>((ref) {
+  return FileEmojiUsageStore();
 });
 
 final conversationAvatarRepositoryProvider =
@@ -673,6 +678,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     api: ref.watch(nextcloudApiProvider),
     mediaCache: ref.watch(chatMediaCacheProvider),
     mediaDiskCache: ref.watch(chatMediaDiskCacheProvider),
+    emojiUsage: ref.watch(emojiUsageStoreProvider),
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
     onRemovalStarted: (accountId) async {

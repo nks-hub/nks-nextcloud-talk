@@ -1,6 +1,14 @@
+import 'dart:async';
+
+import 'package:emojis/emoji.dart' as unicode;
 import 'package:flutter/material.dart';
+import 'package:talk_protocol/talk_protocol.dart';
+
+import 'emoji_usage_store.dart';
 
 enum EmojiCategory {
+  favorites,
+  recent,
   smileys,
   people,
   animals,
@@ -9,6 +17,7 @@ enum EmojiCategory {
   travel,
   objects,
   symbols,
+  flags,
 }
 
 final class EmojiChoice {
@@ -17,24 +26,25 @@ final class EmojiChoice {
     required this.name,
     required this.keywords,
     required this.category,
+    this.stableKey,
   });
 
   final String glyph;
   final String name;
   final List<String> keywords;
   final EmojiCategory category;
+  final String? stableKey;
 
   /// Stable widget-key slug derived from the English name, never localized.
-  String get keyName => name
+  String get keyName => (stableKey ?? name)
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-|-$'), '');
 
   /// Display name for [locale], falling back to the English one.
-  String nameFor(Locale? locale) => locale?.languageCode == 'cs'
-      ? (_czechEmoji[glyph]?.name ?? name)
-      : name;
+  String nameFor(Locale? locale) =>
+      locale?.languageCode == 'cs' ? (_czechEmoji[glyph]?.name ?? name) : name;
 
   /// Every name and keyword in every supported language, so search keeps
   /// working no matter which language the user types in.
@@ -58,11 +68,21 @@ final class EmojiTranslation {
 
 final class EmojiCatalog {
   EmojiCatalog(Iterable<EmojiChoice> choices)
-    : choices = List<EmojiChoice>.unmodifiable(choices);
+    : choices = List<EmojiChoice>.unmodifiable(choices) {
+    _byGlyph = <String, EmojiChoice>{
+      for (final choice in this.choices) choice.glyph: choice,
+    };
+    _searchIndex = <EmojiChoice, String>{
+      for (final choice in this.choices)
+        choice: choice.searchTerms.join('\n').toLowerCase(),
+    };
+  }
 
-  factory EmojiCatalog.standard() => EmojiCatalog(_standardEmoji);
+  factory EmojiCatalog.standard() => _standardCatalog;
 
   final List<EmojiChoice> choices;
+  late final Map<String, EmojiChoice> _byGlyph;
+  late final Map<EmojiChoice, String> _searchIndex;
 
   List<EmojiCategory> get categories => List<EmojiCategory>.unmodifiable({
     for (final choice in choices) choice.category,
@@ -70,6 +90,13 @@ final class EmojiCatalog {
 
   List<EmojiChoice> inCategory(EmojiCategory category) =>
       List.unmodifiable(choices.where((choice) => choice.category == category));
+
+  EmojiChoice? byGlyph(String glyph) => _byGlyph[glyph];
+
+  List<EmojiChoice> resolveGlyphs(Iterable<String> glyphs) =>
+      List<EmojiChoice>.unmodifiable(
+        glyphs.map(byGlyph).whereType<EmojiChoice>(),
+      );
 
   List<EmojiChoice> search(String query) {
     final normalized = query.trim().toLowerCase();
@@ -80,9 +107,7 @@ final class EmojiCatalog {
       choices.where(
         (choice) =>
             choice.glyph == normalized ||
-            choice.searchTerms.any(
-              (term) => term.toLowerCase().contains(normalized),
-            ),
+            (_searchIndex[choice]?.contains(normalized) ?? false),
       ),
     );
   }
@@ -90,25 +115,49 @@ final class EmojiCatalog {
 
 final class EmojiPickerLabels {
   const EmojiPickerLabels({
+    required this.title,
+    required this.closeTooltip,
+    required this.manageFavorites,
+    required this.finishManagingFavorites,
+    required this.favoriteModeHint,
+    required this.addFavoriteLabel,
+    required this.removeFavoriteLabel,
     required this.searchHint,
     required this.noResults,
+    required this.noRecents,
+    required this.noFavorites,
     required this.categoryLabels,
   });
 
+  final String title;
+  final String closeTooltip;
+  final String manageFavorites;
+  final String finishManagingFavorites;
+  final String favoriteModeHint;
+  final String addFavoriteLabel;
+  final String removeFavoriteLabel;
   final String searchHint;
   final String noResults;
+  final String noRecents;
+  final String noFavorites;
   final Map<EmojiCategory, String> categoryLabels;
 }
 
 final class EmojiPicker extends StatefulWidget {
   const EmojiPicker({
+    required this.accountId,
+    required this.usageStore,
     required this.labels,
+    required this.onClose,
     required this.onSelected,
     this.catalog,
     super.key,
   });
 
+  final AccountId accountId;
+  final EmojiUsageStore usageStore;
   final EmojiPickerLabels labels;
+  final VoidCallback onClose;
   final ValueChanged<EmojiChoice> onSelected;
   final EmojiCatalog? catalog;
 
@@ -118,23 +167,43 @@ final class EmojiPicker extends StatefulWidget {
 
 final class _EmojiPickerState extends State<EmojiPicker> {
   late final TextEditingController _searchController;
-  late EmojiCategory? _category;
+  EmojiCategory? _category;
+  EmojiUsage _usage = EmojiUsage.empty;
+  bool _usageLoaded = false;
+  bool _managingFavorites = false;
+  bool _updatingUsage = false;
+  bool _categoryExplicitlySelected = false;
+  int _loadGeneration = 0;
 
   EmojiCatalog get _catalog => widget.catalog ?? EmojiCatalog.standard();
+
+  List<EmojiCategory> get _categories => <EmojiCategory>[
+    EmojiCategory.favorites,
+    EmojiCategory.recent,
+    ..._catalog.categories,
+  ];
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_onSearchChanged);
     _category = _catalog.categories.firstOrNull;
+    unawaited(_loadUsage());
   }
 
   @override
   void didUpdateWidget(covariant EmojiPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.catalog != widget.catalog &&
-        !_catalog.categories.contains(_category)) {
+    if (oldWidget.accountId != widget.accountId ||
+        oldWidget.usageStore != widget.usageStore) {
+      _usage = EmojiUsage.empty;
+      _usageLoaded = false;
       _category = _catalog.categories.firstOrNull;
+      _categoryExplicitlySelected = false;
+      unawaited(_loadUsage());
+    } else if (oldWidget.catalog != widget.catalog &&
+        !_categories.contains(_category)) {
+      _category = _firstCategory(_usage);
     }
   }
 
@@ -148,17 +217,148 @@ final class _EmojiPickerState extends State<EmojiPicker> {
 
   void _onSearchChanged() => setState(() {});
 
+  Future<void> _loadUsage() async {
+    final generation = ++_loadGeneration;
+    final usage = await widget.usageStore.read(widget.accountId);
+    if (!mounted || generation != _loadGeneration) {
+      return;
+    }
+    setState(() {
+      _usage = usage;
+      _usageLoaded = true;
+      if (!_categoryExplicitlySelected && usage.recent.isNotEmpty) {
+        _category = EmojiCategory.recent;
+      } else {
+        _category ??= _firstCategory(usage);
+      }
+    });
+  }
+
+  EmojiCategory? _firstCategory(EmojiUsage usage) => usage.recent.isNotEmpty
+      ? EmojiCategory.recent
+      : _catalog.categories.firstOrNull;
+
+  List<EmojiChoice> _visibleChoices(String query) {
+    if (query.isNotEmpty) {
+      return _catalog.search(query);
+    }
+    return switch (_category) {
+      EmojiCategory.favorites => _catalog.resolveGlyphs(_usage.favorites),
+      EmojiCategory.recent => _catalog.resolveGlyphs(_usage.recent),
+      final EmojiCategory category => _catalog.inCategory(category),
+      null => _catalog.choices,
+    };
+  }
+
+  String _emptyLabel(String query) {
+    if (query.isNotEmpty) {
+      return widget.labels.noResults;
+    }
+    return switch (_category) {
+      EmojiCategory.favorites => widget.labels.noFavorites,
+      EmojiCategory.recent => widget.labels.noRecents,
+      _ => widget.labels.noResults,
+    };
+  }
+
+  Future<void> _activate(EmojiChoice choice) async {
+    if (_updatingUsage) {
+      return;
+    }
+    if (_managingFavorites) {
+      setState(() => _updatingUsage = true);
+      try {
+        final usage = await widget.usageStore.toggleFavorite(
+          widget.accountId,
+          choice.glyph,
+        );
+        if (mounted) {
+          setState(() => _usage = usage);
+        }
+      } on Object {
+        // A preference write must never break the picker.
+      } finally {
+        if (mounted) {
+          setState(() => _updatingUsage = false);
+        }
+      }
+      return;
+    }
+
+    widget.onSelected(choice);
+    try {
+      final usage = await widget.usageStore.recordSelection(
+        widget.accountId,
+        choice.glyph,
+      );
+      if (mounted) {
+        setState(() => _usage = usage);
+      }
+    } on Object {
+      // A preference write must never block composing or reacting.
+    }
+  }
+
+  void _toggleFavoriteManagement() {
+    setState(() => _managingFavorites = !_managingFavorites);
+  }
+
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.maybeLocaleOf(context);
     final query = _searchController.text.trim();
-    final choices = query.isNotEmpty
-        ? _catalog.search(query)
-        : _category == null
-        ? _catalog.choices
-        : _catalog.inCategory(_category!);
+    final choices = _visibleChoices(query);
     return Column(
       children: [
+        SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 16),
+                  child: Text(
+                    widget.labels.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const Key('emoji-manage-favorites'),
+                tooltip: _managingFavorites
+                    ? widget.labels.finishManagingFavorites
+                    : widget.labels.manageFavorites,
+                onPressed: _usageLoaded && !_updatingUsage
+                    ? _toggleFavoriteManagement
+                    : null,
+                icon: Icon(
+                  _managingFavorites ? Icons.done_rounded : Icons.star_outline,
+                ),
+              ),
+              IconButton(
+                key: const Key('emoji-close'),
+                tooltip: widget.labels.closeTooltip,
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (_managingFavorites)
+          Container(
+            key: const Key('emoji-favorite-mode-hint'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            child: Row(
+              children: [
+                const Icon(Icons.star_rounded, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(widget.labels.favoriteModeHint)),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(8),
           child: TextField(
@@ -172,29 +372,37 @@ final class _EmojiPickerState extends State<EmojiPicker> {
             ),
           ),
         ),
-        if (query.isEmpty && _catalog.categories.length > 1)
+        if (query.isEmpty)
           SizedBox(
             height: 48,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 4),
               children: [
-                for (final category in _catalog.categories)
+                for (final category in _categories)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: ChoiceChip(
                       key: Key('emoji-category-${category.name}'),
                       label: Text(widget.labels.categoryLabels[category] ?? ''),
                       selected: category == _category,
-                      onSelected: (_) => setState(() => _category = category),
+                      onSelected: (_) => setState(() {
+                        _category = category;
+                        _categoryExplicitlySelected = true;
+                      }),
                     ),
                   ),
               ],
             ),
           ),
         Expanded(
-          child: choices.isEmpty
-              ? Center(child: Text(widget.labels.noResults))
+          child:
+              !_usageLoaded &&
+                  (_category == EmojiCategory.recent ||
+                      _category == EmojiCategory.favorites)
+              ? const Center(child: CircularProgressIndicator())
+              : choices.isEmpty
+              ? Center(child: Text(_emptyLabel(query)))
               : GridView.builder(
                   padding: const EdgeInsets.all(8),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -204,26 +412,52 @@ final class _EmojiPickerState extends State<EmojiPicker> {
                   itemCount: choices.length,
                   itemBuilder: (context, index) {
                     final choice = choices[index];
+                    final favorite = _usage.favorites.contains(choice.glyph);
+                    final semanticsLabel = _managingFavorites
+                        ? '${choice.nameFor(locale)}. ${favorite ? widget.labels.removeFavoriteLabel : widget.labels.addFavoriteLabel}'
+                        : choice.nameFor(locale);
                     return Center(
                       child: Semantics(
                         key: Key('emoji-choice-${choice.keyName}'),
                         container: true,
                         button: true,
-                        label: choice.nameFor(locale),
-                        onTap: () => widget.onSelected(choice),
+                        label: semanticsLabel,
+                        selected: _managingFavorites && favorite,
+                        onTap: () => unawaited(_activate(choice)),
                         child: SizedBox.square(
                           dimension: 48,
                           child: InkWell(
                             excludeFromSemantics: true,
                             borderRadius: BorderRadius.circular(24),
-                            onTap: () => widget.onSelected(choice),
-                            child: Center(
-                              child: ExcludeSemantics(
-                                child: Text(
-                                  choice.glyph,
-                                  style: const TextStyle(fontSize: 26),
+                            onTap: _updatingUsage
+                                ? null
+                                : () => unawaited(_activate(choice)),
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: ExcludeSemantics(
+                                    child: Text(
+                                      choice.glyph,
+                                      style: const TextStyle(fontSize: 26),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                if (favorite)
+                                  PositionedDirectional(
+                                    top: 1,
+                                    end: 1,
+                                    child: Icon(
+                                      Icons.star_rounded,
+                                      key: Key(
+                                        'emoji-favorite-${choice.keyName}',
+                                      ),
+                                      size: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
@@ -237,194 +471,43 @@ final class _EmojiPickerState extends State<EmojiPicker> {
   }
 }
 
-const List<EmojiChoice> _standardEmoji = <EmojiChoice>[
-  EmojiChoice(
-    glyph: '😀',
-    name: 'Grinning face',
-    keywords: ['smile', 'happy'],
-    category: EmojiCategory.smileys,
-  ),
-  EmojiChoice(
-    glyph: '😂',
-    name: 'Face with tears of joy',
-    keywords: ['laugh', 'funny'],
-    category: EmojiCategory.smileys,
-  ),
-  EmojiChoice(
-    glyph: '🥰',
-    name: 'Smiling face with hearts',
-    keywords: ['love', 'affection'],
-    category: EmojiCategory.smileys,
-  ),
-  EmojiChoice(
-    glyph: '🤔',
-    name: 'Thinking face',
-    keywords: ['think', 'question'],
-    category: EmojiCategory.smileys,
-  ),
-  EmojiChoice(
-    glyph: '😢',
-    name: 'Crying face',
-    keywords: ['sad', 'tear'],
-    category: EmojiCategory.smileys,
-  ),
-  EmojiChoice(
-    glyph: '👋',
-    name: 'Waving hand',
-    keywords: ['wave', 'hello', 'goodbye'],
-    category: EmojiCategory.people,
-  ),
-  EmojiChoice(
-    glyph: '👍',
-    name: 'Thumbs up',
-    keywords: ['yes', 'approve', 'like'],
-    category: EmojiCategory.people,
-  ),
-  EmojiChoice(
-    glyph: '👎',
-    name: 'Thumbs down',
-    keywords: ['no', 'disapprove'],
-    category: EmojiCategory.people,
-  ),
-  EmojiChoice(
-    glyph: '🙏',
-    name: 'Folded hands',
-    keywords: ['please', 'thanks'],
-    category: EmojiCategory.people,
-  ),
-  EmojiChoice(
-    glyph: '💪',
-    name: 'Flexed biceps',
-    keywords: ['strong', 'strength'],
-    category: EmojiCategory.people,
-  ),
-  EmojiChoice(
-    glyph: '🐱',
-    name: 'Cat face',
-    keywords: ['cat', 'pet', 'animal'],
-    category: EmojiCategory.animals,
-  ),
-  EmojiChoice(
-    glyph: '🐶',
-    name: 'Dog face',
-    keywords: ['dog', 'pet', 'animal'],
-    category: EmojiCategory.animals,
-  ),
-  EmojiChoice(
-    glyph: '🦊',
-    name: 'Fox',
-    keywords: ['fox', 'animal'],
-    category: EmojiCategory.animals,
-  ),
-  EmojiChoice(
-    glyph: '🐼',
-    name: 'Panda',
-    keywords: ['panda', 'animal'],
-    category: EmojiCategory.animals,
-  ),
-  EmojiChoice(
-    glyph: '🍎',
-    name: 'Red apple',
-    keywords: ['apple', 'fruit'],
-    category: EmojiCategory.food,
-  ),
-  EmojiChoice(
-    glyph: '🍕',
-    name: 'Pizza',
-    keywords: ['pizza', 'food'],
-    category: EmojiCategory.food,
-  ),
-  EmojiChoice(
-    glyph: '☕',
-    name: 'Hot beverage',
-    keywords: ['coffee', 'tea', 'drink'],
-    category: EmojiCategory.food,
-  ),
-  EmojiChoice(
-    glyph: '🎂',
-    name: 'Birthday cake',
-    keywords: ['cake', 'birthday'],
-    category: EmojiCategory.food,
-  ),
-  EmojiChoice(
-    glyph: '⚽',
-    name: 'Soccer ball',
-    keywords: ['football', 'sport'],
-    category: EmojiCategory.activities,
-  ),
-  EmojiChoice(
-    glyph: '🎮',
-    name: 'Video game',
-    keywords: ['game', 'controller'],
-    category: EmojiCategory.activities,
-  ),
-  EmojiChoice(
-    glyph: '🎨',
-    name: 'Artist palette',
-    keywords: ['art', 'paint'],
-    category: EmojiCategory.activities,
-  ),
-  EmojiChoice(
-    glyph: '🚗',
-    name: 'Car',
-    keywords: ['car', 'travel'],
-    category: EmojiCategory.travel,
-  ),
-  EmojiChoice(
-    glyph: '✈️',
-    name: 'Airplane',
-    keywords: ['plane', 'flight', 'travel'],
-    category: EmojiCategory.travel,
-  ),
-  EmojiChoice(
-    glyph: '🌍',
-    name: 'Globe',
-    keywords: ['earth', 'world'],
-    category: EmojiCategory.travel,
-  ),
-  EmojiChoice(
-    glyph: '💡',
-    name: 'Light bulb',
-    keywords: ['idea', 'light'],
-    category: EmojiCategory.objects,
-  ),
-  EmojiChoice(
-    glyph: '📱',
-    name: 'Mobile phone',
-    keywords: ['phone', 'device'],
-    category: EmojiCategory.objects,
-  ),
-  EmojiChoice(
-    glyph: '🔑',
-    name: 'Key',
-    keywords: ['key', 'security'],
-    category: EmojiCategory.objects,
-  ),
-  EmojiChoice(
-    glyph: '❤️',
-    name: 'Red heart',
-    keywords: ['heart', 'love'],
-    category: EmojiCategory.symbols,
-  ),
-  EmojiChoice(
-    glyph: '✅',
-    name: 'Check mark button',
-    keywords: ['check', 'done', 'yes'],
-    category: EmojiCategory.symbols,
-  ),
-  EmojiChoice(
-    glyph: '❌',
-    name: 'Cross mark',
-    keywords: ['cross', 'no', 'error'],
-    category: EmojiCategory.symbols,
-  ),
-  EmojiChoice(
-    glyph: '⚠️',
-    name: 'Warning',
-    keywords: ['warning', 'caution'],
-    category: EmojiCategory.symbols,
-  ),
-];
+final EmojiCatalog _standardCatalog = EmojiCatalog(
+  unicode.Emoji.all().map(_choiceFromUnicode),
+);
+
+EmojiChoice _choiceFromUnicode(unicode.Emoji emoji) => EmojiChoice(
+  glyph: emoji.char,
+  name: _sentenceCase(emoji.name),
+  keywords: <String>[
+    emoji.shortName,
+    ...emoji.keywords,
+    ...?_legacyEnglishAliases[emoji.char],
+  ],
+  category: _categoryFromUnicode(emoji.emojiGroup),
+);
+
+EmojiCategory _categoryFromUnicode(unicode.EmojiGroup category) =>
+    switch (category) {
+      unicode.EmojiGroup.smileysEmotion => EmojiCategory.smileys,
+      unicode.EmojiGroup.peopleBody ||
+      unicode.EmojiGroup.component => EmojiCategory.people,
+      unicode.EmojiGroup.animalsNature => EmojiCategory.animals,
+      unicode.EmojiGroup.foodDrink => EmojiCategory.food,
+      unicode.EmojiGroup.activities => EmojiCategory.activities,
+      unicode.EmojiGroup.travelPlaces => EmojiCategory.travel,
+      unicode.EmojiGroup.objects => EmojiCategory.objects,
+      unicode.EmojiGroup.symbols => EmojiCategory.symbols,
+      unicode.EmojiGroup.flags => EmojiCategory.flags,
+    };
+
+String _sentenceCase(String value) =>
+    value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
+
+// Preserve aliases that the original compact catalog exposed but the Unicode
+// data source does not include.
+const Map<String, List<String>> _legacyEnglishAliases = <String, List<String>>{
+  '❤️': <String>['love'],
+};
 
 // Emoji names stay in Dart instead of the ARB files: they are a fixed data
 // table rather than UI copy, and search has to match every language at once
@@ -478,22 +561,13 @@ const Map<String, EmojiTranslation> _czechEmoji = <String, EmojiTranslation>{
     name: 'Pes',
     keywords: <String>['pes', 'mazlíček', 'zvíře'],
   ),
-  '🦊': EmojiTranslation(
-    name: 'Liška',
-    keywords: <String>['liška', 'zvíře'],
-  ),
-  '🐼': EmojiTranslation(
-    name: 'Panda',
-    keywords: <String>['panda', 'zvíře'],
-  ),
+  '🦊': EmojiTranslation(name: 'Liška', keywords: <String>['liška', 'zvíře']),
+  '🐼': EmojiTranslation(name: 'Panda', keywords: <String>['panda', 'zvíře']),
   '🍎': EmojiTranslation(
     name: 'Červené jablko',
     keywords: <String>['jablko', 'ovoce'],
   ),
-  '🍕': EmojiTranslation(
-    name: 'Pizza',
-    keywords: <String>['pizza', 'jídlo'],
-  ),
+  '🍕': EmojiTranslation(name: 'Pizza', keywords: <String>['pizza', 'jídlo']),
   '☕': EmojiTranslation(
     name: 'Horký nápoj',
     keywords: <String>['káva', 'čaj', 'nápoj'],
@@ -519,10 +593,7 @@ const Map<String, EmojiTranslation> _czechEmoji = <String, EmojiTranslation>{
     name: 'Letadlo',
     keywords: <String>['letadlo', 'let', 'cestování'],
   ),
-  '🌍': EmojiTranslation(
-    name: 'Zeměkoule',
-    keywords: <String>['země', 'svět'],
-  ),
+  '🌍': EmojiTranslation(name: 'Zeměkoule', keywords: <String>['země', 'svět']),
   '💡': EmojiTranslation(
     name: 'Žárovka',
     keywords: <String>['nápad', 'světlo'],

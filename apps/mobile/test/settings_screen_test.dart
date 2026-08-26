@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
+import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
@@ -90,7 +91,11 @@ Widget _wrap({
 /// a mocked server, and temporary directories. Nothing here may touch the
 /// real home directory, so every path lives under one temp root that the
 /// caller's tearDown removes again.
-({AccountRemovalService service, MemoryCredentialVault vault, List<String> calls})
+({
+  AccountRemovalService service,
+  MemoryCredentialVault vault,
+  List<String> calls,
+})
 _removalService(
   WidgetTester tester,
   AccountRepository accounts, {
@@ -134,6 +139,9 @@ _removalService(
       mediaDiskCache: ChatMediaDiskCache(
         rootDirectory: () async =>
             Directory('${root.path}${Platform.pathSeparator}previews'),
+      ),
+      emojiUsage: FileEmojiUsageStore(
+        directory: Directory('${root.path}${Platform.pathSeparator}emoji'),
       ),
       voiceDirectory: () async =>
           Directory('${root.path}${Platform.pathSeparator}voice'),
@@ -550,8 +558,9 @@ void main() {
 
     RadioListTile<ThemeMode> radioTile(Key key) =>
         tester.widget<RadioListTile<ThemeMode>>(find.byKey(key));
-    RadioGroup<ThemeMode> group() =>
-        tester.widget<RadioGroup<ThemeMode>>(find.byType(RadioGroup<ThemeMode>));
+    RadioGroup<ThemeMode> group() => tester.widget<RadioGroup<ThemeMode>>(
+      find.byType(RadioGroup<ThemeMode>),
+    );
 
     expect(group().groupValue, ThemeMode.system);
     expect(radioTile(const Key('theme-mode-dark')).value, ThemeMode.dark);

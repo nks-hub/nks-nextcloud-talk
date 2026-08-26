@@ -10,6 +10,7 @@ import '../../data/chat_media_cache.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 import '../../platform/media/durable_attachment_source_store.dart';
+import '../chat/composer/emoji_usage_store.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
 
@@ -51,6 +52,7 @@ final class AccountRemovalService {
     required HttpNextcloudApi api,
     required ChatMediaCache mediaCache,
     required ChatMediaDiskCache mediaDiskCache,
+    required EmojiUsageStore emojiUsage,
     required Future<Directory> Function() voiceDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
@@ -59,6 +61,7 @@ final class AccountRemovalService {
        _api = api,
        _mediaCache = mediaCache,
        _mediaDiskCache = mediaDiskCache,
+       _emojiUsage = emojiUsage,
        _voiceDirectory = voiceDirectory,
        _attachmentSources = attachmentSources,
        _onRemovalStarted = onRemovalStarted;
@@ -68,6 +71,7 @@ final class AccountRemovalService {
   final HttpNextcloudApi _api;
   final ChatMediaCache _mediaCache;
   final ChatMediaDiskCache _mediaDiskCache;
+  final EmojiUsageStore _emojiUsage;
   final Future<Directory> Function() _voiceDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
@@ -106,6 +110,7 @@ final class AccountRemovalService {
     }
 
     // From here on nothing may be skipped, whatever the server did.
+    await _emojiUsage.delete(AccountId.parse(accountId));
     final sourceHandles = await _accounts.purgeAccount(accountId);
     await _credentials.deleteAppPassword(accountId);
     _mediaCache.evictAccount(accountId);

@@ -622,7 +622,10 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
           child: SizedBox(
             height: MediaQuery.sizeOf(sheetContext).height * 0.72,
             child: EmojiPicker(
+              accountId: AccountId.parse(_key.accountId),
+              usageStore: ref.read(emojiUsageStoreProvider),
               labels: _emojiPickerLabels(strings),
+              onClose: () => Navigator.of(sheetContext).pop(),
               onSelected: (choice) {
                 Navigator.of(sheetContext).pop();
                 unawaited(

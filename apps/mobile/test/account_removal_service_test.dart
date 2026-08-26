@@ -10,6 +10,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -27,10 +28,12 @@ void main() {
   late ChatMediaCache mediaCache;
   late ChatMediaDiskCache mediaDiskCache;
   late DurableAttachmentSourceStore sources;
+  late FileEmojiUsageStore emojiUsage;
   late Directory root;
   late Directory previewRoot;
   late Directory voiceRoot;
   late Directory sourceRoot;
+  late Directory emojiRoot;
 
   setUp(() async {
     database = openTestDatabase();
@@ -42,9 +45,11 @@ void main() {
     previewRoot = Directory('${root.path}${Platform.pathSeparator}previews');
     voiceRoot = Directory('${root.path}${Platform.pathSeparator}voice');
     sourceRoot = Directory('${root.path}${Platform.pathSeparator}sources');
+    emojiRoot = Directory('${root.path}${Platform.pathSeparator}emoji');
     mediaCache = ChatMediaCache();
     mediaDiskCache = ChatMediaDiskCache(rootDirectory: () async => previewRoot);
     sources = DurableAttachmentSourceStore(root: sourceRoot);
+    emojiUsage = FileEmojiUsageStore(directory: emojiRoot);
   });
 
   tearDown(() async {
@@ -64,6 +69,7 @@ void main() {
       api: api,
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
+      emojiUsage: emojiUsage,
       voiceDirectory: () async => voiceRoot,
       attachmentSources: () async => sources,
       onRemovalStarted: onRemovalStarted,
@@ -121,6 +127,10 @@ void main() {
     );
     final sourceA = await _seedSource(database, sources, 'account-a');
     final sourceB = await _seedSource(database, sources, 'account-b');
+    await emojiUsage.recordSelection(AccountId.parse('account-a'), '😀');
+    await emojiUsage.toggleFavorite(AccountId.parse('account-a'), '❤️');
+    await emojiUsage.recordSelection(AccountId.parse('account-b'), '👋');
+    await emojiUsage.toggleFavorite(AccountId.parse('account-b'), '✅');
 
     final before = await _accountScopedRowCounts(database, 'account-a');
     // Guards the guard: if this ever finds nothing, the assertion below would
@@ -165,6 +175,13 @@ void main() {
     );
     expect(await _voiceFile(voiceRoot, 'account-a').exists(), isFalse);
     expect(await _voiceFile(voiceRoot, 'account-b').exists(), isTrue);
+    expect(
+      await emojiUsage.read(AccountId.parse('account-a')),
+      same(EmojiUsage.empty),
+    );
+    final survivorEmoji = await emojiUsage.read(AccountId.parse('account-b'));
+    expect(survivorEmoji.recent, <String>['👋']);
+    expect(survivorEmoji.favorites, <String>['✅']);
 
     await expectLater(sources.open(sourceA), throwsA(isA<Object>()));
     await (await sources.open(sourceB)).close();
