@@ -94,6 +94,17 @@ void main() {
     await tester.pump();
   }
 
+  /// Tears the tree down while pumping is still the test's own.
+  ///
+  /// `flutter_test` unmounts whatever is left after the body and then pumps
+  /// exactly once, which is not enough: every drift stream the teardown closes
+  /// schedules a zero-duration cleanup timer, and the pending-timer invariant
+  /// runs before those get a turn. A tearDown is too late for the same reason.
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+
   final compactConversation = find.byKey(
     const Key('conversation-shell-compact-conversation'),
   );
@@ -113,6 +124,8 @@ void main() {
 
     expect(compactConversation, findsOneWidget);
     expect(compactList, findsNothing);
+
+    await settle(tester);
   });
 
   testWidgets('widening puts the conversation back beside the list', (
@@ -131,6 +144,7 @@ void main() {
       find.descendant(of: detailPane, matching: find.text('Breakpoint room')),
       findsWidgets,
     );
+    await settle(tester);
   });
 
   testWidgets('a conversation opened while narrow survives widening', (
@@ -155,6 +169,7 @@ void main() {
       find.descendant(of: detailPane, matching: find.text('Breakpoint room')),
       findsWidgets,
     );
+    await settle(tester);
   });
 
   testWidgets('system back clears the selection instead of leaving the app', (
@@ -170,6 +185,7 @@ void main() {
     expect(compactList, findsOneWidget);
     expect(compactConversation, findsNothing);
     expect(tester.takeException(), isNull);
+    await settle(tester);
   });
 
   testWidgets('the back affordance clears the selection', (tester) async {
@@ -181,5 +197,6 @@ void main() {
 
     expect(compactList, findsOneWidget);
     expect(tester.takeException(), isNull);
+    await settle(tester);
   });
 }

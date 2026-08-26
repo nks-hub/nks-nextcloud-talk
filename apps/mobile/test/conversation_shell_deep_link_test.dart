@@ -58,6 +58,14 @@ void main() {
               rawJson: '{}',
             ),
           );
+      // The deep link has to switch accounts for real, so start on the other
+      // one: `upsertAccount` leaves whichever account was written last
+      // selected, which would be the target and prove nothing.
+      await accounts.selectAccount(otherAccount.id);
+      final targetConversation = await accounts.getConversation(
+        accountId: targetAccount.id,
+        token: 'roomtoken1',
+      );
 
       // No app password is stored for either account, so the forced resync
       // that a resolved deep link kicks off fails fast with a caught
@@ -93,8 +101,15 @@ void main() {
             selectedAccountProvider.overrideWith(
               (ref) => selectedAccounts.stream,
             ),
+            // The room has to be in the selected account's list: the shell
+            // opens a conversation by selecting its token, and the workspace
+            // resolves that token against this stream.
             conversationsProvider.overrideWith(
-              (ref, accountId) => Stream.value(const <CachedConversation>[]),
+              (ref, accountId) => Stream.value(
+                accountId == targetAccount.id
+                    ? [targetConversation!]
+                    : const <CachedConversation>[],
+              ),
             ),
             // Plain streams, not drift-backed ones: disposing this test's
             // ChatRoomPane would otherwise tear down several live drift
@@ -124,22 +139,45 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
       });
-      // The shell starts with no account selected; the deep link opening
-      // the room must not depend on one being selected already.
+      // Up to here the shell has seen no account at all: the deep link
+      // opening the room must not depend on one being selected already.
       selectedAccounts.add(otherAccount);
+      // In production `selectedAccountProvider` reads the database back, so it
+      // emits the account the deep link just selected. Standing in for that
+      // here rather than subscribing to the real stream keeps the test free of
+      // a live drift stream, which would deadlock the query below. That the
+      // switch really happened is asserted against the database at the end.
+      selectedAccounts.add(targetAccount);
 
       await _pumpUntil(
         tester,
-        () => find.byKey(const Key('chat-room-screen')).evaluate().isNotEmpty,
+        // The pane is what both layouts render; the pushed screen is gone.
+        () => find.byKey(const Key('chat-room-pane')).evaluate().isNotEmpty,
       );
 
-      expect(find.text('Deep link target room'), findsOneWidget);
-      // A one-shot query, not a watch(): a stream's `.first` here would wait
-      // on a Timer that only fires while something is still pumping frames,
-      // which deadlocks now that `_pumpUntil` has stopped.
-      final selected = await accounts.getAccount(targetAccount.id);
+      // The default 800 px test surface is the wide layout, so the room name
+      // is on screen twice: in the list tile and in the open conversation.
+      // Only the second one says the deep link landed.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('chat-room-header')),
+          matching: find.text('Deep link target room'),
+        ),
+        findsOneWidget,
+      );
+      // On the real clock, not the fake one: the open conversation keeps live
+      // drift streams, and a query awaited under fake async would wait on a
+      // Timer that only fires while something is still pumping frames.
+      final selected = await tester.runAsync(
+        () => accounts.getAccount(targetAccount.id),
+      );
       expect(selected?.selected, isTrue);
       expect(tester.takeException(), isNull);
+
+      // Same reason as `adaptive_breakpoint_test`: unmount while pumping is
+      // still ours, so drift's cleanup timers do not outlive the body.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
     },
   );
 }

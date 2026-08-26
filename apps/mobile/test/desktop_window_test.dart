@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 
 /// The desktop runners are native code that no widget test can exercise, so the
 /// one thing worth guarding is that the three platforms keep declaring the same
@@ -54,10 +55,10 @@ void main() {
   });
 
   test('the minimum window fits inside a supported adaptive layout', () {
-    final breakpoint = readConstant(
-      'lib/features/conversations/conversation_workspace.dart',
-      r'constraints\.maxWidth\s*<\s*(\d+)',
-    );
+    // Read the exported constant instead of grepping the layout for a literal.
+    // The literal moved into `kExpandedShellBreakpoint` and the pattern that
+    // used to match it silently stopped finding anything.
+    final breakpoint = kExpandedShellBreakpoint.toInt();
     // Narrower than the breakpoint is fine — that is the compact single-pane
     // layout. Wider would mean the window can never reach the expanded layout.
     expect(expectedWidth, lessThanOrEqualTo(breakpoint));

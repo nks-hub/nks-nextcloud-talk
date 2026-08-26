@@ -171,13 +171,13 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
 
-        expect(
-          find.byType(PresenceChatRoomScreen),
-          isCompact ? findsOneWidget : findsNothing,
-        );
+        // Both layouts render the same pane now: the compact shell shows it in
+        // place of the list instead of pushing a route, so a selected
+        // conversation survives a resize in either direction.
+        expect(find.byType(PresenceChatRoomScreen), findsNothing);
         expect(
           find.byType(PresenceChatRoomPane),
-          isCompact ? findsNothing : findsOneWidget,
+          findsOneWidget,
         );
         expect(
           find.byKey(const Key('conversation-presence-text-roomlive')),
