@@ -98,7 +98,8 @@ const token = '123e4567-e89b-12d3-a456-426614174000';
         )
 
     def test_private_key_header_is_reported(self) -> None:
-        self._write("config/key.pem", "-----BEGIN PRIVATE KEY-----\n")
+        private_key_header = "-----BEGIN " + "PRIVATE KEY-----\n"
+        self._write("config/key.pem", private_key_header)
         self._track("config/key.pem")
 
         findings = scan_repository(self.root)
