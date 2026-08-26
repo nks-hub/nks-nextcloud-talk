@@ -808,7 +808,9 @@ bool _confirmationsEqual(
     left.referenceId == right.referenceId &&
     left.systemMessage == right.systemMessage &&
     left.messageType == right.messageType &&
-    left.hasFileRichObject == right.hasFileRichObject;
+    left.hasFileRichObject == right.hasFileRichObject &&
+    left.parentMessageId == right.parentMessageId &&
+    left.threadId == right.threadId;
 
 int _confirmationHash(AttachmentMessageConfirmation value) => Object.hash(
   value.accountId,
@@ -819,4 +821,6 @@ int _confirmationHash(AttachmentMessageConfirmation value) => Object.hash(
   value.systemMessage,
   value.messageType,
   value.hasFileRichObject,
+  value.parentMessageId,
+  value.threadId,
 );

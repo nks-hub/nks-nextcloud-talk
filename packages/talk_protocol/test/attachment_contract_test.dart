@@ -95,7 +95,6 @@ void main() {
         referenceId: referenceId(),
         metadata: metadata(
           caption: 'Synthetic caption',
-          replyTo: 101,
           threadId: 101,
           threadTitle: '  Synthetic thread  ',
           silent: true,
@@ -111,10 +110,32 @@ void main() {
       expect(metadataJson, <String, Object?>{
         'caption': 'Synthetic caption',
         'silent': true,
-        'replyTo': 101,
         'threadId': 101,
         'threadTitle': 'Synthetic thread',
       });
+
+      final replyRequest = AttachmentFinalizeRequest(
+        context: attachmentContext(20),
+        remoteTemporaryPath: DavRelativePath.parse('Talk/Draft/job.upload'),
+        source: prepared,
+        referenceId: referenceId(),
+        metadata: metadata(replyTo: 102),
+      );
+      expect(
+        jsonDecode(replyRequest.body.fields['talkMetaData']! as String),
+        <String, Object?>{'replyTo': 102},
+      );
+
+      expect(
+        () => metadata(replyTo: 101, threadId: 101),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidAttachmentModel,
+          ),
+        ),
+      );
 
       expect(
         () => metadata(threadTitle: 'Synthetic thread'),

@@ -78,24 +78,35 @@ final class AttachmentMessageConfirmation {
     required this.systemMessage,
     required this.messageType,
     required this.hasFileRichObject,
+    this.parentMessageId,
+    this.threadId,
   });
 
   factory AttachmentMessageConfirmation.fromMessage(
     ChatMessage message, {
     required AccountId accountId,
     required ServerBase server,
-  }) => AttachmentMessageConfirmation(
-    accountId: accountId,
-    server: server,
-    messageId: message.messageId,
-    roomToken: message.roomToken,
-    referenceId: message.referenceId,
-    systemMessage: message.systemMessage,
-    messageType: message.messageType,
-    hasFileRichObject: message.messageParameters.values.any(
-      (parameter) => parameter.type == 'file',
-    ),
-  );
+  }) {
+    final parent = message.parent;
+    return AttachmentMessageConfirmation(
+      accountId: accountId,
+      server: server,
+      messageId: message.messageId,
+      roomToken: message.roomToken,
+      referenceId: message.referenceId,
+      systemMessage: message.systemMessage,
+      messageType: message.messageType,
+      hasFileRichObject: message.messageParameters.values.any(
+        (parameter) => parameter.type == 'file',
+      ),
+      parentMessageId: parent is ChatFullParent
+          ? parent.messageId
+          : parent is ChatDeletedParent
+          ? parent.messageId
+          : null,
+      threadId: message.threadId,
+    );
+  }
 
   final AccountId accountId;
   final ServerBase server;
@@ -105,6 +116,8 @@ final class AttachmentMessageConfirmation {
   final String systemMessage;
   final String messageType;
   final bool hasFileRichObject;
+  final int? parentMessageId;
+  final int? threadId;
 
   @override
   String toString() => 'AttachmentMessageConfirmation(<redacted>)';

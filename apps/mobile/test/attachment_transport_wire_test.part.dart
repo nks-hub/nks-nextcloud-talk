@@ -79,7 +79,7 @@ void _registerWireTests() {
     },
   );
 
-  test('executes finalize JSON with the planner body', () async {
+  test('executes named-thread finalize JSON with the planner body', () async {
     late http.Request captured;
     final transport = _transport(
       MockClient((request) async {
@@ -87,7 +87,10 @@ void _registerWireTests() {
         return http.Response.bytes(_finalizeSuccessBody(), 200);
       }),
     );
-    final request = _finalizeRequest(3, withMetadata: true);
+    final request = _finalizeRequest(
+      3,
+      metadataScope: _FinalizeMetadataScope.namedThread,
+    );
 
     final response = await transport.finalize(
       request: request,
@@ -103,9 +106,33 @@ void _registerWireTests() {
     expect(jsonDecode(body['talkMetaData']! as String), <String, Object?>{
       'caption': 'Synthetic caption',
       'silent': true,
-      'replyTo': 42,
       'threadId': 42,
       'threadTitle': 'Synthetic thread',
+    });
+  });
+
+  test('executes ordinary-reply finalize JSON without thread scope', () async {
+    late http.Request captured;
+    final transport = _transport(
+      MockClient((request) async {
+        captured = request;
+        return http.Response.bytes(_finalizeSuccessBody(), 200);
+      }),
+    );
+
+    await transport.finalize(
+      request: _finalizeRequest(
+        30,
+        metadataScope: _FinalizeMetadataScope.reply,
+      ),
+      authorization: _authorization,
+    );
+
+    final body = jsonDecode(captured.body) as Map<String, Object?>;
+    expect(jsonDecode(body['talkMetaData']! as String), <String, Object?>{
+      'caption': 'Synthetic caption',
+      'silent': true,
+      'replyTo': 42,
     });
   });
 

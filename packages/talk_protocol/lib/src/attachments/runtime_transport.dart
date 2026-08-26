@@ -468,7 +468,21 @@ bool _confirmationMatches(
     confirmation.referenceId == job.draft.referenceId.value &&
     confirmation.systemMessage.isEmpty &&
     confirmation.hasFileRichObject &&
-    confirmation.messageType == job.draft.expectedMessageType;
+    confirmation.messageType == job.draft.expectedMessageType &&
+    _confirmationScopeMatches(job, confirmation);
+
+bool _confirmationScopeMatches(
+  AttachmentJob job,
+  AttachmentMessageConfirmation confirmation,
+) {
+  final threadId = job.draft.metadata.threadId;
+  if (threadId != null) {
+    return confirmation.threadId == threadId &&
+        confirmation.parentMessageId == threadId;
+  }
+  final replyTo = job.draft.metadata.replyTo;
+  return replyTo == null || confirmation.parentMessageId == replyTo;
+}
 
 bool _authorityMatches(
   AttachmentAccountState account,

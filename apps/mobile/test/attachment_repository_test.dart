@@ -245,6 +245,121 @@ void main() {
   );
 
   test(
+    'recovery preserves reply and named-thread confirmation scope',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'nctalk-attachment-scope-',
+      );
+      final databaseFile = File(
+        '${directory.path}${Platform.pathSeparator}scope.sqlite',
+      );
+      AppDatabase? database;
+      try {
+        database = AppDatabase.forTesting(NativeDatabase(databaseFile));
+        await _insertAccount(database, 'account-a');
+        final repository = AttachmentRepository(database);
+        final reply = await _persistAwaitingJob(
+          repository,
+          accountId: 'account-a',
+          sourceHandle: 'nctalk-media-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          jobId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          referenceId: '11111111-1111-4111-8111-111111111111',
+          replyTo: 42,
+          threadId: null,
+        );
+        final namedThread = await _persistAwaitingJob(
+          repository,
+          accountId: 'account-a',
+          sourceHandle: 'nctalk-media-v1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          jobId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          referenceId: '22222222-2222-4222-8222-222222222222',
+          enqueueSequence: 2,
+          threadId: 84,
+        );
+        await database.transaction(() async {
+          for (final parent in <int?>[null, 41, 42]) {
+            await _insertCachedConfirmation(
+              database!,
+              messageId: 500 + (parent ?? 0),
+              parentMessageId: parent,
+            );
+          }
+          for (final scope in <({int? parent, int? thread})>[
+            (parent: 84, thread: null),
+            (parent: 84, thread: 83),
+            (parent: 84, thread: 84),
+          ]) {
+            await _insertCachedConfirmation(
+              database!,
+              messageId: 600 + (scope.thread ?? 0),
+              referenceId: '22222222-2222-4222-8222-222222222222',
+              parentMessageId: scope.parent,
+              threadId: scope.thread,
+            );
+          }
+        });
+        await database.close();
+
+        database = AppDatabase.forTesting(NativeDatabase(databaseFile));
+        final reopened = AttachmentRepository(database);
+        final loaded = await reopened.loadRuntime();
+        var snapshot = loaded.snapshot;
+        final restoredReply =
+            snapshot.accounts.values.single.jobs[reply.job.jobId]!;
+        final restoredThread =
+            snapshot.accounts.values.single.jobs[namedThread.job.jobId]!;
+        expect(restoredReply.draft.metadata.replyTo, 42);
+        expect(restoredReply.draft.metadata.threadId, isNull);
+        expect(restoredThread.draft.metadata.threadId, 84);
+
+        final replyBatch = await reopened.loadConfirmationCandidates(
+          accountId: 'account-a',
+          jobId: restoredReply.jobId.value,
+        );
+        final replyResult = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: restoredReply.accountId,
+          jobId: restoredReply.jobId,
+          confirmations: replyBatch!.confirmations,
+        );
+        snapshot = replyResult.plan!.commit(snapshot);
+        expect(replyResult.outcome, AttachmentRuntimeOutcome.completed);
+        expect(
+          snapshot.accounts.values.single.jobs[restoredReply.jobId]!.messageIds,
+          <int>[542],
+        );
+
+        final threadBatch = await reopened.loadConfirmationCandidates(
+          accountId: 'account-a',
+          jobId: restoredThread.jobId.value,
+        );
+        final threadResult = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: restoredThread.accountId,
+          jobId: restoredThread.jobId,
+          confirmations: threadBatch!.confirmations,
+        );
+        snapshot = threadResult.plan!.commit(snapshot);
+        expect(threadResult.outcome, AttachmentRuntimeOutcome.completed);
+        expect(
+          snapshot
+              .accounts
+              .values
+              .single
+              .jobs[restoredThread.jobId]!
+              .messageIds,
+          <int>[684],
+        );
+      } finally {
+        await database?.close();
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      }
+    },
+  );
+
+  test(
     'confirmation join rejects account room reference and server drift',
     () async {
       final database = AppDatabase.forTesting(NativeDatabase.memory());
@@ -350,6 +465,9 @@ _AttachmentRuntimeFixture _runtime({
   String roomToken = 'rooma123',
   String? jobId,
   String? referenceId,
+  int enqueueSequence = 1,
+  int? replyTo,
+  int? threadId = 42,
 }) {
   final id = AccountId.parse(accountId);
   final server = ServerBase.parse(serverUrl);
@@ -416,12 +534,12 @@ _AttachmentRuntimeFixture _runtime({
       metadata: AttachmentMetadata(
         kind: AttachmentMessageKind.file,
         caption: 'Synthetic caption',
-        replyTo: null,
-        threadId: 42,
-        threadTitle: 'Synthetic thread',
+        replyTo: replyTo,
+        threadId: threadId,
+        threadTitle: threadId == null ? null : 'Synthetic thread',
         silent: true,
       ),
-      enqueueSequence: 1,
+      enqueueSequence: enqueueSequence,
       policy: AttachmentUploadPolicy(
         normalUploadMaximumBytes: 4,
         chunkSizeBytes: 4,
@@ -472,6 +590,9 @@ Future<_AttachmentRuntimeFixture> _persistAwaitingJob(
   String roomToken = 'rooma123',
   String? jobId,
   String? referenceId,
+  int enqueueSequence = 1,
+  int? replyTo,
+  int? threadId = 42,
 }) async {
   final runtime = _runtime(
     accountId: accountId,
@@ -480,6 +601,9 @@ Future<_AttachmentRuntimeFixture> _persistAwaitingJob(
     roomToken: roomToken,
     jobId: jobId,
     referenceId: referenceId,
+    enqueueSequence: enqueueSequence,
+    replyTo: replyTo,
+    threadId: threadId,
   );
   final awaiting = runtime.job.copyWith(
     phase: AttachmentJobPhase.awaitingConfirmation,
@@ -513,6 +637,8 @@ Future<void> _insertCachedConfirmation(
   String systemMessage = '',
   String messageType = 'comment',
   bool hasFileRichObject = true,
+  int? parentMessageId,
+  int? threadId,
 }) {
   final parameters = hasFileRichObject
       ? <String, Object?>{
@@ -541,10 +667,12 @@ Future<void> _insertCachedConfirmation(
     'reactions': <String, Object?>{},
     'reactionsSelf': <Object?>[],
     'deleted': null,
-    'threadId': null,
+    'threadId': threadId,
     'isThread': false,
     'threadTitle': null,
     'threadReplies': 0,
+    if (parentMessageId != null)
+      'parent': <String, Object?>{'id': parentMessageId, 'deleted': true},
   };
   return database
       .into(database.cachedChatMessages)

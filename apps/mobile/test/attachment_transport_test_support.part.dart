@@ -64,7 +64,7 @@ PreparedAttachmentSource _source(
 
 AttachmentFinalizeRequest _finalizeRequest(
   int requestNumber, {
-  bool withMetadata = false,
+  _FinalizeMetadataScope metadataScope = _FinalizeMetadataScope.none,
 }) => AttachmentFinalizeRequest(
   context: _context(requestNumber),
   remoteTemporaryPath: _remotePath,
@@ -72,13 +72,19 @@ AttachmentFinalizeRequest _finalizeRequest(
   referenceId: ChatReferenceId.parse('11111111-1111-4111-8111-111111111111'),
   metadata: AttachmentMetadata(
     kind: AttachmentMessageKind.file,
-    caption: withMetadata ? 'Synthetic caption' : null,
-    replyTo: withMetadata ? 42 : null,
-    threadId: withMetadata ? 42 : null,
-    threadTitle: withMetadata ? 'Synthetic thread' : null,
-    silent: withMetadata,
+    caption: metadataScope == _FinalizeMetadataScope.none
+        ? null
+        : 'Synthetic caption',
+    replyTo: metadataScope == _FinalizeMetadataScope.reply ? 42 : null,
+    threadId: metadataScope == _FinalizeMetadataScope.namedThread ? 42 : null,
+    threadTitle: metadataScope == _FinalizeMetadataScope.namedThread
+        ? 'Synthetic thread'
+        : null,
+    silent: metadataScope != _FinalizeMetadataScope.none,
   ),
 );
+
+enum _FinalizeMetadataScope { none, reply, namedThread }
 
 DavUploadSessionId _uploadSession() =>
     DavUploadSessionId.parse('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');

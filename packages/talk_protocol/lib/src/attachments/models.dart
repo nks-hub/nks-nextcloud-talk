@@ -102,6 +102,9 @@ final class AttachmentMetadata {
     if (threadId != null && threadId! < 1) {
       _modelFailure(r'$.metadata.threadId');
     }
+    if (replyTo != null && threadId != null) {
+      _modelFailure(r'$.metadata.scope');
+    }
     if ((this.threadTitle != null && threadId == null) ||
         (this.threadTitle != null && this.threadTitle!.length > 200)) {
       _modelFailure(r'$.metadata.threadTitle');

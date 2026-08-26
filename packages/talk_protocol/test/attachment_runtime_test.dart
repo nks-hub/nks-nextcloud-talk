@@ -131,6 +131,77 @@ void main() {
       expect(_state(snapshot, operation).phase, AttachmentJobPhase.completed);
     });
 
+    test('reply completion requires the expected parent message', () {
+      final operation = draft(attachmentMetadata: metadata(replyTo: 42));
+      var snapshot = _driveToAwaiting(operation);
+
+      for (final parentMessageId in <int?>[null, 41]) {
+        final mismatch = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+          confirmations: <AttachmentMessageConfirmation>[
+            confirmation(
+              operation,
+              520 + (parentMessageId ?? 0),
+              parentMessageId: parentMessageId,
+            ),
+          ],
+        );
+        expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
+      }
+
+      final complete = reconcileAttachmentConfirmation(
+        snapshot,
+        accountId: accountA,
+        jobId: operation.jobId,
+        confirmations: <AttachmentMessageConfirmation>[
+          confirmation(operation, 562, parentMessageId: 42),
+        ],
+      );
+      snapshot = commit(snapshot, complete);
+      expect(complete.outcome, AttachmentRuntimeOutcome.completed);
+      expect(_state(snapshot, operation).messageIds, <int>[562]);
+    });
+
+    test('named-thread completion requires its root and thread scope', () {
+      final operation = draft(attachmentMetadata: metadata(threadId: 42));
+      var snapshot = _driveToAwaiting(operation);
+
+      for (final scope in <({int? parent, int? thread})>[
+        (parent: null, thread: null),
+        (parent: 42, thread: 41),
+        (parent: 41, thread: 42),
+      ]) {
+        final mismatch = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+          confirmations: <AttachmentMessageConfirmation>[
+            confirmation(
+              operation,
+              570 + (scope.parent ?? 0),
+              parentMessageId: scope.parent,
+              threadId: scope.thread,
+            ),
+          ],
+        );
+        expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
+      }
+
+      final complete = reconcileAttachmentConfirmation(
+        snapshot,
+        accountId: accountA,
+        jobId: operation.jobId,
+        confirmations: <AttachmentMessageConfirmation>[
+          confirmation(operation, 612, parentMessageId: 42, threadId: 42),
+        ],
+      );
+      snapshot = commit(snapshot, complete);
+      expect(complete.outcome, AttachmentRuntimeOutcome.completed);
+      expect(_state(snapshot, operation).messageIds, <int>[612]);
+    });
+
     test('planned finalization uses the job-bound message type metadata', () {
       for (final fixture in <({AttachmentJobDraft job, Object metadata})>[
         (job: draft(), metadata: <String, Object?>{}),
@@ -868,6 +939,8 @@ AttachmentMessageConfirmation confirmation(
   String systemMessage = '',
   String messageType = 'comment',
   bool hasFileRichObject = true,
+  int? parentMessageId,
+  int? threadId,
 }) => AttachmentMessageConfirmation(
   accountId: accountA,
   server: serverA,
@@ -877,4 +950,6 @@ AttachmentMessageConfirmation confirmation(
   systemMessage: systemMessage,
   messageType: messageType,
   hasFileRichObject: hasFileRichObject,
+  parentMessageId: parentMessageId,
+  threadId: threadId,
 );
