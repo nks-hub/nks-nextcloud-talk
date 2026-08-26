@@ -476,6 +476,22 @@ Future<void> _seedAccount(
         ),
       );
   await database
+      .into(database.cachedThreads)
+      .insert(
+        CachedThreadsCompanion.insert(
+          accountId: accountId,
+          roomToken: roomToken,
+          threadId: 101,
+          title: 'Fixture thread',
+          lastMessageId: 101,
+          lastActivity: 1770000101,
+          numReplies: 0,
+          notificationLevel: 1,
+          detailed: const Value(true),
+          rawJson: '{}',
+        ),
+      );
+  await database
       .into(database.textSendOperations)
       .insert(
         TextSendOperationsCompanion.insert(
