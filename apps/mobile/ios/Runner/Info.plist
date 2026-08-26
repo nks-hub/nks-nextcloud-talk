@@ -31,6 +31,8 @@
 	</array>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

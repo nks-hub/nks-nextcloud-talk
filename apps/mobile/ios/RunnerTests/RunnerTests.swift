@@ -4,6 +4,13 @@ import XCTest
 @testable import Runner
 
 class RunnerTests: XCTestCase {
+  func testFrameworkDeepLinkRoutingIsDisabled() {
+    XCTAssertEqual(
+      Bundle.main.object(forInfoDictionaryKey: "FlutterDeepLinkingEnabled") as? Bool,
+      false
+    )
+  }
+
   func testColdLaunchLinkIsReturnedOnlyOnce() throws {
     let delivery = AppleDeepLinkDelivery()
     let wrapped = try XCTUnwrap(
