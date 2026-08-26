@@ -585,6 +585,14 @@ Tyto invarianty mají focused Dart/Kotlin testy a dvoukrokovou instrumentaci po
 ukončení procesu; neprokazují zatím OCS aktivaci, lokální notifikaci ani
 background/killed payload ze skutečného Nextcloudu.
 
+Provider ACK není zdrojem pravdy pro obsah notifikací. Každý aktivní účet proto
+provede bounded OCS reconciliation po foreground/resume, po návratu connectivity
+a nejvýše po šesti hodinách. Wake-upy se coalescují globálně i per account;
+transientní sync chyba se retryuje, ale jedna chyba nesmí blokovat jiný účet.
+Odebrání účtu nejdřív zvýší epochu a suspenduje jeho lane. Pozdní lifecycle nebo
+notification-open callback se starou epochou pak nesmí znovu spustit registraci
+ani catch-up před dokončením revokace.
+
 Tato garance začíná až callbackem connectoru. Embedded FCM distributor 3.1.0
 potvrzuje provideru GMS broadcast/RPC dříve, než zprávu předá aplikačnímu
 receiveru; současný build proto neprokazuje durable commit před provider FCM
