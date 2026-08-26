@@ -72,7 +72,7 @@ final class DeepLinkResolver {
 final class DeepLinkCoordinator {
   DeepLinkCoordinator({
     required DeepLinkPlatform platform,
-    required DeepLinkResolver resolver,
+    required DeepLinkResolver Function() resolver,
   }) : _platform = platform,
        _resolver = resolver {
     _subscription = _platform.linkOpened.listen((uri) {
@@ -81,7 +81,7 @@ final class DeepLinkCoordinator {
   }
 
   final DeepLinkPlatform _platform;
-  final DeepLinkResolver _resolver;
+  final DeepLinkResolver Function() _resolver;
   final ListQueue<ResolvedDeepLink> _pending = ListQueue();
   final StreamController<void> _availableController =
       StreamController<void>.broadcast();
@@ -109,7 +109,7 @@ final class DeepLinkCoordinator {
   }
 
   Future<void> _accept(Uri uri) async {
-    final resolved = await _resolver.resolve(uri);
+    final resolved = await _resolver().resolve(uri);
     if (resolved == null) {
       return;
     }

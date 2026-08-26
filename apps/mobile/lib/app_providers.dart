@@ -348,7 +348,7 @@ final deepLinkCoordinatorProvider = Provider<DeepLinkCoordinator?>((ref) {
   }
   final coordinator = DeepLinkCoordinator(
     platform: platform,
-    resolver: ref.watch(deepLinkResolverProvider),
+    resolver: () => ref.read(deepLinkResolverProvider),
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());

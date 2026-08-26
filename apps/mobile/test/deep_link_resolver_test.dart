@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_bridge.dart';
 import 'package:nextcloudtalk/features/conversations/deep_link_coordinator.dart';
@@ -171,7 +173,7 @@ void main() {
   test('a missing native bridge leaves the coordinator idle', () async {
     final coordinator = DeepLinkCoordinator(
       platform: _ThrowingDeepLinkPlatform(MissingPluginException()),
-      resolver: DeepLinkResolver(accounts),
+      resolver: () => DeepLinkResolver(accounts),
     );
     addTearDown(coordinator.close);
 
@@ -183,11 +185,32 @@ void main() {
   test('an unexpected native bridge error remains visible', () async {
     final coordinator = DeepLinkCoordinator(
       platform: _ThrowingDeepLinkPlatform(StateError('bridge failed')),
-      resolver: DeepLinkResolver(accounts),
+      resolver: () => DeepLinkResolver(accounts),
     );
     addTearDown(coordinator.close);
 
     await expectLater(coordinator.start(), throwsStateError);
+  });
+
+  test('does not initialize the resolver database without a link', () async {
+    var resolverCreations = 0;
+    final container = ProviderContainer(
+      overrides: [
+        deepLinkPlatformProvider.overrideWithValue(
+          const _NoLinkDeepLinkPlatform(),
+        ),
+        deepLinkResolverProvider.overrideWith((ref) {
+          resolverCreations += 1;
+          throw StateError('resolver must stay lazy');
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(container.read(deepLinkCoordinatorProvider), isNotNull);
+    await pumpEventQueue();
+
+    expect(resolverCreations, 0);
   });
 }
 
@@ -201,6 +224,19 @@ final class _ThrowingDeepLinkPlatform implements DeepLinkPlatform {
 
   @override
   Future<Uri?> getLaunchLink() => Future<Uri?>.error(error);
+
+  @override
+  Future<void> dispose() async {}
+}
+
+final class _NoLinkDeepLinkPlatform implements DeepLinkPlatform {
+  const _NoLinkDeepLinkPlatform();
+
+  @override
+  Stream<Uri> get linkOpened => const Stream.empty();
+
+  @override
+  Future<Uri?> getLaunchLink() async => null;
 
   @override
   Future<void> dispose() async {}
