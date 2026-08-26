@@ -302,6 +302,12 @@ final class SignalingPeerMessage {
         r'$.message',
       );
     }
+    if (payload == null && !_isPayloadFreePeerMessage(type)) {
+      protocolFailure(
+        TalkProtocolErrorCode.invalidSignalingFrame,
+        r'$.message.payload',
+      );
+    }
   }
 
   factory SignalingPeerMessage.fromJson(
@@ -313,14 +319,27 @@ final class SignalingPeerMessage {
       path: path,
       code: TalkProtocolErrorCode.invalidSignalingFrame,
     );
+    final type = requireString(
+      message['type'],
+      path: '$path.type',
+      code: TalkProtocolErrorCode.invalidSignalingFrame,
+      minLength: 1,
+      maxLength: 128,
+    );
+    final payload = message.containsKey('payload')
+        ? SignalingOpaquePayload.fromJson(
+            message['payload'],
+            path: '$path.payload',
+          )
+        : null;
+    if (payload == null && !_isPayloadFreePeerMessage(type)) {
+      protocolFailure(
+        TalkProtocolErrorCode.invalidSignalingFrame,
+        '$path.payload',
+      );
+    }
     return SignalingPeerMessage(
-      type: requireString(
-        message['type'],
-        path: '$path.type',
-        code: TalkProtocolErrorCode.invalidSignalingFrame,
-        minLength: 1,
-        maxLength: 128,
-      ),
+      type: type,
       roomType: message['roomType'] == null
           ? ''
           : requireString(
@@ -344,10 +363,7 @@ final class SignalingPeerMessage {
       sender: message['from'] == null
           ? null
           : SignalingPeerId.parse(message['from'], path: '$path.from'),
-      payload: SignalingOpaquePayload.fromJson(
-        message['payload'],
-        path: '$path.payload',
-      ),
+      payload: payload,
     );
   }
 
@@ -356,23 +372,26 @@ final class SignalingPeerMessage {
   final String? sid;
   final SignalingPeerId? recipient;
   final SignalingPeerId? sender;
-  final SignalingOpaquePayload payload;
+  final SignalingOpaquePayload? payload;
 
   Map<String, Object?> toWire({
     bool includeSender = false,
     bool includeRecipient = true,
   }) => RedactedMapView(<String, Object?>{
     'type': type,
-    'roomType': roomType,
+    if (roomType.isNotEmpty) 'roomType': roomType,
     if (sid != null) 'sid': sid,
     if (includeRecipient && recipient != null) 'to': recipient!.value,
     if (includeSender && sender != null) 'from': sender!.value,
-    'payload': payload.wire,
+    if (payload != null) 'payload': payload!.wire,
   });
 
   @override
   String toString() => 'SignalingPeerMessage(<redacted>)';
 }
+
+bool _isPayloadFreePeerMessage(String type) =>
+    type == 'startedTyping' || type == 'stoppedTyping';
 
 final class HpbControlMessage {
   const HpbControlMessage({

@@ -201,6 +201,52 @@ void main() {
       }
     });
 
+    test('typing messages preserve the upstream payload-free wire shape', () {
+      for (final type in <String>['startedTyping', 'stoppedTyping']) {
+        final inbound = SignalingPeerMessage.fromJson(<String, Object?>{
+          'type': type,
+          'from': 'peer-a',
+        });
+
+        expect(inbound.type, type);
+        expect(inbound.roomType, isEmpty);
+        expect(inbound.payload, isNull);
+        expect(inbound.toWire(includeSender: true), <String, Object?>{
+          'type': type,
+          'from': 'peer-a',
+        });
+
+        final outbound = SignalingPeerMessage(
+          type: type,
+          roomType: '',
+          sid: null,
+          recipient: SignalingPeerId.parse('peer-b'),
+          sender: null,
+          payload: null,
+        );
+        expect(outbound.toWire(), <String, Object?>{
+          'type': type,
+          'to': 'peer-b',
+        });
+      }
+    });
+
+    test('non-typing messages still require an explicit payload', () {
+      expect(
+        () => SignalingPeerMessage.fromJson(<String, Object?>{
+          'type': 'offer',
+          'to': 'peer-b',
+        }),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.path,
+            'path',
+            r'$.message.data.payload',
+          ),
+        ),
+      );
+    });
+
     test('internal batch consumes a one-shot iterable exactly once', () {
       var iterations = 0;
       Iterable<SignalingPeerMessage> oneShot() sync* {
