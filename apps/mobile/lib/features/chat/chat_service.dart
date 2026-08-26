@@ -409,12 +409,14 @@ final class ChatService {
     required bool allowPersistedCapabilitiesForSend,
   }) async {
     try {
-      final capabilities = await _api.getAuthenticatedCapabilities(
+      final capabilityRead = await _api.getAuthenticatedCapabilitiesWithSource(
         server: server,
         loginName: account.loginName,
         appPassword: appPassword,
         abortTrigger: abortTrigger,
+        forceRefresh: allowPersistedCapabilitiesForSend,
       );
+      final capabilities = capabilityRead.snapshot;
       if (!capabilities.hasTalk) {
         throw const ChatServiceException(ChatServiceError.talkUnavailable);
       }
@@ -430,7 +432,8 @@ final class ChatService {
         talkFeatures: capabilities.talkFeatures,
         fingerprint: fingerprint,
         generation: storedCapability.generation,
-        verifiedOnline: true,
+        verifiedOnline:
+            capabilityRead.source == CapabilitySnapshotSource.network,
       );
     } on NextcloudApiException catch (error) {
       if (error.statusCode == 401) {

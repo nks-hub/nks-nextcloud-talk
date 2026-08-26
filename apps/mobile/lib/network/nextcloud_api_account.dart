@@ -52,15 +52,39 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     required String appPassword,
     Future<void>? abortTrigger,
   }) async {
+    final read = await getAuthenticatedCapabilitiesWithSource(
+      server: server,
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    return read.snapshot;
+  }
+
+  /// Reads authenticated capabilities and reports whether transport occurred.
+  ///
+  /// [forceRefresh] bypasses a valid in-memory snapshot without disabling the
+  /// cache for other callers.
+  Future<AuthenticatedCapabilityRead> getAuthenticatedCapabilitiesWithSource({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+    bool forceRefresh = false,
+  }) async {
     final authorization = _basicAuthorization(loginName, appPassword);
     final fingerprint = _credentialFingerprint(authorization);
     final cacheKey = '${server.uri}\u0000$loginName';
     final now = _clock();
     final cached = _capabilityCache[cacheKey];
-    if (cached != null &&
+    if (!forceRefresh &&
+        cached != null &&
         cached.credentialFingerprint == fingerprint &&
         now.isBefore(cached.expiresAt)) {
-      return cached.snapshot;
+      return AuthenticatedCapabilityRead(
+        snapshot: await cached.snapshot,
+        source: CapabilitySnapshotSource.memoryCache,
+      );
     }
 
     final pending = _readCapabilities(
@@ -93,9 +117,16 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       rethrow;
     }
     if (!shared) {
-      _capabilityCache[cacheKey] ??= entry;
+      if (forceRefresh) {
+        _capabilityCache[cacheKey] = entry;
+      } else {
+        _capabilityCache[cacheKey] ??= entry;
+      }
     }
-    return snapshot;
+    return AuthenticatedCapabilityRead(
+      snapshot: snapshot,
+      source: CapabilitySnapshotSource.network,
+    );
   }
 
   Future<CapabilitySnapshot> _readCapabilities({

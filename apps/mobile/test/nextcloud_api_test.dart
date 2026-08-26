@@ -255,6 +255,37 @@ void main() {
     },
   );
 
+  test(
+    'reports cache provenance and can require a fresh capability read',
+    () async {
+      var requests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async {
+          requests++;
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }),
+      );
+      addTearDown(api.close);
+
+      Future<AuthenticatedCapabilityRead> read({bool forceRefresh = false}) {
+        return api.getAuthenticatedCapabilitiesWithSource(
+          server: server,
+          loginName: 'fixture-user',
+          appPassword: 'fixture-password',
+          forceRefresh: forceRefresh,
+        );
+      }
+
+      expect((await read()).source, CapabilitySnapshotSource.network);
+      expect((await read()).source, CapabilitySnapshotSource.memoryCache);
+      expect(
+        (await read(forceRefresh: true)).source,
+        CapabilitySnapshotSource.network,
+      );
+      expect(requests, 2);
+    },
+  );
+
   test('collapses a burst of concurrent capability reads into one', () async {
     var requests = 0;
     final release = Completer<void>();

@@ -34,6 +34,20 @@ enum AvatarResponseStatus { image, notModified, notFound }
 
 enum WebPushRegistrationStatus { active, activationRequired }
 
+/// Identifies whether an authenticated capability read reached the server.
+enum CapabilitySnapshotSource { network, memoryCache }
+
+/// A validated capability snapshot together with its transport provenance.
+final class AuthenticatedCapabilityRead {
+  const AuthenticatedCapabilityRead({
+    required this.snapshot,
+    required this.source,
+  });
+
+  final CapabilitySnapshot snapshot;
+  final CapabilitySnapshotSource source;
+}
+
 final class AvatarResponse {
   const AvatarResponse({
     required this.status,

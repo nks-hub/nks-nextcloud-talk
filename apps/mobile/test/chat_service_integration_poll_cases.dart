@@ -714,11 +714,17 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
         );
 
         await binding.synchronize();
+        expect(capabilityRequests, 1);
         await service.sendText(
           accountId: 'account-a',
           roomToken: 'rooma123',
           message: 'Synthetic ordinary reply before named transition',
           threadId: 109,
+        );
+        expect(
+          capabilityRequests,
+          2,
+          reason: 'send admission requires a fresh capability read',
         );
         final ordinaryView = await chat.getScope(
           accountId: 'account-a',
@@ -752,9 +758,9 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
         await binding.synchronize();
         await binding.synchronize();
 
-        // Re-preparing costs no capability request while the snapshot is valid;
+        // Live re-preparing can reuse the snapshot freshly verified by send;
         // the root/dedicated request split is what proves the re-prepare happened.
-        expect(capabilityRequests, 1);
+        expect(capabilityRequests, 2);
         expect(rootRequests, 2);
         expect(dedicatedRequests, greaterThanOrEqualTo(1));
         expect(dedicatedCursors.first, '109');

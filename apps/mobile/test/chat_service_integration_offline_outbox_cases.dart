@@ -97,6 +97,107 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
     );
 
     test(
+      'hot capability cache cannot authorize offline chat transport',
+      () async {
+        const storedFeatures = <String>{
+          'conversation-v4',
+          'chat-v2',
+          'chat-reference-id',
+        };
+        await accounts.updateTalkFeatures('account-a', storedFeatures);
+        await chat.recordCapabilities(
+          accountId: 'account-a',
+          talkFeatures: storedFeatures,
+          observedAt: DateTime.utc(2026, 1, 1),
+        );
+
+        var networkAvailable = true;
+        var capabilityRequests = 0;
+        var sendRequests = 0;
+        final api = HttpNextcloudApi(
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              capabilityRequests++;
+              if (!networkAvailable) {
+                throw http.ClientException(
+                  'Synthetic offline capability failure',
+                  request.url,
+                );
+              }
+              return http.Response(
+                jsonEncode(
+                  _chatCapabilities(talkFeatures: storedFeatures.toList()),
+                ),
+                200,
+              );
+            }
+            if (request.method == 'GET') {
+              if (!networkAvailable) {
+                throw StateError('Offline send must not fetch chat');
+              }
+              return http.Response('', 304);
+            }
+            expect(request.method, 'POST');
+            sendRequests++;
+            if (!networkAvailable) {
+              throw StateError('Offline send must not reach chat transport');
+            }
+            return http.Response(
+              jsonEncode(
+                _sendResponse(
+                  referenceId: request.bodyFields['referenceId']!,
+                  message: request.bodyFields['message']!,
+                ),
+              ),
+              201,
+              headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+            );
+          }),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+
+        await api.getAuthenticatedCapabilities(
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          loginName: 'fixture-user',
+          appPassword: 'fixture-app-password-never-use',
+        );
+        expect(capabilityRequests, 1);
+
+        networkAvailable = false;
+        await service.sendText(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          message: 'Queued despite a hot capability cache',
+        );
+
+        final queued = await database
+            .select(database.textSendOperations)
+            .getSingle();
+        expect(capabilityRequests, 2);
+        expect(sendRequests, 0);
+        expect(queued.outboxState, 'queued');
+        expect(queued.attemptCount, 0);
+
+        networkAvailable = true;
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+        final completed = await database
+            .select(database.textSendOperations)
+            .getSingle();
+        expect(capabilityRequests, 3);
+        expect(sendRequests, 1);
+        expect(completed.operationId, queued.operationId);
+        expect(completed.outboxState, 'completed');
+      },
+    );
+
+    test(
       'offline send rejects a missing persisted capability snapshot',
       () async {
         var nonCapabilityRequests = 0;
