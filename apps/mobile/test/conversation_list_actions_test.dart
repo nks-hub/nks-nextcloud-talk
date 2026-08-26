@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,9 +83,12 @@ void main() {
             rawJson: jsonEncode(roomJson),
           ),
         );
-    return (database.select(
-      database.cachedConversations,
-    )..where((conversation) => conversation.token.equals(token))).getSingle();
+    return (database.select(database.cachedConversations)..where(
+          (conversation) =>
+              conversation.accountId.equals(account.id) &
+              conversation.token.equals(token),
+        ))
+        .getSingle();
   }
 
   Future<void> setTalkFeatures(Set<String> features) async {
@@ -94,23 +99,43 @@ void main() {
   Widget app({
     required List<CachedConversation> conversations,
     required http.Client client,
+    StoredAccount? displayedAccount,
+    ValueListenable<StoredAccount>? accountListenable,
+    Map<String, List<CachedConversation>> conversationsByAccount = const {},
+    HttpNextcloudApi? api,
   }) {
-    final api = HttpNextcloudApi(client: client);
+    final resolvedApi = api ?? HttpNextcloudApi(client: client);
+    Widget conversationList(
+      StoredAccount resolvedAccount,
+      List<CachedConversation> resolvedConversations,
+    ) {
+      return ConversationListView(
+        account: resolvedAccount,
+        conversations: resolvedConversations,
+        loading: false,
+        onRefresh: () async {},
+        onSelect: (_) {},
+      );
+    }
+
+    final resolvedAccount = displayedAccount ?? account;
     return ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
-        nextcloudApiProvider.overrideWithValue(api),
+        nextcloudApiProvider.overrideWithValue(resolvedApi),
       ],
       child: localizedTestApp(
         home: Scaffold(
-          body: ConversationListView(
-            account: account,
-            conversations: conversations,
-            loading: false,
-            onRefresh: () async {},
-            onSelect: (_) {},
-          ),
+          body: accountListenable == null
+              ? conversationList(resolvedAccount, conversations)
+              : ValueListenableBuilder<StoredAccount>(
+                  valueListenable: accountListenable,
+                  builder: (context, currentAccount, child) => conversationList(
+                    currentAccount,
+                    conversationsByAccount[currentAccount.id] ?? const [],
+                  ),
+                ),
         ),
       ),
     );
@@ -334,7 +359,10 @@ void main() {
         conversations: [conversation],
         client: MockClient((request) async {
           if (request.url.path.endsWith('/cloud/capabilities')) {
-            return http.Response(jsonEncode(capabilitiesJson()), 200);
+            return http.Response(
+              jsonEncode(capabilitiesJson(talkFeatures: _archiveTalkFeatures)),
+              200,
+            );
           }
           if (request.url.path.endsWith('/archive')) {
             expect(request.method, 'POST');
@@ -358,6 +386,158 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an open action sheet keeps the originating account', (
+    tester,
+  ) async {
+    await setTalkFeatures(_archiveTalkFeatures);
+    final accountA = account;
+    final conversationA = await insertConversation(token: 'sharedroom');
+    vault.values['account-b'] = 'password-b';
+    account = await accounts.upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://other.example.invalid',
+      loginName: 'other-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: _archiveTalkFeatures,
+      createdAt: DateTime.utc(2026, 1, 2),
+    );
+    final accountB = account;
+    final conversationB = await insertConversation(token: 'sharedroom');
+    final archiveHosts = <String>[];
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/archive')) {
+        archiveHosts.add(request.url.host);
+        return ocsSuccess();
+      }
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return http.Response(
+          jsonEncode(capabilitiesJson(talkFeatures: _archiveTalkFeatures)),
+          200,
+        );
+      }
+      return http.Response('', 404);
+    });
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final displayedAccount = ValueNotifier(accountA);
+    addTearDown(displayedAccount.dispose);
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversationA],
+        client: client,
+        accountListenable: displayedAccount,
+        conversationsByAccount: {
+          accountA.id: [conversationA],
+          accountB.id: [conversationB],
+        },
+        api: api,
+      ),
+    );
+    await tester.pump();
+    await tester.longPress(
+      find.byKey(const Key('conversation-tile-sharedroom')),
+    );
+    await tester.pumpAndSettle();
+
+    displayedAccount.value = accountB;
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('conversation-action-archive')));
+    await _pumpUntil(tester, () => archiveHosts.isNotEmpty);
+
+    expect(archiveHosts.single, 'cloud.example.invalid');
+  });
+
+  testWidgets('action resync keeps its account during a delayed request', (
+    tester,
+  ) async {
+    await setTalkFeatures(_markUnreadTalkFeatures);
+    final accountA = account;
+    final conversationA = await insertConversation(token: 'sharedroom');
+    vault.values['account-b'] = 'password-b';
+    account = await accounts.upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://other.example.invalid',
+      loginName: 'other-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: _markUnreadTalkFeatures,
+      createdAt: DateTime.utc(2026, 1, 2),
+    );
+    final accountB = account;
+    final conversationB = await insertConversation(token: 'sharedroom');
+    final markUnreadResponse = Completer<http.Response>();
+    final markUnreadStarted = Completer<void>();
+    final conversationHosts = <String>[];
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const [
+                'conversation-v4',
+                'chat-v2',
+                'chat-read-marker',
+                'chat-unread',
+              ],
+            ),
+          ),
+          200,
+        );
+      }
+      if (request.method == 'GET' &&
+          request.url.path.endsWith('/spreed/api/v4/room')) {
+        conversationHosts.add(request.url.host);
+        return http.Response('', 503);
+      }
+      if (request.method == 'DELETE' &&
+          request.url.path.endsWith('/chat/sharedroom/read')) {
+        if (!markUnreadStarted.isCompleted) {
+          markUnreadStarted.complete();
+        }
+        return markUnreadResponse.future;
+      }
+      return http.Response('', 404);
+    });
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final displayedAccount = ValueNotifier(accountA);
+    addTearDown(displayedAccount.dispose);
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversationA],
+        client: client,
+        accountListenable: displayedAccount,
+        conversationsByAccount: {
+          accountA.id: [conversationA],
+          accountB.id: [conversationB],
+        },
+        api: api,
+      ),
+    );
+    await tester.pump();
+    await tester.longPress(
+      find.byKey(const Key('conversation-tile-sharedroom')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('conversation-action-mark-unread')));
+    await _pumpUntil(tester, () => markUnreadStarted.isCompleted);
+
+    displayedAccount.value = accountB;
+    await tester.pump();
+    markUnreadResponse.complete(
+      ocsSuccess(const {
+        'token': 'sharedroom',
+        'lastReadMessage': 5,
+        'lastCommonReadMessage': 5,
+        'unreadMessages': 1,
+      }),
+    );
+    await _pumpUntil(tester, () => conversationHosts.isNotEmpty);
+
+    expect(conversationHosts.single, 'cloud.example.invalid');
+  });
+
   testWidgets(
     'archived conversations stay hidden behind a toggle and unarchive with DELETE',
     (tester) async {
@@ -374,7 +554,12 @@ void main() {
           conversations: [active, archived],
           client: MockClient((request) async {
             if (request.url.path.endsWith('/cloud/capabilities')) {
-              return http.Response(jsonEncode(capabilitiesJson()), 200);
+              return http.Response(
+                jsonEncode(
+                  capabilitiesJson(talkFeatures: _archiveTalkFeatures),
+                ),
+                200,
+              );
             }
             if (request.url.path.endsWith('/archive')) {
               expect(request.method, 'DELETE');
@@ -435,7 +620,10 @@ void main() {
         conversations: [conversation],
         client: MockClient((request) async {
           if (request.url.path.endsWith('/cloud/capabilities')) {
-            return http.Response(jsonEncode(capabilitiesJson()), 200);
+            return http.Response(
+              jsonEncode(capabilitiesJson(talkFeatures: _archiveTalkFeatures)),
+              200,
+            );
           }
           if (request.url.path.endsWith('/archive')) {
             return ocsFailure(401);

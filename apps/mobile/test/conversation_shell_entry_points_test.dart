@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,12 +20,15 @@ import 'test_support.dart';
 /// unreachable from the running app. These tests assert the calling chain
 /// itself, so a screen can never again count as done without an entry point.
 void main() {
-  Future<StoredAccount> seedAccount(AppDatabase database) async {
+  Future<StoredAccount> seedAccount(
+    AppDatabase database, {
+    String accountId = 'account-a',
+  }) async {
     final accounts = AccountRepository(database);
     final account = await accounts.upsertAccount(
-      accountId: 'account-a',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'test-user',
+      accountId: accountId,
+      serverUrl: 'https://$accountId.example.invalid',
+      loginName: 'user-$accountId',
       serverProductName: 'Nextcloud',
       createdAt: DateTime.utc(2026, 1, 1),
     );
@@ -34,17 +39,26 @@ void main() {
     AppDatabase database,
     StoredAccount account, {
     List<Override> overrides = const [],
+    List<StoredAccount>? availableAccounts,
+    Stream<StoredAccount?>? selectedAccounts,
+    Map<String, List<CachedConversation>> conversationsByAccount = const {},
   }) {
     return ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(MemoryCredentialVault()),
-        accountsProvider.overrideWith((ref) => Stream.value([account])),
-        selectedAccountProvider.overrideWith((ref) => Stream.value(account)),
+        accountsProvider.overrideWith(
+          (ref) => Stream.value(availableAccounts ?? [account]),
+        ),
+        selectedAccountProvider.overrideWith(
+          (ref) => selectedAccounts ?? Stream.value(account),
+        ),
         // Plain streams instead of the drift-backed ones: the fake clock in
         // testWidgets never drains drift's live-query timers.
         conversationsProvider.overrideWith(
-          (ref, accountId) => Stream.value(const <CachedConversation>[]),
+          (ref, accountId) => Stream.value(
+            conversationsByAccount[accountId] ?? const <CachedConversation>[],
+          ),
         ),
         chatMessagesProvider.overrideWith(
           (ref, key) => Stream.value(const <CachedChatMessage>[]),
@@ -100,22 +114,23 @@ void main() {
       });
     }
 
-    testWidgets('${layout.key}: the shell reaches the new conversation screen', (
-      tester,
-    ) async {
-      await pumpShell(tester);
+    testWidgets(
+      '${layout.key}: the shell reaches the new conversation screen',
+      (tester) async {
+        await pumpShell(tester);
 
-      expect(
-        find.byKey(const Key('open-new-conversation')),
-        findsOneWidget,
-        reason: 'NewConversationScreen has no other way in',
-      );
-      await tester.tap(find.byKey(const Key('open-new-conversation')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.byKey(const Key('open-new-conversation')),
+          findsOneWidget,
+          reason: 'NewConversationScreen has no other way in',
+        );
+        await tester.tap(find.byKey(const Key('open-new-conversation')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.byType(NewConversationScreen), findsOneWidget);
-    });
+        expect(find.byType(NewConversationScreen), findsOneWidget);
+      },
+    );
 
     testWidgets('${layout.key}: the shell reaches the settings screen', (
       tester,
@@ -135,6 +150,69 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byType(SettingsScreen), findsOneWidget);
+    });
+
+    testWidgets('${layout.key}: an account switch resets the archived view', (
+      tester,
+    ) async {
+      tester.view.physicalSize = layout.value;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      late StoredAccount accountA;
+      late StoredAccount accountB;
+      await tester.runAsync(() async {
+        accountA = await seedAccount(database);
+        accountB = await seedAccount(database, accountId: 'account-b');
+      });
+      final selectedAccounts = StreamController<StoredAccount?>();
+      addTearDown(selectedAccounts.close);
+
+      await tester.pumpWidget(
+        wrapShell(
+          database,
+          accountA,
+          availableAccounts: [accountA, accountB],
+          selectedAccounts: selectedAccounts.stream,
+          conversationsByAccount: {
+            accountA.id: [
+              _conversation(accountA.id, 'roomaa'),
+              _conversation(accountA.id, 'roomab', archived: true),
+            ],
+            accountB.id: [
+              _conversation(accountB.id, 'roomba'),
+              _conversation(accountB.id, 'roombb', archived: true),
+            ],
+          },
+          overrides: [
+            themePreferenceStoreProvider.overrideWithValue(
+              _MemoryThemePreferenceStore(),
+            ),
+          ],
+        ),
+      );
+      selectedAccounts.add(accountA);
+      await tester.pump();
+      await tester.pump();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+
+      expect(find.byKey(const Key('conversation-tile-roomaa')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('conversation-archived-toggle')));
+      await tester.pump();
+      expect(find.byKey(const Key('conversation-tile-roomab')), findsOneWidget);
+
+      selectedAccounts.add(accountB);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byKey(const Key('conversation-tile-roomba')), findsOneWidget);
+      expect(find.byKey(const Key('conversation-tile-roombb')), findsNothing);
+      expect(find.text('Back to conversations'), findsNothing);
     });
   }
 
@@ -172,6 +250,32 @@ void main() {
       );
       expect(app.darkTheme?.brightness, AppTheme.dark().brightness);
     },
+  );
+}
+
+CachedConversation _conversation(
+  String accountId,
+  String token, {
+  bool archived = false,
+}) {
+  return CachedConversation(
+    accountId: accountId,
+    token: token,
+    displayName: token,
+    description: '',
+    lastActivity: 1,
+    unreadMessages: 0,
+    favorite: false,
+    isArchived: archived,
+    readOnly: 0,
+    roomType: 2,
+    roomName: '',
+    objectType: '',
+    avatarVersion: '',
+    isCustomAvatar: false,
+    lastMessageText: 'Preview',
+    lastMessageTimestamp: 1,
+    rawJson: '{}',
   );
 }
 

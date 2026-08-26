@@ -49,12 +49,22 @@ final class _ConversationListViewState
     extends ConsumerState<ConversationListView> {
   var _showArchived = false;
 
+  @override
+  void didUpdateWidget(covariant ConversationListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.account.id != widget.account.id) {
+      _showArchived = false;
+    }
+  }
+
   Future<void> _openActions(CachedConversation conversation) async {
+    final account = widget.account;
+    final accountId = account.id;
     final canMarkUnread =
-        _canMarkUnread(widget.account, conversation) &&
+        _canMarkUnread(account, conversation) &&
         conversation.unreadMessages == 0;
     final canToggleArchived = _talkFeatures(
-      widget.account,
+      account,
     ).contains('archived-conversations-v2');
     if (!canMarkUnread && !canToggleArchived) {
       return;
@@ -105,24 +115,29 @@ final class _ConversationListViewState
           () => ref
               .read(roomSettingsServiceProvider)
               .markConversationUnread(
-                accountId: widget.account.id,
+                accountId: accountId,
                 roomToken: conversation.token,
               ),
+          accountId: accountId,
         );
       case _ConversationAction.toggleArchived:
         await _runAction(
           () => ref
               .read(roomSettingsServiceProvider)
               .setArchived(
-                accountId: widget.account.id,
+                accountId: accountId,
                 roomToken: conversation.token,
                 archived: !conversation.isArchived,
               ),
+          accountId: accountId,
         );
     }
   }
 
-  Future<void> _runAction(Future<void> Function() action) async {
+  Future<void> _runAction(
+    Future<void> Function() action, {
+    required String accountId,
+  }) async {
     try {
       await action();
     } on RoomSettingsException catch (error) {
@@ -137,7 +152,7 @@ final class _ConversationListViewState
     try {
       await ref
           .read(conversationSyncServiceProvider)
-          .sync(widget.account.id, forceFull: true);
+          .sync(accountId, forceFull: true);
     } on ConversationSyncException {
       // The action already succeeded server-side; a later sync will catch up.
     }
