@@ -1,6 +1,6 @@
 # Audit závislostí a assetů
 
-Datum poslední kontroly: 25. srpna 2026.
+Datum poslední kontroly: 26. srpna 2026.
 
 Tento dokument je průběžná distribuční brána pro projekt licencovaný pod
 `GPL-3.0-or-later`. Evidence vychází z konkrétního lockfilu a licenčního souboru
@@ -75,16 +75,16 @@ na přesném upstream tagu.
 
 | Komponenta | Verze a integrita | Licence a notice | Použití | Stav |
 | --- | --- | --- | --- | --- |
-| [`org.unifiedpush.android:connector`](https://codeberg.org/UnifiedPush/android-connector/src/tag/3.3.3) | 3.3.3; AAR SHA-256 `a843bbd7392bd03ef3c19ce11a4f48d0b5ffd882dd07e29a7b2116d9984a4625`; tag LICENSE SHA-256 `65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa` | Apache-2.0; Maven POM a tag LICENSE se shodují | UnifiedPush registrační a callback API | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
+| [`org.unifiedpush.android:connector`](https://codeberg.org/UnifiedPush/android-connector/src/tag/3.3.5) | 3.3.5; tag/commit `04820c8cfe11fe283da50c1a990529fb167eac9d`; AAR SHA-256 `fa017cdfabbdc9af021e1f8c8eff2c8098e701d7a2c599937dce0b4ecf1e929b`; tag LICENSE SHA-256 `65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa` | Apache-2.0; Maven POM a tag LICENSE se shodují | UnifiedPush registrační a callback API | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
 | [`org.unifiedpush.android:embedded-fcm-distributor`](https://codeberg.org/UnifiedPush/android-embedded_fcm_distributor/src/tag/3.1.0) | 3.1.0; AAR SHA-256 `a2e730e33c54a5d59141ac6657b6969375c91e27f64ae9299fab2275e4707291`; tag LICENSE SHA-256 `620e35bd6e6066ee0376391296ff595459584fe135853d8f60434d38693f06cb` | Tag obsahuje plný LGPL-2.1 text, zatímco publikovaný Maven POM odlišně deklaruje Apache-2.0 | Vestavěné získání FCM Web Push endpointu bez druhé aplikace | LGPL text není sám o sobě v konfliktu s GPL-3.0-or-later, ale před release je povinný explicitní notice, corresponding-source/relink audit a vyřešení rozporu metadat; nelze jej zatím evidovat jako Apache-2.0 |
-| [`com.google.crypto.tink:tink`](https://github.com/tink-crypto/tink-java/tree/v1.21.0) | 1.21.0; JAR SHA-256 `065086dbbd61c95529f782966c3462838cc8a801ba78420223aa319175a444ff`; tag LICENSE SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` | Apache-2.0 | Transitivní Web Push kryptografie connectoru | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
+| [`com.google.crypto.tink:tink`](https://github.com/tink-crypto/tink-java/tree/v1.23.0) | 1.23.0; tag/commit `7d41a6435667e6ec543e49ac544ff599b72601c9`; JAR SHA-256 `5bcdc8798ce106f5145acb4a0e993c5e5861337b1e75ca88ceb6ab9da10fa512`; tag LICENSE SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` | Apache-2.0 | Transitivní Web Push kryptografie connectoru | Kompatibilní s GPL-3.0-or-later; zachovat Apache licenci a notices |
 
 <!-- markdownlint-enable MD013 -->
 
 `flutter_secure_storage` 11.0.0 přivádí nepoužitý `tink-android` 1.23.0. Jeho
-třídy se překrývají s Tink Core 1.21.0 vyžadovaným connectorem a sestavení by
+třídy se překrývají s Tink Core 1.23.0 vyžadovaným connectorem a sestavení by
 selhalo na duplicitních třídách. Aplikační Gradle konfigurace proto vylučuje jen
-`tink-android`; aktuální dependency graph potvrzuje jediný Tink Core 1.21.0.
+`tink-android`; aktuální dependency graph potvrzuje jediný Tink Core 1.23.0.
 Zdroj Android části `flutter_secure_storage` Tink API neimportuje.
 
 Úplný artefaktový audit dalších transitivních JVM závislostí connectoru

@@ -49,7 +49,7 @@ configurations.configureEach {
 }
 
 dependencies {
-    implementation("org.unifiedpush.android:connector:3.3.3")
+    implementation("org.unifiedpush.android:connector:3.3.5")
     implementation("org.unifiedpush.android:embedded-fcm-distributor:3.1.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
