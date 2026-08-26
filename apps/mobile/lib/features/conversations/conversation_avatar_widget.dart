@@ -8,6 +8,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../data/conversation_avatar_repository.dart';
+import '../../core/desktop_metrics.dart';
 import 'conversation_avatar.dart';
 
 final class ConversationAvatar extends ConsumerWidget {
@@ -15,16 +16,18 @@ final class ConversationAvatar extends ConsumerWidget {
     super.key,
     required this.account,
     required this.conversation,
-    this.radius = 24,
+    this.radius,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
-  final double radius;
+  /// Defaults to the platform's list avatar size when omitted.
+  final double? radius;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = this.radius ?? context.listAvatarRadius;
     final source = resolveConversationAvatar(
       server: ServerBase.parse(account.serverUrl),
       talkFeatures: _decodeTalkFeatures(account.talkFeaturesJson),

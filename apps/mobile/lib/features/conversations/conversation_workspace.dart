@@ -289,7 +289,7 @@ final class _ExpandedShell extends StatelessWidget {
                 children: [
                   ConstrainedBox(
                     key: const Key('conversation-list-header'),
-                    constraints: const BoxConstraints(minHeight: 72),
+                    constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
                       child: Row(

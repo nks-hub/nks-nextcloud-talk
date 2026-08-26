@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/desktop_metrics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
@@ -274,7 +275,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
       children: [
         Container(
           key: const Key('chat-room-header'),
-          constraints: const BoxConstraints(minHeight: 72),
+          constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
             border: Border(

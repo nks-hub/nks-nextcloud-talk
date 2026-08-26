@@ -6,6 +6,7 @@ import 'package:talk_protocol/talk_protocol.dart' show MessageSearchResult;
 
 import '../../app_providers.dart';
 import '../../core/brand_mark.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
+import 'package:nextcloudtalk/core/desktop_metrics.dart';
 
 /// Mouse and keyboard get tighter controls than fingers do. The touch minimum
 /// is an accessibility floor, so the mobile numbers are asserted exactly and
@@ -91,6 +92,41 @@ void main() {
       expect(sizes['filled']!.height, 38, reason: '$platform FilledButton');
       expect(sizes['outlined']!.height, 36, reason: '$platform OutlinedButton');
       expect(sizes['field']!.height, 40, reason: '$platform TextField');
+    }
+  });
+
+  testWidgets('widget metrics follow the platform', (tester) async {
+    Future<List<double>> metrics(TargetPlatform platform) async {
+      debugDefaultTargetPlatformOverride = platform;
+      late List<double> read;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Builder(
+            builder: (context) {
+              read = [
+                context.listRowHeight,
+                context.listAvatarRadius,
+                context.paneHeaderHeight,
+              ];
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      debugDefaultTargetPlatformOverride = null;
+      return read;
+    }
+
+    expect(await metrics(TargetPlatform.android), [80, 24, 72]);
+    expect(await metrics(TargetPlatform.iOS), [80, 24, 72]);
+    for (final platform in const [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    ]) {
+      expect(await metrics(platform), [56, 20, 52], reason: '$platform');
     }
   });
 
