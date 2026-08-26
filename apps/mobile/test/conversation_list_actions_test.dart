@@ -16,6 +16,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+const _markUnreadTalkFeatures = {'chat-v2', 'chat-read-marker', 'chat-unread'};
+
 void main() {
   late AppDatabase database;
   late AccountRepository accounts;
@@ -79,6 +81,11 @@ void main() {
     )..where((conversation) => conversation.token.equals(token))).getSingle();
   }
 
+  Future<void> setTalkFeatures(Set<String> features) async {
+    await accounts.updateTalkFeatures(account.id, features);
+    account = (await accounts.getAccount(account.id))!;
+  }
+
   Widget app({
     required List<CachedConversation> conversations,
     required http.Client client,
@@ -128,93 +135,153 @@ void main() {
     );
   }
 
-  testWidgets(
-    'long press offers mark-unread only for a read conversation, always offers archive',
-    (tester) async {
-      final read = await insertConversation(token: 'roomread');
-      final unread = await insertConversation(
-        token: 'roomunread',
-        unreadMessages: 3,
-      );
-
-      await tester.pumpWidget(
-        app(
-          conversations: [read, unread],
-          client: MockClient((request) async => http.Response('', 404)),
-        ),
-      );
-      await tester.pump();
-
-      await tester.longPress(find.byKey(const Key('conversation-tile-roomread')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('conversation-action-mark-unread')), findsOneWidget);
-      expect(find.byKey(const Key('conversation-action-archive')), findsOneWidget);
-      expect(find.text('Archive conversation'), findsOneWidget);
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pumpAndSettle();
-
-      await tester.longPress(find.byKey(const Key('conversation-tile-roomunread')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('conversation-action-mark-unread')), findsNothing);
-      expect(find.byKey(const Key('conversation-action-archive')), findsOneWidget);
-
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('marking a conversation unread calls the chat read-marker endpoint', (
+  testWidgets('mark-unread stays hidden without its capability profile', (
     tester,
   ) async {
-    final conversation = await insertConversation(token: 'rooma');
-    var markUnreadRequests = 0;
+    await setTalkFeatures(const {'chat-v2', 'chat-read-marker'});
+    final conversation = await insertConversation(token: 'roomread');
 
     await tester.pumpWidget(
       app(
         conversations: [conversation],
-        client: MockClient((request) async {
-          if (request.url.path.endsWith('/cloud/capabilities')) {
-            return http.Response(
-              jsonEncode(
-                capabilitiesJson(
-                  talkFeatures: const [
-                    'conversation-v4',
-                    'chat-v2',
-                    'chat-read-marker',
-                    'chat-unread',
-                  ],
-                ),
-              ),
-              200,
-            );
-          }
-          if (request.method == 'DELETE' &&
-              request.url.path.endsWith('/chat/rooma/read')) {
-            markUnreadRequests++;
-            return ocsSuccess(const {
-              'token': 'rooma',
-              'lastReadMessage': 5,
-              'lastCommonReadMessage': 5,
-              'unreadMessages': 1,
-            });
-          }
-          return http.Response('', 404);
-        }),
+        client: MockClient((request) async => http.Response('', 404)),
       ),
     );
     await tester.pump();
 
-    await tester.longPress(find.byKey(const Key('conversation-tile-rooma')));
+    await tester.longPress(find.byKey(const Key('conversation-tile-roomread')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('conversation-action-mark-unread')));
-    await _pumpUntil(tester, () => markUnreadRequests == 1);
-    // The action triggers a best-effort background resync; let it settle
-    // (it fails against the unmocked conversation-list endpoint and is
-    // swallowed) before the database closes in tearDown.
-    await _settle(tester);
 
-    expect(markUnreadRequests, 1);
+    expect(
+      find.byKey(const Key('conversation-action-mark-unread')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('conversation-action-archive')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('mark-unread is offered for a supported read conversation', (
+    tester,
+  ) async {
+    await setTalkFeatures(_markUnreadTalkFeatures);
+    final conversation = await insertConversation(token: 'roomread');
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('conversation-tile-roomread')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('conversation-action-mark-unread')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('conversation-action-archive')),
+      findsOneWidget,
+    );
+    expect(find.text('Archive conversation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mark-unread stays hidden for a supported unread conversation', (
+    tester,
+  ) async {
+    await setTalkFeatures(_markUnreadTalkFeatures);
+    final conversation = await insertConversation(
+      token: 'roomunread',
+      unreadMessages: 3,
+    );
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(
+      find.byKey(const Key('conversation-tile-roomunread')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('conversation-action-mark-unread')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('conversation-action-archive')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'marking a conversation unread calls the chat read-marker endpoint',
+    (tester) async {
+      await setTalkFeatures(_markUnreadTalkFeatures);
+      final conversation = await insertConversation(token: 'rooma');
+      var markUnreadRequests = 0;
+
+      await tester.pumpWidget(
+        app(
+          conversations: [conversation],
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              return http.Response(
+                jsonEncode(
+                  capabilitiesJson(
+                    talkFeatures: const [
+                      'conversation-v4',
+                      'chat-v2',
+                      'chat-read-marker',
+                      'chat-unread',
+                    ],
+                  ),
+                ),
+                200,
+              );
+            }
+            if (request.method == 'DELETE' &&
+                request.url.path.endsWith('/chat/rooma/read')) {
+              markUnreadRequests++;
+              return ocsSuccess(const {
+                'token': 'rooma',
+                'lastReadMessage': 5,
+                'lastCommonReadMessage': 5,
+                'unreadMessages': 1,
+              });
+            }
+            return http.Response('', 404);
+          }),
+        ),
+      );
+      await tester.pump();
+
+      await tester.longPress(find.byKey(const Key('conversation-tile-rooma')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('conversation-action-mark-unread')),
+      );
+      await _pumpUntil(tester, () => markUnreadRequests == 1);
+      // The action triggers a best-effort background resync; let it settle
+      // (it fails against the unmocked conversation-list endpoint and is
+      // swallowed) before the database closes in tearDown.
+      await _settle(tester);
+
+      expect(markUnreadRequests, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('archiving a conversation calls the archive endpoint with POST', (
     tester,
@@ -278,15 +345,27 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byKey(const Key('conversation-tile-roomactive')), findsOneWidget);
-      expect(find.byKey(const Key('conversation-tile-roomarchived')), findsNothing);
+      expect(
+        find.byKey(const Key('conversation-tile-roomactive')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('conversation-tile-roomarchived')),
+        findsNothing,
+      );
       expect(find.text('Archived (1)'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('conversation-archived-toggle')));
       await tester.pump();
 
-      expect(find.byKey(const Key('conversation-tile-roomactive')), findsNothing);
-      expect(find.byKey(const Key('conversation-tile-roomarchived')), findsOneWidget);
+      expect(
+        find.byKey(const Key('conversation-tile-roomactive')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('conversation-tile-roomarchived')),
+        findsOneWidget,
+      );
       expect(find.text('Back to conversations'), findsOneWidget);
 
       await tester.longPress(
@@ -329,7 +408,10 @@ void main() {
     await tester.tap(find.byKey(const Key('conversation-action-archive')));
     await _pumpUntil(
       tester,
-      () => find.byKey(const Key('conversation-action-error')).evaluate().isNotEmpty,
+      () => find
+          .byKey(const Key('conversation-action-error'))
+          .evaluate()
+          .isNotEmpty,
     );
 
     expect(

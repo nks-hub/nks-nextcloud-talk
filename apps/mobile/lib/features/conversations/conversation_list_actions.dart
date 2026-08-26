@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
@@ -48,13 +51,14 @@ final class _ConversationListViewState
 
   Future<void> _openActions(CachedConversation conversation) async {
     final strings = AppLocalizations.of(context);
+    final canMarkUnread = _canMarkUnread(widget.account, conversation);
     final action = await showModalBottomSheet<_ConversationAction>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (conversation.unreadMessages == 0)
+            if (canMarkUnread && conversation.unreadMessages == 0)
               ListTile(
                 key: const Key('conversation-action-mark-unread'),
                 leading: const Icon(Icons.mark_chat_unread_outlined),
@@ -462,6 +466,21 @@ final class _EmptyConversations extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+bool _canMarkUnread(StoredAccount account, CachedConversation conversation) {
+  try {
+    final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+    final profile = ChatCapabilityProfile.fromTalkFeatures(
+      jsonDecode(account.talkFeaturesJson),
+      federated: room.isFederated,
+    );
+    return profile.markUnread;
+  } on FormatException {
+    return false;
+  } on TalkProtocolException {
+    return false;
   }
 }
 
