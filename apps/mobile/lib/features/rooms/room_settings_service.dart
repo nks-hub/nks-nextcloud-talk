@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,9 +44,9 @@ final class RoomSettingsException implements Exception {
   String toString() => 'RoomSettingsException(${code.name})';
 }
 
-/// Applies conversation-settings changes (rename, description, notification
-/// level, favorite, leave, delete) scoped to a single account. Every action is
-/// a direct, single request; none of them retry or queue.
+/// Applies conversation-settings changes scoped to a single account. Every
+/// action is a direct request; read mutations for one room are serialized in
+/// memory, but no action is retried or durably queued.
 final class RoomSettingsService {
   RoomSettingsService({
     required AccountRepository accounts,
@@ -64,6 +65,8 @@ final class RoomSettingsService {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
+  final Map<({String accountId, String roomToken}), Future<void>>
+  _readMutationTails = {};
 
   Future<ConversationRoom> renameRoom({
     required String accountId,
@@ -291,6 +294,16 @@ final class RoomSettingsService {
   Future<void> markConversationUnread({
     required String accountId,
     required String roomToken,
+  }) => _serializeReadMutation(
+    accountId: accountId,
+    roomToken: roomToken,
+    action: () =>
+        _markConversationUnread(accountId: accountId, roomToken: roomToken),
+  );
+
+  Future<void> _markConversationUnread({
+    required String accountId,
+    required String roomToken,
   }) async {
     final context = await _authContext(accountId);
     final conversation = await _accounts.getConversation(
@@ -347,7 +360,7 @@ final class RoomSettingsService {
 
     switch (response.classification) {
       case ChatReadClassification.unreadConfirmed:
-        final outcome = await _chat.applyChatReadResponse(response);
+        final outcome = await _applyChatReadResponse(response);
         if (outcome != ChatMergeOutcome.unreadApplied) {
           throw const RoomSettingsException(RoomSettingsError.invalidResponse);
         }
@@ -371,6 +384,20 @@ final class RoomSettingsService {
     required String accountId,
     required String roomToken,
     int? lastReadMessage,
+  }) => _serializeReadMutation(
+    accountId: accountId,
+    roomToken: roomToken,
+    action: () => _markConversationRead(
+      accountId: accountId,
+      roomToken: roomToken,
+      lastReadMessage: lastReadMessage,
+    ),
+  );
+
+  Future<void> _markConversationRead({
+    required String accountId,
+    required String roomToken,
+    required int? lastReadMessage,
   }) async {
     final context = await _authContext(accountId);
     final conversation = await _accounts.getConversation(
@@ -431,7 +458,7 @@ final class RoomSettingsService {
 
     switch (response.classification) {
       case ChatReadClassification.readConfirmed:
-        final outcome = await _chat.applyChatReadResponse(response);
+        final outcome = await _applyChatReadResponse(response);
         if (outcome != ChatMergeOutcome.readApplied) {
           throw const RoomSettingsException(RoomSettingsError.invalidResponse);
         }
@@ -784,6 +811,43 @@ final class RoomSettingsService {
       await _chat.ensureRootScope(account: account, conversation: conversation);
     } on Object {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+  }
+
+  Future<ChatMergeOutcome> _applyChatReadResponse(
+    ChatReadResponse response,
+  ) async {
+    try {
+      return await _chat.applyChatReadResponse(response);
+    } on Object {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+  }
+
+  Future<void> _serializeReadMutation({
+    required String accountId,
+    required String roomToken,
+    required Future<void> Function() action,
+  }) async {
+    final key = (accountId: accountId, roomToken: roomToken);
+    final previous = _readMutationTails[key];
+    final gate = Completer<void>();
+    final tail = gate.future;
+    _readMutationTails[key] = tail;
+    if (previous != null) {
+      try {
+        await previous;
+      } on Object {
+        // A failed earlier mutation must not permanently block this room.
+      }
+    }
+    try {
+      await action();
+    } finally {
+      gate.complete();
+      if (identical(_readMutationTails[key], tail)) {
+        _readMutationTails.remove(key);
+      }
     }
   }
 

@@ -18,6 +18,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_room_connectivity_wake_test.part.dart';
+part 'chat_room_read_marker_serialization_test.part.dart';
 
 void main() {
   testWidgets('root pane keeps background long poll silent and converges', (
@@ -72,6 +73,7 @@ void main() {
   });
 
   _registerConnectivityWakeTest();
+  _registerReadMarkerSerializationTest();
 }
 
 Future<void> _verifyThreadReadSuppressed(

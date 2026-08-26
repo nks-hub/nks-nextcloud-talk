@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
@@ -168,6 +169,194 @@ void main() {
       expect(scope?.lastCommonRead, '4241');
     },
   );
+
+  test('serializes auto-read and mark-unread for the same room', () async {
+    await insertRoom(
+      accountId: 'account-a',
+      token: 'rooma123',
+      lastMessageId: 20,
+    );
+    final firstReadStarted = Completer<void>();
+    final firstReadResponse = Completer<http.Response>();
+    final operations = <String>[];
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                  'chat-unread',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method == 'POST') {
+          final target = int.parse(
+            Uri.splitQueryString(request.body)['lastReadMessage']!,
+          );
+          operations.add('read:$target');
+          firstReadStarted.complete();
+          return firstReadResponse.future;
+        }
+        if (request.method == 'DELETE') {
+          operations.add('unread');
+          return http.Response(
+            jsonEncode(_readOcs(lastReadMessage: 19, unreadMessages: 1)),
+            200,
+          );
+        }
+        return http.Response('', 404);
+      }),
+    );
+
+    final read = service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      lastReadMessage: 20,
+    );
+    await firstReadStarted.future;
+    final unread = service.markConversationUnread(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(operations, ['read:20']);
+
+    firstReadResponse.complete(
+      http.Response(jsonEncode(_readOcs(lastReadMessage: 20)), 200),
+    );
+    await Future.wait([read, unread]);
+    expect(operations, ['read:20', 'unread']);
+    final scope = await ChatRepository(
+      database,
+    ).getScope(accountId: 'account-a', roomToken: 'rooma123', threadId: null);
+    expect(scope?.lastReadMessage, 19);
+    expect(scope?.unreadMessages, 1);
+  });
+
+  test('does not serialize read markers across account boundaries', () async {
+    for (final accountId in <String>['account-a', 'account-b']) {
+      await insertRoom(
+        accountId: accountId,
+        token: 'rooma123',
+        lastMessageId: 20,
+      );
+    }
+    final accountAStarted = Completer<void>();
+    final accountAResponse = Completer<http.Response>();
+    final hosts = <String>[];
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        hosts.add(request.url.host);
+        if (request.url.host == 'a.example.invalid') {
+          accountAStarted.complete();
+          return accountAResponse.future;
+        }
+        return http.Response(jsonEncode(_readOcs(lastReadMessage: 20)), 200);
+      }),
+    );
+
+    final accountARead = service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      lastReadMessage: 20,
+    );
+    await accountAStarted.future;
+    await service.markConversationRead(
+      accountId: 'account-b',
+      roomToken: 'rooma123',
+      lastReadMessage: 20,
+    );
+    expect(hosts, ['a.example.invalid', 'b.example.invalid']);
+
+    accountAResponse.complete(
+      http.Response(jsonEncode(_readOcs(lastReadMessage: 20)), 200),
+    );
+    await accountARead;
+  });
+
+  test('maps a database write failure and releases the room lane', () async {
+    await insertRoom(
+      accountId: 'account-a',
+      token: 'rooma123',
+      lastMessageId: 12,
+    );
+    var reads = 0;
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        reads++;
+        return http.Response(jsonEncode(_readOcs(lastReadMessage: 12)), 200);
+      }),
+    );
+    await database.customStatement('''
+      CREATE TRIGGER fail_read_marker_conversation_update
+      BEFORE UPDATE ON cached_conversations
+      BEGIN
+        SELECT RAISE(ABORT, 'forced read marker rollback');
+      END
+    ''');
+
+    await expectLater(
+      service.markConversationRead(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        lastReadMessage: 12,
+      ),
+      throwsA(
+        isA<RoomSettingsException>().having(
+          (error) => error.code,
+          'code',
+          RoomSettingsError.invalidResponse,
+        ),
+      ),
+    );
+    await database.customStatement(
+      'DROP TRIGGER fail_read_marker_conversation_update',
+    );
+    await service.markConversationRead(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      lastReadMessage: 12,
+    );
+    expect(reads, 2);
+  });
 
   test('refuses a room whose cache has no last message', () async {
     await insertRoom(accountId: 'account-a', token: 'rooma123');
@@ -363,7 +552,10 @@ Map<String, Object?> _roomJson() {
   return Map<String, Object?>.from(rooms.first! as Map<String, Object?>);
 }
 
-Map<String, Object?> _readOcs({required int lastReadMessage}) {
+Map<String, Object?> _readOcs({
+  required int lastReadMessage,
+  int unreadMessages = 0,
+}) {
   return <String, Object?>{
     'ocs': <String, Object?>{
       'meta': <String, Object?>{
@@ -375,7 +567,7 @@ Map<String, Object?> _readOcs({required int lastReadMessage}) {
         'token': 'rooma123',
         'lastReadMessage': lastReadMessage,
         'lastCommonReadMessage': lastReadMessage,
-        'unreadMessages': 0,
+        'unreadMessages': unreadMessages,
       },
     },
   };
