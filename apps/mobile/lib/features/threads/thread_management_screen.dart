@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -488,7 +489,7 @@ final class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
                           children: [
                             ListTile(
                               key: const Key('thread-management-rename'),
-                              minTileHeight: 56,
+                              minTileHeight: context.actionRowHeight,
                               leading: const Icon(Icons.edit_outlined),
                               title: Text(strings.threadManagementRenameAction),
                               trailing: const Icon(Icons.chevron_right_rounded),
@@ -681,26 +682,21 @@ final class _ThreadListTile extends StatelessWidget {
       strings,
       thread.notificationLevel,
     );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 72),
-      child: ListTile(
-        key: Key(
-          'thread-management-item-${thread.roomToken}-${thread.threadId}',
+    return ListTile(
+      key: Key('thread-management-item-${thread.roomToken}-${thread.threadId}'),
+      minTileHeight: context.secondaryRowHeight,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: Tooltip(
+        message: notification,
+        child: Icon(
+          _notificationIcon(thread.notificationLevel),
+          semanticLabel: notification,
         ),
-        minTileHeight: 72,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(details, maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: Tooltip(
-          message: notification,
-          child: Icon(
-            _notificationIcon(thread.notificationLevel),
-            semanticLabel: notification,
-          ),
-        ),
-        onTap: onTap,
       ),
+      onTap: onTap,
     );
   }
 }

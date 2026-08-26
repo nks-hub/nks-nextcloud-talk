@@ -108,6 +108,8 @@ void main() {
                 context.listRowHeight,
                 context.listAvatarRadius,
                 context.paneHeaderHeight,
+                context.secondaryRowHeight,
+                context.actionRowHeight,
               ];
               return const SizedBox.shrink();
             },
@@ -119,14 +121,18 @@ void main() {
       return read;
     }
 
-    expect(await metrics(TargetPlatform.android), [80, 24, 72]);
-    expect(await metrics(TargetPlatform.iOS), [80, 24, 72]);
+    expect(await metrics(TargetPlatform.android), [80, 24, 72, 72, 56]);
+    expect(await metrics(TargetPlatform.iOS), [80, 24, 72, 72, 56]);
     for (final platform in const [
       TargetPlatform.windows,
       TargetPlatform.macOS,
       TargetPlatform.linux,
     ]) {
-      expect(await metrics(platform), [56, 20, 52], reason: '$platform');
+      expect(
+        await metrics(platform),
+        [56, 20, 52, 52, 44],
+        reason: '$platform',
+      );
     }
   });
 

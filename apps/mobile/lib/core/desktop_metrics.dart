@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The three widget dimensions that dominate how big the app feels.
+/// The fixed widget dimensions that dominate how big the app feels.
 ///
 /// `VisualDensity` cannot reach them — they are fixed box constraints and
 /// avatar radii — so they need a platform-aware source of their own. The
@@ -23,4 +23,11 @@ extension AppMetrics on BuildContext {
   /// Minimum height of a pane header — the conversation list header and the
   /// chat room header both use it, so they stay aligned with each other.
   double get paneHeaderHeight => _pointerFirst ? 52 : 72;
+
+  /// Height of a secondary list row, such as a thread in the thread list.
+  /// Shorter than [listRowHeight] because the row carries no unread badge.
+  double get secondaryRowHeight => _pointerFirst ? 52 : 72;
+
+  /// Height of an action row inside a card, such as "Rename thread".
+  double get actionRowHeight => _pointerFirst ? 44 : 56;
 }
