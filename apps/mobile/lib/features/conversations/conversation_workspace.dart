@@ -16,6 +16,7 @@ final class ConversationWorkspace extends StatefulWidget {
     required this.onAddAccount,
     required this.onOpenConversation,
     required this.onSelectConversation,
+    this.onOpenCreatedConversation,
   });
 
   final StoredAccount account;
@@ -35,6 +36,9 @@ final class ConversationWorkspace extends StatefulWidget {
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onOpenConversation;
   final ValueChanged<CachedConversation> onSelectConversation;
+
+  /// Opens a room the new-conversation screen just created or resolved.
+  final ValueChanged<String>? onOpenCreatedConversation;
 
   @override
   State<ConversationWorkspace> createState() => _ConversationWorkspaceState();
@@ -73,6 +77,7 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
     final onRefresh = widget.onRefresh;
     final onReauthenticate = widget.onReauthenticate;
     final onSelectAccount = widget.onSelectAccount;
+    final onOpenCreatedConversation = widget.onOpenCreatedConversation;
     final onAddAccount = widget.onAddAccount;
     final onOpenConversation = widget.onOpenConversation;
     final onSelectConversation = widget.onSelectConversation;
@@ -99,6 +104,7 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
             onSelectAccount: onSelectAccount,
             onAddAccount: onAddAccount,
             onOpenConversation: onOpenConversation,
+            onOpenCreatedConversation: onOpenCreatedConversation,
           );
         }
         _handedOverToken = null;
@@ -115,6 +121,7 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
           onSelectAccount: onSelectAccount,
           onAddAccount: onAddAccount,
           onSelectConversation: onSelectConversation,
+          onOpenCreatedConversation: onOpenCreatedConversation,
         );
       },
     );
@@ -143,6 +150,7 @@ final class _CompactShell extends StatelessWidget {
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onOpenConversation,
+    required this.onOpenCreatedConversation,
   });
 
   final StoredAccount account;
@@ -156,6 +164,7 @@ final class _CompactShell extends StatelessWidget {
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onOpenConversation;
+  final ValueChanged<String>? onOpenCreatedConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +238,12 @@ final class _CompactShell extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         key: const Key('open-new-conversation'),
-        onPressed: () => _openNewConversation(context, account.id, onRefresh),
+        onPressed: () => _openNewConversation(
+          context,
+          account.id,
+          onRefresh,
+          onCreated: onOpenCreatedConversation,
+        ),
         tooltip: strings.newConversationTitle,
         child: const Icon(Icons.chat_bubble_outline_rounded),
       ),
@@ -251,6 +265,7 @@ final class _ExpandedShell extends StatelessWidget {
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onSelectConversation,
+    required this.onOpenCreatedConversation,
   });
 
   final StoredAccount account;
@@ -265,6 +280,7 @@ final class _ExpandedShell extends StatelessWidget {
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onSelectConversation;
+  final ValueChanged<String>? onOpenCreatedConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +300,7 @@ final class _ExpandedShell extends StatelessWidget {
             const VerticalDivider(),
             SizedBox(
               key: const Key('conversation-list-pane'),
-              width: MediaQuery.sizeOf(context).width >= 1100 ? 390 : 330,
+              width: context.listPaneWidth,
               child: Column(
                 children: [
                   ConstrainedBox(
@@ -306,6 +322,7 @@ final class _ExpandedShell extends StatelessWidget {
                               context,
                               account.id,
                               onRefresh,
+                              onCreated: onOpenCreatedConversation,
                             ),
                             tooltip: strings.newConversationTitle,
                             icon: const Icon(Icons.chat_bubble_outline_rounded),

@@ -392,6 +392,9 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onSelectConversation: (conversation) {
             setState(() => _selectedConversationToken = conversation.token);
           },
+          onOpenCreatedConversation: (token) {
+            unawaited(_openAccountConversation(selected.id, token));
+          },
         );
       },
     );
@@ -586,18 +589,27 @@ void _openSettings(BuildContext context) {
 /// Opens the new-conversation screen and, once the server has created the
 /// room, refreshes the list so the caller's own conversation stream is the
 /// single source of truth for what exists.
+///
+/// [onCreated] then opens that room. Picking a person is a request to talk to
+/// them, so dropping the user back on the list would make them hunt for the
+/// conversation they just asked for.
 void _openNewConversation(
   BuildContext context,
   String accountId,
-  Future<void> Function() onRefresh,
-) {
+  Future<void> Function() onRefresh, {
+  ValueChanged<String>? onCreated,
+}) {
   Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (context) => NewConversationScreen(
         accountId: accountId,
-        onConversationCreated: (_) {
+        onConversationCreated: (token) {
           Navigator.of(context).pop();
-          unawaited(onRefresh());
+          if (onCreated == null) {
+            unawaited(onRefresh());
+            return;
+          }
+          onCreated(token.value);
         },
       ),
     ),
