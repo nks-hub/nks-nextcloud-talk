@@ -566,7 +566,7 @@ final class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 2) {
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.readOnly,
         );
@@ -576,24 +576,24 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(textSendOperations);
       }
       if (from < 3) {
-        await migrator.addColumn(accounts, accounts.talkFeaturesJson);
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,accounts, accounts.talkFeaturesJson);
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.roomType,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.roomName,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.objectType,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.avatarVersion,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.isCustomAvatar,
         );
@@ -628,7 +628,7 @@ final class AppDatabase extends _$AppDatabase {
         ''');
       }
       if (from >= 3 && from < 4) {
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           conversationAvatars,
           conversationAvatars.isCustomAvatar,
         );
@@ -637,7 +637,7 @@ final class AppDatabase extends _$AppDatabase {
         await customStatement('DELETE FROM conversation_avatars');
       }
       if (from >= 2 && from < 5) {
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           textSendOperations,
           textSendOperations.threadId,
         );
@@ -658,7 +658,7 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(chatDrafts);
       }
       if (from < 10) {
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.isArchived,
         );
@@ -678,19 +678,19 @@ final class AppDatabase extends _$AppDatabase {
         await migrator.createTable(callLifecycleSessions);
       }
       if (from < 8) {
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.peerStatus,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.peerStatusIcon,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.peerStatusMessage,
         );
-        await migrator.addColumn(
+        await _addColumnIfMissing(migrator,
           cachedConversations,
           cachedConversations.peerStatusClearAt,
         );
@@ -741,4 +741,28 @@ final class AppDatabase extends _$AppDatabase {
       }
     },
   );
+
+  /// Adds [column] to [table] unless it is already there.
+  ///
+  /// An interrupted migration keeps the steps it managed to run but leaves
+  /// `user_version` at the old value, so the next start replays them. Every
+  /// other step survives that replay on its own — tables and indexes are
+  /// created with `IF NOT EXISTS` and the backfills recompute from
+  /// `raw_json` — which left `addColumn` as the only step that could fail
+  /// and lock the app out of its own database for good.
+  Future<void> _addColumnIfMissing(
+    Migrator migrator,
+    TableInfo<Table, dynamic> table,
+    GeneratedColumn<Object> column,
+  ) async {
+    final existing = await customSelect(
+      'PRAGMA table_info(${table.actualTableName})',
+    ).get();
+    final present = existing.any(
+      (row) => row.read<String>('name') == column.name,
+    );
+    if (!present) {
+      await migrator.addColumn(table, column);
+    }
+  }
 }

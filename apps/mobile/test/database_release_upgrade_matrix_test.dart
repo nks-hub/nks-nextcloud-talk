@@ -14,6 +14,63 @@ void main() {
       () => _verifyReleaseUpgrade(release),
     );
   }
+
+  test(
+    'schema left ahead of user_version by an interrupted migration '
+    'still upgrades to v14',
+    _verifyInterruptedUpgrade,
+  );
+}
+
+/// An interrupted migration commits its completed steps but leaves
+/// `user_version` untouched, so the next start replays steps the schema
+/// already has. Reproduces a database recovered from a Windows 11 test
+/// machine: `user_version` 7 with every column and table through step 10.
+Future<void> _verifyInterruptedUpgrade() async {
+  final directory = await Directory.systemTemp.createTemp(
+    'nctalk-interrupted-',
+  );
+  final file = File(
+    '${directory.path}${Platform.pathSeparator}interrupted.sqlite',
+  );
+  AppDatabase? database;
+  try {
+    database = AppDatabase.forTesting(NativeDatabase(file));
+    await _seedSentinelData(database);
+    await _downgradeToReleaseSchema(database, 11);
+    await database.customStatement('PRAGMA user_version = 7');
+    await database.close();
+    database = null;
+
+    database = AppDatabase.forTesting(NativeDatabase(file));
+    final room = await database
+        .select(database.cachedConversations)
+        .getSingle();
+    final version = await database
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final tables = await database
+        .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .get();
+
+    expect(version.read<int>('user_version'), 14);
+    expect(room.isArchived, isTrue);
+    expect(room.peerStatus, 'away');
+    expect(
+      tables.map((row) => row.read<String>('name')).toSet(),
+      containsAll(<String>{
+        'chat_drafts',
+        'call_sessions',
+        'call_lifecycle_sessions',
+        'cached_threads',
+      }),
+    );
+  } finally {
+    await database?.close();
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
 }
 
 Future<void> _verifyReleaseUpgrade(_ReleaseSchema release) async {
