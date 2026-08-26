@@ -24,6 +24,9 @@ final class SecureCredentialVault implements CredentialVault {
   static const _macOsOptions = MacOsOptions(
     accessibility: KeychainAccessibility.first_unlock_this_device,
     synchronizable: false,
+    // The login Keychain supports sandboxed ad-hoc builds without a restricted
+    // access-group entitlement.
+    usesDataProtectionKeychain: false,
   );
 
   final FlutterSecureStorage _storage;

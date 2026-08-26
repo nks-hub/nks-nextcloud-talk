@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import Security
 import XCTest
 @testable import nextcloudtalk
 
@@ -60,5 +61,38 @@ class RunnerTests: XCTestCase {
       delivery.open(try XCTUnwrap(URL(string: "nctalk://other?uri=invalid")))
     )
     XCTAssertNil(delivery.takeLaunchLink())
+  }
+
+  func testKeychainRoundTripWorksForAdHocRunner() throws {
+    let service = "com.nkshub.nextcloudtalk.tests.\(UUID().uuidString)"
+    let account = UUID().uuidString
+    let expected = Data("temporary-keychain-value".utf8)
+    let baseQuery: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: account,
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+      kSecAttrSynchronizable as String: false,
+    ]
+
+    defer {
+      SecItemDelete(baseQuery as CFDictionary)
+    }
+
+    var addQuery = baseQuery
+    addQuery[kSecValueData as String] = expected
+    XCTAssertEqual(SecItemAdd(addQuery as CFDictionary, nil), errSecSuccess)
+
+    var readQuery = baseQuery
+    readQuery[kSecMatchLimit as String] = kSecMatchLimitOne
+    readQuery[kSecReturnData as String] = true
+    var item: CFTypeRef?
+    XCTAssertEqual(
+      SecItemCopyMatching(readQuery as CFDictionary, &item),
+      errSecSuccess
+    )
+    XCTAssertEqual(item as? Data, expected)
+
+    XCTAssertEqual(SecItemDelete(baseQuery as CFDictionary), errSecSuccess)
   }
 }
