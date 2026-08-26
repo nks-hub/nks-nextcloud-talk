@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app_badge_plus/app_badge_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
@@ -96,7 +99,35 @@ final class UnreadCountBadge extends StatelessWidget {
   }
 }
 
-/// Best-effort Android/iOS launcher icon badge. `isSupported()` covers
+/// Talks to the runner that owns the Windows taskbar overlay icon.
+///
+/// `app_badge_plus` declares only `android`, `ios` and `macos`, and Windows
+/// has no launcher badge API at all — the taskbar button takes a small overlay
+/// icon instead, which the runner draws from this count.
+const _windowsTaskbarBadgeChannel = MethodChannel(
+  'com.nkshub.nextcloudtalk/taskbar_badge',
+);
+
+/// Hands [count] to the runner, which redraws or clears the overlay icon.
+Future<void> setWindowsTaskbarBadge(int count) {
+  return _windowsTaskbarBadgeChannel.invokeMethod<void>('setBadge', count);
+}
+
+bool get _usesWindowsTaskbar => !kIsWeb && Platform.isWindows;
+
+Future<bool> _platformIsSupported() async {
+  return _usesWindowsTaskbar ? true : AppBadgePlus.isSupported();
+}
+
+Future<void> _platformUpdateBadge(int count) {
+  return _usesWindowsTaskbar
+      ? setWindowsTaskbarBadge(count)
+      : AppBadgePlus.updateBadge(count);
+}
+
+/// Best-effort launcher icon badge: Android and iOS launchers plus the macOS
+/// dock through `app_badge_plus`, and the Windows taskbar through the runner.
+/// `isSupported()` covers
 /// launchers that don't offer badges at all (checked once and cached), and
 /// every call is swallowed so a badge failure — unsupported launcher,
 /// missing platform channel, anything else — never crashes the app or
@@ -105,8 +136,8 @@ final class AppIconBadgeUpdater {
   AppIconBadgeUpdater({
     Future<bool> Function()? isSupported,
     Future<void> Function(int)? updateBadge,
-  }) : _isSupported = isSupported ?? AppBadgePlus.isSupported,
-       _updateBadge = updateBadge ?? AppBadgePlus.updateBadge;
+  }) : _isSupported = isSupported ?? _platformIsSupported,
+       _updateBadge = updateBadge ?? _platformUpdateBadge;
 
   final Future<bool> Function() _isSupported;
   final Future<void> Function(int) _updateBadge;

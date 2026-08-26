@@ -30,6 +30,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  taskbar_badge_ = std::make_unique<TaskbarBadge>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -45,6 +47,8 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Before the engine goes away: the badge holds a channel on its messenger.
+  taskbar_badge_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

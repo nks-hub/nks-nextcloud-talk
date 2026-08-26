@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -268,6 +269,32 @@ void main() {
       await updater.update(-5);
 
       expect(received, [0]);
+    });
+  });
+
+  group('setWindowsTaskbarBadge', () {
+    const channel = MethodChannel('com.nkshub.nextcloudtalk/taskbar_badge');
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    testWidgets('hands the count to the runner as an int', (tester) async {
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return null;
+          });
+
+      await setWindowsTaskbarBadge(7);
+      // Zero is what clears the overlay, so it must reach the runner too
+      // instead of being filtered out on the Dart side.
+      await setWindowsTaskbarBadge(0);
+
+      expect(calls.map((call) => call.method), ['setBadge', 'setBadge']);
+      expect(calls.map((call) => call.arguments), [7, 0]);
     });
   });
 
