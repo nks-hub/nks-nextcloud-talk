@@ -175,6 +175,19 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       _lastAutoReadMessageId = messageId;
     } on RoomSettingsException {
       // A later successful foreground cycle retries the same visible marker.
+    } on Error catch (error, stackTrace) {
+      _lastAutoReadKey = key;
+      _lastAutoReadMessageId = messageId;
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'Nextcloud Talk chat',
+          context: ErrorDescription(
+            'while automatically marking a message read',
+          ),
+        ),
+      );
     } finally {
       if (_autoReadInFlightKey == key &&
           _autoReadInFlightMessageId == messageId) {
