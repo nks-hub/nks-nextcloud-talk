@@ -468,15 +468,17 @@ stal by se nutný jen při budoucím požadavku na silnější transportní gara
 
 ### D-026: Minimální platformní baseline
 
-Stav: Přijato pro existující Flutter 3.44.4/Dart 3.12.2 scaffold.
+Stav: Aktualizováno po prvním skutečném macOS buildu 26. srpna 2026.
 
 - Android minSdk 24, targetSdk 36 a compileSdk 37 v ověřeném debug buildu;
 - iOS deployment target 13.0;
-- macOS deployment target 10.15;
+- macOS deployment target 11.0; `gal 2.3.3`, používaný pro ukládání médií,
+  deklaruje stejné minimum v Swift Package i CocoaPods kontraktu;
 - Windows a Linux podle toolchain baseline Flutter 3.44.4.
 
-Zvýšení minima vyžaduje konkrétní dependency nebo OS API důvod. Snížení minima
-vyžaduje reálný build a runtime test, ne pouze změnu čísla.
+Zvýšení minima vyžaduje konkrétní dependency nebo OS API důvod. První vzdálený
+macOS build přesně doložil konflikt původních 10.15 s nativním minimem `gal`.
+Snížení minima vyžaduje reálný build a runtime test, ne pouze změnu čísla.
 
 ### D-027: Desktop jako plnohodnotný produktový cíl
 

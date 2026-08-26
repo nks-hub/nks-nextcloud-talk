@@ -1,6 +1,6 @@
 # Flutter aplikační základ
 
-Datum aktualizace: 25. srpna 2026.
+Datum aktualizace: 26. srpna 2026.
 
 ## Stav
 
@@ -25,12 +25,17 @@ serverech a hovory zůstávají otevřené funkční brány.
 Jeden Flutter projekt obsahuje targety pro Android, iOS, Windows, macOS a Linux.
 Android namespace/applicationId, iOS a macOS bundle ID i Linux application ID
 jsou `com.nkshub.nextcloudtalk`. Android build má efektivní minSdk 24; iOS
-deployment target je 13.0 a macOS target 10.15.
+deployment target je 13.0 a macOS target 11.0.
 
 Aktuální Android debug build se sestavil, aktualizačně nainstaloval a spustil na
 `emulator-5554`. Na Windows dříve prošel release build i živý onboarding smoke.
-Platformní projekty pro iOS, macOS a Linux existují, ale jejich build na
-odpovídajícím hostu zatím není runtime důkazem.
+Na macOS 15.7.4 arm64 se z přesného commitu `f0d33c2` (base `b2676ab`)
+sestavil debug bundle a běžel jako běžný uživatel s viditelným oknem 800×628.
+Deployment test 1/1, analyze, codesign a bundle ID prošly; executable SHA-256
+je `0a4861b9974e7a1600cbbae2aa8e719e7fcaefd8b0a554debf41d11a17d3d5be`.
+RemoteCmd proces neměl Screen Recording oprávnění, proto zachycená plocha není
+UI screenshotový důkaz. Platformní projekty pro iOS a Linux existují, ale jejich
+build na odpovídajícím hostu zatím runtime důkaz nemá.
 
 ## Implementovaný tok
 
