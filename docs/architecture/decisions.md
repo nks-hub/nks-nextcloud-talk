@@ -644,7 +644,10 @@ předstírat existencí generated runneru.
 Windows důkaz ze source `0be4c88` prošel release buildem, 29/29 bundle
 manifestem a responsivním runtime na samostatné Windows 11 VM. Inspector capture
 prokazuje Flutter render, ne skutečné pixely release DirectComposition okna;
-přihlášený desktop E2E proto zůstává samostatná brána.
+přihlášený desktop E2E proto zůstává samostatná brána. Commit `1b1066a`
+zabalil stejný produkt jako per-user Inno Setup instalaci. Vyhrazená VM ověřila
+clean install, launch, upgrade za běhu, odmítnutí downgradu bez změny bajtů,
+zachování support dat a uninstall. Release signing zůstává otevřený.
 
 Apple důkaz ze source `83078cd` prošel na macOS 15.7.4 arm64 přes analyze,
 čistý debug i universal release build, codesign verify a živé okno 800×628.
@@ -770,6 +773,38 @@ claimem znovu vynutí fresh capability read. Falešný signál nic neclaimne.
 Android E2E potvrdilo bez restartu přechod z `queued`, attempt 0 do `completed`,
 attempt 1 s jedinou serverovou i cached zprávou. Rozhodnutí stále nezavádí
 background scheduler a neuzavírá live process-death/offline matici.
+
+### D-032: Desktop credential vault podle nativní platformy
+
+Stav: Přijato 26. srpna 2026, macOS řez `9695c9f`.
+
+Desktop nesmí nahrazovat platformní secure storage plaintextem v Drift ani
+v souboru. macOS používá nesynchronizovaný login Keychain s přístupností
+`AfterFirstUnlockThisDeviceOnly`; pro sandboxovaný ad-hoc runner nepoužívá Data
+Protection Keychain, protože ten bez odpovídajícího access-group entitlementu
+round trip odmítá. Nativní test ověřil add, read a delete skutečné generic
+password položky a po testu ji odstranil.
+
+Toto rozhodnutí neprokazuje přihlášený macOS E2E ani Linux. Linux musí dostat
+samostatný ověřený Secret Service/keyring backend; při jeho nedostupnosti se
+credential nesmí tiše uložit méně bezpečně.
+
+### D-033: Redigované bezpečnostní a migrační brány
+
+Stav: Přijato 26. srpna 2026, commity `5f91e37`, `f184f9d` a `73ce1fc`.
+
+Průběžný secret/log gate skenuje tracked zdrojové soubory a na požádání také
+explicitní build nebo runtime-log artefakty. Nález zveřejní pouze cestu, číslo
+řádku a stabilní rule ID; nikdy match, okolní řádek ani nalezenou hodnotu.
+Čistý běh vrací 0, nález 1 a chyba vstupu nebo Gitu 2. Syntetické testovací
+hodnoty nesmějí způsobit, že gate selže sama nad sebou.
+
+Podporované release vstupy databáze jsou Git-backed schema v7 až v13. Každý se
+otevře ze samostatného file-backed snapshotu, migruje do aktuální v14 a ověří
+zachování account/conversation dat, presence, archivace, nové tabulky,
+`user_version` a foreign-key integritu. Novější schema se nadále fail-closed
+odmítá bez změny verze nebo dat. Budoucí release schema musí do stejné matice
+přibýt současně se zvýšením `schemaVersion`.
 
 ## Vyřešené volby
 
