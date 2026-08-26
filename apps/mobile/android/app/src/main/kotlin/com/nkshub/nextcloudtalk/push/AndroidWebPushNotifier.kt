@@ -242,20 +242,29 @@ internal object AndroidSystemNotifications {
                 show(context, manager, store, accountId, groupKey, payload)
             }
             is AndroidWebPushPayload.Delete -> {
-                store.revokeNotificationOpen(accountId, payload.notificationId)
-                manager.cancel(
-                    notificationTag(groupKey, payload.notificationId),
-                    PLATFORM_NOTIFICATION_ID,
+                val released = store.revokeNotificationOpen(accountId, payload.notificationId)
+                cancelNotificationRoute(
+                    manager,
+                    accountId,
+                    payload.notificationId,
+                    released?.platformNotificationId,
                 )
             }
             is AndroidWebPushPayload.DeleteMultiple -> {
-                store.revokeNotificationOpens(accountId, payload.notificationIds.toSet())
+                val released = store
+                    .revokeNotificationOpens(accountId, payload.notificationIds.toSet())
+                    .associateBy { it.notificationId }
                 payload.notificationIds.forEach {
-                    manager.cancel(notificationTag(groupKey, it), PLATFORM_NOTIFICATION_ID)
+                    cancelNotificationRoute(
+                        manager,
+                        accountId,
+                        it,
+                        released[it]?.platformNotificationId,
+                    )
                 }
             }
             AndroidWebPushPayload.DeleteAll -> {
-                store.revokeAllNotificationOpens(accountId)
+                cancelEvictedRoutes(manager, store.revokeAllNotificationOpens(accountId))
                 manager.activeNotifications
                     .filter { it.tag?.startsWith("$groupKey:") == true }
                     .forEach { manager.cancel(it.tag, it.id) }
@@ -400,9 +409,15 @@ internal object AndroidSystemNotifications {
 
     fun cancelNotification(context: Context, accountId: String, notificationId: Long) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.cancel(
-            notificationTag(accountGroupKey(accountId), notificationId),
-            PLATFORM_NOTIFICATION_ID,
+        val released = AndroidWebPushStore(context).revokeNotificationOpen(
+            accountId,
+            notificationId,
+        )
+        cancelNotificationRoute(
+            manager,
+            accountId,
+            notificationId,
+            released?.platformNotificationId,
         )
     }
 
@@ -426,13 +441,14 @@ internal object AndroidSystemNotifications {
         // ponytail: the original subject is not kept in the action record, so
         // the status notification shows only the status line. Tapping it still
         // opens the exact room of the exact account.
-        val openToken = store.storeNotificationOpen(
+        val prepared = store.prepareSystemNotification(
             accountId = action.accountId,
             notificationId = action.notificationId,
             app = DEFAULT_TALK_APP,
             type = "chat",
             objectId = action.roomToken,
         )
+        cancelEvictedRoutes(manager, prepared.evicted)
         val status = context.getString(statusResource)
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
@@ -449,11 +465,13 @@ internal object AndroidSystemNotifications {
             .setGroup(groupKey)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(notificationOpenPendingIntent(context, openToken))
+            .setContentIntent(notificationOpenPendingIntent(context, prepared.openToken))
             .build()
+        val tag = notificationTag(groupKey, action.notificationId)
+        manager.cancel(tag, LEGACY_PLATFORM_NOTIFICATION_ID)
         manager.notify(
-            notificationTag(groupKey, action.notificationId),
-            PLATFORM_NOTIFICATION_ID,
+            tag,
+            prepared.platformNotificationId,
             notification,
         )
     }
@@ -545,14 +563,15 @@ internal object AndroidSystemNotifications {
         val subject = payload.subject ?: return
         val app = payload.app ?: DEFAULT_NOTIFICATION_APP
         ensureChannel(manager)
-        val openToken = store.storeNotificationOpen(
+        val prepared = store.prepareSystemNotification(
             accountId = accountId,
             notificationId = notificationId,
             app = app,
             type = payload.type,
             objectId = payload.objectId,
         )
-        val pendingIntent = notificationOpenPendingIntent(context, openToken)
+        cancelEvictedRoutes(manager, prepared.evicted)
+        val pendingIntent = notificationOpenPendingIntent(context, prepared.openToken)
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
         } else {
@@ -579,11 +598,9 @@ internal object AndroidSystemNotifications {
                     .forEach(::addAction)
             }
             .build()
-        manager.notify(
-            notificationTag(groupKey, notificationId),
-            PLATFORM_NOTIFICATION_ID,
-            notification,
-        )
+        val tag = notificationTag(groupKey, notificationId)
+        manager.cancel(tag, LEGACY_PLATFORM_NOTIFICATION_ID)
+        manager.notify(tag, prepared.platformNotificationId, notification)
     }
 
     private fun ensureChannel(manager: NotificationManager) {
@@ -615,6 +632,34 @@ internal object AndroidSystemNotifications {
         return "$groupKey:$notificationId"
     }
 
+    private fun cancelEvictedRoutes(
+        manager: NotificationManager,
+        routes: List<StoredPlatformNotificationId>,
+    ) {
+        routes.forEach { route ->
+            cancelNotificationRoute(
+                manager,
+                route.accountId,
+                route.notificationId,
+                route.platformNotificationId,
+            )
+        }
+    }
+
+    private fun cancelNotificationRoute(
+        manager: NotificationManager,
+        accountId: String,
+        notificationId: Long,
+        platformNotificationId: Int?,
+    ) {
+        val tag = notificationTag(accountGroupKey(accountId), notificationId)
+        platformNotificationId?.let { manager.cancel(tag, it) }
+        manager.cancel(tag, LEGACY_PLATFORM_NOTIFICATION_ID)
+        manager.activeNotifications
+            .filter { it.tag == tag }
+            .forEach { manager.cancel(it.tag, it.id) }
+    }
+
     const val ACTION_NOTIFICATION_ACTION =
         "com.nkshub.nextcloudtalk.action.PUSH_NOTIFICATION_ACTION"
     const val REPLY_RESULT_KEY = "com.nkshub.nextcloudtalk.notification_reply"
@@ -625,7 +670,7 @@ internal object AndroidSystemNotifications {
     private const val MARK_READ_URI_HOST = "notification-mark-read"
     private const val DEFAULT_NOTIFICATION_APP = "Nextcloud"
     private const val DEFAULT_TALK_APP = "spreed"
-    private const val PLATFORM_NOTIFICATION_ID = 1
+    private const val LEGACY_PLATFORM_NOTIFICATION_ID = 1
     private val ROOM_TOKEN_PATTERN = Regex("^[a-z0-9]{4,30}$")
 }
 

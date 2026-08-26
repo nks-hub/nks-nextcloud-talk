@@ -158,10 +158,12 @@ internal data class AndroidWebPushState(
 internal data class AndroidNotificationOpenState(
     val notificationOpens: MutableList<StoredNotificationOpen> = mutableListOf(),
     val notificationActions: MutableList<StoredNotificationAction> = mutableListOf(),
+    val platformNotificationIds: MutableList<StoredPlatformNotificationId> = mutableListOf(),
 ) {
     override fun toString(): String {
         return "AndroidNotificationOpenState(notificationOpens=${notificationOpens.size}, " +
-            "notificationActions=${notificationActions.size})"
+            "notificationActions=${notificationActions.size}, " +
+            "platformNotificationIds=${platformNotificationIds.size})"
     }
 }
 

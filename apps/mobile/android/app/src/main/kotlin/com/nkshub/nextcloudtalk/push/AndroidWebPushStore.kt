@@ -4,7 +4,6 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -291,6 +290,20 @@ internal class AndroidWebPushStore(context: Context) {
         objectId = objectId,
     )
 
+    fun prepareSystemNotification(
+        accountId: String,
+        notificationId: Long,
+        app: String,
+        type: String?,
+        objectId: String?,
+    ): PreparedAndroidSystemNotification = notificationOpenStore.prepare(
+        accountId = accountId,
+        notificationId = notificationId,
+        app = app,
+        type = type,
+        objectId = objectId,
+    )
+
     fun consumeNotificationOpen(token: String): Map<String, Any?>? {
         if (!isValidNotificationOpenToken(token)) {
             return null
@@ -298,17 +311,25 @@ internal class AndroidWebPushStore(context: Context) {
         return notificationOpenStore.consume(token)?.toChannelMap()
     }
 
-    fun revokeNotificationOpen(accountId: String, notificationId: Long) {
-        revokeNotificationOpens(accountId, setOf(notificationId))
-    }
+    fun revokeNotificationOpen(
+        accountId: String,
+        notificationId: Long,
+    ): StoredPlatformNotificationId? = revokeNotificationOpens(
+        accountId,
+        setOf(notificationId),
+    ).singleOrNull()
 
-    fun revokeNotificationOpens(accountId: String, notificationIds: Set<Long>) {
-        notificationOpenStore.revoke(accountId, notificationIds)
-    }
+    fun revokeNotificationOpens(
+        accountId: String,
+        notificationIds: Set<Long>,
+    ): List<StoredPlatformNotificationId> = notificationOpenStore.revoke(
+        accountId,
+        notificationIds,
+    )
 
-    fun revokeAllNotificationOpens(accountId: String) {
-        notificationOpenStore.revokeAll(accountId)
-    }
+    fun revokeAllNotificationOpens(
+        accountId: String,
+    ): List<StoredPlatformNotificationId> = notificationOpenStore.revokeAll(accountId)
 
     fun armNotificationAction(
         kind: NotificationActionKind,
@@ -497,6 +518,8 @@ internal class AndroidNotificationOpenStore(context: Context) {
         Context.MODE_PRIVATE,
     )
     private val stateMachine = AndroidWebPushStateMachine()
+    private val notificationIdLedger = AndroidPlatformNotificationIdLedger()
+    private val stateCodec = AndroidNotificationStateCodec(::validateRecord, ::validateAction)
 
     fun store(
         accountId: String,
@@ -524,6 +547,54 @@ internal class AndroidNotificationOpenStore(context: Context) {
         return token
     }
 
+    fun prepare(
+        accountId: String,
+        notificationId: Long,
+        app: String,
+        type: String?,
+        objectId: String?,
+    ): PreparedAndroidSystemNotification {
+        validateRecord(accountId, notificationId, app, type, objectId)
+        val token = AndroidWebPushStore.newOpaqueOpenToken()
+        return synchronized(OPEN_STORE_LOCK) {
+            val state = readState()
+            val allocation = notificationIdLedger.allocate(
+                state,
+                accountId,
+                notificationId,
+                System.currentTimeMillis(),
+            )
+            allocation.evicted.forEach { route ->
+                stateMachine.revokeNotificationOpen(
+                    state,
+                    route.accountId,
+                    route.notificationId,
+                )
+                stateMachine.revokeArmedNotificationActions(
+                    state,
+                    route.accountId,
+                    setOf(route.notificationId),
+                )
+            }
+            stateMachine.storeNotificationOpen(
+                state = state,
+                token = token,
+                accountId = accountId,
+                notificationId = notificationId,
+                app = app,
+                type = type,
+                objectId = objectId,
+                nowMillis = System.currentTimeMillis(),
+            )
+            writeState(state)
+            PreparedAndroidSystemNotification(
+                openToken = token,
+                platformNotificationId = allocation.platformNotificationId,
+                evicted = allocation.evicted,
+            )
+        }
+    }
+
     fun consume(token: String): StoredNotificationOpen? = synchronized(OPEN_STORE_LOCK) {
         if (!AndroidWebPushStore.isValidNotificationOpenToken(token)) {
             return@synchronized null
@@ -542,30 +613,37 @@ internal class AndroidNotificationOpenStore(context: Context) {
         notification
     }
 
-    fun revoke(accountId: String, notificationIds: Set<Long>) {
+    fun revoke(
+        accountId: String,
+        notificationIds: Set<Long>,
+    ): List<StoredPlatformNotificationId> {
         if (notificationIds.isEmpty()) {
-            return
+            return emptyList()
         }
-        synchronized(OPEN_STORE_LOCK) {
+        return synchronized(OPEN_STORE_LOCK) {
             val state = readState()
             val before = state.size()
             stateMachine.revokeNotificationOpens(state, accountId, notificationIds)
             stateMachine.revokeArmedNotificationActions(state, accountId, notificationIds)
+            val released = notificationIdLedger.release(state, accountId, notificationIds)
             if (state.size() != before) {
                 writeState(state)
             }
+            released
         }
     }
 
-    fun revokeAll(accountId: String) {
-        synchronized(OPEN_STORE_LOCK) {
+    fun revokeAll(accountId: String): List<StoredPlatformNotificationId> {
+        return synchronized(OPEN_STORE_LOCK) {
             val state = readState()
             val before = state.size()
             stateMachine.revokeAllNotificationOpens(state, accountId)
             stateMachine.revokeArmedNotificationActions(state, accountId, null)
+            val released = notificationIdLedger.releaseAll(state, accountId)
             if (state.size() != before) {
                 writeState(state)
             }
+            released
         }
     }
 
@@ -647,7 +725,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
     }
 
     private fun AndroidNotificationOpenState.size(): Int {
-        return notificationOpens.size + notificationActions.size
+        return notificationOpens.size + notificationActions.size + platformNotificationIds.size
     }
 
     private fun readState(): AndroidNotificationOpenState {
@@ -677,7 +755,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
             if (plaintext.size > MAX_PLAINTEXT_BYTES) {
                 throw PushStoreException("notification_open_store_too_large")
             }
-            return decodeState(JSONObject(String(plaintext, StandardCharsets.UTF_8)))
+            return stateCodec.decode(JSONObject(String(plaintext, StandardCharsets.UTF_8)))
         } catch (error: PushStoreException) {
             throw error
         } catch (error: Exception) {
@@ -687,7 +765,7 @@ internal class AndroidNotificationOpenStore(context: Context) {
 
     private fun writeState(state: AndroidNotificationOpenState) {
         try {
-            val plaintext = encodeState(state).toString().toByteArray(StandardCharsets.UTF_8)
+            val plaintext = stateCodec.encode(state).toString().toByteArray(StandardCharsets.UTF_8)
             if (plaintext.size > MAX_PLAINTEXT_BYTES) {
                 throw PushStoreException("notification_open_store_too_large")
             }
@@ -707,118 +785,6 @@ internal class AndroidNotificationOpenStore(context: Context) {
         } catch (error: Exception) {
             throw PushStoreException("notification_open_store_encryption_failed", error)
         }
-    }
-
-    private fun encodeState(state: AndroidNotificationOpenState): JSONObject {
-        val notificationOpens = JSONArray()
-        state.notificationOpens.forEach { open ->
-            notificationOpens.put(
-                JSONObject()
-                    .put("token", open.token)
-                    .put("accountId", open.accountId)
-                    .put("notificationId", open.notificationId)
-                    .put("app", open.app)
-                    .putNullable("type", open.type)
-                    .putNullable("objectId", open.objectId)
-                    .put("createdAtMillis", open.createdAtMillis),
-            )
-        }
-        val notificationActions = JSONArray()
-        state.notificationActions.forEach { action ->
-            notificationActions.put(
-                JSONObject()
-                    .put("token", action.token)
-                    .put("kind", action.kind.name)
-                    .put("accountId", action.accountId)
-                    .put("notificationId", action.notificationId)
-                    .put("roomToken", action.roomToken)
-                    .putNullable("replyText", action.replyText)
-                    .put("queued", action.queued)
-                    .put("attempts", action.attempts)
-                    .put("createdAtMillis", action.createdAtMillis),
-            )
-        }
-        return JSONObject()
-            .put("schema", STATE_SCHEMA)
-            .put("notificationOpens", notificationOpens)
-            .put("notificationActions", notificationActions)
-    }
-
-    private fun decodeState(json: JSONObject): AndroidNotificationOpenState {
-        // Schema 1 predates notification actions; it upgrades in place with an
-        // empty action list instead of throwing away pending opens.
-        if (json.getInt("schema") !in SUPPORTED_STATE_SCHEMAS) {
-            throw PushStoreException("unsupported_notification_open_state_schema")
-        }
-        val array = json.getJSONArray("notificationOpens")
-        if (array.length() > AndroidWebPushStateMachine.MAX_NOTIFICATION_OPENS) {
-            throw PushStoreException("notification_open_store_too_large")
-        }
-        val opens = array.mapObjects { item ->
-            val open = StoredNotificationOpen(
-                token = item.getString("token"),
-                accountId = item.getString("accountId"),
-                notificationId = item.getLong("notificationId"),
-                app = item.getString("app"),
-                type = item.nullableString("type"),
-                objectId = item.nullableString("objectId"),
-                createdAtMillis = item.getLong("createdAtMillis"),
-            )
-            validateRecord(
-                accountId = open.accountId,
-                notificationId = open.notificationId,
-                app = open.app,
-                type = open.type,
-                objectId = open.objectId,
-            )
-            if (
-                !AndroidWebPushStore.isValidNotificationOpenToken(open.token) ||
-                open.createdAtMillis < 0
-            ) {
-                throw PushStoreException("invalid_notification_open_state")
-            }
-            open
-        }
-        if (
-            opens.map { it.token }.toSet().size != opens.size ||
-            opens.map { it.accountId to it.notificationId }.toSet().size != opens.size
-        ) {
-            throw PushStoreException("invalid_notification_open_state")
-        }
-        return AndroidNotificationOpenState(
-            opens.toMutableList(),
-            decodeActions(json).toMutableList(),
-        )
-    }
-
-    private fun decodeActions(json: JSONObject): List<StoredNotificationAction> {
-        if (json.isNull("notificationActions")) {
-            return emptyList()
-        }
-        val array = json.getJSONArray("notificationActions")
-        if (array.length() > AndroidWebPushStateMachine.MAX_NOTIFICATION_ACTIONS) {
-            throw PushStoreException("notification_action_store_too_large")
-        }
-        val actions = array.mapObjects { item ->
-            val action = StoredNotificationAction(
-                token = item.getString("token"),
-                kind = NotificationActionKind.parse(item.getString("kind"))
-                    ?: throw PushStoreException("invalid_notification_action_state"),
-                accountId = item.getString("accountId"),
-                notificationId = item.getLong("notificationId"),
-                roomToken = item.getString("roomToken"),
-                replyText = item.nullableString("replyText"),
-                queued = item.getBoolean("queued"),
-                attempts = item.getInt("attempts"),
-                createdAtMillis = item.getLong("createdAtMillis"),
-            )
-            validateAction(action)
-            action
-        }
-        if (actions.map { it.token }.toSet().size != actions.size) {
-            throw PushStoreException("invalid_notification_action_state")
-        }
-        return actions
     }
 
     private fun validateAction(action: StoredNotificationAction) {
@@ -895,8 +861,6 @@ internal class AndroidNotificationOpenStore(context: Context) {
         private const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_BITS = 128
         private const val ENVELOPE_VERSION = 1
-        private const val STATE_SCHEMA = 2
-        private val SUPPORTED_STATE_SCHEMAS = setOf(1, 2)
         private const val MAX_ACCOUNT_ID_LENGTH = 256
         private const val MAX_APP_LENGTH = 128
         private const val MAX_TYPE_LENGTH = 128
@@ -912,15 +876,3 @@ internal class PushStoreException(
     val code: String,
     cause: Throwable? = null,
 ) : IllegalStateException(code, cause)
-
-private fun JSONObject.putNullable(key: String, value: String?): JSONObject {
-    return put(key, value ?: JSONObject.NULL)
-}
-
-private fun JSONObject.nullableString(key: String): String? {
-    return if (isNull(key)) null else getString(key)
-}
-
-private fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> {
-    return List(length()) { index -> transform(getJSONObject(index)) }
-}
