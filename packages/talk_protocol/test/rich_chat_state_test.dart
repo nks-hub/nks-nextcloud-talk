@@ -286,6 +286,57 @@ void main() {
       );
     },
   );
+
+  test('metadata-only rename reprojects every cached thread title', () {
+    final source = _snapshot(includeReply: true);
+    final fixture = _object(
+      jsonDecode(jsonEncode(responseFixtures['thread-rename-success'])),
+    );
+    final body = _object(fixture['body']);
+    final data = _object(_object(body['ocs'])['data']);
+    final wireThread = _object(data['thread']);
+    wireThread['lastMessageId'] = 121;
+    wireThread['numReplies'] = 1;
+    final response = _decodeFixture(
+      fixture,
+      accountId: AccountId.parse('account-a'),
+      server: _server(AccountId.parse('account-a')),
+    );
+
+    final result = planRichChatMerge(source, response);
+    expect(result.outcome, RichChatMergeOutcome.applied);
+    final originalRoom = source
+        .accounts[AccountId.parse('account-a')]!
+        .rooms[_token('rooma123')]!;
+    expect(originalRoom.threads[120]!.title, 'Design');
+    expect(originalRoom.messages[120]!.threadTitle, 'Design');
+
+    final committed = result.plan!.commit(source);
+    final room = committed
+        .accounts[AccountId.parse('account-a')]!
+        .rooms[_token('rooma123')]!;
+    final thread = room.threads[120]!;
+    expect(thread.title, 'Updated design');
+    expect(_object(thread.wire['thread'])['title'], 'Updated design');
+
+    for (final message in <ChatMessage>[
+      thread.firstMessage!,
+      thread.lastMessage!,
+      room.messages[120]!,
+      room.messages[121]!,
+    ]) {
+      expect(message.threadTitle, 'Updated design');
+      expect(message.wire['threadTitle'], 'Updated design');
+    }
+    expect(_object(thread.wire['first'])['threadTitle'], 'Updated design');
+    expect(_object(thread.wire['last'])['threadTitle'], 'Updated design');
+    final replyParent = room.messages[121]!.parent! as ChatFullParent;
+    expect(replyParent.message.threadTitle, 'Updated design');
+    expect(
+      _object(room.messages[121]!.wire['parent'])['threadTitle'],
+      'Updated design',
+    );
+  });
 }
 
 RichChatRuntimeSnapshot _commitFixture(

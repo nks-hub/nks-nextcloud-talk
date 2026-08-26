@@ -113,6 +113,35 @@ void main() {
     );
   });
 
+  for (final field in <String>['first', 'last']) {
+    test('rejects $field message bound to another thread id', () {
+      final fixture = _fixture('recent-threads-success');
+      final body = _object(fixture['body']);
+      final data = _object(body['ocs'])['data']! as List<Object?>;
+      final threadInfo = _object(data.single);
+      threadInfo[field] = <String, Object?>{
+        ..._message(),
+        'id': field == 'first' ? 120 : 122,
+        'threadId': 999,
+      };
+
+      expect(
+        () => decodeRichChatResponse(
+          request: _recentThreadsRequest(),
+          statusCode: 200,
+          body: Uint8List.fromList(utf8.encode(jsonEncode(body))),
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.code,
+            'code',
+            TalkProtocolErrorCode.invalidRichChatResponse,
+          ),
+        ),
+      );
+    });
+  }
+
   test('keeps thread notification responses account and request scoped', () {
     final fixture = _fixture('thread-notify-success');
     final requestA = _notifyRequest(

@@ -77,10 +77,12 @@ final class RichChatRoomState {
       final last = thread.lastMessage;
       if ((first != null &&
               (first.roomToken != roomToken ||
-                  first.messageId != thread.threadId)) ||
+                  first.messageId != thread.threadId ||
+                  first.threadId != thread.threadId)) ||
           (last != null &&
               (last.roomToken != roomToken ||
-                  last.messageId != thread.lastMessageId))) {
+                  last.messageId != thread.lastMessageId ||
+                  last.threadId != thread.threadId))) {
         _stateFailure(r'$.rooms.threads.messages');
       }
     }

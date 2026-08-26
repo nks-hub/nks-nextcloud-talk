@@ -70,6 +70,29 @@ class ResponsePolicyTest(unittest.TestCase):
             str(raised.exception),
         )
 
+    def test_thread_messages_require_canonical_thread_identity(self) -> None:
+        document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
+        fixture = next(
+            case
+            for case in fixture_cases("responses.cases.json")
+            if case["id"] == "thread-detail-success"
+        )
+
+        for field in ("first", "last"):
+            with self.subTest(field=field):
+                case = deepcopy(fixture)
+                case["body"]["ocs"]["data"][field]["threadId"] = 999
+
+                with self.assertRaises(
+                    rich_contract.ResponseSemanticError
+                ) as raised:
+                    rich_contract.validate_response_cases(document, [case])
+
+                self.assertEqual(
+                    f"Thread {field} message thread id mismatch",
+                    str(raised.exception),
+                )
+
 
 class CapabilityPolicyTest(unittest.TestCase):
     def test_scheduled_messages_are_local_and_non_federated_only(self) -> None:

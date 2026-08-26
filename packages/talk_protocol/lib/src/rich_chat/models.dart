@@ -131,10 +131,12 @@ final class RichChatThread {
     final lastMessage = last == null ? null : ChatMessage.fromJson(last);
     if ((firstMessage != null &&
             (firstMessage.roomToken != roomToken ||
-                firstMessage.messageId != threadId)) ||
+                firstMessage.messageId != threadId ||
+                firstMessage.threadId != threadId)) ||
         (lastMessage != null &&
             (lastMessage.roomToken != roomToken ||
-                lastMessage.messageId != lastMessageId))) {
+                lastMessage.messageId != lastMessageId ||
+                lastMessage.threadId != threadId))) {
       _responseFailure(r'$.ocs.data[].thread.messages');
     }
     return RichChatThread._(

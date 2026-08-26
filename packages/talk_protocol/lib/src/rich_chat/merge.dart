@@ -152,23 +152,65 @@ RichChatMergeResult _mergeThreads(
         updatedAccount.rooms[incoming.roomToken] ??
         RichChatRoomState.empty(incoming.roomToken);
     final existing = room.threads[incoming.threadId];
-    final merged = existing == null
-        ? incoming
-        : incoming.copyWithMessages(
-            firstMessage:
-                incoming.firstMessage ??
-                (existing.firstMessage?.messageId == incoming.threadId
-                    ? existing.firstMessage
-                    : null),
-            lastMessage:
-                incoming.lastMessage ??
-                (existing.lastMessage?.messageId == incoming.lastMessageId
-                    ? existing.lastMessage
-                    : null),
-          );
-    final updatedThreads = Map<int, RichChatThread>.of(room.threads)
-      ..[merged.threadId] = merged;
-    final updatedMessages = Map<int, ChatMessage>.of(room.messages);
+    final retainedFirst =
+        incoming.firstMessage ??
+        (existing?.firstMessage?.messageId == incoming.threadId &&
+                existing?.firstMessage?.threadId == incoming.threadId
+            ? existing?.firstMessage
+            : null);
+    final retainedLast =
+        incoming.lastMessage ??
+        (existing?.lastMessage?.messageId == incoming.lastMessageId &&
+                existing?.lastMessage?.threadId == incoming.threadId
+            ? existing?.lastMessage
+            : null);
+    var projectedFirst = _projectThreadTitle(incoming, retainedFirst);
+    var projectedLast = _projectThreadTitle(incoming, retainedLast);
+    final cachedRoot = room.messages[incoming.threadId];
+    final projectedRoot =
+        projectedFirst ??
+        (cachedRoot?.threadId == incoming.threadId
+            ? _projectThreadTitle(incoming, cachedRoot)
+            : null) ??
+        (projectedLast?.messageId == incoming.threadId ? projectedLast : null);
+    if (projectedRoot != null) {
+      if (projectedFirst?.messageId == projectedRoot.messageId) {
+        projectedFirst = projectedRoot;
+      } else {
+        projectedFirst = projectedFirst?.replaceParentMessageIfMatching(
+          projectedRoot,
+        );
+      }
+      if (projectedLast?.messageId == projectedRoot.messageId) {
+        projectedLast = projectedRoot;
+      } else {
+        projectedLast = projectedLast?.replaceParentMessageIfMatching(
+          projectedRoot,
+        );
+      }
+    }
+    final merged = incoming.copyWithMessages(
+      firstMessage: projectedFirst,
+      lastMessage: projectedLast,
+    );
+    var updatedMessages = <int, ChatMessage>{
+      for (final entry in room.messages.entries)
+        entry.key: _projectThreadTitle(incoming, entry.value)!,
+    };
+    var updatedThreads = Map<int, RichChatThread>.of(room.threads);
+    var updatedSchedules = room.scheduledMessages;
+    if (projectedRoot != null) {
+      updatedMessages = _replaceMessageInMessages(
+        updatedMessages,
+        projectedRoot,
+      );
+      updatedThreads = _replaceMessageInThreads(updatedThreads, projectedRoot);
+      updatedSchedules = _replaceMessageInSchedules(
+        updatedSchedules,
+        projectedRoot,
+      );
+    }
+    updatedThreads[merged.threadId] = merged;
     if (merged.firstMessage case final first?) {
       updatedMessages[first.messageId] = first;
     }
@@ -176,13 +218,31 @@ RichChatMergeResult _mergeThreads(
       updatedMessages[last.messageId] = last;
     }
     updatedAccount = updatedAccount.replaceRoom(
-      room.copyWith(messages: updatedMessages, threads: updatedThreads),
+      room.copyWith(
+        messages: updatedMessages,
+        threads: updatedThreads,
+        scheduledMessages: updatedSchedules,
+      ),
     );
   }
   if (identical(updatedAccount, account)) {
     return _unchanged;
   }
   return _replaceAccount(snapshot, updatedAccount);
+}
+
+ChatMessage? _projectThreadTitle(RichChatThread thread, ChatMessage? message) {
+  if (message == null ||
+      message.roomToken != thread.roomToken ||
+      message.threadId != thread.threadId ||
+      (message.threadTitle == thread.title &&
+          message.wire['threadTitle'] == thread.title)) {
+    return message;
+  }
+  return ChatMessage.fromJson(<String, Object?>{
+    ...message.wire,
+    'threadTitle': thread.title,
+  });
 }
 
 RichChatMergeResult _mergeReactions(

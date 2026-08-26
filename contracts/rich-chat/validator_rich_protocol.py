@@ -386,11 +386,44 @@ def validate_response_binding(
             thread.get("roomToken"),
             f"{operation_id}[{index}].roomToken",
         )
+        thread_id = require_integer(
+            thread.get("id"),
+            f"{operation_id}[{index}].thread.id",
+            minimum=1,
+        )
+        last_message_id = require_integer(
+            thread.get("lastMessageId"),
+            f"{operation_id}[{index}].thread.lastMessageId",
+            minimum=0,
+        )
         if "roomToken" in context and room_token != context["roomToken"]:
             raise ResponseSemanticError("Thread response room binding mismatch")
         expected_thread_id = context.get("threadId", context.get("messageId"))
-        if expected_thread_id is not None and thread.get("id") != expected_thread_id:
+        if expected_thread_id is not None and thread_id != expected_thread_id:
             raise ResponseSemanticError("Thread response id binding mismatch")
+        for field, expected_message_id in (
+            ("first", thread_id),
+            ("last", last_message_id),
+        ):
+            raw_message = thread_info.get(field)
+            if raw_message is None:
+                continue
+            message = require_object(
+                raw_message,
+                f"{operation_id}[{index}].{field}",
+            )
+            if message.get("token") != room_token:
+                raise ResponseSemanticError(
+                    f"Thread {field} message room mismatch"
+                )
+            if message.get("id") != expected_message_id:
+                raise ResponseSemanticError(
+                    f"Thread {field} message id mismatch"
+                )
+            if message.get("threadId") != thread_id:
+                raise ResponseSemanticError(
+                    f"Thread {field} message thread id mismatch"
+                )
 
     if operation_id in {
         "editChatMessage",
