@@ -322,4 +322,121 @@ void _registerAndroidPushReconciliationTests() {
     expect(retryTimers.single.duration, const Duration(seconds: 30));
     expect(retryTimers.single.isActive, isTrue);
   });
+
+  test('a synced account row rewrite does not re-register push', () async {
+    final fixture = await _createAccounts(const <String>['account-a']);
+    final platform = _FakeAndroidWebPushPlatform();
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 201)), 201);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    var catchUps = 0;
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (accountId) async {
+        catchUps++;
+        // Mirrors ConversationSyncService, which stores the observed Talk
+        // features on every catch-up and therefore rewrites the account row.
+        await fixture.accounts.updateTalkFeatures(accountId, <String>{
+          'chat-v2',
+          'threads',
+        });
+      },
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.start();
+    await _settle(() => platform.registrations.isNotEmpty);
+
+    expect(platform.registrations, hasLength(1));
+    expect(catchUps, 1);
+  });
+
+  test('changed push identity of a known account reconciles again', () async {
+    final fixture = await _createAccounts(const <String>['account-a']);
+    final platform = _FakeAndroidWebPushPlatform();
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 201)), 201);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.start();
+    await _settle(() => platform.registrations.isNotEmpty);
+    expect(platform.registrations, hasLength(1));
+
+    await fixture.accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://other.example.invalid',
+      loginName: 'fixture-account-a',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026),
+    );
+    await _settle(() => platform.registrations.length >= 2);
+
+    expect(platform.registrations, hasLength(2));
+  });
+}
+
+/// Waits until [reached] holds and then keeps pumping for a bounded tail, so a
+/// runaway reconcile loop shows up as extra work instead of hanging the test.
+Future<void> _settle(bool Function() reached) async {
+  for (var attempt = 0; attempt < 200 && !reached(); attempt++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  for (var tail = 0; tail < 40; tail++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }

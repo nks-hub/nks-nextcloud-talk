@@ -147,25 +147,41 @@ final class AndroidPushCoordinator {
       _runDetached(_acceptNotificationOpen(open));
     });
     _accountsSubscription = _accounts.watchAccounts().listen((accounts) {
-      final previousIds = _knownAccounts.keys.toSet();
+      final previous = Map<String, StoredAccount>.of(_knownAccounts);
       final nextIds = accounts.map((account) => account.id).toSet();
-      for (final accountId in previousIds.difference(nextIds)) {
+      for (final accountId in previous.keys.toSet().difference(nextIds)) {
         _deactivateAccount(accountId);
       }
-      for (final accountId in nextIds.difference(previousIds)) {
+      for (final accountId in nextIds.difference(previous.keys.toSet())) {
         _activateAccount(accountId);
       }
       _knownAccounts
         ..clear()
         ..addEntries(accounts.map((account) => MapEntry(account.id, account)));
       for (final account in accounts) {
-        _runDetached(reconcileAccount(account.id));
+        // The stream re-emits on every write to the account row, including the
+        // Talk features a catch-up stores after each sync. Reconciling on those
+        // would close a loop: reconcile ends in a catch-up, the catch-up
+        // rewrites the row and the stream fires again. Only a new account or a
+        // changed push identity needs a reconcile here; staying registered is
+        // covered by the periodic timer and the wake events.
+        if (_pushIdentityChanged(previous[account.id], account)) {
+          _runDetached(reconcileAccount(account.id));
+        }
       }
     });
     final launchNotification = await _platform.getLaunchNotification();
     if (!_closed && launchNotification != null) {
       await _acceptNotificationOpen(launchNotification);
     }
+  }
+
+  /// Whether [next] needs a push reconcile compared to the previously known
+  /// [previous] row. A missing [previous] means the account is new here.
+  static bool _pushIdentityChanged(StoredAccount? previous, StoredAccount next) {
+    return previous == null ||
+        previous.serverUrl != next.serverUrl ||
+        previous.loginName != next.loginName;
   }
 
   Future<void> reconcileAll() {
