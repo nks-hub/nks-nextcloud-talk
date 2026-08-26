@@ -1,6 +1,6 @@
 part of 'conversation_shell.dart';
 
-final class ConversationWorkspace extends StatelessWidget {
+final class ConversationWorkspace extends StatefulWidget {
   const ConversationWorkspace({
     super.key,
     required this.account,
@@ -37,10 +37,56 @@ final class ConversationWorkspace extends StatelessWidget {
   final ValueChanged<CachedConversation> onSelectConversation;
 
   @override
+  State<ConversationWorkspace> createState() => _ConversationWorkspaceState();
+}
+
+final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
+  /// Token already handed over to the compact shell as a pushed route. The
+  /// expanded shell keeps a selected conversation beside the list, but the
+  /// compact shell has no second pane, so narrowing the window would drop the
+  /// open conversation off screen. Handing it to the navigator keeps it
+  /// reachable and matches the official client, where the route is the source
+  /// of truth.
+  String? _handedOverToken;
+
+  void _handOverToCompact(CachedConversation conversation) {
+    if (_handedOverToken == conversation.token) {
+      return;
+    }
+    _handedOverToken = conversation.token;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onOpenConversation(conversation);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final account = widget.account;
+    final accounts = widget.accounts;
+    final unreadByAccount = widget.unreadByAccount;
+    final conversations = widget.conversations;
+    final selectedConversationToken = widget.selectedConversationToken;
+    final loading = widget.loading;
+    final syncing = widget.syncing;
+    final onRefresh = widget.onRefresh;
+    final onReauthenticate = widget.onReauthenticate;
+    final onSelectAccount = widget.onSelectAccount;
+    final onAddAccount = widget.onAddAccount;
+    final onOpenConversation = widget.onOpenConversation;
+    final onSelectConversation = widget.onSelectConversation;
     return LayoutBuilder(
       builder: (context, constraints) {
+        final selectedConversation = conversations
+            .where(
+              (conversation) => conversation.token == selectedConversationToken,
+            )
+            .firstOrNull;
         if (constraints.maxWidth < 720) {
+          if (selectedConversation != null) {
+            _handOverToCompact(selectedConversation);
+          }
           return _CompactShell(
             account: account,
             accounts: accounts,
@@ -55,11 +101,7 @@ final class ConversationWorkspace extends StatelessWidget {
             onOpenConversation: onOpenConversation,
           );
         }
-        final selectedConversation = conversations
-            .where(
-              (conversation) => conversation.token == selectedConversationToken,
-            )
-            .firstOrNull;
+        _handedOverToken = null;
         return _ExpandedShell(
           account: account,
           accounts: accounts,
