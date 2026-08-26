@@ -94,15 +94,39 @@ abstract class _HttpNextcloudApiBase {
 
   /// Any authenticated request answered with 401 means the session behind those
   /// credentials no longer holds the authority the snapshot was read under, so
-  /// the snapshot is dropped before the caller can gate a feature on it.
-  void _invalidateCapabilitiesForCredentials(String? authorization) {
+  /// the snapshot is dropped before the caller can gate a feature on it. Basic
+  /// auth can be byte-identical on multiple servers, so the fingerprint alone
+  /// is never an invalidation scope.
+  void _invalidateCapabilitiesForRequest(
+    String? authorization,
+    Uri requestUri,
+  ) {
     if (authorization == null) {
       return;
     }
     final fingerprint = _credentialFingerprint(authorization);
-    _capabilityCache.removeWhere(
-      (_, entry) => entry.credentialFingerprint == fingerprint,
+    final matchingKeys = _capabilityCache.entries
+        .where(
+          (entry) =>
+              entry.value.credentialFingerprint == fingerprint &&
+              entry.value.server.hasSameOrigin(requestUri) &&
+              _requestIsWithinServer(entry.value.server, requestUri),
+        )
+        .toList(growable: false);
+    if (matchingKeys.isEmpty) {
+      return;
+    }
+    final mostSpecificPathLength = matchingKeys.fold<int>(
+      0,
+      (length, entry) => entry.value.server.basePath.length > length
+          ? entry.value.server.basePath.length
+          : length,
     );
+    for (final entry in matchingKeys) {
+      if (entry.value.server.basePath.length == mostSpecificPathLength) {
+        _capabilityCache.remove(entry.key);
+      }
+    }
   }
 
   Future<_JsonPayload> _sendJson(
@@ -215,7 +239,10 @@ abstract class _HttpNextcloudApiBase {
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
       if (response.statusCode == 401) {
-        _invalidateCapabilitiesForCredentials(request.headers['Authorization']);
+        _invalidateCapabilitiesForRequest(
+          request.headers['Authorization'],
+          request.url,
+        );
       }
       if (!allowedStatusCodes.contains(response.statusCode)) {
         await response.stream.drain<void>();
@@ -317,14 +344,23 @@ String _credentialFingerprint(String authorization) =>
 
 final class _CachedCapabilities {
   const _CachedCapabilities({
+    required this.server,
     required this.credentialFingerprint,
     required this.snapshot,
     required this.expiresAt,
   });
 
+  final ServerBase server;
   final String credentialFingerprint;
   final Future<CapabilitySnapshot> snapshot;
   final DateTime expiresAt;
+}
+
+bool _requestIsWithinServer(ServerBase server, Uri requestUri) {
+  final basePath = server.basePath;
+  return basePath.isEmpty ||
+      requestUri.path == basePath ||
+      requestUri.path.startsWith('$basePath/');
 }
 
 bool _isAllowedAvatarUri(ServerBase server, Uri avatarUri) {

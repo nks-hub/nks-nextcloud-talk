@@ -398,6 +398,124 @@ void main() {
     expect(capabilityRequests, 2);
   });
 
+  test('unauthorized request invalidates only its server snapshot', () async {
+    final firstServer = ServerBase.parse('https://first.example.invalid');
+    final secondServer = ServerBase.parse('https://second.example.invalid');
+    final capabilityRequests = <String, int>{};
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          capabilityRequests.update(
+            request.url.host,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        if (request.url.host == firstServer.uri.host &&
+            request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response('', 401);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+
+    Future<CapabilitySnapshot> read(ServerBase target) =>
+        api.getAuthenticatedCapabilities(
+          server: target,
+          loginName: 'shared-user',
+          appPassword: 'shared-password',
+        );
+
+    await read(firstServer);
+    await read(secondServer);
+    expect(capabilityRequests, <String, int>{
+      firstServer.uri.host: 1,
+      secondServer.uri.host: 1,
+    });
+
+    await expectLater(
+      api.getWebPushVapid(
+        server: firstServer,
+        loginName: 'shared-user',
+        appPassword: 'shared-password',
+      ),
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          401,
+        ),
+      ),
+    );
+
+    await read(secondServer);
+    expect(
+      capabilityRequests[secondServer.uri.host],
+      1,
+      reason: 'a 401 from the first origin must not evict the second origin',
+    );
+    await read(firstServer);
+    expect(capabilityRequests[firstServer.uri.host], 2);
+  });
+
+  test('unauthorized request selects the most specific server base', () async {
+    final rootServer = ServerBase.parse('https://shared.example.invalid');
+    final nestedServer = ServerBase.parse(
+      'https://shared.example.invalid/nested',
+    );
+    var rootCapabilityRequests = 0;
+    var nestedCapabilityRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          if (request.url.path.startsWith('/nested/')) {
+            nestedCapabilityRequests++;
+          } else {
+            rootCapabilityRequests++;
+          }
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        if (request.url.path ==
+            '/nested/ocs/v2.php/apps/notifications/api/v2/webpush/vapid') {
+          return http.Response('', 401);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+    );
+    addTearDown(api.close);
+
+    Future<CapabilitySnapshot> read(ServerBase target) =>
+        api.getAuthenticatedCapabilities(
+          server: target,
+          loginName: 'shared-user',
+          appPassword: 'shared-password',
+        );
+
+    await read(rootServer);
+    await read(nestedServer);
+    await expectLater(
+      api.getWebPushVapid(
+        server: nestedServer,
+        loginName: 'shared-user',
+        appPassword: 'shared-password',
+      ),
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          401,
+        ),
+      ),
+    );
+
+    await read(rootServer);
+    await read(nestedServer);
+    expect(rootCapabilityRequests, 1);
+    expect(nestedCapabilityRequests, 2);
+  });
+
   test('performs the authenticated Web Push registration handshake', () async {
     final requests = <http.Request>[];
     final responses = <http.Response>[

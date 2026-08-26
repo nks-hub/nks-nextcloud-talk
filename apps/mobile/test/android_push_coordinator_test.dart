@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'test_support.dart';
 
 part 'android_push_coordinator_actions_test.part.dart';
+part 'android_push_coordinator_multi_server_test.part.dart';
 part 'android_push_coordinator_registration_test.part.dart';
 part 'android_push_coordinator_reconciliation_test.part.dart';
 part 'android_push_coordinator_retry_routing_test.part.dart';
@@ -23,4 +24,5 @@ void main() {
   _registerAndroidPushReconciliationTests();
   _registerAndroidPushRetryRoutingTests();
   _registerAndroidPushActionTests();
+  _registerAndroidPushMultiServerTests();
 }

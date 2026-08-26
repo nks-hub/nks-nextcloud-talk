@@ -98,6 +98,7 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     // room shares one request instead of racing several identical ones.
     final shared = abortTrigger == null;
     final entry = _CachedCapabilities(
+      server: server,
       credentialFingerprint: fingerprint,
       snapshot: pending,
       expiresAt: now.add(capabilityCacheTtl),

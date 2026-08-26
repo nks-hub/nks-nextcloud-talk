@@ -177,9 +177,13 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
     required int generation,
     required String vapidPublicKey,
   }) async {
+    final scopedState = registrationStates[accountId];
     final existingActiveRegistration =
-        this.generation == generation &&
-        phase == AndroidWebPushRegistrationPhase.active;
+        scopedState?.generation == generation &&
+            scopedState?.phase == AndroidWebPushRegistrationPhase.active ||
+        scopedState == null &&
+            this.generation == generation &&
+            phase == AndroidWebPushRegistrationPhase.active;
     registrations.add((accountId: accountId, generation: generation));
     this.generation = generation;
     if (!existingActiveRegistration) {
