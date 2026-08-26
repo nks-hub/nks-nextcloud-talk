@@ -388,8 +388,12 @@ final class RichChatScheduledMessage {
     final value = _frozenObject(json, r'$.ocs.data[]');
     final rawParent = value['parent'];
     final parent = rawParent == null ? null : ChatMessage.fromJson(rawParent);
+    final threadId = _integer(value['threadId'], r'$.ocs.data[].threadId');
     if (parent != null && parent.roomToken != roomToken) {
       _responseFailure(r'$.ocs.data[].parent.token');
+    }
+    if (parent != null && (threadId < 1 || parent.threadId != threadId)) {
+      _responseFailure(r'$.ocs.data[].parent.threadId');
     }
     return RichChatScheduledMessage._(
       scheduleId: RichChatScheduleId.parse(
@@ -409,7 +413,7 @@ final class RichChatScheduledMessage {
         minimum: 1,
         maximum: 128,
       ),
-      threadId: _integer(value['threadId'], r'$.ocs.data[].threadId'),
+      threadId: threadId,
       threadTitle: _optionalString(
         value['threadTitle'],
         r'$.ocs.data[].threadTitle',

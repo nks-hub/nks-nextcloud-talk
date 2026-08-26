@@ -295,6 +295,50 @@ void main() {
     );
   });
 
+  test('requires a scheduled parent to match its thread identity', () {
+    final fixture = _fixture('schedule-list-success');
+    final body = _object(fixture['body']);
+    final data = _object(body['ocs'])['data']! as List<Object?>;
+    final scheduled = _object(data.single)
+      ..['threadId'] = 120
+      ..['threadTitle'] = 'Design'
+      ..['parent'] = <String, Object?>{
+        ..._message(),
+        'threadId': 121,
+        'isThread': true,
+        'threadTitle': 'Design',
+      };
+
+    RichChatResponse decode() => decodeRichChatResponse(
+      request: _scheduledRequest(),
+      statusCode: 200,
+      body: Uint8List.fromList(utf8.encode(jsonEncode(body))),
+    );
+
+    expect(
+      decode,
+      throwsA(
+        isA<TalkProtocolException>().having(
+          (error) => error.code,
+          'code',
+          TalkProtocolErrorCode.invalidRichChatResponse,
+        ),
+      ),
+    );
+
+    _object(scheduled['parent'])['threadId'] = 120;
+    final parsed = decode().scheduledMessages.single;
+    final reparsed = RichChatScheduledMessage.fromJson(
+      parsed.wire,
+      roomToken: _token('rooma123'),
+    );
+
+    expect(parsed.threadId, 120);
+    expect(parsed.parent?.threadId, 120);
+    expect(reparsed.threadId, 120);
+    expect(reparsed.parent?.threadId, 120);
+  });
+
   test('wire models and request sections are deeply immutable', () {
     final source = <String, Object?>{
       'type': 'user',
