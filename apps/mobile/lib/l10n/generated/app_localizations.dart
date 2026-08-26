@@ -1358,6 +1358,42 @@ abstract class AppLocalizations {
   /// **'Favorite conversation'**
   String get roomDetailsFavoriteLabel;
 
+  /// No description provided for @roomDetailsImportantLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Important conversation'**
+  String get roomDetailsImportantLabel;
+
+  /// No description provided for @roomDetailsImportantSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me even while Do Not Disturb is active'**
+  String get roomDetailsImportantSubtitle;
+
+  /// No description provided for @roomDetailsSensitiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensitive conversation'**
+  String get roomDetailsSensitiveLabel;
+
+  /// No description provided for @roomDetailsSensitiveSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the last message and notification previews'**
+  String get roomDetailsSensitiveSubtitle;
+
+  /// No description provided for @roomDetailsSensitiveClassifiedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for classified conversations'**
+  String get roomDetailsSensitiveClassifiedSubtitle;
+
+  /// No description provided for @roomDetailsSensitiveRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation must keep message previews hidden.'**
+  String get roomDetailsSensitiveRejected;
+
   /// No description provided for @roomDetailsLeaveAction.
   ///
   /// In en, this message translates to:

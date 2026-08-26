@@ -701,6 +701,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsFavoriteLabel => 'Favorite conversation';
 
   @override
+  String get roomDetailsImportantLabel => 'Important conversation';
+
+  @override
+  String get roomDetailsImportantSubtitle =>
+      'Notify me even while Do Not Disturb is active';
+
+  @override
+  String get roomDetailsSensitiveLabel => 'Sensitive conversation';
+
+  @override
+  String get roomDetailsSensitiveSubtitle =>
+      'Hide the last message and notification previews';
+
+  @override
+  String get roomDetailsSensitiveClassifiedSubtitle =>
+      'Required for classified conversations';
+
+  @override
+  String get roomDetailsSensitiveRejected =>
+      'This conversation must keep message previews hidden.';
+
+  @override
   String get roomDetailsLeaveAction => 'Leave conversation';
 
   @override

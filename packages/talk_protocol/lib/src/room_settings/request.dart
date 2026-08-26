@@ -10,6 +10,7 @@ import '../protocol_exception.dart';
 import '../server_base.dart';
 
 part 'request_call_notifications.dart';
+part 'request_importance_sensitivity.dart';
 part 'request_message_expiration.dart';
 
 const String roomSettingsContractUserAgent =

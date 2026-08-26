@@ -701,6 +701,28 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsFavoriteLabel => 'Oblíbená konverzace';
 
   @override
+  String get roomDetailsImportantLabel => 'Důležitá konverzace';
+
+  @override
+  String get roomDetailsImportantSubtitle =>
+      'Upozorňovat i při zapnutém režimu Nerušit';
+
+  @override
+  String get roomDetailsSensitiveLabel => 'Citlivá konverzace';
+
+  @override
+  String get roomDetailsSensitiveSubtitle =>
+      'Skrýt poslední zprávu a náhledy v oznámeních';
+
+  @override
+  String get roomDetailsSensitiveClassifiedSubtitle =>
+      'Povinné u klasifikovaných konverzací';
+
+  @override
+  String get roomDetailsSensitiveRejected =>
+      'U této konverzace musí náhledy zpráv zůstat skryté.';
+
+  @override
   String get roomDetailsLeaveAction => 'Opustit konverzaci';
 
   @override

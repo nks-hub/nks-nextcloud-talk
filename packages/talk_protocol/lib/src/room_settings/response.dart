@@ -9,6 +9,7 @@ import 'request.dart';
 part 'response_updates.dart';
 part 'response_administration.dart';
 part 'response_call_notifications.dart';
+part 'response_importance_sensitivity.dart';
 part 'response_message_expiration.dart';
 
 const TalkProtocolErrorCode _responseCode =

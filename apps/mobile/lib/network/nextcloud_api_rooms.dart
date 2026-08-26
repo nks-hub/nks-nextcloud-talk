@@ -247,6 +247,66 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  /// Changes the current participant's DND importance preference.
+  Future<SetImportantResponse> setImportant({
+    required SetImportantRequest importantRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            importantRequest.httpMethod,
+            importantRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...importantRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSettingsMutationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetImportantResponse(
+      request: importantRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Changes whether previews are hidden for the current participant.
+  Future<SetSensitiveResponse> setSensitive({
+    required SetSensitiveRequest sensitiveRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            sensitiveRequest.httpMethod,
+            sensitiveRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...sensitiveRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomSensitivityAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeSetSensitiveResponse(
+      request: sensitiveRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Archives or unarchives a conversation for the caller.
   Future<SetArchivedResponse> setArchived({
     required SetArchivedRequest archivedRequest,

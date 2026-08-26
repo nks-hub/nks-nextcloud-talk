@@ -15,6 +15,7 @@ import 'participants_service.dart';
 import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
+part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
 part 'room_details_support.part.dart';
 part 'room_details_widgets.part.dart';
@@ -40,6 +41,9 @@ const String _readOnlyCapability = 'read-only-rooms';
 const String _lobbyCapability = 'webinary-lobby';
 const String _banCapability = 'ban-v1';
 const String _messageExpirationCapability = 'message-expiration';
+const String _importantCapability = 'important-conversations';
+const String _sensitiveCapability = 'sensitive-conversations';
+const int _classifiedRoomAttribute = 4;
 
 /// The emoji the avatar picker offers. Talk accepts any single emoji; this is
 /// a short, keyboard-free shortlist rather than a full picker.
@@ -93,7 +97,7 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 }
 
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
-    with _RoomDetailsStateLogic {
+    with _RoomDetailsStateLogic, _RoomImportanceSensitivityStateLogic {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -148,6 +152,28 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               subtitle: Text(strings.roomDetailsCallNotificationsSubtitle),
               value: _callNotificationsEnabled,
               onChanged: _busy ? null : _toggleCallNotifications,
+            ),
+          if (_canSetImportant)
+            SwitchListTile(
+              key: const Key('room-details-important-toggle'),
+              secondary: const Icon(Icons.priority_high),
+              title: Text(strings.roomDetailsImportantLabel),
+              subtitle: Text(strings.roomDetailsImportantSubtitle),
+              value: _room!.isImportant,
+              onChanged: _busy ? null : _toggleImportant,
+            ),
+          if (_canSetSensitive)
+            SwitchListTile(
+              key: const Key('room-details-sensitive-toggle'),
+              secondary: const Icon(Icons.visibility_off_outlined),
+              title: Text(strings.roomDetailsSensitiveLabel),
+              subtitle: Text(
+                _isClassified
+                    ? strings.roomDetailsSensitiveClassifiedSubtitle
+                    : strings.roomDetailsSensitiveSubtitle,
+              ),
+              value: _room!.isSensitive,
+              onChanged: _busy || _isClassified ? null : _toggleSensitive,
             ),
           if (_canSetMessageExpiration)
             ListTile(

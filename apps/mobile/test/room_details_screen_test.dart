@@ -22,6 +22,7 @@ import 'test_support.dart';
 part 'room_details_administration_test.part.dart';
 part 'room_details_avatar_bans_test.part.dart';
 part 'room_details_call_notifications_test.part.dart';
+part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
 part 'room_details_test_support.part.dart';
@@ -78,6 +79,7 @@ void main() {
   _registerAdministrationTests();
   _registerAvatarAndBanTests();
   _registerCallNotificationTests();
+  _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
 }
 
