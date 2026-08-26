@@ -35,6 +35,7 @@ import 'platform/media/voice_platform_adapters.dart';
 import 'features/conversations/deep_link_bridge.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
+import 'features/profile/profile_service.dart';
 import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
 import 'features/settings/theme_preference.dart';
@@ -117,6 +118,14 @@ final onboardingCoordinatorProvider = Provider<OnboardingCoordinator>((ref) {
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     launcher: ref.watch(loginPageLauncherProvider),
+  );
+});
+
+final profileServiceProvider = Provider<ProfileService>((ref) {
+  return ProfileService(
+    ref.watch(accountRepositoryProvider),
+    ref.watch(credentialVaultProvider),
+    ref.watch(nextcloudApiProvider),
   );
 });
 

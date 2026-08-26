@@ -8,6 +8,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 part 'nextcloud_api_account.dart';
 part 'nextcloud_api_chat.dart';
+part 'nextcloud_api_profile.dart';
 part 'nextcloud_api_rooms.dart';
 part 'nextcloud_api_transport.dart';
 
@@ -101,7 +102,11 @@ final class PendingLogin {
 const String loginFlowUserAgent = 'NCloudTalk';
 
 final class HttpNextcloudApi extends _HttpNextcloudApiBase
-    with _NextcloudApiAccount, _NextcloudApiRooms, _NextcloudApiChat {
+    with
+        _NextcloudApiAccount,
+        _NextcloudApiRooms,
+        _NextcloudApiChat,
+        _NextcloudApiProfile {
   HttpNextcloudApi({
     super.client,
     super.originPolicy = ServerOriginPolicy.production,

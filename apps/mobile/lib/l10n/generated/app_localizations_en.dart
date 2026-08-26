@@ -785,6 +785,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.';
 
   @override
+  String get settingsProfileSection => 'Profile';
+
+  @override
+  String get settingsOpenProfile => 'Profile and status';
+
+  @override
+  String get settingsOpenProfileSubtitle =>
+      'View your profile and manage your availability';
+
+  @override
   String get settingsThemeSection => 'Appearance';
 
   @override
@@ -795,6 +805,92 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsThemeDark => 'Dark';
+
+  @override
+  String get profileTitle => 'Profile and status';
+
+  @override
+  String get profileUserIdLabel => 'User ID';
+
+  @override
+  String get profileEmailLabel => 'Email';
+
+  @override
+  String get profileServerLabel => 'Server';
+
+  @override
+  String get profileStatusSection => 'Availability';
+
+  @override
+  String get profileStatusUnavailable =>
+      'This server does not advertise compatible user status support.';
+
+  @override
+  String get profileStatusOnline => 'Online';
+
+  @override
+  String get profileStatusAway => 'Away';
+
+  @override
+  String get profileStatusBusy => 'Busy';
+
+  @override
+  String get profileStatusDoNotDisturb => 'Do not disturb';
+
+  @override
+  String get profileStatusInvisible => 'Invisible';
+
+  @override
+  String get profileStatusOffline => 'Offline';
+
+  @override
+  String get profileStatusIconLabel => 'Status emoji';
+
+  @override
+  String get profileStatusIconHelp =>
+      'Use a single emoji supported by your server.';
+
+  @override
+  String get profileStatusMessageLabel => 'Status message';
+
+  @override
+  String get profileStatusSave => 'Save status';
+
+  @override
+  String get profileStatusClear => 'Clear message';
+
+  @override
+  String get profileStatusSaved => 'Status updated.';
+
+  @override
+  String get profileErrorAccountMissing =>
+      'This account is no longer available.';
+
+  @override
+  String get profileErrorReauth =>
+      'Sign in again to open or change your profile.';
+
+  @override
+  String get profileErrorForbidden =>
+      'The server did not permit this profile action.';
+
+  @override
+  String get profileErrorRateLimited => 'Too many requests. Try again soon.';
+
+  @override
+  String get profileErrorUnavailable =>
+      'The profile service is temporarily unavailable.';
+
+  @override
+  String get profileErrorNetwork => 'Could not reach the server.';
+
+  @override
+  String get profileErrorInvalidInput =>
+      'Use at most 80 message characters and one status emoji.';
+
+  @override
+  String get profileErrorInvalidResponse =>
+      'The server sent an unexpected profile response.';
 
   @override
   String get conversationActionsTitle => 'Conversation actions';

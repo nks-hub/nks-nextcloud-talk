@@ -5,6 +5,7 @@ import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../profile/profile_screen.dart';
 
 /// Accounts and appearance settings. Reached from the account menu in the
 /// compact shell and from the account rail in the expanded one.
@@ -56,6 +57,25 @@ final class SettingsScreen extends ConsumerWidget {
             onTap: () => _addAccount(context),
           ),
           const Divider(height: 1),
+          _SectionHeader(strings.settingsProfileSection),
+          accounts.when(
+            data: (items) {
+              final selected = _selectedAccount(items);
+              return ListTile(
+                key: const Key('settings-open-profile'),
+                leading: const Icon(Icons.account_circle_outlined),
+                title: Text(strings.settingsOpenProfile),
+                subtitle: Text(strings.settingsOpenProfileSubtitle),
+                enabled: selected != null,
+                onTap: selected == null
+                    ? null
+                    : () => _openProfile(context, selected.id),
+              );
+            },
+            loading: () => const SizedBox(height: 24),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+          const Divider(height: 1),
           _SectionHeader(strings.settingsThemeSection),
           RadioGroup<ThemeMode>(
             groupValue: themeMode,
@@ -101,6 +121,23 @@ final class SettingsScreen extends ConsumerWidget {
     }
     ref.read(themeModeProvider.notifier).setThemeMode(mode);
   }
+
+  void _openProfile(BuildContext context, String accountId) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ProfileScreen(accountId: accountId),
+      ),
+    );
+  }
+}
+
+StoredAccount? _selectedAccount(List<StoredAccount> accounts) {
+  for (final account in accounts) {
+    if (account.selected) {
+      return account;
+    }
+  }
+  return null;
 }
 
 final class _AccountTile extends ConsumerStatefulWidget {

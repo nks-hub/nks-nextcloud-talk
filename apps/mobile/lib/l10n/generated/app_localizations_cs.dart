@@ -784,6 +784,16 @@ class AppLocalizationsCs extends AppLocalizations {
       'Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.';
 
   @override
+  String get settingsProfileSection => 'Profil';
+
+  @override
+  String get settingsOpenProfile => 'Profil a stav';
+
+  @override
+  String get settingsOpenProfileSubtitle =>
+      'Zobrazit profil a nastavit dostupnost';
+
+  @override
   String get settingsThemeSection => 'Vzhled';
 
   @override
@@ -794,6 +804,90 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsThemeDark => 'Tmavý';
+
+  @override
+  String get profileTitle => 'Profil a stav';
+
+  @override
+  String get profileUserIdLabel => 'ID uživatele';
+
+  @override
+  String get profileEmailLabel => 'E-mail';
+
+  @override
+  String get profileServerLabel => 'Server';
+
+  @override
+  String get profileStatusSection => 'Dostupnost';
+
+  @override
+  String get profileStatusUnavailable =>
+      'Server neuvádí podporu kompatibilního uživatelského stavu.';
+
+  @override
+  String get profileStatusOnline => 'Online';
+
+  @override
+  String get profileStatusAway => 'Pryč';
+
+  @override
+  String get profileStatusBusy => 'Zaneprázdněn';
+
+  @override
+  String get profileStatusDoNotDisturb => 'Nerušit';
+
+  @override
+  String get profileStatusInvisible => 'Neviditelný';
+
+  @override
+  String get profileStatusOffline => 'Offline';
+
+  @override
+  String get profileStatusIconLabel => 'Emoji stavu';
+
+  @override
+  String get profileStatusIconHelp =>
+      'Použijte jedno emoji podporované serverem.';
+
+  @override
+  String get profileStatusMessageLabel => 'Zpráva stavu';
+
+  @override
+  String get profileStatusSave => 'Uložit stav';
+
+  @override
+  String get profileStatusClear => 'Smazat zprávu';
+
+  @override
+  String get profileStatusSaved => 'Stav byl aktualizován.';
+
+  @override
+  String get profileErrorAccountMissing => 'Tento účet už není dostupný.';
+
+  @override
+  String get profileErrorReauth =>
+      'Pro zobrazení nebo změnu profilu se přihlaste znovu.';
+
+  @override
+  String get profileErrorForbidden => 'Server tuto akci s profilem nepovolil.';
+
+  @override
+  String get profileErrorRateLimited =>
+      'Příliš mnoho požadavků. Zkuste to za chvíli.';
+
+  @override
+  String get profileErrorUnavailable => 'Služba profilu je dočasně nedostupná.';
+
+  @override
+  String get profileErrorNetwork => 'Server je nedostupný.';
+
+  @override
+  String get profileErrorInvalidInput =>
+      'Použijte nejvýše 80 znaků zprávy a jedno emoji stavu.';
+
+  @override
+  String get profileErrorInvalidResponse =>
+      'Server poslal neočekávanou odpověď profilu.';
 
   @override
   String get conversationActionsTitle => 'Akce konverzace';

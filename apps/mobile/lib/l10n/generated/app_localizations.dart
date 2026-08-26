@@ -1502,6 +1502,24 @@ abstract class AppLocalizations {
   /// **'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.'**
   String get settingsRemoveAccountUnavailable;
 
+  /// No description provided for @settingsProfileSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get settingsProfileSection;
+
+  /// No description provided for @settingsOpenProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile and status'**
+  String get settingsOpenProfile;
+
+  /// No description provided for @settingsOpenProfileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View your profile and manage your availability'**
+  String get settingsOpenProfileSubtitle;
+
   /// No description provided for @settingsThemeSection.
   ///
   /// In en, this message translates to:
@@ -1525,6 +1543,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get settingsThemeDark;
+
+  /// No description provided for @profileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile and status'**
+  String get profileTitle;
+
+  /// No description provided for @profileUserIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'User ID'**
+  String get profileUserIdLabel;
+
+  /// No description provided for @profileEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get profileEmailLabel;
+
+  /// No description provided for @profileServerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get profileServerLabel;
+
+  /// No description provided for @profileStatusSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get profileStatusSection;
+
+  /// No description provided for @profileStatusUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not advertise compatible user status support.'**
+  String get profileStatusUnavailable;
+
+  /// No description provided for @profileStatusOnline.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get profileStatusOnline;
+
+  /// No description provided for @profileStatusAway.
+  ///
+  /// In en, this message translates to:
+  /// **'Away'**
+  String get profileStatusAway;
+
+  /// No description provided for @profileStatusBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get profileStatusBusy;
+
+  /// No description provided for @profileStatusDoNotDisturb.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not disturb'**
+  String get profileStatusDoNotDisturb;
+
+  /// No description provided for @profileStatusInvisible.
+  ///
+  /// In en, this message translates to:
+  /// **'Invisible'**
+  String get profileStatusInvisible;
+
+  /// No description provided for @profileStatusOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get profileStatusOffline;
+
+  /// No description provided for @profileStatusIconLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status emoji'**
+  String get profileStatusIconLabel;
+
+  /// No description provided for @profileStatusIconHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a single emoji supported by your server.'**
+  String get profileStatusIconHelp;
+
+  /// No description provided for @profileStatusMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status message'**
+  String get profileStatusMessageLabel;
+
+  /// No description provided for @profileStatusSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save status'**
+  String get profileStatusSave;
+
+  /// No description provided for @profileStatusClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear message'**
+  String get profileStatusClear;
+
+  /// No description provided for @profileStatusSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Status updated.'**
+  String get profileStatusSaved;
+
+  /// No description provided for @profileErrorAccountMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This account is no longer available.'**
+  String get profileErrorAccountMissing;
+
+  /// No description provided for @profileErrorReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to open or change your profile.'**
+  String get profileErrorReauth;
+
+  /// No description provided for @profileErrorForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not permit this profile action.'**
+  String get profileErrorForbidden;
+
+  /// No description provided for @profileErrorRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many requests. Try again soon.'**
+  String get profileErrorRateLimited;
+
+  /// No description provided for @profileErrorUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The profile service is temporarily unavailable.'**
+  String get profileErrorUnavailable;
+
+  /// No description provided for @profileErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server.'**
+  String get profileErrorNetwork;
+
+  /// No description provided for @profileErrorInvalidInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at most 80 message characters and one status emoji.'**
+  String get profileErrorInvalidInput;
+
+  /// No description provided for @profileErrorInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The server sent an unexpected profile response.'**
+  String get profileErrorInvalidResponse;
 
   /// No description provided for @conversationActionsTitle.
   ///
