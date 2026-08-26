@@ -350,6 +350,60 @@ void _registerGiphyRepositoryTests(
       }
     });
 
+    test('reuses a thumbnail without another authenticated request', () async {
+      var requests = 0;
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((_) async {
+          requests++;
+          return http.Response.bytes(
+            _validGif,
+            200,
+            headers: const <String, String>{'content-type': 'image/gif'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+      final entry = _giphyEntry('cached-thumbnail');
+
+      final first = await repository.loadThumbnail(entry);
+      final second = await repository.loadThumbnail(entry);
+
+      expect(first.body, _validGif);
+      expect(second.body, _validGif);
+      expect(requests, 1);
+    });
+
+    test('coalesces concurrent loads of the same thumbnail', () async {
+      var requests = 0;
+      final release = Completer<void>();
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((_) async {
+          requests++;
+          await release.future;
+          return http.Response.bytes(
+            _validGif,
+            200,
+            headers: const <String, String>{'content-type': 'image/gif'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+      final entry = _giphyEntry('shared-thumbnail');
+
+      final first = repository.loadThumbnail(entry);
+      final second = repository.loadThumbnail(entry);
+      await Future<void>.delayed(Duration.zero);
+      release.complete();
+      final thumbnails = await Future.wait([first, second]);
+
+      expect(thumbnails, hasLength(2));
+      expect(requests, 1);
+    });
+
     test(
       'attribution deadline physically aborts a stalled send',
       () async {

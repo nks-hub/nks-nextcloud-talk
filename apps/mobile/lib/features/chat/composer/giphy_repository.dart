@@ -1,6 +1,9 @@
 part of 'giphy.dart';
 
 final class HttpGiphyRepository implements GiphyRepository {
+  static const _maximumCachedThumbnails = 32;
+  static const _maximumThumbnailCacheBytes = 16 * 1024 * 1024;
+
   HttpGiphyRepository({
     required this.server,
     required this.authorization,
@@ -26,6 +29,10 @@ final class HttpGiphyRepository implements GiphyRepository {
   final int maximumAttributionBytes;
   final http.Client _client;
   ({int cursor, int limit, GiphyPage page})? _prefetchedTrending;
+  final LinkedHashMap<Uri, GiphyThumbnail> _thumbnailCache =
+      LinkedHashMap<Uri, GiphyThumbnail>();
+  final Map<Uri, Future<GiphyThumbnail>> _thumbnailLoads = {};
+  var _thumbnailCacheBytes = 0;
   bool _closed = false;
 
   @override
@@ -206,11 +213,75 @@ final class HttpGiphyRepository implements GiphyRepository {
   Future<GiphyThumbnail> loadThumbnail(
     GiphyEntry entry, {
     Future<void>? abortTrigger,
-  }) => _loadImage(
-    entry.thumbnailUrl,
-    maximumBytes: maximumThumbnailBytes,
-    abortTrigger: abortTrigger,
-  );
+  }) async {
+    if (_closed) {
+      throw const GiphyException(GiphyError.invalidResponse);
+    }
+    final cached = _takeCachedThumbnail(entry.thumbnailUrl);
+    if (cached != null) {
+      return _copyThumbnail(cached);
+    }
+
+    if (abortTrigger != null) {
+      final loaded = await _loadImage(
+        entry.thumbnailUrl,
+        maximumBytes: maximumThumbnailBytes,
+        abortTrigger: abortTrigger,
+      );
+      _cacheThumbnail(entry.thumbnailUrl, loaded);
+      return _copyThumbnail(loaded);
+    }
+
+    var load = _thumbnailLoads[entry.thumbnailUrl];
+    if (load == null) {
+      late final Future<GiphyThumbnail> started;
+      started =
+          _loadImage(entry.thumbnailUrl, maximumBytes: maximumThumbnailBytes)
+              .then((thumbnail) {
+                _cacheThumbnail(entry.thumbnailUrl, thumbnail);
+                return thumbnail;
+              })
+              .whenComplete(() {
+                if (identical(_thumbnailLoads[entry.thumbnailUrl], started)) {
+                  _thumbnailLoads.remove(entry.thumbnailUrl);
+                }
+              });
+      _thumbnailLoads[entry.thumbnailUrl] = started;
+      load = started;
+    }
+    return _copyThumbnail(await load);
+  }
+
+  GiphyThumbnail? _takeCachedThumbnail(Uri uri) {
+    final cached = _thumbnailCache.remove(uri);
+    if (cached != null) {
+      _thumbnailCache[uri] = cached;
+    }
+    return cached;
+  }
+
+  void _cacheThumbnail(Uri uri, GiphyThumbnail thumbnail) {
+    if (_closed || thumbnail.body.lengthInBytes > _maximumThumbnailCacheBytes) {
+      return;
+    }
+    final replaced = _thumbnailCache.remove(uri);
+    if (replaced != null) {
+      _thumbnailCacheBytes -= replaced.body.lengthInBytes;
+    }
+    while (_thumbnailCache.isNotEmpty &&
+        (_thumbnailCache.length >= _maximumCachedThumbnails ||
+            _thumbnailCacheBytes + thumbnail.body.lengthInBytes >
+                _maximumThumbnailCacheBytes)) {
+      final oldest = _thumbnailCache.keys.first;
+      final removed = _thumbnailCache.remove(oldest)!;
+      _thumbnailCacheBytes -= removed.body.lengthInBytes;
+    }
+    _thumbnailCache[uri] = thumbnail;
+    _thumbnailCacheBytes += thumbnail.body.lengthInBytes;
+  }
+
+  GiphyThumbnail _copyThumbnail(GiphyThumbnail thumbnail) =>
+      GiphyThumbnail(body: thumbnail.body, contentType: thumbnail.contentType);
 
   Future<GiphyThumbnail> _loadImage(
     Uri imageUrl, {
@@ -559,6 +630,9 @@ final class HttpGiphyRepository implements GiphyRepository {
     }
     _closed = true;
     _prefetchedTrending = null;
+    _thumbnailCache.clear();
+    _thumbnailLoads.clear();
+    _thumbnailCacheBytes = 0;
     _client.close();
   }
 }
