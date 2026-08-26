@@ -295,7 +295,53 @@ void main() {
     );
   });
 
-  test('requires a scheduled parent to match its thread identity', () {
+  test('accepts ordinary scheduled messages with an optional parent', () {
+    final fixture = _fixture('schedule-list-success');
+    final body = _object(fixture['body']);
+    final data = _object(body['ocs'])['data']! as List<Object?>;
+    final scheduled = _object(data.single);
+
+    RichChatScheduledMessage decode() => decodeRichChatResponse(
+      request: _scheduledRequest(),
+      statusCode: 200,
+      body: Uint8List.fromList(utf8.encode(jsonEncode(body))),
+    ).scheduledMessages.single;
+
+    final withoutParent = decode();
+    final reparsedWithoutParent = RichChatScheduledMessage.fromJson(
+      withoutParent.wire,
+      roomToken: _token('rooma123'),
+    );
+    expect(withoutParent.threadId, 0);
+    expect(withoutParent.parent, isNull);
+    expect(reparsedWithoutParent.threadId, 0);
+    expect(reparsedWithoutParent.parent, isNull);
+    expect(
+      () => withoutParent.wire['message'] = 'blocked',
+      throwsUnsupportedError,
+    );
+
+    scheduled['parent'] = <String, Object?>{
+      ..._message(),
+      'threadId': 0,
+      'isThread': false,
+    };
+    final withParent = decode();
+    final reparsedWithParent = RichChatScheduledMessage.fromJson(
+      withParent.wire,
+      roomToken: _token('rooma123'),
+    );
+    expect(withParent.threadId, 0);
+    expect(withParent.parent?.threadId, 0);
+    expect(reparsedWithParent.threadId, 0);
+    expect(reparsedWithParent.parent?.threadId, 0);
+    expect(
+      () => _object(withParent.wire['parent'])['message'] = 'blocked',
+      throwsUnsupportedError,
+    );
+  });
+
+  test('requires a named scheduled parent to match its thread identity', () {
     final fixture = _fixture('schedule-list-success');
     final body = _object(fixture['body']);
     final data = _object(body['ocs'])['data']! as List<Object?>;

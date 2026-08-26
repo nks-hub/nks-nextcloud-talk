@@ -392,7 +392,7 @@ final class RichChatScheduledMessage {
     if (parent != null && parent.roomToken != roomToken) {
       _responseFailure(r'$.ocs.data[].parent.token');
     }
-    if (parent != null && (threadId < 1 || parent.threadId != threadId)) {
+    if (parent != null && threadId > 0 && parent.threadId != threadId) {
       _responseFailure(r'$.ocs.data[].parent.threadId');
     }
     return RichChatScheduledMessage._(
