@@ -533,6 +533,74 @@ void main() {
       }
     }
   });
+
+  test('refuses a newer schema without changing its version or data', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'nctalk-newer-schema-',
+    );
+    final file = File(
+      '${directory.path}${Platform.pathSeparator}future.sqlite',
+    );
+    AppDatabase? database;
+    try {
+      database = AppDatabase.forTesting(NativeDatabase(file));
+      await database.customStatement(
+        'CREATE TABLE future_schema_probe (value TEXT NOT NULL)',
+      );
+      await database.customStatement(
+        "INSERT INTO future_schema_probe (value) VALUES ('preserve-me')",
+      );
+      await database.customStatement('PRAGMA user_version = 11');
+      await database.close();
+      database = null;
+
+      database = AppDatabase.forTesting(NativeDatabase(file));
+      await expectLater(
+        database.customSelect('SELECT 1').get(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('newer than supported'),
+          ),
+        ),
+      );
+      await database.close();
+      database = null;
+
+      int? observedVersion;
+      String? observedValue;
+      database = AppDatabase.forTesting(
+        NativeDatabase(
+          file,
+          setup: (raw) {
+            observedVersion = raw.userVersion;
+            observedValue =
+                raw
+                        .select('SELECT value FROM future_schema_probe')
+                        .single['value']
+                    as String;
+            throw const _DatabaseInspectionComplete();
+          },
+        ),
+      );
+      await expectLater(
+        database.customSelect('SELECT 1').get(),
+        throwsA(isA<_DatabaseInspectionComplete>()),
+      );
+      expect(observedVersion, 11);
+      expect(observedValue, 'preserve-me');
+    } finally {
+      await database?.close();
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    }
+  });
+}
+
+final class _DatabaseInspectionComplete implements Exception {
+  const _DatabaseInspectionComplete();
 }
 
 Future<void> _dropPresenceColumns(AppDatabase database) async {

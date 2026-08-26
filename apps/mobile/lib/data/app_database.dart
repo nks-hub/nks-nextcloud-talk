@@ -454,6 +454,11 @@ final class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
     onUpgrade: (migrator, from, to) async {
+      if (from > to) {
+        throw StateError(
+          'Database schema version $from is newer than supported $to',
+        );
+      }
       if (from < 2) {
         await migrator.addColumn(
           cachedConversations,
