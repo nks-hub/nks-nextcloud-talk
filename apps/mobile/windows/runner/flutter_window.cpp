@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "window_state.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -13,6 +14,10 @@ bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
   }
+
+  // Restore before the view controller is created so the first surface already
+  // has the final size.
+  RestoreWindowBounds(GetHandle());
 
   RECT frame = GetClientArea();
 
@@ -64,6 +69,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_EXITSIZEMOVE:
+    case WM_DESTROY:
+      SaveWindowBounds(hwnd);
       break;
   }
 

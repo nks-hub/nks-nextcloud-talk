@@ -1,6 +1,11 @@
 import Cocoa
 import FlutterMacOS
 
+/// Smallest window the adaptive layout is designed for, in points.
+/// Keep in sync with the Windows and Linux runners.
+private let minimumWindowWidth: CGFloat = 600
+private let minimumWindowHeight: CGFloat = 400
+
 class MainFlutterWindow: NSWindow {
   private var deepLinkChannel: FlutterMethodChannel?
 
@@ -9,6 +14,7 @@ class MainFlutterWindow: NSWindow {
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    self.minSize = NSSize(width: minimumWindowWidth, height: minimumWindowHeight)
     self.title = "NKS Talk"
 
     RegisterGeneratedPlugins(registry: flutterViewController)

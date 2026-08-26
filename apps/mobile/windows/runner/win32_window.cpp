@@ -4,6 +4,7 @@
 #include <flutter_windows.h>
 
 #include "resource.h"
+#include "window_state.h"
 
 namespace {
 
@@ -216,6 +217,16 @@ Win32Window::MessageHandler(HWND hwnd,
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
+
+    case WM_GETMINMAXINFO: {
+      UINT dpi = FlutterDesktopGetDpiForHWND(hwnd);
+      double scale_factor = (dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi) /
+                            static_cast<double>(USER_DEFAULT_SCREEN_DPI);
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      info->ptMinTrackSize.x = Scale(kMinimumWindowWidth, scale_factor);
+      info->ptMinTrackSize.y = Scale(kMinimumWindowHeight, scale_factor);
+      return 0;
+    }
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
