@@ -559,6 +559,10 @@ def _validate_metadata(value: Any) -> dict[str, Any]:
     for name in ("replyTo", "threadId"):
         if name in metadata:
             require_integer(metadata[name], name, 1)
+    if "replyTo" in metadata and "threadId" in metadata:
+        raise ContractValidationError(
+            "Attachment replyTo and threadId are mutually exclusive"
+        )
     if "threadTitle" in metadata:
         title = require_string(metadata["threadTitle"], "threadTitle", maximum=200)
         if title != title.strip():

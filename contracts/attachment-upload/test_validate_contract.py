@@ -291,6 +291,15 @@ class FinalizeMessageTypeBindingTest(unittest.TestCase):
                 {**base, "metadata": {"threadTitle": "Synthetic thread"}},
             )
 
+        with self.assertRaises(attachment_contract.ContractValidationError):
+            attachment_contract.build_wire_case(
+                "finalize",
+                {
+                    **base,
+                    "metadata": {"replyTo": 101, "threadId": 101},
+                },
+            )
+
         invalid_titles = (" Synthetic thread", "Synthetic thread ", "x" * 201)
         for title in invalid_titles:
             with self.subTest(title_length=len(title)):
