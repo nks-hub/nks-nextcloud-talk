@@ -432,18 +432,45 @@ void _registerChatRoomPaneInteractionTests() {
   testWidgets('open message actions recheck a live read-only transition', (
     tester,
   ) async {
+    // The seeded room only holds someone else's message, and edit/delete need
+    // an own one to be offered at all.
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 70,
+        actorId: account.loginName,
+        actorDisplayName: 'Fixture User',
+        timestamp: 1724300400,
+        message: 'My own message',
+      ),
+      displayText: 'My own message',
+    );
+
     await tester.pumpWidget(
       app(
         home: roomScreen(),
         overrides: [
           chatMessageActionsProfileProvider.overrideWith(
-            (ref, key) async => _capabilityProfile(reply: true, react: true),
+            (ref, key) async => _capabilityProfile(
+              reply: true,
+              react: true,
+              edit: true,
+              delete: true,
+            ),
           ),
         ],
       ),
     );
     await tester.pump();
     await tester.pump();
+
+    // While the room is still writable the own message offers both.
+    await tester.longPress(find.byKey(const Key('chat-message-target-70')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-edit')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-delete')), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
 
     await tester.longPress(find.byKey(const Key('chat-message-target-10')));
     await tester.pumpAndSettle();
@@ -469,6 +496,16 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('message-action-reply')), findsNothing);
     expect(find.byKey(const Key('message-action-react')), findsNothing);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    // Talk answers `403` for edit and delete in a read-only room just like it
+    // does for react and send, so an own message must not keep offering them
+    // once the room turns read-only. Message 70 is the outgoing one.
+    await tester.longPress(find.byKey(const Key('chat-message-target-70')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-edit')), findsNothing);
+    expect(find.byKey(const Key('message-action-delete')), findsNothing);
 
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
