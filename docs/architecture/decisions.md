@@ -63,6 +63,12 @@ POST/DELETE bez body; federované rooms jsou podporované. Classified room nesm�
 vypnout `sensitive` a serverový error `classified` se nesmí převést na lokální
 úspěch. I zde je zdrojem pravdy autoritativní room z response.
 
+Conversation tags jsou na ověřeném upstream SHA `f2958bb` také
+participant-scoped, nikoli moderator-only. Klient za capability
+`conversation-tags` načte definice, nabídne pouze custom tagy a při změně odešle
+úplnou výslednou množinu `tagIds`; lokální delta ani skryté predefined tagy
+nesmějí serverový stav přepsat.
+
 `clear-history` je destruktivní moderator-only online operace bez klientského
 idempotency key. Po fresh authenticated capability snapshotu používá jediný
 DELETE bez body a nikdy nevstoupí do outboxu ani automatického retry. HTTP 200
@@ -435,6 +441,11 @@ znovu ověří velikost a SHA-256. Source mismatch nesmí pod původním
 Chunk v1 nepoužívá HTTP `Range`; byte rozsah je jen v názvu chunku a `MOVE`
 vždy posílá přesný `OC-Total-Length`. XML multistatus je UTF-8-only, odmítá DTD
 a entity a má průběžný byte, depth a node limit.
+
+Upload cílovou path nikdy nepřepisuje. Normal PUT používá
+`If-None-Match: *`, chunk MOVE `Overwrite: F` a HTTP 412 je typovaná kolize,
+po které job durable zvolí další z nejvýše 16 kandidátních názvů. Cizí
+kolidující path se nesmí mazat ani při pozdějším cancel nebo cleanupu.
 
 Finalize není atomický. Úspěšná response, 5xx, ztracená response, možná
 odeslané body i restart ve `finalizing` vedou do `awaitingConfirmation`, nikdy
