@@ -1,0 +1,735 @@
+{
+  "cases": [
+    {
+      "id": "completed-late-multiple-matches-reports-conflict",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000033",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic completed text send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "completed",
+              "attemptCount": 1,
+              "messageIds": [
+                120
+              ]
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "authoritativeMessages",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000033",
+          "fixture": "duplicate-reference-id",
+          "expectedOutcome": "conflict-after-completion",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "completed",
+            "attemptCount": 1,
+            "messageIds": [
+              120
+            ],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "manual-resend-with-server-matches-is-rejected",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000034",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic ambiguous text send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "awaitingConfirmation",
+              "attemptCount": 1,
+              "errorClass": "ambiguous-transport"
+            }
+          ]
+        },
+        "account-c": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000045",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "44444444-4444-4444-8444-444444444444",
+              "message": "Synthetic older queued send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "queued",
+              "attemptCount": 0
+            },
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000046",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "55555555-5555-4555-8555-555555555555",
+              "message": "Synthetic FIFO-blocked resend",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 2,
+              "state": "awaitingConfirmation",
+              "attemptCount": 1,
+              "errorClass": "ambiguous-transport"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "authoritativeMessages",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000034",
+          "fixture": "duplicate-reference-id",
+          "expectedOutcome": "ambiguous-match",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [
+              116,
+              117
+            ],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "multiple-reference-matches",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "manualResend",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000034",
+          "duplicateRiskAcknowledged": true,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [
+              116,
+              117
+            ],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "multiple-reference-matches",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "manualResend",
+          "accountId": "account-c",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000046",
+          "duplicateRiskAcknowledged": true,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedCredentialGeneration": 1,
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "per-room-ordering-and-single-flight",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000035",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic first room send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "queued",
+              "attemptCount": 0
+            },
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000036",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "22222222-2222-4222-8222-222222222222",
+              "message": "Synthetic second room send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 2,
+              "state": "queued",
+              "attemptCount": 0
+            },
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000037",
+              "operationKind": "textSend",
+              "roomToken": "roomb123",
+              "referenceId": "33333333-3333-4333-8333-333333333333",
+              "message": "Synthetic other room send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "queued",
+              "attemptCount": 0
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "claim",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000036",
+          "now": 1000,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "queued",
+            "attemptCount": 0,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "claim",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000035",
+          "now": 1000,
+          "expectedOutcome": "sending",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "claim",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000036",
+          "now": 1001,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "queued",
+            "attemptCount": 0,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "claim",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000037",
+          "now": 1001,
+          "expectedOutcome": "sending",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "cross-room-reply-admission-rejected",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": []
+        }
+      },
+      "steps": [
+        {
+          "action": "admit",
+          "accountId": "account-a",
+          "capabilities": [
+            "chat-v2",
+            "chat-reference-id",
+            "chat-replies"
+          ],
+          "operation": {
+            "operationId": "aaaaaaaa-0000-4000-8000-000000000038",
+            "operationKind": "textSend",
+            "roomToken": "rooma123",
+            "referenceId": "11111111-1111-4111-8111-111111111111",
+            "message": "Synthetic cross-room reply",
+            "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+            "enqueueSequence": 1,
+            "replyTo": 700,
+            "parentRoomToken": "parent12",
+            "replyToToken": "parent12"
+          },
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": null
+        }
+      ]
+    },
+    {
+      "id": "missing-reply-token-rejects-admission",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": []
+        }
+      },
+      "steps": [
+        {
+          "action": "admit",
+          "accountId": "account-a",
+          "capabilities": [
+            "chat-v2",
+            "chat-reference-id",
+            "chat-replies"
+          ],
+          "operation": {
+            "operationId": "aaaaaaaa-0000-4000-8000-000000000039",
+            "operationKind": "textSend",
+            "roomToken": "rooma123",
+            "referenceId": "11111111-1111-4111-8111-111111111111",
+            "message": "Synthetic incomplete reply",
+            "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+            "enqueueSequence": 1,
+            "replyTo": 700,
+            "parentRoomToken": "parent12"
+          },
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": null
+        }
+      ]
+    },
+    {
+      "id": "whitespace-admission-rejected",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": []
+        }
+      },
+      "steps": [
+        {
+          "action": "admit",
+          "accountId": "account-a",
+          "capabilities": [
+            "chat-v2",
+            "chat-reference-id"
+          ],
+          "operation": {
+            "operationId": "aaaaaaaa-0000-4000-8000-000000000040",
+            "operationKind": "textSend",
+            "roomToken": "rooma123",
+            "referenceId": "11111111-1111-4111-8111-111111111111",
+            "message": " \t\n",
+            "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+            "enqueueSequence": 1
+          },
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": null
+        }
+      ]
+    },
+    {
+      "id": "manual-resend-respects-scheduler",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "reauthRequired",
+          "credentialGeneration": 1,
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000041",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic paused resend",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "awaitingConfirmation",
+              "attemptCount": 1,
+              "errorClass": "ambiguous-transport"
+            }
+          ]
+        },
+        "account-b": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000042",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "22222222-2222-4222-8222-222222222222",
+              "message": "Synthetic in-flight send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "sending",
+              "attemptCount": 1
+            },
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000043",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "33333333-3333-4333-8333-333333333333",
+              "message": "Synthetic blocked resend",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 2,
+              "state": "awaitingConfirmation",
+              "attemptCount": 1,
+              "errorClass": "ambiguous-transport"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "manualResend",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000041",
+          "duplicateRiskAcknowledged": true,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "reauthRequired",
+          "expectedCredentialGeneration": 1,
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "manualResend",
+          "accountId": "account-b",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000043",
+          "duplicateRiskAcknowledged": true,
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedCredentialGeneration": 1,
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "zero-message-catch-up-keeps-awaiting",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000044",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic awaiting text send",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "awaitingConfirmation",
+              "attemptCount": 1,
+              "errorClass": "ambiguous-transport"
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "authoritativeMessages",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000044",
+          "fixture": "invisible-cursor-advance",
+          "expectedOutcome": "unchanged",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "authoritativeMessages",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000044",
+          "fixture": "common-read-only",
+          "expectedOutcome": "unchanged",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "authoritativeMessages",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000044",
+          "fixture": "future-timeout",
+          "expectedOutcome": "unchanged",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "awaitingConfirmation",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": "ambiguous-transport",
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "http-confirmation-context-mismatch-rejected",
+      "initialAccounts": {
+        "account-a": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000047",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "44444444-4444-4444-8444-444444444444",
+              "message": "Synthetic reference mismatch",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "sending",
+              "attemptCount": 1
+            }
+          ]
+        },
+        "account-b": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000048",
+              "operationKind": "textSend",
+              "roomToken": "roomb456",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "message": "Synthetic room mismatch",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "state": "sending",
+              "attemptCount": 1
+            }
+          ]
+        },
+        "account-c": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000049",
+              "operationKind": "textSend",
+              "roomToken": "rooma123",
+              "referenceId": "22222222-2222-4222-8222-222222222222",
+              "message": "Synthetic reply mismatch",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "replyTo": 109,
+              "parentRoomToken": "rooma123",
+              "state": "sending",
+              "attemptCount": 1
+            }
+          ]
+        },
+        "account-d": {
+          "laneState": "ready",
+          "operations": [
+            {
+              "operationId": "aaaaaaaa-0000-4000-8000-000000000050",
+              "operationKind": "textSend",
+              "roomToken": "direct456",
+              "referenceId": "33333333-3333-4333-8333-333333333333",
+              "message": "Synthetic private reply token mismatch",
+              "replayContractRevision": "talk-chat-text-send-f2958bb-f9b9e947-r2",
+              "enqueueSequence": 1,
+              "replyTo": 333,
+              "replyToToken": "source000",
+              "parentRoomToken": "source000",
+              "state": "sending",
+              "attemptCount": 1
+            }
+          ]
+        }
+      },
+      "steps": [
+        {
+          "action": "httpResponse",
+          "accountId": "account-a",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000047",
+          "fixture": "send-success",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "httpResponse",
+          "accountId": "account-b",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000048",
+          "fixture": "send-success",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": null,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": null
+          }
+        },
+        {
+          "action": "httpResponse",
+          "accountId": "account-c",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000049",
+          "fixture": "send-reply-success",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": 109,
+            "threadId": null,
+            "replyToToken": null,
+            "parentRoomToken": "rooma123"
+          }
+        },
+        {
+          "action": "httpResponse",
+          "accountId": "account-d",
+          "operationId": "aaaaaaaa-0000-4000-8000-000000000050",
+          "fixture": "send-cross-room-reply-success",
+          "transaction": "commit",
+          "expectedOutcome": "rejected",
+          "expectedAccountLane": "ready",
+          "expectedOperation": {
+            "state": "sending",
+            "attemptCount": 1,
+            "messageIds": [],
+            "duplicateRiskAcknowledged": false,
+            "errorClass": null,
+            "nextAttemptAt": null,
+            "replyTo": 333,
+            "threadId": null,
+            "replyToToken": "source000",
+            "parentRoomToken": "source000"
+          }
+        }
+      ]
+    }
+  ]
+}

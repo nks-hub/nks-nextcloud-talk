@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -773,12 +774,15 @@ def apply_outbox_step(
 
 
 def validate_outbox_cases(
-    path: Path,
+    paths: Sequence[Path],
     records: dict[str, dict[str, Any]],
 ) -> tuple[int, int]:
-    root = require_object(load_json(path), path.name)
+    raw_cases: list[Any] = []
+    for path in paths:
+        root = require_object(load_json(path), path.name)
+        raw_cases.extend(require_list(root.get("cases"), "outbox cases"))
     cases = require_unique_ids(
-        require_list(root.get("cases"), "outbox cases"),
+        raw_cases,
         REQUIRED_OUTBOX_IDS,
         "outbox case",
     )

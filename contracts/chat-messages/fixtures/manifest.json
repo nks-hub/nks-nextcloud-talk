@@ -3,7 +3,12 @@
   "queryCasesFile": "query.cases.json",
   "capabilityCasesFile": "capability.cases.json",
   "mergeCasesFile": "merge.cases.json",
-  "outboxCasesFile": "outbox.cases.json",
+  "outboxCasesFiles": [
+    "outbox-delivery.cases.json",
+    "outbox-account-failures.cases.json",
+    "outbox-recovery-ordering.cases.json",
+    "outbox-named-threads.cases.json"
+  ],
   "headerSets": {
     "history": {
       "X-Chat-Last-Given": "103",

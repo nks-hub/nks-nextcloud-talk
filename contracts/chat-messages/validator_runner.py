@@ -432,12 +432,30 @@ def live_write_smoke(
     )
 
 
+def resolve_case_paths(manifest: dict[str, Any], field: str) -> tuple[Path, ...]:
+    value = manifest.get(field)
+    filenames = [value] if isinstance(value, str) else require_list(value, field)
+    if not filenames:
+        raise ContractValidationError(f"{field} must not be empty")
+    paths: list[Path] = []
+    for index, raw_filename in enumerate(filenames):
+        filename = require_string(raw_filename, f"{field}[{index}]")
+        path = (FIXTURE_ROOT / filename).resolve()
+        if path.parent != FIXTURE_ROOT or path.suffix != ".json":
+            raise ContractValidationError(
+                f"{field} must stay in the fixtures directory"
+            )
+        if path in paths:
+            raise ContractValidationError(f"{field} contains duplicate paths")
+        paths.append(path)
+    return tuple(paths)
+
+
 def resolve_case_path(manifest: dict[str, Any], field: str) -> Path:
-    filename = require_string(manifest.get(field), field)
-    path = (FIXTURE_ROOT / filename).resolve()
-    if path.parent != FIXTURE_ROOT or path.suffix != ".json":
-        raise ContractValidationError(f"{field} must stay in the fixtures directory")
-    return path
+    paths = resolve_case_paths(manifest, field)
+    if len(paths) != 1:
+        raise ContractValidationError(f"{field} must contain exactly one path")
+    return paths[0]
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -513,11 +531,11 @@ def main() -> int:
         query_path = resolve_case_path(manifest, "queryCasesFile")
         capability_path = resolve_case_path(manifest, "capabilityCasesFile")
         merge_path = resolve_case_path(manifest, "mergeCasesFile")
-        outbox_path = resolve_case_path(manifest, "outboxCasesFile")
+        outbox_paths = resolve_case_paths(manifest, "outboxCasesFiles")
         query_count = validate_query_cases(document, query_path)
         capability_count = validate_capability_cases(capability_path)
         merge_count, merge_steps = validate_merge_cases(merge_path, records)
-        outbox_count, outbox_steps = validate_outbox_cases(outbox_path, records)
+        outbox_count, outbox_steps = validate_outbox_cases(outbox_paths, records)
         redaction_fixture = next(
             fixture for fixture in fixtures if fixture["id"] == "history-page"
         )
@@ -528,7 +546,7 @@ def main() -> int:
         )
         origin_count = validate_origin_normalization()
 
-        case_paths = {query_path, capability_path, merge_path, outbox_path}
+        case_paths = {query_path, capability_path, merge_path, *outbox_paths}
         listed_paths = listed_fixture_paths | case_paths
         actual_paths = {
             path.resolve()
