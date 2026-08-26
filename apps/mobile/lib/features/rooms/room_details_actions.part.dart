@@ -91,6 +91,12 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       _isGroupOrPublic &&
       _talkFeatures.contains(_lobbyCapability);
 
+  /// Talk only accepts a name and a description on group and public rooms.
+  /// A one-to-one room, its former shell, note-to-self and the changelog take
+  /// their title from the other party or from the system, so offering the
+  /// actions there would only produce a refusal.
+  bool get _canEditRoomMetadata => _isModerator && _isGroupOrPublic;
+
   /// The avatar endpoints refuse a one-to-one conversation with `400`, so the
   /// action stays hidden there even for a moderator.
   bool get _canSetAvatar =>

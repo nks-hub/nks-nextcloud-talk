@@ -526,6 +526,10 @@ void _registerAvatarAndBanTests() {
       'room-details-lobby-toggle',
       'room-details-read-only-toggle',
       'room-details-bans',
+      // Talk refuses a name or a description on a one-to-one room, so the
+      // actions must not be offered there either.
+      'room-details-rename',
+      'room-details-description-edit',
     ]) {
       expect(find.byKey(Key(key)), findsNothing, reason: key);
     }

@@ -135,14 +135,14 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
-          if (_isModerator)
+          if (_canEditRoomMetadata)
             ListTile(
               key: const Key('room-details-rename'),
               leading: const Icon(Icons.edit_outlined),
               title: Text(strings.roomDetailsRenameAction),
               onTap: _busy ? null : _renameRoom,
             ),
-          if (_isModerator)
+          if (_canEditRoomMetadata)
             ListTile(
               key: const Key('room-details-description-edit'),
               leading: const Icon(Icons.short_text),
