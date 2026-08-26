@@ -809,7 +809,7 @@ final class RoomSettingsService {
         observedAt: DateTime.now().toUtc(),
       );
       await _chat.ensureRootScope(account: account, conversation: conversation);
-    } on Object {
+    } on Exception {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
   }

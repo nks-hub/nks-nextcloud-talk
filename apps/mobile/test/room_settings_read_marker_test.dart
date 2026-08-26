@@ -495,6 +495,88 @@ void main() {
   });
 
   test(
+    'propagates preparation StateError and releases the room lane',
+    () async {
+      await insertRoom(
+        accountId: 'account-a',
+        token: 'rooma123',
+        lastMessageId: 12,
+      );
+
+      Future<void> setPayloadToken(String token) async {
+        final conversation = await accounts.getConversation(
+          accountId: 'account-a',
+          token: 'rooma123',
+        );
+        final payload =
+            jsonDecode(conversation!.rawJson) as Map<String, Object?>
+              ..['token'] = token;
+        final lastMessage = payload['lastMessage'];
+        if (lastMessage is Map<String, Object?>) {
+          payload['lastMessage'] = Map<String, Object?>.from(lastMessage)
+            ..['token'] = token;
+        }
+        await (database.update(database.cachedConversations)..where(
+              (row) =>
+                  row.accountId.equals('account-a') &
+                  row.token.equals('rooma123'),
+            ))
+            .write(
+              CachedConversationsCompanion(rawJson: Value(jsonEncode(payload))),
+            );
+      }
+
+      await setPayloadToken('wrongroom');
+      var reads = 0;
+      final service = serviceWith(
+        MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-read-marker',
+                    'chat-read-last',
+                  ],
+                ),
+              ),
+              200,
+            );
+          }
+          reads++;
+          return http.Response(jsonEncode(_readOcs(lastReadMessage: 12)), 200);
+        }),
+      );
+
+      await expectLater(
+        service.markConversationRead(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          lastReadMessage: 12,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'Conversation token does not match its payload',
+          ),
+        ),
+      );
+      expect(reads, 0);
+
+      await setPayloadToken('rooma123');
+      await service.markConversationRead(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        lastReadMessage: 12,
+      );
+      expect(reads, 1);
+    },
+  );
+
+  test(
     'propagates programming errors and still releases the room lane',
     () async {
       await insertRoom(
