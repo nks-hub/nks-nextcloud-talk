@@ -5,7 +5,6 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
-import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_room_pane.dart';
 import '../chat/chat_service.dart';
 import '../conversations/conversation_presence.dart';
@@ -176,24 +175,13 @@ final class MessageSearchThreadScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final threadId = threadContext.rootMessageId;
-    return Scaffold(
+    return KeyedSubtree(
       key: Key('message-search-thread-screen-$threadId'),
-      appBar: AppBar(
-        title: Text(
-          threadContext.isNamed
-              ? threadContext.title!
-              : AppLocalizations.of(context).thread,
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: ChatRoomPane(
-          account: account,
-          conversation: conversation,
-          threadId: threadId,
-          threadContext: threadContext,
-          jumpToMessageId: jumpToMessageId,
-        ),
+      child: ChatThreadScreen(
+        account: account,
+        conversation: conversation,
+        threadContext: threadContext,
+        jumpToMessageId: jumpToMessageId,
       ),
     );
   }

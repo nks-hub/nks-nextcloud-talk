@@ -4,6 +4,8 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
@@ -12,6 +14,7 @@ import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/search/message_search_thread_screen.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -202,7 +205,7 @@ void main() {
           appDatabaseProvider.overrideWithValue(database),
           credentialVaultProvider.overrideWithValue(MemoryCredentialVault()),
           chatMessagesProvider.overrideWith(
-            (ref, key) => Stream.value(const <CachedChatMessage>[]),
+            (ref, key) => Stream.value(<CachedChatMessage>[root]),
           ),
           outgoingMessageStatusesProvider.overrideWith(
             (ref, key) => Stream.value(const []),
@@ -226,11 +229,25 @@ void main() {
       ),
     );
 
+    await _pumpUntil(
+      tester,
+      () =>
+          tester
+              .widget<ChatRoomPane>(find.byType(ChatRoomPane))
+              .threadContext ==
+          context,
+    );
     final pane = tester.widget<ChatRoomPane>(find.byType(ChatRoomPane));
     expect(pane.threadId, 110);
     expect(pane.threadContext, context);
     expect(pane.jumpToMessageId, 113);
-    expect(find.text('Named fixture thread'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Named fixture thread'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     for (var attempt = 0; attempt < 100; attempt++) {
@@ -240,6 +257,230 @@ void main() {
       );
     }
   });
+
+  testWidgets(
+    'search-opened thread follows a live ordinary-to-named send binding',
+    (tester) async {
+      conversation = await _insertConversation(database, account.id);
+      await _insertRoot(database, account.id, id: 120, named: false);
+      final root = await repository.getMessage(
+        accountId: account.id,
+        roomToken: conversation.token,
+        messageId: 120,
+      );
+      final initialContext = ChatThreadContext.fromCachedRoot(
+        accountId: account.id,
+        roomToken: conversation.token,
+        root: root!,
+      )!;
+      final vault = MemoryCredentialVault()
+        ..values[account.id] = 'fixture-app-password';
+      final posts = <Map<String, String>>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-reference-id',
+                    'chat-replies',
+                    'threads',
+                  ],
+                ),
+              ),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json; charset=utf-8',
+              },
+            );
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/apps/spreed/api/v1/chat/rooma123')) {
+            posts.add(Map<String, String>.from(request.bodyFields));
+            return http.Response('', 400);
+          }
+          if (request.method == 'GET' &&
+              request.url.path.endsWith('/apps/spreed/api/v1/chat/rooma123')) {
+            return http.Response('', 304);
+          }
+          return http.Response('', 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appDatabaseProvider.overrideWithValue(database),
+            credentialVaultProvider.overrideWithValue(vault),
+            nextcloudApiProvider.overrideWithValue(api),
+            chatMessagesProvider.overrideWith(
+              (ref, key) => repository.watchMessages(
+                accountId: key.accountId,
+                roomToken: key.roomToken,
+                threadId: key.threadId,
+              ),
+            ),
+            outgoingMessageStatusesProvider.overrideWith(
+              (ref, key) => Stream.value(const []),
+            ),
+            textSendOperationsProvider.overrideWith(
+              (ref, key) => Stream.value(const <StoredTextSendOperation>[]),
+            ),
+            chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
+            connectivityWakeEventsProvider.overrideWithValue(
+              const Stream<void>.empty(),
+            ),
+            chatAttachmentDependenciesProvider.overrideWith(
+              (ref, key) => Future<ChatAttachmentDependencies>.error(
+                StateError('transport is outside this route test'),
+                StackTrace.empty,
+              ),
+            ),
+          ],
+          child: localizedTestApp(
+            home: MessageSearchThreadScreen(
+              account: account,
+              conversation: conversation,
+              threadContext: initialContext,
+              jumpToMessageId: 123,
+            ),
+          ),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byType(ChatRoomPane).evaluate().isNotEmpty,
+      );
+      expect(find.text('Thread'), findsOneWidget);
+      expect(
+        tester
+            .widget<ChatRoomPane>(find.byType(ChatRoomPane))
+            .threadContext
+            ?.kind,
+        ChatThreadKind.ordinary,
+      );
+
+      await (database.update(database.cachedChatMessages)..where(
+            (row) =>
+                row.accountId.equals(account.id) &
+                row.roomToken.equals(conversation.token) &
+                row.messageId.equals(120),
+          ))
+          .write(
+            CachedChatMessagesCompanion(
+              rawJson: Value(
+                jsonEncode(_messageWire(id: 120, threadId: 120, named: true)),
+              ),
+            ),
+          );
+      await _pumpUntil(
+        tester,
+        () => find.text('Named fixture thread').evaluate().isNotEmpty,
+      );
+
+      final pane = tester.widget<ChatRoomPane>(find.byType(ChatRoomPane));
+      expect(pane.threadId, 120);
+      expect(pane.threadContext?.kind, ChatThreadKind.named);
+      expect(pane.threadContext?.replyTo, null);
+      expect(pane.threadContext?.networkThreadId, 120);
+      expect(pane.jumpToMessageId, 123);
+      final mediaBinding = pane.threadContext!.mediaBinding(
+        accountId: AccountId.parse(account.id),
+        roomToken: ConversationToken.parse(
+          conversation.token,
+          path: r'$.roomToken',
+        ),
+      );
+      expect(mediaBinding.replyTo, null);
+      expect(mediaBinding.threadId, 120);
+
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('chat-composer')).evaluate().isNotEmpty &&
+            tester
+                    .widget<IconButton>(find.byKey(const Key('send-message')))
+                    .onPressed !=
+                null,
+      );
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'Search route send',
+      );
+      tester
+          .widget<IconButton>(find.byKey(const Key('send-message')))
+          .onPressed!();
+      await _pumpUntil(tester, () => posts.isNotEmpty);
+      expect(posts.single['threadId'], '120');
+      expect(posts.single.containsKey('replyTo'), isFalse);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _settleDisposal(tester);
+    },
+  );
+}
+
+Future<CachedConversation> _insertConversation(
+  AppDatabase database,
+  String accountId,
+) async {
+  final fixture =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = fixture['ocs']! as Map<String, Object?>;
+  final roomJson = Map<String, Object?>.from(
+    (ocs['data']! as List<Object?>).first! as Map<String, Object?>,
+  );
+  final room = ConversationRoom.fromJson(roomJson);
+  await database
+      .into(database.cachedConversations)
+      .insert(
+        CachedConversationsCompanion.insert(
+          accountId: accountId,
+          token: room.token.value,
+          displayName: room.displayName,
+          description: room.description,
+          lastActivity: room.lastActivity,
+          unreadMessages: room.unreadMessages,
+          favorite: room.isFavorite,
+          readOnly: Value(room.readOnly),
+          roomType: Value(room.type),
+          roomName: Value(room.name),
+          objectType: Value(room.objectType),
+          avatarVersion: Value(room.avatarVersion),
+          isCustomAvatar: Value(room.isCustomAvatar),
+          rawJson: jsonEncode(roomJson),
+        ),
+      );
+  return database.select(database.cachedConversations).getSingle();
+}
+
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 10));
+    if (condition()) {
+      return;
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
+  }
+  fail('Condition was not reached');
+}
+
+Future<void> _settleDisposal(WidgetTester tester) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    await tester.pump(const Duration(milliseconds: 10));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
+  }
 }
 
 MessageSearchResult _result({required int messageId, int? threadId}) {

@@ -53,7 +53,8 @@ final class ChatThreadContext {
     required String roomToken,
     required CachedChatMessage root,
   }) {
-    if (root.accountId != accountId ||
+    if (root.deleted ||
+        root.accountId != accountId ||
         root.roomToken != roomToken ||
         root.messageId < 1 ||
         (root.threadId != null &&
@@ -109,6 +110,27 @@ final class ChatThreadContext {
   int? get replyTo => isNamed ? null : rootMessageId;
   int? get networkThreadId => isNamed ? rootMessageId : null;
 
+  ChatMediaThreadBinding mediaBinding({
+    required AccountId accountId,
+    required ConversationToken roomToken,
+  }) {
+    if (accountId.value != this.accountId ||
+        roomToken.value != this.roomToken) {
+      throw StateError('Chat thread media binding scope changed');
+    }
+    return isNamed
+        ? ChatMediaThreadBinding.named(
+            accountId: accountId,
+            roomToken: roomToken,
+            rootMessageId: rootMessageId,
+          )
+        : ChatMediaThreadBinding.ordinary(
+            accountId: accountId,
+            roomToken: roomToken,
+            rootMessageId: rootMessageId,
+          );
+  }
+
   bool matches({
     required String accountId,
     required String roomToken,
@@ -132,27 +154,43 @@ final class ChatThreadContext {
       Object.hash(accountId, roomToken, rootMessageId, kind, title);
 }
 
-final class ChatThreadScreen extends StatelessWidget {
+final class ChatThreadScreen extends ConsumerWidget {
   const ChatThreadScreen({
     super.key,
     required this.account,
     required this.conversation,
     required this.threadContext,
+    this.jumpToMessageId,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
   final ChatThreadContext threadContext;
+  final int? jumpToMessageId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final threadId = threadContext.rootMessageId;
+    final key = (
+      accountId: threadContext.accountId,
+      roomToken: threadContext.roomToken,
+      threadId: threadId,
+    );
+    final messages = ref.watch(chatMessagesProvider(key)).valueOrNull;
+    final root = messages == null ? null : _findRoot(messages, threadId);
+    final liveThreadContext = root == null
+        ? null
+        : ChatThreadContext.fromCachedRoot(
+            accountId: threadContext.accountId,
+            roomToken: threadContext.roomToken,
+            root: root,
+          );
     return Scaffold(
       key: Key('chat-thread-screen-$threadId'),
       appBar: AppBar(
         title: Text(
-          threadContext.isNamed
-              ? threadContext.title!
+          liveThreadContext?.isNamed == true
+              ? liveThreadContext!.title!
               : AppLocalizations.of(context).thread,
         ),
       ),
@@ -162,10 +200,20 @@ final class ChatThreadScreen extends StatelessWidget {
           account: account,
           conversation: conversation,
           threadId: threadId,
-          threadContext: threadContext,
+          threadContext: liveThreadContext,
+          jumpToMessageId: jumpToMessageId,
         ),
       ),
     );
+  }
+
+  CachedChatMessage? _findRoot(List<CachedChatMessage> messages, int threadId) {
+    for (final message in messages) {
+      if (message.messageId == threadId) {
+        return message;
+      }
+    }
+    return null;
   }
 }
 
@@ -344,8 +392,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id == widget.account.id &&
         oldWidget.conversation.token == widget.conversation.token &&
-        oldWidget.threadId == widget.threadId &&
-        oldWidget.threadContext == widget.threadContext) {
+        oldWidget.threadId == widget.threadId) {
       return;
     }
     unawaited(

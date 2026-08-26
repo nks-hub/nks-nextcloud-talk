@@ -7,9 +7,16 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
+import 'package:nextcloudtalk/data/attachment_thread_binding.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'test_support.dart';
+
+part 'attachment_repository_thread_binding.part.dart';
+
 void main() {
+  _registerAttachmentRepositoryThreadBindingTests();
+
   test(
     'persists and reconstructs an in-flight chunk job across reopen',
     () async {
@@ -213,6 +220,7 @@ void main() {
       addTearDown(database.close);
       await _insertAccount(database, 'account-a');
       final repository = AttachmentRepository(database);
+      await _insertCachedThreadRoot(database, rootId: 42, named: false);
       await _persistAwaitingJob(
         repository,
         accountId: 'account-a',
@@ -248,8 +256,9 @@ void main() {
         threadId: 77,
       );
       await invalidScope.future;
-      final row =
-          (await database.select(database.cachedChatMessages).get()).single;
+      final row = await (database.select(
+        database.cachedChatMessages,
+      )..where((message) => message.messageId.equals(202))).getSingle();
       final wire = jsonDecode(row.rawJson) as Map<String, Object?>;
       final parent = wire['parent']! as Map<String, Object?>;
       parent['threadId'] = 77;
@@ -320,6 +329,8 @@ void main() {
         database = AppDatabase.forTesting(NativeDatabase(databaseFile));
         await _insertAccount(database, 'account-a');
         final repository = AttachmentRepository(database);
+        await _insertCachedThreadRoot(database, rootId: 42, named: false);
+        await _insertCachedThreadRoot(database, rootId: 84, named: true);
         final reply = await _persistAwaitingJob(
           repository,
           accountId: 'account-a',
@@ -543,7 +554,8 @@ _AttachmentRuntimeFixture _runtime({
   String? referenceId,
   int enqueueSequence = 1,
   int? replyTo,
-  int? threadId = 42,
+  int? threadId,
+  String? threadTitle,
 }) {
   final id = AccountId.parse(accountId);
   final server = ServerBase.parse(serverUrl);
@@ -612,7 +624,9 @@ _AttachmentRuntimeFixture _runtime({
         caption: 'Synthetic caption',
         replyTo: replyTo,
         threadId: threadId,
-        threadTitle: threadId == null ? null : 'Synthetic thread',
+        threadTitle: threadId == null
+            ? null
+            : threadTitle ?? 'Synthetic thread',
         silent: true,
       ),
       enqueueSequence: enqueueSequence,
@@ -668,7 +682,8 @@ Future<_AttachmentRuntimeFixture> _persistAwaitingJob(
   String? referenceId,
   int enqueueSequence = 1,
   int? replyTo,
-  int? threadId = 42,
+  int? threadId,
+  String? threadTitle,
 }) async {
   final runtime = _runtime(
     accountId: accountId,
@@ -680,6 +695,7 @@ Future<_AttachmentRuntimeFixture> _persistAwaitingJob(
     enqueueSequence: enqueueSequence,
     replyTo: replyTo,
     threadId: threadId,
+    threadTitle: threadTitle,
   );
   final awaiting = runtime.job.copyWith(
     phase: AttachmentJobPhase.awaitingConfirmation,

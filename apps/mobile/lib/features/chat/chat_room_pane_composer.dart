@@ -61,12 +61,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       return;
     }
     final rootReply = targetKey.threadId == null ? _replyTo : null;
-    final replyTo = targetKey.threadId == null
-        ? rootReply?.messageId
-        : threadContext!.replyTo;
-    final networkThreadId = targetKey.threadId == null
-        ? null
-        : threadContext!.networkThreadId;
     final generation = ++_sendGeneration;
     _update(() => _sending = true);
     try {
@@ -76,8 +70,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             message: message,
-            threadId: networkThreadId,
-            replyTo: replyTo,
+            threadId: targetKey.threadId,
+            replyTo: rootReply?.messageId,
           );
       if (!_isCurrentSendScope(targetKey, generation)) {
         return;
@@ -418,19 +412,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             path: r'$.roomToken',
           );
           final threadContext = _currentThreadContext;
-          final threadBinding = threadContext == null
-              ? null
-              : threadContext.isNamed
-              ? ChatMediaThreadBinding.named(
-                  accountId: accountId,
-                  roomToken: roomToken,
-                  rootMessageId: threadContext.rootMessageId,
-                )
-              : ChatMediaThreadBinding.ordinary(
-                  accountId: accountId,
-                  roomToken: roomToken,
-                  rootMessageId: threadContext.rootMessageId,
-                );
+          final threadBinding = threadContext?.mediaBinding(
+            accountId: accountId,
+            roomToken: roomToken,
+          );
           final cachedReplyTo = widget.threadId == null ? _replyTo : null;
           final replyTarget = cachedReplyTo == null
               ? null

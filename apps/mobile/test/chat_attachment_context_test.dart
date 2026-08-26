@@ -104,6 +104,8 @@ void main() {
   });
 
   test('binds voice replies and named threads to separate scopes', () async {
+    await _upsertAttachmentThreadRoot(database, rootId: 40, named: false);
+    await _upsertAttachmentThreadRoot(database, rootId: 42, named: true);
     final api = _api(
       (_) async => http.Response(jsonEncode(_attachmentCapabilities()), 200),
     );
@@ -146,6 +148,54 @@ void main() {
     expect(threadRequest.metadata.threadId, 42);
     expect(threadRequest.metadata.threadTitle, 'Synthetic thread');
   });
+
+  for (final transition in const <({bool before, bool after})>[
+    (before: false, after: true),
+    (before: true, after: false),
+  ]) {
+    test('reclassifies ${transition.before ? 'named' : 'ordinary'} metadata '
+        'when the cached root becomes '
+        '${transition.after ? 'named' : 'ordinary'} in flight', () async {
+      await _upsertAttachmentThreadRoot(
+        database,
+        rootId: 42,
+        named: transition.before,
+        title: 'Before',
+      );
+      final api = _api((_) async {
+        await _upsertAttachmentThreadRoot(
+          database,
+          rootId: 42,
+          named: transition.after,
+          title: 'After',
+        );
+        return http.Response(jsonEncode(_attachmentCapabilities()), 200);
+      });
+      addTearDown(api.close);
+
+      final request =
+          await _resolver(
+            accounts: accounts,
+            chat: chat,
+            credentials: credentials,
+            api: api,
+            uploadPolicy: uploadPolicy,
+          ).resolve(
+            accountId: AccountId.parse('account-a'),
+            roomToken: _roomToken(),
+            source: _source(),
+            metadata: _metadata(
+              replyTo: transition.before ? null : 42,
+              threadId: transition.before ? 42 : null,
+              threadTitle: transition.before ? 'Before' : null,
+            ),
+          );
+
+      expect(request.metadata.replyTo, transition.after ? isNull : 42);
+      expect(request.metadata.threadId, transition.after ? 42 : isNull);
+      expect(request.metadata.threadTitle, transition.after ? 'After' : isNull);
+    });
+  }
 
   test('rejects metadata that mixes a reply with a named thread', () {
     expect(
@@ -711,6 +761,48 @@ Future<void> _insertRoom({
           avatarVersion: Value(room.avatarVersion),
           isCustomAvatar: Value(room.isCustomAvatar),
           rawJson: jsonEncode(roomJson),
+        ),
+      );
+}
+
+Future<void> _upsertAttachmentThreadRoot(
+  AppDatabase database, {
+  required int rootId,
+  required bool named,
+  String title = 'Synthetic thread',
+}) {
+  final response =
+      readFixtureJson(
+            'chat-messages/fixtures/chat-thread-future.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = response['ocs']! as Map<String, Object?>;
+  final data = ocs['data']! as List<Object?>;
+  final message = data.single! as Map<String, Object?>;
+  final root = message['parent']! as Map<String, Object?>
+    ..['id'] = rootId
+    ..['threadId'] = rootId
+    ..['isThread'] = named
+    ..['threadTitle'] = named ? title : null
+    ..['threadReplies'] = named ? 0 : 1;
+  return database
+      .into(database.cachedChatMessages)
+      .insertOnConflictUpdate(
+        CachedChatMessagesCompanion.insert(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          messageId: rootId,
+          actorType: 'users',
+          actorId: 'fixture-user',
+          actorDisplayName: 'Fixture User',
+          timestamp: 1770000000 + rootId,
+          systemMessage: '',
+          messageType: 'comment',
+          referenceId: '',
+          displayText: 'Thread root',
+          deleted: false,
+          threadId: Value(rootId),
+          rawJson: jsonEncode(root),
         ),
       );
 }

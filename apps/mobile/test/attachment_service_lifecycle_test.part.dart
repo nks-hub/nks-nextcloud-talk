@@ -111,6 +111,7 @@ void _registerAttachmentServiceLifecycleTests() {
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.close);
+      await fixture.cacheThreadRoot(42);
       var releaseCalls = 0;
       final service = fixture.service(
         MockClient((request) async {
@@ -173,6 +174,7 @@ void _registerAttachmentServiceLifecycleTests() {
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.close);
+      await fixture.cacheThreadRoot(42);
       var releaseCalls = 0;
       var catchUpCalls = 0;
       final sourceReleased = Completer<void>();

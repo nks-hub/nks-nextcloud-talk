@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'app_database.dart';
+import 'attachment_thread_binding.dart';
 
 typedef AttachmentPersistenceKey = ({String accountId, String jobId});
 
@@ -304,6 +305,7 @@ final class AttachmentRepository {
   }) {
     final updatedAtMillis = updatedAt.toUtc().millisecondsSinceEpoch;
     return _database.transaction(() async {
+      await _verifyThreadBinding(job);
       await _database
           .into(_database.attachmentRuntimeAccounts)
           .insertOnConflictUpdate(
@@ -322,6 +324,31 @@ final class AttachmentRepository {
             _jobCompanion(job, metadata, updatedAtMillis: updatedAtMillis),
           );
     });
+  }
+
+  Future<void> _verifyThreadBinding(AttachmentJob job) async {
+    final metadata = job.draft.metadata;
+    final rootMessageId = metadata.threadId ?? metadata.replyTo;
+    if (rootMessageId == null) {
+      return;
+    }
+    final root =
+        await (_database.select(_database.cachedChatMessages)..where(
+              (message) =>
+                  message.accountId.equals(job.accountId.value) &
+                  message.roomToken.equals(job.draft.roomToken.value) &
+                  message.messageId.equals(rootMessageId),
+            ))
+            .getSingleOrNull();
+    final binding = AttachmentThreadBinding.fromCachedRoot(
+      root: root,
+      accountId: job.accountId.value,
+      roomToken: job.draft.roomToken.value,
+      rootMessageId: rootMessageId,
+    );
+    if (!binding.matches(metadata)) {
+      throw StateError('Attachment thread binding changed before admission');
+    }
   }
 
   Future<void> persistTransition({

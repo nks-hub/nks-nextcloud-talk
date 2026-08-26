@@ -340,6 +340,42 @@ final class _Fixture {
     threadId: useMessageIdAsThread ? threadId ?? messageId : threadId,
   );
 
+  Future<void> cacheThreadRoot(int rootMessageId) {
+    final response =
+        readFixtureJson(
+              'chat-messages/fixtures/chat-thread-future.response.json',
+            )!
+            as Map<String, Object?>;
+    final ocs = response['ocs']! as Map<String, Object?>;
+    final data = ocs['data']! as List<Object?>;
+    final message = data.single! as Map<String, Object?>;
+    final root = message['parent']! as Map<String, Object?>
+      ..['id'] = rootMessageId
+      ..['threadId'] = rootMessageId
+      ..['isThread'] = false
+      ..['threadTitle'] = null
+      ..['threadReplies'] = 1;
+    return database
+        .into(database.cachedChatMessages)
+        .insertOnConflictUpdate(
+          CachedChatMessagesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: rootMessageId,
+            actorType: 'users',
+            actorId: 'fixture-user',
+            actorDisplayName: 'Fixture User',
+            timestamp: 1770000000 + rootMessageId,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: '',
+            displayText: 'Reply root',
+            deleted: false,
+            rawJson: jsonEncode(root),
+          ),
+        );
+  }
+
   Future<void> cacheConfirmation({
     required int messageId,
     bool hasFileRichObject = true,

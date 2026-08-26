@@ -4,6 +4,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
+import '../../data/attachment_thread_binding.dart';
 import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
@@ -96,7 +97,12 @@ final class ChatAttachmentContextResolver {
       accountId: accountId,
       roomToken: roomToken,
     );
-    if (!authority.profile.supports(metadata)) {
+    final currentMetadata = await _canonicalThreadMetadata(
+      accountId: accountId,
+      roomToken: roomToken,
+      metadata: metadata,
+    );
+    if (!authority.profile.supports(currentMetadata)) {
       throw const ChatAttachmentContextException(
         ChatAttachmentContextError.attachmentUnsupported,
       );
@@ -107,7 +113,7 @@ final class ChatAttachmentContextResolver {
       server: authority.server,
       roomToken: roomToken,
       source: source,
-      metadata: metadata,
+      metadata: currentMetadata,
       davUserId: authority.davUserId,
       profile: authority.profile,
       credentialGeneration: authority.credentialGeneration,
@@ -115,6 +121,34 @@ final class ChatAttachmentContextResolver {
       roomCanWrite: true,
       policy: _uploadPolicy,
     );
+  }
+
+  Future<AttachmentMetadata> _canonicalThreadMetadata({
+    required AccountId accountId,
+    required ConversationToken roomToken,
+    required AttachmentMetadata metadata,
+  }) async {
+    final rootMessageId = metadata.threadId ?? metadata.replyTo;
+    if (rootMessageId == null) {
+      return metadata;
+    }
+    final root = await _chat.getMessage(
+      accountId: accountId.value,
+      roomToken: roomToken.value,
+      messageId: rootMessageId,
+    );
+    try {
+      return AttachmentThreadBinding.fromCachedRoot(
+        root: root,
+        accountId: accountId.value,
+        roomToken: roomToken.value,
+        rootMessageId: rootMessageId,
+      ).applyTo(metadata);
+    } on StateError {
+      throw const ChatAttachmentContextException(
+        ChatAttachmentContextError.contextChanged,
+      );
+    }
   }
 
   Future<_ResolvedAttachmentAuthority> _resolveAuthority({

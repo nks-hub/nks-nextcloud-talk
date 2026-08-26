@@ -680,6 +680,7 @@ void _registerAttachmentServiceRecoveryTests() {
     () async {
       final fixture = await _Fixture.create(fileBacked: true);
       addTearDown(fixture.close);
+      await fixture.cacheThreadRoot(42);
       var initialRequestCount = 0;
       final initialService = fixture.service(
         MockClient((request) async {

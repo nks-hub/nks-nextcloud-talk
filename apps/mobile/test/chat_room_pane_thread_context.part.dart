@@ -190,13 +190,66 @@ void _registerChatRoomPaneThreadContextTests() {
         (tester) => _verifyTextThreadWireField(tester, testCase),
       );
     }
+
+    for (final testCase
+        in const <({int rootId, bool initiallyNamed, bool finallyNamed})>[
+          (rootId: 83, initiallyNamed: false, finallyNamed: true),
+          (rootId: 84, initiallyNamed: true, finallyNamed: false),
+        ]) {
+      testWidgets(
+        'open thread follows a live '
+        '${testCase.initiallyNamed ? 'named-to-ordinary' : 'ordinary-to-named'} '
+        'root transition',
+        (tester) => _verifyTextThreadWireField(
+          tester,
+          (rootId: testCase.rootId, named: testCase.initiallyNamed),
+          expectedNamed: testCase.finallyNamed,
+          beforeSend: () async {
+            final updatedRoot = _messageJson(
+              id: testCase.rootId,
+              actorId: 'thread-author',
+              actorDisplayName: 'Thread author',
+              timestamp: 1724300180 + testCase.rootId,
+              message: 'Text routing root',
+              threadId: testCase.rootId,
+              isThread: testCase.finallyNamed,
+              threadReplies: testCase.finallyNamed ? 0 : 1,
+            );
+            if (testCase.finallyNamed) {
+              updatedRoot['threadTitle'] = 'Renamed while open';
+            }
+            await (database.update(database.cachedChatMessages)..where(
+                  (row) =>
+                      row.accountId.equals(account.id) &
+                      row.roomToken.equals(conversation.token) &
+                      row.messageId.equals(testCase.rootId),
+                ))
+                .write(
+                  CachedChatMessagesCompanion(
+                    threadId: Value(testCase.rootId),
+                    rawJson: Value(jsonEncode(updatedRoot)),
+                  ),
+                );
+            await _pumpUntil(
+              tester,
+              () => find
+                  .text(testCase.finallyNamed ? 'Renamed while open' : 'Thread')
+                  .evaluate()
+                  .isNotEmpty,
+            );
+          },
+        ),
+      );
+    }
   });
 }
 
 Future<void> _verifyTextThreadWireField(
   WidgetTester tester,
-  ({int rootId, bool named}) testCase,
-) async {
+  ({int rootId, bool named}) testCase, {
+  bool? expectedNamed,
+  Future<void> Function()? beforeSend,
+}) async {
   final roomFixture =
       readFixtureJson(
             'conversation-list/fixtures/conversations-full.response.json',
@@ -291,6 +344,7 @@ Future<void> _verifyTextThreadWireField(
     tester,
     () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
   );
+  await beforeSend?.call();
   await tester.enterText(
     find.byKey(const Key('chat-composer')),
     'Context-specific send ${testCase.rootId}',
@@ -313,7 +367,7 @@ Future<void> _verifyTextThreadWireField(
         null,
   );
 
-  if (testCase.named) {
+  if (expectedNamed ?? testCase.named) {
     expect(posts.single['threadId'], '${testCase.rootId}');
     expect(posts.single.containsKey('replyTo'), isFalse);
   } else {
