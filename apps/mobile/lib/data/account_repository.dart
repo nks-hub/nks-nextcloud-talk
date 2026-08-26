@@ -168,36 +168,39 @@ final class AccountRepository {
 
       final wasSelected = (await getAccount(accountId))?.selected ?? false;
 
-      await (_database.delete(_database.attachmentJobs)
-            ..where((job) => job.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.attachmentRuntimeAccounts)
-            ..where((runtime) => runtime.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.chatDrafts)
-            ..where((draft) => draft.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.textSendOperations)
-            ..where((operation) => operation.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.cachedChatMessages)
-            ..where((message) => message.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.chatScopes)
-            ..where((scope) => scope.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.chatCapabilities)
-            ..where((capability) => capability.accountId.equals(accountId)))
-          .go();
-      await (_database.delete(_database.conversationAvatars)
-            ..where((avatar) => avatar.accountId.equals(accountId)))
-          .go();
+      await (_database.delete(
+        _database.callSessions,
+      )..where((session) => session.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.attachmentJobs,
+      )..where((job) => job.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.attachmentRuntimeAccounts,
+      )..where((runtime) => runtime.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.chatDrafts,
+      )..where((draft) => draft.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.textSendOperations,
+      )..where((operation) => operation.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.cachedChatMessages,
+      )..where((message) => message.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.chatScopes,
+      )..where((scope) => scope.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.chatCapabilities,
+      )..where((capability) => capability.accountId.equals(accountId))).go();
+      await (_database.delete(
+        _database.conversationAvatars,
+      )..where((avatar) => avatar.accountId.equals(accountId))).go();
       await (_database.delete(_database.cachedConversations)
             ..where((conversation) => conversation.accountId.equals(accountId)))
           .go();
-      await (_database.delete(_database.accounts)
-            ..where((account) => account.id.equals(accountId)))
-          .go();
+      await (_database.delete(
+        _database.accounts,
+      )..where((account) => account.id.equals(accountId))).go();
 
       if (wasSelected) {
         final successor =

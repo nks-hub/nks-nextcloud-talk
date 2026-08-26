@@ -419,6 +419,42 @@ class AttachmentJobs extends Table {
   ];
 }
 
+/// Minimal non-secret state needed to recover a signaling lane after process
+/// death. HPB tickets, tokens, settings, participants and pending frames are
+/// deliberately transient and never belong in this table.
+@DataClassName('StoredCallSession')
+class CallSessions extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get roomToken => text()();
+
+  TextColumn get serverUrl => text()();
+
+  IntColumn get credentialGeneration => integer()();
+
+  IntColumn get capabilityGeneration => integer()();
+
+  TextColumn get settingsRevision => text()();
+
+  BoolColumn get profileEnabled => boolean()();
+
+  BoolColumn get profileChatRelay => boolean()();
+
+  TextColumn get nextcloudSessionId => text()();
+
+  IntColumn get connectionEpoch => integer()();
+
+  IntColumn get roomEpoch => integer()();
+
+  BoolColumn get renegotiationRequired => boolean()();
+
+  IntColumn get updatedAtMillis => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, roomToken};
+}
+
 @DriftDatabase(
   tables: [
     Accounts,
@@ -431,6 +467,7 @@ class AttachmentJobs extends Table {
     ChatDrafts,
     AttachmentRuntimeAccounts,
     AttachmentJobs,
+    CallSessions,
   ],
 )
 final class AppDatabase extends _$AppDatabase {
@@ -448,7 +485,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -564,6 +601,9 @@ final class AppDatabase extends _$AppDatabase {
                 ELSE 0
               END
         ''');
+      }
+      if (from < 11) {
+        await migrator.createTable(callSessions);
       }
       if (from < 8) {
         await migrator.addColumn(

@@ -1,5 +1,14 @@
 part of 'nextcloud_api.dart';
 
+final Set<int> _internalSignalingAllowedStatusCodes = <int>{
+  200,
+  400,
+  401,
+  404,
+  409,
+  for (var statusCode = 500; statusCode <= 599; statusCode++) statusCode,
+};
+
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
   /// Fetches the complete user-scoped tag definition list.
   Future<FetchConversationTagsResponse> getConversationTags({
@@ -69,11 +78,67 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     final payload = await _sendBody(
       request,
       allowedStatusCodes: _signalingSettingsAllowedStatusCodes,
-      maximumBytes: chatMaximumResponseBytes,
+      maximumBytes: maximumSignalingWireBytes,
       timeout: const Duration(seconds: 20),
     );
     return decodeSignalingSettingsResponse(
       request: settingsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Executes one internal-signaling long poll. The request object owns the
+  /// account, room and epoch binding; this adapter only adds the matching
+  /// account credential and preserves the bounded OCS response.
+  Future<InternalSignalingPullResponse> pullInternalSignaling({
+    required InternalSignalingPullRequest pullRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', pullRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...pullRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _internalSignalingAllowedStatusCodes,
+      maximumBytes: maximumSignalingWireBytes,
+      timeout: const Duration(seconds: 45),
+    );
+    return decodeInternalSignalingPullResponse(
+      request: pullRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Sends a non-replayable internal-signaling batch. Callers must treat any
+  /// transport failure as possibly sent; this transport never retries it.
+  Future<InternalSignalingBatchResponse> sendInternalSignalingBatch({
+    required InternalSignalingBatchRequest batchRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', batchRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...batchRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = batchRequest.formFields;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _internalSignalingAllowedStatusCodes,
+      maximumBytes: maximumSignalingWireBytes,
+      timeout: const Duration(seconds: 20),
+    );
+    return decodeInternalSignalingBatchResponse(
+      request: batchRequest,
       statusCode: payload.statusCode,
       body: payload.body,
     );

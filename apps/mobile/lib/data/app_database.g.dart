@@ -9818,6 +9818,834 @@ class AttachmentJobsCompanion extends UpdateCompanion<StoredAttachmentJob> {
   }
 }
 
+class $CallSessionsTable extends CallSessions
+    with TableInfo<$CallSessionsTable, StoredCallSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CallSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _roomTokenMeta = const VerificationMeta(
+    'roomToken',
+  );
+  @override
+  late final GeneratedColumn<String> roomToken = GeneratedColumn<String>(
+    'room_token',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _serverUrlMeta = const VerificationMeta(
+    'serverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> serverUrl = GeneratedColumn<String>(
+    'server_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _credentialGenerationMeta =
+      const VerificationMeta('credentialGeneration');
+  @override
+  late final GeneratedColumn<int> credentialGeneration = GeneratedColumn<int>(
+    'credential_generation',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _capabilityGenerationMeta =
+      const VerificationMeta('capabilityGeneration');
+  @override
+  late final GeneratedColumn<int> capabilityGeneration = GeneratedColumn<int>(
+    'capability_generation',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _settingsRevisionMeta = const VerificationMeta(
+    'settingsRevision',
+  );
+  @override
+  late final GeneratedColumn<String> settingsRevision = GeneratedColumn<String>(
+    'settings_revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _profileEnabledMeta = const VerificationMeta(
+    'profileEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> profileEnabled = GeneratedColumn<bool>(
+    'profile_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("profile_enabled" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _profileChatRelayMeta = const VerificationMeta(
+    'profileChatRelay',
+  );
+  @override
+  late final GeneratedColumn<bool> profileChatRelay = GeneratedColumn<bool>(
+    'profile_chat_relay',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("profile_chat_relay" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _nextcloudSessionIdMeta =
+      const VerificationMeta('nextcloudSessionId');
+  @override
+  late final GeneratedColumn<String> nextcloudSessionId =
+      GeneratedColumn<String>(
+        'nextcloud_session_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _connectionEpochMeta = const VerificationMeta(
+    'connectionEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> connectionEpoch = GeneratedColumn<int>(
+    'connection_epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _roomEpochMeta = const VerificationMeta(
+    'roomEpoch',
+  );
+  @override
+  late final GeneratedColumn<int> roomEpoch = GeneratedColumn<int>(
+    'room_epoch',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _renegotiationRequiredMeta =
+      const VerificationMeta('renegotiationRequired');
+  @override
+  late final GeneratedColumn<bool> renegotiationRequired =
+      GeneratedColumn<bool>(
+        'renegotiation_required',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("renegotiation_required" IN (0, 1))',
+        ),
+      );
+  static const VerificationMeta _updatedAtMillisMeta = const VerificationMeta(
+    'updatedAtMillis',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAtMillis = GeneratedColumn<int>(
+    'updated_at_millis',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    roomToken,
+    serverUrl,
+    credentialGeneration,
+    capabilityGeneration,
+    settingsRevision,
+    profileEnabled,
+    profileChatRelay,
+    nextcloudSessionId,
+    connectionEpoch,
+    roomEpoch,
+    renegotiationRequired,
+    updatedAtMillis,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'call_sessions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredCallSession> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('room_token')) {
+      context.handle(
+        _roomTokenMeta,
+        roomToken.isAcceptableOrUnknown(data['room_token']!, _roomTokenMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roomTokenMeta);
+    }
+    if (data.containsKey('server_url')) {
+      context.handle(
+        _serverUrlMeta,
+        serverUrl.isAcceptableOrUnknown(data['server_url']!, _serverUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_serverUrlMeta);
+    }
+    if (data.containsKey('credential_generation')) {
+      context.handle(
+        _credentialGenerationMeta,
+        credentialGeneration.isAcceptableOrUnknown(
+          data['credential_generation']!,
+          _credentialGenerationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_credentialGenerationMeta);
+    }
+    if (data.containsKey('capability_generation')) {
+      context.handle(
+        _capabilityGenerationMeta,
+        capabilityGeneration.isAcceptableOrUnknown(
+          data['capability_generation']!,
+          _capabilityGenerationMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_capabilityGenerationMeta);
+    }
+    if (data.containsKey('settings_revision')) {
+      context.handle(
+        _settingsRevisionMeta,
+        settingsRevision.isAcceptableOrUnknown(
+          data['settings_revision']!,
+          _settingsRevisionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_settingsRevisionMeta);
+    }
+    if (data.containsKey('profile_enabled')) {
+      context.handle(
+        _profileEnabledMeta,
+        profileEnabled.isAcceptableOrUnknown(
+          data['profile_enabled']!,
+          _profileEnabledMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_profileEnabledMeta);
+    }
+    if (data.containsKey('profile_chat_relay')) {
+      context.handle(
+        _profileChatRelayMeta,
+        profileChatRelay.isAcceptableOrUnknown(
+          data['profile_chat_relay']!,
+          _profileChatRelayMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_profileChatRelayMeta);
+    }
+    if (data.containsKey('nextcloud_session_id')) {
+      context.handle(
+        _nextcloudSessionIdMeta,
+        nextcloudSessionId.isAcceptableOrUnknown(
+          data['nextcloud_session_id']!,
+          _nextcloudSessionIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nextcloudSessionIdMeta);
+    }
+    if (data.containsKey('connection_epoch')) {
+      context.handle(
+        _connectionEpochMeta,
+        connectionEpoch.isAcceptableOrUnknown(
+          data['connection_epoch']!,
+          _connectionEpochMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_connectionEpochMeta);
+    }
+    if (data.containsKey('room_epoch')) {
+      context.handle(
+        _roomEpochMeta,
+        roomEpoch.isAcceptableOrUnknown(data['room_epoch']!, _roomEpochMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roomEpochMeta);
+    }
+    if (data.containsKey('renegotiation_required')) {
+      context.handle(
+        _renegotiationRequiredMeta,
+        renegotiationRequired.isAcceptableOrUnknown(
+          data['renegotiation_required']!,
+          _renegotiationRequiredMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_renegotiationRequiredMeta);
+    }
+    if (data.containsKey('updated_at_millis')) {
+      context.handle(
+        _updatedAtMillisMeta,
+        updatedAtMillis.isAcceptableOrUnknown(
+          data['updated_at_millis']!,
+          _updatedAtMillisMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMillisMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, roomToken};
+  @override
+  StoredCallSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredCallSession(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      roomToken: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}room_token'],
+      )!,
+      serverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}server_url'],
+      )!,
+      credentialGeneration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}credential_generation'],
+      )!,
+      capabilityGeneration: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}capability_generation'],
+      )!,
+      settingsRevision: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}settings_revision'],
+      )!,
+      profileEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}profile_enabled'],
+      )!,
+      profileChatRelay: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}profile_chat_relay'],
+      )!,
+      nextcloudSessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nextcloud_session_id'],
+      )!,
+      connectionEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}connection_epoch'],
+      )!,
+      roomEpoch: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}room_epoch'],
+      )!,
+      renegotiationRequired: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}renegotiation_required'],
+      )!,
+      updatedAtMillis: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at_millis'],
+      )!,
+    );
+  }
+
+  @override
+  $CallSessionsTable createAlias(String alias) {
+    return $CallSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredCallSession extends DataClass
+    implements Insertable<StoredCallSession> {
+  final String accountId;
+  final String roomToken;
+  final String serverUrl;
+  final int credentialGeneration;
+  final int capabilityGeneration;
+  final String settingsRevision;
+  final bool profileEnabled;
+  final bool profileChatRelay;
+  final String nextcloudSessionId;
+  final int connectionEpoch;
+  final int roomEpoch;
+  final bool renegotiationRequired;
+  final int updatedAtMillis;
+  const StoredCallSession({
+    required this.accountId,
+    required this.roomToken,
+    required this.serverUrl,
+    required this.credentialGeneration,
+    required this.capabilityGeneration,
+    required this.settingsRevision,
+    required this.profileEnabled,
+    required this.profileChatRelay,
+    required this.nextcloudSessionId,
+    required this.connectionEpoch,
+    required this.roomEpoch,
+    required this.renegotiationRequired,
+    required this.updatedAtMillis,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['room_token'] = Variable<String>(roomToken);
+    map['server_url'] = Variable<String>(serverUrl);
+    map['credential_generation'] = Variable<int>(credentialGeneration);
+    map['capability_generation'] = Variable<int>(capabilityGeneration);
+    map['settings_revision'] = Variable<String>(settingsRevision);
+    map['profile_enabled'] = Variable<bool>(profileEnabled);
+    map['profile_chat_relay'] = Variable<bool>(profileChatRelay);
+    map['nextcloud_session_id'] = Variable<String>(nextcloudSessionId);
+    map['connection_epoch'] = Variable<int>(connectionEpoch);
+    map['room_epoch'] = Variable<int>(roomEpoch);
+    map['renegotiation_required'] = Variable<bool>(renegotiationRequired);
+    map['updated_at_millis'] = Variable<int>(updatedAtMillis);
+    return map;
+  }
+
+  CallSessionsCompanion toCompanion(bool nullToAbsent) {
+    return CallSessionsCompanion(
+      accountId: Value(accountId),
+      roomToken: Value(roomToken),
+      serverUrl: Value(serverUrl),
+      credentialGeneration: Value(credentialGeneration),
+      capabilityGeneration: Value(capabilityGeneration),
+      settingsRevision: Value(settingsRevision),
+      profileEnabled: Value(profileEnabled),
+      profileChatRelay: Value(profileChatRelay),
+      nextcloudSessionId: Value(nextcloudSessionId),
+      connectionEpoch: Value(connectionEpoch),
+      roomEpoch: Value(roomEpoch),
+      renegotiationRequired: Value(renegotiationRequired),
+      updatedAtMillis: Value(updatedAtMillis),
+    );
+  }
+
+  factory StoredCallSession.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredCallSession(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      roomToken: serializer.fromJson<String>(json['roomToken']),
+      serverUrl: serializer.fromJson<String>(json['serverUrl']),
+      credentialGeneration: serializer.fromJson<int>(
+        json['credentialGeneration'],
+      ),
+      capabilityGeneration: serializer.fromJson<int>(
+        json['capabilityGeneration'],
+      ),
+      settingsRevision: serializer.fromJson<String>(json['settingsRevision']),
+      profileEnabled: serializer.fromJson<bool>(json['profileEnabled']),
+      profileChatRelay: serializer.fromJson<bool>(json['profileChatRelay']),
+      nextcloudSessionId: serializer.fromJson<String>(
+        json['nextcloudSessionId'],
+      ),
+      connectionEpoch: serializer.fromJson<int>(json['connectionEpoch']),
+      roomEpoch: serializer.fromJson<int>(json['roomEpoch']),
+      renegotiationRequired: serializer.fromJson<bool>(
+        json['renegotiationRequired'],
+      ),
+      updatedAtMillis: serializer.fromJson<int>(json['updatedAtMillis']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'roomToken': serializer.toJson<String>(roomToken),
+      'serverUrl': serializer.toJson<String>(serverUrl),
+      'credentialGeneration': serializer.toJson<int>(credentialGeneration),
+      'capabilityGeneration': serializer.toJson<int>(capabilityGeneration),
+      'settingsRevision': serializer.toJson<String>(settingsRevision),
+      'profileEnabled': serializer.toJson<bool>(profileEnabled),
+      'profileChatRelay': serializer.toJson<bool>(profileChatRelay),
+      'nextcloudSessionId': serializer.toJson<String>(nextcloudSessionId),
+      'connectionEpoch': serializer.toJson<int>(connectionEpoch),
+      'roomEpoch': serializer.toJson<int>(roomEpoch),
+      'renegotiationRequired': serializer.toJson<bool>(renegotiationRequired),
+      'updatedAtMillis': serializer.toJson<int>(updatedAtMillis),
+    };
+  }
+
+  StoredCallSession copyWith({
+    String? accountId,
+    String? roomToken,
+    String? serverUrl,
+    int? credentialGeneration,
+    int? capabilityGeneration,
+    String? settingsRevision,
+    bool? profileEnabled,
+    bool? profileChatRelay,
+    String? nextcloudSessionId,
+    int? connectionEpoch,
+    int? roomEpoch,
+    bool? renegotiationRequired,
+    int? updatedAtMillis,
+  }) => StoredCallSession(
+    accountId: accountId ?? this.accountId,
+    roomToken: roomToken ?? this.roomToken,
+    serverUrl: serverUrl ?? this.serverUrl,
+    credentialGeneration: credentialGeneration ?? this.credentialGeneration,
+    capabilityGeneration: capabilityGeneration ?? this.capabilityGeneration,
+    settingsRevision: settingsRevision ?? this.settingsRevision,
+    profileEnabled: profileEnabled ?? this.profileEnabled,
+    profileChatRelay: profileChatRelay ?? this.profileChatRelay,
+    nextcloudSessionId: nextcloudSessionId ?? this.nextcloudSessionId,
+    connectionEpoch: connectionEpoch ?? this.connectionEpoch,
+    roomEpoch: roomEpoch ?? this.roomEpoch,
+    renegotiationRequired: renegotiationRequired ?? this.renegotiationRequired,
+    updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
+  );
+  StoredCallSession copyWithCompanion(CallSessionsCompanion data) {
+    return StoredCallSession(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      roomToken: data.roomToken.present ? data.roomToken.value : this.roomToken,
+      serverUrl: data.serverUrl.present ? data.serverUrl.value : this.serverUrl,
+      credentialGeneration: data.credentialGeneration.present
+          ? data.credentialGeneration.value
+          : this.credentialGeneration,
+      capabilityGeneration: data.capabilityGeneration.present
+          ? data.capabilityGeneration.value
+          : this.capabilityGeneration,
+      settingsRevision: data.settingsRevision.present
+          ? data.settingsRevision.value
+          : this.settingsRevision,
+      profileEnabled: data.profileEnabled.present
+          ? data.profileEnabled.value
+          : this.profileEnabled,
+      profileChatRelay: data.profileChatRelay.present
+          ? data.profileChatRelay.value
+          : this.profileChatRelay,
+      nextcloudSessionId: data.nextcloudSessionId.present
+          ? data.nextcloudSessionId.value
+          : this.nextcloudSessionId,
+      connectionEpoch: data.connectionEpoch.present
+          ? data.connectionEpoch.value
+          : this.connectionEpoch,
+      roomEpoch: data.roomEpoch.present ? data.roomEpoch.value : this.roomEpoch,
+      renegotiationRequired: data.renegotiationRequired.present
+          ? data.renegotiationRequired.value
+          : this.renegotiationRequired,
+      updatedAtMillis: data.updatedAtMillis.present
+          ? data.updatedAtMillis.value
+          : this.updatedAtMillis,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredCallSession(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('serverUrl: $serverUrl, ')
+          ..write('credentialGeneration: $credentialGeneration, ')
+          ..write('capabilityGeneration: $capabilityGeneration, ')
+          ..write('settingsRevision: $settingsRevision, ')
+          ..write('profileEnabled: $profileEnabled, ')
+          ..write('profileChatRelay: $profileChatRelay, ')
+          ..write('nextcloudSessionId: $nextcloudSessionId, ')
+          ..write('connectionEpoch: $connectionEpoch, ')
+          ..write('roomEpoch: $roomEpoch, ')
+          ..write('renegotiationRequired: $renegotiationRequired, ')
+          ..write('updatedAtMillis: $updatedAtMillis')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    roomToken,
+    serverUrl,
+    credentialGeneration,
+    capabilityGeneration,
+    settingsRevision,
+    profileEnabled,
+    profileChatRelay,
+    nextcloudSessionId,
+    connectionEpoch,
+    roomEpoch,
+    renegotiationRequired,
+    updatedAtMillis,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredCallSession &&
+          other.accountId == this.accountId &&
+          other.roomToken == this.roomToken &&
+          other.serverUrl == this.serverUrl &&
+          other.credentialGeneration == this.credentialGeneration &&
+          other.capabilityGeneration == this.capabilityGeneration &&
+          other.settingsRevision == this.settingsRevision &&
+          other.profileEnabled == this.profileEnabled &&
+          other.profileChatRelay == this.profileChatRelay &&
+          other.nextcloudSessionId == this.nextcloudSessionId &&
+          other.connectionEpoch == this.connectionEpoch &&
+          other.roomEpoch == this.roomEpoch &&
+          other.renegotiationRequired == this.renegotiationRequired &&
+          other.updatedAtMillis == this.updatedAtMillis);
+}
+
+class CallSessionsCompanion extends UpdateCompanion<StoredCallSession> {
+  final Value<String> accountId;
+  final Value<String> roomToken;
+  final Value<String> serverUrl;
+  final Value<int> credentialGeneration;
+  final Value<int> capabilityGeneration;
+  final Value<String> settingsRevision;
+  final Value<bool> profileEnabled;
+  final Value<bool> profileChatRelay;
+  final Value<String> nextcloudSessionId;
+  final Value<int> connectionEpoch;
+  final Value<int> roomEpoch;
+  final Value<bool> renegotiationRequired;
+  final Value<int> updatedAtMillis;
+  final Value<int> rowid;
+  const CallSessionsCompanion({
+    this.accountId = const Value.absent(),
+    this.roomToken = const Value.absent(),
+    this.serverUrl = const Value.absent(),
+    this.credentialGeneration = const Value.absent(),
+    this.capabilityGeneration = const Value.absent(),
+    this.settingsRevision = const Value.absent(),
+    this.profileEnabled = const Value.absent(),
+    this.profileChatRelay = const Value.absent(),
+    this.nextcloudSessionId = const Value.absent(),
+    this.connectionEpoch = const Value.absent(),
+    this.roomEpoch = const Value.absent(),
+    this.renegotiationRequired = const Value.absent(),
+    this.updatedAtMillis = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CallSessionsCompanion.insert({
+    required String accountId,
+    required String roomToken,
+    required String serverUrl,
+    required int credentialGeneration,
+    required int capabilityGeneration,
+    required String settingsRevision,
+    required bool profileEnabled,
+    required bool profileChatRelay,
+    required String nextcloudSessionId,
+    required int connectionEpoch,
+    required int roomEpoch,
+    required bool renegotiationRequired,
+    required int updatedAtMillis,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       roomToken = Value(roomToken),
+       serverUrl = Value(serverUrl),
+       credentialGeneration = Value(credentialGeneration),
+       capabilityGeneration = Value(capabilityGeneration),
+       settingsRevision = Value(settingsRevision),
+       profileEnabled = Value(profileEnabled),
+       profileChatRelay = Value(profileChatRelay),
+       nextcloudSessionId = Value(nextcloudSessionId),
+       connectionEpoch = Value(connectionEpoch),
+       roomEpoch = Value(roomEpoch),
+       renegotiationRequired = Value(renegotiationRequired),
+       updatedAtMillis = Value(updatedAtMillis);
+  static Insertable<StoredCallSession> custom({
+    Expression<String>? accountId,
+    Expression<String>? roomToken,
+    Expression<String>? serverUrl,
+    Expression<int>? credentialGeneration,
+    Expression<int>? capabilityGeneration,
+    Expression<String>? settingsRevision,
+    Expression<bool>? profileEnabled,
+    Expression<bool>? profileChatRelay,
+    Expression<String>? nextcloudSessionId,
+    Expression<int>? connectionEpoch,
+    Expression<int>? roomEpoch,
+    Expression<bool>? renegotiationRequired,
+    Expression<int>? updatedAtMillis,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (roomToken != null) 'room_token': roomToken,
+      if (serverUrl != null) 'server_url': serverUrl,
+      if (credentialGeneration != null)
+        'credential_generation': credentialGeneration,
+      if (capabilityGeneration != null)
+        'capability_generation': capabilityGeneration,
+      if (settingsRevision != null) 'settings_revision': settingsRevision,
+      if (profileEnabled != null) 'profile_enabled': profileEnabled,
+      if (profileChatRelay != null) 'profile_chat_relay': profileChatRelay,
+      if (nextcloudSessionId != null)
+        'nextcloud_session_id': nextcloudSessionId,
+      if (connectionEpoch != null) 'connection_epoch': connectionEpoch,
+      if (roomEpoch != null) 'room_epoch': roomEpoch,
+      if (renegotiationRequired != null)
+        'renegotiation_required': renegotiationRequired,
+      if (updatedAtMillis != null) 'updated_at_millis': updatedAtMillis,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CallSessionsCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? roomToken,
+    Value<String>? serverUrl,
+    Value<int>? credentialGeneration,
+    Value<int>? capabilityGeneration,
+    Value<String>? settingsRevision,
+    Value<bool>? profileEnabled,
+    Value<bool>? profileChatRelay,
+    Value<String>? nextcloudSessionId,
+    Value<int>? connectionEpoch,
+    Value<int>? roomEpoch,
+    Value<bool>? renegotiationRequired,
+    Value<int>? updatedAtMillis,
+    Value<int>? rowid,
+  }) {
+    return CallSessionsCompanion(
+      accountId: accountId ?? this.accountId,
+      roomToken: roomToken ?? this.roomToken,
+      serverUrl: serverUrl ?? this.serverUrl,
+      credentialGeneration: credentialGeneration ?? this.credentialGeneration,
+      capabilityGeneration: capabilityGeneration ?? this.capabilityGeneration,
+      settingsRevision: settingsRevision ?? this.settingsRevision,
+      profileEnabled: profileEnabled ?? this.profileEnabled,
+      profileChatRelay: profileChatRelay ?? this.profileChatRelay,
+      nextcloudSessionId: nextcloudSessionId ?? this.nextcloudSessionId,
+      connectionEpoch: connectionEpoch ?? this.connectionEpoch,
+      roomEpoch: roomEpoch ?? this.roomEpoch,
+      renegotiationRequired:
+          renegotiationRequired ?? this.renegotiationRequired,
+      updatedAtMillis: updatedAtMillis ?? this.updatedAtMillis,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (roomToken.present) {
+      map['room_token'] = Variable<String>(roomToken.value);
+    }
+    if (serverUrl.present) {
+      map['server_url'] = Variable<String>(serverUrl.value);
+    }
+    if (credentialGeneration.present) {
+      map['credential_generation'] = Variable<int>(credentialGeneration.value);
+    }
+    if (capabilityGeneration.present) {
+      map['capability_generation'] = Variable<int>(capabilityGeneration.value);
+    }
+    if (settingsRevision.present) {
+      map['settings_revision'] = Variable<String>(settingsRevision.value);
+    }
+    if (profileEnabled.present) {
+      map['profile_enabled'] = Variable<bool>(profileEnabled.value);
+    }
+    if (profileChatRelay.present) {
+      map['profile_chat_relay'] = Variable<bool>(profileChatRelay.value);
+    }
+    if (nextcloudSessionId.present) {
+      map['nextcloud_session_id'] = Variable<String>(nextcloudSessionId.value);
+    }
+    if (connectionEpoch.present) {
+      map['connection_epoch'] = Variable<int>(connectionEpoch.value);
+    }
+    if (roomEpoch.present) {
+      map['room_epoch'] = Variable<int>(roomEpoch.value);
+    }
+    if (renegotiationRequired.present) {
+      map['renegotiation_required'] = Variable<bool>(
+        renegotiationRequired.value,
+      );
+    }
+    if (updatedAtMillis.present) {
+      map['updated_at_millis'] = Variable<int>(updatedAtMillis.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CallSessionsCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('roomToken: $roomToken, ')
+          ..write('serverUrl: $serverUrl, ')
+          ..write('credentialGeneration: $credentialGeneration, ')
+          ..write('capabilityGeneration: $capabilityGeneration, ')
+          ..write('settingsRevision: $settingsRevision, ')
+          ..write('profileEnabled: $profileEnabled, ')
+          ..write('profileChatRelay: $profileChatRelay, ')
+          ..write('nextcloudSessionId: $nextcloudSessionId, ')
+          ..write('connectionEpoch: $connectionEpoch, ')
+          ..write('roomEpoch: $roomEpoch, ')
+          ..write('renegotiationRequired: $renegotiationRequired, ')
+          ..write('updatedAtMillis: $updatedAtMillis, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -9838,6 +10666,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AttachmentRuntimeAccountsTable attachmentRuntimeAccounts =
       $AttachmentRuntimeAccountsTable(this);
   late final $AttachmentJobsTable attachmentJobs = $AttachmentJobsTable(this);
+  late final $CallSessionsTable callSessions = $CallSessionsTable(this);
   late final Index cachedChatMessagesAttachmentConfirmation = Index(
     'cached_chat_messages_attachment_confirmation',
     'CREATE INDEX cached_chat_messages_attachment_confirmation ON cached_chat_messages (account_id, room_token, reference_id, message_id)',
@@ -9857,6 +10686,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     chatDrafts,
     attachmentRuntimeAccounts,
     attachmentJobs,
+    callSessions,
     cachedChatMessagesAttachmentConfirmation,
   ];
   @override
@@ -9909,6 +10739,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('chat_drafts', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('call_sessions', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -10121,6 +10958,24 @@ final class $$AccountsTableReferences
     final cache = $_typedResult.readTableOrNull(
       _attachmentRuntimeAccountsRefsTable($_db),
     );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CallSessionsTable, List<StoredCallSession>>
+  _callSessionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.callSessions,
+    aliasName: 'accounts__id__call_sessions__account_id',
+  );
+
+  $$CallSessionsTableProcessedTableManager get callSessionsRefs {
+    final manager = $$CallSessionsTableTableManager(
+      $_db,
+      $_db.callSessions,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_callSessionsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -10401,6 +11256,31 @@ class $$AccountsTableFilterComposer
                     $removeJoinBuilderFromRootComposer,
               ),
         );
+    return f(composer);
+  }
+
+  Expression<bool> callSessionsRefs(
+    Expression<bool> Function($$CallSessionsTableFilterComposer f) f,
+  ) {
+    final $$CallSessionsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.callSessions,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CallSessionsTableFilterComposer(
+            $db: $db,
+            $table: $db.callSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
     return f(composer);
   }
 }
@@ -10753,6 +11633,31 @@ class $$AccountsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> callSessionsRefs<T extends Object>(
+    Expression<T> Function($$CallSessionsTableAnnotationComposer a) f,
+  ) {
+    final $$CallSessionsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.callSessions,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CallSessionsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.callSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AccountsTableTableManager
@@ -10777,6 +11682,7 @@ class $$AccountsTableTableManager
             bool textSendOperationsRefs,
             bool chatDraftsRefs,
             bool attachmentRuntimeAccountsRefs,
+            bool callSessionsRefs,
           })
         > {
   $$AccountsTableTableManager(_$AppDatabase db, $AccountsTable table)
@@ -10878,6 +11784,7 @@ class $$AccountsTableTableManager
                 textSendOperationsRefs = false,
                 chatDraftsRefs = false,
                 attachmentRuntimeAccountsRefs = false,
+                callSessionsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -10891,6 +11798,7 @@ class $$AccountsTableTableManager
                     if (chatDraftsRefs) db.chatDrafts,
                     if (attachmentRuntimeAccountsRefs)
                       db.attachmentRuntimeAccounts,
+                    if (callSessionsRefs) db.callSessions,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -11063,6 +11971,27 @@ class $$AccountsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (callSessionsRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          StoredCallSession
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._callSessionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).callSessionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -11092,6 +12021,7 @@ typedef $$AccountsTableProcessedTableManager =
         bool textSendOperationsRefs,
         bool chatDraftsRefs,
         bool attachmentRuntimeAccountsRefs,
+        bool callSessionsRefs,
       })
     >;
 typedef $$CachedConversationsTableCreateCompanionBuilder =
@@ -16074,6 +17004,494 @@ typedef $$AttachmentJobsTableProcessedTableManager =
       StoredAttachmentJob,
       PrefetchHooks Function()
     >;
+typedef $$CallSessionsTableCreateCompanionBuilder =
+    CallSessionsCompanion Function({
+      required String accountId,
+      required String roomToken,
+      required String serverUrl,
+      required int credentialGeneration,
+      required int capabilityGeneration,
+      required String settingsRevision,
+      required bool profileEnabled,
+      required bool profileChatRelay,
+      required String nextcloudSessionId,
+      required int connectionEpoch,
+      required int roomEpoch,
+      required bool renegotiationRequired,
+      required int updatedAtMillis,
+      Value<int> rowid,
+    });
+typedef $$CallSessionsTableUpdateCompanionBuilder =
+    CallSessionsCompanion Function({
+      Value<String> accountId,
+      Value<String> roomToken,
+      Value<String> serverUrl,
+      Value<int> credentialGeneration,
+      Value<int> capabilityGeneration,
+      Value<String> settingsRevision,
+      Value<bool> profileEnabled,
+      Value<bool> profileChatRelay,
+      Value<String> nextcloudSessionId,
+      Value<int> connectionEpoch,
+      Value<int> roomEpoch,
+      Value<bool> renegotiationRequired,
+      Value<int> updatedAtMillis,
+      Value<int> rowid,
+    });
+
+final class $$CallSessionsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $CallSessionsTable, StoredCallSession> {
+  $$CallSessionsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('call_sessions__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CallSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $CallSessionsTable> {
+  $$CallSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get serverUrl => $composableBuilder(
+    column: $table.serverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get credentialGeneration => $composableBuilder(
+    column: $table.credentialGeneration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capabilityGeneration => $composableBuilder(
+    column: $table.capabilityGeneration,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get settingsRevision => $composableBuilder(
+    column: $table.settingsRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get profileEnabled => $composableBuilder(
+    column: $table.profileEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get profileChatRelay => $composableBuilder(
+    column: $table.profileChatRelay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nextcloudSessionId => $composableBuilder(
+    column: $table.nextcloudSessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get connectionEpoch => $composableBuilder(
+    column: $table.connectionEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get roomEpoch => $composableBuilder(
+    column: $table.roomEpoch,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get renegotiationRequired => $composableBuilder(
+    column: $table.renegotiationRequired,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CallSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CallSessionsTable> {
+  $$CallSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get roomToken => $composableBuilder(
+    column: $table.roomToken,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get serverUrl => $composableBuilder(
+    column: $table.serverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get credentialGeneration => $composableBuilder(
+    column: $table.credentialGeneration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capabilityGeneration => $composableBuilder(
+    column: $table.capabilityGeneration,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get settingsRevision => $composableBuilder(
+    column: $table.settingsRevision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get profileEnabled => $composableBuilder(
+    column: $table.profileEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get profileChatRelay => $composableBuilder(
+    column: $table.profileChatRelay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nextcloudSessionId => $composableBuilder(
+    column: $table.nextcloudSessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get connectionEpoch => $composableBuilder(
+    column: $table.connectionEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get roomEpoch => $composableBuilder(
+    column: $table.roomEpoch,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get renegotiationRequired => $composableBuilder(
+    column: $table.renegotiationRequired,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CallSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CallSessionsTable> {
+  $$CallSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get roomToken =>
+      $composableBuilder(column: $table.roomToken, builder: (column) => column);
+
+  GeneratedColumn<String> get serverUrl =>
+      $composableBuilder(column: $table.serverUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get credentialGeneration => $composableBuilder(
+    column: $table.credentialGeneration,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get capabilityGeneration => $composableBuilder(
+    column: $table.capabilityGeneration,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get settingsRevision => $composableBuilder(
+    column: $table.settingsRevision,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get profileEnabled => $composableBuilder(
+    column: $table.profileEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get profileChatRelay => $composableBuilder(
+    column: $table.profileChatRelay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get nextcloudSessionId => $composableBuilder(
+    column: $table.nextcloudSessionId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get connectionEpoch => $composableBuilder(
+    column: $table.connectionEpoch,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get roomEpoch =>
+      $composableBuilder(column: $table.roomEpoch, builder: (column) => column);
+
+  GeneratedColumn<bool> get renegotiationRequired => $composableBuilder(
+    column: $table.renegotiationRequired,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get updatedAtMillis => $composableBuilder(
+    column: $table.updatedAtMillis,
+    builder: (column) => column,
+  );
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CallSessionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CallSessionsTable,
+          StoredCallSession,
+          $$CallSessionsTableFilterComposer,
+          $$CallSessionsTableOrderingComposer,
+          $$CallSessionsTableAnnotationComposer,
+          $$CallSessionsTableCreateCompanionBuilder,
+          $$CallSessionsTableUpdateCompanionBuilder,
+          (StoredCallSession, $$CallSessionsTableReferences),
+          StoredCallSession,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$CallSessionsTableTableManager(_$AppDatabase db, $CallSessionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CallSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CallSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CallSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> roomToken = const Value.absent(),
+                Value<String> serverUrl = const Value.absent(),
+                Value<int> credentialGeneration = const Value.absent(),
+                Value<int> capabilityGeneration = const Value.absent(),
+                Value<String> settingsRevision = const Value.absent(),
+                Value<bool> profileEnabled = const Value.absent(),
+                Value<bool> profileChatRelay = const Value.absent(),
+                Value<String> nextcloudSessionId = const Value.absent(),
+                Value<int> connectionEpoch = const Value.absent(),
+                Value<int> roomEpoch = const Value.absent(),
+                Value<bool> renegotiationRequired = const Value.absent(),
+                Value<int> updatedAtMillis = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CallSessionsCompanion(
+                accountId: accountId,
+                roomToken: roomToken,
+                serverUrl: serverUrl,
+                credentialGeneration: credentialGeneration,
+                capabilityGeneration: capabilityGeneration,
+                settingsRevision: settingsRevision,
+                profileEnabled: profileEnabled,
+                profileChatRelay: profileChatRelay,
+                nextcloudSessionId: nextcloudSessionId,
+                connectionEpoch: connectionEpoch,
+                roomEpoch: roomEpoch,
+                renegotiationRequired: renegotiationRequired,
+                updatedAtMillis: updatedAtMillis,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String roomToken,
+                required String serverUrl,
+                required int credentialGeneration,
+                required int capabilityGeneration,
+                required String settingsRevision,
+                required bool profileEnabled,
+                required bool profileChatRelay,
+                required String nextcloudSessionId,
+                required int connectionEpoch,
+                required int roomEpoch,
+                required bool renegotiationRequired,
+                required int updatedAtMillis,
+                Value<int> rowid = const Value.absent(),
+              }) => CallSessionsCompanion.insert(
+                accountId: accountId,
+                roomToken: roomToken,
+                serverUrl: serverUrl,
+                credentialGeneration: credentialGeneration,
+                capabilityGeneration: capabilityGeneration,
+                settingsRevision: settingsRevision,
+                profileEnabled: profileEnabled,
+                profileChatRelay: profileChatRelay,
+                nextcloudSessionId: nextcloudSessionId,
+                connectionEpoch: connectionEpoch,
+                roomEpoch: roomEpoch,
+                renegotiationRequired: renegotiationRequired,
+                updatedAtMillis: updatedAtMillis,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CallSessionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable: $$CallSessionsTableReferences
+                                    ._accountIdTable(db),
+                                referencedColumn: $$CallSessionsTableReferences
+                                    ._accountIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CallSessionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CallSessionsTable,
+      StoredCallSession,
+      $$CallSessionsTableFilterComposer,
+      $$CallSessionsTableOrderingComposer,
+      $$CallSessionsTableAnnotationComposer,
+      $$CallSessionsTableCreateCompanionBuilder,
+      $$CallSessionsTableUpdateCompanionBuilder,
+      (StoredCallSession, $$CallSessionsTableReferences),
+      StoredCallSession,
+      PrefetchHooks Function({bool accountId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -16101,4 +17519,6 @@ class $AppDatabaseManager {
       );
   $$AttachmentJobsTableTableManager get attachmentJobs =>
       $$AttachmentJobsTableTableManager(_db, _db.attachmentJobs);
+  $$CallSessionsTableTableManager get callSessions =>
+      $$CallSessionsTableTableManager(_db, _db.callSessions);
 }

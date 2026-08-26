@@ -352,6 +352,25 @@ Future<void> _seedAccount(
 
   const roomToken = 'rooma123';
   await database
+      .into(database.callSessions)
+      .insert(
+        CallSessionsCompanion.insert(
+          accountId: accountId,
+          roomToken: roomToken,
+          serverUrl: serverUrl,
+          credentialGeneration: 1,
+          capabilityGeneration: 1,
+          settingsRevision: 'fixture-revision',
+          profileEnabled: true,
+          profileChatRelay: false,
+          nextcloudSessionId: 'fixture-session',
+          connectionEpoch: 1,
+          roomEpoch: 1,
+          renegotiationRequired: false,
+          updatedAtMillis: 1770000000,
+        ),
+      );
+  await database
       .into(database.cachedConversations)
       .insert(
         CachedConversationsCompanion.insert(
