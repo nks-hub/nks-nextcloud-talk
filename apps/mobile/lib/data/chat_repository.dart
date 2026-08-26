@@ -9,6 +9,7 @@ import 'app_database.dart';
 
 part 'chat_repository_models.dart';
 part 'chat_repository_clear_history.dart';
+part 'chat_repository_mutations.dart';
 part 'chat_repository_projection.dart';
 part 'chat_repository_queries.dart';
 part 'chat_repository_read_markers.dart';
@@ -920,55 +921,14 @@ final class ChatRepository {
         .getSingleOrNull();
   }
 
-  /// Persists a message the server returned from an edit, delete, or
-  /// reaction mutation. Unlike [_persistMessage] this is a targeted single
-  /// row update: it does not touch outbox/scope state, and only bumps the
-  /// conversation preview when the message is still the newest one.
+  /// Persists an authoritative edit, delete, or reaction mutation.
   Future<void> applyMessageMutation({
     required String accountId,
     required ServerBase server,
     required ChatMessage message,
-  }) async {
-    final displayText = _displayText(server, message);
-    await _database
-        .into(_database.cachedChatMessages)
-        .insertOnConflictUpdate(
-          CachedChatMessagesCompanion.insert(
-            accountId: accountId,
-            roomToken: message.roomToken.value,
-            messageId: message.messageId,
-            actorType: message.actorType,
-            actorId: message.actorId,
-            actorDisplayName: message.actorDisplayName,
-            timestamp: message.timestamp,
-            systemMessage: message.systemMessage,
-            messageType: message.messageType,
-            referenceId: message.referenceId,
-            displayText: displayText,
-            deleted: message.deleted,
-            threadId: Value(message.threadId),
-            rawJson: jsonEncode(message.wire),
-          ),
-        );
-    final conversation = await getConversation(
-      accountId: accountId,
-      roomToken: message.roomToken.value,
-    );
-    if (conversation == null ||
-        (conversation.lastMessageTimestamp ?? -1) > message.timestamp) {
-      return;
-    }
-    await (_database.update(_database.cachedConversations)..where(
-          (row) =>
-              row.accountId.equals(accountId) &
-              row.token.equals(message.roomToken.value),
-        ))
-        .write(
-          CachedConversationsCompanion(
-            lastActivity: Value(message.timestamp),
-            lastMessageText: Value(displayText.isEmpty ? null : displayText),
-            lastMessageTimestamp: Value(message.timestamp),
-          ),
-        );
-  }
+  }) => _applyMessageMutation(
+    accountId: accountId,
+    server: server,
+    message: message,
+  );
 }

@@ -61,11 +61,7 @@ void main() {
       return http.Response(
         jsonEncode(
           capabilitiesJson(
-            talkFeatures: const [
-              'chat-v2',
-              'reactions',
-              'react-permission',
-            ],
+            talkFeatures: const ['chat-v2', 'reactions', 'react-permission'],
           ),
         ),
         200,
@@ -87,52 +83,49 @@ void main() {
     expect(profile.canReact, isTrue);
   });
 
-  test('a participant whose override withholds the react bit may not react', () async {
-    final room = _roomJson()
-      // PERMISSIONS_CUSTOM plus chat, deliberately without PERMISSIONS_REACT.
-      ..['permissions'] = 1 | 128
-      ..['attendeePermissions'] = 1 | 128;
-    await _insertRoom(database, room);
+  test(
+    'a participant whose override withholds the react bit may not react',
+    () async {
+      final room = _roomJson()
+        // PERMISSIONS_CUSTOM plus chat, deliberately without PERMISSIONS_REACT.
+        ..['permissions'] = 1 | 128
+        ..['attendeePermissions'] = 1 | 128;
+      await _insertRoom(database, room);
 
-    final api = _api((request) async {
-      expect(request.url.path, endsWith('/capabilities'));
-      return http.Response(
-        jsonEncode(
-          capabilitiesJson(
-            talkFeatures: const [
-              'chat-v2',
-              'reactions',
-              'react-permission',
-            ],
+      final api = _api((request) async {
+        expect(request.url.path, endsWith('/capabilities'));
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const ['chat-v2', 'reactions', 'react-permission'],
+            ),
           ),
-        ),
-        200,
+          200,
+        );
+      });
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
       );
-    });
-    addTearDown(api.close);
-    final service = ChatMessageActionsService(
-      accounts: accounts,
-      chat: chat,
-      credentials: credentials,
-      api: api,
-    );
 
-    final profile = await service.resolveProfile(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-    );
-    expect(profile.reactions, isTrue);
-    expect(profile.canReact, isFalse);
-  });
+      final profile = await service.resolveProfile(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      expect(profile.reactions, isTrue);
+      expect(profile.canReact, isFalse);
+    },
+  );
 
   test('edits an own message and persists the authoritative text', () async {
     final api = _api((request) async {
       if (request.url.path.endsWith('/capabilities')) {
         return http.Response(
           jsonEncode(
-            capabilitiesJson(
-              talkFeatures: const ['chat-v2', 'edit-messages'],
-            ),
+            capabilitiesJson(talkFeatures: const ['chat-v2', 'edit-messages']),
           ),
           200,
         );
@@ -142,10 +135,7 @@ void main() {
       expect(request.bodyFields['message'], 'Updated text');
       return http.Response(
         jsonEncode(
-          _mutationResponseJson(
-            editedMessageId: 5,
-            message: 'Updated text',
-          ),
+          _mutationResponseJson(editedMessageId: 5, message: 'Updated text'),
         ),
         200,
       );
@@ -175,6 +165,59 @@ void main() {
     final wire = jsonDecode(stored.rawJson) as Map<String, Object?>;
     expect(wire['message'], 'Updated text');
     expect(stored.deleted, isFalse);
+  });
+
+  test('projects an edited parent into cached replies', () async {
+    await _insertMessage(
+      database,
+      id: 6,
+      actorId: 'other-user',
+      message: 'Reply text',
+      parent: _messageWire(
+        id: 5,
+        actorId: 'fixture-user',
+        message: 'Original text',
+      ),
+    );
+    final api = _api((request) async {
+      if (request.url.path.endsWith('/capabilities')) {
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(talkFeatures: const ['chat-v2', 'edit-messages']),
+          ),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode(
+          _mutationResponseJson(editedMessageId: 5, message: 'Updated text'),
+        ),
+        200,
+      );
+    });
+    addTearDown(api.close);
+    final service = ChatMessageActionsService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await service.editMessage(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      messageId: 5,
+      message: 'Updated text',
+    );
+
+    final storedReply = await chat.getMessage(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      messageId: 6,
+    );
+    final reply = ChatMessage.fromJson(jsonDecode(storedReply!.rawJson));
+    expect(reply.parent, isA<ChatFullParent>());
+    expect((reply.parent! as ChatFullParent).message.message, 'Updated text');
   });
 
   test('editing is refused without the edit-messages capability', () async {
@@ -258,6 +301,60 @@ void main() {
       messageId: 5,
     );
     expect(stored!.deleted, isTrue);
+  });
+
+  test('projects a deleted parent into cached replies', () async {
+    await _insertMessage(
+      database,
+      id: 6,
+      actorId: 'other-user',
+      message: 'Reply text',
+      parent: _messageWire(
+        id: 5,
+        actorId: 'fixture-user',
+        message: 'Original text',
+      ),
+    );
+    final api = _api((request) async {
+      if (request.url.path.endsWith('/capabilities')) {
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const ['chat-v2', 'delete-messages'],
+            ),
+          ),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode(_mutationResponseJson(editedMessageId: 5, deleted: true)),
+        200,
+      );
+    });
+    addTearDown(api.close);
+    final service = ChatMessageActionsService(
+      accounts: accounts,
+      chat: chat,
+      credentials: credentials,
+      api: api,
+    );
+
+    await service.deleteMessage(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      messageId: 5,
+    );
+
+    final storedReply = await chat.getMessage(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      messageId: 6,
+    );
+    final reply = ChatMessage.fromJson(jsonDecode(storedReply!.rawJson));
+    expect(reply.parent, isA<ChatFullParent>());
+    final parent = (reply.parent! as ChatFullParent).message;
+    expect(parent.deleted, isTrue);
+    expect(parent.message, isEmpty);
   });
 
   test('adds a reaction and records the aggregate self-membership', () async {
@@ -496,10 +593,12 @@ Future<void> _insertMessage(
   required String message,
   Map<String, Object?> reactions = const {},
   List<Object?> reactionsSelf = const [],
+  Map<String, Object?>? parent,
 }) {
-  final wire = _messageWire(id: id, actorId: actorId, message: message)
-    ..['reactions'] = reactions
-    ..['reactionsSelf'] = reactionsSelf;
+  final wire =
+      _messageWire(id: id, actorId: actorId, message: message, parent: parent)
+        ..['reactions'] = reactions
+        ..['reactionsSelf'] = reactionsSelf;
   return database
       .into(database.cachedChatMessages)
       .insert(
