@@ -446,6 +446,23 @@ internal class AndroidWebPushStateMachine(
         return pendingNativeUnregistrations(state)
     }
 
+    fun prepareServerRevocation(
+        state: AndroidWebPushState,
+        accountId: String,
+        nowMillis: Long,
+    ): List<Long> {
+        state.registrations
+            .filter {
+                it.accountId == accountId &&
+                    (
+                        it.phase == PushRegistrationPhase.REGISTERING ||
+                            it.phase == PushRegistrationPhase.ACTIVE
+                    )
+            }
+            .forEach { markServerRevokePending(state, it, nowMillis) }
+        return pendingServerRevocations(state, accountId)
+    }
+
     fun markRetired(
         state: AndroidWebPushState,
         instance: String,

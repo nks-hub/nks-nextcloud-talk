@@ -159,6 +159,281 @@ void _registerAndroidPushRegistrationTests() {
     },
   );
 
+  test(
+    'revokes an active subscription when capability omits webpush',
+    () async {
+      final fixture = await _createAccounts(const <String>['account-a']);
+      final requests = <http.Request>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['devices'],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'DELETE' &&
+              request.url.path.endsWith('/webpush')) {
+            return http.Response(jsonEncode(_ocs(const <Object>[], 202)), 202);
+          }
+          fail('Unexpected request: ${request.method} ${request.url.path}');
+        }),
+      );
+      addTearDown(api.close);
+      final platform = _FakeAndroidWebPushPlatform()
+        ..phase = AndroidWebPushRegistrationPhase.active
+        ..generation = 1;
+      final coordinator = AndroidPushCoordinator(
+        accounts: fixture.accounts,
+        credentials: fixture.credentials,
+        api: api,
+        platform: platform,
+        onWakeUp: (_) async {},
+      );
+      addTearDown(coordinator.close);
+
+      await coordinator.reconcileAccount('account-a');
+
+      expect(platform.preparedServerRevocations, <String>['account-a']);
+      expect(platform.retiredServerRevocations, <Object>[
+        (accountId: 'account-a', generation: 1),
+      ]);
+      expect(
+        requests.where((request) => request.method == 'DELETE'),
+        hasLength(1),
+      );
+      expect(platform.registrations, isEmpty);
+      expect(platform.permissionRequests, 0);
+      expect(
+        await fixture.credentials.readAppPassword('account-a'),
+        'fixture-password',
+      );
+    },
+  );
+
+  test(
+    'restarts a pending capability revocation after transient DELETE failure',
+    () async {
+      final fixture = await _createAccounts(const <String>['account-a']);
+      final platform = _FakeAndroidWebPushPlatform()
+        ..phase = AndroidWebPushRegistrationPhase.active
+        ..generation = 3;
+      final retryTimers = <_ManualRetryTimer>[];
+      final failingApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['devices'],
+                ),
+              ),
+              200,
+            );
+          }
+          return http.Response('', 503);
+        }),
+      );
+      addTearDown(failingApi.close);
+      final firstCoordinator = AndroidPushCoordinator(
+        accounts: fixture.accounts,
+        credentials: fixture.credentials,
+        api: failingApi,
+        platform: platform,
+        onWakeUp: (_) async {},
+        retryDelay: const Duration(seconds: 1),
+        createRetryTimer: (duration, callback) {
+          final timer = _ManualRetryTimer(duration, callback);
+          retryTimers.add(timer);
+          return timer;
+        },
+      );
+
+      await expectLater(
+        firstCoordinator.reconcileAccount('account-a'),
+        throwsA(
+          isA<NextcloudApiException>().having(
+            (error) => error.statusCode,
+            'statusCode',
+            503,
+          ),
+        ),
+      );
+
+      expect(
+        (await platform.getRegistrationState(accountId: 'account-a')).phase,
+        AndroidWebPushRegistrationPhase.serverRevokePending,
+      );
+      expect(platform.pendingServerRevocations['account-a'], <int>{3});
+      expect(platform.retiredServerRevocations, isEmpty);
+      expect(retryTimers, hasLength(1));
+      expect(
+        await fixture.credentials.readAppPassword('account-a'),
+        'fixture-password',
+      );
+      await firstCoordinator.close();
+
+      var deleteRequests = 0;
+      final recoveryApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['devices'],
+                ),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'DELETE' &&
+              request.url.path.endsWith('/webpush')) {
+            deleteRequests++;
+            return http.Response(jsonEncode(_ocs(const <Object>[])), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url.path}');
+        }),
+      );
+      addTearDown(recoveryApi.close);
+      final restartedCoordinator = AndroidPushCoordinator(
+        accounts: fixture.accounts,
+        credentials: fixture.credentials,
+        api: recoveryApi,
+        platform: platform,
+        onWakeUp: (_) async {},
+      );
+      addTearDown(restartedCoordinator.close);
+
+      await restartedCoordinator.reconcileAccount('account-a');
+
+      expect(deleteRequests, 1);
+      expect(platform.preparedServerRevocations, <String>[
+        'account-a',
+        'account-a',
+      ]);
+      expect(platform.pendingServerRevocations['account-a'], isEmpty);
+      expect(platform.retiredServerRevocations, <Object>[
+        (accountId: 'account-a', generation: 3),
+      ]);
+    },
+  );
+
+  test('capability revocation remains account scoped', () async {
+    final fixture = await _createAccounts(const <String>[
+      'account-a',
+      'account-b',
+    ]);
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['devices'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method == 'DELETE' &&
+            request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[])), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..registrationStates['account-a'] = const AndroidWebPushRegistrationState(
+        generation: 2,
+        nextGeneration: 3,
+        phase: AndroidWebPushRegistrationPhase.active,
+        pendingEventCount: 0,
+      )
+      ..registrationStates['account-b'] = const AndroidWebPushRegistrationState(
+        generation: 7,
+        nextGeneration: 8,
+        phase: AndroidWebPushRegistrationPhase.active,
+        pendingEventCount: 0,
+      );
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.reconcileAccount('account-a');
+
+    expect(platform.preparedServerRevocations, <String>['account-a']);
+    expect(platform.retiredServerRevocations, <Object>[
+      (accountId: 'account-a', generation: 2),
+    ]);
+    expect(
+      platform.registrationStates['account-b']?.phase,
+      AndroidWebPushRegistrationPhase.active,
+    );
+    expect(platform.pendingServerRevocations['account-b'], isNull);
+  });
+
+  test('returning capability replaces a pending generation safely', () async {
+    final fixture = await _createAccounts(const <String>['account-a']);
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        if (request.method == 'POST' && request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 201)), 201);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final platform = _FakeAndroidWebPushPlatform()
+      ..phase = AndroidWebPushRegistrationPhase.serverRevokePending
+      ..generation = 4
+      ..pendingServerRevocations['account-a'] = <int>{4};
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: platform,
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+
+    await coordinator.reconcileAccount('account-a');
+
+    expect(platform.registrations, <Object>[
+      (accountId: 'account-a', generation: 5),
+    ]);
+    expect(platform.retiredServerRevocations, <Object>[
+      (accountId: 'account-a', generation: 4),
+    ]);
+    expect(platform.pendingServerRevocations['account-a'], isEmpty);
+  });
+
   test('retries a retained activation after a detached HTTP failure', () async {
     final database = openTestDatabase();
     addTearDown(database.close);

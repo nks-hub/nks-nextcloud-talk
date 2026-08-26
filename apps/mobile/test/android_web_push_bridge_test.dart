@@ -157,6 +157,24 @@ void main() {
     ]);
   });
 
+  test('prepares account-scoped server revocation durably', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return <String, Object>{
+            'generations': <int>[7, 3],
+          };
+        });
+
+    final generations = await bridge.prepareServerRevocation(
+      accountId: 'account-c',
+    );
+
+    expect(generations, <int>[3, 7]);
+    expect(calls.single.method, 'prepareServerRevocation');
+    expect(calls.single.arguments, <String, Object>{'accountId': 'account-c'});
+  });
+
   test('native eventsAvailable callback is exposed as a stream', () async {
     final nextCount = bridge.eventsAvailable.first;
     final completer = Completer<void>();

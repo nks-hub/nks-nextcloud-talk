@@ -98,6 +98,88 @@ class AndroidWebPushStateMachineTest {
     }
 
     @Test
+    fun prepareServerRevocationIsAccountScopedAndIdempotent() {
+        val state = AndroidWebPushState()
+        val active = machine.beginRegistration(state, "account-a", 1, "instance-a1", 1).record
+        val activeEndpoint = machine.appendEndpoint(
+            state,
+            active.instance,
+            endpoint("active-a"),
+            2,
+        )!!
+        machine.commitEndpoint(state, "account-a", 1, activeEndpoint.id, 3)
+        val registering = machine.beginRegistration(
+            state,
+            "account-a",
+            2,
+            "instance-a2",
+            4,
+        ).record
+        val other = machine.beginRegistration(state, "account-b", 1, "instance-b1", 5).record
+        val otherEndpoint = machine.appendEndpoint(
+            state,
+            other.instance,
+            endpoint("active-b"),
+            6,
+        )!!
+        machine.commitEndpoint(state, "account-b", 1, otherEndpoint.id, 7)
+
+        assertEquals(
+            listOf(1L, 2L),
+            machine.prepareServerRevocation(state, "account-a", 8),
+        )
+        assertEquals(PushRegistrationPhase.SERVER_REVOKE_PENDING, active.phase)
+        assertEquals(PushRegistrationPhase.SERVER_REVOKE_PENDING, registering.phase)
+        assertEquals(PushRegistrationPhase.ACTIVE, other.phase)
+
+        assertEquals(
+            listOf(1L, 2L),
+            machine.prepareServerRevocation(state, "account-a", 9),
+        )
+        assertEquals(8L, active.updatedAtMillis)
+        assertEquals(8L, registering.updatedAtMillis)
+        assertEquals(7L, other.updatedAtMillis)
+    }
+
+    @Test
+    fun returningCapabilityReplacesPreparedGenerationBeforeNativeRetirement() {
+        val state = AndroidWebPushState()
+        val old = machine.beginRegistration(state, "account", 1, "instance-1", 1).record
+        val oldEndpoint = machine.appendEndpoint(state, old.instance, endpoint("old"), 2)!!
+        machine.commitEndpoint(state, "account", 1, oldEndpoint.id, 3)
+        assertEquals(listOf(1L), machine.prepareServerRevocation(state, "account", 4))
+
+        val replacement = machine.beginRegistration(
+            state,
+            "account",
+            2,
+            "instance-2",
+            5,
+        ).record
+        val replacementEndpoint = machine.appendEndpoint(
+            state,
+            replacement.instance,
+            endpoint("replacement"),
+            6,
+        )!!
+        val commit = machine.commitEndpoint(
+            state,
+            "account",
+            2,
+            replacementEndpoint.id,
+            7,
+        )
+
+        assertEquals(PushRegistrationPhase.SERVER_REVOKE_PENDING, old.phase)
+        assertEquals(PushRegistrationPhase.ACTIVE, replacement.phase)
+        assertEquals(listOf(1L), commit.serverRevokeGenerations)
+        assertEquals(
+            listOf(old.instance),
+            machine.retireAfterServerRevocation(state, "account", 1, 8),
+        )
+    }
+
+    @Test
     fun acceptedServerRevocationRetirementIsIdempotent() {
         val state = AndroidWebPushState()
         val registration = machine.beginRegistration(

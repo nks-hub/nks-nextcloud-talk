@@ -226,6 +226,14 @@ internal class AndroidWebPushStore(context: Context) {
         )
     }
 
+    fun prepareServerRevocation(accountId: String): List<Long> = mutate { state ->
+        stateMachine.prepareServerRevocation(
+            state,
+            accountId,
+            System.currentTimeMillis(),
+        )
+    }
+
     fun pendingNativeUnregistrations(): List<String> = read { state ->
         stateMachine.pendingNativeUnregistrations(state)
     }

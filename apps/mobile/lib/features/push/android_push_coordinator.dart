@@ -256,8 +256,11 @@ final class AndroidPushCoordinator {
       loginName: context.account.loginName,
       appPassword: context.appPassword,
     );
-    if (!capabilities.supportsNotificationPush('webpush') ||
-        !_isAccountActive(accountId, epoch)) {
+    if (!_isAccountActive(accountId, epoch)) {
+      return;
+    }
+    if (!capabilities.supportsNotificationPush('webpush')) {
+      await _revokeUnsupportedWebPush(context, epoch);
       return;
     }
     await _ensureNotificationPermission();
@@ -293,6 +296,30 @@ final class AndroidPushCoordinator {
     await _drainAccount(accountId, context: context);
     if (_isAccountActive(accountId, epoch)) {
       await _onWakeUp(accountId);
+    }
+  }
+
+  Future<void> _revokeUnsupportedWebPush(
+    _PushAccountContext context,
+    int epoch,
+  ) async {
+    final accountId = context.account.id;
+    final generations = await _platform.prepareServerRevocation(
+      accountId: accountId,
+    );
+    if (generations.isEmpty || !_isAccountActive(accountId, epoch)) {
+      return;
+    }
+    await _api.unregisterWebPush(
+      server: context.server,
+      loginName: context.account.loginName,
+      appPassword: context.appPassword,
+    );
+    for (final generation in generations) {
+      await _platform.retireAfterServerRevocation(
+        accountId: accountId,
+        generation: generation,
+      );
     }
   }
 

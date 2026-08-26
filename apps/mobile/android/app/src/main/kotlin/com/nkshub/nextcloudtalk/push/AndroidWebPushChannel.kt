@@ -32,6 +32,9 @@ internal class AndroidWebPushChannel(
                 "getLaunchNotification" -> result.success(activity.takeLaunchNotification())
                 "register" -> result.success(register(requireArguments(call)))
                 "commitEndpoint" -> result.success(commitEndpoint(requireArguments(call)))
+                "prepareServerRevocation" -> {
+                    result.success(prepareServerRevocation(requireArguments(call)))
+                }
                 "retireAfterServerRevocation" -> {
                     result.success(retireAfterServerRevocation(requireArguments(call)))
                 }
@@ -125,6 +128,11 @@ internal class AndroidWebPushChannel(
         val generation = arguments.requiredGeneration()
         val instances = store.retireAfterServerRevocation(accountId, generation)
         return mapOf("retiredCount" to reconcileNativeUnregistrations(instances))
+    }
+
+    private fun prepareServerRevocation(arguments: Map<*, *>): Map<String, Any> {
+        val accountId = arguments.requiredAccountId()
+        return mapOf("generations" to store.prepareServerRevocation(accountId))
     }
 
     private fun pendingEventCount(arguments: Map<*, *>): Map<String, Any> {

@@ -96,6 +96,10 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   final openController = StreamController<AndroidNotificationOpen>.broadcast();
   final events = <AndroidWebPushEvent>[];
   final registrations = <({String accountId, int generation})>[];
+  final preparedServerRevocations = <String>[];
+  final retiredServerRevocations = <({String accountId, int generation})>[];
+  final registrationStates = <String, AndroidWebPushRegistrationState>{};
+  final pendingServerRevocations = <String, Set<int>>{};
   final committedEventIds = <String>[];
   final acknowledgedEventIds = <String>[];
   final notificationActions = <AndroidNotificationAction>[];
@@ -137,6 +141,10 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   Future<AndroidWebPushRegistrationState> getRegistrationState({
     required String accountId,
   }) async {
+    final scoped = registrationStates[accountId];
+    if (scoped != null) {
+      return scoped;
+    }
     return AndroidWebPushRegistrationState(
       generation: generation,
       nextGeneration: (generation ?? 0) + 1,
@@ -177,6 +185,15 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
     if (!existingActiveRegistration) {
       phase = AndroidWebPushRegistrationPhase.registering;
     }
+    final registrationPhase = existingActiveRegistration
+        ? AndroidWebPushRegistrationPhase.active
+        : AndroidWebPushRegistrationPhase.registering;
+    registrationStates[accountId] = AndroidWebPushRegistrationState(
+      generation: generation,
+      nextGeneration: generation + 1,
+      phase: registrationPhase,
+      pendingEventCount: events.length,
+    );
     if (emitEndpointOnRegister &&
         events
             .where((event) => event.type == AndroidWebPushEventType.endpoint)
@@ -213,17 +230,68 @@ class _FakeAndroidWebPushPlatform implements AndroidWebPushPlatform {
   }) async {
     committedEventIds.add(eventId);
     phase = AndroidWebPushRegistrationPhase.active;
+    registrationStates[accountId] = AndroidWebPushRegistrationState(
+      generation: generation,
+      nextGeneration: generation + 1,
+      phase: AndroidWebPushRegistrationPhase.active,
+      pendingEventCount: events.length,
+    );
     if (!endpointCommitted.isCompleted) {
       endpointCommitted.complete();
     }
-    return const AndroidWebPushCommitResult(serverRevokeGenerations: <int>[]);
+    final serverRevokeGenerations =
+        pendingServerRevocations[accountId]?.toList(growable: false) ?? <int>[];
+    serverRevokeGenerations.sort();
+    return AndroidWebPushCommitResult(
+      serverRevokeGenerations: serverRevokeGenerations,
+    );
+  }
+
+  @override
+  Future<List<int>> prepareServerRevocation({required String accountId}) async {
+    preparedServerRevocations.add(accountId);
+    final state = await getRegistrationState(accountId: accountId);
+    final currentGeneration = state.generation;
+    if (currentGeneration != null &&
+        (state.phase == AndroidWebPushRegistrationPhase.active ||
+            state.phase == AndroidWebPushRegistrationPhase.registering ||
+            state.phase ==
+                AndroidWebPushRegistrationPhase.serverRevokePending)) {
+      pendingServerRevocations
+          .putIfAbsent(accountId, () => <int>{})
+          .add(currentGeneration);
+      registrationStates[accountId] = AndroidWebPushRegistrationState(
+        generation: currentGeneration,
+        nextGeneration: state.nextGeneration,
+        phase: AndroidWebPushRegistrationPhase.serverRevokePending,
+        pendingEventCount: state.pendingEventCount,
+      );
+      if (accountId == 'account-a') {
+        phase = AndroidWebPushRegistrationPhase.serverRevokePending;
+      }
+    }
+    final generations =
+        pendingServerRevocations[accountId]?.toList() ?? <int>[];
+    generations.sort();
+    return generations;
   }
 
   @override
   Future<int> retireAfterServerRevocation({
     required String accountId,
     required int generation,
-  }) async => 1;
+  }) async {
+    retiredServerRevocations.add((
+      accountId: accountId,
+      generation: generation,
+    ));
+    pendingServerRevocations[accountId]?.remove(generation);
+    final state = registrationStates[accountId];
+    if (state?.generation == generation) {
+      registrationStates.remove(accountId);
+    }
+    return 1;
+  }
 
   @override
   Future<int> pendingEventCount({required String accountId}) async {

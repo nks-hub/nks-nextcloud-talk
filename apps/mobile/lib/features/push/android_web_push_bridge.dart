@@ -57,6 +57,10 @@ abstract interface class AndroidWebPushPlatform {
     required String eventId,
   });
 
+  /// Durably moves this account's live native generations behind the server
+  /// revocation barrier and returns every generation awaiting confirmation.
+  Future<List<int>> prepareServerRevocation({required String accountId});
+
   Future<int> retireAfterServerRevocation({
     required String accountId,
     required int generation,
@@ -116,7 +120,9 @@ class AndroidNotificationAction {
     final kind = switch (_requiredString(map, 'kind')) {
       'REPLY' => AndroidNotificationActionKind.reply,
       'MARK_READ' => AndroidNotificationActionKind.markRead,
-      _ => throw const FormatException('Native notification action is invalid.'),
+      _ => throw const FormatException(
+        'Native notification action is invalid.',
+      ),
     };
     if (notificationId <= 0 ||
         (kind == AndroidNotificationActionKind.reply &&
@@ -452,6 +458,28 @@ class AndroidWebPushBridge implements AndroidWebPushPlatform {
   }
 
   @override
+  Future<List<int>> prepareServerRevocation({required String accountId}) async {
+    final response = await _invokeMap(
+      'prepareServerRevocation',
+      <String, Object>{'accountId': accountId},
+    );
+    final rawGenerations = response['generations'];
+    if (rawGenerations is! List<Object?> ||
+        rawGenerations.any((value) => value is! int || value <= 0)) {
+      throw const FormatException(
+        'Native push response has invalid pending generations.',
+      );
+    }
+    final generations = rawGenerations.cast<int>().toSet().toList()..sort();
+    if (generations.length != rawGenerations.length) {
+      throw const FormatException(
+        'Native push response has duplicate pending generations.',
+      );
+    }
+    return generations;
+  }
+
+  @override
   Future<int> retireAfterServerRevocation({
     required String accountId,
     required int generation,
@@ -511,10 +539,14 @@ class AndroidWebPushBridge implements AndroidWebPushPlatform {
       <String, Object>{'accountId': accountId, 'limit': limit},
     );
     if (response == null) {
-      throw const FormatException('Native notification action list is missing.');
+      throw const FormatException(
+        'Native notification action list is missing.',
+      );
     }
     return response
-        .map((action) => AndroidNotificationAction.fromMap(_requiredMap(action)))
+        .map(
+          (action) => AndroidNotificationAction.fromMap(_requiredMap(action)),
+        )
         .toList(growable: false);
   }
 
