@@ -467,13 +467,57 @@ final class RichChatScheduledMessage {
     if (identical(updatedParent, currentParent)) {
       return this;
     }
+    return _copyWith(parent: updatedParent);
+  }
+
+  RichChatScheduledMessage projectThreadTitle({
+    required int threadId,
+    required String threadTitle,
+    required ChatMessage? parent,
+  }) {
+    if (this.threadId != threadId) {
+      return this;
+    }
+    return _copyWith(threadTitle: threadTitle, parent: parent);
+  }
+
+  RichChatScheduledMessage _copyWith({
+    Object? threadTitle = _unchangedScheduledField,
+    Object? parent = _unchangedScheduledField,
+  }) {
+    final effectiveThreadTitle =
+        identical(threadTitle, _unchangedScheduledField)
+        ? this.threadTitle
+        : threadTitle as String?;
+    final effectiveParent = identical(parent, _unchangedScheduledField)
+        ? this.parent
+        : parent as ChatMessage?;
+    if (effectiveThreadTitle == this.threadTitle &&
+        identical(effectiveParent, this.parent)) {
+      return this;
+    }
+    final projectedWire = <String, Object?>{...wire};
+    if (!identical(threadTitle, _unchangedScheduledField)) {
+      if (effectiveThreadTitle == null) {
+        projectedWire.remove('threadTitle');
+      } else {
+        projectedWire['threadTitle'] = effectiveThreadTitle;
+      }
+    }
+    if (!identical(parent, _unchangedScheduledField)) {
+      if (effectiveParent == null) {
+        projectedWire.remove('parent');
+      } else {
+        projectedWire['parent'] = effectiveParent.wire;
+      }
+    }
     final updatedWire = requireObject(
       JsonFreezeSession(
         maximumDepth: richChatMaximumJsonDepth,
         maximumNodes: richChatMaximumJsonNodes,
         errorCode: TalkProtocolErrorCode.invalidRichChatState,
         errorPath: r'$.scheduledMessages.parent',
-      ).freeze(<String, Object?>{...wire, 'parent': updatedParent.wire}),
+      ).freeze(projectedWire),
       path: r'$.scheduledMessages',
       code: TalkProtocolErrorCode.invalidRichChatState,
     );
@@ -483,8 +527,8 @@ final class RichChatScheduledMessage {
       actorId: actorId,
       actorType: actorType,
       threadId: threadId,
-      threadTitle: threadTitle,
-      parent: updatedParent,
+      threadTitle: effectiveThreadTitle,
+      parent: effectiveParent,
       message: message,
       messageType: messageType,
       createdAt: createdAt,
@@ -498,6 +542,8 @@ final class RichChatScheduledMessage {
   @override
   String toString() => 'RichChatScheduledMessage(<redacted>)';
 }
+
+const Object _unchangedScheduledField = Object();
 
 Map<String, Object?> _frozenObject(Object? json, String path) {
   final frozen = JsonFreezeSession(

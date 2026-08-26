@@ -198,7 +198,10 @@ RichChatMergeResult _mergeThreads(
         entry.key: _projectThreadTitle(incoming, entry.value)!,
     };
     var updatedThreads = Map<int, RichChatThread>.of(room.threads);
-    var updatedSchedules = room.scheduledMessages;
+    var updatedSchedules = <RichChatScheduleId, RichChatScheduledMessage>{
+      for (final entry in room.scheduledMessages.entries)
+        entry.key: _projectScheduledThreadTitle(incoming, entry.value),
+    };
     if (projectedRoot != null) {
       updatedMessages = _replaceMessageInMessages(
         updatedMessages,
@@ -243,6 +246,21 @@ ChatMessage? _projectThreadTitle(RichChatThread thread, ChatMessage? message) {
     ...message.wire,
     'threadTitle': thread.title,
   });
+}
+
+RichChatScheduledMessage _projectScheduledThreadTitle(
+  RichChatThread thread,
+  RichChatScheduledMessage scheduled,
+) {
+  if (scheduled.roomToken != thread.roomToken ||
+      scheduled.threadId != thread.threadId) {
+    return scheduled;
+  }
+  return scheduled.projectThreadTitle(
+    threadId: thread.threadId,
+    threadTitle: thread.title,
+    parent: _projectThreadTitle(thread, scheduled.parent),
+  );
 }
 
 RichChatMergeResult _mergeReactions(

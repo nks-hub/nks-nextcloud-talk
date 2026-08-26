@@ -336,6 +336,60 @@ void main() {
       _object(room.messages[121]!.wire['parent'])['threadTitle'],
       'Updated design',
     );
+    final scheduled = room.scheduledMessages.values.single;
+    expect(scheduled.threadTitle, 'Updated design');
+    expect(scheduled.wire['threadTitle'], 'Updated design');
+    expect(scheduled.parent!.threadTitle, 'Updated design');
+    expect(_object(scheduled.wire['parent'])['threadTitle'], 'Updated design');
+  });
+
+  test('metadata-only rename reprojects a scheduled-only thread cache', () {
+    final source = _snapshot(includeReply: true);
+    final accountId = AccountId.parse('account-a');
+    final roomToken = _token('rooma123');
+    final account = source.accounts[accountId]!;
+    final room = account.rooms[roomToken]!;
+    final sparseThread = RichChatThread.fromJson(<String, Object?>{
+      'thread': <String, Object?>{
+        'id': 120,
+        'roomToken': 'rooma123',
+        'title': 'Design',
+        'lastMessageId': 121,
+        'lastActivity': 1787440000,
+        'numReplies': 1,
+      },
+      'attendee': <String, Object?>{'notificationLevel': 1},
+      'first': null,
+      'last': null,
+    });
+    final sparseSource = source.replaceAccount(
+      account.replaceRoom(
+        RichChatRoomState(
+          roomToken: roomToken,
+          messages: const {},
+          threads: <int, RichChatThread>{120: sparseThread},
+          reminders: room.reminders,
+          scheduledMessages: room.scheduledMessages,
+          lastMessageId: null,
+        ),
+      ),
+    );
+    final response = _decodeFixture(
+      responseFixtures['thread-rename-success']!,
+      accountId: accountId,
+      server: _server(accountId),
+    );
+
+    final result = planRichChatMerge(sparseSource, response);
+    expect(result.outcome, RichChatMergeOutcome.applied);
+    final committed = result.plan!.commit(sparseSource);
+    final committedRoom = committed.accounts[accountId]!.rooms[roomToken]!;
+    expect(committedRoom.messages, isEmpty);
+    final scheduled = committedRoom.scheduledMessages.values.single;
+    expect(scheduled.threadTitle, 'Updated design');
+    expect(scheduled.wire['threadTitle'], 'Updated design');
+    expect(scheduled.parent!.threadTitle, 'Updated design');
+    expect(_object(scheduled.wire['parent'])['threadTitle'], 'Updated design');
   });
 }
 
