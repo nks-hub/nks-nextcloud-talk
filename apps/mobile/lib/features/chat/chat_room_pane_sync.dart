@@ -129,6 +129,115 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       _localError = null;
     });
     _startPendingJump();
+    _scheduleVisibleRootReadMarker(generation);
+  }
+
+  void _scheduleVisibleRootReadMarker(int generation) {
+    if (!_canMarkVisibleRootRead(generation, _key)) {
+      return;
+    }
+    final key = _key;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_markVisibleRootRead(key, generation));
+    });
+  }
+
+  Future<void> _markVisibleRootRead(
+    ChatRoomProviderKey key,
+    int generation,
+  ) async {
+    if (!_canMarkVisibleRootRead(generation, key)) {
+      return;
+    }
+    final messages = _visibleMessages();
+    if (messages.isEmpty) {
+      return;
+    }
+    final messageId = messages.last.messageId;
+    if (!_isMessageActuallyVisible(messageId) ||
+        (_lastAutoReadKey == key && _lastAutoReadMessageId == messageId) ||
+        (_autoReadInFlightKey == key &&
+            _autoReadInFlightMessageId == messageId)) {
+      return;
+    }
+
+    _autoReadInFlightKey = key;
+    _autoReadInFlightMessageId = messageId;
+    try {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .markConversationRead(
+            accountId: key.accountId,
+            roomToken: key.roomToken,
+            lastReadMessage: messageId,
+          );
+      _lastAutoReadKey = key;
+      _lastAutoReadMessageId = messageId;
+    } on RoomSettingsException {
+      // A later successful foreground cycle retries the same visible marker.
+    } finally {
+      if (_autoReadInFlightKey == key &&
+          _autoReadInFlightMessageId == messageId) {
+        _autoReadInFlightKey = null;
+        _autoReadInFlightMessageId = null;
+      }
+    }
+  }
+
+  bool _canMarkVisibleRootRead(int generation, ChatRoomProviderKey key) {
+    return mounted &&
+        generation == _syncGeneration &&
+        key == _key &&
+        widget.threadId == null &&
+        widget.jumpToMessageId == null &&
+        _pendingJumpMessageId == null &&
+        _jumpTargetId == null &&
+        _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
+  }
+
+  bool _isMessageActuallyVisible(int messageId) {
+    final targetKey = ValueKey(
+      'chat-message-${widget.account.id}-'
+      '${widget.conversation.token}-$messageId',
+    );
+    Element? target;
+    void findTarget(Element element) {
+      if (target != null) {
+        return;
+      }
+      if (element.widget.key == targetKey) {
+        target = element;
+        return;
+      }
+      element.visitChildElements(findTarget);
+    }
+
+    context.visitChildElements(findTarget);
+    final renderObject = target?.renderObject;
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return false;
+    }
+    RenderObject? ancestor = renderObject.parent;
+    while (ancestor != null) {
+      if (ancestor is RenderOffstage && ancestor.offstage) {
+        return false;
+      }
+      ancestor = ancestor.parent;
+    }
+    final viewport = RenderAbstractViewport.of(renderObject);
+    final scrollable = Scrollable.maybeOf(target!);
+    if (scrollable == null || !scrollable.position.hasContentDimensions) {
+      return false;
+    }
+    final start = viewport.getOffsetToReveal(renderObject, 0).offset;
+    final end = viewport.getOffsetToReveal(renderObject, 1).offset;
+    final targetStart = math.min(start, end);
+    final targetEnd = math.max(start, end);
+    final visibleStart = scrollable.position.pixels;
+    final visibleEnd = visibleStart + scrollable.position.viewportDimension;
+    return targetEnd > visibleStart && targetStart < visibleEnd;
   }
 
   void _setSyncError(int generation, Object error) {

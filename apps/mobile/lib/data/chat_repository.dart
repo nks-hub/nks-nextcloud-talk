@@ -10,6 +10,7 @@ import 'app_database.dart';
 part 'chat_repository_models.dart';
 part 'chat_repository_projection.dart';
 part 'chat_repository_queries.dart';
+part 'chat_repository_read_markers.dart';
 
 const String _rootScopeKey = 'root';
 const String _networkRootScopeKey = 'network-root';
@@ -587,6 +588,9 @@ final class ChatRepository {
       return result.outcome;
     });
   }
+
+  Future<ChatMergeOutcome> applyChatReadResponse(ChatReadResponse response) =>
+      _applyChatReadResponse(response);
 
   Future<TextSendOutboxOperation> admitTextSend({
     required String accountId,

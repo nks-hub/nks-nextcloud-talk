@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/rooms/room_settings_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -77,72 +78,96 @@ void main() {
     addTearDown(api.close);
     return RoomSettingsService(
       accounts: accounts,
+      chat: ChatRepository(database),
       credentials: vault,
       api: api,
     );
   }
 
-  test('posts the cached last message id to the account server', () async {
-    await insertRoom(
-      accountId: 'account-a',
-      token: 'rooma123',
-      lastMessageId: 4242,
-    );
-    // The same token exists on the other account and server; the request must
-    // never leak across that boundary.
-    await insertRoom(
-      accountId: 'account-b',
-      token: 'rooma123',
-      lastMessageId: 99,
-    );
-    final reads = <({Uri uri, String body, String? authorization})>[];
+  test(
+    'posts and persists the explicitly visible account-room message',
+    () async {
+      await insertRoom(
+        accountId: 'account-a',
+        token: 'rooma123',
+        lastMessageId: 4242,
+      );
+      // The same token exists on the other account and server; the request must
+      // never leak across that boundary.
+      await insertRoom(
+        accountId: 'account-b',
+        token: 'rooma123',
+        lastMessageId: 99,
+      );
+      final reads = <({Uri uri, String body, String? authorization})>[];
 
-    final service = serviceWith(
-      MockClient((request) async {
-        if (request.url.path.endsWith('/cloud/capabilities')) {
-          return http.Response(
-            jsonEncode(
-              capabilitiesJson(
-                talkFeatures: const <String>[
-                  'conversation-v4',
-                  'chat-v2',
-                  'chat-read-marker',
-                  'chat-read-last',
-                ],
+      final service = serviceWith(
+        MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  talkFeatures: const <String>[
+                    'conversation-v4',
+                    'chat-v2',
+                    'chat-read-marker',
+                    'chat-read-last',
+                  ],
+                ),
               ),
-            ),
-            200,
-          );
-        }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/chat/rooma123/read')) {
-          reads.add((
-            uri: request.url,
-            body: request.body,
-            authorization: request.headers['Authorization'],
-          ));
-          return http.Response(
-            jsonEncode(_readOcs(lastReadMessage: 4242)),
-            200,
-          );
-        }
-        return http.Response('', 404);
-      }),
-    );
+              200,
+            );
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/chat/rooma123/read')) {
+            reads.add((
+              uri: request.url,
+              body: request.body,
+              authorization: request.headers['Authorization'],
+            ));
+            return http.Response(
+              jsonEncode(_readOcs(lastReadMessage: 4241)),
+              200,
+            );
+          }
+          return http.Response('', 404);
+        }),
+      );
 
-    await service.markConversationRead(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-    );
+      await service.markConversationRead(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        lastReadMessage: 4241,
+      );
 
-    expect(reads, hasLength(1));
-    expect(reads.single.uri.host, 'a.example.invalid');
-    expect(reads.single.body, 'lastReadMessage=4242');
-    expect(
-      reads.single.authorization,
-      'Basic ${base64Encode(utf8.encode('user-account-a:password-a'))}',
-    );
-  });
+      expect(reads, hasLength(1));
+      expect(reads.single.uri.host, 'a.example.invalid');
+      expect(reads.single.body, 'lastReadMessage=4241');
+      expect(
+        reads.single.authorization,
+        'Basic ${base64Encode(utf8.encode('user-account-a:password-a'))}',
+      );
+      final storedA = await accounts.getConversation(
+        accountId: 'account-a',
+        token: 'rooma123',
+      );
+      final storedB = await accounts.getConversation(
+        accountId: 'account-b',
+        token: 'rooma123',
+      );
+      final wireA = jsonDecode(storedA!.rawJson) as Map<String, Object?>;
+      final wireB = jsonDecode(storedB!.rawJson) as Map<String, Object?>;
+      expect(storedA.unreadMessages, 0);
+      expect(wireA['lastReadMessage'], 4241);
+      expect(wireA['lastCommonReadMessage'], 4241);
+      expect(wireB['lastReadMessage'], isNot(4241));
+      final scope = await ChatRepository(
+        database,
+      ).getScope(accountId: 'account-a', roomToken: 'rooma123', threadId: null);
+      expect(scope?.lastReadMessage, 4241);
+      expect(scope?.lastCommonRead, '4241');
+    },
+  );
 
   test('refuses a room whose cache has no last message', () async {
     await insertRoom(accountId: 'account-a', token: 'rooma123');
@@ -164,6 +189,55 @@ void main() {
               )
             : http.Response('', 404),
       ),
+    );
+
+    await expectLater(
+      service.markConversationRead(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      ),
+      throwsA(
+        isA<RoomSettingsException>().having(
+          (error) => error.code,
+          'code',
+          RoomSettingsError.invalidResponse,
+        ),
+      ),
+    );
+  });
+
+  test('maps a rejected local read merge to invalid response', () async {
+    await insertRoom(
+      accountId: 'account-a',
+      token: 'rooma123',
+      lastMessageId: 12,
+    );
+    final service = serviceWith(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                talkFeatures: const <String>[
+                  'conversation-v4',
+                  'chat-v2',
+                  'chat-read-marker',
+                  'chat-read-last',
+                ],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/chat/rooma123/read')) {
+          await (database.delete(
+            database.chatScopes,
+          )..where((scope) => scope.accountId.equals('account-a'))).go();
+          return http.Response(jsonEncode(_readOcs(lastReadMessage: 12)), 200);
+        }
+        return http.Response('', 404);
+      }),
     );
 
     await expectLater(
@@ -280,7 +354,9 @@ void main() {
 
 Map<String, Object?> _roomJson() {
   final root =
-      readFixtureJson('conversation-list/fixtures/conversations-full.response.json')!
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
           as Map<String, Object?>;
   final ocs = root['ocs']! as Map<String, Object?>;
   final rooms = ocs['data']! as List<Object?>;

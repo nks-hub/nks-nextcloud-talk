@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../app_providers.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
+import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
@@ -48,15 +49,18 @@ final class RoomSettingsException implements Exception {
 final class RoomSettingsService {
   RoomSettingsService({
     required AccountRepository accounts,
+    required ChatRepository chat,
     required CredentialVault credentials,
     required HttpNextcloudApi api,
     Uuid? uuid,
   }) : _accounts = accounts,
+       _chat = chat,
        _credentials = credentials,
        _api = api,
        _uuid = uuid ?? const Uuid();
 
   final AccountRepository _accounts;
+  final ChatRepository _chat;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
@@ -309,11 +313,10 @@ final class RoomSettingsService {
       throw RoomSettingsException(_mapApiError(error));
     }
 
+    final ConversationRoom room;
     final ChatMarkUnreadRequest request;
     try {
-      final room = ConversationRoom.fromJson(
-        jsonDecode(conversation.rawJson),
-      );
+      room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
       final profile = ChatCapabilityProfile.fromSnapshot(
         capabilities,
         federated: room.isFederated,
@@ -328,6 +331,11 @@ final class RoomSettingsService {
     } on TalkProtocolException {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
+    await _prepareReadState(
+      account: context.account,
+      conversation: conversation,
+      talkFeatures: capabilities.talkFeatures,
+    );
 
     final response = await _call(
       () => _api.markChatUnread(
@@ -339,6 +347,10 @@ final class RoomSettingsService {
 
     switch (response.classification) {
       case ChatReadClassification.unreadConfirmed:
+        final outcome = await _chat.applyChatReadResponse(response);
+        if (outcome != ChatMergeOutcome.unreadApplied) {
+          throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+        }
         return;
       case ChatReadClassification.reauthenticationRequired:
         throw const RoomSettingsException(
@@ -358,6 +370,7 @@ final class RoomSettingsService {
   Future<void> markConversationRead({
     required String accountId,
     required String roomToken,
+    int? lastReadMessage,
   }) async {
     final context = await _authContext(accountId);
     final conversation = await _accounts.getConversation(
@@ -380,10 +393,11 @@ final class RoomSettingsService {
       throw RoomSettingsException(_mapApiError(error));
     }
 
+    final ConversationRoom room;
     final ChatSetReadMarkerRequest request;
     try {
-      final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
-      final lastMessage = room.lastMessage?.id;
+      room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+      final lastMessage = lastReadMessage ?? room.lastMessage?.id;
       if (lastMessage == null || lastMessage < 1) {
         throw const RoomSettingsException(RoomSettingsError.invalidResponse);
       }
@@ -401,6 +415,11 @@ final class RoomSettingsService {
     } on TalkProtocolException {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
+    await _prepareReadState(
+      account: context.account,
+      conversation: conversation,
+      talkFeatures: capabilities.talkFeatures,
+    );
 
     final response = await _call(
       () => _api.markChatRead(
@@ -412,6 +431,10 @@ final class RoomSettingsService {
 
     switch (response.classification) {
       case ChatReadClassification.readConfirmed:
+        final outcome = await _chat.applyChatReadResponse(response);
+        if (outcome != ChatMergeOutcome.readApplied) {
+          throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+        }
         return;
       case ChatReadClassification.reauthenticationRequired:
         throw const RoomSettingsException(
@@ -747,6 +770,23 @@ final class RoomSettingsService {
     return _AuthContext(account: account, appPassword: appPassword);
   }
 
+  Future<void> _prepareReadState({
+    required StoredAccount account,
+    required CachedConversation conversation,
+    required Set<String> talkFeatures,
+  }) async {
+    try {
+      await _chat.recordCapabilities(
+        accountId: account.id,
+        talkFeatures: talkFeatures,
+        observedAt: DateTime.now().toUtc(),
+      );
+      await _chat.ensureRootScope(account: account, conversation: conversation);
+    } on Object {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+  }
+
   Future<T> _call<T>(Future<T> Function() action) async {
     try {
       return await action();
@@ -801,6 +841,7 @@ final class _RoomIdentifiers {
 final roomSettingsServiceProvider = Provider<RoomSettingsService>((ref) {
   return RoomSettingsService(
     accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
   );

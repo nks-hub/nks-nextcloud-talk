@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/rooms/room_settings_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
@@ -75,6 +76,7 @@ void main() {
     addTearDown(api.close);
     return RoomSettingsService(
       accounts: accounts,
+      chat: ChatRepository(database),
       credentials: vault,
       api: api,
     );

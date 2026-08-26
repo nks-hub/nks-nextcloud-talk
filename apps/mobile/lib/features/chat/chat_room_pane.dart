@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -14,6 +16,7 @@ import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
@@ -138,6 +141,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int? _jumpTargetId;
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
+  ChatRoomProviderKey? _lastAutoReadKey;
+  int? _lastAutoReadMessageId;
+  ChatRoomProviderKey? _autoReadInFlightKey;
+  int? _autoReadInFlightMessageId;
 
   ChatRoomProviderKey get _key => (
     accountId: widget.account.id,
