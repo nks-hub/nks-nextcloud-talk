@@ -806,6 +806,35 @@ zachování account/conversation dat, presence, archivace, nové tabulky,
 odmítá bez změny verze nebo dat. Budoucí release schema musí do stejné matice
 přibýt současně se zvýšením `schemaVersion`.
 
+### D-037: Vybraná konverzace je jediný zdroj pravdy pro obě šířky okna
+
+Stav: Přijato 27. srpna 2026, commity `052a006` a `1b8687d`.
+
+Otevřenou konverzaci drží výhradně výběr v shellu. Úzké okno ji vykreslí na
+místě seznamu, široké okno v pravém panelu. Přepnutí mezi nimi je tím pádem
+čistě otázkou rozvržení a funguje obousměrně bez zvláštní logiky. Systémové
+tlačítko zpět a zpětné tlačítko v hlavičce ruší výběr, nezavírají aplikaci.
+
+Předchozí pokus předával konverzaci navigátoru jako pushnutou obrazovku.
+Zúžení okna fungovalo, rozšíření ne: aplikace zůstala v jednosloupcovém režimu
+i na maximalizovaném okně. Příčinou nebyl chybějící pop, ale to, že vznikly
+dva zdroje pravdy — výběr v shellu a stack navigátoru — a kopírovalo se jen
+jedním směrem.
+
+Opravit to zevnitř nešlo. Navigátor nebuduje route pod první neprůhlednou
+route, takže se nestaví ani workspace, ani shell a ani jeden z nich se
+o změnu velikosti okna nedozví; změřeno instrumentovaným testem, který
+napočítal nula postavených shellů a jednu route. Jakákoliv reakce na resize
+napsaná pod pushnutou obrazovkou je proto mrtvý kód.
+
+Deep link musí v tomto modelu nejdřív odstranit vše nad kořenovou obrazovkou
+a teprve pak nastavit výběr. Odkaz může přijít, když je uživatel kdekoliv,
+a samotné nastavení výběru by ho nechalo dívat se na to, co má navrchu.
+
+Poznámka k dohledatelnosti: shell část této změny nese commit `052a006`
+s hlavičkou o doplnění klíče widgetu, protože vznikla nechtěně stagenutím
+celého souboru s cizí rozpracovanou prací. Obsahově patří k `1b8687d`.
+
 ### D-034: Desktopová hustota podle vstupního zařízení, ne podle šířky okna
 
 Stav: Přijato 27. srpna 2026, commity `7cde8ca`, `520c88e`, `289a6ee`
