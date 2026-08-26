@@ -217,7 +217,12 @@ final class ChatService {
         if (replyTo != null && (threadId != null || replyTo < 1)) {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
-        var prepared = await _prepare(accountId, roomToken, threadId: threadId);
+        var prepared = await _prepare(
+          accountId,
+          roomToken,
+          threadId: threadId,
+          allowPersistedCapabilitiesForSend: true,
+        );
         if (replyTo != null && !prepared.profile.reply) {
           throw const ChatServiceException(ChatServiceError.sendUnsupported);
         }
@@ -228,6 +233,9 @@ final class ChatService {
           throw const ChatServiceException(ChatServiceError.sendUnsupported);
         }
         if (prepared.threadId != null && prepared.namedThread == null) {
+          if (!prepared.capabilitiesVerifiedOnline) {
+            throw const ChatServiceException(ChatServiceError.network);
+          }
           prepared = await _resolveAndSynchronizePrepared(prepared);
         }
         final effectiveReplyTo =
@@ -246,7 +254,9 @@ final class ChatService {
               ? null
               : prepared.room.token,
         );
-        await _processPending(prepared);
+        if (prepared.capabilitiesVerifiedOnline) {
+          await _processPending(prepared);
+        }
       }, threadId: threadId);
     });
   }
@@ -298,6 +308,7 @@ final class ChatService {
     String roomToken, {
     int? threadId,
     Future<void>? abortTrigger,
+    bool allowPersistedCapabilitiesForSend = false,
   }) async {
     if (threadId != null && threadId < 1) {
       throw const ChatServiceException(ChatServiceError.invalidResponse);
@@ -318,29 +329,16 @@ final class ChatService {
       throw const ChatServiceException(ChatServiceError.credentialMissing);
     }
     final server = ServerBase.parse(account.serverUrl);
-    final CapabilitySnapshot capabilities;
-    try {
-      capabilities = await _api.getAuthenticatedCapabilities(
-        server: server,
-        loginName: account.loginName,
-        appPassword: appPassword,
-        abortTrigger: abortTrigger,
-      );
-    } on NextcloudApiException catch (error) {
-      if (error.statusCode == 401) {
-        await _chat.markReauthenticationRequired(accountId);
-      }
-      throw ChatServiceException(_mapApiError(error));
-    }
-    if (!capabilities.hasTalk) {
-      throw const ChatServiceException(ChatServiceError.talkUnavailable);
-    }
-    final sortedTalkFeatures = capabilities.talkFeatures.toList()..sort();
-    final capabilityFingerprint = jsonEncode(sortedTalkFeatures);
-    await _accounts.updateTalkFeatures(accountId, capabilities.talkFeatures);
+    final preparedCapabilities = await _prepareCapabilities(
+      account: account,
+      server: server,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+      allowPersistedCapabilitiesForSend: allowPersistedCapabilitiesForSend,
+    );
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
-    final profile = ChatCapabilityProfile.fromSnapshot(
-      capabilities,
+    final profile = ChatCapabilityProfile.fromTalkFeatures(
+      preparedCapabilities.talkFeatures.toList(growable: false),
       federated: room.isFederated,
     );
     if (!profile.read) {
@@ -361,11 +359,6 @@ final class ChatService {
     if (namedThread == true && !profile.threadFetch) {
       throw const ChatServiceException(ChatServiceError.chatUnsupported);
     }
-    final storedCapability = await _chat.recordCapabilities(
-      accountId: accountId,
-      talkFeatures: capabilities.talkFeatures,
-      observedAt: DateTime.now().toUtc(),
-    );
     await _chat.ensureRootScope(account: account, conversation: conversation);
     if (threadId != null) {
       await _chat.ensureThreadScope(
@@ -396,15 +389,103 @@ final class ChatService {
       namedThread: namedThread,
       appPassword: appPassword,
       profile: profile,
-      capabilityFingerprint: capabilityFingerprint,
+      capabilityFingerprint: preparedCapabilities.fingerprint,
+      capabilitiesVerifiedOnline: preparedCapabilities.verifiedOnline,
       authority: ChatTextSendAuthority(
         accountId: AccountId.parse(accountId),
         server: server,
-        capabilityGeneration: storedCapability.generation,
+        capabilityGeneration: preparedCapabilities.generation,
         profile: profile,
         replayContractRevision: textSendReplayContractRevision,
       ),
     );
+  }
+
+  Future<_PreparedCapabilities> _prepareCapabilities({
+    required StoredAccount account,
+    required ServerBase server,
+    required String appPassword,
+    required Future<void>? abortTrigger,
+    required bool allowPersistedCapabilitiesForSend,
+  }) async {
+    try {
+      final capabilities = await _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: account.loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      );
+      if (!capabilities.hasTalk) {
+        throw const ChatServiceException(ChatServiceError.talkUnavailable);
+      }
+      final sortedTalkFeatures = capabilities.talkFeatures.toList()..sort();
+      final fingerprint = jsonEncode(sortedTalkFeatures);
+      await _accounts.updateTalkFeatures(account.id, capabilities.talkFeatures);
+      final storedCapability = await _chat.recordCapabilities(
+        accountId: account.id,
+        talkFeatures: capabilities.talkFeatures,
+        observedAt: DateTime.now().toUtc(),
+      );
+      return _PreparedCapabilities(
+        talkFeatures: capabilities.talkFeatures,
+        fingerprint: fingerprint,
+        generation: storedCapability.generation,
+        verifiedOnline: true,
+      );
+    } on NextcloudApiException catch (error) {
+      if (error.statusCode == 401) {
+        await _chat.markReauthenticationRequired(account.id);
+      }
+      if (allowPersistedCapabilitiesForSend &&
+          _isTransientCapabilityFailure(error)) {
+        final persisted = await _loadPersistedCapabilities(account);
+        if (persisted != null) {
+          return persisted;
+        }
+      }
+      throw ChatServiceException(_mapApiError(error));
+    }
+  }
+
+  Future<_PreparedCapabilities?> _loadPersistedCapabilities(
+    StoredAccount account,
+  ) async {
+    final stored = await _chat.getReadyCapabilitySnapshot(account.id);
+    if (stored == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(account.talkFeaturesJson);
+      if (decoded is! List<Object?> ||
+          !decoded.every((feature) => feature is String)) {
+        return null;
+      }
+      final talkFeatures = decoded.cast<String>().toList(growable: false);
+      final profile = ChatCapabilityProfile.fromTalkFeatures(
+        talkFeatures,
+        federated: false,
+      );
+      if (!profile.sendText) {
+        return null;
+      }
+      final sortedTalkFeatures = talkFeatures.toList()..sort();
+      final fingerprint = jsonEncode(sortedTalkFeatures);
+      if (account.talkFeaturesJson != fingerprint ||
+          stored.fingerprint != fingerprint ||
+          stored.generation < 1) {
+        return null;
+      }
+      return _PreparedCapabilities(
+        talkFeatures: sortedTalkFeatures.toSet(),
+        fingerprint: fingerprint,
+        generation: stored.generation,
+        verifiedOnline: false,
+      );
+    } on FormatException {
+      return null;
+    } on TalkProtocolException {
+      return null;
+    }
   }
 
   Future<_PreparedChat> _resolveAndSynchronizePrepared(

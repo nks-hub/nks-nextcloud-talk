@@ -18,6 +18,7 @@ part 'chat_service_integration_support.dart';
 part 'chat_service_integration_sync_cases.dart';
 part 'chat_service_integration_poll_cases.dart';
 part 'chat_service_integration_lifecycle_send_cases.dart';
+part 'chat_service_integration_offline_outbox_cases.dart';
 part 'chat_service_integration_outbox_cases.dart';
 
 void main() {
@@ -29,5 +30,6 @@ void main() {
   suite.registerSyncCases();
   suite.registerPollCases();
   suite.registerLifecycleSendCases();
+  suite.registerOfflineOutboxCases();
   suite.registerOutboxCases();
 }

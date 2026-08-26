@@ -23,6 +23,7 @@ final class _PreparedChat {
     required this.appPassword,
     required this.profile,
     required this.capabilityFingerprint,
+    required this.capabilitiesVerifiedOnline,
     required this.authority,
   });
 
@@ -35,6 +36,7 @@ final class _PreparedChat {
   final String appPassword;
   final ChatCapabilityProfile profile;
   final String capabilityFingerprint;
+  final bool capabilitiesVerifiedOnline;
   final ChatTextSendAuthority authority;
 
   _PreparedChat asRootBackedView() => _PreparedChat(
@@ -47,6 +49,7 @@ final class _PreparedChat {
     appPassword: appPassword,
     profile: profile,
     capabilityFingerprint: capabilityFingerprint,
+    capabilitiesVerifiedOnline: capabilitiesVerifiedOnline,
     authority: authority,
   );
 
@@ -60,8 +63,23 @@ final class _PreparedChat {
     appPassword: appPassword,
     profile: profile,
     capabilityFingerprint: capabilityFingerprint,
+    capabilitiesVerifiedOnline: capabilitiesVerifiedOnline,
     authority: authority,
   );
+}
+
+final class _PreparedCapabilities {
+  const _PreparedCapabilities({
+    required this.talkFeatures,
+    required this.fingerprint,
+    required this.generation,
+    required this.verifiedOnline,
+  });
+
+  final Set<String> talkFeatures;
+  final String fingerprint;
+  final int generation;
+  final bool verifiedOnline;
 }
 
 bool _conversationIsFederated(CachedConversation conversation) {
@@ -92,6 +110,19 @@ ChatServiceError _mapApiError(NextcloudApiException error) {
       NextcloudApiError.unexpectedStatus => ChatServiceError.invalidResponse,
     },
   };
+}
+
+bool _isTransientCapabilityFailure(NextcloudApiException error) {
+  if (error.statusCode == 429 ||
+      error.statusCode == 500 ||
+      error.statusCode == 502 ||
+      error.statusCode == 503 ||
+      error.statusCode == 504) {
+    return true;
+  }
+  return error.statusCode == null &&
+      (error.code == NextcloudApiError.network ||
+          error.code == NextcloudApiError.timeout);
 }
 
 int _nowSeconds() =>

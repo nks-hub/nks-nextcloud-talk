@@ -517,6 +517,20 @@ final class ChatRepository {
         capability.lane == ChatAccountLane.ready.name;
   }
 
+  Future<StoredChatCapability?> getReadyCapabilitySnapshot(
+    String accountId,
+  ) async {
+    final capability =
+        await (_database.select(_database.chatCapabilities)
+              ..where((row) => row.accountId.equals(accountId))
+              ..limit(1))
+            .getSingleOrNull();
+    if (capability?.lane != ChatAccountLane.ready.name) {
+      return null;
+    }
+    return capability;
+  }
+
   Future<void> markReauthenticationRequired(String accountId) {
     return (_database.update(
       _database.chatCapabilities,
