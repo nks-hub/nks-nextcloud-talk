@@ -173,6 +173,59 @@ void _registerOverviewAndModerationTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('reopening rename prefills the name the server returned', (
+    tester,
+  ) async {
+    _growViewport(tester);
+    final renamedJson = Map<String, Object?>.from(_conversationRoomJson())
+      ..['name'] = 'renamed-room'
+      ..['displayName'] = 'Renamed Room';
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' && request.url.path.endsWith('/rooma123')) {
+        return _ocsSuccess(renamedJson);
+      }
+      return http.Response('', 404);
+    });
+
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: client,
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-rename')).evaluate().isNotEmpty,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-rename')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('room-details-rename-field')),
+      'Renamed Room',
+    );
+    await tester.tap(find.byKey(const Key('room-details-rename-save')));
+    await _pumpUntil(tester, () => _roomTitleText(tester) == 'Renamed Room');
+
+    await tester.tap(find.byKey(const Key('room-details-rename')));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const Key('room-details-rename-field')),
+          )
+          .initialValue,
+      'Renamed Room',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a rename that the server rejects keeps the original name', (
     tester,
   ) async {
