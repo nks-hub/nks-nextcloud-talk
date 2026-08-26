@@ -11,6 +11,7 @@ import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 import '../../platform/media/durable_attachment_source_store.dart';
 import '../chat/composer/emoji_usage_store.dart';
+import '../chat/media/chat_attachment_opener.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
 
@@ -54,6 +55,7 @@ final class AccountRemovalService {
     required ChatMediaDiskCache mediaDiskCache,
     required EmojiUsageStore emojiUsage,
     required Future<Directory> Function() voiceDirectory,
+    required Future<Directory> Function() chatAttachmentDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
   }) : _accounts = accounts,
@@ -63,6 +65,7 @@ final class AccountRemovalService {
        _mediaDiskCache = mediaDiskCache,
        _emojiUsage = emojiUsage,
        _voiceDirectory = voiceDirectory,
+       _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
        _onRemovalStarted = onRemovalStarted;
 
@@ -73,6 +76,7 @@ final class AccountRemovalService {
   final ChatMediaDiskCache _mediaDiskCache;
   final EmojiUsageStore _emojiUsage;
   final Future<Directory> Function() _voiceDirectory;
+  final Future<Directory> Function() _chatAttachmentDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
 
@@ -118,6 +122,12 @@ final class AccountRemovalService {
     await _bestEffort(
       () async => evictAccountVoiceFiles(
         directory: await _voiceDirectory(),
+        accountId: accountId,
+      ),
+    );
+    await _bestEffort(
+      () async => evictChatAttachmentFiles(
+        rootDirectory: await _chatAttachmentDirectory(),
         accountId: accountId,
       ),
     );

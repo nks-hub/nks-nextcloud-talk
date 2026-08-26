@@ -145,6 +145,7 @@ _removalService(
       ),
       voiceDirectory: () async =>
           Directory('${root.path}${Platform.pathSeparator}voice'),
+      chatAttachmentDirectory: () async => root,
       attachmentSources: () async => DurableAttachmentSourceStore(
         root: Directory('${root.path}${Platform.pathSeparator}sources'),
       ),

@@ -266,11 +266,11 @@ final class _ChatAttachment extends ConsumerWidget {
         ? strings.attachment
         : parameter.name!.trim();
     final mimeType = _mimeType(parameter);
+    final originalUri = _davDownloadUri(account, parameter);
     final voiceUri = mimeType?.startsWith('audio/') == true
-        ? _davDownloadUri(account, parameter)
+        ? originalUri
         : null;
     final previewUri = _previewUri(account, parameter, mimeType);
-    final link = _safeSameOriginLink(account, parameter.link);
     final previewProvider = previewUri == null
         ? null
         : chatMediaProvider((account: account, uri: previewUri));
@@ -281,23 +281,35 @@ final class _ChatAttachment extends ConsumerWidget {
     final fullScreenPreviewUri = previewUri == null
         ? null
         : _fullScreenPreviewUri(previewUri);
-    final VoidCallback? openImage = fullScreenPreviewUri == null
+    final VoidCallback? openImage =
+        fullScreenPreviewUri == null || originalUri == null || mimeType == null
         ? null
         : () => unawaited(
             showAuthenticatedImageViewer(
               context,
               account: account,
               previewUri: fullScreenPreviewUri,
+              originalUri: originalUri,
+              originalContentType: mimeType,
               imageName: name,
               repository: ref.read(chatMediaRepositoryProvider),
             ),
           );
-    final VoidCallback? openExternal = link == null
+    final VoidCallback? openFile =
+        originalUri == null || mimeType == null || voiceUri != null
         ? null
-        : () =>
-              unawaited(launchUrl(link, mode: LaunchMode.externalApplication));
-    final openAttachment = openImage ?? openExternal;
-    final opensExternally = openImage == null && openExternal != null;
+        : () => unawaited(
+            _openDownloadedAttachment(
+              context,
+              ref,
+              account: account,
+              uri: originalUri,
+              fileName: name,
+              contentType: mimeType,
+            ),
+          );
+    final openAttachment = openImage ?? openFile;
+    final opensFile = openImage == null && openFile != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -387,7 +399,9 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           ),
         ],
-        if (previewProvider == null && voiceUri == null)
+        if (previewProvider == null &&
+            voiceUri == null &&
+            openAttachment != null)
           // The message text already names the file through its rich object,
           // so this fallback stays compact instead of repeating the name.
           Semantics(
@@ -420,7 +434,7 @@ final class _ChatAttachment extends ConsumerWidget {
                                 : Icons.insert_drive_file_rounded,
                             color: scheme.primary,
                           ),
-                          if (opensExternally) ...[
+                          if (opensFile) ...[
                             const SizedBox(width: 6),
                             Icon(
                               Icons.open_in_new_rounded,
@@ -447,22 +461,23 @@ Uri? _davDownloadUri(StoredAccount account, ChatRichObjectParameter parameter) {
   if (raw is! String) {
     return null;
   }
-  final segments = raw
-      .split('/')
-      .where((segment) => segment.isNotEmpty && segment != '.')
-      .toList(growable: false);
-  if (segments.isEmpty || segments.contains('..')) {
+  final DavRelativePath path;
+  final DavUserId user;
+  try {
+    path = DavRelativePath.parse(raw);
+    user = DavUserId.parse(account.loginName);
+  } on TalkProtocolException {
     return null;
   }
   final server = ServerBase.parse(account.serverUrl);
   return server.uri.replace(
     pathSegments: [
-      ...server.uri.pathSegments,
+      ...server.uri.pathSegments.where((segment) => segment.isNotEmpty),
       'remote.php',
       'dav',
       'files',
-      account.loginName,
-      ...segments,
+      user.value,
+      ...path.segments,
     ],
   );
 }
@@ -495,21 +510,6 @@ Uri? _previewUri(
   );
 }
 
-Uri? _safeSameOriginLink(StoredAccount account, String? raw) {
-  if (raw == null || raw.isEmpty || raw.contains(r'\')) {
-    return null;
-  }
-  final parsed = Uri.tryParse(raw);
-  if (parsed == null || parsed.userInfo.isNotEmpty) {
-    return null;
-  }
-  final server = ServerBase.parse(account.serverUrl);
-  final resolved = parsed.hasScheme ? parsed : server.uri.resolveUri(parsed);
-  return resolved.scheme == 'https' && server.hasSameOrigin(resolved)
-      ? resolved
-      : null;
-}
-
 Uri _fullScreenPreviewUri(Uri previewUri) {
   return previewUri.replace(
     queryParameters: <String, String>{
@@ -517,5 +517,35 @@ Uri _fullScreenPreviewUri(Uri previewUri) {
       'x': '2048',
       'y': '2048',
     },
+  );
+}
+
+Future<void> _openDownloadedAttachment(
+  BuildContext context,
+  WidgetRef ref, {
+  required StoredAccount account,
+  required Uri uri,
+  required String fileName,
+  required String contentType,
+}) async {
+  final opener = ref.read(chatAttachmentOpenActionFactoryProvider)(
+    ref.read(chatMediaRepositoryProvider),
+  );
+  final result = await opener.open(
+    account: account,
+    uri: uri,
+    fileName: fileName,
+    expectedContentType: contentType,
+  );
+  if (result == ChatAttachmentOpenResult.opened || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        AppLocalizations.of(context).conversationActionErrorGeneric,
+      ),
+      behavior: SnackBarBehavior.floating,
+    ),
   );
 }

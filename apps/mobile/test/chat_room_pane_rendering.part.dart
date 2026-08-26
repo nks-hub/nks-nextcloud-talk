@@ -46,6 +46,7 @@ void _registerChatRoomPaneRenderingTests() {
             'id': '77',
             'name': 'pixel.gif',
             'link': '/index.php/f/77',
+            'path': 'Talk/pixel.gif',
             'mimetype': 'image/gif',
             'preview-available': 'yes',
           },
@@ -379,26 +380,10 @@ void _registerChatRoomPaneRenderingTests() {
     expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
   });
 
-  testWidgets('unsupported attachment previews keep external fallback', (
+  testWidgets('generic attachments download authenticated originals', (
     tester,
   ) async {
-    const launcherChannel = MethodChannel('plugins.flutter.io/url_launcher');
-    final launched = <String>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      launcherChannel,
-      (call) async {
-        expect(call.method, 'launch');
-        final arguments = call.arguments! as Map<Object?, Object?>;
-        launched.add(arguments['url']! as String);
-        return true;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        launcherChannel,
-        null,
-      ),
-    );
+    final opener = _RecordingAttachmentOpenAction();
     final document = _attachmentMessage(
       id: 32,
       fileId: 90,
@@ -437,6 +422,11 @@ void _registerChatRoomPaneRenderingTests() {
             ],
           ),
         ),
+        overrides: [
+          chatAttachmentOpenActionFactoryProvider.overrideWithValue(
+            (_) => opener,
+          ),
+        ],
       ),
     );
     await tester.pump();
@@ -456,11 +446,55 @@ void _registerChatRoomPaneRenderingTests() {
     }
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
 
-    expect(launched, <String>[
-      'https://cloud.example.invalid/remote.php/dav/files/fixture-user/report.pdf',
-      'https://cloud.example.invalid/index.php/f/91',
+    expect(opener.uris, <Uri>[
+      Uri.parse(
+        'https://cloud.example.invalid/remote.php/dav/files/'
+        'fixture-user/Talk/report.pdf',
+      ),
+      Uri.parse(
+        'https://cloud.example.invalid/remote.php/dav/files/'
+        'fixture-user/Talk/disabled.gif',
+      ),
     ]);
+    expect(opener.contentTypes, ['application/pdf', 'image/gif']);
     expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
+  });
+
+  testWidgets('unsafe DAV paths do not expose an attachment action', (
+    tester,
+  ) async {
+    final opener = _RecordingAttachmentOpenAction();
+    final message = _attachmentMessage(
+      id: 34,
+      fileId: 92,
+      name: 'unsafe.txt',
+      mimeType: 'text/plain',
+      previewAvailable: 'no',
+      link: '/index.php/f/92',
+      path: 'Talk/../unsafe.txt',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: Scaffold(
+          body: ChatMessageContent(
+            account: account,
+            message: message,
+            fallbackText: '',
+            foregroundColor: Colors.black,
+          ),
+        ),
+        overrides: [
+          chatAttachmentOpenActionFactoryProvider.overrideWithValue(
+            (_) => opener,
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-open-attachment-34-0')), findsNothing);
+    expect(opener.uris, isEmpty);
   });
 
   testWidgets('localizes today, yesterday, and older day separators', (
@@ -780,4 +814,21 @@ void _registerChatRoomPaneRenderingTests() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+}
+
+final class _RecordingAttachmentOpenAction implements ChatAttachmentOpenAction {
+  final List<Uri> uris = [];
+  final List<String> contentTypes = [];
+
+  @override
+  Future<ChatAttachmentOpenResult> open({
+    required StoredAccount account,
+    required Uri uri,
+    required String fileName,
+    required String expectedContentType,
+  }) async {
+    uris.add(uri);
+    contentTypes.add(expectedContentType);
+    return ChatAttachmentOpenResult.opened;
+  }
 }

@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -32,6 +33,7 @@ void main() {
   late Directory root;
   late Directory previewRoot;
   late Directory voiceRoot;
+  late Directory chatAttachmentRoot;
   late Directory sourceRoot;
   late Directory emojiRoot;
 
@@ -44,6 +46,9 @@ void main() {
     root = await Directory.systemTemp.createTemp('nctalk-account-removal-');
     previewRoot = Directory('${root.path}${Platform.pathSeparator}previews');
     voiceRoot = Directory('${root.path}${Platform.pathSeparator}voice');
+    chatAttachmentRoot = Directory(
+      '${root.path}${Platform.pathSeparator}opened',
+    );
     sourceRoot = Directory('${root.path}${Platform.pathSeparator}sources');
     emojiRoot = Directory('${root.path}${Platform.pathSeparator}emoji');
     mediaCache = ChatMediaCache();
@@ -71,6 +76,7 @@ void main() {
       mediaDiskCache: mediaDiskCache,
       emojiUsage: emojiUsage,
       voiceDirectory: () async => voiceRoot,
+      chatAttachmentDirectory: () async => chatAttachmentRoot,
       attachmentSources: () async => sources,
       onRemovalStarted: onRemovalStarted,
     );
@@ -117,12 +123,14 @@ void main() {
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
       voiceRoot: voiceRoot,
+      chatAttachmentRoot: chatAttachmentRoot,
       accountId: 'account-a',
     );
     await _seedFiles(
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
       voiceRoot: voiceRoot,
+      chatAttachmentRoot: chatAttachmentRoot,
       accountId: 'account-b',
     );
     final sourceA = await _seedSource(database, sources, 'account-a');
@@ -175,6 +183,14 @@ void main() {
     );
     expect(await _voiceFile(voiceRoot, 'account-a').exists(), isFalse);
     expect(await _voiceFile(voiceRoot, 'account-b').exists(), isTrue);
+    expect(
+      await _openedAttachmentFile(chatAttachmentRoot, 'account-a').exists(),
+      isFalse,
+    );
+    expect(
+      await _openedAttachmentFile(chatAttachmentRoot, 'account-b').exists(),
+      isTrue,
+    );
     expect(
       await emojiUsage.read(AccountId.parse('account-a')),
       same(EmojiUsage.empty),
@@ -294,6 +310,14 @@ File _voiceFile(Directory voiceRoot, String accountId) {
     '${voiceRoot.path}${Platform.pathSeparator}'
     '${chatVoiceCacheKey(accountId: accountId, messageId: 42)}',
   );
+}
+
+File _openedAttachmentFile(Directory root, String accountId) {
+  final directory = chatAttachmentCacheAccountDirectory(
+    rootDirectory: root,
+    accountId: accountId,
+  );
+  return File('${directory.path}${Platform.pathSeparator}private.txt');
 }
 
 String _okOcs() => jsonEncode(<String, Object?>{
@@ -599,6 +623,7 @@ Future<void> _seedFiles({
   required ChatMediaCache mediaCache,
   required ChatMediaDiskCache mediaDiskCache,
   required Directory voiceRoot,
+  required Directory chatAttachmentRoot,
   required String accountId,
 }) async {
   final image = ChatMediaImage(
@@ -616,4 +641,7 @@ Future<void> _seedFiles({
     voiceRoot,
     accountId,
   ).writeAsBytes(<int>[5, 5, 5], flush: true);
+  final opened = _openedAttachmentFile(chatAttachmentRoot, accountId);
+  await opened.parent.create(recursive: true);
+  await opened.writeAsBytes(<int>[6, 6, 6], flush: true);
 }

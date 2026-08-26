@@ -12,6 +12,8 @@ Future<void> showAuthenticatedImageViewer(
   BuildContext context, {
   required StoredAccount account,
   required Uri previewUri,
+  required Uri originalUri,
+  required String originalContentType,
   required String imageName,
   required ChatMediaRepository repository,
   ChatImageExporter exporter = const PlatformChatImageExporter(),
@@ -22,6 +24,8 @@ Future<void> showAuthenticatedImageViewer(
       builder: (_) => AuthenticatedImageViewer(
         account: account,
         previewUri: previewUri,
+        originalUri: originalUri,
+        originalContentType: originalContentType,
         imageName: imageName,
         repository: repository,
         exporter: exporter,
@@ -35,6 +39,8 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     super.key,
     required this.account,
     required this.previewUri,
+    required this.originalUri,
+    required this.originalContentType,
     required this.imageName,
     required this.repository,
     this.exporter = const PlatformChatImageExporter(),
@@ -42,6 +48,8 @@ final class AuthenticatedImageViewer extends StatefulWidget {
 
   final StoredAccount account;
   final Uri previewUri;
+  final Uri originalUri;
+  final String originalContentType;
   final String imageName;
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
@@ -61,6 +69,7 @@ final class _AuthenticatedImageViewerState
   /// Kept outside the [FutureBuilder] because the save and share buttons live
   /// in a sibling of it and have to enable themselves when the bytes arrive.
   ChatMediaImage? _loaded;
+  ChatMediaFile? _original;
   bool _exporting = false;
 
   @override
@@ -74,8 +83,11 @@ final class _AuthenticatedImageViewerState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id != widget.account.id ||
         oldWidget.previewUri != widget.previewUri ||
+        oldWidget.originalUri != widget.originalUri ||
+        oldWidget.originalContentType != widget.originalContentType ||
         !identical(oldWidget.repository, widget.repository)) {
       _resetTransformation();
+      _original = null;
       _image = _load();
     }
   }
@@ -126,7 +138,7 @@ final class _AuthenticatedImageViewerState
         ChatImageSaveResult.outOfSpace => strings.imageSaveOutOfSpace,
         ChatImageSaveResult.failed => strings.imageSaveFailed,
       };
-    });
+    }, failureMessage: (strings) => strings.imageSaveFailed);
   }
 
   Future<void> _share() async {
@@ -137,15 +149,15 @@ final class _AuthenticatedImageViewerState
         contentType: image.contentType,
       );
       return offered ? null : strings.imageShareFailed;
-    });
+    }, failureMessage: (strings) => strings.imageShareFailed);
   }
 
   Future<void> _export(
-    Future<String?> Function(ChatMediaImage image, AppLocalizations strings)
-    run,
-  ) async {
-    final image = _loaded;
-    if (image == null || _exporting) {
+    Future<String?> Function(ChatMediaFile image, AppLocalizations strings)
+    run, {
+    required String Function(AppLocalizations strings) failureMessage,
+  }) async {
+    if (_loaded == null || _exporting) {
       return;
     }
     final strings = AppLocalizations.of(context);
@@ -153,9 +165,16 @@ final class _AuthenticatedImageViewerState
     setState(() {
       _exporting = true;
     });
-    final String? message;
+    String? message;
     try {
+      final image = _original ??= await widget.repository.loadOriginalFile(
+        account: widget.account,
+        uri: widget.originalUri,
+        expectedContentType: widget.originalContentType,
+      );
       message = await run(image, strings);
+    } on Object {
+      message = failureMessage(strings);
     } finally {
       if (mounted) {
         setState(() {
@@ -231,33 +250,33 @@ final class _AuthenticatedImageViewerState
                   builder: (context, constraints) {
                     _viewport = constraints.biggest;
                     return InteractiveViewer(
-                  key: const Key('authenticated-image-interactive-viewer'),
-                  transformationController: _transformation,
-                  minScale: _minimumScale,
-                  maxScale: _maximumScale,
-                  onInteractionUpdate: (_) {
-                    final next = _transformation.value.getMaxScaleOnAxis();
-                    if ((next - _scale).abs() >= 0.01 && mounted) {
-                      setState(() {
-                        _scale = next;
-                      });
-                    }
-                  },
-                  child: SizedBox.expand(
-                    child: Center(
-                      child: Image.memory(
-                        image.body,
-                        key: const Key('authenticated-image-fullscreen'),
-                        cacheWidth: 2048,
-                        cacheHeight: 2048,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.medium,
-                        gaplessPlayback: true,
-                        errorBuilder: (_, _, _) =>
-                            _ImageLoadFailure(onRetry: _retry),
+                      key: const Key('authenticated-image-interactive-viewer'),
+                      transformationController: _transformation,
+                      minScale: _minimumScale,
+                      maxScale: _maximumScale,
+                      onInteractionUpdate: (_) {
+                        final next = _transformation.value.getMaxScaleOnAxis();
+                        if ((next - _scale).abs() >= 0.01 && mounted) {
+                          setState(() {
+                            _scale = next;
+                          });
+                        }
+                      },
+                      child: SizedBox.expand(
+                        child: Center(
+                          child: Image.memory(
+                            image.body,
+                            key: const Key('authenticated-image-fullscreen'),
+                            cacheWidth: 2048,
+                            cacheHeight: 2048,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                            gaplessPlayback: true,
+                            errorBuilder: (_, _, _) =>
+                                _ImageLoadFailure(onRetry: _retry),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
                     );
                   },
                 ),

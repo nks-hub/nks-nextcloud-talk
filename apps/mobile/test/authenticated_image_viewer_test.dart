@@ -135,13 +135,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('saving hands the shown bytes to the gallery and says so', (
+  testWidgets('saving downloads and exports the original instead of preview', (
     tester,
   ) async {
     final exporter = _RecordingExporter();
     await tester.pumpWidget(
       _app(
-        repository: _repository((_) async => _imageResponse()),
+        repository: _repository(_previewAndOriginalResponse),
         exporter: exporter,
         imageName: 'holiday photo (1).JPG',
       ),
@@ -155,10 +155,7 @@ void main() {
 
     expect(exporter.saved, hasLength(1));
     expect(exporter.saved.single.contentType, 'image/png');
-    expect(
-      exporter.saved.single.bytes,
-      base64Decode(_onePixelPngBase64).length,
-    );
+    expect(exporter.saved.single.bytes, _originalPng.length);
     expect(
       exporter.saved.single.fileName,
       'holiday_photo__1_',
@@ -193,13 +190,13 @@ void main() {
     );
   });
 
-  testWidgets('sharing offers the sheet without reporting anything', (
+  testWidgets('sharing downloads and offers the original bytes', (
     tester,
   ) async {
     final exporter = _RecordingExporter();
     await tester.pumpWidget(
       _app(
-        repository: _repository((_) async => _imageResponse()),
+        repository: _repository(_previewAndOriginalResponse),
         exporter: exporter,
       ),
     );
@@ -212,10 +209,7 @@ void main() {
 
     expect(exporter.shared, hasLength(1));
     expect(exporter.shared.single.contentType, 'image/png');
-    expect(
-      exporter.shared.single.bytes,
-      base64Decode(_onePixelPngBase64).length,
-    );
+    expect(exporter.shared.single.bytes, _originalPng.length);
     expect(
       find.byType(SnackBar),
       findsNothing,
@@ -240,6 +234,35 @@ void main() {
     expect(find.text('The image could not be shared.'), findsOneWidget);
   });
 
+  testWidgets('a failed original download never exports preview bytes', (
+    tester,
+  ) async {
+    final exporter = _RecordingExporter();
+    await tester.pumpWidget(
+      _app(
+        repository: _repository((request) async {
+          if (request.url == _originalUri) {
+            return http.StreamedResponse(
+              Stream<List<int>>.value(const <int>[1, 2, 3]),
+              503,
+            );
+          }
+          return _imageResponse();
+        }),
+        exporter: exporter,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    await tester.tap(find.byKey(const Key('authenticated-image-save')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(exporter.saved, isEmpty);
+    expect(find.text('The image could not be saved.'), findsOneWidget);
+  });
+
   testWidgets('save and share stay disabled while there is nothing to export', (
     tester,
   ) async {
@@ -247,10 +270,8 @@ void main() {
     await tester.pumpWidget(
       _app(
         repository: _repository(
-          (_) async => http.StreamedResponse(
-            const Stream<List<int>>.empty(),
-            503,
-          ),
+          (_) async =>
+              http.StreamedResponse(const Stream<List<int>>.empty(), 503),
         ),
         exporter: exporter,
       ),
@@ -361,6 +382,8 @@ final class _ViewerLauncher extends StatelessWidget {
             context,
             account: _account,
             previewUri: _previewUri,
+            originalUri: _originalUri,
+            originalContentType: 'image/png',
             imageName: imageName,
             repository: repository,
             exporter: exporter,
@@ -429,6 +452,16 @@ http.StreamedResponse _imageResponse() => http.StreamedResponse(
   headers: const <String, String>{'content-type': 'image/png'},
 );
 
+Future<http.StreamedResponse> _previewAndOriginalResponse(
+  http.BaseRequest request,
+) async => request.url == _originalUri
+    ? http.StreamedResponse(
+        Stream<List<int>>.value(_originalPng),
+        200,
+        headers: const <String, String>{'content-type': 'image/png'},
+      )
+    : _imageResponse();
+
 const _onePixelPngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGP6zwAAAgcB'
     'ApocMXEAAAAASUVORK5CYII=';
@@ -458,3 +491,16 @@ final Uri _previewUri = Uri.parse(
   'https://cloud.example.invalid/index.php/core/preview'
   '?fileId=42&x=2048&y=2048&a=0',
 );
+
+final Uri _originalUri = Uri.parse(
+  'https://cloud.example.invalid/remote.php/dav/files/'
+  'fixture-user/Talk/original.png',
+);
+
+final Uint8List _originalPng = Uint8List.fromList(<int>[
+  ...base64Decode(_onePixelPngBase64),
+  1,
+  2,
+  3,
+  4,
+]);

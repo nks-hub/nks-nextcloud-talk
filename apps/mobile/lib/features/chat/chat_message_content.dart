@@ -12,6 +12,7 @@ import '../../platform/media/voice_platform_adapters.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
+import 'media/chat_attachment_opener.dart';
 
 part 'chat_message_attachment_content.dart';
 part 'chat_message_giphy_content.dart';

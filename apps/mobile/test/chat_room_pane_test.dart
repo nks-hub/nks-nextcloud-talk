@@ -14,6 +14,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
@@ -144,6 +145,7 @@ ChatMessage _attachmentMessage({
   required String mimeType,
   required Object previewAvailable,
   required String link,
+  String? path,
 }) {
   return ChatMessage.fromJson(
     _messageJson(
@@ -159,6 +161,7 @@ ChatMessage _attachmentMessage({
           'id': '$fileId',
           'name': name,
           'link': link,
+          'path': path ?? 'Talk/$name',
           'mimetype': mimeType,
           'preview-available': previewAvailable,
         },
