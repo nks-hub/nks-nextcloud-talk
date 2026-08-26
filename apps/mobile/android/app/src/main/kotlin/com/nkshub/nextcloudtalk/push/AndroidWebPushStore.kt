@@ -83,52 +83,66 @@ internal class AndroidWebPushStore(context: Context) {
         instance: String,
         content: ByteArray,
         decrypted: Boolean,
-    ): StoredEventResult = mutate { state ->
-        val oversized = content.size > MAX_PUSH_PAYLOAD_BYTES
-        val payload = mutableMapOf<String, Any?>(
-            "decrypted" to decrypted,
-            "payloadOversized" to oversized,
-            "originalSize" to content.size,
+    ): StoredEventResult {
+        val fingerprint = PushDeliveryFingerprint.from(
+            content,
+            AndroidWebPushPayloadParser.parse(content, decrypted),
         )
-        if (!oversized) {
-            payload["content"] = Base64.encodeToString(content, Base64.NO_WRAP)
+        return mutate { state ->
+            val oversized = content.size > MAX_PUSH_PAYLOAD_BYTES
+            val payload = mutableMapOf<String, Any?>(
+                "decrypted" to decrypted,
+                "payloadOversized" to oversized,
+                "originalSize" to content.size,
+            )
+            if (!oversized) {
+                payload["content"] = Base64.encodeToString(content, Base64.NO_WRAP)
+            }
+            val event = stateMachine.appendActivation(
+                state,
+                instance,
+                payload,
+                System.currentTimeMillis(),
+                fingerprint,
+            )
+            StoredEventResult(
+                stored = event != null,
+                totalPendingCount = stateMachine.pendingEventCount(state, null),
+            )
         }
-        val event = stateMachine.appendActivation(
-            state,
-            instance,
-            payload,
-            System.currentTimeMillis(),
-        )
-        StoredEventResult(
-            stored = event != null,
-            totalPendingCount = stateMachine.pendingEventCount(state, null),
-        )
     }
 
     fun storeMessage(
         instance: String,
         content: ByteArray,
         decrypted: Boolean,
-    ): StoredEventResult = mutate { state ->
-        val oversized = content.size > MAX_PUSH_PAYLOAD_BYTES
-        val payload = mutableMapOf<String, Any?>(
-            "decrypted" to decrypted,
-            "payloadOversized" to oversized,
-            "originalSize" to content.size,
+    ): StoredEventResult {
+        val fingerprint = PushDeliveryFingerprint.from(
+            content,
+            AndroidWebPushPayloadParser.parse(content, decrypted),
         )
-        if (!oversized) {
-            payload["content"] = Base64.encodeToString(content, Base64.NO_WRAP)
+        return mutate { state ->
+            val oversized = content.size > MAX_PUSH_PAYLOAD_BYTES
+            val payload = mutableMapOf<String, Any?>(
+                "decrypted" to decrypted,
+                "payloadOversized" to oversized,
+                "originalSize" to content.size,
+            )
+            if (!oversized) {
+                payload["content"] = Base64.encodeToString(content, Base64.NO_WRAP)
+            }
+            val event = stateMachine.appendMessage(
+                state,
+                instance,
+                payload,
+                System.currentTimeMillis(),
+                fingerprint,
+            )
+            StoredEventResult(
+                stored = event != null,
+                totalPendingCount = stateMachine.pendingEventCount(state, null),
+            )
         }
-        val event = stateMachine.appendMessage(
-            state,
-            instance,
-            payload,
-            System.currentTimeMillis(),
-        )
-        StoredEventResult(
-            stored = event != null,
-            totalPendingCount = stateMachine.pendingEventCount(state, null),
-        )
     }
 
     fun storeInvalidMessage(instance: String): StoredEventResult = mutate { state ->
@@ -370,7 +384,9 @@ internal class AndroidWebPushStore(context: Context) {
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
             cipher.updateAAD(aad())
             val plaintext = cipher.doFinal(ciphertext)
-            return decodeState(JSONObject(String(plaintext, StandardCharsets.UTF_8)))
+            return AndroidWebPushStateCodec.decode(
+                JSONObject(String(plaintext, StandardCharsets.UTF_8)),
+            )
         } catch (error: PushStoreException) {
             throw error
         } catch (error: Exception) {
@@ -383,7 +399,9 @@ internal class AndroidWebPushStore(context: Context) {
             val cipher = Cipher.getInstance(CIPHER_TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getKey(create = true))
             cipher.updateAAD(aad())
-            val plaintext = encodeState(state).toString().toByteArray(StandardCharsets.UTF_8)
+            val plaintext = AndroidWebPushStateCodec.encode(state)
+                .toString()
+                .toByteArray(StandardCharsets.UTF_8)
             val ciphertext = cipher.doFinal(plaintext)
             val envelope = JSONObject()
                 .put("version", ENVELOPE_VERSION)
@@ -430,80 +448,6 @@ internal class AndroidWebPushStore(context: Context) {
             .toByteArray(StandardCharsets.UTF_8)
     }
 
-    private fun encodeState(state: AndroidWebPushState): JSONObject {
-        val registrations = JSONArray()
-        state.registrations.forEach { record ->
-            registrations.put(
-                JSONObject()
-                    .put("accountId", record.accountId)
-                    .put("generation", record.generation)
-                    .put("instance", record.instance)
-                    .put("phase", record.phase.name)
-                    .putNullable("currentEndpointEventId", record.currentEndpointEventId)
-                    .putNullable("committedEndpointEventId", record.committedEndpointEventId)
-                    .put("createdAtMillis", record.createdAtMillis)
-                    .put("updatedAtMillis", record.updatedAtMillis),
-            )
-        }
-        val events = JSONArray()
-        state.events.forEach { event ->
-            events.put(
-                JSONObject()
-                    .put("id", event.id)
-                    .put("accountId", event.accountId)
-                    .put("generation", event.generation)
-                    .put("type", event.type.name)
-                    .put("createdAtMillis", event.createdAtMillis)
-                    .put("coalescedCount", event.coalescedCount)
-                    .put("stale", event.stale)
-                    .put("payload", JSONObject(event.payload)),
-            )
-        }
-        val highWatermarks = JSONObject()
-        state.generationHighWatermarks.forEach(highWatermarks::put)
-        return JSONObject()
-            .put("schema", STATE_SCHEMA)
-            .put("registrations", registrations)
-            .put("events", events)
-            .put("generationHighWatermarks", highWatermarks)
-    }
-
-    private fun decodeState(json: JSONObject): AndroidWebPushState {
-        if (json.getInt("schema") != STATE_SCHEMA) {
-            throw PushStoreException("unsupported_state_schema")
-        }
-        val registrations = json.getJSONArray("registrations").mapObjects { item ->
-            PushRegistrationRecord(
-                accountId = item.getString("accountId"),
-                generation = item.getLong("generation"),
-                instance = item.getString("instance"),
-                phase = PushRegistrationPhase.valueOf(item.getString("phase")),
-                currentEndpointEventId = item.nullableString("currentEndpointEventId"),
-                committedEndpointEventId = item.nullableString("committedEndpointEventId"),
-                createdAtMillis = item.getLong("createdAtMillis"),
-                updatedAtMillis = item.getLong("updatedAtMillis"),
-            )
-        }.toMutableList()
-        val events = json.getJSONArray("events").mapObjects { item ->
-            StoredPushEvent(
-                id = item.getString("id"),
-                accountId = item.getString("accountId"),
-                generation = item.getLong("generation"),
-                type = StoredPushEventType.valueOf(item.getString("type")),
-                createdAtMillis = item.getLong("createdAtMillis"),
-                coalescedCount = item.getInt("coalescedCount"),
-                stale = item.getBoolean("stale"),
-                payload = item.getJSONObject("payload").toMutableMap(),
-            )
-        }.toMutableList()
-        val highWatermarks = mutableMapOf<String, Long>()
-        val highWatermarkJson = json.getJSONObject("generationHighWatermarks")
-        highWatermarkJson.keys().forEach { accountId ->
-            highWatermarks[accountId] = highWatermarkJson.getLong(accountId)
-        }
-        return AndroidWebPushState(registrations, events, highWatermarks)
-    }
-
     companion object {
         private val STORE_LOCK = Any()
         private val SECURE_RANDOM = SecureRandom()
@@ -515,7 +459,6 @@ internal class AndroidWebPushStore(context: Context) {
         private const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_TAG_BITS = 128
         private const val ENVELOPE_VERSION = 1
-        private const val STATE_SCHEMA = 1
         private const val MAX_PUSH_PAYLOAD_BYTES = 64 * 1024
         private const val MAX_ENDPOINT_LENGTH = 8 * 1024
         private const val MAX_KEY_MATERIAL_LENGTH = 512
@@ -980,19 +923,4 @@ private fun JSONObject.nullableString(key: String): String? {
 
 private fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> {
     return List(length()) { index -> transform(getJSONObject(index)) }
-}
-
-private fun JSONObject.toMutableMap(): MutableMap<String, Any?> {
-    val result = mutableMapOf<String, Any?>()
-    keys().forEach { key -> result[key] = jsonValueToKotlin(get(key)) }
-    return result
-}
-
-private fun jsonValueToKotlin(value: Any?): Any? {
-    return when (value) {
-        JSONObject.NULL -> null
-        is JSONObject -> value.toMutableMap()
-        is JSONArray -> List(value.length()) { index -> jsonValueToKotlin(value.get(index)) }
-        else -> value
-    }
 }

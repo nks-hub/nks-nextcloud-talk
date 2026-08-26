@@ -205,6 +205,79 @@ class AndroidWebPushRuntimeTest {
     }
 
     @Test
+    fun duplicateMessageIsSuppressedAcrossStoreReopenAndAccountScope() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            instrumentation.uiAutomation.grantRuntimePermission(
+                context.packageName,
+                "android.permission.POST_NOTIFICATIONS",
+            )
+        }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val suffix = System.currentTimeMillis().toString()
+        val accountA = "instrumentation-dedup-a-$suffix"
+        val accountB = "instrumentation-dedup-b-$suffix"
+        val instanceA = AndroidWebPushStore.newOpaqueInstance()
+        val instanceB = AndroidWebPushStore.newOpaqueInstance()
+        val first = PushMessage(
+            """{"nid":5101,"app":"spreed","subject":"first","type":"chat","id":"roomalpha"}"""
+                .toByteArray(StandardCharsets.UTF_8),
+            true,
+        )
+        val second = PushMessage(
+            """{"nid":5102,"app":"spreed","subject":"second","type":"chat","id":"roomalpha"}"""
+                .toByteArray(StandardCharsets.UTF_8),
+            true,
+        )
+
+        manager.cancelAll()
+        try {
+            AndroidWebPushStore(context).apply {
+                beginRegistration(accountA, 1, instanceA)
+                beginRegistration(accountB, 1, instanceB)
+            }
+            AndroidWebPushEventSink.message(context, first, instanceA)
+            val firstNotification = manager.activeNotifications.single {
+                it.notification.extras.getString(Notification.EXTRA_TEXT) == "first"
+            }.notification
+            val replyIntent = firstNotification.actions[0].actionIntent
+            val markReadIntent = firstNotification.actions[1].actionIntent
+
+            AndroidWebPushEventSink.message(context, first, instanceA)
+            val afterDuplicate = manager.activeNotifications.single {
+                it.notification.extras.getString(Notification.EXTRA_TEXT) == "first"
+            }.notification
+            assertEquals(replyIntent, afterDuplicate.actions[0].actionIntent)
+            assertEquals(markReadIntent, afterDuplicate.actions[1].actionIntent)
+
+            AndroidWebPushEventSink.message(context, first, instanceB)
+            AndroidWebPushEventSink.message(context, second, instanceA)
+
+            val reopened = AndroidWebPushStore(context)
+            val eventsA = reopened.drain(accountA, 10)
+            val eventsB = reopened.drain(accountB, 10)
+            assertEquals(2, eventsA.size)
+            assertEquals(1, eventsB.size)
+            assertEquals(2, eventsA.map { it["content"] }.toSet().size)
+        } finally {
+            val cleanup = AndroidWebPushStore(context)
+            listOf(accountA, accountB).forEach { accountId ->
+                val ids = cleanup.drain(accountId, 10)
+                    .map { it.getValue("id") as String }
+                    .toSet()
+                if (ids.isNotEmpty()) {
+                    cleanup.acknowledge(accountId, ids)
+                }
+                cleanup.revokeAllNotificationOpens(accountId)
+            }
+            cleanup.markRetired(instanceA)
+            cleanup.markRetired(instanceB)
+            manager.cancelAll()
+        }
+    }
+
+    @Test
     fun embeddedDistributorPersistsEndpointBeforeNotification() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = AndroidWebPushStore(context)

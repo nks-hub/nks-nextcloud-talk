@@ -146,10 +146,12 @@ internal data class AndroidWebPushState(
     val registrations: MutableList<PushRegistrationRecord> = mutableListOf(),
     val events: MutableList<StoredPushEvent> = mutableListOf(),
     val generationHighWatermarks: MutableMap<String, Long> = mutableMapOf(),
+    val deliveryFingerprints: MutableList<StoredPushDeliveryFingerprint> = mutableListOf(),
 ) {
     override fun toString(): String {
         return "AndroidWebPushState(registrations=${registrations.size}, events=${events.size}, " +
-            "accounts=${generationHighWatermarks.size})"
+            "accounts=${generationHighWatermarks.size}, " +
+            "deliveryFingerprints=${deliveryFingerprints.size})"
     }
 }
 
