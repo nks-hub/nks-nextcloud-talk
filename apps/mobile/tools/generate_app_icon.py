@@ -37,6 +37,10 @@ SIZE = 1024
 # drawn edge to edge would lose its rim under the round mask.
 ADAPTIVE_SHARE = 0.66
 
+# Android 12 expands splash foregrounds to 150% of the icon bounds. A 4/9 mark
+# therefore renders at 2/3 of the final mask instead of a clipped 99%.
+SPLASH_MARK_SHARE = 4 / 9
+
 # How much of the square the mark itself fills once re-centred. Below ~0.7 the
 # icon looks timid in a launcher grid; above ~0.8 the tail touches the rim.
 MARK_SHARE = 0.66
@@ -148,9 +152,9 @@ def build_mark(size: int, background: Image.Image | None) -> Image.Image:
     return canvas.resize((size, size), Image.LANCZOS)
 
 
-def adaptive_foreground(size: int) -> Image.Image:
+def adaptive_foreground(size: int, mark_share: float = ADAPTIVE_SHARE) -> Image.Image:
     """Transparent foreground with the mark shrunk to survive the round mask."""
-    inner = round(size * ADAPTIVE_SHARE / MARK_SHARE)
+    inner = round(size * mark_share / MARK_SHARE)
     mark = build_mark(inner, None)
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     offset = (size - inner) // 2
@@ -171,6 +175,12 @@ def main() -> None:
 
     foreground = adaptive_foreground(SIZE)
     foreground.save(BRAND / "app-icon-foreground.png")
+
+    splash_target = RES / "drawable-nodpi"
+    splash_target.mkdir(parents=True, exist_ok=True)
+    adaptive_foreground(SIZE, SPLASH_MARK_SHARE).save(
+        splash_target / "splash_icon_foreground.png"
+    )
 
     written = []
     for folder, px in LAUNCHER_SIZES.items():
@@ -205,7 +215,17 @@ def main() -> None:
     (anydpi / "ic_launcher.xml").write_text(adaptive, encoding="utf-8")
     (anydpi / "ic_launcher_round.xml").write_text(adaptive, encoding="utf-8")
 
-    print(json.dumps({"zdroj": str(BRAND), "launcher": written}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "zdroj": str(BRAND),
+                "splash": "drawable-nodpi/1024px",
+                "launcher": written,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
