@@ -139,6 +139,22 @@ class SignalingContractValidatorTest(unittest.TestCase):
                 "message.data",
             )
 
+    def test_typing_payload_must_be_an_object_when_present(self) -> None:
+        for message_type in ("startedTyping", "stoppedTyping"):
+            for payload in (None, [], "not-an-object"):
+                with self.subTest(
+                    message_type=message_type,
+                    payload_type=type(payload).__name__,
+                ):
+                    with self.assertRaisesRegex(
+                        ContractValidationError,
+                        r"message\.data\.payload",
+                    ):
+                        validate_peer_message(
+                            {"type": message_type, "payload": payload},
+                            "message.data",
+                        )
+
     def test_failed_federation_resume_preserves_local_peers_only(self) -> None:
         state = simulate_runtime(
             {
