@@ -380,99 +380,180 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 void _openMessageSearch(BuildContext context, String accountId) {
   Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (context) => Consumer(
-        builder: (context, ref, _) => MessageSearchScreen(
-          accountId: accountId,
-          service: ref.watch(messageSearchServiceProvider),
-          onResultSelected: (result) =>
-              unawaited(_openSearchResult(context, ref, accountId, result)),
-        ),
-      ),
+      builder: (context) => _MessageSearchRoute(accountId: accountId),
     ),
   );
 }
 
-/// Closes the search screen and opens the found conversation on the found
-/// message. A room the account has no cached row for is reported instead of
-/// opened as a guess, mirroring how deep links refuse to invent a target.
-Future<void> _openSearchResult(
-  BuildContext context,
-  WidgetRef ref,
-  String accountId,
-  MessageSearchResult result,
-) async {
-  final navigator = Navigator.of(context);
-  final messenger = ScaffoldMessenger.of(context);
-  final strings = AppLocalizations.of(context);
-  final accounts = ref.read(accountRepositoryProvider);
-  final account = await accounts.getAccount(accountId);
-  final conversation = account == null
-      ? null
-      : await accounts.getConversation(
-          accountId: accountId,
-          token: result.roomToken.value,
+final class _MessageSearchRoute extends ConsumerStatefulWidget {
+  const _MessageSearchRoute({required this.accountId});
+
+  final String accountId;
+
+  @override
+  ConsumerState<_MessageSearchRoute> createState() =>
+      _MessageSearchRouteState();
+}
+
+final class _MessageSearchRouteState
+    extends ConsumerState<_MessageSearchRoute> {
+  var _generation = 0;
+  var _resultPending = false;
+
+  @override
+  void dispose() {
+    _generation++;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: <Widget>[
+        MessageSearchScreen(
+          accountId: widget.accountId,
+          service: ref.watch(messageSearchServiceProvider),
+          onResultSelected: _openResult,
+        ),
+        IgnorePointer(
+          key: const Key('message-search-result-guard'),
+          ignoring: _resultPending,
+          child: const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  /// Resolves the result only while this exact search route and account still
+  /// own the operation. Navigator and messenger state are deliberately looked
+  /// up after the asynchronous work, so a stale completion cannot act on the
+  /// route that happened to replace search in the meantime.
+  void _openResult(MessageSearchResult result) {
+    if (_resultPending) {
+      return;
+    }
+    setState(() => _resultPending = true);
+    final generation = ++_generation;
+    final route = ModalRoute.of(context);
+    unawaited(_resolveResult(result, route, generation));
+  }
+
+  Future<void> _resolveResult(
+    MessageSearchResult result,
+    ModalRoute<Object?>? route,
+    int generation,
+  ) async {
+    try {
+      final accounts = ref.read(accountRepositoryProvider);
+      final account = await accounts.getAccount(widget.accountId);
+      final conversation = account == null
+          ? null
+          : await accounts.getConversation(
+              accountId: widget.accountId,
+              token: result.roomToken.value,
+            );
+      if (!_ownsCompletion(route, generation)) {
+        return;
+      }
+      if (account == null || conversation == null) {
+        _closeWithMissingConversation();
+        return;
+      }
+
+      final threadId = result.threadId;
+      ChatThreadContext? threadContext;
+      if (threadId != null && threadId != result.messageId) {
+        try {
+          threadContext = await resolveMessageSearchThread(
+            repository: ref.read(chatRepositoryProvider),
+            accountId: widget.accountId,
+            result: result,
+            synchronizeThread: () => ref
+                .read(chatServiceProvider)
+                .syncRoom(
+                  accountId: widget.accountId,
+                  roomToken: result.roomToken.value,
+                  threadId: threadId,
+                ),
+          );
+        } on MessageSearchThreadException catch (error) {
+          if (_ownsCompletion(route, generation)) {
+            _showThreadError(error.code);
+          }
+          return;
+        }
+      }
+
+      if (!_ownsCompletion(route, generation)) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushReplacement<void, void>(
+        MaterialPageRoute<void>(
+          builder: (context) => buildMessageSearchDestination(
+            account: account,
+            conversation: conversation,
+            result: result,
+            threadContext: threadContext,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _resultPending = false);
+      }
+    }
+  }
+
+  bool _ownsCompletion(ModalRoute<Object?>? route, int generation) {
+    if (!mounted || generation != _generation || route?.isCurrent != true) {
+      return false;
+    }
+    return ref.read(selectedAccountProvider).valueOrNull?.id ==
+        widget.accountId;
+  }
+
+  void _closeWithMissingConversation() {
+    final strings = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    Navigator.of(context).pop();
+    if (messenger?.mounted ?? false) {
+      messenger!
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('search-conversation-missing'),
+            content: Text(strings.jumpToMessageConversationMissing),
+          ),
         );
-  if (account == null || conversation == null) {
-    navigator.pop();
+    }
+  }
+
+  void _showThreadError(MessageSearchThreadError error) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          key: const Key('search-conversation-missing'),
-          content: Text(strings.jumpToMessageConversationMissing),
+          key: const Key('search-thread-unavailable'),
+          content: Text(switch (error) {
+            MessageSearchThreadError.unavailable =>
+              strings.jumpToMessageNotFound,
+            MessageSearchThreadError.credential =>
+              strings.syncCredentialMissing,
+            MessageSearchThreadError.rateLimited => strings.syncRateLimited,
+            MessageSearchThreadError.serviceUnavailable ||
+            MessageSearchThreadError.network => strings.chatUnavailable,
+          }),
         ),
       );
-    return;
   }
-
-  final threadId = result.threadId;
-  ChatThreadContext? threadContext;
-  if (threadId != null && threadId != result.messageId) {
-    try {
-      threadContext = await resolveMessageSearchThread(
-        repository: ref.read(chatRepositoryProvider),
-        accountId: accountId,
-        result: result,
-        synchronizeThread: () => ref
-            .read(chatServiceProvider)
-            .syncRoom(
-              accountId: accountId,
-              roomToken: result.roomToken.value,
-              threadId: threadId,
-            ),
-      );
-    } on MessageSearchThreadException catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            key: const Key('search-thread-unavailable'),
-            content: Text(switch (error.code) {
-              MessageSearchThreadError.unavailable =>
-                strings.jumpToMessageNotFound,
-              MessageSearchThreadError.credential =>
-                strings.syncCredentialMissing,
-              MessageSearchThreadError.rateLimited => strings.syncRateLimited,
-              MessageSearchThreadError.serviceUnavailable ||
-              MessageSearchThreadError.network => strings.chatUnavailable,
-            }),
-          ),
-        );
-      return;
-    }
-  }
-
-  navigator.pop();
-  await navigator.push<void>(
-    MaterialPageRoute<void>(
-      builder: (context) => buildMessageSearchDestination(
-        account: account,
-        conversation: conversation,
-        result: result,
-        threadContext: threadContext,
-      ),
-    ),
-  );
 }
 
 void _openSettings(BuildContext context) {
