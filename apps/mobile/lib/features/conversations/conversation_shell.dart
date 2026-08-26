@@ -380,11 +380,16 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onSelectAccount: _selectAccount,
           onAddAccount: _addAccount,
           onOpenConversation: (conversation) {
+            // Both layouts record the open conversation in the same place, so
+            // widening the window can show it beside the list again.
+            setState(() => _selectedConversationToken = conversation.token);
             Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
-                builder: (context) => PresenceChatRoomScreen(
-                  account: selected,
-                  conversation: conversation,
+                builder: (context) => PopWhenExpanded(
+                  child: PresenceChatRoomScreen(
+                    account: selected,
+                    conversation: conversation,
+                  ),
                 ),
               ),
             );
@@ -577,6 +582,35 @@ final class _MessageSearchRouteState
           }),
         ),
       );
+  }
+}
+
+/// Sends the conversation back to the two-pane layout once the window is wide
+/// enough for it. The workspace underneath is not built while this route
+/// covers it, so the route has to notice the resize itself.
+final class PopWhenExpanded extends StatelessWidget {
+  const PopWhenExpanded({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= kExpandedShellBreakpoint) {
+          final route = ModalRoute.of(context);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Only when nothing was opened on top; a dialog or the room
+            // details keeps this route alive until the user closes it, and
+            // this runs again when it becomes visible.
+            if (route != null && route.isActive && route.isCurrent) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+        return child;
+      },
+    );
   }
 }
 

@@ -1,5 +1,9 @@
 part of 'conversation_shell.dart';
 
+/// Below this the list and the conversation cannot sit side by side, so the
+/// conversation moves onto the navigator instead.
+const double kExpandedShellBreakpoint = 720;
+
 final class ConversationWorkspace extends StatefulWidget {
   const ConversationWorkspace({
     super.key,
@@ -88,7 +92,7 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
               (conversation) => conversation.token == selectedConversationToken,
             )
             .firstOrNull;
-        if (constraints.maxWidth < 720) {
+        if (constraints.maxWidth < kExpandedShellBreakpoint) {
           if (selectedConversation != null) {
             _handOverToCompact(selectedConversation);
           }
