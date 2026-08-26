@@ -16,12 +16,14 @@ import 'conversation_sync_service.dart';
 
 enum _ConversationAction { markUnread, toggleArchived }
 
+enum _ConversationListFilter { unread, mentions, archived }
+
 /// Conversation list body used by the conversation shell.
 ///
-/// Archived conversations are hidden from the main list behind a toggle, and
-/// a long press on a row opens a menu with actions (mark unread,
-/// archive/unarchive) that are applied through [RoomSettingsService] and
-/// then reconciled by a forced conversation resync.
+/// Unread, mention and archived filters mirror the official Android client's
+/// account-local AND semantics. A long press on a row opens a menu with
+/// actions (mark unread, archive/unarchive) that are applied through
+/// [RoomSettingsService] and then reconciled by a forced conversation resync.
 final class ConversationListView extends ConsumerStatefulWidget {
   const ConversationListView({
     super.key,
@@ -47,14 +49,26 @@ final class ConversationListView extends ConsumerStatefulWidget {
 
 final class _ConversationListViewState
     extends ConsumerState<ConversationListView> {
-  var _showArchived = false;
+  final Set<_ConversationListFilter> _filters = {};
 
   @override
   void didUpdateWidget(covariant ConversationListView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id != widget.account.id) {
-      _showArchived = false;
+      _filters.clear();
+      return;
     }
+    if (!_canViewArchived(widget.account)) {
+      _filters.remove(_ConversationListFilter.archived);
+    }
+  }
+
+  void _toggleFilter(_ConversationListFilter filter) {
+    setState(() {
+      if (!_filters.remove(filter)) {
+        _filters.add(filter);
+      }
+    });
   }
 
   Future<void> _openActions(CachedConversation conversation) async {
@@ -179,21 +193,21 @@ final class _ConversationListViewState
       return const Center(child: CircularProgressIndicator());
     }
 
-    final visible = widget.conversations
-        .where((conversation) => !conversation.isArchived)
+    final canViewArchived = _canViewArchived(widget.account);
+    final filters = Set<_ConversationListFilter>.of(_filters);
+    if (!canViewArchived) {
+      filters.remove(_ConversationListFilter.archived);
+    }
+    final shown = widget.conversations
+        .where((conversation) => _matchesFilters(conversation, filters))
         .toList(growable: false);
-    final archived = widget.conversations
-        .where((conversation) => conversation.isArchived)
-        .toList(growable: false);
-    final shown = _showArchived ? archived : visible;
 
     final items = <Widget>[
-      if (archived.isNotEmpty)
-        _ArchivedToggleTile(
-          expanded: _showArchived,
-          count: archived.length,
-          onTap: () => setState(() => _showArchived = !_showArchived),
-        ),
+      _ConversationFilterBar(
+        selected: filters,
+        showArchived: canViewArchived,
+        onToggle: _toggleFilter,
+      ),
       for (final conversation in shown)
         _ConversationTile(
           account: widget.account,
@@ -212,7 +226,7 @@ final class _ConversationListViewState
           children: [
             ...items,
             const SizedBox(height: 120),
-            const _EmptyConversations(),
+            _EmptyConversations(filtered: filters.isNotEmpty),
           ],
         ),
       );
@@ -230,36 +244,54 @@ final class _ConversationListViewState
   }
 }
 
-final class _ArchivedToggleTile extends StatelessWidget {
-  const _ArchivedToggleTile({
-    required this.expanded,
-    required this.count,
-    required this.onTap,
+final class _ConversationFilterBar extends StatelessWidget {
+  const _ConversationFilterBar({
+    required this.selected,
+    required this.showArchived,
+    required this.onToggle,
   });
 
-  final bool expanded;
-  final int count;
-  final VoidCallback onTap;
+  final Set<_ConversationListFilter> selected;
+  final bool showArchived;
+  final ValueChanged<_ConversationListFilter> onToggle;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    return ListTile(
-      key: const Key('conversation-archived-toggle'),
-      leading: Icon(
-        expanded ? Icons.arrow_back_rounded : Icons.archive_outlined,
-        color: scheme.onSurfaceVariant,
+    return Semantics(
+      container: true,
+      label: strings.conversationFiltersLabel,
+      child: SingleChildScrollView(
+        key: const Key('conversation-filters'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Row(
+          children: [
+            FilterChip(
+              key: const Key('conversation-filter-unread'),
+              selected: selected.contains(_ConversationListFilter.unread),
+              label: Text(strings.conversationFilterUnread),
+              onSelected: (_) => onToggle(_ConversationListFilter.unread),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              key: const Key('conversation-filter-mentions'),
+              selected: selected.contains(_ConversationListFilter.mentions),
+              label: Text(strings.conversationFilterMentions),
+              onSelected: (_) => onToggle(_ConversationListFilter.mentions),
+            ),
+            if (showArchived) ...[
+              const SizedBox(width: 8),
+              FilterChip(
+                key: const Key('conversation-filter-archived'),
+                selected: selected.contains(_ConversationListFilter.archived),
+                label: Text(strings.conversationFilterArchived),
+                onSelected: (_) => onToggle(_ConversationListFilter.archived),
+              ),
+            ],
+          ],
+        ),
       ),
-      title: Text(
-        expanded
-            ? strings.conversationArchivedSectionHide
-            : strings.conversationArchivedSectionShow(count),
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-      ),
-      onTap: onTap,
     );
   }
 }
@@ -472,7 +504,9 @@ final class _UnreadBadge extends StatelessWidget {
 }
 
 final class _EmptyConversations extends StatelessWidget {
-  const _EmptyConversations();
+  const _EmptyConversations({required this.filtered});
+
+  final bool filtered;
 
   @override
   Widget build(BuildContext context) {
@@ -489,13 +523,17 @@ final class _EmptyConversations extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            strings.noConversations,
+            filtered
+                ? strings.conversationFilterNoResults
+                : strings.noConversations,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            strings.noConversationsBody,
+            filtered
+                ? strings.conversationFilterNoResultsBody
+                : strings.noConversationsBody,
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -506,6 +544,38 @@ final class _EmptyConversations extends StatelessWidget {
     );
   }
 }
+
+bool _matchesFilters(
+  CachedConversation conversation,
+  Set<_ConversationListFilter> filters,
+) {
+  final showArchived = filters.contains(_ConversationListFilter.archived);
+  if (conversation.isArchived != showArchived) {
+    return false;
+  }
+  if (filters.contains(_ConversationListFilter.unread) &&
+      conversation.unreadMessages <= 0) {
+    return false;
+  }
+  return !filters.contains(_ConversationListFilter.mentions) ||
+      _hasUnreadMention(conversation);
+}
+
+bool _hasUnreadMention(CachedConversation conversation) {
+  try {
+    final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+    final directConversation = room.type == 1 || room.type == 5;
+    return room.unreadMention ||
+        (directConversation && conversation.unreadMessages > 0);
+  } on FormatException {
+    return false;
+  } on TalkProtocolException {
+    return false;
+  }
+}
+
+bool _canViewArchived(StoredAccount account) =>
+    _talkFeatures(account).contains('archived-conversations-v2');
 
 bool _canMarkUnread(StoredAccount account, CachedConversation conversation) {
   try {

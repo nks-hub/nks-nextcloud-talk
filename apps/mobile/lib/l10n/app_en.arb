@@ -258,6 +258,12 @@
   "conversationActionMarkUnread": "Mark as unread",
   "conversationActionArchive": "Archive conversation",
   "conversationActionUnarchive": "Unarchive conversation",
+  "conversationFiltersLabel": "Conversation filters",
+  "conversationFilterUnread": "Unread",
+  "conversationFilterMentions": "Mentions",
+  "conversationFilterArchived": "Archived",
+  "conversationFilterNoResults": "No matching conversations",
+  "conversationFilterNoResultsBody": "Change or clear a filter to show more conversations.",
   "conversationArchivedSectionShow": "{count, plural, =1{Archived (1)} other{Archived ({count})}}",
   "@conversationArchivedSectionShow": {
     "placeholders": {

@@ -539,7 +539,7 @@ void main() {
   });
 
   testWidgets(
-    'archived conversations stay hidden behind a toggle and unarchive with DELETE',
+    'archived conversations stay behind a filter and unarchive with DELETE',
     (tester) async {
       await setTalkFeatures(_archiveTalkFeatures);
       final active = await insertConversation(token: 'roomactive');
@@ -580,9 +580,9 @@ void main() {
         find.byKey(const Key('conversation-tile-roomarchived')),
         findsNothing,
       );
-      expect(find.text('Archived (1)'), findsOneWidget);
+      expect(find.text('Archived'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('conversation-archived-toggle')));
+      await tester.tap(find.byKey(const Key('conversation-filter-archived')));
       await tester.pump();
 
       expect(
@@ -593,7 +593,14 @@ void main() {
         find.byKey(const Key('conversation-tile-roomarchived')),
         findsOneWidget,
       );
-      expect(find.text('Back to conversations'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilterChip>(
+              find.byKey(const Key('conversation-filter-archived')),
+            )
+            .selected,
+        isTrue,
+      );
 
       await tester.longPress(
         find.byKey(const Key('conversation-tile-roomarchived')),

@@ -1532,6 +1532,42 @@ abstract class AppLocalizations {
   /// **'Unarchive conversation'**
   String get conversationActionUnarchive;
 
+  /// No description provided for @conversationFiltersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation filters'**
+  String get conversationFiltersLabel;
+
+  /// No description provided for @conversationFilterUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get conversationFilterUnread;
+
+  /// No description provided for @conversationFilterMentions.
+  ///
+  /// In en, this message translates to:
+  /// **'Mentions'**
+  String get conversationFilterMentions;
+
+  /// No description provided for @conversationFilterArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get conversationFilterArchived;
+
+  /// No description provided for @conversationFilterNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching conversations'**
+  String get conversationFilterNoResults;
+
+  /// No description provided for @conversationFilterNoResultsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Change or clear a filter to show more conversations.'**
+  String get conversationFilterNoResultsBody;
+
   /// No description provided for @conversationArchivedSectionShow.
   ///
   /// In en, this message translates to:

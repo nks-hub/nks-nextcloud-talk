@@ -251,6 +251,12 @@
   "conversationActionMarkUnread": "Označit jako nepřečtené",
   "conversationActionArchive": "Archivovat konverzaci",
   "conversationActionUnarchive": "Zrušit archivaci konverzace",
+  "conversationFiltersLabel": "Filtry konverzací",
+  "conversationFilterUnread": "Nepřečtené",
+  "conversationFilterMentions": "Zmínky",
+  "conversationFilterArchived": "Archivované",
+  "conversationFilterNoResults": "Žádné odpovídající konverzace",
+  "conversationFilterNoResultsBody": "Změňte nebo zrušte filtr a zobrazí se další konverzace.",
   "conversationArchivedSectionShow": "{count, plural, =1{Archivováno (1)} few{Archivováno ({count})} other{Archivováno ({count})}}",
   "@conversationArchivedSectionShow": {
     "placeholders": {

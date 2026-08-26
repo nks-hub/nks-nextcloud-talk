@@ -798,6 +798,25 @@ class AppLocalizationsCs extends AppLocalizations {
   String get conversationActionUnarchive => 'Zrušit archivaci konverzace';
 
   @override
+  String get conversationFiltersLabel => 'Filtry konverzací';
+
+  @override
+  String get conversationFilterUnread => 'Nepřečtené';
+
+  @override
+  String get conversationFilterMentions => 'Zmínky';
+
+  @override
+  String get conversationFilterArchived => 'Archivované';
+
+  @override
+  String get conversationFilterNoResults => 'Žádné odpovídající konverzace';
+
+  @override
+  String get conversationFilterNoResultsBody =>
+      'Změňte nebo zrušte filtr a zobrazí se další konverzace.';
+
+  @override
   String conversationArchivedSectionShow(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

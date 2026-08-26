@@ -799,6 +799,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationActionUnarchive => 'Unarchive conversation';
 
   @override
+  String get conversationFiltersLabel => 'Conversation filters';
+
+  @override
+  String get conversationFilterUnread => 'Unread';
+
+  @override
+  String get conversationFilterMentions => 'Mentions';
+
+  @override
+  String get conversationFilterArchived => 'Archived';
+
+  @override
+  String get conversationFilterNoResults => 'No matching conversations';
+
+  @override
+  String get conversationFilterNoResultsBody =>
+      'Change or clear a filter to show more conversations.';
+
+  @override
   String conversationArchivedSectionShow(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

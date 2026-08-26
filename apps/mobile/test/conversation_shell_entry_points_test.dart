@@ -26,6 +26,7 @@ void main() {
   Future<StoredAccount> seedAccount(
     AppDatabase database, {
     String accountId = 'account-a',
+    Set<String> talkFeatures = const {},
   }) async {
     final accounts = AccountRepository(database);
     final account = await accounts.upsertAccount(
@@ -33,6 +34,7 @@ void main() {
       serverUrl: 'https://$accountId.example.invalid',
       loginName: 'user-$accountId',
       serverProductName: 'Nextcloud',
+      talkFeatures: talkFeatures,
       createdAt: DateTime.utc(2026, 1, 1),
     );
     return account;
@@ -238,7 +240,7 @@ void main() {
       expect(find.byType(SettingsScreen), findsOneWidget);
     });
 
-    testWidgets('${layout.key}: an account switch resets the archived view', (
+    testWidgets('${layout.key}: an account switch resets archive filtering', (
       tester,
     ) async {
       tester.view.physicalSize = layout.value;
@@ -250,8 +252,15 @@ void main() {
       late StoredAccount accountA;
       late StoredAccount accountB;
       await tester.runAsync(() async {
-        accountA = await seedAccount(database);
-        accountB = await seedAccount(database, accountId: 'account-b');
+        accountA = await seedAccount(
+          database,
+          talkFeatures: const {'archived-conversations-v2'},
+        );
+        accountB = await seedAccount(
+          database,
+          accountId: 'account-b',
+          talkFeatures: const {'archived-conversations-v2'},
+        );
       });
       final selectedAccounts = StreamController<StoredAccount?>();
       addTearDown(selectedAccounts.close);
@@ -288,7 +297,7 @@ void main() {
       });
 
       expect(find.byKey(const Key('conversation-tile-roomaa')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('conversation-archived-toggle')));
+      await tester.tap(find.byKey(const Key('conversation-filter-archived')));
       await tester.pump();
       expect(find.byKey(const Key('conversation-tile-roomab')), findsOneWidget);
 
@@ -298,7 +307,14 @@ void main() {
 
       expect(find.byKey(const Key('conversation-tile-roomba')), findsOneWidget);
       expect(find.byKey(const Key('conversation-tile-roombb')), findsNothing);
-      expect(find.text('Back to conversations'), findsNothing);
+      expect(
+        tester
+            .widget<FilterChip>(
+              find.byKey(const Key('conversation-filter-archived')),
+            )
+            .selected,
+        isFalse,
+      );
     });
   }
 
