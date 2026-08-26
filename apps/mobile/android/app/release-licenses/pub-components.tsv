@@ -1,0 +1,3 @@
+# package<TAB>version<TAB>SPDX-expression<TAB>notice-file<TAB>notice-SHA256<TAB>archive-SHA256
+file_selector_android	0.5.2+9	BSD-3-Clause AND Apache-2.0	file-selector-android.txt	a3710be158b9738bb56b1f3594131937458c042951e7c03195f8c90a58911641	1d45e9910f68c16eb0c74f0b10097ad81aed516ea28054c027137e8f7d75e840
+image_picker_android	0.8.13+19	BSD-3-Clause AND Apache-2.0	image-picker-android.txt	8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88	6f3a1995eafb000333174fae92202622033b0ee7fd917a6cd3730295264df84a
