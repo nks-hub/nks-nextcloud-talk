@@ -289,33 +289,7 @@ final class AccountRepository {
   Future<void> applyConversationMerge(ConversationMergePlan plan) async {
     await _database.transaction(() async {
       for (final room in plan.upserts) {
-        await _database
-            .into(_database.cachedConversations)
-            .insertOnConflictUpdate(
-              CachedConversationsCompanion.insert(
-                accountId: plan.accountId.value,
-                token: room.token.value,
-                displayName: room.displayName,
-                description: room.description,
-                lastActivity: room.lastActivity,
-                unreadMessages: room.unreadMessages,
-                favorite: room.isFavorite,
-                isArchived: Value(room.isArchived),
-                readOnly: Value(room.readOnly),
-                roomType: Value(room.type),
-                roomName: Value(room.name),
-                objectType: Value(room.objectType),
-                avatarVersion: Value(room.avatarVersion),
-                isCustomAvatar: Value(room.isCustomAvatar),
-                peerStatus: Value(room.status),
-                peerStatusIcon: Value(room.statusIcon),
-                peerStatusMessage: Value(room.statusMessage),
-                peerStatusClearAt: Value(room.statusClearAt),
-                lastMessageText: Value(_safePreview(room)),
-                lastMessageTimestamp: Value(room.lastMessage?.timestamp),
-                rawJson: jsonEncode(room.wire),
-              ),
-            );
+        await _upsertConversation(plan.accountId.value, room);
       }
       for (final token in plan.deleteTokens) {
         await (_database.delete(_database.cachedConversations)..where(
@@ -348,6 +322,48 @@ final class AccountRepository {
         ),
       );
     });
+  }
+
+  /// Persists one room returned by an authoritative mutation response without
+  /// changing the conversation-list cursor or hash.
+  Future<void> applyAuthoritativeConversation(
+    String accountId,
+    ConversationRoom room,
+  ) async {
+    if (room.token.value.isEmpty) {
+      throw const FormatException('Invalid conversation token');
+    }
+    await _database.transaction(() => _upsertConversation(accountId, room));
+  }
+
+  Future<void> _upsertConversation(String accountId, ConversationRoom room) {
+    return _database
+        .into(_database.cachedConversations)
+        .insertOnConflictUpdate(
+          CachedConversationsCompanion.insert(
+            accountId: accountId,
+            token: room.token.value,
+            displayName: room.displayName,
+            description: room.description,
+            lastActivity: room.lastActivity,
+            unreadMessages: room.unreadMessages,
+            favorite: room.isFavorite,
+            isArchived: Value(room.isArchived),
+            readOnly: Value(room.readOnly),
+            roomType: Value(room.type),
+            roomName: Value(room.name),
+            objectType: Value(room.objectType),
+            avatarVersion: Value(room.avatarVersion),
+            isCustomAvatar: Value(room.isCustomAvatar),
+            peerStatus: Value(room.status),
+            peerStatusIcon: Value(room.statusIcon),
+            peerStatusMessage: Value(room.statusMessage),
+            peerStatusClearAt: Value(room.statusClearAt),
+            lastMessageText: Value(_safePreview(room)),
+            lastMessageTimestamp: Value(room.lastMessage?.timestamp),
+            rawJson: jsonEncode(room.wire),
+          ),
+        );
   }
 
   Future<void> recordSyncError(String accountId, String errorCode) {

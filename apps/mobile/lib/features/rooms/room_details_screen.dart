@@ -11,12 +11,14 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
 import '../chat/chat_participant_avatar.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import 'conversation_tags_service.dart';
 import 'guest_link_sharer.dart';
 import 'participants_service.dart';
 import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
 part 'room_details_clear_history.part.dart';
+part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
 part 'room_details_support.part.dart';
@@ -44,6 +46,7 @@ const String _lobbyCapability = 'webinary-lobby';
 const String _banCapability = 'ban-v1';
 const String _messageExpirationCapability = 'message-expiration';
 const String _clearHistoryCapability = 'clear-history';
+const String _conversationTagsCapability = 'conversation-tags';
 const String _importantCapability = 'important-conversations';
 const String _sensitiveCapability = 'sensitive-conversations';
 const int _classifiedRoomAttribute = 4;
@@ -103,6 +106,10 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with _RoomDetailsStateLogic, _RoomImportanceSensitivityStateLogic {
   void _setBusy(bool value) {
     setState(() => _busy = value);
+  }
+
+  void _setAuthoritativeRoom(ConversationRoom room) {
+    setState(() => _room = room);
   }
 
   @override
@@ -192,6 +199,19 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                 key: const Key('room-details-message-expiration-subtitle'),
               ),
               onTap: _busy ? null : _changeMessageExpiration,
+            ),
+          if (_canManageConversationTags)
+            ListTile(
+              key: const Key('room-details-conversation-tags'),
+              leading: const Icon(Icons.label_outline),
+              title: Text(strings.roomDetailsConversationTagsAction),
+              subtitle: Text(
+                strings.roomDetailsConversationTagsSelectedCount(
+                  _room!.tagIds.length,
+                ),
+                key: const Key('room-details-conversation-tags-subtitle'),
+              ),
+              onTap: _busy ? null : _manageConversationTags,
             ),
           SwitchListTile(
             key: const Key('room-details-favorite-toggle'),

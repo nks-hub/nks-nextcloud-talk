@@ -1389,6 +1389,35 @@ class AppLocalizationsEn extends AppLocalizations {
       'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.';
 
   @override
+  String get roomDetailsConversationTagsAction => 'Conversation tags';
+
+  @override
+  String roomDetailsConversationTagsSelectedCount(int count) {
+    return 'Selected: $count';
+  }
+
+  @override
+  String get roomDetailsConversationTagsDialogTitle => 'Conversation tags';
+
+  @override
+  String get roomDetailsConversationTagsDialogHint =>
+      'Choose the tags used to organize this conversation for your account.';
+
+  @override
+  String get roomDetailsConversationTagsEmpty =>
+      'Create a custom tag in Nextcloud Talk before assigning it here.';
+
+  @override
+  String get roomDetailsConversationTagsSave => 'Save tags';
+
+  @override
+  String get roomDetailsConversationTagsSaved => 'Conversation tags updated.';
+
+  @override
+  String get roomDetailsConversationTagsUnsupported =>
+      'This server no longer supports conversation tags.';
+
+  @override
   String get roomDetailsAvatarPickImage => 'Choose a picture';
 
   @override

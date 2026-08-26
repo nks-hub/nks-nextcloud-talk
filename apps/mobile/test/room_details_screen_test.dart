@@ -23,6 +23,7 @@ part 'room_details_administration_test.part.dart';
 part 'room_details_avatar_bans_test.part.dart';
 part 'room_details_call_notifications_test.part.dart';
 part 'room_details_clear_history_test.part.dart';
+part 'room_details_conversation_tags_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
@@ -81,6 +82,7 @@ void main() {
   _registerAvatarAndBanTests();
   _registerCallNotificationTests();
   _registerClearHistoryTests();
+  _registerConversationTagsTests();
   _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
 }

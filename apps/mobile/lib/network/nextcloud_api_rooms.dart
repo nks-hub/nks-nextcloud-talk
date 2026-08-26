@@ -1,6 +1,57 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
+  /// Fetches the complete user-scoped tag definition list.
+  Future<FetchConversationTagsResponse> getConversationTags({
+    required FetchConversationTagsRequest tagsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', tagsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...tagsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 401, 429, 503},
+      maximumBytes: conversationTagsMaximumWireBytes,
+    );
+    return decodeFetchConversationTagsResponse(
+      request: tagsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Replaces one participant's complete tag assignment for a room.
+  Future<AssignConversationTagsResponse> assignConversationTags({
+    required AssignConversationTagsRequest tagsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', tagsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...tagsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyBytes = tagsRequest.bodyBytes;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 401, 403, 404, 429, 503},
+      maximumBytes: conversationTagsMaximumWireBytes,
+    );
+    return decodeAssignConversationTagsResponse(
+      request: tagsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Resolves how a room's call would be signalled. It is the first step of
   /// any call and is deliberately separate from media handling.
   Future<SignalingSettingsResponse> getSignalingSettings({

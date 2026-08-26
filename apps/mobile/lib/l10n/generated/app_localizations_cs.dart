@@ -1390,6 +1390,36 @@ class AppLocalizationsCs extends AppLocalizations {
       'Historie konverzace byla vymazána, ale aktuální stav se zatím nepodařilo načíst. Pro obnovení konverzaci znovu otevřete.';
 
   @override
+  String get roomDetailsConversationTagsAction => 'Štítky konverzace';
+
+  @override
+  String roomDetailsConversationTagsSelectedCount(int count) {
+    return 'Vybráno: $count';
+  }
+
+  @override
+  String get roomDetailsConversationTagsDialogTitle => 'Štítky konverzace';
+
+  @override
+  String get roomDetailsConversationTagsDialogHint =>
+      'Vyberte štítky, podle kterých bude tato konverzace uspořádaná ve vašem účtu.';
+
+  @override
+  String get roomDetailsConversationTagsEmpty =>
+      'Než zde štítek přiřadíte, vytvořte si vlastní štítek v Nextcloud Talk.';
+
+  @override
+  String get roomDetailsConversationTagsSave => 'Uložit štítky';
+
+  @override
+  String get roomDetailsConversationTagsSaved =>
+      'Štítky konverzace byly aktualizovány.';
+
+  @override
+  String get roomDetailsConversationTagsUnsupported =>
+      'Tento server už štítky konverzací nepodporuje.';
+
+  @override
   String get roomDetailsAvatarPickImage => 'Vybrat obrázek';
 
   @override

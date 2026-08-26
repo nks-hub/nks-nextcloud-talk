@@ -664,6 +664,43 @@
   "@roomDetailsClearHistoryRefreshFailed": {
     "description": "Success message shown when the destructive request succeeded but its follow-up refresh failed."
   },
+  "roomDetailsConversationTagsAction": "Conversation tags",
+  "@roomDetailsConversationTagsAction": {
+    "description": "Action that manages this participant's tags for a conversation."
+  },
+  "roomDetailsConversationTagsSelectedCount": "Selected: {count}",
+  "@roomDetailsConversationTagsSelectedCount": {
+    "description": "Number of tags currently assigned to the conversation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomDetailsConversationTagsDialogTitle": "Conversation tags",
+  "@roomDetailsConversationTagsDialogTitle": {
+    "description": "Title of the conversation tag assignment dialog."
+  },
+  "roomDetailsConversationTagsDialogHint": "Choose the tags used to organize this conversation for your account.",
+  "@roomDetailsConversationTagsDialogHint": {
+    "description": "Explanation of the per-account tag assignment."
+  },
+  "roomDetailsConversationTagsEmpty": "Create a custom tag in Nextcloud Talk before assigning it here.",
+  "@roomDetailsConversationTagsEmpty": {
+    "description": "Empty state when the user owns no custom conversation tags."
+  },
+  "roomDetailsConversationTagsSave": "Save tags",
+  "@roomDetailsConversationTagsSave": {
+    "description": "Button that replaces the conversation's complete tag assignment."
+  },
+  "roomDetailsConversationTagsSaved": "Conversation tags updated.",
+  "@roomDetailsConversationTagsSaved": {
+    "description": "Confirmation after the server returned the updated conversation."
+  },
+  "roomDetailsConversationTagsUnsupported": "This server no longer supports conversation tags.",
+  "@roomDetailsConversationTagsUnsupported": {
+    "description": "Message shown when a fresh capability read no longer admits tags."
+  },
   "roomDetailsAvatarPickImage": "Choose a picture",
   "@roomDetailsAvatarPickImage": {
     "description": "Button that opens the gallery to pick a conversation picture."

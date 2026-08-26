@@ -2564,6 +2564,54 @@ abstract class AppLocalizations {
   /// **'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.'**
   String get roomDetailsClearHistoryRefreshFailed;
 
+  /// Action that manages this participant's tags for a conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation tags'**
+  String get roomDetailsConversationTagsAction;
+
+  /// Number of tags currently assigned to the conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected: {count}'**
+  String roomDetailsConversationTagsSelectedCount(int count);
+
+  /// Title of the conversation tag assignment dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation tags'**
+  String get roomDetailsConversationTagsDialogTitle;
+
+  /// Explanation of the per-account tag assignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the tags used to organize this conversation for your account.'**
+  String get roomDetailsConversationTagsDialogHint;
+
+  /// Empty state when the user owns no custom conversation tags.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a custom tag in Nextcloud Talk before assigning it here.'**
+  String get roomDetailsConversationTagsEmpty;
+
+  /// Button that replaces the conversation's complete tag assignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Save tags'**
+  String get roomDetailsConversationTagsSave;
+
+  /// Confirmation after the server returned the updated conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation tags updated.'**
+  String get roomDetailsConversationTagsSaved;
+
+  /// Message shown when a fresh capability read no longer admits tags.
+  ///
+  /// In en, this message translates to:
+  /// **'This server no longer supports conversation tags.'**
+  String get roomDetailsConversationTagsUnsupported;
+
   /// Button that opens the gallery to pick a conversation picture.
   ///
   /// In en, this message translates to:
