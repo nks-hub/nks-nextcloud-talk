@@ -14,7 +14,6 @@ import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_avatar_widget.dart';
-import '../rooms/room_details_screen.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
@@ -34,67 +33,6 @@ part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
-
-final class ChatRoomScreen extends StatelessWidget {
-  const ChatRoomScreen({
-    super.key,
-    required this.account,
-    required this.conversation,
-  });
-
-  final StoredAccount account;
-  final CachedConversation conversation;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      key: const Key('chat-room-screen'),
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            ExcludeSemantics(
-              child: ConversationAvatar(
-                account: account,
-                conversation: conversation,
-                radius: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                conversation.displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            key: const Key('open-room-details'),
-            tooltip: AppLocalizations.of(context).roomDetailsOpenTooltip,
-            icon: const Icon(Icons.info_outline_rounded),
-            onPressed: () => unawaited(
-              Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  builder: (context) => RoomDetailsScreen(
-                    account: account,
-                    conversation: conversation,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: ChatRoomPane(account: account, conversation: conversation),
-      ),
-    );
-  }
-}
 
 final class ChatThreadScreen extends StatelessWidget {
   const ChatThreadScreen({

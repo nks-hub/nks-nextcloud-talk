@@ -9,7 +9,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
-import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -120,9 +120,7 @@ void main() {
 
   tearDown(() => database.close());
 
-  HttpNextcloudApi buildApi({
-    List<String> talkFeatures = _sendableFeatures,
-  }) {
+  HttpNextcloudApi buildApi({List<String> talkFeatures = _sendableFeatures}) {
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.url.path.endsWith('/cloud/capabilities')) {
@@ -173,7 +171,7 @@ void main() {
         ),
       ],
       child: localizedTestApp(
-        home: ChatRoomScreen(account: account, conversation: source),
+        home: PresenceChatRoomScreen(account: account, conversation: source),
       ),
     );
   }
@@ -220,36 +218,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('a refused forward reports the error instead of a false success', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      app(
-        api: buildApi(
-          talkFeatures: const <String>['conversation-v4', 'chat-v2'],
+  testWidgets(
+    'a refused forward reports the error instead of a false success',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          api: buildApi(
+            talkFeatures: const <String>['conversation-v4', 'chat-v2'],
+          ),
         ),
-      ),
-    );
-    await settle(tester);
+      );
+      await settle(tester);
 
-    await openForwardPicker(tester);
-    await tester.tap(
-      find.byKey(const Key('chat-forward-conversation-roomb456')),
-    );
-    await flush(tester);
+      await openForwardPicker(tester);
+      await tester.tap(
+        find.byKey(const Key('chat-forward-conversation-roomb456')),
+      );
+      await flush(tester);
 
-    expect(postedRooms, isEmpty);
-    expect(find.byKey(const Key('chat-forward-failure')), findsOneWidget);
-    expect(find.byKey(const Key('chat-forward-success')), findsNothing);
-    expect(
-      find.text('The message could not be forwarded.'),
-      findsOneWidget,
-    );
+      expect(postedRooms, isEmpty);
+      expect(find.byKey(const Key('chat-forward-failure')), findsOneWidget);
+      expect(find.byKey(const Key('chat-forward-success')), findsNothing);
+      expect(find.text('The message could not be forwarded.'), findsOneWidget);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  });
-
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
 }
 
 Future<void> _insertConversation(

@@ -4,11 +4,7 @@ void _registerChatRoomPaneRenderingTests() {
   testWidgets('phone screen and expanded pane share the same cached chat UI', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     expect(find.byKey(const Key('chat-room-screen')), findsOneWidget);
@@ -128,7 +124,7 @@ void _registerChatRoomPaneRenderingTests() {
       addTearDown(viewerRepository.close);
       await tester.pumpWidget(
         app(
-          home: ChatRoomScreen(account: account, conversation: conversation),
+          home: roomScreen(),
           overrides: [
             mediaOverride,
             chatMediaRepositoryProvider.overrideWithValue(viewerRepository),
@@ -511,12 +507,7 @@ void _registerChatRoomPaneRenderingTests() {
     }
 
     for (final locale in const [Locale('en'), Locale('cs')]) {
-      await tester.pumpWidget(
-        app(
-          locale: locale,
-          home: ChatRoomScreen(account: account, conversation: conversation),
-        ),
-      );
+      await tester.pumpWidget(app(locale: locale, home: roomScreen()));
       await tester.pump();
       await tester.pump();
 
@@ -565,11 +556,7 @@ void _registerChatRoomPaneRenderingTests() {
       displayText: 'Fresh thread root',
     );
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     final openThread = find.byKey(const Key('chat-open-thread-30'));
@@ -631,7 +618,7 @@ void _registerChatRoomPaneRenderingTests() {
             ]),
           ),
         ],
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
       ),
     );
     await tester.pump();
@@ -699,11 +686,7 @@ void _registerChatRoomPaneRenderingTests() {
           ),
         );
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
     await tester.pump();
 
@@ -751,11 +734,7 @@ void _registerChatRoomPaneRenderingTests() {
       displayText: 'voice-message.wav',
     );
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     expect(find.byKey(const Key('chat-voice-50')), findsOneWidget);
@@ -775,7 +754,7 @@ void _registerChatRoomPaneRenderingTests() {
     (tester) async {
       await tester.pumpWidget(
         app(
-          home: ChatRoomScreen(account: account, conversation: conversation),
+          home: roomScreen(),
           overrides: [
             chatMessageActionsProfileProvider.overrideWith(
               (ref, key) async => _capabilityProfile(reply: true),

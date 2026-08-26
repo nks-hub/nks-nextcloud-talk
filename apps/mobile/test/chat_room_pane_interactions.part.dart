@@ -4,11 +4,7 @@ void _registerChatRoomPaneInteractionTests() {
   testWidgets('composer text survives losing the pane', (tester) async {
     // A send can be refused before the outbox admits it, for example while
     // offline, so the typed text must not depend on the widget staying alive.
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     await tester.enterText(
@@ -20,11 +16,7 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
     await tester.pump();
 
@@ -75,11 +67,7 @@ void _registerChatRoomPaneInteractionTests() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     final composer = find.byKey(const Key('chat-composer'));
@@ -137,11 +125,7 @@ void _registerChatRoomPaneInteractionTests() {
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     final avatarSemantics = tester
@@ -236,11 +220,7 @@ void _registerChatRoomPaneInteractionTests() {
         displayText: 'Outgoing follow-up',
       );
 
-      await tester.pumpWidget(
-        app(
-          home: ChatRoomScreen(account: account, conversation: conversation),
-        ),
-      );
+      await tester.pumpWidget(app(home: roomScreen()));
       await tester.pump();
 
       expect(
@@ -365,11 +345,7 @@ void _registerChatRoomPaneInteractionTests() {
 
     // The refusal is a snackbar, so this needs the screen that owns a
     // Scaffold rather than the bare pane.
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('chat-cancel-operation-x')));
@@ -412,7 +388,7 @@ void _registerChatRoomPaneInteractionTests() {
 
     await tester.pumpWidget(
       app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
         overrides: [
           chatMessageActionsProfileProvider.overrideWith(
             (ref, key) async => _capabilityProfile(
@@ -458,7 +434,7 @@ void _registerChatRoomPaneInteractionTests() {
   ) async {
     await tester.pumpWidget(
       app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
         overrides: [
           chatMessageActionsProfileProvider.overrideWith(
             (ref, key) async => _capabilityProfile(reply: true, react: true),
@@ -502,11 +478,7 @@ void _registerChatRoomPaneInteractionTests() {
   testWidgets('without a resolved capability profile reply stays hidden', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
     await tester.pump();
 
@@ -528,7 +500,7 @@ void _registerChatRoomPaneInteractionTests() {
   ) async {
     await tester.pumpWidget(
       app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
         overrides: [
           chatMessageActionsProfileProvider.overrideWith(
             (ref, key) async => _capabilityProfile(),
@@ -570,11 +542,7 @@ void _registerChatRoomPaneInteractionTests() {
       ),
     );
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     await tester.longPress(find.byKey(const Key('chat-message-target-10')));
@@ -610,7 +578,7 @@ void _registerChatRoomPaneInteractionTests() {
 
     await tester.pumpWidget(
       app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
         overrides: [
           chatMessageActionsProfileProvider.overrideWith(
             (ref, key) async => _capabilityProfile(edit: true),
@@ -661,7 +629,7 @@ void _registerChatRoomPaneInteractionTests() {
 
     await tester.pumpWidget(
       app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
+        home: roomScreen(),
         overrides: [
           // Cancelling never reaches the network, so the menu only needs a
           // capability profile pinned; the default unmocked API (as used by
@@ -713,11 +681,7 @@ void _registerChatRoomPaneInteractionTests() {
             ),
           );
 
-      await tester.pumpWidget(
-        app(
-          home: ChatRoomScreen(account: account, conversation: conversation),
-        ),
-      );
+      await tester.pumpWidget(app(home: roomScreen()));
       await tester.pump();
 
       expect(find.byKey(const Key('chat-load-older')), findsOneWidget);
@@ -766,11 +730,7 @@ void _registerChatRoomPaneInteractionTests() {
             ),
           );
 
-      await tester.pumpWidget(
-        app(
-          home: ChatRoomScreen(account: account, conversation: conversation),
-        ),
-      );
+      await tester.pumpWidget(app(home: roomScreen()));
       await tester.pump();
       expect(find.byKey(const Key('chat-load-older')), findsOneWidget);
 
@@ -871,11 +831,7 @@ void _registerChatRoomPaneInteractionTests() {
           ),
         );
 
-    await tester.pumpWidget(
-      app(
-        home: ChatRoomScreen(account: account, conversation: conversation),
-      ),
-    );
+    await tester.pumpWidget(app(home: roomScreen()));
     await tester.pump();
 
     expect(find.text('Cached hello'), findsOneWidget);

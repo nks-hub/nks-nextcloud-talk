@@ -8,9 +8,12 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/newconversation/new_conversation_screen.dart';
+import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
 
@@ -42,6 +45,7 @@ void main() {
     List<StoredAccount>? availableAccounts,
     Stream<StoredAccount?>? selectedAccounts,
     Map<String, List<CachedConversation>> conversationsByAccount = const {},
+    Set<ChatRoomProviderKey>? observedChatKeys,
   }) {
     return ProviderScope(
       overrides: [
@@ -60,9 +64,10 @@ void main() {
             conversationsByAccount[accountId] ?? const <CachedConversation>[],
           ),
         ),
-        chatMessagesProvider.overrideWith(
-          (ref, key) => Stream.value(const <CachedChatMessage>[]),
-        ),
+        chatMessagesProvider.overrideWith((ref, key) {
+          observedChatKeys?.add(key);
+          return Stream.value(const <CachedChatMessage>[]);
+        }),
         outgoingMessageStatusesProvider.overrideWith(
           (ref, key) => Stream.value(const <OutgoingMessageStatus>[]),
         ),
@@ -70,6 +75,15 @@ void main() {
           (ref, key) => Stream.value(const <StoredTextSendOperation>[]),
         ),
         chatScopeProvider.overrideWith((ref, key) => Stream.value(null)),
+        connectivityWakeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
+        chatAttachmentDependenciesProvider.overrideWith(
+          (ref, key) => Future<ChatAttachmentDependencies>.error(
+            StateError('attachment transport is outside this route test'),
+            StackTrace.empty,
+          ),
+        ),
         ...overrides,
       ],
       child: localizedTestApp(home: const ConversationShell()),
@@ -86,7 +100,12 @@ void main() {
   for (final layout in layouts.entries) {
     final isCompact = layout.key == 'compact';
 
-    Future<void> pumpShell(WidgetTester tester) async {
+    Future<StoredAccount> pumpShell(
+      WidgetTester tester, {
+      Map<String, List<CachedConversation>> conversationsByAccount = const {},
+      Set<ChatRoomProviderKey>? observedChatKeys,
+      List<Override> overrides = const [],
+    }) async {
       tester.view.physicalSize = layout.value;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -100,10 +119,13 @@ void main() {
         wrapShell(
           database,
           account,
+          conversationsByAccount: conversationsByAccount,
+          observedChatKeys: observedChatKeys,
           overrides: [
             themePreferenceStoreProvider.overrideWithValue(
               _MemoryThemePreferenceStore(),
             ),
+            ...overrides,
           ],
         ),
       );
@@ -112,7 +134,71 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
       });
+      return account;
     }
+
+    testWidgets(
+      '${layout.key}: a conversation tile opens the production room route',
+      (tester) async {
+        final observedChatKeys = <ChatRoomProviderKey>{};
+        final liveConversation = _conversation(
+          'account-a',
+          'roomlive',
+          displayName: 'Live peer',
+          roomType: 1,
+          peerStatus: 'online',
+          peerStatusIcon: '🌟',
+          peerStatusMessage: 'Focusing',
+          rawJson: '{"hasCall":true}',
+        );
+        final routedAccount = await pumpShell(
+          tester,
+          conversationsByAccount: {
+            'account-a': [liveConversation],
+          },
+          observedChatKeys: observedChatKeys,
+          overrides: [
+            callTransportProvider.overrideWith(
+              (ref, key) async => CallTransport.internal,
+            ),
+          ],
+        );
+        await tester.pump();
+
+        await tester.tap(find.byKey(const Key('conversation-tile-roomlive')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(
+          find.byType(PresenceChatRoomScreen),
+          isCompact ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.byType(PresenceChatRoomPane),
+          isCompact ? findsNothing : findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('conversation-presence-text-roomlive')),
+          findsOneWidget,
+        );
+        expect(find.text('🌟 Focusing'), findsOneWidget);
+        expect(find.byKey(const Key('call-banner')), findsOneWidget);
+        expect(find.byKey(const Key('open-room-details')), findsOneWidget);
+        expect(
+          observedChatKeys,
+          contains((
+            accountId: routedAccount.id,
+            roomToken: liveConversation.token,
+            threadId: null,
+          )),
+        );
+
+        await tester.tap(find.byKey(const Key('open-room-details')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(RoomDetailsScreen), findsOneWidget);
+      },
+    );
 
     testWidgets(
       '${layout.key}: the shell reaches the new conversation screen',
@@ -257,25 +343,34 @@ CachedConversation _conversation(
   String accountId,
   String token, {
   bool archived = false,
+  String? displayName,
+  int roomType = 2,
+  String? peerStatus,
+  String? peerStatusIcon,
+  String? peerStatusMessage,
+  String rawJson = '{}',
 }) {
   return CachedConversation(
     accountId: accountId,
     token: token,
-    displayName: token,
+    displayName: displayName ?? token,
     description: '',
     lastActivity: 1,
     unreadMessages: 0,
     favorite: false,
     isArchived: archived,
     readOnly: 0,
-    roomType: 2,
+    roomType: roomType,
     roomName: '',
     objectType: '',
     avatarVersion: '',
     isCustomAvatar: false,
+    peerStatus: peerStatus,
+    peerStatusIcon: peerStatusIcon,
+    peerStatusMessage: peerStatusMessage,
     lastMessageText: 'Preview',
     lastMessageTimestamp: 1,
-    rawJson: '{}',
+    rawJson: rawJson,
   );
 }
 

@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
+import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -126,6 +127,9 @@ Widget app({
     ),
   );
 }
+
+PresenceChatRoomScreen roomScreen() =>
+    PresenceChatRoomScreen(account: account, conversation: conversation);
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';
 const _onePixelGif = 'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
