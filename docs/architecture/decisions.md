@@ -33,6 +33,12 @@ Asynchronní UI akce zachytí accountId objektu při otevření a používají j
 celý request i následný sync. Pozdější změna globálně vybraného účtu nesmí akci
 přesměrovat; account-specific filtry pohledu se při přepnutí resetují.
 
+Conversation-list filtry na ověřeném Android upstream SHA `5428960` kombinují
+nepřečtené a zmínky jako AND. Archivovaný pohled je dostupný pouze za
+`archived-conversations-v2`; bez něj i bez aktivního filtru zůstávají
+archivované rooms skryté. Mention filtr přijme explicitní `unreadMention` a
+také každou nepřečtenou one-to-one nebo former-one-to-one room.
+
 ### D-003: Capability-first
 
 Stav: Přijato jako protokolová invarianta.
@@ -44,11 +50,33 @@ Každá mutace musí ověřit přihlášený account-scoped snapshot v odpovědn
 nebo protokolové vrstvě, ne jen skrýt tlačítko v UI. Archivace například nesmí
 vydat request bez jednoznačné capability `archived-conversations-v2`.
 
-Thread request musí oddělit cílovou zprávu od identity canonical rootu. Notify
-nad reply používá `messageId` reply ve wire URL, ale response se váže na povinný
-canonical `threadId` původního requestu. Decoder odmítá room/root mismatch a
-zachová původní request; merge planner odmítá account/server snapshot mismatch.
-Libovolný serverem vrácený root se nepřijímá.
+Room settings respektují přesný upstream kontrakt, ne domyšlenou společnou
+bránu. `message-expiration` se povolí jen moderátorovi se stejnojmennou
+capability a používá nezáporné sekundy, kde 0 vypíná; serverem vynucená hodnota
+zůstává autoritativní. `notify-calls` na ověřeném upstream SHA samostatnou
+capability nemá a používá pouze absolutní level 0/1. Obě response znovu dekódují
+autoritativní room místo lokálního přepnutí optimistic stavem.
+
+`important` a `sensitive` nejsou moderátorská room metadata, ale osobní
+participant-scoped nastavení. Každé vyžaduje vlastní capability a absolutní
+POST/DELETE bez body; federované rooms jsou podporované. Classified room nesmí
+vypnout `sensitive` a serverový error `classified` se nesmí převést na lokální
+úspěch. I zde je zdrojem pravdy autoritativní room z response.
+
+`clear-history` je destruktivní moderator-only online operace bez klientského
+idempotency key. Po fresh authenticated capability snapshotu používá jediný
+DELETE bez body a nikdy nevstoupí do outboxu ani automatického retry. HTTP 200
+i 202 znamenají provedené smazání; 202 navíc vyžaduje varování, že federace či
+externí bridge mohou držet kopie. Lokální purge je account/room-scoped a nesmí
+smazat drafty, durable upload zdroje ani pending outbox. Selhání následného
+refresh nesmí uživatele vyzvat k opakování již provedeného DELETE.
+
+Thread request musí oddělit cílovou zprávu od identity canonical rootu.
+Notification-level request používá jako cíl výhradně canonical `threadId`, i
+když historický název route parametru na serveru zní `messageId`. Response
+wrapper musí nést `threadId` a legacy `messageId` se fail-closed odmítá. Decoder
+odmítá room/root mismatch a zachová původní request; merge planner odmítá
+account/server snapshot mismatch. Libovolný serverem vrácený root se nepřijímá.
 
 ### D-004: Žádné fake subsystémy
 
@@ -183,6 +211,12 @@ Response se smí commitnout jen při shodě request anchoru s aktuálním cursor
 Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
 se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
 
+Autoritativní editace nebo smazání zprávy se nesmí uložit jen do samostatného
+řádku parentu. Ve stejné Drift transakci se promítne do každé full parent kopie
+v cached replies stejného accountu a roomu a případně do conversation preview.
+Full i compact deleted parent se v UI vykreslí jako smazaný bez původního
+autora, obsahu nebo interaktivního jump cíle.
+
 Read a mark-unread mutace se pořadově serializují pouze v lane
 `(accountId, roomToken)`. Zachová se tedy skutečné pořadí read → unread i
 unread → read v jedné room, zatímco jiné rooms a účty mohou pokračovat
@@ -194,6 +228,18 @@ Ordinary reply view a named-thread network scope jsou oddělené projekce.
 Přechod z ordinary view do named threadu nesmí migrovat ordinary cursor ani
 posunout nový network scope. Root merge se smí promítnout jen do stejného
 accountu a roomu. Tyto hranice mají automatizované regresní testy.
+
+Otevřený thread route, včetně vstupu ze search, odvozuje kind a title průběžně
+z canonical cached rootu; snapshot z okamžiku navigace není autorita pro další
+send. Asynchronně připravený media request je immutable: resolver jej sváže s
+aktuálním rootem a durable repository ve stejné transakci těsně před insertem
+exact binding znovu ověří. Změna ordinary ↔ named, missing, deleted nebo invalid
+root admission fail-closed odmítne; repository metadata potichu nepřepisuje.
+Stejná autorita platí pro text: po asynchronním capability read se cached root
+znovu dekóduje a musí být nesmazaný, nesystémový a canonical. Named root navíc
+vyžaduje neprázdný bounded title a shodný `threadId`; jinak nevznikne outbox
+řádek ani HTTP POST. Validní ordinary ↔ named změna se naopak použije jako
+aktuální wire binding.
 
 Full embedded parent z thread response smí obnovit cached thread original jen
 při shodě room tokenu, parent/original ID a thread ID. Explicitní serverové
@@ -289,6 +335,16 @@ account-scoped tabulky a transakční conversation merge. Android a Windows
 debug build i repository testy prošly; message/outbox migrace a Apple/Linux
 build zůstávají povinným důkazem dalších řezů.
 
+Talk neposkytuje seznam identit čtenářů. `lastCommonReadMessage` je room-wide
+minimum markerů pouze public user actors; guesté do něj nevstupují. Klient smí
+agregovaný stav ukázat jen u vlastní serverem potvrzené zprávy, pokud současný
+account současně prokazuje capability `chat-read-status` a public
+`config.chat.read-privacy`. Private, chybějící nebo nevalidní policy marker
+explicitně zneplatní; absence hlavičky nesmí ponechat stale „přečteno“.
+Invalidace uloží sentinel 0 atomicky do chat scope i cached conversation a
+reprojektuje outgoing UI zpět na `sent`. Pozdější public snapshot bez nového
+serverového markeru nesmí historickou hodnotu obnovit.
+
 ### D-010: Riverpod pro application/UI state
 
 Stav: Přijato pro první implementační baseline 22. srpna 2026.
@@ -309,6 +365,13 @@ Od 720 logical px se zobrazí account rail, seznam a detail; onboarding přechá
 od 900 px do dvou sloupců. Deep link
 nejprve kryptograficky nebo lokálním account mappingem vybere `accountId` a až
 potom sestaví room/thread stack; nesmí implicitně použít právě aktivní účet.
+Unified-search výsledek stejně zachová vlastní account, room, message a
+canonical thread identitu. Root výsledek otevře room scope, reply otevře
+ordinary nebo named thread podle validního cached rootu a chybějící či neshodný
+root se fail-closed neotevře v jiném scope. Jump loader musí cíl zkontrolovat i
+po posledním povoleném history fetchi, ne jen před ním. Každé asynchronní
+dokončení je navíc svázané s route identitou, generací a účtem; výsledek starší
+search navigace nesmí ovládat novější route ani po opožděném history fetchi.
 
 iOS zachová edge-swipe back a Android systémový i predictive back. Gestures
 jsou pouze zkratky s viditelnou alternativou. Touch target má nejméně 44 pt na
@@ -449,10 +512,13 @@ Gateway uzná položku jako přijatou až po DB commitu. Notifications na ověř
 SHA po transportní chybě stejný batch aplikačně neopakuje, takže in-memory nebo
 předčasně potvrzený enqueue by wake-up nevratně ztratil.
 
-Mobil po kryptografickém account routingu deduplikuje podle `accountId`, akce a
-`nid` nebo kanonických `nids`; payload bez `nid` používá digest obálky s
-omezeným TTL. Opakování může bezpečně spustit OCS catch-up, ale nesmí vytvořit
-druhou lokální notifikaci ani druhou mutaci.
+Mobil po kryptografickém account routingu počítá SHA-256 přes přesné dešifrované
+payload bajty a ledger klíčuje dvojicí accountId + fingerprint ve stejném
+AES-GCM state commitu jako event frontu. Payload s `nid`, `nids` nebo activation
+tokenem má strong TTL 7 dní; delete-all a Message bez serverového ID jsou weak
+jen 60 sekund. Ledger je omezený na 128 položek na účet a 512 globálně. Starý
+state bez ledgeru se načte jako prázdný. Opakování může bezpečně spustit OCS
+catch-up, ale nesmí enqueueovat, zobrazit ani zmutovat druhou událost.
 
 ### D-025: Android přes Notifications Web Push
 
@@ -460,8 +526,11 @@ Stav: Přijato po ověření Nextcloud Notifications 34.0.3 na SHA
 `2a62d472d31b97de522c897c979912cd49b820a9`; P1 platformní příjem a durable
 lifecycle jsou implementované, serverová P2 orchestrace a delivery E2E chybějí.
 
-Android používá capability `webpush`, UnifiedPush connector baseline 3.3.3 a
-embedded FCM distributor 3.1.0. Server dodá VAPID public key, klient získá
+Android používá capability `webpush`, UnifiedPush connector baseline 3.3.5 a
+embedded FCM distributor 3.1.0. Upgrade v `1250c44` zachoval stávající API,
+ověřenou Apache-2.0 licenci i oddělenou verzi distributoru a prošel Kotlin
+testy, compile, duplicate-classes kontrolou i `assembleDebug`. Server dodá
+VAPID public key, klient získá
 subscription endpoint a dokončí register → activation token → activate tok za
 běhu pro každý `accountId`.
 
@@ -469,6 +538,13 @@ Správce Nextcloudu Web Push výslovně zapne přepínačem v Administration →
 Notifications; nezadává FCM credentials ani gateway. Klient každému účtu přidělí
 vlastní connector instance a subscription generation. Callback se přijme jen
 pro právě aktuální dvojici a poté spustí account-scoped OCS catch-up.
+
+Android platformní notification ID není serverové `nid` ani globální konstanta.
+Šifrovaný bounded ledger mapuje `(accountId, nid)` na stabilní kladné ID,
+vynechává rezervované hodnoty a při hash kolizi deterministicky hledá další.
+Tap, reply, read, delete-one i delete-all nejdřív resolveují stejnou account
+route; nikdy nesmí zrušit ani otevřít notifikaci jiného účtu. Upgrade starého
+state bez ledgeru začíná prázdnou mapou a zachová ostatní push stav.
 
 Veřejný Android build nemá publisher Firebase projekt, `google-services.json`,
 vlastní mobilní gateway ani per-server rebuild. Embedded distributor je
@@ -555,6 +631,10 @@ Bezpečnostní hranice zůstávají: klient přijme jen `integration_giphy_gif`,
 same-origin proxy konkrétního serveru a validní `image/gif` bajty. Loader je
 account-scoped, bounded a s LRU. Jediný viditelný externí odkaz je povinná
 GIPHY attribution v pickeru.
+
+Picker thumbnail repository sdílí souběžný request stejné URL a drží nejvýše
+32 ověřených obrázků nebo 16 MiB na instanci účtu. Cache se zahodí s repository;
+explicitně rušený load zůstává samostatný, aby jeden caller nerušil ostatní.
 
 Známé omezení: příjemce bez zapnuté Giphy integrace na svém serveru referenci
 nevyřeší a uvidí odkaz. To je cena zvolené varianty.
