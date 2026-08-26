@@ -20,7 +20,7 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 ## Přímé Flutter runtime závislosti
 
-Následujících sedmnáct hostovaných balíků je přímo deklarovaných v
+Následujících osmnáct hostovaných balíků je přímo deklarovaných v
 `apps/mobile/pubspec.yaml`. Verze a archive SHA-256 jsou z
 `apps/mobile/pubspec.lock`; licence a jejich SHA-256 byly ověřené v odpovídajícím
 staženém balíku v lokální Pub cache.
@@ -33,6 +33,7 @@ staženém balíku v lokální Pub cache.
 | [`audioplayers`](https://pub.dev/packages/audioplayers) | 6.8.1; archive SHA-256 `2ba4bb2944baacbdd5372ff8254a8e7feb8c10d7739545e392f5605a8f618745`; LICENSE SHA-256 `d6c0bdbc83e6bb5f02eed5caf25e6edf174cb56d0ecd6fe19a2cd05b62bbda41` | MIT; Copyright 2017 Blue Fire | Přehrávání lokálně připravených hlasových zpráv |
 | [`crypto`](https://pub.dev/packages/crypto) | 3.0.7; archive SHA-256 `c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf`; LICENSE SHA-256 `ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888` | BSD-3-Clause; Copyright 2015, the Dart project authors | SHA-256 integrita durable kopie přílohy |
 | [`cupertino_icons`](https://pub.dev/packages/cupertino_icons) | 1.0.9; archive SHA-256 `41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd`; LICENSE SHA-256 `310d6ab6483280280c9db122bded0a63c09558bc5743720f61dbcbb494db370a` | MIT; Copyright 2016 Vladimir Kharlampidi | Cupertino icon font pro iOS vzhled |
+| [`emojis`](https://pub.dev/packages/emojis) ([upstream](https://github.com/i-Naji/emojis)) | 3.2.0; archive SHA-256 `36d382349255a3d90a33fa5e01b57b5213578d90a493aad98d2955dac79df74f`; LICENSE SHA-256 `9f2d0499872d61cb552aad0fafa912711b0fd83f855ef3ce28f0359240f5ec2b` | BSD-3-Clause; Copyright 2020 Naji; notice a disclaimer musí zůstat ve zdrojové i binární distribuci | Úplný katalog Unicode 17.0 pro vyhledávání a kategorie emoji pickeru |
 | [`file_selector`](https://pub.dev/packages/file_selector) | 1.1.0; archive SHA-256 `bd15e43e9268db636b53eeaca9f56324d1622af30e5c34d6e267649758c84d9a`; LICENSE SHA-256 `420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Platformní výběr obrázkové přílohy |
 | [`flutter_riverpod`](https://pub.dev/packages/flutter_riverpod) | 2.6.1; archive SHA-256 `9532ee6db4a943a1ed8383072a2e3eeda041db5657cdf6d2acecf3c21ecbe7e1`; LICENSE SHA-256 `757d9c09a9a2a701144328c0fd596234ea287ff62952b39cd22f9ad4caed1171` | MIT; Copyright 2020 Remi Rousselet | Account-scoped application a UI state |
 | [`http`](https://pub.dev/packages/http) | 1.6.0; archive SHA-256 `87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412`; LICENSE SHA-256 `3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16` | BSD-3-Clause; Copyright 2014, the Dart project authors | Nextcloud HTTP transport |
