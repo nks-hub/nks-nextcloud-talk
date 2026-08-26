@@ -6,6 +6,7 @@ import 'package:mime/mime.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';

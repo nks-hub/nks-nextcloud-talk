@@ -193,33 +193,15 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
 
   Future<void> _renameRoom() async {
     final strings = AppLocalizations.of(context);
-    final controller = TextEditingController(
-      text: widget.conversation.displayName,
-    );
-    final newName = await showDialog<String>(
+    final newName = await showTextPromptDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(strings.roomDetailsRenameDialogTitle),
-        content: TextField(
-          key: const Key('room-details-rename-field'),
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: strings.roomDetailsRenameFieldLabel,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(strings.cancel),
-          ),
-          TextButton(
-            key: const Key('room-details-rename-save'),
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(strings.roomDetailsSave),
-          ),
-        ],
-      ),
+      fieldKey: const Key('room-details-rename-field'),
+      confirmKey: const Key('room-details-rename-save'),
+      title: strings.roomDetailsRenameDialogTitle,
+      initialValue: widget.conversation.displayName,
+      fieldLabel: strings.roomDetailsRenameFieldLabel,
+      cancelLabel: strings.cancel,
+      confirmLabel: strings.roomDetailsSave,
     );
     if (newName == null || newName.trim().isEmpty || !mounted) {
       return;
@@ -240,35 +222,17 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
 
   Future<void> _editDescription() async {
     final strings = AppLocalizations.of(context);
-    final controller = TextEditingController(
-      text: widget.conversation.description,
-    );
-    final newDescription = await showDialog<String>(
+    final newDescription = await showTextPromptDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(strings.roomDetailsDescriptionDialogTitle),
-        content: TextField(
-          key: const Key('room-details-description-field'),
-          controller: controller,
-          autofocus: true,
-          minLines: 2,
-          maxLines: 6,
-          decoration: InputDecoration(
-            labelText: strings.roomDetailsDescriptionFieldLabel,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(strings.cancel),
-          ),
-          TextButton(
-            key: const Key('room-details-description-save'),
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(strings.roomDetailsSave),
-          ),
-        ],
-      ),
+      fieldKey: const Key('room-details-description-field'),
+      confirmKey: const Key('room-details-description-save'),
+      title: strings.roomDetailsDescriptionDialogTitle,
+      initialValue: widget.conversation.description,
+      fieldLabel: strings.roomDetailsDescriptionFieldLabel,
+      cancelLabel: strings.cancel,
+      confirmLabel: strings.roomDetailsSave,
+      minLines: 2,
+      maxLines: 6,
     );
     if (newDescription == null || !mounted) {
       return;

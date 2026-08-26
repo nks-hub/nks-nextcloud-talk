@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
+import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_room_pane.dart';
@@ -288,55 +289,19 @@ final class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
       return;
     }
     final strings = AppLocalizations.of(context);
-    final controller = TextEditingController(text: current.title);
-    final formKey = GlobalKey<FormState>();
-    String? title;
-    try {
-      title = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          key: const Key('thread-management-rename-dialog'),
-          title: Text(strings.threadManagementRenameDialogTitle),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              key: const Key('thread-management-rename-field'),
-              controller: controller,
-              autofocus: true,
-              maxLength: 4096,
-              decoration: InputDecoration(
-                labelText: strings.threadManagementNameLabel,
-              ),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? strings.threadManagementNameRequired
-                  : null,
-              onFieldSubmitted: (_) {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(dialogContext).pop(controller.text);
-                }
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(strings.cancel),
-            ),
-            FilledButton(
-              key: const Key('thread-management-rename-save'),
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(dialogContext).pop(controller.text);
-                }
-              },
-              child: Text(strings.roomDetailsSave),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      controller.dispose();
-    }
+    final title = await showTextPromptDialog(
+      context: context,
+      dialogKey: const Key('thread-management-rename-dialog'),
+      fieldKey: const Key('thread-management-rename-field'),
+      confirmKey: const Key('thread-management-rename-save'),
+      title: strings.threadManagementRenameDialogTitle,
+      initialValue: current.title,
+      fieldLabel: strings.threadManagementNameLabel,
+      cancelLabel: strings.cancel,
+      confirmLabel: strings.roomDetailsSave,
+      maxLength: 4096,
+      emptyErrorText: strings.threadManagementNameRequired,
+    );
     if (title == null || !mounted) {
       return;
     }
@@ -347,7 +312,7 @@ final class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
             accountId: widget.account.id,
             roomToken: current.roomToken,
             threadId: current.threadId,
-            title: title!,
+            title: title,
           ),
     );
   }

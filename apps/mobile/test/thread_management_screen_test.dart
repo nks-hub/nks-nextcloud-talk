@@ -550,6 +550,45 @@ void main() {
     await disposeHarness(tester);
   });
 
+  testWidgets('rename survives an open IME composing region', (tester) async {
+    await _setLargeSurface(tester);
+    var puts = 0;
+    await openDetail(
+      tester,
+      handler: (request) {
+        if (request.url.path.endsWith('/threads/recent')) {
+          return _fixtureResponse('recent-threads-success');
+        }
+        if (request.method == 'PUT') {
+          puts++;
+          return _fixtureResponse('thread-rename-success');
+        }
+        return _fixtureResponse('thread-detail-success');
+      },
+    );
+
+    await tester.tap(find.byKey(const Key('thread-management-rename')));
+    await tester.pump();
+    await tester.showKeyboard(
+      find.byKey(const Key('thread-management-rename-field')),
+    );
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'Updated design',
+        selection: TextSelection.collapsed(offset: 14),
+        composing: TextRange(start: 8, end: 14),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('thread-management-rename-save')));
+    await _pumpUntil(tester, () => puts == 1);
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(tester.takeException(), isNull);
+    expect(puts, 1);
+    await disposeHarness(tester);
+  });
+
   testWidgets('open action routes through validated canonical thread root', (
     tester,
   ) async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/text_prompt_dialog.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'new_conversation_service.dart';
 
@@ -134,35 +135,18 @@ final class _NewConversationScreenState
     }
   }
 
-  Future<String?> _promptRoomName(String groupLabel) {
+  Future<String?> _promptRoomName(String groupLabel) async {
     final strings = AppLocalizations.of(context);
-    final controller = TextEditingController(text: groupLabel);
-    return showDialog<String>(
+    final name = await showTextPromptDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(strings.newConversationNameDialogTitle),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: strings.newConversationNameLabel,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(strings.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              Navigator.of(dialogContext).pop(name.isEmpty ? null : name);
-            },
-            child: Text(strings.newConversationCreate),
-          ),
-        ],
-      ),
+      title: strings.newConversationNameDialogTitle,
+      initialValue: groupLabel,
+      fieldLabel: strings.newConversationNameLabel,
+      cancelLabel: strings.cancel,
+      confirmLabel: strings.newConversationCreate,
     );
+    final trimmed = name?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   @override
