@@ -21,6 +21,7 @@ part 'chat_service_integration_lifecycle_send_cases.dart';
 part 'chat_service_integration_connectivity_cases.dart';
 part 'chat_service_integration_offline_outbox_cases.dart';
 part 'chat_service_integration_outbox_cases.dart';
+part 'chat_service_integration_thread_admission_cases.dart';
 
 void main() {
   final suite = _ChatServiceIntegrationSuite();
@@ -34,4 +35,5 @@ void main() {
   suite.registerConnectivityCases();
   suite.registerOfflineOutboxCases();
   suite.registerOutboxCases();
+  suite.registerThreadAdmissionCases();
 }

@@ -303,6 +303,22 @@ final class ChatService {
     });
   }
 
+  Future<bool?> _validatedCachedRootIsNamedThread({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+  }) async {
+    try {
+      return await _chat.validatedCachedRootIsNamedThread(
+        accountId: accountId,
+        roomToken: roomToken,
+        threadId: threadId,
+      );
+    } on InvalidCachedThreadRootException {
+      throw const ChatServiceException(ChatServiceError.invalidResponse);
+    }
+  }
+
   Future<_PreparedChat> _prepare(
     String accountId,
     String roomToken, {
@@ -348,7 +364,7 @@ final class ChatService {
     }
     final namedThread = threadId == null
         ? null
-        : await _chat.cachedRootIsNamedThread(
+        : await _validatedCachedRootIsNamedThread(
             accountId: accountId,
             roomToken: conversation.token,
             threadId: threadId,
@@ -536,7 +552,7 @@ final class ChatService {
     );
     final rootPrepared = prepared.asRootBackedView();
     for (var page = 0; page < _maximumCatchUpPages; page++) {
-      final classification = await _chat.cachedRootIsNamedThread(
+      final classification = await _validatedCachedRootIsNamedThread(
         accountId: prepared.account.id,
         roomToken: prepared.conversation.token,
         threadId: threadId,
@@ -557,7 +573,7 @@ final class ChatService {
         abortTrigger: abortTrigger,
       );
     }
-    final classification = await _chat.cachedRootIsNamedThread(
+    final classification = await _validatedCachedRootIsNamedThread(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,
       threadId: threadId,

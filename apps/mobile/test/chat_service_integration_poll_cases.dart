@@ -138,6 +138,7 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
           reply['timestamp'] = 1770000120;
           final parent = reply['parent']! as Map<String, Object?>;
           parent['isThread'] = true;
+          parent['threadTitle'] = 'Shared root poll thread';
           parent['threadReplies'] = 1;
           ocs['data'] = <Object?>[reply];
           return http.Response(
@@ -742,6 +743,7 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
                 .getSingle();
         final rawRoot = jsonDecode(cachedRoot.rawJson) as Map<String, Object?>;
         rawRoot['isThread'] = true;
+        rawRoot['threadTitle'] = 'Named after ordinary reply';
         await (database.update(database.cachedChatMessages)..where(
               (message) =>
                   message.accountId.equals('account-a') &

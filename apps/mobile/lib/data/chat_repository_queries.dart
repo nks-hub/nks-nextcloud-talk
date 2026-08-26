@@ -1,5 +1,27 @@
 part of 'chat_repository.dart';
 
+/// The cached row exists, but cannot represent a canonical thread root.
+final class InvalidCachedThreadRootException implements Exception {
+  const InvalidCachedThreadRootException();
+
+  @override
+  String toString() => 'InvalidCachedThreadRootException()';
+}
+
+/// Strict cached-thread classification for admission and other mutations.
+extension ValidatedChatRepositoryThreadQueries on ChatRepository {
+  Future<bool?> validatedCachedRootIsNamedThread({
+    required String accountId,
+    required String roomToken,
+    required int threadId,
+  }) => _validatedCachedRootIsNamedThreadQuery(
+    this,
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+  );
+}
+
 extension _ChatRepositoryQueries on ChatRepository {
   Stream<List<CachedChatMessage>> _watchMessagesQuery({
     required String accountId,
@@ -26,25 +48,16 @@ extension _ChatRepositoryQueries on ChatRepository {
     required String roomToken,
     required int threadId,
   }) async {
-    if (threadId < 1) {
-      throw ArgumentError.value(threadId, 'threadId');
-    }
-    final root =
-        await (_database.select(_database.cachedChatMessages)..where(
-              (message) =>
-                  message.accountId.equals(accountId) &
-                  message.roomToken.equals(roomToken) &
-                  message.messageId.equals(threadId),
-            ))
-            .getSingleOrNull();
-    if (root == null) {
+    try {
+      return await _validatedCachedRootIsNamedThreadQuery(
+        this,
+        accountId: accountId,
+        roomToken: roomToken,
+        threadId: threadId,
+      );
+    } on InvalidCachedThreadRootException {
       return null;
     }
-    final message = ChatMessage.fromJson(jsonDecode(root.rawJson));
-    if (message.messageId != threadId || message.roomToken.value != roomToken) {
-      return null;
-    }
-    return message.isThread == true;
   }
 
   Stream<List<StoredTextSendOperation>> _watchTextSendOperationsQuery({
@@ -167,3 +180,67 @@ extension _ChatRepositoryQueries on ChatRepository {
         .getSingleOrNull();
   }
 }
+
+Future<bool?> _validatedCachedRootIsNamedThreadQuery(
+  ChatRepository repository, {
+  required String accountId,
+  required String roomToken,
+  required int threadId,
+}) async {
+  if (threadId < 1) {
+    throw ArgumentError.value(threadId, 'threadId');
+  }
+  final root =
+      await (repository._database.select(
+            repository._database.cachedChatMessages,
+          )..where(
+            (message) =>
+                message.accountId.equals(accountId) &
+                message.roomToken.equals(roomToken) &
+                message.messageId.equals(threadId),
+          ))
+          .getSingleOrNull();
+  if (root == null) {
+    return null;
+  }
+  if (root.accountId != accountId ||
+      root.roomToken != roomToken ||
+      root.messageId != threadId ||
+      root.deleted ||
+      root.systemMessage.isNotEmpty ||
+      !_isCanonicalCachedRootThreadId(root.threadId, threadId)) {
+    throw const InvalidCachedThreadRootException();
+  }
+
+  final ChatMessage message;
+  try {
+    message = ChatMessage.fromJson(jsonDecode(root.rawJson));
+  } on FormatException {
+    throw const InvalidCachedThreadRootException();
+  } on TalkProtocolException {
+    throw const InvalidCachedThreadRootException();
+  }
+  if (message.messageId != threadId ||
+      message.roomToken.value != roomToken ||
+      message.deleted ||
+      message.systemMessage.isNotEmpty ||
+      !_isCanonicalCachedRootThreadId(message.threadId, threadId) ||
+      root.threadId != message.threadId) {
+    throw const InvalidCachedThreadRootException();
+  }
+  if (message.isThread != true) {
+    return false;
+  }
+  final title = message.threadTitle?.trim();
+  if (root.threadId != threadId ||
+      message.threadId != threadId ||
+      title == null ||
+      title.isEmpty ||
+      title.length > 200) {
+    throw const InvalidCachedThreadRootException();
+  }
+  return true;
+}
+
+bool _isCanonicalCachedRootThreadId(int? value, int rootMessageId) =>
+    value == null || value == 0 || value == rootMessageId;

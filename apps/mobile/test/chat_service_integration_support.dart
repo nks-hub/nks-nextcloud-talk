@@ -69,8 +69,9 @@ Future<void> _cacheThreadRoot(
     'messageParameters': <String, Object?>{},
     'markdown': true,
     'reactions': <String, Object?>{},
-    'threadId': 109,
+    'threadId': storedThreadId,
     'isThread': ?isThread,
+    'threadTitle': isThread == true ? 'Cached named thread' : null,
     'threadReplies': ?threadReplies,
   };
   await database

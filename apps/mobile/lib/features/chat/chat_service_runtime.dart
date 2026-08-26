@@ -12,7 +12,7 @@ extension _ChatServiceLiveRuntime on ChatService {
   ) async {
     final classification = threadId == null
         ? null
-        : await _chat.cachedRootIsNamedThread(
+        : await _validatedCachedRootIsNamedThread(
             accountId: accountId,
             roomToken: roomToken,
             threadId: threadId,
@@ -284,7 +284,7 @@ extension _ChatServiceLiveRuntime on ChatService {
         : _conversationIsFederated(conversation) == prepared.room.isFederated;
     final namedThread = prepared.threadId == null
         ? null
-        : await _chat.cachedRootIsNamedThread(
+        : await _validatedCachedRootIsNamedThread(
             accountId: prepared.account.id,
             roomToken: prepared.conversation.token,
             threadId: prepared.threadId!,
