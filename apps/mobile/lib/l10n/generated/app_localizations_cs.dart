@@ -228,10 +228,44 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openEmojiPicker => 'Otevřít výběr emoji';
 
   @override
+  String get emojiPickerTitle => 'Emoji';
+
+  @override
+  String get emojiPickerCloseTooltip => 'Zavřít výběr emoji';
+
+  @override
+  String get emojiManageFavorites => 'Spravovat oblíbené';
+
+  @override
+  String get emojiFinishManagingFavorites => 'Dokončit úpravy oblíbených';
+
+  @override
+  String get emojiFavoriteModeHint =>
+      'Klepnutím na emoji ho přidáte do oblíbených nebo odeberete.';
+
+  @override
+  String get emojiAddFavoriteLabel => 'Přidat do oblíbených';
+
+  @override
+  String get emojiRemoveFavoriteLabel => 'Odebrat z oblíbených';
+
+  @override
   String get emojiSearchHint => 'Vyhledat emoji';
 
   @override
   String get emojiNoResults => 'Žádné emoji nenalezeno';
+
+  @override
+  String get emojiNoRecents => 'Žádné nedávno použité emoji';
+
+  @override
+  String get emojiNoFavorites => 'Žádné oblíbené emoji';
+
+  @override
+  String get emojiCategoryFavorites => 'Oblíbené';
+
+  @override
+  String get emojiCategoryRecent => 'Nedávné';
 
   @override
   String get emojiCategorySmileys => 'Emotikony';
@@ -256,6 +290,9 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get emojiCategorySymbols => 'Symboly';
+
+  @override
+  String get emojiCategoryFlags => 'Vlajky';
 
   @override
   String get mentionSuggestionsEmpty => 'Žádné shody';

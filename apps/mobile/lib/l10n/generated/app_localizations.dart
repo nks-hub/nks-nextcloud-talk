@@ -476,6 +476,48 @@ abstract class AppLocalizations {
   /// **'Open emoji picker'**
   String get openEmojiPicker;
 
+  /// No description provided for @emojiPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Emoji'**
+  String get emojiPickerTitle;
+
+  /// No description provided for @emojiPickerCloseTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Close emoji picker'**
+  String get emojiPickerCloseTooltip;
+
+  /// No description provided for @emojiManageFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage favorites'**
+  String get emojiManageFavorites;
+
+  /// No description provided for @emojiFinishManagingFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish managing favorites'**
+  String get emojiFinishManagingFavorites;
+
+  /// No description provided for @emojiFavoriteModeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap emoji to add or remove favorites'**
+  String get emojiFavoriteModeHint;
+
+  /// No description provided for @emojiAddFavoriteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favorites'**
+  String get emojiAddFavoriteLabel;
+
+  /// No description provided for @emojiRemoveFavoriteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favorites'**
+  String get emojiRemoveFavoriteLabel;
+
   /// No description provided for @emojiSearchHint.
   ///
   /// In en, this message translates to:
@@ -487,6 +529,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No emoji found'**
   String get emojiNoResults;
+
+  /// No description provided for @emojiNoRecents.
+  ///
+  /// In en, this message translates to:
+  /// **'No recently used emoji'**
+  String get emojiNoRecents;
+
+  /// No description provided for @emojiNoFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorite emoji'**
+  String get emojiNoFavorites;
+
+  /// No description provided for @emojiCategoryFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get emojiCategoryFavorites;
+
+  /// No description provided for @emojiCategoryRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get emojiCategoryRecent;
 
   /// No description provided for @emojiCategorySmileys.
   ///
@@ -535,6 +601,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Symbols'**
   String get emojiCategorySymbols;
+
+  /// No description provided for @emojiCategoryFlags.
+  ///
+  /// In en, this message translates to:
+  /// **'Flags'**
+  String get emojiCategoryFlags;
 
   /// No description provided for @mentionSuggestionsEmpty.
   ///

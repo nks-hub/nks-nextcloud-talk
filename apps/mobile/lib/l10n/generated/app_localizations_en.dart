@@ -227,10 +227,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openEmojiPicker => 'Open emoji picker';
 
   @override
+  String get emojiPickerTitle => 'Emoji';
+
+  @override
+  String get emojiPickerCloseTooltip => 'Close emoji picker';
+
+  @override
+  String get emojiManageFavorites => 'Manage favorites';
+
+  @override
+  String get emojiFinishManagingFavorites => 'Finish managing favorites';
+
+  @override
+  String get emojiFavoriteModeHint => 'Tap emoji to add or remove favorites';
+
+  @override
+  String get emojiAddFavoriteLabel => 'Add to favorites';
+
+  @override
+  String get emojiRemoveFavoriteLabel => 'Remove from favorites';
+
+  @override
   String get emojiSearchHint => 'Search emoji';
 
   @override
   String get emojiNoResults => 'No emoji found';
+
+  @override
+  String get emojiNoRecents => 'No recently used emoji';
+
+  @override
+  String get emojiNoFavorites => 'No favorite emoji';
+
+  @override
+  String get emojiCategoryFavorites => 'Favorites';
+
+  @override
+  String get emojiCategoryRecent => 'Recent';
 
   @override
   String get emojiCategorySmileys => 'Smileys';
@@ -255,6 +288,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emojiCategorySymbols => 'Symbols';
+
+  @override
+  String get emojiCategoryFlags => 'Flags';
 
   @override
   String get mentionSuggestionsEmpty => 'No matches';
