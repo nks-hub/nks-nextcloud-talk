@@ -98,6 +98,9 @@ void main() {
   testWidgets('widget metrics follow the platform', (tester) async {
     Future<List<double>> metrics(TargetPlatform platform) async {
       debugDefaultTargetPlatformOverride = platform;
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.reset);
       late List<double> read;
       await tester.pumpWidget(
         MaterialApp(
@@ -110,6 +113,7 @@ void main() {
                 context.paneHeaderHeight,
                 context.secondaryRowHeight,
                 context.actionRowHeight,
+                context.listPaneWidth,
               ];
               return const SizedBox.shrink();
             },
@@ -121,8 +125,9 @@ void main() {
       return read;
     }
 
-    expect(await metrics(TargetPlatform.android), [80, 24, 72, 72, 56]);
-    expect(await metrics(TargetPlatform.iOS), [80, 24, 72, 72, 56]);
+    // 1400 wide viewport, so the touch width is the >= 1100 variant.
+    expect(await metrics(TargetPlatform.android), [80, 24, 72, 72, 56, 390]);
+    expect(await metrics(TargetPlatform.iOS), [80, 24, 72, 72, 56, 390]);
     for (final platform in const [
       TargetPlatform.windows,
       TargetPlatform.macOS,
@@ -130,7 +135,7 @@ void main() {
     ]) {
       expect(
         await metrics(platform),
-        [56, 20, 52, 52, 44],
+        [56, 20, 52, 52, 44, 300],
         reason: '$platform',
       );
     }

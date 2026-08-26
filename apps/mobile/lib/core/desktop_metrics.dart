@@ -14,6 +14,16 @@ import 'package:flutter/material.dart';
 extension AppMetrics on BuildContext {
   bool get _pointerFirst => Theme.of(this).visualDensity.vertical < 0;
 
+  /// Width of the conversation list pane. Nextcloud's own navigation column is
+  /// a flat 300 regardless of window size; the wider touch values only pay off
+  /// when the row has to stay readable under a finger.
+  // ponytail: fixed per platform, not a draggable splitter. Add the splitter
+  // when someone actually asks to resize it — it needs its own Dart-side
+  // persistence, since the window bounds live in the native runner.
+  double get listPaneWidth => _pointerFirst
+      ? 300
+      : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
+
   /// Height of one conversation row in the list.
   double get listRowHeight => _pointerFirst ? 56 : 80;
 
