@@ -285,7 +285,7 @@ void _registerAttachmentServiceRecoveryTests() {
   );
 
   test(
-    'cancel aborts upload, cleans remote draft, and releases source',
+    'cancel aborts ambiguous upload without deleting the remote path',
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.close);
@@ -320,7 +320,7 @@ void _registerAttachmentServiceRecoveryTests() {
       );
 
       expect(cancelled.phase, AttachmentJobPhase.cancelled);
-      expect(deleteCount, 1);
+      expect(deleteCount, 0);
       expect(await fixture.sourceFile.exists(), isFalse);
     },
   );
@@ -639,7 +639,7 @@ void _registerAttachmentServiceRecoveryTests() {
   });
 
   test(
-    'cancel interrupts source verification before upload dispatch',
+    'cancelled recovered upload never deletes an unverified remote path',
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.close);
@@ -669,7 +669,7 @@ void _registerAttachmentServiceRecoveryTests() {
           .firstWhere((event) => event.phase == AttachmentJobPhase.cancelled);
 
       expect(cancelled.phase, AttachmentJobPhase.cancelled);
-      expect(deleteCount, 1);
+      expect(deleteCount, 0);
       expect(sourceProvider.leaseClosed.isCompleted, isTrue);
       expect(await fixture.sourceFile.exists(), isFalse);
     },

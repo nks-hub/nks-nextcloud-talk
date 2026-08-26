@@ -1,6 +1,83 @@
 part of 'attachment_runtime_test.dart';
 
 void _registerAttachmentRuntimeCollisionTests() {
+  test('cancel never deletes an in-flight upload with an unknown result', () {
+    final operation = draft();
+    final inFlight = _inFlightNormalUpload(operation, 40);
+    var snapshot = inFlight.snapshot;
+
+    final cancel = requestAttachmentCancel(
+      snapshot,
+      accountId: accountA,
+      jobId: operation.jobId,
+    );
+
+    expect(cancel.outcome, AttachmentRuntimeOutcome.cancelled);
+    snapshot = commit(snapshot, cancel);
+    final cancelled = _state(snapshot, operation);
+    expect(cancelled.phase, AttachmentJobPhase.cancelled);
+    expect(cancelled.cleanupDraftFile, isFalse);
+    expect(_plan(snapshot, operation, 41).request, isNull);
+  });
+
+  test('cancel never deletes a restart-recovered unknown upload', () {
+    final operation = draft();
+    final inFlight = _inFlightNormalUpload(operation, 42);
+    var snapshot = inFlight.snapshot;
+    final recovery = recoverAttachmentAfterRestart(
+      snapshot,
+      accountId: accountA,
+      jobId: operation.jobId,
+    );
+    snapshot = commit(snapshot, recovery);
+    final recovered = _state(snapshot, operation);
+    expect(recovered.phase, AttachmentJobPhase.retryable);
+    expect(recovered.resumePhase, AttachmentJobPhase.draftResolved);
+    expect(recovered.errorClass, 'process-interrupted');
+
+    final cancel = requestAttachmentCancel(
+      snapshot,
+      accountId: accountA,
+      jobId: operation.jobId,
+    );
+
+    expect(cancel.outcome, AttachmentRuntimeOutcome.cancelled);
+    snapshot = commit(snapshot, cancel);
+    final cancelled = _state(snapshot, operation);
+    expect(cancelled.phase, AttachmentJobPhase.cancelled);
+    expect(cancelled.cleanupDraftFile, isFalse);
+    expect(_plan(snapshot, operation, 43).request, isNull);
+  });
+
+  test('cancel never deletes a destination rejected as a collision', () {
+    final operation = draft();
+    final inFlight = _inFlightNormalUpload(operation, 44);
+    var snapshot = _apply(
+      inFlight.snapshot,
+      operation,
+      decodeAttachmentDavResponse(
+        request: inFlight.request,
+        statusCode: 412,
+        body: Uint8List(0),
+      ),
+    );
+    final rotated = _state(snapshot, operation);
+    expect(rotated.phase, AttachmentJobPhase.draftResolved);
+    expect(rotated.errorClass, 'dav-destination-collision');
+
+    final cancel = requestAttachmentCancel(
+      snapshot,
+      accountId: accountA,
+      jobId: operation.jobId,
+    );
+
+    expect(cancel.outcome, AttachmentRuntimeOutcome.cancelled);
+    snapshot = commit(snapshot, cancel);
+    final cancelled = _state(snapshot, operation);
+    expect(cancelled.cleanupDraftFile, isFalse);
+    expect(_plan(snapshot, operation, 45).request, isNull);
+  });
+
   test('normal upload rotates a colliding durable destination', () {
     final operation = draft();
     var snapshot = _driveProbe(operation);
@@ -166,4 +243,19 @@ void _registerAttachmentRuntimeCollisionTests() {
     final cancelled = commit(snapshot, cancel);
     expect(_state(cancelled, operation).phase, AttachmentJobPhase.cancelled);
   });
+}
+
+({AttachmentRuntimeSnapshot snapshot, AttachmentDavRequest request})
+_inFlightNormalUpload(AttachmentJobDraft operation, int requestNumber) {
+  var snapshot = _driveProbe(operation);
+  final upload = _plan(
+    snapshot,
+    operation,
+    requestNumber,
+    observation: observation(operation.source),
+  );
+  final request = upload.request! as AttachmentDavRequest;
+  expect(request.step, AttachmentRequestStep.normalPut);
+  snapshot = commit(snapshot, upload);
+  return (snapshot: snapshot, request: request);
 }

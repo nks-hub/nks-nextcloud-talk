@@ -667,9 +667,10 @@ void main() {
       expect(secondFinalize.outcome, AttachmentRuntimeOutcome.finalizing);
     });
 
-    test('cancel before finalize performs idempotent Draft cleanup', () {
+    test('cancel deletes a confirmed-owned remote Draft file', () {
       final operation = draft();
       var snapshot = _driveToUploaded(operation);
+      expect(_state(snapshot, operation).phase, AttachmentJobPhase.uploaded);
       final cancel = requestAttachmentCancel(
         snapshot,
         accountId: accountA,
