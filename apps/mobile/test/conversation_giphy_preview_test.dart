@@ -27,6 +27,7 @@ void main() {
           onSelectAccount: _ignoreAccount,
           onAddAccount: _noop,
           onOpenConversation: _ignoreConversation,
+          onCloseConversation: () {},
           onSelectConversation: _ignoreConversation,
         ),
       ),

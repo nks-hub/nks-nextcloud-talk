@@ -4,7 +4,7 @@ part of 'conversation_shell.dart';
 /// conversation moves onto the navigator instead.
 const double kExpandedShellBreakpoint = 720;
 
-final class ConversationWorkspace extends StatefulWidget {
+final class ConversationWorkspace extends StatelessWidget {
   const ConversationWorkspace({
     super.key,
     required this.account,
@@ -20,6 +20,7 @@ final class ConversationWorkspace extends StatefulWidget {
     required this.onAddAccount,
     required this.onOpenConversation,
     required this.onSelectConversation,
+    required this.onCloseConversation,
     this.onOpenCreatedConversation,
   });
 
@@ -41,50 +42,14 @@ final class ConversationWorkspace extends StatefulWidget {
   final ValueChanged<CachedConversation> onOpenConversation;
   final ValueChanged<CachedConversation> onSelectConversation;
 
+  /// Clears the selection, returning the narrow layout to the list.
+  final VoidCallback onCloseConversation;
+
   /// Opens a room the new-conversation screen just created or resolved.
   final ValueChanged<String>? onOpenCreatedConversation;
 
   @override
-  State<ConversationWorkspace> createState() => _ConversationWorkspaceState();
-}
-
-final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
-  /// Token already handed over to the compact shell as a pushed route. The
-  /// expanded shell keeps a selected conversation beside the list, but the
-  /// compact shell has no second pane, so narrowing the window would drop the
-  /// open conversation off screen. Handing it to the navigator keeps it
-  /// reachable and matches the official client, where the route is the source
-  /// of truth.
-  String? _handedOverToken;
-
-  void _handOverToCompact(CachedConversation conversation) {
-    if (_handedOverToken == conversation.token) {
-      return;
-    }
-    _handedOverToken = conversation.token;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        widget.onOpenConversation(conversation);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final account = widget.account;
-    final accounts = widget.accounts;
-    final unreadByAccount = widget.unreadByAccount;
-    final conversations = widget.conversations;
-    final selectedConversationToken = widget.selectedConversationToken;
-    final loading = widget.loading;
-    final syncing = widget.syncing;
-    final onRefresh = widget.onRefresh;
-    final onReauthenticate = widget.onReauthenticate;
-    final onSelectAccount = widget.onSelectAccount;
-    final onOpenCreatedConversation = widget.onOpenCreatedConversation;
-    final onAddAccount = widget.onAddAccount;
-    final onOpenConversation = widget.onOpenConversation;
-    final onSelectConversation = widget.onSelectConversation;
     return LayoutBuilder(
       builder: (context, constraints) {
         final selectedConversation = conversations
@@ -93,14 +58,12 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
             )
             .firstOrNull;
         if (constraints.maxWidth < kExpandedShellBreakpoint) {
-          if (selectedConversation != null) {
-            _handOverToCompact(selectedConversation);
-          }
           return _CompactShell(
             account: account,
             accounts: accounts,
             unreadByAccount: unreadByAccount,
             conversations: conversations,
+            selectedConversation: selectedConversation,
             loading: loading,
             syncing: syncing,
             onRefresh: onRefresh,
@@ -108,10 +71,10 @@ final class _ConversationWorkspaceState extends State<ConversationWorkspace> {
             onSelectAccount: onSelectAccount,
             onAddAccount: onAddAccount,
             onOpenConversation: onOpenConversation,
+            onCloseConversation: onCloseConversation,
             onOpenCreatedConversation: onOpenCreatedConversation,
           );
         }
-        _handedOverToken = null;
         return _ExpandedShell(
           account: account,
           accounts: accounts,
@@ -154,13 +117,16 @@ final class _CompactShell extends StatelessWidget {
     required this.onSelectAccount,
     required this.onAddAccount,
     required this.onOpenConversation,
+    required this.onCloseConversation,
     required this.onOpenCreatedConversation,
+    this.selectedConversation,
   });
 
   final StoredAccount account;
   final List<StoredAccount> accounts;
   final Map<String, int> unreadByAccount;
   final List<CachedConversation> conversations;
+  final CachedConversation? selectedConversation;
   final bool loading;
   final bool syncing;
   final Future<void> Function() onRefresh;
@@ -168,11 +134,36 @@ final class _CompactShell extends StatelessWidget {
   final ValueChanged<String> onSelectAccount;
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onOpenConversation;
+  final VoidCallback onCloseConversation;
   final ValueChanged<String>? onOpenCreatedConversation;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final selected = selectedConversation;
+    if (selected != null) {
+      // One pane, so the conversation takes the list's place instead of being
+      // pushed. Selection stays the only record of what is open, which is what
+      // lets a widened window put it back beside the list.
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) {
+            onCloseConversation();
+          }
+        },
+        child: Scaffold(
+          key: const Key('conversation-shell-compact-conversation'),
+          body: SafeArea(
+            child: PresenceChatRoomPane(
+              account: account,
+              conversation: selected,
+              onClose: onCloseConversation,
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       key: const Key('conversation-shell-compact'),
       appBar: AppBar(

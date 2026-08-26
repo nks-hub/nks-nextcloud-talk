@@ -263,10 +263,15 @@ final class PresenceChatRoomPane extends StatelessWidget {
     super.key,
     required this.account,
     required this.conversation,
+    this.onClose,
   });
 
   final StoredAccount account;
   final CachedConversation conversation;
+
+  /// Shows a back affordance in the header. The narrow layout renders this
+  /// pane in place of the list, where there is no route to pop.
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -286,6 +291,15 @@ final class PresenceChatRoomPane extends StatelessWidget {
           ),
           child: Row(
             children: [
+              if (onClose != null) ...[
+                IconButton(
+                  key: const Key('close-conversation'),
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: const BackButtonIcon(),
+                  onPressed: onClose,
+                ),
+                const SizedBox(width: 4),
+              ],
               ExcludeSemantics(
                 child: ConversationAvatar(
                   account: account,

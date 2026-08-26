@@ -118,6 +118,7 @@ void main() {
           onSelectAccount: _ignoreString,
           onAddAccount: _ignore,
           onOpenConversation: _ignoreConversation,
+          onCloseConversation: () {},
           onSelectConversation: _ignoreConversation,
         ),
       ),
@@ -175,6 +176,7 @@ void main() {
         onSelectAccount: (_) {},
         onAddAccount: () {},
         onOpenConversation: (_) {},
+        onCloseConversation: () {},
         onSelectConversation: (_) {},
       ),
     );
@@ -252,6 +254,7 @@ void main() {
           onSelectAccount: (_) {},
           onAddAccount: () {},
           onOpenConversation: (value) => opened.add(value.token),
+          onCloseConversation: () {},
           onSelectConversation: (_) {},
         ),
       ),
@@ -400,6 +403,7 @@ void main() {
             onSelectAccount: (_) {},
             onAddAccount: () {},
             onOpenConversation: (_) {},
+            onCloseConversation: () {},
             onSelectConversation: (_) {},
           ),
         ),
@@ -458,6 +462,7 @@ ConversationWorkspace _accessibilityWorkspace({
     onSelectAccount: _ignoreString,
     onAddAccount: _ignore,
     onOpenConversation: _ignoreConversation,
+    onCloseConversation: () {},
     onSelectConversation: _ignoreConversation,
   );
 }

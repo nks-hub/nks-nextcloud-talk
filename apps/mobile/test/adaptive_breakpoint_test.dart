@@ -1,82 +1,185 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 
-/// Narrowing the window hands the open conversation to the navigator. Nothing
-/// underneath that route is built while it covers the screen, so the route is
-/// the only thing that can notice the window growing back.
-void main() {
-  Future<void> pumpPushed(WidgetTester tester, {required Size size}) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = size;
-    addTearDown(tester.view.reset);
+import 'test_support.dart';
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: TextButton(
-                onPressed: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const PopWhenExpanded(
-                      child: Scaffold(body: Text('pushed conversation')),
-                    ),
-                  ),
-                ),
-                child: const Text('workspace below'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('workspace below'));
-    await tester.pumpAndSettle();
+const _account = StoredAccount(
+  id: 'breakpoint-account',
+  serverUrl: 'https://cloud.example.invalid',
+  loginName: 'breakpoint-user',
+  serverProductName: 'Nextcloud',
+  talkFeaturesJson: '["avatar"]',
+  selected: true,
+  createdAtMillis: 1767225600000,
+);
+
+const _conversation = CachedConversation(
+  accountId: 'breakpoint-account',
+  token: 'breakpointtoken',
+  displayName: 'Breakpoint room',
+  description: 'Breakpoint conversation',
+  lastActivity: 1724300000,
+  unreadMessages: 0,
+  favorite: false,
+  isArchived: false,
+  readOnly: 0,
+  roomType: 2,
+  roomName: 'breakpoint-room',
+  objectType: '',
+  avatarVersion: '',
+  isCustomAvatar: false,
+  lastMessageText: 'Breakpoint preview',
+  lastMessageTimestamp: 1724300000,
+  rawJson: '{}',
+);
+
+/// Stands in for the shell: it owns the selected token, which is the single
+/// record of what is open in both layouts.
+final class _Harness extends StatefulWidget {
+  const _Harness({this.initialToken});
+
+  final String? initialToken;
+
+  @override
+  State<_Harness> createState() => _HarnessState();
+}
+
+final class _HarnessState extends State<_Harness> {
+  String? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    _token = widget.initialToken;
   }
 
-  testWidgets('a widened window pops the conversation back to the workspace', (
-    tester,
-  ) async {
-    await pumpPushed(tester, size: const Size(700, 800));
-    expect(find.text('pushed conversation'), findsOneWidget);
+  @override
+  Widget build(BuildContext context) {
+    return ConversationWorkspace(
+      account: _account,
+      accounts: const [_account],
+      conversations: const [_conversation],
+      selectedConversationToken: _token,
+      loading: false,
+      syncing: false,
+      onRefresh: () async {},
+      onSelectAccount: (_) {},
+      onAddAccount: () {},
+      onOpenConversation: (c) => setState(() => _token = c.token),
+      onSelectConversation: (c) => setState(() => _token = c.token),
+      onCloseConversation: () => setState(() => _token = null),
+    );
+  }
+}
 
-    tester.view.physicalSize = const Size(1200, 800);
-    await tester.pumpAndSettle();
+void main() {
+  late AppDatabase database;
 
-    expect(find.text('pushed conversation'), findsNothing);
-    expect(find.text('workspace below'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  setUp(() => database = openTestDatabase());
+  tearDown(() => database.close());
 
-  testWidgets('a narrow window leaves the conversation alone', (tester) async {
-    await pumpPushed(tester, size: const Size(700, 800));
-
-    tester.view.physicalSize = const Size(719, 800);
-    await tester.pumpAndSettle();
-
-    expect(find.text('pushed conversation'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('a screen opened on top keeps the conversation in place', (
-    tester,
-  ) async {
-    await pumpPushed(tester, size: const Size(700, 800));
-
-    final pushedContext = tester.element(find.text('pushed conversation'));
-    Navigator.of(pushedContext).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const Scaffold(body: Text('room details')),
+  Future<void> pump(WidgetTester tester, {String? token}) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [appDatabaseProvider.overrideWithValue(database)],
+        child: localizedTestApp(home: _Harness(initialToken: token)),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+  }
+
+  final compactConversation = find.byKey(
+    const Key('conversation-shell-compact-conversation'),
+  );
+  final compactList = find.byKey(const Key('conversation-shell-compact'));
+  final expanded = find.byKey(const Key('conversation-shell-expanded'));
+  final detailPane = find.byKey(const Key('conversation-detail-pane'));
+
+  testWidgets('narrowing keeps the open conversation on screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    await pump(tester, token: _conversation.token);
+    expect(expanded, findsOneWidget);
+
+    tester.view.physicalSize = const Size(700, 800);
+    await tester.pump();
+
+    expect(compactConversation, findsOneWidget);
+    expect(compactList, findsNothing);
+  });
+
+  testWidgets('widening puts the conversation back beside the list', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(700, 800);
+    await pump(tester, token: _conversation.token);
+    expect(compactConversation, findsOneWidget);
 
     tester.view.physicalSize = const Size(1200, 800);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
-    // Popping here would yank the details screen out from under the user.
-    expect(find.text('room details'), findsOneWidget);
+    expect(expanded, findsOneWidget);
+    expect(detailPane, findsOneWidget);
+    expect(
+      find.descendant(of: detailPane, matching: find.text('Breakpoint room')),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('a conversation opened while narrow survives widening', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(700, 800);
+    await pump(tester);
+    expect(compactList, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(Key('conversation-tile-${_conversation.token}')),
+    );
+    await tester.pump();
+    expect(compactConversation, findsOneWidget);
+
+    tester.view.physicalSize = const Size(1200, 800);
+    await tester.pump();
+
+    // The old hand-over dropped this case into an empty detail pane.
+    expect(expanded, findsOneWidget);
+    expect(
+      find.descendant(of: detailPane, matching: find.text('Breakpoint room')),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('system back clears the selection instead of leaving the app', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(700, 800);
+    await pump(tester, token: _conversation.token);
+    expect(compactConversation, findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+
+    expect(compactList, findsOneWidget);
+    expect(compactConversation, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the back affordance clears the selection', (tester) async {
+    tester.view.physicalSize = const Size(700, 800);
+    await pump(tester, token: _conversation.token);
+
+    await tester.tap(find.byKey(const Key('close-conversation')));
+    await tester.pump();
+
+    expect(compactList, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
