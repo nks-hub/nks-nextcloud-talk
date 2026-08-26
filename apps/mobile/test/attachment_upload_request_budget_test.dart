@@ -27,30 +27,33 @@ import 'test_support.dart';
 /// change that adds a round trip to an upload fails here instead of only
 /// showing up in a server access log.
 void main() {
-  test('an upload with no open room costs three steps and one catch-up', () async {
-    final fixture = await _UploadFixture.create();
-    addTearDown(fixture.close);
+  test(
+    'an upload with no open room costs three steps and one catch-up',
+    () async {
+      final fixture = await _UploadFixture.create();
+      addTearDown(fixture.close);
 
-    await fixture.settleRoom();
-    fixture.reset();
+      await fixture.settleRoom();
+      fixture.reset();
 
-    final session = await fixture.service.enqueue(fixture.enqueueRequest());
-    await session.events.firstWhere(
-      (event) => event.phase == AttachmentJobPhase.completed,
-    );
-    await fixture.settleTraffic();
+      final session = await fixture.service.enqueue(fixture.enqueueRequest());
+      await session.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.completed,
+      );
+      await fixture.settleTraffic();
 
-    expect(fixture.log, <String>[
-      'POST attachment/folder',
-      'PUT dav',
-      'POST attachment',
-      // The confirmation has to observe the server-created message, and the
-      // catch-up drains to convergence so the room can long poll again.
-      'GET chat future',
-      'GET chat future',
-    ]);
-    expect(fixture.capabilityRequests, 0, reason: 'capabilities stay cached');
-  });
+      expect(fixture.log, <String>[
+        'POST attachment/folder',
+        'PUT dav',
+        'POST attachment',
+        // The confirmation has to observe the server-created message, and the
+        // catch-up drains to convergence so the room can long poll again.
+        'GET chat future',
+        'GET chat future',
+      ]);
+      expect(fixture.capabilityRequests, 0, reason: 'capabilities stay cached');
+    },
+  );
 
   test('an upload from an open room adds no chat request of its own', () async {
     final fixture = await _UploadFixture.create();
@@ -169,7 +172,8 @@ final class _UploadFixture {
 
   final List<String> log = <String>[];
   final Completer<void> livePollStarted = Completer<void>();
-  final List<Completer<http.Response>> _heldPolls = <Completer<http.Response>>[];
+  final List<Completer<http.Response>> _heldPolls =
+      <Completer<http.Response>>[];
 
   int chatRequests = 0;
   int capabilityRequests = 0;
@@ -376,6 +380,8 @@ final class _UploadFixture {
     message['actorId'] = 'fixture-user';
     message['messageType'] = 'comment';
     message['systemMessage'] = '';
+    message['threadId'] = _confirmationMessageId;
+    message['isThread'] = false;
     message['message'] = '{file}';
     message['messageParameters'] = <String, Object?>{
       'file': <String, Object?>{
