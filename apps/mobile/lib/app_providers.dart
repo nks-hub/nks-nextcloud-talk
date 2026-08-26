@@ -908,7 +908,8 @@ final chatVoiceFileProvider = FutureProvider.autoDispose
     });
 
 final chatMessagesProvider =
-    StreamProvider.family<List<CachedChatMessage>, ChatRoomProviderKey>((
+    StreamProvider.autoDispose
+        .family<List<CachedChatMessage>, ChatRoomProviderKey>((
       ref,
       key,
     ) {
@@ -922,7 +923,8 @@ final chatMessagesProvider =
     });
 
 final outgoingMessageStatusesProvider =
-    StreamProvider.family<List<OutgoingMessageStatus>, ChatRoomProviderKey>((
+    StreamProvider.autoDispose
+        .family<List<OutgoingMessageStatus>, ChatRoomProviderKey>((
       ref,
       key,
     ) {
@@ -936,7 +938,8 @@ final outgoingMessageStatusesProvider =
     });
 
 final textSendOperationsProvider =
-    StreamProvider.family<List<StoredTextSendOperation>, ChatRoomProviderKey>((
+    StreamProvider.autoDispose
+        .family<List<StoredTextSendOperation>, ChatRoomProviderKey>((
       ref,
       key,
     ) {
@@ -950,7 +953,8 @@ final textSendOperationsProvider =
     });
 
 final chatScopeProvider =
-    StreamProvider.family<StoredChatScope?, ChatRoomProviderKey>((ref, key) {
+    StreamProvider.autoDispose
+        .family<StoredChatScope?, ChatRoomProviderKey>((ref, key) {
       return ref
           .watch(chatRepositoryProvider)
           .watchScope(
