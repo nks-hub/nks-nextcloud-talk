@@ -106,6 +106,8 @@ final class _Fixture {
     AttachmentMessageKind kind = AttachmentMessageKind.file,
     String mimeType = 'image/png',
     String displayName = 'source.png',
+    int? replyTo,
+    int? threadId,
   }) => AttachmentEnqueueRequest(
     accountId: AccountId.parse('account-a'),
     server: ServerBase.parse('https://cloud.example.invalid'),
@@ -127,9 +129,9 @@ final class _Fixture {
     metadata: AttachmentMetadata(
       kind: kind,
       caption: null,
-      replyTo: null,
-      threadId: null,
-      threadTitle: null,
+      replyTo: replyTo,
+      threadId: threadId,
+      threadTitle: threadId == null ? null : 'Synthetic thread',
       silent: false,
     ),
     davUserId: DavUserId.parse('fixture-user'),
@@ -292,6 +294,12 @@ final class _Fixture {
   AttachmentMessageConfirmation confirmation(
     AttachmentJobId _, {
     required int messageId,
+    int? parentMessageId,
+    ConversationToken? parentRoomToken,
+    int? parentThreadId,
+    bool parentDeleted = false,
+    int? threadId,
+    bool useMessageIdAsThread = true,
   }) => AttachmentMessageConfirmation(
     accountId: AccountId.parse('account-a'),
     server: ServerBase.parse('https://cloud.example.invalid'),
@@ -305,6 +313,11 @@ final class _Fixture {
     systemMessage: '',
     messageType: 'comment',
     hasFileRichObject: true,
+    parentMessageId: parentMessageId,
+    parentRoomToken: parentRoomToken,
+    parentThreadId: parentThreadId,
+    parentDeleted: parentDeleted,
+    threadId: useMessageIdAsThread ? threadId ?? messageId : threadId,
   );
 
   Future<void> cacheConfirmation({
@@ -337,7 +350,7 @@ final class _Fixture {
       'reactions': <String, Object?>{},
       'reactionsSelf': <Object?>[],
       'deleted': null,
-      'threadId': null,
+      'threadId': messageId,
       'isThread': false,
       'threadTitle': null,
       'threadReplies': 0,
@@ -520,6 +533,8 @@ AttachmentCapabilityProfile _profile() =>
               'spreed': <String, Object?>{
                 'features': <String>[
                   'chat-reference-id',
+                  'chat-replies',
+                  'threads',
                   'voice-message-sharing',
                 ],
                 'config': <String, Object?>{

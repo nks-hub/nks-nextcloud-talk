@@ -1,6 +1,7 @@
 import '../identifiers.dart';
 import '../protocol_exception.dart';
 import '../server_base.dart';
+import 'confirmation_scope.dart';
 import 'identifiers.dart';
 import 'models.dart';
 import 'profile.dart';
@@ -72,30 +73,20 @@ final class ChatMessageConfirmation {
     required AccountId accountId,
     required ServerBase server,
   }) {
-    final parent = message.parent;
-    final rawReplyTo = parent is ChatFullParent
-        ? parent.metadata['replyToMessageId']
-        : null;
-    final rawReplyToken = parent is ChatFullParent
-        ? parent.metadata['replyToConversationToken']
-        : null;
+    final scope = ChatConfirmationScope.fromMessage(message);
     return ChatMessageConfirmation(
       accountId: accountId,
       server: server,
       messageId: message.messageId,
       roomToken: message.roomToken,
       referenceId: message.referenceId,
-      parentMessageId: parent is ChatFullParent
-          ? parent.messageId
-          : parent is ChatDeletedParent
-          ? parent.messageId
-          : null,
-      parentRoomToken: parent is ChatFullParent ? parent.roomToken : null,
-      parentThreadId: parent is ChatFullParent ? parent.message.threadId : null,
-      parentDeleted: parent is ChatDeletedParent,
-      replyToMessageId: rawReplyTo is int ? rawReplyTo : null,
-      replyToRoomToken: rawReplyToken is String ? rawReplyToken : null,
-      threadId: message.threadId,
+      parentMessageId: scope.parentMessageId,
+      parentRoomToken: scope.parentRoomToken,
+      parentThreadId: scope.parentThreadId,
+      parentDeleted: scope.parentDeleted,
+      replyToMessageId: scope.replyToMessageId,
+      replyToRoomToken: scope.replyToRoomToken,
+      threadId: scope.threadId,
     );
   }
 
@@ -684,39 +675,23 @@ bool _authoritativeConfirmationMatches(
       message.referenceId != operation.referenceId.value) {
     return false;
   }
-  if (operation.threadId != null) {
-    if (message.threadId != operation.threadId) {
-      return false;
-    }
-    if (message.parentMessageId == null) {
-      return false;
-    }
-    if (message.parentDeleted) {
-      return message.parentMessageId == operation.threadId &&
-          message.parentRoomToken == null &&
-          message.parentThreadId == null;
-    }
-    return message.parentMessageId == operation.threadId &&
-        message.parentRoomToken == operation.roomToken &&
-        message.parentThreadId == operation.threadId;
-  }
-  if (operation.replyTo == null) {
-    return message.threadId == message.messageId &&
-        message.parentMessageId == null &&
-        message.parentRoomToken == null;
-  }
-  if (operation.replyToToken == null) {
-    return message.parentMessageId == operation.replyTo &&
-        message.parentRoomToken == operation.parentRoomToken &&
-        message.parentThreadId != null &&
-        message.parentThreadId! > 0 &&
-        message.threadId == message.parentThreadId;
-  }
-  return message.replyToMessageId == operation.replyTo &&
-      message.replyToRoomToken == operation.replyToToken!.value &&
-      message.parentRoomToken == operation.parentRoomToken &&
-      message.parentThreadId == 0 &&
-      message.threadId == message.parentMessageId;
+  return matchesAuthoritativeChatConfirmationScope(
+    confirmation: ChatConfirmationScope(
+      messageId: message.messageId,
+      parentMessageId: message.parentMessageId,
+      parentRoomToken: message.parentRoomToken,
+      parentThreadId: message.parentThreadId,
+      parentDeleted: message.parentDeleted,
+      replyToMessageId: message.replyToMessageId,
+      replyToRoomToken: message.replyToRoomToken,
+      threadId: message.threadId,
+    ),
+    roomToken: operation.roomToken,
+    replyTo: operation.replyTo,
+    replyToToken: operation.replyToToken,
+    parentRoomToken: operation.parentRoomToken,
+    threadId: operation.threadId,
+  );
 }
 
 bool _responseMatches(

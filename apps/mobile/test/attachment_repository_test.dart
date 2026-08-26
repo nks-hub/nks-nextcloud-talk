@@ -207,6 +207,68 @@ void main() {
   });
 
   test(
+    'emits when an authoritative parent scope changes in cached JSON',
+    () async {
+      final database = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(database.close);
+      await _insertAccount(database, 'account-a');
+      final repository = AttachmentRepository(database);
+      await _persistAwaitingJob(
+        repository,
+        accountId: 'account-a',
+        sourceHandle: 'nctalk-media-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        replyTo: 42,
+        threadId: null,
+      );
+      final invalidScope = Completer<void>();
+      final correctedScope = Completer<AttachmentMessageConfirmation>();
+      final subscription = repository.watchConfirmationCandidates().listen((
+        snapshot,
+      ) {
+        if (snapshot.batches.isEmpty ||
+            snapshot.batches.single.confirmations.isEmpty) {
+          return;
+        }
+        final confirmation = snapshot.batches.single.confirmations.single;
+        if (confirmation.parentThreadId == 76 && !invalidScope.isCompleted) {
+          invalidScope.complete();
+        }
+        if (confirmation.parentThreadId == 77 && !correctedScope.isCompleted) {
+          correctedScope.complete(confirmation);
+        }
+      });
+      addTearDown(subscription.cancel);
+
+      await _insertCachedConfirmation(
+        database,
+        messageId: 202,
+        parentMessageId: 42,
+        parentRoomToken: 'rooma123',
+        parentThreadId: 76,
+        threadId: 77,
+      );
+      await invalidScope.future;
+      final row =
+          (await database.select(database.cachedChatMessages).get()).single;
+      final wire = jsonDecode(row.rawJson) as Map<String, Object?>;
+      final parent = wire['parent']! as Map<String, Object?>;
+      parent['threadId'] = 77;
+      await (database.update(database.cachedChatMessages)..where(
+            (message) =>
+                message.accountId.equals(row.accountId) &
+                message.roomToken.equals(row.roomToken) &
+                message.messageId.equals(row.messageId),
+          ))
+          .write(CachedChatMessagesCompanion(rawJson: Value(jsonEncode(wire))));
+
+      final corrected = await correctedScope.future;
+      expect(corrected.parentRoomToken?.value, 'rooma123');
+      expect(corrected.parentThreadId, 77);
+      expect(corrected.threadId, 77);
+    },
+  );
+
+  test(
     'replays an existing confirmation snapshot after database reopen',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -277,26 +339,40 @@ void main() {
           threadId: 84,
         );
         await database.transaction(() async {
-          for (final parent in <int?>[null, 41, 42]) {
-            await _insertCachedConfirmation(
-              database!,
-              messageId: 500 + (parent ?? 0),
-              parentMessageId: parent,
-            );
-          }
-          for (final scope in <({int? parent, int? thread})>[
-            (parent: 84, thread: null),
-            (parent: 84, thread: 83),
-            (parent: 84, thread: 84),
-          ]) {
-            await _insertCachedConfirmation(
-              database!,
-              messageId: 600 + (scope.thread ?? 0),
-              referenceId: '22222222-2222-4222-8222-222222222222',
-              parentMessageId: scope.parent,
-              threadId: scope.thread,
-            );
-          }
+          await _insertCachedConfirmation(
+            database!,
+            messageId: 541,
+            parentMessageId: 41,
+            parentRoomToken: 'rooma123',
+            parentThreadId: 77,
+            threadId: 77,
+          );
+          await _insertCachedConfirmation(
+            database,
+            messageId: 542,
+            parentMessageId: 42,
+            parentRoomToken: 'rooma123',
+            parentThreadId: 77,
+            threadId: 77,
+          );
+          await _insertCachedConfirmation(
+            database,
+            messageId: 683,
+            referenceId: '22222222-2222-4222-8222-222222222222',
+            parentMessageId: 84,
+            parentRoomToken: 'rooma123',
+            parentThreadId: 83,
+            threadId: 84,
+          );
+          await _insertCachedConfirmation(
+            database,
+            messageId: 684,
+            referenceId: '22222222-2222-4222-8222-222222222222',
+            parentMessageId: 84,
+            parentRoomToken: 'rooma123',
+            parentThreadId: 84,
+            threadId: 84,
+          );
         });
         await database.close();
 
@@ -638,7 +714,11 @@ Future<void> _insertCachedConfirmation(
   String messageType = 'comment',
   bool hasFileRichObject = true,
   int? parentMessageId,
+  String? parentRoomToken,
+  int? parentThreadId,
+  bool parentDeleted = false,
   int? threadId,
+  bool useMessageIdAsThread = true,
 }) {
   final parameters = hasFileRichObject
       ? <String, Object?>{
@@ -667,12 +747,35 @@ Future<void> _insertCachedConfirmation(
     'reactions': <String, Object?>{},
     'reactionsSelf': <Object?>[],
     'deleted': null,
-    'threadId': threadId,
+    'threadId': useMessageIdAsThread ? threadId ?? messageId : threadId,
     'isThread': false,
     'threadTitle': null,
     'threadReplies': 0,
     if (parentMessageId != null)
-      'parent': <String, Object?>{'id': parentMessageId, 'deleted': true},
+      'parent': parentDeleted
+          ? <String, Object?>{'id': parentMessageId, 'deleted': true}
+          : <String, Object?>{
+              'id': parentMessageId,
+              'token': parentRoomToken ?? roomToken,
+              'actorType': 'users',
+              'actorId': 'fixture-parent',
+              'actorDisplayName': 'Fixture Parent',
+              'timestamp': 1769990000 + parentMessageId,
+              'systemMessage': '',
+              'messageType': 'comment',
+              'isReplyable': true,
+              'referenceId': '',
+              'message': 'Synthetic parent',
+              'messageParameters': <String, Object?>{},
+              'markdown': false,
+              'reactions': <String, Object?>{},
+              'reactionsSelf': <Object?>[],
+              'deleted': null,
+              'threadId': parentThreadId,
+              'isThread': false,
+              'threadTitle': null,
+              'threadReplies': 0,
+            },
   };
   return database
       .into(database.cachedChatMessages)

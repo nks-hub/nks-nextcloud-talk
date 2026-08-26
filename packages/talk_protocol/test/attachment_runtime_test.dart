@@ -131,60 +131,41 @@ void main() {
       expect(_state(snapshot, operation).phase, AttachmentJobPhase.completed);
     });
 
-    test('reply completion requires the expected parent message', () {
-      final operation = draft(attachmentMetadata: metadata(replyTo: 42));
-      var snapshot = _driveToAwaiting(operation);
+    test('plain completion rejects a parent or foreign thread scope', () {
+      final operation = draft();
+      final snapshot = _driveToAwaiting(operation);
 
-      for (final parentMessageId in <int?>[null, 41]) {
-        final mismatch = reconcileAttachmentConfirmation(
-          snapshot,
-          accountId: accountA,
-          jobId: operation.jobId,
-          confirmations: <AttachmentMessageConfirmation>[
-            confirmation(
-              operation,
-              520 + (parentMessageId ?? 0),
-              parentMessageId: parentMessageId,
-            ),
-          ],
-        );
-        expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
-      }
-
-      final complete = reconcileAttachmentConfirmation(
-        snapshot,
-        accountId: accountA,
-        jobId: operation.jobId,
-        confirmations: <AttachmentMessageConfirmation>[
-          confirmation(operation, 562, parentMessageId: 42),
-        ],
-      );
-      snapshot = commit(snapshot, complete);
-      expect(complete.outcome, AttachmentRuntimeOutcome.completed);
-      expect(_state(snapshot, operation).messageIds, <int>[562]);
-    });
-
-    test('named-thread completion requires its root and thread scope', () {
-      final operation = draft(attachmentMetadata: metadata(threadId: 42));
-      var snapshot = _driveToAwaiting(operation);
-
-      for (final scope in <({int? parent, int? thread})>[
-        (parent: null, thread: null),
-        (parent: 42, thread: 41),
-        (parent: 41, thread: 42),
+      for (final candidate in <AttachmentMessageConfirmation>[
+        confirmation(
+          operation,
+          520,
+          parentMessageId: 42,
+          parentRoomToken: roomA,
+          parentThreadId: 42,
+          threadId: 42,
+        ),
+        confirmation(operation, 521, threadId: 42),
       ]) {
         final mismatch = reconcileAttachmentConfirmation(
           snapshot,
           accountId: accountA,
           jobId: operation.jobId,
-          confirmations: <AttachmentMessageConfirmation>[
-            confirmation(
-              operation,
-              570 + (scope.parent ?? 0),
-              parentMessageId: scope.parent,
-              threadId: scope.thread,
-            ),
-          ],
+          confirmations: <AttachmentMessageConfirmation>[candidate],
+        );
+        expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
+      }
+    });
+
+    test('reply completion requires its authoritative same-room thread', () {
+      final operation = draft(attachmentMetadata: metadata(replyTo: 42));
+      final snapshot = _driveToAwaiting(operation);
+
+      for (final candidate in invalidReplyConfirmations(operation)) {
+        final mismatch = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+          confirmations: <AttachmentMessageConfirmation>[candidate],
         );
         expect(mismatch.outcome, AttachmentRuntimeOutcome.noMatch);
       }
@@ -194,12 +175,39 @@ void main() {
         accountId: accountA,
         jobId: operation.jobId,
         confirmations: <AttachmentMessageConfirmation>[
-          confirmation(operation, 612, parentMessageId: 42, threadId: 42),
+          confirmation(
+            operation,
+            562,
+            parentMessageId: 42,
+            parentRoomToken: roomA,
+            parentThreadId: 77,
+            threadId: 77,
+          ),
         ],
       );
-      snapshot = commit(snapshot, complete);
       expect(complete.outcome, AttachmentRuntimeOutcome.completed);
-      expect(_state(snapshot, operation).messageIds, <int>[612]);
+      expect(_state(commit(snapshot, complete), operation).messageIds, <int>[
+        562,
+      ]);
+    });
+
+    test('named-thread completion validates full and deleted root shapes', () {
+      final operation = draft(attachmentMetadata: metadata(threadId: 42));
+      for (final candidate in namedThreadConfirmationCases(operation)) {
+        final snapshot = _driveToAwaiting(operation);
+        final result = reconcileAttachmentConfirmation(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+          confirmations: <AttachmentMessageConfirmation>[candidate.value],
+        );
+        expect(
+          result.outcome,
+          candidate.matches
+              ? AttachmentRuntimeOutcome.completed
+              : AttachmentRuntimeOutcome.noMatch,
+        );
+      }
     });
 
     test('planned finalization uses the job-bound message type metadata', () {
@@ -932,24 +940,3 @@ AttachmentRuntimeSnapshot _driveToAwaiting(AttachmentJobDraft operation) {
     ),
   );
 }
-
-AttachmentMessageConfirmation confirmation(
-  AttachmentJobDraft operation,
-  int messageId, {
-  String systemMessage = '',
-  String messageType = 'comment',
-  bool hasFileRichObject = true,
-  int? parentMessageId,
-  int? threadId,
-}) => AttachmentMessageConfirmation(
-  accountId: accountA,
-  server: serverA,
-  messageId: messageId,
-  roomToken: operation.roomToken,
-  referenceId: operation.referenceId.value,
-  systemMessage: systemMessage,
-  messageType: messageType,
-  hasFileRichObject: hasFileRichObject,
-  parentMessageId: parentMessageId,
-  threadId: threadId,
-);

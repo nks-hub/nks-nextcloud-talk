@@ -1,3 +1,4 @@
+import '../chat/confirmation_scope.dart';
 import '../chat/models.dart';
 import '../identifiers.dart';
 import '../protocol_exception.dart';
@@ -79,6 +80,11 @@ final class AttachmentMessageConfirmation {
     required this.messageType,
     required this.hasFileRichObject,
     this.parentMessageId,
+    this.parentRoomToken,
+    this.parentThreadId,
+    this.parentDeleted = false,
+    this.replyToMessageId,
+    this.replyToRoomToken,
     this.threadId,
   });
 
@@ -87,7 +93,7 @@ final class AttachmentMessageConfirmation {
     required AccountId accountId,
     required ServerBase server,
   }) {
-    final parent = message.parent;
+    final scope = ChatConfirmationScope.fromMessage(message);
     return AttachmentMessageConfirmation(
       accountId: accountId,
       server: server,
@@ -99,12 +105,13 @@ final class AttachmentMessageConfirmation {
       hasFileRichObject: message.messageParameters.values.any(
         (parameter) => parameter.type == 'file',
       ),
-      parentMessageId: parent is ChatFullParent
-          ? parent.messageId
-          : parent is ChatDeletedParent
-          ? parent.messageId
-          : null,
-      threadId: message.threadId,
+      parentMessageId: scope.parentMessageId,
+      parentRoomToken: scope.parentRoomToken,
+      parentThreadId: scope.parentThreadId,
+      parentDeleted: scope.parentDeleted,
+      replyToMessageId: scope.replyToMessageId,
+      replyToRoomToken: scope.replyToRoomToken,
+      threadId: scope.threadId,
     );
   }
 
@@ -117,6 +124,11 @@ final class AttachmentMessageConfirmation {
   final String messageType;
   final bool hasFileRichObject;
   final int? parentMessageId;
+  final ConversationToken? parentRoomToken;
+  final int? parentThreadId;
+  final bool parentDeleted;
+  final int? replyToMessageId;
+  final String? replyToRoomToken;
   final int? threadId;
 
   @override

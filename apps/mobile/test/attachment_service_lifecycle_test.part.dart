@@ -106,6 +106,68 @@ void _registerAttachmentServiceLifecycleTests() {
     },
   );
 
+  test(
+    'scope collision cannot complete or release a reply attachment',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      var releaseCalls = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        releaseSource: (_) async {
+          releaseCalls++;
+        },
+      );
+      addTearDown(service.close);
+
+      final session = await service.enqueue(
+        fixture.request(normalMaximum: 32, replyTo: 42),
+      );
+      await session.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+      );
+      await service.reconcileConfirmations(
+        accountId: session.accountId,
+        confirmations: <AttachmentMessageConfirmation>[
+          fixture.confirmation(
+            session.jobId,
+            messageId: 120,
+            parentMessageId: 42,
+            parentRoomToken: ConversationToken.parse(
+              'rooma123',
+              path: r'$.roomToken',
+              code: TalkProtocolErrorCode.invalidAttachmentModel,
+            ),
+            parentThreadId: 76,
+            threadId: 77,
+          ),
+        ],
+      );
+
+      final stored = await fixture.repository.getStoredJob(
+        accountId: session.accountId.value,
+        jobId: session.jobId.value,
+      );
+      expect(stored?.phase, AttachmentJobPhase.awaitingConfirmation.name);
+      expect(stored?.messageIdsJson, '[]');
+      expect(releaseCalls, 0);
+      expect(await fixture.sourceFile.exists(), isTrue);
+    },
+  );
+
   test('ambiguous finalize waits for authoritative confirmation', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);

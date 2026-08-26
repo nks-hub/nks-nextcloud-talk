@@ -474,15 +474,25 @@ bool _confirmationMatches(
 bool _confirmationScopeMatches(
   AttachmentJob job,
   AttachmentMessageConfirmation confirmation,
-) {
-  final threadId = job.draft.metadata.threadId;
-  if (threadId != null) {
-    return confirmation.threadId == threadId &&
-        confirmation.parentMessageId == threadId;
-  }
-  final replyTo = job.draft.metadata.replyTo;
-  return replyTo == null || confirmation.parentMessageId == replyTo;
-}
+) => matchesAuthoritativeChatConfirmationScope(
+  confirmation: ChatConfirmationScope(
+    messageId: confirmation.messageId,
+    parentMessageId: confirmation.parentMessageId,
+    parentRoomToken: confirmation.parentRoomToken,
+    parentThreadId: confirmation.parentThreadId,
+    parentDeleted: confirmation.parentDeleted,
+    replyToMessageId: confirmation.replyToMessageId,
+    replyToRoomToken: confirmation.replyToRoomToken,
+    threadId: confirmation.threadId,
+  ),
+  roomToken: job.draft.roomToken,
+  replyTo: job.draft.metadata.replyTo,
+  replyToToken: null,
+  parentRoomToken: job.draft.metadata.replyTo == null
+      ? null
+      : job.draft.roomToken,
+  threadId: job.draft.metadata.threadId,
+);
 
 bool _authorityMatches(
   AttachmentAccountState account,

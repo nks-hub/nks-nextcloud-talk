@@ -810,6 +810,11 @@ bool _confirmationsEqual(
     left.messageType == right.messageType &&
     left.hasFileRichObject == right.hasFileRichObject &&
     left.parentMessageId == right.parentMessageId &&
+    left.parentRoomToken == right.parentRoomToken &&
+    left.parentThreadId == right.parentThreadId &&
+    left.parentDeleted == right.parentDeleted &&
+    left.replyToMessageId == right.replyToMessageId &&
+    left.replyToRoomToken == right.replyToRoomToken &&
     left.threadId == right.threadId;
 
 int _confirmationHash(AttachmentMessageConfirmation value) => Object.hash(
@@ -822,5 +827,10 @@ int _confirmationHash(AttachmentMessageConfirmation value) => Object.hash(
   value.messageType,
   value.hasFileRichObject,
   value.parentMessageId,
+  value.parentRoomToken,
+  value.parentThreadId,
+  value.parentDeleted,
+  value.replyToMessageId,
+  value.replyToRoomToken,
   value.threadId,
 );

@@ -62,11 +62,13 @@ def validate_operation(value: Any) -> dict[str, Any]:
         "referenceId",
         "remoteTempPath",
         "replayContractRevision",
+        "replyTo",
         "resumePhase",
         "roomToken",
         "server",
         "source",
         "sourceVerified",
+        "threadId",
     }
     if set(operation) != required:
         raise ContractValidationError(
@@ -91,6 +93,16 @@ def validate_operation(value: Any) -> dict[str, Any]:
     _uuid(operation.get("jobId"), "jobId")
     _conversation_token(operation.get("roomToken"))
     _uuid(operation.get("referenceId"), "referenceId")
+    reply_to = operation.get("replyTo")
+    if reply_to is not None:
+        reply_to = require_integer(reply_to, "replyTo", 1)
+    thread_id = operation.get("threadId")
+    if thread_id is not None:
+        thread_id = require_integer(thread_id, "threadId", 1)
+    if reply_to is not None and thread_id is not None:
+        raise ContractValidationError(
+            "Attachment replyTo and threadId are mutually exclusive"
+        )
     expected_message_type = _expected_message_type(operation.get("expectedMessageType"))
     allow_update = require_boolean(operation.get("allowUpdate"), "allowUpdate")
     if allow_update:
@@ -225,6 +237,69 @@ def _authority_matches(operation: dict[str, Any], value: Any) -> bool:
     )
 
 
+def _nullable_positive_integer(value: Any, description: str) -> int | None:
+    if value is None:
+        return None
+    return require_integer(value, description, 1)
+
+
+def _nullable_nonnegative_integer(value: Any, description: str) -> int | None:
+    if value is None:
+        return None
+    return require_integer(value, description, 0)
+
+
+def _nullable_conversation_token(value: Any) -> str | None:
+    if value is None:
+        return None
+    return _conversation_token(value)
+
+
+def _bounded_string_allow_empty(value: Any, description: str) -> str:
+    if not isinstance(value, str) or len(value) > 64:
+        raise ContractValidationError(f"{description} must be a bounded string")
+    return value
+
+
+def _confirmation_scope_matches(
+    operation: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> bool:
+    message_id = confirmation["messageId"]
+    parent_message_id = confirmation["parentMessageId"]
+    parent_room_token = confirmation["parentRoomToken"]
+    parent_thread_id = confirmation["parentThreadId"]
+    thread_id = confirmation["threadId"]
+    operation_thread_id = operation["threadId"]
+    if operation_thread_id is not None:
+        if thread_id != operation_thread_id or parent_message_id is None:
+            return False
+        if confirmation["parentDeleted"]:
+            return (
+                parent_message_id == operation_thread_id
+                and parent_room_token is None
+                and parent_thread_id is None
+            )
+        return (
+            parent_message_id == operation_thread_id
+            and parent_room_token == operation["roomToken"]
+            and parent_thread_id == operation_thread_id
+        )
+    if operation["replyTo"] is None:
+        return (
+            thread_id == message_id
+            and parent_message_id is None
+            and parent_room_token is None
+        )
+    return (
+        parent_message_id == operation["replyTo"]
+        and parent_room_token == operation["roomToken"]
+        and parent_thread_id is not None
+        and parent_thread_id > 0
+        and thread_id == parent_thread_id
+    )
+
+
 def _confirmation_ids(
     operation: dict[str, Any],
     value: Any,
@@ -242,6 +317,14 @@ def _confirmation_ids(
             "systemMessage",
             "messageType",
             "messageId",
+            "hasFileRichObject",
+            "parentMessageId",
+            "parentRoomToken",
+            "parentThreadId",
+            "parentDeleted",
+            "replyToMessageId",
+            "replyToRoomToken",
+            "threadId",
         }:
             raise ContractValidationError("Attachment confirmation shape differs")
         message_id = require_integer(
@@ -252,6 +335,33 @@ def _confirmation_ids(
         if message_id in all_ids:
             raise ContractValidationError("Confirmation input repeats a message id")
         all_ids.add(message_id)
+        confirmation["messageId"] = message_id
+        confirmation["parentMessageId"] = _nullable_positive_integer(
+            confirmation.get("parentMessageId"),
+            "confirmation parentMessageId",
+        )
+        confirmation["parentRoomToken"] = _nullable_conversation_token(
+            confirmation.get("parentRoomToken")
+        )
+        confirmation["parentThreadId"] = _nullable_nonnegative_integer(
+            confirmation.get("parentThreadId"),
+            "confirmation parentThreadId",
+        )
+        confirmation["parentDeleted"] = require_boolean(
+            confirmation.get("parentDeleted"),
+            "confirmation parentDeleted",
+        )
+        confirmation["replyToMessageId"] = _nullable_positive_integer(
+            confirmation.get("replyToMessageId"),
+            "confirmation replyToMessageId",
+        )
+        confirmation["replyToRoomToken"] = _nullable_conversation_token(
+            confirmation.get("replyToRoomToken")
+        )
+        confirmation["threadId"] = _nullable_nonnegative_integer(
+            confirmation.get("threadId"),
+            "confirmation threadId",
+        )
         if (
             _safe_identifier(confirmation.get("accountId"), "confirmation accountId")
             == operation["accountId"]
@@ -260,13 +370,22 @@ def _confirmation_ids(
             == operation["roomToken"]
             and _uuid(confirmation.get("referenceId"), "confirmation referenceId")
             == operation["referenceId"]
-            and confirmation.get("systemMessage") == "file_shared"
+            and _bounded_string_allow_empty(
+                confirmation.get("systemMessage"),
+                "confirmation systemMessage",
+            )
+            == ""
+            and require_boolean(
+                confirmation.get("hasFileRichObject"),
+                "confirmation hasFileRichObject",
+            )
             and require_string(
                 confirmation.get("messageType"),
                 "confirmation messageType",
                 maximum=64,
             )
             == operation["expectedMessageType"]
+            and _confirmation_scope_matches(operation, confirmation)
         ):
             matches.append(message_id)
     return matches

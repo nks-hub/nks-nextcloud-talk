@@ -46,7 +46,7 @@ class CompleteContractTest(unittest.TestCase):
                 "davPlans": 7,
                 "davStatuses": 11,
                 "davXmlFixtures": 3,
-                "stateCases": 20,
+                "stateCases": 25,
             },
             attachment_contract.validate_contract(),
         )
@@ -314,6 +314,13 @@ class FinalizeMessageTypeBindingTest(unittest.TestCase):
 
 
 class StateSafetyTest(unittest.TestCase):
+    def test_operation_rejects_mixed_reply_and_named_thread_scope(self) -> None:
+        operation = base_operation()
+        operation.update({"replyTo": 42, "threadId": 84})
+
+        with self.assertRaises(attachment_contract.ContractValidationError):
+            attachment_contract.validate_operation(operation)
+
     def test_blind_finalize_replay_is_rejected_without_mutation(self) -> None:
         operation = base_operation()
         operation.update(
@@ -444,9 +451,17 @@ class StateSafetyTest(unittest.TestCase):
             return {
                 **binding,
                 "referenceId": operation["referenceId"],
-                "systemMessage": "file_shared",
+                "systemMessage": "",
                 "messageType": message_type,
                 "messageId": message_id,
+                "hasFileRichObject": True,
+                "parentMessageId": None,
+                "parentRoomToken": None,
+                "parentThreadId": None,
+                "parentDeleted": False,
+                "replyToMessageId": None,
+                "replyToRoomToken": None,
+                "threadId": message_id,
             }
 
         self.assertEqual(

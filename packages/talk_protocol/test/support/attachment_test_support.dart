@@ -274,6 +274,106 @@ Uint8List finalizeSuccessBody() => ocsBody(
   },
 );
 
+AttachmentMessageConfirmation confirmation(
+  AttachmentJobDraft operation,
+  int messageId, {
+  String systemMessage = '',
+  String messageType = 'comment',
+  bool hasFileRichObject = true,
+  int? parentMessageId,
+  ConversationToken? parentRoomToken,
+  int? parentThreadId,
+  bool parentDeleted = false,
+  int? replyToMessageId,
+  String? replyToRoomToken,
+  int? threadId,
+  bool useMessageIdAsThread = true,
+}) => AttachmentMessageConfirmation(
+  accountId: accountA,
+  server: serverA,
+  messageId: messageId,
+  roomToken: operation.roomToken,
+  referenceId: operation.referenceId.value,
+  systemMessage: systemMessage,
+  messageType: messageType,
+  hasFileRichObject: hasFileRichObject,
+  parentMessageId: parentMessageId,
+  parentRoomToken: parentRoomToken,
+  parentThreadId: parentThreadId,
+  parentDeleted: parentDeleted,
+  replyToMessageId: replyToMessageId,
+  replyToRoomToken: replyToRoomToken,
+  threadId: useMessageIdAsThread ? threadId ?? messageId : threadId,
+);
+
+List<AttachmentMessageConfirmation> invalidReplyConfirmations(
+  AttachmentJobDraft operation,
+) => <AttachmentMessageConfirmation>[
+  for (final scope
+      in <
+        ({
+          ConversationToken? room,
+          int? parentThread,
+          int childThread,
+          bool deleted,
+        })
+      >[
+        (room: roomA, parentThread: 77, childThread: 78, deleted: false),
+        (room: roomA, parentThread: 76, childThread: 77, deleted: false),
+        (room: roomB, parentThread: 77, childThread: 77, deleted: false),
+        (room: null, parentThread: null, childThread: 77, deleted: true),
+      ])
+    confirmation(
+      operation,
+      530 + scope.childThread,
+      parentMessageId: 42,
+      parentRoomToken: scope.room,
+      parentThreadId: scope.parentThread,
+      parentDeleted: scope.deleted,
+      threadId: scope.childThread,
+    ),
+];
+
+typedef ConfirmationExpectation = ({
+  AttachmentMessageConfirmation value,
+  bool matches,
+});
+
+List<ConfirmationExpectation> namedThreadConfirmationCases(
+  AttachmentJobDraft operation,
+) => <ConfirmationExpectation>[
+  for (final scope
+      in <
+        ({
+          int parent,
+          ConversationToken? room,
+          int? thread,
+          bool deleted,
+          bool matches,
+        })
+      >[
+        (parent: 42, room: roomA, thread: 42, deleted: false, matches: true),
+        (parent: 42, room: null, thread: null, deleted: true, matches: true),
+        (parent: 41, room: roomA, thread: 42, deleted: false, matches: false),
+        (parent: 42, room: roomB, thread: 42, deleted: false, matches: false),
+        (parent: 42, room: roomA, thread: 41, deleted: false, matches: false),
+        (parent: 42, room: roomA, thread: null, deleted: true, matches: false),
+        (parent: 42, room: null, thread: 42, deleted: true, matches: false),
+      ])
+    (
+      value: confirmation(
+        operation,
+        610 + scope.parent + (scope.thread ?? 0),
+        parentMessageId: scope.parent,
+        parentRoomToken: scope.room,
+        parentThreadId: scope.thread,
+        parentDeleted: scope.deleted,
+        threadId: 42,
+      ),
+      matches: scope.matches,
+    ),
+];
+
 String davManifestXml({
   required Uri sessionUri,
   Iterable<(String, int)> chunks = const <(String, int)>[],

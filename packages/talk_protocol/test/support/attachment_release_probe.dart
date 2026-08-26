@@ -186,6 +186,7 @@ void main() {
             systemMessage: '',
             messageType: 'comment',
             hasFileRichObject: true,
+            threadId: 501,
           ),
         ],
       ),

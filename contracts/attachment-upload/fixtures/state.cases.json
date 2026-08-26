@@ -7,6 +7,8 @@
     "jobId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     "roomToken": "rooma123",
     "referenceId": "11111111-1111-4111-8111-111111111111",
+    "replyTo": null,
+    "threadId": null,
     "expectedMessageType": "comment",
     "allowUpdate": false,
     "phase": "localPrepared",
@@ -79,9 +81,17 @@
               "server": "https://cloud.example.invalid/nextcloud",
               "roomToken": "rooma123",
               "referenceId": "11111111-1111-4111-8111-111111111111",
-              "systemMessage": "file_shared",
+              "systemMessage": "",
               "messageType": "comment",
-              "messageId": 501
+              "messageId": 501,
+              "hasFileRichObject": true,
+              "parentMessageId": null,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 501
             }
           ],
           "expectedOutcome": "completed"
@@ -172,9 +182,17 @@
               "server": "https://cloud.example.invalid/nextcloud",
               "roomToken": "rooma123",
               "referenceId": "11111111-1111-4111-8111-111111111111",
-              "systemMessage": "file_shared",
+              "systemMessage": "",
               "messageType": "comment",
-              "messageId": 501
+              "messageId": 501,
+              "hasFileRichObject": true,
+              "parentMessageId": null,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 501
             }
           ],
           "expectedOutcome": "no-match"
@@ -215,18 +233,34 @@
               "server": "https://cloud.example.invalid/nextcloud",
               "roomToken": "rooma123",
               "referenceId": "11111111-1111-4111-8111-111111111111",
-              "systemMessage": "file_shared",
+              "systemMessage": "",
               "messageType": "voice-message",
-              "messageId": 501
+              "messageId": 501,
+              "hasFileRichObject": true,
+              "parentMessageId": null,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 501
             },
             {
               "accountId": "account-a",
               "server": "https://cloud.example.invalid/nextcloud",
               "roomToken": "rooma123",
               "referenceId": "11111111-1111-4111-8111-111111111111",
-              "systemMessage": "file_shared",
+              "systemMessage": "",
               "messageType": "voice-message",
-              "messageId": 502
+              "messageId": 502,
+              "hasFileRichObject": true,
+              "parentMessageId": null,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 502
             }
           ],
           "expectedOutcome": "ambiguous-match"
@@ -659,6 +693,225 @@
         "cleanupRequired": true,
         "messageIds": [],
         "lastOutcome": "source-mismatch"
+      }
+    },
+    {
+      "id": "plain-confirmation-rejects-parent-scope",
+      "initial": {
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 601,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": "rooma123",
+              "parentThreadId": 77,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 77
+            }
+          ],
+          "expectedOutcome": "no-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "no-match"
+      }
+    },
+    {
+      "id": "reply-confirmation-requires-same-room-thread",
+      "initial": {
+        "replyTo": 42,
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 602,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": "rooma123",
+              "parentThreadId": 76,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 77
+            }
+          ],
+          "expectedOutcome": "no-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "no-match"
+      }
+    },
+    {
+      "id": "named-thread-full-root-confirms",
+      "initial": {
+        "threadId": 42,
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 603,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": "rooma123",
+              "parentThreadId": 42,
+              "parentDeleted": false,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 42
+            }
+          ],
+          "expectedOutcome": "completed"
+        }
+      ],
+      "expected": {
+        "phase": "completed",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [603],
+        "lastOutcome": "completed"
+      }
+    },
+    {
+      "id": "named-thread-deleted-root-confirms",
+      "initial": {
+        "threadId": 42,
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 604,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": null,
+              "parentThreadId": null,
+              "parentDeleted": true,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 42
+            }
+          ],
+          "expectedOutcome": "completed"
+        }
+      ],
+      "expected": {
+        "phase": "completed",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [604],
+        "lastOutcome": "completed"
+      }
+    },
+    {
+      "id": "named-thread-malformed-root-is-not-confirmation",
+      "initial": {
+        "threadId": 42,
+        "phase": "awaitingConfirmation",
+        "remoteTempPath": "Talk/Synthetic room-rooma123/Draft/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.upload",
+        "finalizationDispatched": true,
+        "lastOutcome": "awaiting-confirmation"
+      },
+      "steps": [
+        {
+          "action": "confirm",
+          "matches": [
+            {
+              "accountId": "account-a",
+              "server": "https://cloud.example.invalid/nextcloud",
+              "roomToken": "rooma123",
+              "referenceId": "11111111-1111-4111-8111-111111111111",
+              "systemMessage": "",
+              "messageType": "comment",
+              "messageId": 605,
+              "hasFileRichObject": true,
+              "parentMessageId": 42,
+              "parentRoomToken": "rooma123",
+              "parentThreadId": null,
+              "parentDeleted": true,
+              "replyToMessageId": null,
+              "replyToRoomToken": null,
+              "threadId": 42
+            }
+          ],
+          "expectedOutcome": "no-match"
+        }
+      ],
+      "expected": {
+        "phase": "awaitingConfirmation",
+        "lane": "ready",
+        "resumePhase": null,
+        "finalizationDispatched": true,
+        "cleanupRequired": false,
+        "messageIds": [],
+        "lastOutcome": "no-match"
       }
     }
   ]
