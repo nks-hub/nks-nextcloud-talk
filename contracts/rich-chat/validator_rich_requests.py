@@ -136,13 +136,12 @@ def build_wire_request(
     if request_kind == "notifyThread":
         require_capability(capabilities, "threadMetadata", request_kind)
         token = room()
-        target = message_id()
-        require_integer(values.get("threadId"), "threadId", minimum=1)
+        thread_id = require_integer(values.get("threadId"), "threadId", minimum=1)
         level = require_integer(values.get("level"), "level", minimum=0, maximum=3)
         return base_request(
             "setThreadNotificationLevel",
             "POST",
-            f"/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{target}/notify",
+            f"/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{thread_id}/notify",
             body={"level": level},
         )
 

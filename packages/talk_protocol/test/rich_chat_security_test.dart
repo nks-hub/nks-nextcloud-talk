@@ -139,10 +139,32 @@ void main() {
     expect(identical(responseB.request, requestB), isTrue);
     expect(identical(responseA.request, responseB.request), isFalse);
     expect(responseA.request.accountId, isNot(responseB.request.accountId));
-    expect(requestA.messageId, 122);
+    expect(requestA.messageId, isNull);
     expect(requestA.threadId, 120);
-    expect(requestA.requestPath, endsWith('/threads/122/notify'));
+    expect(requestA.requestPath, endsWith('/threads/120/notify'));
     expect(responseA.threads.single.threadId, 120);
+  });
+
+  test('rejects notification response bound to a reply instead of root', () {
+    final fixture = _fixture('thread-notify-success');
+    final body = _object(fixture['body']);
+    final thread = _object(_object(_object(body['ocs'])['data'])['thread']);
+    thread['id'] = 122;
+
+    expect(
+      () => decodeRichChatResponse(
+        request: _notifyRequest(),
+        statusCode: fixture['status']! as int,
+        body: Uint8List.fromList(utf8.encode(jsonEncode(body))),
+      ),
+      throwsA(
+        isA<TalkProtocolException>().having(
+          (error) => error.code,
+          'code',
+          TalkProtocolErrorCode.invalidRichChatResponse,
+        ),
+      ),
+    );
   });
 
   test('rejects thread notification room and canonical root mismatches', () {
@@ -468,7 +490,6 @@ RichChatRequest _recentThreadsRequest() => RichChatRequest.recentThreads(
 RichChatRequest _notifyRequest({
   String accountId = 'account-a',
   String requestId = 'security-notify-thread',
-  int messageId = 122,
   int threadId = 120,
 }) => RichChatRequest.setThreadNotificationLevel(
   accountId: AccountId.parse(accountId),
@@ -476,7 +497,6 @@ RichChatRequest _notifyRequest({
   server: ServerBase.parse('https://cloud.example.invalid'),
   roomToken: _token('rooma123'),
   profile: _profile(),
-  messageId: messageId,
   threadId: threadId,
   level: 3,
 );

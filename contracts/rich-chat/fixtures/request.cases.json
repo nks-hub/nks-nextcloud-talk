@@ -53,8 +53,8 @@
       "id": "notify-thread",
       "kind": "notifyThread",
       "profile": { "talkFeatures": ["chat-v2", "threads"], "talkLocalFeatures": [], "federated": true, "moderator": false, "participantPermissions": 0 },
-      "input": { "roomToken": "rooma123", "messageId": 122, "threadId": 120, "level": 3 },
-      "expected": { "operationId": "setThreadNotificationLevel", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/122/notify", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "level": 3 } }
+      "input": { "roomToken": "rooma123", "threadId": 120, "level": 3 },
+      "expected": { "operationId": "setThreadNotificationLevel", "method": "POST", "path": "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120/notify", "query": { "format": "json" }, "headers": { "OCS-APIRequest": "true", "User-Agent": "com.nkshub.nextcloudtalk rich-chat-contract/0.1" }, "body": { "level": 3 } }
     },
     {
       "id": "get-reactions",

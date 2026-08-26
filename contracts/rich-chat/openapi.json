@@ -99,12 +99,12 @@
         }
       }
     },
-    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{messageId}/notify": {
+    "/ocs/v2.php/apps/spreed/api/v1/chat/{token}/threads/{threadId}/notify": {
       "post": {
         "operationId": "setThreadNotificationLevel",
         "parameters": [
           { "$ref": "#/components/parameters/RoomToken" },
-          { "$ref": "#/components/parameters/MessageId" },
+          { "$ref": "#/components/parameters/ThreadId" },
           { "$ref": "#/components/parameters/OcsHeader" },
           { "$ref": "#/components/parameters/FormatQuery" }
         ],

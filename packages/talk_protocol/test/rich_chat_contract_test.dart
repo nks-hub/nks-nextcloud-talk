@@ -64,6 +64,9 @@ void main() {
         }.contains(testCase['kind'])) {
           expect(request.threadId, input['threadId']);
         }
+        if (testCase['kind'] == 'notifyThread') {
+          expect(request.messageId, isNull);
+        }
         expect(jsonEncode(testCase), before);
       });
     }
@@ -272,7 +275,6 @@ RichChatRequest _requestFromCase(String id, Map<String, Object?> testCase) {
       server: common.server,
       roomToken: room(),
       profile: profile,
-      messageId: input['messageId']! as int,
       threadId: input['threadId']! as int,
       level: input['level']! as int,
     ),
@@ -482,7 +484,6 @@ RichChatRequest _responseRequest(String id, Map<String, Object?> testCase) {
         server: server,
         roomToken: room!,
         profile: _fullProfile(),
-        messageId: messageId,
         threadId: context['threadId']! as int,
         level: 3,
       ),

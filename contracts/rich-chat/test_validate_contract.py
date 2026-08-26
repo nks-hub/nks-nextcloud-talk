@@ -149,7 +149,6 @@ class ThreadRequestBindingTest(unittest.TestCase):
         for invalid_thread_id in (None, 0):
             values = {
                 "roomToken": "rooma123",
-                "messageId": 122,
                 "level": 3,
             }
             if invalid_thread_id is not None:
@@ -160,6 +159,26 @@ class ThreadRequestBindingTest(unittest.TestCase):
                 self.assertRaises(rich_contract.ContractValidationError),
             ):
                 rich_contract.build_wire_request("notifyThread", values, profile)
+
+    def test_notification_targets_only_the_canonical_thread_root(self) -> None:
+        profile = {
+            "talkFeatures": ["chat-v2", "threads"],
+            "talkLocalFeatures": [],
+            "federated": True,
+            "moderator": False,
+            "participantPermissions": 0,
+        }
+
+        request = rich_contract.build_wire_request(
+            "notifyThread",
+            {"roomToken": "rooma123", "threadId": 120, "level": 3},
+            profile,
+        )
+
+        self.assertEqual(
+            "/ocs/v2.php/apps/spreed/api/v1/chat/rooma123/threads/120/notify",
+            request["path"],
+        )
 
     def test_notification_response_requires_canonical_thread_context(self) -> None:
         document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
@@ -176,6 +195,23 @@ class ThreadRequestBindingTest(unittest.TestCase):
 
         self.assertEqual(
             "Thread notification canonical id context missing",
+            str(raised.exception),
+        )
+
+    def test_notification_response_rejects_reply_identity_as_root(self) -> None:
+        document = rich_contract.load_json(CONTRACT_ROOT / "openapi.json")
+        case = next(
+            deepcopy(case)
+            for case in fixture_cases("responses.cases.json")
+            if case["id"] == "thread-notify-success"
+        )
+        case["body"]["ocs"]["data"]["thread"]["id"] = 122
+
+        with self.assertRaises(rich_contract.ResponseSemanticError) as raised:
+            rich_contract.validate_response_cases(document, [case])
+
+        self.assertEqual(
+            "Thread response id binding mismatch",
             str(raised.exception),
         )
 
