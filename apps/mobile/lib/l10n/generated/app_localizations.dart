@@ -1736,6 +1736,240 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get settingsThemeDark;
 
+  /// No description provided for @settingsDiagnosticsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get settingsDiagnosticsSection;
+
+  /// No description provided for @settingsOpenDiagnostics.
+  ///
+  /// In en, this message translates to:
+  /// **'Local diagnostics'**
+  String get settingsOpenDiagnostics;
+
+  /// No description provided for @settingsOpenDiagnosticsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local state of the active account'**
+  String get settingsOpenDiagnosticsSubtitle;
+
+  /// No description provided for @diagnosticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Local diagnostics'**
+  String get diagnosticsTitle;
+
+  /// No description provided for @diagnosticsRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Read again'**
+  String get diagnosticsRefresh;
+
+  /// No description provided for @diagnosticsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The local state could not be read.'**
+  String get diagnosticsLoadFailed;
+
+  /// No description provided for @diagnosticsAppSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Application'**
+  String get diagnosticsAppSection;
+
+  /// No description provided for @diagnosticsAppVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get diagnosticsAppVersion;
+
+  /// No description provided for @diagnosticsAppBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'Build'**
+  String get diagnosticsAppBuild;
+
+  /// No description provided for @diagnosticsPlatform.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform'**
+  String get diagnosticsPlatform;
+
+  /// No description provided for @diagnosticsDatabaseSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Database'**
+  String get diagnosticsDatabaseSection;
+
+  /// No description provided for @diagnosticsSchemaVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Schema version'**
+  String get diagnosticsSchemaVersion;
+
+  /// No description provided for @diagnosticsConversationRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached conversations'**
+  String get diagnosticsConversationRows;
+
+  /// No description provided for @diagnosticsMessageRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached messages'**
+  String get diagnosticsMessageRows;
+
+  /// No description provided for @diagnosticsThreadRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached threads'**
+  String get diagnosticsThreadRows;
+
+  /// No description provided for @diagnosticsTextOutboxRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Text outbox entries'**
+  String get diagnosticsTextOutboxRows;
+
+  /// No description provided for @diagnosticsAttachmentOutboxRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment outbox entries'**
+  String get diagnosticsAttachmentOutboxRows;
+
+  /// No description provided for @diagnosticsOutboxSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Outbox'**
+  String get diagnosticsOutboxSection;
+
+  /// No description provided for @diagnosticsOutboxTextTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Text messages'**
+  String get diagnosticsOutboxTextTitle;
+
+  /// No description provided for @diagnosticsOutboxAttachmentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments'**
+  String get diagnosticsOutboxAttachmentsTitle;
+
+  /// No description provided for @diagnosticsOutboxPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get diagnosticsOutboxPending;
+
+  /// No description provided for @diagnosticsOutboxFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get diagnosticsOutboxFailed;
+
+  /// No description provided for @diagnosticsOutboxLastError.
+  ///
+  /// In en, this message translates to:
+  /// **'Last error'**
+  String get diagnosticsOutboxLastError;
+
+  /// No description provided for @diagnosticsSyncSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronisation'**
+  String get diagnosticsSyncSection;
+
+  /// No description provided for @diagnosticsSyncLastSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Last successful sync'**
+  String get diagnosticsSyncLastSuccess;
+
+  /// No description provided for @diagnosticsSyncLastError.
+  ///
+  /// In en, this message translates to:
+  /// **'Last error'**
+  String get diagnosticsSyncLastError;
+
+  /// No description provided for @diagnosticsPushSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Push registration'**
+  String get diagnosticsPushSection;
+
+  /// No description provided for @diagnosticsPushPhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Phase'**
+  String get diagnosticsPushPhase;
+
+  /// No description provided for @diagnosticsPushGeneration.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation'**
+  String get diagnosticsPushGeneration;
+
+  /// No description provided for @diagnosticsPushNextGeneration.
+  ///
+  /// In en, this message translates to:
+  /// **'Next generation'**
+  String get diagnosticsPushNextGeneration;
+
+  /// No description provided for @diagnosticsPushPendingEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued events'**
+  String get diagnosticsPushPendingEvents;
+
+  /// No description provided for @diagnosticsPushPlatformUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available on this platform.'**
+  String get diagnosticsPushPlatformUnsupported;
+
+  /// No description provided for @diagnosticsPushReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not be read ({code}).'**
+  String diagnosticsPushReadFailed(String code);
+
+  /// No description provided for @diagnosticsCapabilitiesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Talk capabilities'**
+  String get diagnosticsCapabilitiesSection;
+
+  /// No description provided for @diagnosticsTalkFeatureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported features'**
+  String get diagnosticsTalkFeatureCount;
+
+  /// No description provided for @diagnosticsValueNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get diagnosticsValueNone;
+
+  /// No description provided for @diagnosticsValueNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never'**
+  String get diagnosticsValueNever;
+
+  /// No description provided for @diagnosticsValueYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get diagnosticsValueYes;
+
+  /// No description provided for @diagnosticsValueNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get diagnosticsValueNo;
+
   /// No description provided for @profileTitle.
   ///
   /// In en, this message translates to:

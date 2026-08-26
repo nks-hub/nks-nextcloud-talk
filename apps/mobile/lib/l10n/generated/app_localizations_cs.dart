@@ -911,6 +911,126 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsThemeDark => 'Tmavý';
 
   @override
+  String get settingsDiagnosticsSection => 'Diagnostika';
+
+  @override
+  String get settingsOpenDiagnostics => 'Lokální diagnostika';
+
+  @override
+  String get settingsOpenDiagnosticsSubtitle => 'Lokální stav aktivního účtu';
+
+  @override
+  String get diagnosticsTitle => 'Lokální diagnostika';
+
+  @override
+  String get diagnosticsRefresh => 'Načíst znovu';
+
+  @override
+  String get diagnosticsLoadFailed => 'Lokální stav se nepodařilo načíst.';
+
+  @override
+  String get diagnosticsAppSection => 'Aplikace';
+
+  @override
+  String get diagnosticsAppVersion => 'Verze';
+
+  @override
+  String get diagnosticsAppBuild => 'Build';
+
+  @override
+  String get diagnosticsPlatform => 'Platforma';
+
+  @override
+  String get diagnosticsDatabaseSection => 'Databáze';
+
+  @override
+  String get diagnosticsSchemaVersion => 'Verze schématu';
+
+  @override
+  String get diagnosticsConversationRows => 'Konverzace v cache';
+
+  @override
+  String get diagnosticsMessageRows => 'Zprávy v cache';
+
+  @override
+  String get diagnosticsThreadRows => 'Vlákna v cache';
+
+  @override
+  String get diagnosticsTextOutboxRows => 'Položky textového outboxu';
+
+  @override
+  String get diagnosticsAttachmentOutboxRows => 'Položky outboxu příloh';
+
+  @override
+  String get diagnosticsOutboxSection => 'Odchozí fronta';
+
+  @override
+  String get diagnosticsOutboxTextTitle => 'Textové zprávy';
+
+  @override
+  String get diagnosticsOutboxAttachmentsTitle => 'Přílohy';
+
+  @override
+  String get diagnosticsOutboxPending => 'Čeká';
+
+  @override
+  String get diagnosticsOutboxFailed => 'Selhalo';
+
+  @override
+  String get diagnosticsOutboxLastError => 'Poslední chyba';
+
+  @override
+  String get diagnosticsSyncSection => 'Synchronizace';
+
+  @override
+  String get diagnosticsSyncLastSuccess => 'Poslední úspěšná synchronizace';
+
+  @override
+  String get diagnosticsSyncLastError => 'Poslední chyba';
+
+  @override
+  String get diagnosticsPushSection => 'Registrace push';
+
+  @override
+  String get diagnosticsPushPhase => 'Fáze';
+
+  @override
+  String get diagnosticsPushGeneration => 'Generace';
+
+  @override
+  String get diagnosticsPushNextGeneration => 'Příští generace';
+
+  @override
+  String get diagnosticsPushPendingEvents => 'Události ve frontě';
+
+  @override
+  String get diagnosticsPushPlatformUnsupported =>
+      'Na této platformě není k dispozici.';
+
+  @override
+  String diagnosticsPushReadFailed(String code) {
+    return 'Nepodařilo se načíst ($code).';
+  }
+
+  @override
+  String get diagnosticsCapabilitiesSection => 'Talk capabilities';
+
+  @override
+  String get diagnosticsTalkFeatureCount => 'Nahlášené featury';
+
+  @override
+  String get diagnosticsValueNone => 'Žádná';
+
+  @override
+  String get diagnosticsValueNever => 'Nikdy';
+
+  @override
+  String get diagnosticsValueYes => 'Ano';
+
+  @override
+  String get diagnosticsValueNo => 'Ne';
+
+  @override
   String get profileTitle => 'Profil a stav';
 
   @override

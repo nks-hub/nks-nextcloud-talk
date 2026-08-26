@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -76,6 +77,25 @@ final class SettingsScreen extends ConsumerWidget {
             error: (_, _) => const SizedBox.shrink(),
           ),
           const Divider(height: 1),
+          _SectionHeader(strings.settingsDiagnosticsSection),
+          accounts.when(
+            data: (items) {
+              final selected = _selectedAccount(items);
+              return ListTile(
+                key: const Key('settings-open-diagnostics'),
+                leading: const Icon(Icons.troubleshoot_rounded),
+                title: Text(strings.settingsOpenDiagnostics),
+                subtitle: Text(strings.settingsOpenDiagnosticsSubtitle),
+                enabled: selected != null,
+                onTap: selected == null
+                    ? null
+                    : () => _openDiagnostics(context, selected.id),
+              );
+            },
+            loading: () => const SizedBox(height: 24),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
+          const Divider(height: 1),
           _SectionHeader(strings.settingsThemeSection),
           RadioGroup<ThemeMode>(
             groupValue: themeMode,
@@ -126,6 +146,14 @@ final class SettingsScreen extends ConsumerWidget {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ProfileScreen(accountId: accountId),
+      ),
+    );
+  }
+
+  void _openDiagnostics(BuildContext context, String accountId) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => DiagnosticsScreen(accountId: accountId),
       ),
     );
   }

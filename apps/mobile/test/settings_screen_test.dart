@@ -527,6 +527,11 @@ void main() {
 
   testWidgets('choosing a theme mode persists it and updates the group '
       'selection', (tester) async {
+    // The theme tiles sit below every other settings section, so the default
+    // 800x600 test surface leaves them off-screen and a tap would miss.
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final database = openTestDatabase();
     addTearDown(database.close);
     final accounts = AccountRepository(database);

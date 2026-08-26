@@ -912,6 +912,127 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsThemeDark => 'Dark';
 
   @override
+  String get settingsDiagnosticsSection => 'Diagnostics';
+
+  @override
+  String get settingsOpenDiagnostics => 'Local diagnostics';
+
+  @override
+  String get settingsOpenDiagnosticsSubtitle =>
+      'Local state of the active account';
+
+  @override
+  String get diagnosticsTitle => 'Local diagnostics';
+
+  @override
+  String get diagnosticsRefresh => 'Read again';
+
+  @override
+  String get diagnosticsLoadFailed => 'The local state could not be read.';
+
+  @override
+  String get diagnosticsAppSection => 'Application';
+
+  @override
+  String get diagnosticsAppVersion => 'Version';
+
+  @override
+  String get diagnosticsAppBuild => 'Build';
+
+  @override
+  String get diagnosticsPlatform => 'Platform';
+
+  @override
+  String get diagnosticsDatabaseSection => 'Database';
+
+  @override
+  String get diagnosticsSchemaVersion => 'Schema version';
+
+  @override
+  String get diagnosticsConversationRows => 'Cached conversations';
+
+  @override
+  String get diagnosticsMessageRows => 'Cached messages';
+
+  @override
+  String get diagnosticsThreadRows => 'Cached threads';
+
+  @override
+  String get diagnosticsTextOutboxRows => 'Text outbox entries';
+
+  @override
+  String get diagnosticsAttachmentOutboxRows => 'Attachment outbox entries';
+
+  @override
+  String get diagnosticsOutboxSection => 'Outbox';
+
+  @override
+  String get diagnosticsOutboxTextTitle => 'Text messages';
+
+  @override
+  String get diagnosticsOutboxAttachmentsTitle => 'Attachments';
+
+  @override
+  String get diagnosticsOutboxPending => 'Waiting';
+
+  @override
+  String get diagnosticsOutboxFailed => 'Failed';
+
+  @override
+  String get diagnosticsOutboxLastError => 'Last error';
+
+  @override
+  String get diagnosticsSyncSection => 'Synchronisation';
+
+  @override
+  String get diagnosticsSyncLastSuccess => 'Last successful sync';
+
+  @override
+  String get diagnosticsSyncLastError => 'Last error';
+
+  @override
+  String get diagnosticsPushSection => 'Push registration';
+
+  @override
+  String get diagnosticsPushPhase => 'Phase';
+
+  @override
+  String get diagnosticsPushGeneration => 'Generation';
+
+  @override
+  String get diagnosticsPushNextGeneration => 'Next generation';
+
+  @override
+  String get diagnosticsPushPendingEvents => 'Queued events';
+
+  @override
+  String get diagnosticsPushPlatformUnsupported =>
+      'Not available on this platform.';
+
+  @override
+  String diagnosticsPushReadFailed(String code) {
+    return 'Could not be read ($code).';
+  }
+
+  @override
+  String get diagnosticsCapabilitiesSection => 'Talk capabilities';
+
+  @override
+  String get diagnosticsTalkFeatureCount => 'Reported features';
+
+  @override
+  String get diagnosticsValueNone => 'None';
+
+  @override
+  String get diagnosticsValueNever => 'Never';
+
+  @override
+  String get diagnosticsValueYes => 'Yes';
+
+  @override
+  String get diagnosticsValueNo => 'No';
+
+  @override
   String get profileTitle => 'Profile and status';
 
   @override
