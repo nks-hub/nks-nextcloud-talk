@@ -45,6 +45,7 @@ import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
+import 'features/push/android_fcm_channel.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_push_device_key_store.dart';
 import 'features/push/android_push_transport.dart';
@@ -469,7 +470,12 @@ final androidPushRegistrationCoordinatorProvider =
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
         tokenHandlePrefix: 'fcm-token',
       );
-      ref.onDispose(() => unawaited(coordinator.dispose()));
+      final fcm = AndroidFcmChannel(onToken: coordinator.installToken);
+      final platform = ref.watch(androidWebPushPlatformProvider);
+      ref.onDispose(() {
+        fcm.dispose();
+        unawaited(coordinator.dispose());
+      });
 
       // Same account-following shape as the Apple and Client Push
       // coordinators: track whoever the UI currently shows.
@@ -491,9 +497,30 @@ final androidPushRegistrationCoordinatorProvider =
             const <String>[]) {
           unawaited(coordinator.unfollow(accountId));
         }
+        if (live.isEmpty) {
+          return;
+        }
+        // Only once somebody is signed in: a token, and the permission to
+        // show what arrives with it, are both pointless before that. The
+        // permission call is the same one the Web Push path uses — it is an
+        // activity-level Android 13 prompt, not a Web Push detail.
+        unawaited(_ensureAndroidNotificationPermission(platform));
+        unawaited(fcm.start());
       }, fireImmediately: true);
       return coordinator;
     });
+
+Future<void> _ensureAndroidNotificationPermission(
+  AndroidWebPushPlatform? platform,
+) async {
+  if (platform == null) {
+    return;
+  }
+  if (await platform.getNotificationPermission() ==
+      AndroidNotificationPermission.notDetermined) {
+    await platform.requestNotificationPermission();
+  }
+}
 
 /// Asks iOS for notification permission, keeps the APNs device token, and
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can

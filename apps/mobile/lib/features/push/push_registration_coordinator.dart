@@ -124,6 +124,11 @@ final class PushRegistrationCoordinator {
     if (resolved == null) {
       return;
     }
+    // The account stream re-emits on every write to the row, so this runs far
+    // more often than the push identity changes. It stays cheap without a
+    // guard here: `getAuthenticatedCapabilities` serves an in-memory snapshot
+    // for five minutes, and nothing in this coordinator triggers a sync, so
+    // there is no loop to close.
     final server = ServerBase.parse(resolved.account.serverUrl);
     final capabilities = await _api.getAuthenticatedCapabilities(
       server: server,

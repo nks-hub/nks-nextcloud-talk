@@ -7,6 +7,10 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Reads app/google-services.json, which is gitignored. Without that file
+    // the build fails loudly rather than producing an app that silently has
+    // no FCM.
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -54,8 +58,13 @@ configurations.configureEach {
 }
 
 dependencies {
+    // Both push transports talk to Play Services, and only the one the user
+    // picked ever registers: the Web Push coordinator is not built while the
+    // proxy transport is selected, and vice versa.
     implementation("org.unifiedpush.android:connector:3.3.5")
     implementation("org.unifiedpush.android:embedded-fcm-distributor:3.1.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-messaging")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")

@@ -316,6 +316,50 @@ void main() {
     expect(keyStore.ensured.toSet(), hasLength(2));
   });
 
+  test('re-following an unchanged account costs no server request', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    final coordinator = build(wired, _FakeDeviceKeyStore());
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    // The account row is rewritten after every sync, so the list stream
+    // re-emits and the provider follows again. That must stay free.
+    await coordinator.follow('account-a');
+    await coordinator.follow('account-a');
+
+    expect(
+      wired.nextcloudRequests.where(
+        (request) => request.url.path.contains('/capabilities'),
+      ),
+      hasLength(1),
+    );
+  });
+
+  test('a changed login re-reads capabilities', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    final coordinator = build(wired, _FakeDeviceKeyStore());
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'someone-else',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026),
+    );
+    await coordinator.follow('account-a');
+
+    expect(
+      wired.nextcloudRequests.where(
+        (request) => request.url.path.contains('/capabilities'),
+      ),
+      hasLength(2),
+    );
+  });
+
   test('a device key shared with another account is refused', () async {
     await seedAccount('account-a');
     await seedAccount('account-b');

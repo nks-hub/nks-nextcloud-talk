@@ -18,6 +18,12 @@ class AndroidWebPushActivity : FlutterActivity() {
     private var deepLinkChannel: MethodChannel? = null
     private var deviceKeyChannel: MethodChannel? = null
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
+    private var fcmChannel: MethodChannel? = null
+    private val fcmTokenListener: (String) -> Unit = { token ->
+        mainHandler.post {
+            fcmChannel?.invokeMethod("tokenRefreshed", token)
+        }
+    }
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val notificationOpenDelivery = AndroidNotificationOpenDelivery { notification ->
         mainHandler.post {
@@ -76,6 +82,14 @@ class AndroidWebPushActivity : FlutterActivity() {
         deviceKey.setMethodCallHandler(deviceKeyHandler)
         deviceKeyChannel = deviceKey
         deviceKeyStore = deviceKeyHandler
+
+        val fcm = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AndroidFcmChannel.CHANNEL_NAME,
+        )
+        fcm.setMethodCallHandler(AndroidFcmChannel())
+        fcmChannel = fcm
+        AndroidFcmChannel.attach(fcmTokenListener)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -164,6 +178,9 @@ class AndroidWebPushActivity : FlutterActivity() {
         deviceKeyChannel = null
         deviceKeyStore?.dispose()
         deviceKeyStore = null
+        AndroidFcmChannel.detach(fcmTokenListener)
+        fcmChannel?.setMethodCallHandler(null)
+        fcmChannel = null
         super.onDestroy()
     }
 

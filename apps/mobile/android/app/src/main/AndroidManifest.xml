@@ -109,6 +109,16 @@
             android:name="org.unifiedpush.android.connector.internal.RaiseToForegroundService"
             android:exported="false"
             tools:replace="android:exported" />
+        <!-- Push v2 over our own proxy. Registered alongside the UnifiedPush
+             services above on purpose: both transports stay installed and the
+             switch in settings decides which one ever registers. -->
+        <service
+            android:name=".push.NksFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
