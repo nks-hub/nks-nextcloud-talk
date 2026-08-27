@@ -14,6 +14,11 @@ final class PushDeviceKeyStore {
   private static let keySizeInBits = 2048
   private static let tagPrefix = "com.nkshub.nextcloudtalk.pushkey."
 
+  /// Shared with the Notification Service Extension via the
+  /// `keychain-access-groups` entitlement on both targets (team TEAMID0000) —
+  /// the extension has no other way to reach a key it did not create.
+  static let sharedAccessGroup = "TEAMID0000.com.nkshub.nextcloudtalk"
+
   private func applicationTag(for handle: String) -> Data {
     (Self.tagPrefix + handle).data(using: .utf8)!
   }
@@ -32,6 +37,7 @@ final class PushDeviceKeyStore {
         kSecAttrIsPermanent as String: true,
         kSecAttrApplicationTag as String: tag,
         kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        kSecAttrAccessGroup as String: Self.sharedAccessGroup,
       ],
     ]
     var error: Unmanaged<CFError>?
@@ -51,6 +57,7 @@ final class PushDeviceKeyStore {
       kSecClass as String: kSecClassKey,
       kSecAttrApplicationTag as String: tag,
       kSecAttrKeyType as String: Self.keyType,
+      kSecAttrAccessGroup as String: Self.sharedAccessGroup,
     ]
     SecItemDelete(query as CFDictionary)
   }
@@ -60,6 +67,7 @@ final class PushDeviceKeyStore {
       kSecClass as String: kSecClassKey,
       kSecAttrApplicationTag as String: tag,
       kSecAttrKeyType as String: Self.keyType,
+      kSecAttrAccessGroup as String: Self.sharedAccessGroup,
       kSecReturnRef as String: true,
     ]
     var item: CFTypeRef?

@@ -57,4 +57,90 @@ class RunnerTests: XCTestCase {
     )
     XCTAssertNil(delivery.takeLaunchLink())
   }
+
+  // MARK: - PushEnvelopeDecryptor
+
+  private func makeTestKeyPair() throws -> (privateKey: SecKey, publicKey: SecKey) {
+    let attributes: [String: Any] = [
+      kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+      kSecAttrKeySizeInBits as String: 2048,
+    ]
+    var error: Unmanaged<CFError>?
+    guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
+      throw try XCTUnwrap(error?.takeRetainedValue() as Error?)
+    }
+    return (privateKey, try XCTUnwrap(SecKeyCopyPublicKey(privateKey)))
+  }
+
+  private func encrypt(_ plaintext: Data, with publicKey: SecKey) throws -> Data {
+    var error: Unmanaged<CFError>?
+    guard
+      let ciphertext = SecKeyCreateEncryptedData(
+        publicKey,
+        .rsaEncryptionPKCS1,
+        plaintext as CFData,
+        &error
+      )
+    else {
+      throw try XCTUnwrap(error?.takeRetainedValue() as Error?)
+    }
+    return ciphertext as Data
+  }
+
+  func testDecryptorRecoversThePayloadEncryptedForTheOnlyCandidateKey() throws {
+    let (privateKey, publicKey) = try makeTestKeyPair()
+    let plaintext = try XCTUnwrap(
+      "{\"app\":\"spreed\",\"subject\":\"New message\"}".data(using: .utf8)
+    )
+    let ciphertext = try encrypt(plaintext, with: publicKey)
+
+    let payload = PushEnvelopeDecryptor.decodeWakeUpPayload(
+      ciphertext: ciphertext,
+      candidates: [privateKey]
+    )
+
+    XCTAssertEqual(payload?["subject"] as? String, "New message")
+  }
+
+  func testDecryptorPicksTheOneCandidateThatActuallyDecryptsIt() throws {
+    let (correctPrivateKey, correctPublicKey) = try makeTestKeyPair()
+    let (wrongPrivateKey, _) = try makeTestKeyPair()
+    let plaintext = try XCTUnwrap("{\"app\":\"spreed\"}".data(using: .utf8))
+    let ciphertext = try encrypt(plaintext, with: correctPublicKey)
+
+    let payload = PushEnvelopeDecryptor.decodeWakeUpPayload(
+      ciphertext: ciphertext,
+      candidates: [wrongPrivateKey, correctPrivateKey]
+    )
+
+    XCTAssertEqual(payload?["app"] as? String, "spreed")
+  }
+
+  func testDecryptorReturnsNilWhenNoCandidateKeyMatches() throws {
+    let (_, publicKey) = try makeTestKeyPair()
+    let (wrongPrivateKey, _) = try makeTestKeyPair()
+    let plaintext = try XCTUnwrap("{\"app\":\"spreed\"}".data(using: .utf8))
+    let ciphertext = try encrypt(plaintext, with: publicKey)
+
+    XCTAssertNil(
+      PushEnvelopeDecryptor.decodeWakeUpPayload(
+        ciphertext: ciphertext,
+        candidates: [wrongPrivateKey]
+      )
+    )
+  }
+
+  func testDecryptorRejectsCiphertextThatDecryptsToNonJson() throws {
+    let (privateKey, publicKey) = try makeTestKeyPair()
+    // A valid RSA/PKCS#1 v1.5 ciphertext whose plaintext just isn't JSON —
+    // the padding check alone must not be treated as proof of a match.
+    let ciphertext = try encrypt(try XCTUnwrap("not json".data(using: .utf8)), with: publicKey)
+
+    XCTAssertNil(
+      PushEnvelopeDecryptor.decodeWakeUpPayload(
+        ciphertext: ciphertext,
+        candidates: [privateKey]
+      )
+    )
+  }
 }

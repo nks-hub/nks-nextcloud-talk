@@ -91,5 +91,34 @@ void main() {
 
     expectCompiled(project, 'ApplePushDelivery.swift');
     expectCompiled(project, 'PushDeviceKeyStore.swift');
+    expectCompiled(project, 'PushEnvelopeDecryptor.swift');
+  });
+
+  test('the device key and its Keychain access group are shared with a '
+      'future Notification Service Extension', () {
+    final entitlements = File('$ios${Platform.pathSeparator}Runner.entitlements')
+        .readAsStringSync();
+    for (final needle in const [
+      'com.apple.security.application-groups',
+      'group.com.nkshub.nextcloudtalk',
+      'keychain-access-groups',
+    ]) {
+      expect(
+        entitlements.contains(needle),
+        isTrue,
+        reason: 'Runner.entitlements is missing $needle',
+      );
+    }
+
+    final keyStore = File(
+      '$ios${Platform.pathSeparator}PushDeviceKeyStore.swift',
+    ).readAsStringSync();
+    expect(
+      keyStore.contains('kSecAttrAccessGroup'),
+      isTrue,
+      reason:
+          'PushDeviceKeyStore must pin its keys to the shared Keychain access '
+          'group, or a Notification Service Extension can never see them',
+    );
   });
 }

@@ -1,0 +1,56 @@
+import Foundation
+import Security
+
+/// Decrypts an APNs push's `nc-subject` field and validates the wake-up
+/// payload it decodes to.
+///
+/// Nextcloud encrypts with the device's own RSA-2048 public key
+/// (`PushDeviceKeyStore`), and the proxy forwards only the ciphertext — no
+/// signature travels with it (see `nks-talk-notify/app/apns.py::build_payload`:
+/// `{"aps": ..., "nc-subject": encrypted_subject_b64}`). A raw PKCS#1 v1.5
+/// decrypt has no built-in integrity check, so a candidate key only counts as
+/// a match once its plaintext also parses as a non-empty JSON object — the
+/// same fail-closed, exactly-one-match rule the pure Dart router
+/// (`packages/talk_protocol/lib/src/push/routing.dart`) applies for the
+/// signed variant of this problem.
+enum PushEnvelopeDecryptor {
+  /// Tries every RSA private key in `candidates` against `ciphertext`,
+  /// PKCS#1 v1.5 first (Nextcloud's default), then OAEP-SHA1 (its only
+  /// configurable alternative). Returns the decoded payload only if exactly
+  /// one candidate produces a valid one — zero or multiple matches both
+  /// count as "not routable" rather than picking one at random.
+  static func decodeWakeUpPayload(
+    ciphertext: Data,
+    candidates: [SecKey]
+  ) -> [String: Any]? {
+    let matches = candidates.compactMap { key in
+      decrypt(ciphertext: ciphertext, with: key).flatMap(validWakeUpPayload)
+    }
+    return matches.count == 1 ? matches[0] : nil
+  }
+
+  private static func decrypt(ciphertext: Data, with key: SecKey) -> Data? {
+    for algorithm: SecKeyAlgorithm in [.rsaEncryptionPKCS1, .rsaEncryptionOAEPSHA1] {
+      guard SecKeyIsAlgorithmSupported(key, .decrypt, algorithm) else { continue }
+      if let plaintext = SecKeyCreateDecryptedData(key, algorithm, ciphertext as CFData, nil) {
+        return plaintext as Data
+      }
+    }
+    return nil
+  }
+
+  /// Nextcloud's plaintext wake-up payload is small JSON — `app`, `subject`,
+  /// `type`, `id`/`nid`, or one of the `delete*` flags
+  /// (`Push::encryptAndSign()` / `decodePushWakeUpPayload` on the Dart side).
+  /// A structurally valid, non-empty object is enough to treat a decrypt as
+  /// genuine rather than PKCS#1 v1.5 padding that happened to look valid.
+  private static func validWakeUpPayload(from plaintext: Data) -> [String: Any]? {
+    guard plaintext.count <= 4096,
+      let object = try? JSONSerialization.jsonObject(with: plaintext) as? [String: Any],
+      !object.isEmpty
+    else {
+      return nil
+    }
+    return object
+  }
+}
