@@ -488,6 +488,13 @@ extension _ChatRepositoryProjection on ChatRepository {
       if (threadId == null || threadId < 1 || message.messageId == threadId) {
         continue;
       }
+      // A reaction and a deletion notice both arrive as system messages
+      // carrying the thread they belong to. Counting those made a bubble
+      // claim "1 reply" the moment somebody reacted to it, or deleted
+      // something in the thread — neither is a reply.
+      if (message.systemMessage.isNotEmpty) {
+        continue;
+      }
       final scope = (
         accountId: accountId,
         roomToken: message.roomToken.value,
@@ -591,6 +598,11 @@ extension _ChatRepositoryProjection on ChatRepository {
     ChatMessage message,
     Map<_ThreadReplyScope, _ThreadReplyAccumulator> replyAccumulators,
   ) async {
+    // Same rule as the accumulator: a system message about a reaction or a
+    // deletion carries its thread, but it is not a reply to anything.
+    if (message.systemMessage.isNotEmpty) {
+      return;
+    }
     final parent = _matchingThreadParent(message);
     if (parent == null) {
       return;

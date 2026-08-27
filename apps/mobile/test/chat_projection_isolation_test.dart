@@ -38,6 +38,46 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('a reaction does not turn into a thread reply', () async {
+    // Talk delivers a reaction as a SYSTEM message that carries the thread it
+    // belongs to. Counting those made a bubble claim "1 reply" the moment
+    // somebody reacted to it - reported from a real device.
+    await _insertScope(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      scopeKey: 'root',
+      threadId: null,
+      cursor: 20,
+    );
+    await _insertMessage(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+
+    expect(
+      await repository.applyChatGetResponse(_reactionResponse()),
+      ChatMergeOutcome.applied,
+    );
+
+    final row =
+        await (database.select(database.cachedChatMessages)..where(
+              (r) =>
+                  r.accountId.equals('account-a') &
+                  r.roomToken.equals('rooma123') &
+                  r.messageId.equals(20),
+            ))
+            .getSingleOrNull();
+    expect(row, isA<CachedChatMessage>());
+    final wire = jsonDecode(row!.rawJson) as Map<String, Object?>;
+    expect(
+      wire['threadReplies'],
+      anyOf(equals(null), equals(0)),
+      reason: 'a reaction is not a reply',
+    );
+  });
+
   test('root merge projects only into the matching account and room', () async {
     await _insertScope(
       database,
@@ -209,6 +249,54 @@ Future<void> _insertMessage(
           rawJson: jsonEncode(raw),
         ),
       );
+}
+
+ChatGetResponse _reactionResponse() {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('projection-reaction'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+      'chat-replies',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('20'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  // The shape the server really sends: a system message that carries both
+  // its thread and the full parent it reacted to. Without the parent the
+  // reply accumulator never even looks at it, so a fixture missing it
+  // passes whether or not the bug is fixed.
+  final root = _messageJson(id: 20, roomToken: 'rooma123', threadId: 20)
+    ..['isThread'] = true;
+  final reaction = _messageJson(id: 31, roomToken: 'rooma123', threadId: 20)
+    ..['systemMessage'] = 'reaction'
+    ..['message'] = 'thumbs-up'
+    ..['parent'] = root;
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': [reaction],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(const {
+      'X-Chat-Last-Given': '31',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
 }
 
 ChatGetResponse _rootReplyResponse() {
