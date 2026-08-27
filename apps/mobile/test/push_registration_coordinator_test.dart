@@ -103,7 +103,9 @@ void main() {
     database = openTestDatabase();
     accounts = AccountRepository(database);
     credentials = MemoryCredentialVault();
-    gateway = PushGatewayOrigin.parse('https://nks-talk-notify.example.invalid');
+    gateway = PushGatewayOrigin.parse(
+      'https://nks-talk-notify.example.invalid',
+    );
   });
 
   tearDown(() => database.close());
@@ -215,27 +217,33 @@ void main() {
     expect(wired.gatewayRequests, hasLength(1));
     expect(wired.gatewayRequests.single.method, 'POST');
     expect(wired.gatewayRequests.single.bodyFields['pushToken'], _fcmToken);
-  });
-
-  test('pushTokenHash is the lowercase SHA-512 hex Nextcloud demands', () async {
-    await seedAccount('account-a');
-    final wired = wire();
-    final coordinator = build(wired, _FakeDeviceKeyStore());
-
-    coordinator.installToken(_fcmToken);
-    await coordinator.follow('account-a');
-
-    final registration = wired.nextcloudRequests.singleWhere(
-      (request) => request.method == 'POST' && request.url.path.endsWith('/push'),
-    );
-    final hash = registration.bodyFields['pushTokenHash'];
-    // PushController::registerDevice rejects anything else outright.
-    expect(hash, matches(RegExp(r'^[a-f0-9]{128}$')));
+    expect(wired.gatewayRequests.single.bodyFields['pushProvider'], 'fcm');
     expect(
-      hash,
-      crypto.sha512.convert(utf8.encode(_fcmToken)).toString(),
+      wired.gatewayRequests.single.bodyFields.containsKey('pushEnvironment'),
+      isFalse,
     );
   });
+
+  test(
+    'pushTokenHash is the lowercase SHA-512 hex Nextcloud demands',
+    () async {
+      await seedAccount('account-a');
+      final wired = wire();
+      final coordinator = build(wired, _FakeDeviceKeyStore());
+
+      coordinator.installToken(_fcmToken);
+      await coordinator.follow('account-a');
+
+      final registration = wired.nextcloudRequests.singleWhere(
+        (request) =>
+            request.method == 'POST' && request.url.path.endsWith('/push'),
+      );
+      final hash = registration.bodyFields['pushTokenHash'];
+      // PushController::registerDevice rejects anything else outright.
+      expect(hash, matches(RegExp(r'^[a-f0-9]{128}$')));
+      expect(hash, crypto.sha512.convert(utf8.encode(_fcmToken)).toString());
+    },
+  );
 
   test('proxyServer is sent verbatim, with no trailing slash', () async {
     await seedAccount('account-a');
@@ -246,7 +254,8 @@ void main() {
     await coordinator.follow('account-a');
 
     final registration = wired.nextcloudRequests.singleWhere(
-      (request) => request.method == 'POST' && request.url.path.endsWith('/push'),
+      (request) =>
+          request.method == 'POST' && request.url.path.endsWith('/push'),
     );
     expect(
       registration.bodyFields['proxyServer'],
@@ -295,7 +304,9 @@ void main() {
       2,
     );
     expect(
-      wired.gatewayRequests.where((request) => request.method == 'DELETE').length,
+      wired.gatewayRequests
+          .where((request) => request.method == 'DELETE')
+          .length,
       2,
     );
     expect(coordinator.isSettled, isTrue);

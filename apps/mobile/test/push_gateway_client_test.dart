@@ -67,6 +67,7 @@ void main() {
     final completion = await client.register(
       effect,
       rawPushToken: 'deadbeef',
+      pushProvider: PushGatewayProvider.apns,
       pushEnvironment: 'production',
     );
 
@@ -74,6 +75,7 @@ void main() {
     expect(seen.url.path, '/devices');
     final fields = (seen as http.Request).bodyFields;
     expect(fields['pushToken'], 'deadbeef');
+    expect(fields['pushProvider'], 'apns');
     expect(fields['pushEnvironment'], 'production');
     expect(fields['deviceIdentifier'], _testDeviceIdentifier);
     expect(fields['deviceIdentifierSignature'], _testDeviceSignature);
@@ -98,7 +100,11 @@ void main() {
       cloudId: null,
     );
 
-    final completion = await client.register(effect, rawPushToken: 'deadbeef');
+    final completion = await client.register(
+      effect,
+      rawPushToken: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+    );
 
     expect(completion.classification, PushCompletionClass.conflict);
   });

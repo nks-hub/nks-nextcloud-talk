@@ -350,6 +350,7 @@ final class ApplePushRegistrationCoordinator {
       return await _gatewayClient.register(
         effect,
         rawPushToken: rawToken,
+        pushProvider: PushGatewayProvider.apns,
         pushEnvironment: _pushEnvironment,
       );
     } on Object {

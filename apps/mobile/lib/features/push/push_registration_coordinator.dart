@@ -344,7 +344,11 @@ final class PushRegistrationCoordinator {
       return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
     }
     try {
-      return await _gatewayClient.register(effect, rawPushToken: rawToken);
+      return await _gatewayClient.register(
+        effect,
+        rawPushToken: rawToken,
+        pushProvider: PushGatewayProvider.fcm,
+      );
     } on Object {
       return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
     }

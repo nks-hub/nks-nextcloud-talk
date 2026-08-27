@@ -133,6 +133,7 @@ void main() {
     expect(gatewayRequests.single.method, 'POST');
     final fields = (gatewayRequests.single as http.Request).bodyFields;
     expect(fields['pushToken'], 'deadbeef');
+    expect(fields['pushProvider'], 'apns');
     expect(fields['pushEnvironment'], 'production');
   });
 

@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
 
+enum PushGatewayProvider { apns, fcm }
+
 /// Talks to the self-hosted APNs proxy (`nks-talk-notify`) directly — a
 /// different origin than the Nextcloud server, authenticated by an RSA
 /// signature instead of the account's app password. See that project's
@@ -10,22 +12,29 @@ final class PushGatewayClient {
 
   final http.Client _client;
 
-  /// Registers (or refreshes) a device with the proxy. [rawPushToken] is the
-  /// hex APNs token — the one field of the wire contract the pure protocol
-  /// core deliberately never carries, since Nextcloud itself never sees it
-  /// either; only this proxy needs the real token.
+  /// Registers (or refreshes) a device with the proxy. The pure protocol core
+  /// carries only the token hash because Nextcloud never sees the raw APNs or
+  /// FCM token; only this proxy needs it and its provider.
   Future<PushGatewayRegistrationCompletion> register(
     RegisterPushWithGatewayEffect effect, {
     required String rawPushToken,
+    required PushGatewayProvider pushProvider,
     String? pushEnvironment,
   }) async {
-    if (pushEnvironment != null &&
-        pushEnvironment != 'development' &&
-        pushEnvironment != 'production') {
+    final validEnvironment =
+        pushEnvironment == 'development' || pushEnvironment == 'production';
+    if (pushProvider == PushGatewayProvider.apns && !validEnvironment) {
       throw ArgumentError.value(
         pushEnvironment,
         'pushEnvironment',
-        'must be development or production',
+        'APNs requires development or production',
+      );
+    }
+    if (pushProvider == PushGatewayProvider.fcm && pushEnvironment != null) {
+      throw ArgumentError.value(
+        pushEnvironment,
+        'pushEnvironment',
+        'FCM does not use an APNs environment',
       );
     }
     final response = await _client.post(
@@ -33,6 +42,7 @@ final class PushGatewayClient {
       body: <String, String>{
         ...effect.identityFields,
         'pushToken': rawPushToken,
+        'pushProvider': pushProvider.name,
         'pushEnvironment': ?pushEnvironment,
       },
     );
