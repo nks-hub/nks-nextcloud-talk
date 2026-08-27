@@ -196,7 +196,11 @@ final class ApplePushRegistrationCoordinator {
           break;
         }
         _snapshot = commitPushRuntime(_snapshot, planned);
+        // ignore: avoid_print
+        print('PUSHV2DIAG plan=${planned.effect!.kind.name}');
         final completion = await _execute(planned.effect!);
+        // ignore: avoid_print
+        print('PUSHV2DIAG completion=${completion.classification.name}');
         if (_disposed) {
           return;
         }
@@ -234,7 +238,9 @@ final class ApplePushRegistrationCoordinator {
         generation: effect.context.keyGeneration + 1,
       );
       return PushDeviceKeyCompletion.success(effect: effect, key: key);
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushDeviceKeyCompletion.failure(
         effect: effect,
         classification: PushCompletionClass.transientFailure,
@@ -248,7 +254,9 @@ final class ApplePushRegistrationCoordinator {
     try {
       await _keyStore.destroyKey(effect.key.handle.value);
       return PushDeviceKeyDestructionCompletion.success(effect: effect);
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushDeviceKeyDestructionCompletion.transientFailure(
         effect: effect,
       );
@@ -270,7 +278,9 @@ final class ApplePushRegistrationCoordinator {
         loginName: resolved.account.loginName,
         appPassword: resolved.appPassword,
       );
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushNextcloudRegistrationCompletion.transientFailure(
         effect: effect,
       );
@@ -292,7 +302,9 @@ final class ApplePushRegistrationCoordinator {
         loginName: resolved.account.loginName,
         appPassword: resolved.appPassword,
       );
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushNextcloudUnregistrationCompletion.transientFailure(
         effect: effect,
       );
@@ -310,7 +322,9 @@ final class ApplePushRegistrationCoordinator {
     }
     try {
       return await _gatewayClient.register(effect, rawPushToken: rawToken);
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushGatewayRegistrationCompletion.transientFailure(
         effect: effect,
       );
@@ -322,7 +336,9 @@ final class ApplePushRegistrationCoordinator {
   ) async {
     try {
       return await _gatewayClient.unregister(effect);
-    } on Object {
+    } on Object catch (error) {
+      // ignore: avoid_print
+      print('PUSHV2DIAG error=$error');
       return PushGatewayUnregistrationCompletion.transientFailure(
         effect: effect,
       );
