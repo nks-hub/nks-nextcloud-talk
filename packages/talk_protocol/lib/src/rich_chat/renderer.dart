@@ -268,10 +268,18 @@ List<RichChatSemanticNode> _convertNode(
 }) {
   budget.requireDepth(depth);
   if (node is markdown.Text) {
-    return _textNodes(node.text, parameters, budget);
+    return _textNodes(
+      _unescapeMarkdownText(node.text),
+      parameters,
+      budget,
+    );
   }
   if (node is! markdown.Element) {
-    return _textNodes(node.textContent, parameters, budget);
+    return _textNodes(
+      _unescapeMarkdownText(node.textContent),
+      parameters,
+      budget,
+    );
   }
 
   if (node.tag == 'pre') {
@@ -369,7 +377,11 @@ List<RichChatSemanticNode> _convertNode(
     );
   }
   if (kind == null) {
-    return _textNodes(node.textContent, parameters, budget);
+    return _textNodes(
+      _unescapeMarkdownText(node.textContent),
+      parameters,
+      budget,
+    );
   }
   return _singleNode(
     budget,
@@ -387,6 +399,28 @@ List<RichChatSemanticNode> _singleNode(
   _RenderBudget budget,
   RichChatSemanticNode Function() create,
 ) => <RichChatSemanticNode>[budget.createNode(create)];
+
+/// Undoes the HTML escaping `package:markdown` applies to text nodes.
+///
+/// That package produces text destined for an HTML document, so a quote comes
+/// back as `&quot;` and an ampersand as `&amp;`. We render plain Flutter text,
+/// where those would show literally — which is exactly what a user saw in a
+/// message containing quotation marks.
+///
+/// Only the five entities that package emits are undone, and `&amp;` is undone
+/// last so that a message actually containing `&amp;quot;` keeps its text
+/// instead of collapsing into a quote.
+String _unescapeMarkdownText(String text) {
+  if (!text.contains('&')) {
+    return text;
+  }
+  return text
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&#39;', "'")
+      .replaceAll('&amp;', '&');
+}
 
 List<RichChatSemanticNode> _textNodes(
   String text,
