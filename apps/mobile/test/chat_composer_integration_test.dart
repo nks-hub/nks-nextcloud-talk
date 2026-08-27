@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -319,6 +321,55 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+  testWidgets(
+    'a bare Enter sends and Shift+Enter does not, in the real pane',
+    (tester) async {
+      // The rule itself is asserted in `composer_enter_key_test.dart`. What
+      // only the real pane can show is that the `Focus` around the field sees
+      // Enter at all, rather than the multiline field swallowing it first.
+      // Reset inside the body, not in a tearDown: the invariant that catches
+      // a leaked debug variable runs before tearDowns do.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final harness = (await tester.runAsync(_ComposerHarness.create))!;
+      addTearDown(harness.close);
+
+      await tester.pumpWidget(harness.app());
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      await tester.pump();
+
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'ctrl-free send',
+      );
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(
+        harness.sentMessages,
+        isEmpty,
+        reason: 'Shift+Enter belongs to the field, not to sending',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+
+      // Only the send matters here; clearing the composer afterwards is
+      // already covered by the emoji test above.
+      expect(harness.sentMessages, <String>['ctrl-free send']);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+      debugDefaultTargetPlatformOverride = null;
     },
   );
 }
