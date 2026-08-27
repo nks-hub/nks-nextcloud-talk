@@ -72,8 +72,11 @@ dependencies:
   image_picker: ^1.2.3
 
   # Crash reporting for our own builds only; without a compiled-in DSN
-  # lib/core/telemetry.dart never initialises it.
-  sentry_flutter: ^9.7.0
+  # lib/core/telemetry.dart never initialises it. Held at 8.x on
+  # purpose: 9.0 added a `jni` dependency whose CMake calls
+  # find_package(JNI) on Windows and Linux, so the desktop build stops
+  # working without a JDK installed. Windows is a shipping target here.
+  sentry_flutter: ^8.14.2
   # Anonymous screen usage for our own builds only, same gate as Sentry.
   rybbit_flutter_sdk: ^0.3.0
 
