@@ -402,6 +402,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				DEVELOPMENT_TEAM = TEAMID0000;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -582,6 +583,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				DEVELOPMENT_TEAM = TEAMID0000;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -605,6 +607,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				DEVELOPMENT_TEAM = TEAMID0000;
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";

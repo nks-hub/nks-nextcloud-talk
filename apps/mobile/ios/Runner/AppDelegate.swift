@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 final class AppleDeepLinkDelivery {
   private static let maximumPendingLinks = 16
@@ -82,7 +83,9 @@ final class AppleDeepLinkDelivery {
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   let deepLinks = AppleDeepLinkDelivery()
+  let push = ApplePushDelivery()
   private var deepLinkChannel: FlutterMethodChannel?
+  private var pushChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -120,5 +123,86 @@ final class AppleDeepLinkDelivery {
       }
     }
     deepLinkChannel = channel
+
+    let pushMethods = FlutterMethodChannel(
+      name: "com.nkshub.nextcloudtalk/apple_push",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    pushMethods.setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "requestPermission":
+        self?.requestNotificationPermission(result)
+      case "getDeviceToken":
+        result(self?.push.takeLaunchToken())
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    push.attach(
+      onToken: { [weak pushMethods] token in
+        pushMethods?.invokeMethod("deviceTokenChanged", arguments: token)
+      },
+      onNotification: { [weak pushMethods] payload in
+        pushMethods?.invokeMethod("notificationReceived", arguments: payload)
+      }
+    )
+    pushChannel = pushMethods
+  }
+
+  /// Asks for notification permission and, only once granted, registers with
+  /// APNs.
+  ///
+  /// Registering without permission still yields a token but the user never
+  /// sees anything, which reads as "notifications are broken" rather than
+  /// "notifications are off". Reporting the decision back lets the Dart side
+  /// leave the account unregistered instead of holding a token it must not use.
+  private func requestNotificationPermission(_ result: @escaping FlutterResult) {
+    UNUserNotificationCenter.current().requestAuthorization(
+      options: [.alert, .badge, .sound]
+    ) { granted, error in
+      DispatchQueue.main.async {
+        if let error {
+          result(
+            FlutterError(
+              code: "permission_failed",
+              message: error.localizedDescription,
+              details: nil
+            )
+          )
+          return
+        }
+        if granted {
+          UIApplication.shared.registerForRemoteNotifications()
+        }
+        result(granted)
+      }
+    }
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    push.registered(deviceToken: deviceToken)
+    super.application(
+      application,
+      didRegisterForRemoteNotificationsWithDeviceToken: deviceToken
+    )
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler:
+      @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+    var payload: [String: Any] = [:]
+    for (key, value) in userInfo {
+      if let name = key as? String {
+        payload[name] = value
+      }
+    }
+    push.received(notification: payload)
+    completionHandler(.noData)
   }
 }
