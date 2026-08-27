@@ -307,7 +307,9 @@ final class _UploadPreview extends StatelessWidget {
                     bytes!,
                     cacheWidth: 192,
                     cacheHeight: 192,
-                    fit: BoxFit.cover,
+                    // Same reason as the composer thumbnail: what is shown
+                    // before sending must match what is sent.
+                    fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => ColoredBox(
                       color: scheme.surfaceContainerHighest,
                       child: Icon(

@@ -53,7 +53,10 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
             }
             return Image.memory(
               thumbnail.body,
-              fit: BoxFit.cover,
+              // The whole picture, not a square crop of it: the upload sends
+              // the original bytes, so a preview that cuts the edges off
+              // shows something the recipient will never see.
+              fit: BoxFit.contain,
               gaplessPlayback: true,
               cacheWidth: 480,
               cacheHeight: 480,
