@@ -359,6 +359,17 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 
   @override
   Widget build(BuildContext context) {
+    // Both coordinators can come into existence after this shell has already
+    // had its first frame, and the subscription binds to one instance. A
+    // single read in a post-frame callback would miss anything created later
+    // and the queue would then never drain. Both attach methods already guard
+    // against subscribing twice, so re-running them is free.
+    ref.listen(androidPushCoordinatorProvider, (_, _) {
+      _attachPushNavigation();
+    });
+    ref.listen(deepLinkCoordinatorProvider, (_, _) {
+      _attachDeepLinkNavigation();
+    });
     ref.watch(appIconBadgeSyncProvider);
     final accountsValue = ref.watch(accountsProvider);
     final selectedValue = ref.watch(selectedAccountProvider);
