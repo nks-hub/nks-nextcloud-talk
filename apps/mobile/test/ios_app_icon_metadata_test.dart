@@ -50,6 +50,25 @@ void main() {
     );
   });
 
+  test('the iOS deployment target meets the App Store floor', () {
+    // Apple warns with `ITMS-90068 MinimumOSVersion too low` below 15.0 and
+    // stops accepting such uploads in spring 2027, so the floor is asserted
+    // rather than left to whoever next regenerates the project.
+    final project = File(
+      '${Directory.current.path}${Platform.pathSeparator}ios'
+      '${Platform.pathSeparator}Runner.xcodeproj'
+      '${Platform.pathSeparator}project.pbxproj',
+    );
+    final targets = RegExp(r'IPHONEOS_DEPLOYMENT_TARGET = ([0-9.]+);')
+        .allMatches(project.readAsStringSync())
+        .map((match) => double.parse(match.group(1)!))
+        .toList(growable: false);
+    expect(targets, isNotEmpty);
+    for (final target in targets) {
+      expect(target, greaterThanOrEqualTo(15.0));
+    }
+  });
+
   test('iOS Info.plist names the asset catalog app icon', () {
     final plist = _plist();
     expect(plist.existsSync(), isTrue);
