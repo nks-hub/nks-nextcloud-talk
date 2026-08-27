@@ -93,6 +93,9 @@ void main() {
       ProviderScope(
         overrides: [
           appDatabaseProvider.overrideWithValue(database),
+          // Push owns separate call-chain coverage; this test only exercises
+          // conversation sync and must not open its unrelated Drift watcher.
+          clientPushEnabledProvider.overrideWithValue(false),
           credentialVaultProvider.overrideWithValue(vault),
           nextcloudApiProvider.overrideWithValue(api),
           conversationSyncServiceProvider.overrideWithValue(service),
@@ -201,6 +204,9 @@ void main() {
         ProviderScope(
           overrides: [
             appDatabaseProvider.overrideWithValue(database),
+            // Push owns separate call-chain coverage; this test only exercises
+            // conversation sync and must not open its unrelated Drift watcher.
+            clientPushEnabledProvider.overrideWithValue(false),
             credentialVaultProvider.overrideWithValue(vault),
             nextcloudApiProvider.overrideWithValue(api),
             conversationSyncServiceProvider.overrideWithValue(service),
