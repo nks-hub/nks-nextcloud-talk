@@ -239,7 +239,9 @@ internal object AndroidSystemNotifications {
         val groupKey = accountGroupKey(accountId)
         when (payload) {
             is AndroidWebPushPayload.Message -> {
-                show(context, manager, store, accountId, groupKey, payload)
+                if (surfacesAsTalkNotification(payload)) {
+                    show(context, manager, store, accountId, groupKey, payload)
+                }
             }
             is AndroidWebPushPayload.Delete -> {
                 val released = store.revokeNotificationOpen(accountId, payload.notificationId)
@@ -550,6 +552,18 @@ internal object AndroidSystemNotifications {
             .build()
         return listOf(replyAction, markReadAction)
     }
+
+    /// Whether this notification belongs in a Talk client at all.
+    ///
+    /// Nextcloud pushes every app's notifications to a registered device, so a
+    /// Deck card or a share arrives on the same channel as a chat message. The
+    /// app used to show them all, which is how a Deck notification ended up
+    /// looking like it came from Talk. A payload that does not say `spreed` is
+    /// not ours to show; a payload with no `app` at all cannot be shown to be
+    /// ours either, so it is dropped rather than guessed at.
+    internal fun surfacesAsTalkNotification(
+        payload: AndroidWebPushPayload.Message,
+    ): Boolean = payload.app == DEFAULT_TALK_APP
 
     private fun show(
         context: Context,
