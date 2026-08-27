@@ -10,6 +10,8 @@
 	<string>NKS Talk</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -45,6 +47,8 @@
 	<string>NKS Talk needs camera access to attach a photo you take to a message.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NKS Talk needs microphone access to record voice messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NKS Talk needs photo library access to attach a picture you pick to a message.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>NKS Talk saves pictures from your conversations to your photo library.</string>
 	<key>UIApplicationSceneManifest</key>
