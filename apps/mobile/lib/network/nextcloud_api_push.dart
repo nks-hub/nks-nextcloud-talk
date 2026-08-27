@@ -46,10 +46,16 @@ mixin _NextcloudApiPush on _HttpNextcloudApiBase {
       allowedStatusCodes: _pushRegistrationStatusCodes,
       maximumBytes: PushWireLimits.maximumOcsBodyBytes,
     );
+    final body = utf8.decode(payload.body, allowMalformed: true);
+    // ignore: avoid_print
+    print(
+      'PUSHV2DIAG registerNextcloud status=${payload.statusCode} '
+      'keyLen=${effect.formFields['devicePublicKey']?.length} body=$body',
+    );
     return decodePushNextcloudRegistrationResponse(
       effect: effect,
       statusCode: payload.statusCode,
-      body: utf8.decode(payload.body, allowMalformed: true),
+      body: body,
     );
   }
 
