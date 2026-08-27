@@ -50,6 +50,7 @@ final class _Harness extends StatefulWidget {
 
 final class _HarnessState extends State<_Harness> {
   String? _token;
+  bool _detailsOpen = false;
 
   @override
   void initState() {
@@ -69,9 +70,21 @@ final class _HarnessState extends State<_Harness> {
       onRefresh: () async {},
       onSelectAccount: (_) {},
       onAddAccount: () {},
-      onOpenConversation: (c) => setState(() => _token = c.token),
-      onSelectConversation: (c) => setState(() => _token = c.token),
-      onCloseConversation: () => setState(() => _token = null),
+      onOpenConversation: (c) => setState(() {
+        _token = c.token;
+        _detailsOpen = false;
+      }),
+      onSelectConversation: (c) => setState(() {
+        _token = c.token;
+        _detailsOpen = false;
+      }),
+      onCloseConversation: () => setState(() {
+        _token = null;
+        _detailsOpen = false;
+      }),
+      detailsOpen: _detailsOpen,
+      onOpenDetails: () => setState(() => _detailsOpen = true),
+      onCloseDetails: () => setState(() => _detailsOpen = false),
     );
   }
 }
@@ -111,6 +124,51 @@ void main() {
   final compactList = find.byKey(const Key('conversation-shell-compact'));
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
+
+  testWidgets('the details open beside the conversation, not over it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    await pump(tester, token: _conversation.token);
+    expect(find.byKey(const Key('room-details-panel')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('open-room-details')));
+    await tester.pump();
+
+    // A panel beside the room, not a route over the whole window.
+    expect(find.byKey(const Key('room-details-panel')), findsOneWidget);
+    expect(find.byKey(const Key('room-details-screen')), findsNothing);
+    expect(expanded, findsOneWidget);
+    expect(detailPane, findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('close-room-details')));
+    await tester.pump();
+    expect(find.byKey(const Key('room-details-panel')), findsNothing);
+
+    await settle(tester);
+  });
+
+  testWidgets('closing the conversation takes its details with it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    await pump(tester, token: _conversation.token);
+    await tester.tap(find.byKey(const Key('open-room-details')));
+    await tester.pump();
+    expect(find.byKey(const Key('room-details-panel')), findsOneWidget);
+
+    // Details belong to a room; with no room open there is nothing to detail.
+    tester.view.physicalSize = const Size(700, 800);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('close-conversation')));
+    await tester.pump();
+    tester.view.physicalSize = const Size(1400, 900);
+    await tester.pump();
+
+    expect(find.byKey(const Key('room-details-panel')), findsNothing);
+
+    await settle(tester);
+  });
 
   testWidgets('narrowing keeps the open conversation on screen', (
     tester,

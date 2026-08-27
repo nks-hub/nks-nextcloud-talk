@@ -264,6 +264,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
     required this.account,
     required this.conversation,
     this.onClose,
+    this.onOpenDetails,
   });
 
   final StoredAccount account;
@@ -272,6 +273,10 @@ final class PresenceChatRoomPane extends StatelessWidget {
   /// Shows a back affordance in the header. The narrow layout renders this
   /// pane in place of the list, where there is no route to pop.
   final VoidCallback? onClose;
+
+  /// Hands the details to the caller instead of pushing them over everything.
+  /// Only a caller with room for a third column supplies this.
+  final VoidCallback? onOpenDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -333,16 +338,18 @@ final class PresenceChatRoomPane extends StatelessWidget {
                 key: const Key('open-room-details'),
                 tooltip: strings.roomDetailsOpenTooltip,
                 icon: const Icon(Icons.info_outline_rounded),
-                onPressed: () => unawaited(
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder: (context) => RoomDetailsScreen(
-                        account: account,
-                        conversation: conversation,
+                onPressed:
+                    onOpenDetails ??
+                    () => unawaited(
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (context) => RoomDetailsScreen(
+                            account: account,
+                            conversation: conversation,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
               ),
             ],
           ),

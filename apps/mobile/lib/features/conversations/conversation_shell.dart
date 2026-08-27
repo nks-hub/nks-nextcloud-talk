@@ -15,6 +15,7 @@ import '../chat/chat_room_pane.dart' show ChatThreadContext;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
+import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';
 import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
@@ -38,6 +39,12 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   String? _scheduledAccountId;
   String? _syncingAccountId;
   String? _selectedConversationToken;
+
+  /// Whether the selected conversation's details show beside it.
+  ///
+  /// Lives here, not in the layout, for the same reason the selected token
+  /// does: a resize rebuilds the layout and would take the flag with it.
+  bool _detailsOpen = false;
   String? _selectedAccountId;
   ForegroundSyncLoop? _liveSyncLoop;
   StreamSubscription<void>? _pushOpenSubscription;
@@ -310,6 +317,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       return;
     }
     _selectedConversationToken = null;
+    _detailsOpen = false;
     await ref.read(accountRepositoryProvider).selectAccount(accountId);
   }
 
@@ -378,14 +386,28 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onSelectAccount: _selectAccount,
           onAddAccount: _addAccount,
           onOpenConversation: (conversation) {
-            setState(() => _selectedConversationToken = conversation.token);
+            setState(() {
+              _selectedConversationToken = conversation.token;
+              // The details belong to whichever room is open, so switching
+              // rooms with the panel up must not show the old room's details.
+              _detailsOpen = false;
+            });
           },
           onSelectConversation: (conversation) {
-            setState(() => _selectedConversationToken = conversation.token);
+            setState(() {
+              _selectedConversationToken = conversation.token;
+              _detailsOpen = false;
+            });
           },
           onCloseConversation: () {
-            setState(() => _selectedConversationToken = null);
+            setState(() {
+              _selectedConversationToken = null;
+              _detailsOpen = false;
+            });
           },
+          detailsOpen: _detailsOpen,
+          onOpenDetails: () => setState(() => _detailsOpen = true),
+          onCloseDetails: () => setState(() => _detailsOpen = false),
           onOpenCreatedConversation: (token) {
             unawaited(_openAccountConversation(selected.id, token));
           },

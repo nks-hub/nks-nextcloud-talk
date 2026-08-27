@@ -22,6 +22,9 @@ final class ConversationWorkspace extends StatelessWidget {
     required this.onSelectConversation,
     required this.onCloseConversation,
     this.onOpenCreatedConversation,
+    this.detailsOpen = false,
+    this.onOpenDetails,
+    this.onCloseDetails,
   });
 
   final StoredAccount account;
@@ -47,6 +50,15 @@ final class ConversationWorkspace extends StatelessWidget {
 
   /// Opens a room the new-conversation screen just created or resolved.
   final ValueChanged<String>? onOpenCreatedConversation;
+
+  /// Whether the conversation's details are showing beside it.
+  ///
+  /// Held by the shell for the same reason the selected token is: it has to
+  /// survive a resize, and the layout is the wrong place to keep state that
+  /// the layout itself destroys.
+  final bool detailsOpen;
+  final VoidCallback? onOpenDetails;
+  final VoidCallback? onCloseDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +116,9 @@ final class ConversationWorkspace extends StatelessWidget {
           onAddAccount: onAddAccount,
           onSelectConversation: onSelectConversation,
           onOpenCreatedConversation: onOpenCreatedConversation,
+          detailsOpen: detailsOpen,
+          onOpenDetails: onOpenDetails,
+          onCloseDetails: onCloseDetails,
         );
       },
     );
@@ -276,6 +291,9 @@ final class _ExpandedShell extends StatelessWidget {
     required this.onAddAccount,
     required this.onSelectConversation,
     required this.onOpenCreatedConversation,
+    required this.detailsOpen,
+    required this.onOpenDetails,
+    required this.onCloseDetails,
   });
 
   final StoredAccount account;
@@ -291,6 +309,9 @@ final class _ExpandedShell extends StatelessWidget {
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onSelectConversation;
   final ValueChanged<String>? onOpenCreatedConversation;
+  final bool detailsOpen;
+  final VoidCallback? onOpenDetails;
+  final VoidCallback? onCloseDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -381,8 +402,24 @@ final class _ExpandedShell extends StatelessWidget {
                   : PresenceChatRoomPane(
                       account: account,
                       conversation: selectedConversation!,
+                      onOpenDetails: onOpenDetails,
                     ),
             ),
+            if (detailsOpen && selectedConversation != null) ...[
+              const VerticalDivider(),
+              SizedBox(
+                // `clamp(300px, 27vw, 500px)`, which is what Nextcloud's own
+                // sidebar uses.
+                width: MediaQuery.sizeOf(
+                  context,
+                ).width.clamp(300 / 0.27, 500 / 0.27) * 0.27,
+                child: RoomDetailsScreen(
+                  account: account,
+                  conversation: selectedConversation!,
+                  onClose: onCloseDetails,
+                ),
+              ),
+            ],
           ],
         ),
       ),
