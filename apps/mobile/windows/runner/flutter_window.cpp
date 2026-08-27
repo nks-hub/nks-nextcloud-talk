@@ -35,7 +35,7 @@ bool FlutterWindow::OnCreate() {
   taskbar_badge_ = std::make_unique<TaskbarBadge>(
       flutter_controller_->engine()->messenger(), GetHandle());
   shell_notification_ = std::make_unique<ShellNotification>(
-      flutter_controller_->engine()->messenger(), GetHandle(), deep_links_);
+      flutter_controller_->engine()->messenger(), GetHandle());
   RegisterDeepLinkChannel();
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
@@ -88,9 +88,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_DESTROY:
       SaveWindowBounds(hwnd);
       break;
-    case ShellNotification::kCallbackMessage:
+    case ShellNotification::kActivationMessage:
       if (shell_notification_ != nullptr &&
-          shell_notification_->HandleCallback(wparam, lparam)) {
+          shell_notification_->HandleActivation()) {
         return 0;
       }
       break;
