@@ -1,12 +1,14 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <string>
 
 #include "flutter/generated_plugin_registrant.h"
 #include "window_state.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
-    : project_(project) {}
+FlutterWindow::FlutterWindow(const flutter::DartProject& project,
+                             DeepLinkDelivery* deep_links)
+    : project_(project), deep_links_(deep_links) {}
 
 FlutterWindow::~FlutterWindow() {}
 
@@ -32,6 +34,7 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   taskbar_badge_ = std::make_unique<TaskbarBadge>(
       flutter_controller_->engine()->messenger(), GetHandle());
+  RegisterDeepLinkChannel();
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -47,8 +50,12 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
-  // Before the engine goes away: the badge holds a channel on its messenger.
+  // Before the engine goes away: both hold a channel on its messenger.
   taskbar_badge_ = nullptr;
+  if (deep_links_ != nullptr) {
+    deep_links_->Attach(nullptr);
+  }
+  deep_link_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -78,7 +85,52 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_DESTROY:
       SaveWindowBounds(hwnd);
       break;
+    case WM_COPYDATA:
+      // A second launch handed its link to this instance instead of starting
+      // a window of its own.
+      if (deep_links_ != nullptr) {
+        auto* data = reinterpret_cast<COPYDATASTRUCT*>(lparam);
+        if (data != nullptr && data->dwData == kDeepLinkCopyDataId &&
+            data->cbData >= sizeof(wchar_t)) {
+          const std::wstring url(
+              static_cast<const wchar_t*>(data->lpData),
+              data->cbData / sizeof(wchar_t) - 1);
+          deep_links_->Open(url);
+          SetForegroundWindow(hwnd);
+        }
+      }
+      return TRUE;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+}
+
+void FlutterWindow::RegisterDeepLinkChannel() {
+  if (deep_links_ == nullptr) {
+    return;
+  }
+  deep_link_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "com.nkshub.nextcloudtalk/deep_link",
+          &flutter::StandardMethodCodec::GetInstance());
+  deep_link_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() != "getLaunchLink") {
+          result->NotImplemented();
+          return;
+        }
+        const auto launch_link = deep_links_->TakeLaunchLink();
+        result->Success(launch_link.has_value() ? *launch_link
+                                                : flutter::EncodableValue());
+      });
+  deep_links_->Attach([this](const flutter::EncodableValue& payload) {
+    if (deep_link_channel_ != nullptr) {
+      deep_link_channel_->InvokeMethod(
+          "linkOpened",
+          std::make_unique<flutter::EncodableValue>(payload));
+    }
+  });
 }

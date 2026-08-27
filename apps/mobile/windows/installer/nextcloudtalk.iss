@@ -83,6 +83,14 @@ Filename: "{app}\nextcloudtalk.exe"; Description: "{cm:LaunchProgram,NKS Talk}";
 Root: HKCU; Subkey: "Software\NKS Hub\NKS Talk"; ValueType: string; ValueName: "InstallLocation"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\NKS Hub\NKS Talk"; ValueType: string; ValueName: "InstallerVersion"; ValueData: "{#NumericVersion}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
+; The `nctalk:` protocol, without which Windows has no idea a Talk link is
+; ours and the app can never be opened from a browser. Registered per user
+; under HKCU because the installer itself is per user.
+Root: HKCU; Subkey: "Software\Classes\nctalk"; ValueType: string; ValueName: ""; ValueData: "URL:NKS Talk"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\nctalk"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\nctalk\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\nextcloudtalk.exe,0"
+Root: HKCU; Subkey: "Software\Classes\nctalk\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\nextcloudtalk.exe"" ""%1"""
+
 [Code]
 var
   DowngradeBlocked: Boolean;
