@@ -38,6 +38,70 @@ void main() {
 
   tearDown(() => database.close());
 
+  test('a cached reaction is not counted on a later recount', () async {
+    // The first fix stopped a reaction from being counted as it arrived.
+    // Reactions are cached like any other message, so a recount that reads
+    // them back out of the database inflated the number again - which is
+    // why a wrong "1 reply" survived on a device that had already synced.
+    await _insertScope(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      scopeKey: 'root',
+      threadId: null,
+      cursor: 20,
+    );
+    await _insertMessage(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            messageId: 25,
+            actorType: 'users',
+            actorId: 'fixture-user',
+            actorDisplayName: 'Fixture User',
+            timestamp: 25,
+            systemMessage: 'reaction',
+            messageType: 'system',
+            referenceId: 'reference-25',
+            displayText: 'thumbs-up',
+            deleted: false,
+            threadId: const Value(20),
+            rawJson: jsonEncode(
+              _messageJson(id: 25, roomToken: 'rooma123', threadId: 20)
+                ..['systemMessage'] = 'reaction',
+            ),
+          ),
+        );
+
+    expect(
+      await repository.applyChatGetResponse(_threadReplyResponse()),
+      ChatMergeOutcome.applied,
+    );
+
+    final row =
+        await (database.select(database.cachedChatMessages)..where(
+              (r) =>
+                  r.accountId.equals('account-a') &
+                  r.roomToken.equals('rooma123') &
+                  r.messageId.equals(20),
+            ))
+            .getSingleOrNull();
+    expect(row, isA<CachedChatMessage>());
+    final wire = jsonDecode(row!.rawJson) as Map<String, Object?>;
+    expect(
+      wire['threadReplies'],
+      1,
+      reason: 'one real reply, and the cached reaction is not a second',
+    );
+  });
+
   test('a reaction does not turn into a thread reply', () async {
     // Talk delivers a reaction as a SYSTEM message that carries the thread it
     // belongs to. Counting those made a bubble claim "1 reply" the moment
@@ -249,6 +313,48 @@ Future<void> _insertMessage(
           rawJson: jsonEncode(raw),
         ),
       );
+}
+
+ChatGetResponse _threadReplyResponse() {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('projection-thread-reply'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+      'chat-replies',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('20'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  final root = _messageJson(id: 20, roomToken: 'rooma123', threadId: 20)
+    ..['isThread'] = true;
+  final reply = _messageJson(id: 30, roomToken: 'rooma123', threadId: 20)
+    ..['parent'] = root;
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': [reply],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(const {
+      'X-Chat-Last-Given': '30',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
 }
 
 ChatGetResponse _reactionResponse() {

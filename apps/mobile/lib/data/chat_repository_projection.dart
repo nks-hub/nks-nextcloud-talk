@@ -519,7 +519,12 @@ extension _ChatRepositoryProjection on ChatRepository {
                       ) &
                       _database.cachedChatMessages.threadId.equals(
                         scope.threadId,
-                      ),
+                      ) &
+                      // Reactions and deletion notices are cached like any
+                      // other message and carry the thread they belong to.
+                      // Counting them here is what made a wrong "1 reply"
+                      // survive every later recount, not just appear once.
+                      _database.cachedChatMessages.systemMessage.equals(''),
                 ))
               .get();
       final replyIds = incomingReplyIds[scope]!;
