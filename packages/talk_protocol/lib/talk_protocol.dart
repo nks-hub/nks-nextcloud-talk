@@ -24,6 +24,7 @@ export 'src/chat/profile.dart';
 export 'src/chat/request.dart';
 export 'src/chat/response.dart';
 export 'src/chat/state.dart';
+export 'src/client_push/models.dart';
 export 'src/conversation_tags/models.dart';
 export 'src/conversation_tags/profile.dart';
 export 'src/conversation_tags/request.dart';
