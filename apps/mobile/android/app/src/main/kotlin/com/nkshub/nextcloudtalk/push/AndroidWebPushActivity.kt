@@ -16,6 +16,8 @@ class AndroidWebPushActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var methodChannel: MethodChannel? = null
     private var deepLinkChannel: MethodChannel? = null
+    private var deviceKeyChannel: MethodChannel? = null
+    private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val notificationOpenDelivery = AndroidNotificationOpenDelivery { notification ->
         mainHandler.post {
@@ -62,6 +64,18 @@ class AndroidWebPushActivity : FlutterActivity() {
             }
         }
         deepLinkChannel = deepLink
+
+        // The push-v2 device key is independent of Web Push: it belongs to the
+        // proxy transport, but it lives on the same engine, so it is wired here
+        // rather than in a second activity.
+        val deviceKey = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AndroidPushDeviceKeyStore.CHANNEL_NAME,
+        )
+        val deviceKeyHandler = AndroidPushDeviceKeyStore()
+        deviceKey.setMethodCallHandler(deviceKeyHandler)
+        deviceKeyChannel = deviceKey
+        deviceKeyStore = deviceKeyHandler
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -146,6 +160,10 @@ class AndroidWebPushActivity : FlutterActivity() {
         methodChannel = null
         deepLinkChannel?.setMethodCallHandler(null)
         deepLinkChannel = null
+        deviceKeyChannel?.setMethodCallHandler(null)
+        deviceKeyChannel = null
+        deviceKeyStore?.dispose()
+        deviceKeyStore = null
         super.onDestroy()
     }
 
