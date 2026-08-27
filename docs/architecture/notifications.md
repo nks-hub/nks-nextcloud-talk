@@ -261,6 +261,75 @@ nemůže dostat tutéž zprávu viditelně dvakrát, i kdyby jí Client Push i A
 oznámily prakticky současně — druhý zobrazovací zdroj neexistuje, není co
 deduplikovat.
 
+### Stav implementace: iOS hotové a testované, živé doručení na zavřenou appku neověřené
+
+HOTOVO A OVĚŘENO (build přes `flutter run` + `xcodebuild test`, ne jen
+`analyze`), stav 2026-08-27/28:
+
+- Notification Service Extension jako vlastní Xcode target (dva reálné
+  build-blocking bugy v ručně psaném `project.pbxproj` nalezené a opravené
+  skutečným buildem, ne čtením — chybějící `XCBuildConfiguration`/
+  `XCConfigurationList` a chybějící `PBXSourcesBuildPhase` objekt).
+- Dešifrování `nc-subject` (`PushEnvelopeDecryptor`, PKCS#1 v1.5 nejdřív,
+  OAEP-SHA1 jako Nextcloudova jediná alternativa), ciphertext se odmítne,
+  pokud není přesně 256 B (RSA-2048 modulus) — kontrola proběhne ještě před
+  prvním `SecKeyCreateDecryptedData`, ne až po něm. Payload musí nést `app`
+  jako neprázdný string, samotné „je to JSON objekt" nestačí.
+- Přepis title/body a `content.categoryIdentifier` pro Reply/Mark as Read.
+  Titulek je shodný s Androidem: `app == "spreed"` → lokalizovaný název
+  aplikace, jinak raw `app` id — přepnutí mezi zařízeními nesmí ukázat jiný
+  text pro tutéž zprávu.
+- Rozklik i notifikační akce nesou účet **přímo od dešifrujícího klíče**
+  (Keychain label, `PushDeviceKeyStore.setAccount`/`allKeys()`), ne
+  rekonstruovaný z hostitele serveru. Nezávislý audit (Codex) na tohle
+  upozornil jako na vážný nález: dva účty na stejném serveru by si jinak
+  mohly poslat rozklik nebo odpověď z notifikace pod cizí identitou.
+  `ApplePushNotificationOpenDelivery` nese `{accountId, roomToken}` stejným
+  tvarem fronty jako `AppleDeepLinkDelivery`, ale je to samostatný
+  mechanismus — zrcadlí Androidí `AndroidNotificationOpen`, který taky nejde
+  přes deep-link resolver.
+- `ApplePushRegistrationCoordinator.dispose()` čeká na rozdělaný `_drain()`
+  před zavřením gateway klienta — dřív mohl přerušit mid-flight
+  register/unregister a nechat zařízení zaregistrované jen na Nextcloudu,
+  nebo jen na proxy. Ověřeno i obráceně: test bez opravy padá přesně na
+  „dispose must wait for the in-flight drain".
+- Foreground dedup Client Push vs. APNs byl postavený a pak **zrušený** —
+  ověřeno (grep), že druhý zobrazovací zdroj vůbec neexistuje (viz odstavec
+  výš), takže nebylo co deduplikovat.
+
+ZBÝVÁ, ŽIVĚ NEOVĚŘENO: doručení na zavřenou aplikaci a rozklik na reálném
+zařízení. Push-v2 registrace samotná byla dřív ověřená (`/health` proxy
+ukázal reálné registrace), ale finální test „zpráva dorazí na zavřenou
+appku" neproběhl kvůli čtyřem nezávislým překážkám, ne kódu:
+
+1. Testovací účty `fixture-user`/`fixture-user2` sdílí Android emulátor i iOS
+   simulátor. `deviceIdentifier = sha512([cloudId, tokenId])` je identita
+   dvojice účet+heslo aplikace, ne zařízení — dvě zařízení na stejném účtu
+   si navzájem přepisují registraci na proxy. iOS potřebuje vlastní účet.
+2. `flutter build ios --no-codesign` + ruční `simctl install` dává Keychain
+   operacím `errSecMissingEntitlement (-34018)`; funguje jen `flutter run`
+   (skutečný codesign i pro simulátor), který ale při reinstalaci smaže
+   přihlášení.
+3. Nextcloud login flow v2 ve WKWebView: potvrzovací dialog hesla před
+   grant-access nereaguje spolehlivě na simulované tapy ani na Tab+Enter
+   přes `idb` — opakovaně vyzkoušeno, bez jasného vzorce.
+4. Doručení APNs na iOS Simulator je samo o sobě nespolehlivé, stejná třída
+   problému jako Android emulátor + FCM.
+
+Domluveno: finální živý test přesunout na fyzické zařízení přes TestFlight,
+jakmile bude mít iOS vlastní testovací účet.
+
+### Stav implementace: macOS nezačaté
+
+Kanál `apple_push` v `apps/mobile/macos/Runner/` dnes neexistuje vůbec.
+Potřeba pro budoucí implementaci: entitlement `aps-environment` v macOS
+`Runner.entitlements` i `Release.entitlements`, APNs registrace analogická
+iOS, a NSE ekvivalent (macOS Notification Service Extension existuje jako
+koncept stejně jako na iOS, ale je to samostatný target s vlastním code
+signing — macOS se podepisuje jinak než iOS/simulator, takže postup z iOS se
+nedá zkopírovat beze změny). Odloženo na pokyn majitele; nezačínat bez
+výslovného zadání.
+
 ## Windows: běžící aplikace ano, zavřená ne
 
 Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push ji
