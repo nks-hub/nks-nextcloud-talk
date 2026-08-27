@@ -233,7 +233,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await tester.runAsync(() async {
-        for (var attempt = 0; attempt < 100; attempt++) {
+        for (var attempt = 0; attempt < 600; attempt++) {
           if (probeClient.requestStarted.isCompleted) {
             return;
           }
@@ -425,8 +425,16 @@ bool _giphyButtonEnabled(WidgetTester tester) {
       tester.widget<IconButton>(button).onPressed != null;
 }
 
+/// Pumps until [condition] holds.
+///
+/// The bound is a net against a hang, not a budget for the work: the chains
+/// waited on here span drift, real file I/O and a mocked HTTP round trip, and
+/// at the old bound of 100 they outran it on a loaded machine — the media
+/// reply test then failed reproducibly while the code was fine. Six hundred
+/// rounds is roughly seven seconds, still inside the twenty-second timeout,
+/// and the work itself finishes in three.
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
-  for (var attempt = 0; attempt < 100; attempt++) {
+  for (var attempt = 0; attempt < 600; attempt++) {
     await tester.pump(const Duration(milliseconds: 10));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 1)),
