@@ -76,6 +76,25 @@ zamítnutý upload.
 Hlásit „je to v TestFlightu" se smí až podle stavu záznamu, ne podle
 výstupu uploadu.
 
+## Export compliance
+
+Build s `usesNonExemptEncryption = null` visí v TestFlightu jako **Missing
+Compliance** a nejde předat testerovi. iOS build mluví jen přes HTTPS
+a používá systémovou klíčenku — obojí je z hlediska vývozních pravidel
+osvobozené, žádná vlastní kryptografie v něm není (Web Push dešifrování
+přes tink je jen v Androidu, Apple push vrstva v repozitáři vůbec není).
+Odpověď je tedy `false` a od commitu níže je natrvalo v `Info.plist` jako
+`ITSAppUsesNonExemptEncryption`, takže se otázka u dalších buildů
+neobjeví. Existující build se dá dorovnat i přes API:
+
+```
+PATCH /v1/builds/<id>  {"data":{"type":"builds","id":"<id>",
+  "attributes":{"usesNonExemptEncryption":false}}}
+```
+
+Pokud aplikace někdy dostane vlastní šifrování (třeba E2EE hovorů), tohle
+tvrzení přestane platit a musí se přehodnotit.
+
 ## Zbývá
 
 - `MinimumOSVersion` je 13.0; od jara 2027 Apple vyžaduje 15.0.

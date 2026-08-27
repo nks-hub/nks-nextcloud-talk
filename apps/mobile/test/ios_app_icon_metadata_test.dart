@@ -35,6 +35,21 @@ void main() {
     }
   });
 
+  test('iOS Info.plist answers the export compliance question up front', () {
+    // Without this key every upload lands in TestFlight as "Missing
+    // Compliance" and cannot be handed to a tester until somebody answers the
+    // encryption question by hand. The iOS build only talks HTTPS and uses the
+    // system keychain, both exempt, so the answer is a standing false.
+    final contents = _plist().readAsStringSync();
+    final at = contents.indexOf('<key>ITSAppUsesNonExemptEncryption</key>');
+    expect(at, isNonNegative, reason: 'export compliance must be declared');
+    expect(
+      contents.substring(at, at + 120).contains('<false/>'),
+      isTrue,
+      reason: 'the iOS build carries no non-exempt encryption',
+    );
+  });
+
   test('iOS Info.plist names the asset catalog app icon', () {
     final plist = _plist();
     expect(plist.existsSync(), isTrue);
