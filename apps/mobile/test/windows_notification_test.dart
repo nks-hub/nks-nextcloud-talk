@@ -71,7 +71,7 @@ void main() {
       channel: WindowsNotificationChannel(),
     );
     addTearDown(() async => service.dispose());
-    service.follow('account-a', 'https://cloud.example.invalid');
+    service.follow('account-a');
     return service;
   }
 
@@ -96,12 +96,9 @@ void main() {
     expect(shown, hasLength(1));
     expect(shown.single['body'], 'a new one');
     expect(shown.single['title'], 'Room roomtoken1');
-    // The click route is the existing deep link handler, so the URL has to be
-    // the shape it already parses.
-    expect(
-      shown.single['url'],
-      'https://cloud.example.invalid/call/roomtoken1',
-    );
+    expect(shown.single['accountId'], 'account-a');
+    expect(shown.single['roomToken'], 'roomtoken1');
+    expect(shown.single, isNot(contains('url')));
   });
 
   test('an unchanged or falling count says nothing', () async {
@@ -126,5 +123,79 @@ void main() {
     await settle();
 
     expect(shown, isEmpty);
+  });
+
+  test('native open preserves the exact account and room route', () async {
+    final notificationChannel = WindowsNotificationChannel(channel: channel);
+    addTearDown(notificationChannel.dispose);
+    final opened = notificationChannel.notificationOpened.first;
+
+    final response = await TestDefaultBinaryMessengerBinding
+        .instance
+        .defaultBinaryMessenger
+        .handlePlatformMessage(
+          WindowsNotificationChannel.channelName,
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall('notificationOpened', <String, Object>{
+              'accountId': 'account-b',
+              'roomToken': 'shared-host-room',
+            }),
+          ),
+          (_) {},
+        );
+
+    expect(const StandardMethodCodec().decodeEnvelope(response!), isTrue);
+    await opened;
+    final open = notificationChannel.takeNextNotificationOpen();
+    expect(open?.accountId, 'account-b');
+    expect(open?.roomToken, 'shared-host-room');
+  });
+
+  test('native actions remain account scoped', () async {
+    final actions = <Map<String, String?>>[];
+    final notificationChannel = WindowsNotificationChannel(
+      channel: channel,
+      onNotificationAction:
+          ({
+            required kind,
+            required accountId,
+            required roomToken,
+            replyText,
+          }) async {
+            actions.add(<String, String?>{
+              'kind': kind,
+              'accountId': accountId,
+              'roomToken': roomToken,
+              'replyText': replyText,
+            });
+          },
+    );
+    addTearDown(notificationChannel.dispose);
+
+    final response = await TestDefaultBinaryMessengerBinding
+        .instance
+        .defaultBinaryMessenger
+        .handlePlatformMessage(
+          WindowsNotificationChannel.channelName,
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall('notificationAction', <String, Object>{
+              'kind': 'reply',
+              'accountId': 'account-b',
+              'roomToken': 'shared-host-room',
+              'replyText': 'Reply text',
+            }),
+          ),
+          (_) {},
+        );
+
+    expect(const StandardMethodCodec().decodeEnvelope(response!), isTrue);
+    expect(actions, <Map<String, String?>>[
+      <String, String?>{
+        'kind': 'reply',
+        'accountId': 'account-b',
+        'roomToken': 'shared-host-room',
+        'replyText': 'Reply text',
+      },
+    ]);
   });
 }

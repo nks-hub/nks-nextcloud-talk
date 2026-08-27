@@ -16,6 +16,7 @@ import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import '../push/apple_push_channel.dart' show ApplePushNotificationOpen;
+import '../push/windows_notification.dart' show WindowsNotificationOpen;
 import '../../core/talk_features.dart';
 import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';
@@ -51,11 +52,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   ForegroundSyncLoop? _liveSyncLoop;
   StreamSubscription<void>? _pushOpenSubscription;
   StreamSubscription<void>? _applePushOpenSubscription;
+  StreamSubscription<void>? _windowsPushOpenSubscription;
   StreamSubscription<void>? _deepLinkSubscription;
   var _liveSyncGeneration = 0;
   var _isForeground = true;
   var _handlingPushOpen = false;
   var _handlingApplePushOpen = false;
+  var _handlingWindowsPushOpen = false;
   var _handlingDeepLink = false;
 
   @override
@@ -69,6 +72,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       if (mounted) {
         _attachPushNavigation();
         _attachApplePushNavigation();
+        _attachWindowsPushNavigation();
         _attachDeepLinkNavigation();
       }
     });
@@ -149,6 +153,44 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _openApplePushNotification(ApplePushNotificationOpen open) {
+    return _openAccountConversation(open.accountId, open.roomToken);
+  }
+
+  void _attachWindowsPushNavigation() {
+    final service = ref.read(windowsNotificationServiceProvider);
+    final channel = service?.channel;
+    if (channel == null || _windowsPushOpenSubscription != null) {
+      return;
+    }
+    _windowsPushOpenSubscription = channel.notificationOpened.listen((_) {
+      unawaited(_drainWindowsPushNavigation());
+    });
+    unawaited(_drainWindowsPushNavigation());
+  }
+
+  Future<void> _drainWindowsPushNavigation() async {
+    if (_handlingWindowsPushOpen) {
+      return;
+    }
+    final channel = ref.read(windowsNotificationServiceProvider)?.channel;
+    if (channel == null) {
+      return;
+    }
+    _handlingWindowsPushOpen = true;
+    try {
+      while (mounted) {
+        final open = channel.takeNextNotificationOpen();
+        if (open == null) {
+          return;
+        }
+        await _openWindowsPushNotification(open);
+      }
+    } finally {
+      _handlingWindowsPushOpen = false;
+    }
+  }
+
+  Future<void> _openWindowsPushNotification(WindowsNotificationOpen open) {
     return _openAccountConversation(open.accountId, open.roomToken);
   }
 
@@ -335,6 +377,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_pushOpenSubscription?.cancel());
     unawaited(_applePushOpenSubscription?.cancel());
+    unawaited(_windowsPushOpenSubscription?.cancel());
     unawaited(_deepLinkSubscription?.cancel());
     unawaited(_stopLiveSync());
     super.dispose();
