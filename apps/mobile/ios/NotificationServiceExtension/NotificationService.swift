@@ -69,7 +69,7 @@ final class NotificationService: UNNotificationServiceExtension {
       let roomToken = payload["id"] as? String, !roomToken.isEmpty,
       let accountId = candidates[envelope.matchedKeyIndex].accountId
     {
-      PushNotificationRouteStore.remember(
+      PushNotificationRouteStore.production.remember(
         identifier: request.identifier,
         route: PushNotificationRouteStore.Route(accountId: accountId, roomToken: roomToken)
       )

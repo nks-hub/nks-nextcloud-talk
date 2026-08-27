@@ -46,6 +46,9 @@ class MainFlutterWindow: NSWindow {
           #endif
         }
       }
+      appDelegate.configurePushChannel(
+        binaryMessenger: flutterViewController.engine.binaryMessenger
+      )
     }
     self.deepLinkChannel = deepLinkChannel
 

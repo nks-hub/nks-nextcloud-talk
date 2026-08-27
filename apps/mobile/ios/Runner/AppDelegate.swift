@@ -80,68 +80,6 @@ final class AppleDeepLinkDelivery {
   }
 }
 
-/// Queues a tapped push notification's `(accountId, roomToken)` for Flutter
-/// to open, cold start included — same launch/pending/emit shape as
-/// `AppleDeepLinkDelivery` above, kept as a separate type because a push
-/// open and a universal link are different domains that happen to need the
-/// same queueing behavior (mirrors how `AndroidNotificationOpen` is its own
-/// stream on Android, distinct from that platform's deep-link handling).
-///
-/// The account id here is never a guess: the Notification Service Extension
-/// only ever recorded it once its own key had already decrypted the push
-/// (see `PushNotificationRouteStore`), so there is nothing left to resolve
-/// by matching a server host — which is exactly what would go wrong with two
-/// signed-in accounts on the same server.
-final class ApplePushNotificationOpenDelivery {
-  private static let maximumPendingOpens = 16
-
-  private var launchOpen: [String: Any]?
-  private var launchOpenWasTaken = false
-  private var pendingOpens: [[String: Any]] = []
-  private var emit: (([String: Any]) -> Void)?
-
-  func attach(_ emit: @escaping ([String: Any]) -> Void) {
-    self.emit = emit
-    deliverPendingOpensIfReady()
-  }
-
-  func enqueue(accountId: String, roomToken: String) {
-    let payload: [String: Any] = ["accountId": accountId, "roomToken": roomToken]
-
-    if !launchOpenWasTaken, launchOpen == nil {
-      launchOpen = payload
-      return
-    }
-    if let emit {
-      emit(payload)
-      return
-    }
-    if pendingOpens.count == Self.maximumPendingOpens {
-      pendingOpens.removeFirst()
-    }
-    pendingOpens.append(payload)
-  }
-
-  func takeLaunchOpen() -> [String: Any]? {
-    launchOpenWasTaken = true
-    let result = launchOpen
-    launchOpen = nil
-    deliverPendingOpensIfReady()
-    return result
-  }
-
-  private func deliverPendingOpensIfReady() {
-    guard launchOpenWasTaken, let emit else {
-      return
-    }
-    let opens = pendingOpens
-    pendingOpens.removeAll(keepingCapacity: true)
-    for open in opens {
-      emit(open)
-    }
-  }
-}
-
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   /// Matches `NotificationService.swift`'s `content.categoryIdentifier`,
@@ -153,6 +91,7 @@ final class ApplePushNotificationOpenDelivery {
 
   let deepLinks = AppleDeepLinkDelivery()
   let pushOpens = ApplePushNotificationOpenDelivery()
+  let pushActions = ApplePushNotificationActionDelivery()
   let push = ApplePushDelivery()
   let deviceKeys = PushDeviceKeyStore()
   private var deepLinkChannel: FlutterMethodChannel?
@@ -166,6 +105,7 @@ final class ApplePushNotificationOpenDelivery {
     // that cold-launched the app is not delivered before anything is
     // listening for it — iOS holds it until a delegate exists.
     UNUserNotificationCenter.current().delegate = self
+    PushNotificationRouteStore.removeLegacyDefaults()
     registerNotificationCategories()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
@@ -220,29 +160,25 @@ final class ApplePushNotificationOpenDelivery {
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
-    let route = PushNotificationRouteStore.take(
+    let route = PushNotificationRouteStore.production.take(
       identifier: response.notification.request.identifier
     )
 
     switch response.actionIdentifier {
     case Self.replyActionIdentifier, Self.markReadActionIdentifier:
-      guard let route, let pushChannel else {
+      guard let route else {
         completionHandler()
         return
       }
       let kind = response.actionIdentifier == Self.replyActionIdentifier ? "reply" : "markRead"
       let replyText = (response as? UNTextInputNotificationResponse)?.userText
-      pushChannel.invokeMethod(
-        "notificationAction",
-        arguments: [
-          "kind": kind,
-          "accountId": route.accountId,
-          "roomToken": route.roomToken,
-          "replyText": replyText as Any,
-        ]
-      ) { _ in
-        completionHandler()
-      }
+      pushActions.enqueue(
+        kind: kind,
+        accountId: route.accountId,
+        roomToken: route.roomToken,
+        replyText: replyText,
+        completion: completionHandler
+      )
     default:
       if let route {
         pushOpens.enqueue(accountId: route.accountId, roomToken: route.roomToken)
@@ -298,7 +234,9 @@ final class ApplePushNotificationOpenDelivery {
       case "recordDeviceKeyAccount":
         self?.recordDeviceKeyAccount(call.arguments, result)
       case "getLaunchNotificationOpen":
-        result(self?.pushOpens.takeLaunchOpen())
+        let open = self?.pushOpens.takeLaunchOpen()
+        result(open)
+        self?.pushActions.markFlutterReady()
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -313,6 +251,15 @@ final class ApplePushNotificationOpenDelivery {
     )
     pushOpens.attach { [weak pushMethods] payload in
       pushMethods?.invokeMethod("notificationOpened", arguments: payload)
+    }
+    pushActions.attach { [weak pushMethods] payload, completion in
+      guard let pushMethods else {
+        completion()
+        return
+      }
+      pushMethods.invokeMethod("notificationAction", arguments: payload) { _ in
+        completion()
+      }
     }
     pushChannel = pushMethods
   }

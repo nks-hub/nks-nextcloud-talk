@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import UserNotifications
 
 final class AppleDeepLinkDelivery {
   private static let maximumPendingLinks = 16
@@ -80,10 +81,21 @@ final class AppleDeepLinkDelivery {
 }
 
 @main
-class AppDelegate: FlutterAppDelegate {
+class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
+  static let messageCategoryIdentifier = "TALK_MESSAGE"
+  static let replyActionIdentifier = "REPLY_ACTION"
+  static let markReadActionIdentifier = "MARK_READ_ACTION"
+
   let deepLinks = AppleDeepLinkDelivery()
+  let pushOpens = ApplePushNotificationOpenDelivery()
+  let pushActions = ApplePushNotificationActionDelivery()
+  let push = ApplePushDelivery()
+  let deviceKeys = PushDeviceKeyStore()
+  private var pushChannel: FlutterMethodChannel?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+    UNUserNotificationCenter.current().delegate = self
+    registerNotificationCategories()
     NSAppleEventManager.shared().setEventHandler(
       self,
       andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
@@ -117,5 +129,219 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
+  }
+
+  func configurePushChannel(binaryMessenger: FlutterBinaryMessenger) {
+    guard pushChannel == nil else {
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: "com.nkshub.nextcloudtalk/apple_push",
+      binaryMessenger: binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "requestPermission":
+        self?.requestNotificationPermission(result)
+      case "getDeviceToken":
+        result(self?.push.takeLaunchToken())
+      case "generateDeviceKey":
+        self?.generateDeviceKey(call.arguments, result)
+      case "destroyDeviceKey":
+        self?.destroyDeviceKey(call.arguments, result)
+      case "recordDeviceKeyAccount":
+        self?.recordDeviceKeyAccount(call.arguments, result)
+      case "getLaunchNotificationOpen":
+        let open = self?.pushOpens.takeLaunchOpen()
+        result(open)
+        self?.pushActions.markFlutterReady()
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    push.attach(
+      onToken: { [weak channel] token in
+        channel?.invokeMethod("deviceTokenChanged", arguments: token)
+      },
+      onNotification: { [weak channel] payload in
+        channel?.invokeMethod("notificationReceived", arguments: payload)
+      }
+    )
+    pushOpens.attach { [weak channel] payload in
+      channel?.invokeMethod("notificationOpened", arguments: payload)
+    }
+    pushActions.attach { [weak channel] payload, completion in
+      guard let channel else {
+        completion()
+        return
+      }
+      channel.invokeMethod("notificationAction", arguments: payload) { _ in
+        completion()
+      }
+    }
+    pushChannel = channel
+  }
+
+  private func registerNotificationCategories() {
+    let reply = UNTextInputNotificationAction(
+      identifier: Self.replyActionIdentifier,
+      title: NSLocalizedString("Reply", comment: "Notification action"),
+      options: [.authenticationRequired]
+    )
+    let markRead = UNNotificationAction(
+      identifier: Self.markReadActionIdentifier,
+      title: NSLocalizedString("Mark as Read", comment: "Notification action"),
+      options: []
+    )
+    let category = UNNotificationCategory(
+      identifier: Self.messageCategoryIdentifier,
+      actions: [reply, markRead],
+      intentIdentifiers: [],
+      options: []
+    )
+    UNUserNotificationCenter.current().setNotificationCategories([category])
+  }
+
+  private func requestNotificationPermission(_ result: @escaping FlutterResult) {
+    UNUserNotificationCenter.current().requestAuthorization(
+      options: [.alert, .badge, .sound]
+    ) { granted, error in
+      DispatchQueue.main.async {
+        if let error {
+          result(
+            FlutterError(
+              code: "permission_failed",
+              message: error.localizedDescription,
+              details: nil
+            )
+          )
+          return
+        }
+        if granted {
+          NSApplication.shared.registerForRemoteNotifications()
+        }
+        result(granted)
+      }
+    }
+  }
+
+  private func generateDeviceKey(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let handle = (arguments as? [String: Any])?["handle"] as? String, !handle.isEmpty
+    else {
+      result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
+      return
+    }
+    do {
+      result(try deviceKeys.ensureKey(handle: handle))
+    } catch {
+      result(
+        FlutterError(
+          code: "key_generation_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func destroyDeviceKey(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let handle = (arguments as? [String: Any])?["handle"] as? String, !handle.isEmpty
+    else {
+      result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
+      return
+    }
+    deviceKeys.destroyKey(handle: handle)
+    result(nil)
+  }
+
+  private func recordDeviceKeyAccount(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any],
+      let handle = args["handle"] as? String, !handle.isEmpty,
+      let accountId = args["accountId"] as? String, !accountId.isEmpty
+    else {
+      result(
+        FlutterError(
+          code: "invalid_arguments",
+          message: "Missing handle or accountId",
+          details: nil
+        )
+      )
+      return
+    }
+    do {
+      try deviceKeys.setAccount(handle: handle, accountId: accountId)
+      result(nil)
+    } catch {
+      result(
+        FlutterError(
+          code: "account_update_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
+  }
+
+  override func application(
+    _ application: NSApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    push.registered(deviceToken: deviceToken)
+  }
+
+  override func application(
+    _ application: NSApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    #if DEBUG
+      NSLog("APNs registration failed: %@", error.localizedDescription)
+    #endif
+  }
+
+  override func application(
+    _ application: NSApplication,
+    didReceiveRemoteNotification userInfo: [String: Any]
+  ) {
+    push.received(notification: userInfo)
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler:
+      @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .badge, .sound])
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let route = PushNotificationRouteStore.production.take(
+      identifier: response.notification.request.identifier
+    )
+    switch response.actionIdentifier {
+    case Self.replyActionIdentifier, Self.markReadActionIdentifier:
+      guard let route else {
+        completionHandler()
+        return
+      }
+      let kind = response.actionIdentifier == Self.replyActionIdentifier ? "reply" : "markRead"
+      let replyText = (response as? UNTextInputNotificationResponse)?.userText
+      pushActions.enqueue(
+        kind: kind,
+        accountId: route.accountId,
+        roomToken: route.roomToken,
+        replyText: replyText,
+        completion: completionHandler
+      )
+    default:
+      if let route {
+        pushOpens.enqueue(accountId: route.accountId, roomToken: route.roomToken)
+      }
+      completionHandler()
+    }
   }
 }

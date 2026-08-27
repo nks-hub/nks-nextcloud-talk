@@ -81,3 +81,233 @@ final class ApplePushDelivery {
     token.map { String(format: "%02x", $0) }.joined()
   }
 }
+
+/// Holds notification routes until Flutter has installed its channel handler.
+///
+/// A route is always account-scoped by the private key that decrypted the
+/// payload. Keeping the cold-launch item separate from later opens preserves
+/// platform ordering without ever reconstructing an account from a server
+/// host.
+final class ApplePushNotificationOpenDelivery {
+  private static let maximumPendingOpens = 16
+
+  private var launchOpen: [String: Any]?
+  private var launchOpenWasTaken = false
+  private var pendingOpens: [[String: Any]] = []
+  private var emit: (([String: Any]) -> Void)?
+
+  func attach(_ emit: @escaping ([String: Any]) -> Void) {
+    self.emit = emit
+    deliverPendingOpensIfReady()
+  }
+
+  func enqueue(accountId: String, roomToken: String) {
+    let payload: [String: Any] = ["accountId": accountId, "roomToken": roomToken]
+    if !launchOpenWasTaken, launchOpen == nil {
+      launchOpen = payload
+      return
+    }
+    if let emit {
+      emit(payload)
+      return
+    }
+    if pendingOpens.count == Self.maximumPendingOpens {
+      pendingOpens.removeFirst()
+    }
+    pendingOpens.append(payload)
+  }
+
+  func takeLaunchOpen() -> [String: Any]? {
+    launchOpenWasTaken = true
+    let result = launchOpen
+    launchOpen = nil
+    deliverPendingOpensIfReady()
+    return result
+  }
+
+  private func deliverPendingOpensIfReady() {
+    guard launchOpenWasTaken, let emit else {
+      return
+    }
+    let opens = pendingOpens
+    pendingOpens.removeAll(keepingCapacity: true)
+    for open in opens {
+      emit(open)
+    }
+  }
+}
+
+/// Keeps Reply and Mark-as-read alive across a cold launch until Dart can run
+/// the account-scoped operation.
+///
+/// The OS completion handler is released only after Flutter acknowledges the
+/// method call. If the bounded queue overflows, the oldest handler is
+/// completed before its action is discarded so the system is never left
+/// waiting indefinitely.
+private final class CompletionGate {
+  private let lock = NSLock()
+  private let completion: () -> Void
+  private var timeoutCancellation: (() -> Void)?
+  private var isComplete = false
+
+  init(completion: @escaping () -> Void) {
+    self.completion = completion
+  }
+
+  func setTimeoutCancellation(_ cancellation: @escaping () -> Void) {
+    lock.lock()
+    if isComplete {
+      lock.unlock()
+      cancellation()
+      return
+    }
+    timeoutCancellation = cancellation
+    lock.unlock()
+  }
+
+  func complete() {
+    lock.lock()
+    guard !isComplete else {
+      lock.unlock()
+      return
+    }
+    isComplete = true
+    let cancellation = timeoutCancellation
+    timeoutCancellation = nil
+    lock.unlock()
+
+    cancellation?()
+    completion()
+  }
+}
+
+final class ApplePushNotificationActionDelivery {
+  typealias Emit = ([String: Any], @escaping () -> Void) -> Void
+  typealias Schedule = (TimeInterval, @escaping () -> Void) -> (() -> Void)
+
+  private let maximumPendingActions: Int
+  private let completionTimeout: TimeInterval
+  private let schedule: Schedule
+  private let lock = NSLock()
+
+  private struct PendingAction {
+    let id: UUID
+    let payload: [String: Any]
+    let completionGate: CompletionGate
+  }
+
+  private var pendingActions: [PendingAction] = []
+  private var emit: Emit?
+  private var flutterIsReady = false
+
+  convenience init() {
+    self.init(
+      maximumPendingActions: 16,
+      completionTimeout: 20,
+      schedule: Self.scheduleOnMainQueue
+    )
+  }
+
+  init(
+    maximumPendingActions: Int,
+    completionTimeout: TimeInterval,
+    schedule: @escaping Schedule
+  ) {
+    precondition(maximumPendingActions > 0)
+    precondition(completionTimeout > 0)
+    self.maximumPendingActions = maximumPendingActions
+    self.completionTimeout = completionTimeout
+    self.schedule = schedule
+  }
+
+  func attach(_ emit: @escaping Emit) {
+    lock.lock()
+    self.emit = emit
+    lock.unlock()
+    deliverPendingActionsIfReady()
+  }
+
+  func markFlutterReady() {
+    lock.lock()
+    flutterIsReady = true
+    lock.unlock()
+    deliverPendingActionsIfReady()
+  }
+
+  private func deliverPendingActionsIfReady() {
+    lock.lock()
+    guard flutterIsReady, let emit else {
+      lock.unlock()
+      return
+    }
+    let actions = pendingActions
+    pendingActions.removeAll(keepingCapacity: true)
+    lock.unlock()
+    for action in actions {
+      emit(action.payload) {
+        action.completionGate.complete()
+      }
+    }
+  }
+
+  func enqueue(
+    kind: String,
+    accountId: String,
+    roomToken: String,
+    replyText: String?,
+    completion: @escaping () -> Void
+  ) {
+    var payload: [String: Any] = [
+      "kind": kind,
+      "accountId": accountId,
+      "roomToken": roomToken,
+    ]
+    if let replyText {
+      payload["replyText"] = replyText
+    }
+
+    let action = PendingAction(
+      id: UUID(),
+      payload: payload,
+      completionGate: CompletionGate(completion: completion)
+    )
+    var immediateEmit: Emit?
+    var evictedAction: PendingAction?
+
+    lock.lock()
+    if flutterIsReady, let emit {
+      immediateEmit = emit
+    } else {
+      if pendingActions.count == maximumPendingActions {
+        evictedAction = pendingActions.removeFirst()
+      }
+      pendingActions.append(action)
+    }
+    lock.unlock()
+
+    evictedAction?.completionGate.complete()
+    let cancelTimeout = schedule(completionTimeout) { [weak self] in
+      self?.removePendingAction(id: action.id)
+      action.completionGate.complete()
+    }
+    action.completionGate.setTimeoutCancellation(cancelTimeout)
+    immediateEmit?(payload) {
+      action.completionGate.complete()
+    }
+  }
+
+  private func removePendingAction(id: UUID) {
+    lock.lock()
+    pendingActions.removeAll { $0.id == id }
+    lock.unlock()
+  }
+
+  private static func scheduleOnMainQueue(
+    after delay: TimeInterval,
+    action: @escaping () -> Void
+  ) -> () -> Void {
+    let workItem = DispatchWorkItem(block: action)
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    return { workItem.cancel() }
+  }
+}

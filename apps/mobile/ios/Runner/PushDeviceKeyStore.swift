@@ -5,9 +5,9 @@ import Security
 /// for Nextcloud push v2 registration.
 ///
 /// The private key is created non-extractable and never leaves the
-/// Keychain; only `ensureKey`'s PEM return value crosses into Dart. A future
-/// Notification Service Extension would look the same Keychain item up by
-/// its application tag to decrypt an incoming push — it never needs the key
+/// Keychain; only `ensureKey`'s PEM return value crosses into Dart. The
+/// Notification Service Extension looks the same Keychain item up by its
+/// application tag to decrypt an incoming push — it never needs the key
 /// handed to it.
 final class PushDeviceKeyStore {
   private static let keyType = kSecAttrKeyTypeRSA
@@ -36,9 +36,10 @@ final class PushDeviceKeyStore {
       kSecPrivateKeyAttrs as String: [
         kSecAttrIsPermanent as String: true,
         kSecAttrApplicationTag as String: tag,
-        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         kSecAttrAccessGroup as String: Self.sharedAccessGroup,
       ],
+      kSecUseDataProtectionKeychain as String: true,
     ]
     var error: Unmanaged<CFError>?
     guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
@@ -58,6 +59,7 @@ final class PushDeviceKeyStore {
       kSecAttrApplicationTag as String: tag,
       kSecAttrKeyType as String: Self.keyType,
       kSecAttrAccessGroup as String: Self.sharedAccessGroup,
+      kSecUseDataProtectionKeychain as String: true,
     ]
     SecItemDelete(query as CFDictionary)
   }
@@ -75,6 +77,7 @@ final class PushDeviceKeyStore {
       kSecAttrApplicationTag as String: tag,
       kSecAttrKeyType as String: Self.keyType,
       kSecAttrAccessGroup as String: Self.sharedAccessGroup,
+      kSecUseDataProtectionKeychain as String: true,
     ]
     let status = SecItemUpdate(
       query as CFDictionary,
@@ -102,6 +105,7 @@ final class PushDeviceKeyStore {
       kSecAttrKeyType as String: keyType,
       kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
       kSecAttrAccessGroup as String: sharedAccessGroup,
+      kSecUseDataProtectionKeychain as String: true,
       kSecMatchLimit as String: kSecMatchLimitAll,
       kSecReturnRef as String: true,
       kSecReturnAttributes as String: true,
@@ -131,6 +135,7 @@ final class PushDeviceKeyStore {
       kSecAttrApplicationTag as String: tag,
       kSecAttrKeyType as String: Self.keyType,
       kSecAttrAccessGroup as String: Self.sharedAccessGroup,
+      kSecUseDataProtectionKeychain as String: true,
       kSecReturnRef as String: true,
     ]
     var item: CFTypeRef?

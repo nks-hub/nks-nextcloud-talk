@@ -1,69 +1,154 @@
 import Foundation
+import Security
 
-/// Hands a decrypted push's routing info from the Notification Service
-/// Extension to the main app when the user taps the banner.
+/// Hands a decrypted notification route from the Notification Service
+/// Extension to the main app without exposing it in the notification payload
+/// or an App Group plist.
 ///
-/// `UNMutableNotificationContent.userInfo` cannot carry new keys — it stays
-/// exactly what APNs delivered, even after the extension rewrites `title`/
-/// `body` — so there is no way to smuggle the decrypted room token back
-/// through the notification itself. The two processes share nothing else
-/// but the Keychain (already used for the device key) and this App Group's
-/// `UserDefaults` suite, which is the standard way around that limitation.
-/// Entries are keyed by the notification's own `request.identifier`, which
-/// both processes see unchanged.
-///
-/// ponytail: stored unencrypted in a plist, not the Keychain. What lives
-/// here is an opaque account id and a room token — a routing hint, not a
-/// credential or the message content, and it self-evicts (bounded to
-/// `maximumEntries`, consumed on the first tap). Move to a Keychain access
-/// group shared with the extension if that stops being an acceptable
-/// exposure for a room token specifically.
-enum PushNotificationRouteStore {
-  private static let suiteName = "group.com.nkshub.nextcloudtalk"
-  private static let storageKey = "pushNotificationRoutes"
-  private static let maximumEntries = 20
+/// Each route is a bounded, this-device-only Keychain item shared through the
+/// same access group as the RSA push key. The notification identifier is only
+/// an opaque lookup key; the stored account id and room token remain encrypted
+/// at rest and are consumed on the first tap or action.
+final class PushNotificationRouteStore {
+  static let production = PushNotificationRouteStore(
+    service: "com.nkshub.nextcloudtalk.push-route",
+    maximumEntries: 20
+  )
 
-  /// [accountId] is the account whose key actually decrypted the push —
-  /// known for certain at decrypt time. Carrying it through here, rather
-  /// than having the tap/action handler reconstruct "which account" from the
-  /// server host afterwards, is what keeps this correct when two signed-in
-  /// accounts share a server: a host match alone cannot tell them apart, but
-  /// the decrypting key already could.
+  private static let legacySuiteName = "group.com.nkshub.nextcloudtalk"
+  private static let legacyStorageKey = "pushNotificationRoutes"
+
+  private let service: String
+  private let maximumEntries: Int
+  private let accessGroup: String?
+  private let useDataProtectionKeychain: Bool
+  private let lock = NSLock()
+
+  init(
+    service: String,
+    maximumEntries: Int,
+    accessGroup: String? = PushDeviceKeyStore.sharedAccessGroup,
+    useDataProtectionKeychain: Bool = true
+  ) {
+    precondition(!service.isEmpty)
+    precondition(maximumEntries > 0)
+    self.service = service
+    self.maximumEntries = maximumEntries
+    self.accessGroup = accessGroup
+    self.useDataProtectionKeychain = useDataProtectionKeychain
+  }
+
   struct Route {
     let accountId: String
     let roomToken: String
   }
 
-  /// Records where a decrypted notification should route to, evicting the
-  /// oldest entry once `maximumEntries` is exceeded — mirrors
-  /// `AppleDeepLinkDelivery`'s bounded pending-link queue, for the same
-  /// reason: a tap that never lands must not leak memory forever.
-  static func remember(identifier: String, route: Route) {
-    guard let defaults = UserDefaults(suiteName: suiteName) else {
-      return
+  @discardableResult
+  func remember(identifier: String, route: Route) -> Bool {
+    guard !identifier.isEmpty, !route.accountId.isEmpty, !route.roomToken.isEmpty,
+      let data = try? JSONSerialization.data(
+        withJSONObject: ["accountId": route.accountId, "token": route.roomToken]
+      )
+    else {
+      return false
     }
-    var stored = defaults.dictionary(forKey: storageKey) ?? [:]
-    if stored.count >= maximumEntries, stored[identifier] == nil {
-      if let oldest = stored.keys.first {
-        stored.removeValue(forKey: oldest)
-      }
-    }
-    stored[identifier] = ["accountId": route.accountId, "token": route.roomToken]
-    defaults.set(stored, forKey: storageKey)
+
+    lock.lock()
+    defer { lock.unlock() }
+    SecItemDelete(itemQuery(identifier: identifier) as CFDictionary)
+    trimOldestEntryIfNeeded()
+    var item = itemQuery(identifier: identifier)
+    item[kSecValueData as String] = data
+    item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
   }
 
-  /// Returns and forgets the route recorded for `identifier`, if any.
-  static func take(identifier: String) -> Route? {
-    guard let defaults = UserDefaults(suiteName: suiteName) else {
+  func take(identifier: String) -> Route? {
+    guard !identifier.isEmpty else {
       return nil
     }
-    var stored = defaults.dictionary(forKey: storageKey) ?? [:]
-    guard let entry = stored.removeValue(forKey: identifier) as? [String: String],
-      let accountId = entry["accountId"], let token = entry["token"]
+    lock.lock()
+    defer { lock.unlock() }
+    var query = itemQuery(identifier: identifier)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &item)
+    SecItemDelete(itemQuery(identifier: identifier) as CFDictionary)
+    guard status == errSecSuccess, let data = item as? Data,
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let accountId = object["accountId"] as? String, !accountId.isEmpty,
+      let token = object["token"] as? String, !token.isEmpty
     else {
       return nil
     }
-    defaults.set(stored, forKey: storageKey)
     return Route(accountId: accountId, roomToken: token)
+  }
+
+  func removeAll() {
+    lock.lock()
+    defer { lock.unlock() }
+    var query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+    ]
+    if let accessGroup {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    if useDataProtectionKeychain {
+      query[kSecUseDataProtectionKeychain as String] = true
+    }
+    SecItemDelete(query as CFDictionary)
+  }
+
+  static func removeLegacyDefaults(
+    _ defaults: UserDefaults? = UserDefaults(suiteName: legacySuiteName)
+  ) {
+    defaults?.removeObject(forKey: legacyStorageKey)
+  }
+
+  private func itemQuery(identifier: String) -> [String: Any] {
+    var query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecAttrAccount as String: identifier,
+    ]
+    if let accessGroup {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    if useDataProtectionKeychain {
+      query[kSecUseDataProtectionKeychain as String] = true
+    }
+    return query
+  }
+
+  private func trimOldestEntryIfNeeded() {
+    var query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: service,
+      kSecReturnAttributes as String: true,
+      kSecMatchLimit as String: kSecMatchLimitAll,
+    ]
+    if let accessGroup {
+      query[kSecAttrAccessGroup as String] = accessGroup
+    }
+    if useDataProtectionKeychain {
+      query[kSecUseDataProtectionKeychain as String] = true
+    }
+    var items: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess,
+      let attributes = items as? [[String: Any]],
+      attributes.count >= maximumEntries,
+      let oldest = attributes.min(by: { left, right in
+        let leftDate = left[kSecAttrCreationDate as String] as? Date ?? .distantPast
+        let rightDate = right[kSecAttrCreationDate as String] as? Date ?? .distantPast
+        return leftDate < rightDate
+      }),
+      let identifier = oldest[kSecAttrAccount as String] as? String
+    else {
+      return
+    }
+    query = itemQuery(identifier: identifier)
+    SecItemDelete(query as CFDictionary)
   }
 }
