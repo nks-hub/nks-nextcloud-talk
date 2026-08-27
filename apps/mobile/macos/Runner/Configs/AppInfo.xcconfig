@@ -12,3 +12,7 @@ PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.nkshub. All rights reserved.
+
+// The Apple Developer team the signed build belongs to. Signing needs it
+// even for a local Developer ID build; it stays empty in forks.
+DEVELOPMENT_TEAM = TEAMID0000
