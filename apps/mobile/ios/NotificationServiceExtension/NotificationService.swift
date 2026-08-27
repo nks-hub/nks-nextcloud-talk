@@ -32,14 +32,16 @@ final class NotificationService: UNNotificationServiceExtension {
     else {
       return
     }
+    let candidates = PushDeviceKeyStore.allKeys()
     guard
-      let payload = PushEnvelopeDecryptor.decodeWakeUpPayload(
+      let envelope = PushEnvelopeDecryptor.decodeWakeUpPayload(
         ciphertext: ciphertext,
-        candidates: allDevicePrivateKeys()
+        candidates: candidates.map(\.key)
       )
     else {
       return
     }
+    let payload = envelope.payload
     if let subject = payload["subject"] as? String, !subject.isEmpty {
       content.body = subject
     }
@@ -51,34 +53,25 @@ final class NotificationService: UNNotificationServiceExtension {
     if let app = payload["app"] as? String, app == "spreed" {
       content.title = "Nextcloud Talk"
     }
+
+    // Chat pushes carry the room token as `id` (push-v2.md:
+    // {"app":"spreed","type":"chat","id":"<room token>", ...}). Stash it so
+    // a tap can route straight there — see PushNotificationRouteStore for
+    // why this can't just be added to content.userInfo.
+    if payload["app"] as? String == "spreed", payload["type"] as? String == "chat",
+      let roomToken = payload["id"] as? String, !roomToken.isEmpty,
+      let host = candidates[envelope.matchedKeyIndex].host
+    {
+      PushNotificationRouteStore.remember(
+        identifier: request.identifier,
+        route: PushNotificationRouteStore.Route(host: host, roomToken: roomToken)
+      )
+    }
   }
 
   override func serviceExtensionTimeWillExpire() {
     if let contentHandler, let bestAttemptContent {
       contentHandler(bestAttemptContent)
     }
-  }
-
-  /// Every RSA private key this app has ever generated for push, shared via
-  /// the `keychain-access-groups` entitlement both targets declare
-  /// (`PushDeviceKeyStore.sharedAccessGroup`). The extension has no other way
-  /// to know which of possibly several signed-in accounts a push belongs to
-  /// — it tries them all and keeps whichever one actually decrypts.
-  private func allDevicePrivateKeys() -> [SecKey] {
-    let query: [String: Any] = [
-      kSecClass as String: kSecClassKey,
-      kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-      kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
-      kSecAttrAccessGroup as String: PushDeviceKeyStore.sharedAccessGroup,
-      kSecMatchLimit as String: kSecMatchLimitAll,
-      kSecReturnRef as String: true,
-    ]
-    var items: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess,
-      let keys = items as? [SecKey]
-    else {
-      return []
-    }
-    return keys
   }
 }

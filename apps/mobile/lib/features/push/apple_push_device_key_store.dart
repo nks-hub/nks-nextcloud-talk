@@ -5,9 +5,9 @@ import 'apple_push_channel.dart';
 /// Generates and stores this device's per-account RSA-2048 push key.
 ///
 /// The private half never leaves the platform Keychain — [ensureKey] only
-/// ever returns the public key's PEM. A Notification Service Extension
-/// (not built yet) would be the only other thing on-device that ever touches
-/// the private key, to decrypt an incoming push.
+/// ever returns the public key's PEM. A Notification Service Extension is
+/// the only other thing on-device that ever touches the private key, to
+/// decrypt an incoming push.
 abstract interface class PushDeviceKeyStore {
   /// Returns the SubjectPublicKeyInfo PEM for [handle], generating a
   /// Keychain-resident RSA-2048 keypair on first use and reusing it on every
@@ -43,5 +43,17 @@ final class ApplePushDeviceKeyChannel implements PushDeviceKeyStore {
   @override
   Future<void> destroyKey(String handle) async {
     await _channel.invokeMethod<void>('destroyDeviceKey', {'handle': handle});
+  }
+
+  /// Records which Nextcloud server host owns the key at [handle], so the
+  /// Notification Service Extension can look it back up once a push
+  /// decrypts, to route a tap to the right server. iOS-only: kept off
+  /// [PushDeviceKeyStore] itself because Android, which implements that same
+  /// shared interface, has no equivalent need.
+  Future<void> recordHost(String handle, String host) async {
+    await _channel.invokeMethod<void>('recordDeviceKeyHost', {
+      'handle': handle,
+      'host': host,
+    });
   }
 }

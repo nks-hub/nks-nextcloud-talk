@@ -578,12 +578,14 @@ final applePushRegistrationCoordinatorProvider =
       if (!Platform.isIOS) {
         return null;
       }
+      final deviceKeyChannel = ApplePushDeviceKeyChannel();
       final coordinator = ApplePushRegistrationCoordinator(
         accounts: ref.watch(accountRepositoryProvider),
         credentials: ref.watch(credentialVaultProvider),
         api: ref.watch(nextcloudApiProvider),
-        keyStore: ApplePushDeviceKeyChannel(),
+        keyStore: deviceKeyChannel,
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        recordDeviceKeyHost: deviceKeyChannel.recordHost,
       );
       ref.onDispose(() => unawaited(coordinator.dispose()));
 

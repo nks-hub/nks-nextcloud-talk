@@ -14,6 +14,15 @@ import Security
 /// (`packages/talk_protocol/lib/src/push/routing.dart`) applies for the
 /// signed variant of this problem.
 enum PushEnvelopeDecryptor {
+  /// A payload decrypted by exactly one of the offered candidates, plus that
+  /// candidate's position in `candidates` — callers that track per-key
+  /// metadata (e.g. which account's server a key belongs to) use the index to
+  /// look that metadata back up without this type needing to know about it.
+  struct DecodedEnvelope {
+    let payload: [String: Any]
+    let matchedKeyIndex: Int
+  }
+
   /// Tries every RSA private key in `candidates` against `ciphertext`,
   /// PKCS#1 v1.5 first (Nextcloud's default), then OAEP-SHA1 (its only
   /// configurable alternative). Returns the decoded payload only if exactly
@@ -22,9 +31,15 @@ enum PushEnvelopeDecryptor {
   static func decodeWakeUpPayload(
     ciphertext: Data,
     candidates: [SecKey]
-  ) -> [String: Any]? {
-    let matches = candidates.compactMap { key in
-      decrypt(ciphertext: ciphertext, with: key).flatMap(validWakeUpPayload)
+  ) -> DecodedEnvelope? {
+    let matches = candidates.indices.compactMap { index -> DecodedEnvelope? in
+      guard
+        let payload = decrypt(ciphertext: ciphertext, with: candidates[index])
+          .flatMap(validWakeUpPayload)
+      else {
+        return nil
+      }
+      return DecodedEnvelope(payload: payload, matchedKeyIndex: index)
     }
     return matches.count == 1 ? matches[0] : nil
   }

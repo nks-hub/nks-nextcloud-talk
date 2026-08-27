@@ -92,7 +92,33 @@ void main() {
     expectCompiled(project, 'ApplePushDelivery.swift');
     expectCompiled(project, 'PushDeviceKeyStore.swift');
     expectCompiled(project, 'PushEnvelopeDecryptor.swift');
+    expectCompiled(project, 'PushNotificationRouteStore.swift');
   });
+
+  test(
+    'PushNotificationRouteStore.swift is compiled into both the Runner and '
+    'NotificationServiceExtension targets, since both processes use it',
+    () {
+      final projectFile = File(
+        '${Directory.current.path}${Platform.pathSeparator}ios'
+        '${Platform.pathSeparator}Runner.xcodeproj'
+        '${Platform.pathSeparator}project.pbxproj',
+      );
+      final project = projectFile.readAsStringSync();
+
+      final sourcesEntries = RegExp(
+        '/\\* PushNotificationRouteStore\\.swift in Sources \\*/,',
+      ).allMatches(project).length;
+      expect(
+        sourcesEntries,
+        2,
+        reason:
+            'PushNotificationRouteStore.swift must be listed in exactly two '
+            'Sources build phases (Runner and NotificationServiceExtension), '
+            'found $sourcesEntries',
+      );
+    },
+  );
 
   test('the device key and its Keychain access group are shared with a '
       'future Notification Service Extension', () {

@@ -36,6 +36,7 @@ final class ApplePushRegistrationCoordinator {
     Duration firstRetry = const Duration(seconds: 5),
     Duration maximumRetry = const Duration(minutes: 30),
     Future<void> Function(Duration)? delay,
+    Future<void> Function(String handle, String host)? recordDeviceKeyHost,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
@@ -44,7 +45,8 @@ final class ApplePushRegistrationCoordinator {
        _gatewayClient = gatewayClient ?? PushGatewayClient(),
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
-       _delay = delay ?? _sleep {
+       _delay = delay ?? _sleep,
+       _recordDeviceKeyHost = recordDeviceKeyHost ?? _noHostRecording {
     if (firstRetry <= Duration.zero || maximumRetry < firstRetry) {
       throw ArgumentError('Invalid Apple push retry timing');
     }
@@ -52,6 +54,8 @@ final class ApplePushRegistrationCoordinator {
 
   static Future<void> _sleep(Duration duration) =>
       Future<void>.delayed(duration);
+
+  static Future<void> _noHostRecording(String handle, String host) async {}
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -62,6 +66,7 @@ final class ApplePushRegistrationCoordinator {
   final Duration _firstRetry;
   final Duration _maximumRetry;
   final Future<void> Function(Duration) _delay;
+  final Future<void> Function(String handle, String host) _recordDeviceKeyHost;
 
   PushRuntimeSnapshot _snapshot = PushRuntimeSnapshot.empty();
   final Map<String, PushRegistrationAuthority> _authorities = {};
@@ -226,8 +231,20 @@ final class ApplePushRegistrationCoordinator {
     EnsurePushDeviceKeyEffect effect,
   ) async {
     try {
+      final authority = _authorities[effect.context.accountId.value];
+      if (authority == null) {
+        return PushDeviceKeyCompletion.failure(
+          effect: effect,
+          classification: PushCompletionClass.transientFailure,
+        );
+      }
       final handle = _keyHandleFor(effect.context.accountId);
       final pem = await _keyStore.ensureKey(handle.value);
+      // Lets the Notification Service Extension later resolve a decrypted
+      // room token to a server — see PushNotificationRouteStore.swift.
+      // `ensureKey` above is idempotent, so retrying this whole effect on
+      // failure (the same path every other exception here takes) is safe.
+      await _recordDeviceKeyHost(handle.value, authority.server.uri.host);
       final key = PushDeviceKeyBinding(
         handle: handle,
         publicKey: PushRsaPublicKey.parse(pem),

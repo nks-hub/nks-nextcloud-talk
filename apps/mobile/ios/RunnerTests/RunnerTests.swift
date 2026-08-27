@@ -94,12 +94,13 @@ class RunnerTests: XCTestCase {
     )
     let ciphertext = try encrypt(plaintext, with: publicKey)
 
-    let payload = PushEnvelopeDecryptor.decodeWakeUpPayload(
+    let envelope = PushEnvelopeDecryptor.decodeWakeUpPayload(
       ciphertext: ciphertext,
       candidates: [privateKey]
     )
 
-    XCTAssertEqual(payload?["subject"] as? String, "New message")
+    XCTAssertEqual(envelope?.payload["subject"] as? String, "New message")
+    XCTAssertEqual(envelope?.matchedKeyIndex, 0)
   }
 
   func testDecryptorPicksTheOneCandidateThatActuallyDecryptsIt() throws {
@@ -108,12 +109,13 @@ class RunnerTests: XCTestCase {
     let plaintext = try XCTUnwrap("{\"app\":\"spreed\"}".data(using: .utf8))
     let ciphertext = try encrypt(plaintext, with: correctPublicKey)
 
-    let payload = PushEnvelopeDecryptor.decodeWakeUpPayload(
+    let envelope = PushEnvelopeDecryptor.decodeWakeUpPayload(
       ciphertext: ciphertext,
       candidates: [wrongPrivateKey, correctPrivateKey]
     )
 
-    XCTAssertEqual(payload?["app"] as? String, "spreed")
+    XCTAssertEqual(envelope?.payload["app"] as? String, "spreed")
+    XCTAssertEqual(envelope?.matchedKeyIndex, 1)
   }
 
   func testDecryptorReturnsNilWhenNoCandidateKeyMatches() throws {

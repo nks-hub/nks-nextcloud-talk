@@ -16,9 +16,11 @@
 		A4839DFDB635FB92EE66B86F /* ApplePushDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */; };
 		30EDC32B327F32A172BAFC65 /* PushDeviceKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */; };
 		E65ADE417CC6AAFA80FAA950 /* PushEnvelopeDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B346EC797F32740D8F77174 /* PushEnvelopeDecryptor.swift */; };
+		AA83E4E97DB74EB7C7E03581 /* PushNotificationRouteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E046F80D715CDE370813CC2 /* PushNotificationRouteStore.swift */; };
 		03CDD22D8B63920734B183BB /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 333F54DBFFD3CBC2DCD27807 /* NotificationService.swift */; };
 		D3E69EFA2A7878E0EC956231 /* PushEnvelopeDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B346EC797F32740D8F77174 /* PushEnvelopeDecryptor.swift */; };
 		9C6D56E9685EB360E6D5A935 /* PushDeviceKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */; };
+		3232C8EBEED1C498E0C1874E /* PushNotificationRouteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E046F80D715CDE370813CC2 /* PushNotificationRouteStore.swift */; };
 		47BAA877F12999C489E45A1B /* NotificationServiceExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 34B630F28A4C4E2744551061 /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
@@ -79,6 +81,7 @@
 		F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePushDelivery.swift; sourceTree = "<group>"; };
 		9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeviceKeyStore.swift; sourceTree = "<group>"; };
 		1B346EC797F32740D8F77174 /* PushEnvelopeDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushEnvelopeDecryptor.swift; sourceTree = "<group>"; };
+		6E046F80D715CDE370813CC2 /* PushNotificationRouteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationRouteStore.swift; sourceTree = "<group>"; };
 		333F54DBFFD3CBC2DCD27807 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		34B630F28A4C4E2744551061 /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E26C917979685147963826BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -180,6 +183,7 @@
 				F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */,
 				9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */,
 				1B346EC797F32740D8F77174 /* PushEnvelopeDecryptor.swift */,
+				6E046F80D715CDE370813CC2 /* PushNotificationRouteStore.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -391,6 +395,7 @@
 				A4839DFDB635FB92EE66B86F /* ApplePushDelivery.swift in Sources */,
 				30EDC32B327F32A172BAFC65 /* PushDeviceKeyStore.swift in Sources */,
 				E65ADE417CC6AAFA80FAA950 /* PushEnvelopeDecryptor.swift in Sources */,
+				AA83E4E97DB74EB7C7E03581 /* PushNotificationRouteStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -401,6 +406,7 @@
 				03CDD22D8B63920734B183BB /* NotificationService.swift in Sources */,
 				D3E69EFA2A7878E0EC956231 /* PushEnvelopeDecryptor.swift in Sources */,
 				9C6D56E9685EB360E6D5A935 /* PushDeviceKeyStore.swift in Sources */,
+				3232C8EBEED1C498E0C1874E /* PushNotificationRouteStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

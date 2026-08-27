@@ -92,7 +92,42 @@ final class AppleDeepLinkDelivery {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Must be set before `super`'s own launch handling returns, so a tap
+    // that cold-launched the app is not delivered before anything is
+    // listening for it — iOS holds it until a delegate exists.
+    UNUserNotificationCenter.current().delegate = self
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Routes a tapped push notification to the conversation it decrypted to,
+  /// by replaying it through the same `AppleDeepLinkDelivery` queue a
+  /// universal link would use — cold start included, since that queue
+  /// already handles "opened before the Flutter engine exists".
+  ///
+  /// The room token only exists because the Notification Service Extension
+  /// decrypted it and stashed it in `PushNotificationRouteStore`
+  /// (`content.userInfo` cannot carry it — see that type's doc comment). A
+  /// push with no matching route (decrypt failed, or this build predates
+  /// route tracking) is silently not routed rather than treated as an error.
+  ///
+  /// `FlutterAppDelegate` already conforms to `UNUserNotificationCenterDelegate`
+  /// and forwards this to any plugin that registered for it, so this override
+  /// does its own routing first and then defers to `super` for that
+  /// forwarding and the single `completionHandler()` call, instead of also
+  /// calling it here.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    if let route = PushNotificationRouteStore.take(
+      identifier: response.notification.request.identifier
+    ),
+      let url = URL(string: "https://\(route.host)/call/\(route.roomToken)")
+    {
+      _ = deepLinks.open(url)
+    }
+    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
@@ -139,6 +174,8 @@ final class AppleDeepLinkDelivery {
         self?.generateDeviceKey(call.arguments, result)
       case "destroyDeviceKey":
         self?.destroyDeviceKey(call.arguments, result)
+      case "recordDeviceKeyHost":
+        self?.recordDeviceKeyHost(call.arguments, result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -216,6 +253,33 @@ final class AppleDeepLinkDelivery {
     }
     deviceKeys.destroyKey(handle: handle)
     result(nil)
+  }
+
+  /// Records which Nextcloud server host owns `handle`'s device key, so the
+  /// Notification Service Extension can resolve a decrypted room token back
+  /// to a server. `arguments` must be `{"handle": String, "host": String}`.
+  private func recordDeviceKeyHost(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any],
+      let handle = args["handle"] as? String, !handle.isEmpty,
+      let host = args["host"] as? String, !host.isEmpty
+    else {
+      result(
+        FlutterError(code: "invalid_arguments", message: "Missing handle or host", details: nil)
+      )
+      return
+    }
+    do {
+      try deviceKeys.setHost(handle: handle, host: host)
+      result(nil)
+    } catch {
+      result(
+        FlutterError(
+          code: "host_update_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
   }
 
   override func application(
