@@ -218,13 +218,30 @@ final class _ChatComposer extends StatelessWidget {
   /// Sends whatever is in the composer, same as the send button.
   final VoidCallback onSubmit;
 
-  /// Routes a bare Enter through [composerEnterAction].
-  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+  /// Routes Escape and, where the platform sends on Enter, a bare Enter.
+  KeyEventResult _handleKey(
+    KeyEvent event, {
+    required bool sendsOnEnter,
+  }) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
     final key = event.logicalKey;
+    // Escape backs out of the reply, on every platform with a keyboard: the
+    // banner's own close button is a mouse target, and nothing else here
+    // wants the key. With no reply open it is left alone, so it can still
+    // reach whatever does want it.
+    if (key == LogicalKeyboardKey.escape) {
+      if (replyTo == null) {
+        return KeyEventResult.ignored;
+      }
+      onCancelReply();
+      return KeyEventResult.handled;
+    }
     final isEnter =
         key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter;
-    if (event is! KeyDownEvent || !isEnter) {
+    if (!isEnter || !sendsOnEnter) {
       return KeyEventResult.ignored;
     }
     final value = controller.value;
@@ -284,9 +301,10 @@ final class _ChatComposer extends StatelessWidget {
                       ),
                     ),
                     Focus(
-                      onKeyEvent: context.sendsOnEnter
-                          ? _handleKey
-                          : null,
+                      onKeyEvent: (node, event) => _handleKey(
+                        event,
+                        sendsOnEnter: context.sendsOnEnter,
+                      ),
                       child: TextField(
                       key: const Key('chat-composer'),
                       controller: controller,

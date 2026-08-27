@@ -372,6 +372,38 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
+  testWidgets('Escape backs out of a reply', (tester) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    await tester.runAsync(harness.seedReplyMessage);
+
+    await tester.pumpWidget(harness.app());
+    await _pumpUntil(
+      tester,
+      () =>
+          find.byKey(const Key('chat-message-target-109')).evaluate().isNotEmpty &&
+          find.byType(ChatMediaComposer).evaluate().isNotEmpty,
+    );
+    await tester.longPress(find.byKey(const Key('chat-message-target-109')));
+    await _pumpTransition(tester);
+    await tester.tap(find.byKey(const Key('message-action-reply')));
+    await _pumpTransition(tester);
+    expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-composer')));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-reply-banner')).evaluate().isEmpty,
+    );
+
+    expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
+    expect(harness.sentMessages, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  }, timeout: const Timeout(Duration(seconds: 20)));
 }
 
 TextEditingController _composer(WidgetTester tester) {
