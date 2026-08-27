@@ -72,15 +72,18 @@ final class ApplePushCoordinator {
     _onToken?.call(token);
   }
 
+  /// Reports that a token arrived without revealing any of it.
+  ///
+  /// Even a short prefix is a stable device fingerprint that survives across
+  /// log files, so nothing derived from the token itself is printed — only
+  /// that one arrived, and how long it was, which is what actually helps when
+  /// a registration is rejected for its shape.
   void _logToken(String token) {
     if (!kDebugMode) {
       return;
     }
-    final preview = token.length > 8 ? '${token.substring(0, 8)}…' : token;
     // ignore: avoid_print
-    print(
-      'Apple push device token acquired ($preview, ${token.length} chars).',
-    );
+    print('Apple push device token acquired (${token.length} chars).');
   }
 
   void dispose() {
