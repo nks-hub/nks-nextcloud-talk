@@ -221,6 +221,63 @@ void main() {
       },
     );
 
+    testWidgets('${layout.key}: arrows walk the conversation list', (
+      tester,
+    ) async {
+      await pumpShell(
+        tester,
+        conversationsByAccount: {
+          'account-a': [
+            _conversation('account-a', 'roomone'),
+            _conversation('account-a', 'roomtwo'),
+            _conversation('account-a', 'roomthree'),
+          ],
+        },
+      );
+
+      // Flutter's directional traversal already does this; the test is here so
+      // a later wrapper around the tiles cannot quietly take it away.
+      String? focusedToken() {
+        final context = FocusManager.instance.primaryFocus?.context;
+        if (context == null) {
+          return null;
+        }
+        String? token;
+        context.visitAncestorElements((element) {
+          final key = element.widget.key;
+          if (key is ValueKey<String> &&
+              key.value.startsWith('conversation-tile-')) {
+            token = key.value.substring('conversation-tile-'.length);
+            return false;
+          }
+          return true;
+        });
+        return token;
+      }
+
+      // Tab first: without focus inside the list there is nothing to move.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      var seen = <String?>[focusedToken()];
+      for (var step = 0; step < 6 && seen.last == null; step++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        seen = [...seen, focusedToken()];
+      }
+      final first = seen.last;
+      expect(first, isNotNull, reason: 'Tab must reach a conversation tile');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      final second = focusedToken();
+      expect(second, isNotNull);
+      expect(second, isNot(first), reason: 'Down must move to the next room');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focusedToken(), first, reason: 'Up must come back');
+    });
+
     testWidgets('${layout.key}: Ctrl+F opens the message search', (
       tester,
     ) async {
