@@ -412,9 +412,9 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       ..bodyFields = createRequest.formBody;
     final payload = await _sendJson(
       request,
-      allowedStatusCodes: const {200, 401, 429, 503},
+      allowedStatusCodes: const {200, 201, 401, 429, 503},
       maximumBytes: _createConversationMaximumBytes,
-      parseBodyForStatusCodes: const {200, 401},
+      parseBodyForStatusCodes: const {200, 201, 401},
     );
     return decodeCreateConversationResponse(
       request: createRequest,

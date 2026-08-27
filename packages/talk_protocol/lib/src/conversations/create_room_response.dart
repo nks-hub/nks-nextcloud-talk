@@ -102,7 +102,10 @@ CreateConversationResponse decodeCreateConversationResponse({
         statusCode: 503,
         kind: CreateConversationHttpFailureKind.serviceUnavailable,
       );
-    case 200:
+    // Talk answers a created room with 201, not 200; measured against
+    // Nextcloud 34.0.1, where `POST v4/room` returned 201 for both a group
+    // and a public room. Accepting only 200 made every creation fail.
+    case 200 || 201:
       return _decodeSuccessOrOcsFailure(request: request, json: json);
     default:
       protocolFailure(
