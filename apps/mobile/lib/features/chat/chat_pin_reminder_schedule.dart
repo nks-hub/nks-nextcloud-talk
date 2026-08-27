@@ -218,11 +218,24 @@ final class ReminderSheetResult {
   final DateTime? at;
 }
 
+/// Stable semantic identity for one offered moment.
+enum TimePresetId {
+  laterToday('later-today'),
+  tomorrow('tomorrow'),
+  thisWeekend('this-weekend'),
+  nextWeek('next-week');
+
+  const TimePresetId(this.keySegment);
+
+  final String keySegment;
+}
+
 /// One offered moment, e.g. "tomorrow morning".
 @immutable
 final class TimePreset {
-  const TimePreset(this.label, this.at);
+  const TimePreset(this.id, this.label, this.at);
 
+  final TimePresetId id;
   final String label;
   final DateTime at;
 }
@@ -243,13 +256,15 @@ List<TimePreset> timePresets(AppLocalizations strings, DateTime now) {
   final daysUntilSaturday = (DateTime.saturday - now.weekday) % 7;
   final daysUntilMonday = (DateTime.monday - now.weekday) % 7;
   final candidates = <TimePreset>[
-    TimePreset(strings.reminderLaterToday, at(0, 18)),
-    TimePreset(strings.reminderTomorrow, at(1, 8)),
+    TimePreset(TimePresetId.laterToday, strings.reminderLaterToday, at(0, 18)),
+    TimePreset(TimePresetId.tomorrow, strings.reminderTomorrow, at(1, 8)),
     TimePreset(
+      TimePresetId.thisWeekend,
       strings.reminderThisWeekend,
       at(daysUntilSaturday == 0 ? 7 : daysUntilSaturday, 8),
     ),
     TimePreset(
+      TimePresetId.nextWeek,
       strings.reminderNextWeek,
       at(daysUntilMonday == 0 ? 7 : daysUntilMonday, 8),
     ),
@@ -310,7 +325,7 @@ Future<ReminderSheetResult?> showReminderSheet({
           const Divider(height: 1),
           for (final preset in timePresets(strings, now))
             ListTile(
-              key: Key('reminder-preset-${preset.at.millisecondsSinceEpoch}'),
+              key: Key('reminder-preset-${preset.id.keySegment}'),
               leading: const Icon(Icons.schedule_rounded),
               title: Text(preset.label),
               subtitle: Text(_formatMoment(sheetContext, preset.at)),
@@ -366,7 +381,7 @@ Future<DateTime?> showSendLaterSheet({
           const Divider(height: 1),
           for (final preset in timePresets(strings, now))
             ListTile(
-              key: Key('send-later-preset-${preset.at.millisecondsSinceEpoch}'),
+              key: Key('send-later-preset-${preset.id.keySegment}'),
               leading: const Icon(Icons.schedule_send_outlined),
               title: Text(preset.label),
               subtitle: Text(_formatMoment(sheetContext, preset.at)),

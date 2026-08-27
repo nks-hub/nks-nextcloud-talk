@@ -673,6 +673,75 @@ void main() {
   });
 
   group('time presets', () {
+    testWidgets('Friday reminder choices stay independently selectable', (
+      tester,
+    ) async {
+      ReminderSheetResult? result;
+      final friday = DateTime(2026, 8, 28, 9);
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              key: const Key('open-fixed-reminder-sheet'),
+              onPressed: () async {
+                result = await showReminderSheet(
+                  context: context,
+                  now: friday,
+                  existing: null,
+                );
+              },
+              child: const Text('Open reminder'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('open-fixed-reminder-sheet')));
+      await tester.pumpAndSettle();
+
+      final tomorrow = find.byKey(const Key('reminder-preset-tomorrow'));
+      final weekend = find.byKey(const Key('reminder-preset-this-weekend'));
+      expect(tomorrow, findsOneWidget);
+      expect(weekend, findsOneWidget);
+      await tester.tap(tomorrow);
+      await tester.pumpAndSettle();
+      expect(result?.at, DateTime(2026, 8, 29, 8));
+    });
+
+    testWidgets('Friday send-later choices stay independently selectable', (
+      tester,
+    ) async {
+      DateTime? result;
+      final friday = DateTime(2026, 8, 28, 9);
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              key: const Key('open-fixed-send-later-sheet'),
+              onPressed: () async {
+                result = await showSendLaterSheet(
+                  context: context,
+                  now: friday,
+                );
+              },
+              child: const Text('Open send later'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('open-fixed-send-later-sheet')));
+      await tester.pumpAndSettle();
+
+      final tomorrow = find.byKey(const Key('send-later-preset-tomorrow'));
+      final weekend = find.byKey(const Key('send-later-preset-this-weekend'));
+      expect(tomorrow, findsOneWidget);
+      expect(weekend, findsOneWidget);
+      await tester.tap(weekend);
+      await tester.pumpAndSettle();
+      expect(result, DateTime(2026, 8, 29, 8));
+    });
+
     // The server refuses a reminder or a send time in the past, so a preset
     // that has already gone by must not be offered at all.
     test('a preset already gone by today is dropped', () {
