@@ -221,3 +221,27 @@ Nextcloud posílá na registrované zařízení notifikace **všech** aplikací,
 jen Talku, takže karta z Decku dorazí na stejný kanál jako zpráva. Pole `app`
 v payloadu je proto brána: zobrazí se jen `spreed`. Payload bez `app` se za
 Talk nepovažuje — nehádá se.
+
+## VoIP push a proč tu zatím není
+
+Hovory potřebují na iOS druhý, oddělený kanál: PushKit s VoIP tokenem. Apple
+u něj vynucuje, že každý doručený VoIP push musí skončit voláním
+`reportNewIncomingCall`, jinak systém aplikaci zabije — takže se ten kanál
+nedá použít na běžné notifikace a naopak.
+
+Upstream to řeší způsobem, který je dobré znát dřív, než se to začne stavět:
+iOS klient posílá proxy **jeden řetězec se dvěma tokeny oddělenými mezerou**,
+`"<běžný hex> <voip hex>"`, a `pushTokenHash` pro Nextcloud počítá SHA-512
+právě z toho spojeného tvaru (`NCKeyChainController.m`). Naše proxy tenhle
+tvar dnes nepřijme: `token_kind()` uznává jen čistý hex nebo base64url a
+mezera neprojde ani jednou maskou, takže by registrace skončila na
+`INVALID_PUSH_TOKEN`. Databáze proxy má navíc jediný sloupec `push_token`,
+takže i kdyby prošla, není kam VoIP token uložit.
+
+Mapování `type: "voip"` na topic s příponou `.voip` v proxy hotové je,
+chybí tedy jen ta identita a schéma. Na straně Applu k tomu bude potřeba
+VoIP entitlement, který v tabulce výš není.
+
+Nejsme vázaní upstream tvarem — proxy i klient jsou naše, takže dvojice
+tokenů může jít dvěma poli místo jednoho řetězce s mezerou. Rozhodne se to,
+až se budou stavět hovory; do té doby je tohle jen zapsaný nález, ne plán.
