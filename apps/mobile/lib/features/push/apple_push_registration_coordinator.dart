@@ -32,6 +32,7 @@ final class ApplePushRegistrationCoordinator {
     required HttpNextcloudApi api,
     required PushDeviceKeyStore keyStore,
     required PushGatewayOrigin gateway,
+    String pushEnvironment = 'development',
     PushGatewayClient? gatewayClient,
     Duration firstRetry = const Duration(seconds: 5),
     Duration maximumRetry = const Duration(minutes: 30),
@@ -43,6 +44,7 @@ final class ApplePushRegistrationCoordinator {
        _api = api,
        _keyStore = keyStore,
        _gateway = gateway,
+       _pushEnvironment = pushEnvironment,
        _gatewayClient = gatewayClient ?? PushGatewayClient(),
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
@@ -51,18 +53,25 @@ final class ApplePushRegistrationCoordinator {
     if (firstRetry <= Duration.zero || maximumRetry < firstRetry) {
       throw ArgumentError('Invalid Apple push retry timing');
     }
+    if (pushEnvironment != 'development' && pushEnvironment != 'production') {
+      throw ArgumentError('Invalid APNs environment');
+    }
   }
 
   static Future<void> _sleep(Duration duration) =>
       Future<void>.delayed(duration);
 
-  static Future<void> _noAccountRecording(String handle, String accountId) async {}
+  static Future<void> _noAccountRecording(
+    String handle,
+    String accountId,
+  ) async {}
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final PushDeviceKeyStore _keyStore;
   final PushGatewayOrigin _gateway;
+  final String _pushEnvironment;
   final PushGatewayClient _gatewayClient;
   final Duration _firstRetry;
   final Duration _maximumRetry;
@@ -233,8 +242,7 @@ final class ApplePushRegistrationCoordinator {
     final EnsurePushDeviceKeyEffect e => _executeKey(e),
     final RegisterPushWithNextcloudEffect e => _executeRegisterNextcloud(e),
     final RegisterPushWithGatewayEffect e => _executeRegisterGateway(e),
-    final UnregisterPushFromNextcloudEffect e =>
-      _executeUnregisterNextcloud(e),
+    final UnregisterPushFromNextcloudEffect e => _executeUnregisterNextcloud(e),
     final UnregisterPushFromGatewayEffect e => _executeUnregisterGateway(e),
     final DestroyPushDeviceKeyEffect e => _executeDestroyKey(e),
   };
@@ -336,16 +344,16 @@ final class ApplePushRegistrationCoordinator {
   ) async {
     final rawToken = _rawToken;
     if (rawToken == null) {
-      return PushGatewayRegistrationCompletion.transientFailure(
-        effect: effect,
-      );
+      return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
     }
     try {
-      return await _gatewayClient.register(effect, rawPushToken: rawToken);
-    } on Object {
-      return PushGatewayRegistrationCompletion.transientFailure(
-        effect: effect,
+      return await _gatewayClient.register(
+        effect,
+        rawPushToken: rawToken,
+        pushEnvironment: _pushEnvironment,
       );
+    } on Object {
+      return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
     }
   }
 

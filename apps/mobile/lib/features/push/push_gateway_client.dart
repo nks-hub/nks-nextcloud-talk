@@ -17,12 +17,23 @@ final class PushGatewayClient {
   Future<PushGatewayRegistrationCompletion> register(
     RegisterPushWithGatewayEffect effect, {
     required String rawPushToken,
+    String? pushEnvironment,
   }) async {
+    if (pushEnvironment != null &&
+        pushEnvironment != 'development' &&
+        pushEnvironment != 'production') {
+      throw ArgumentError.value(
+        pushEnvironment,
+        'pushEnvironment',
+        'must be development or production',
+      );
+    }
     final response = await _client.post(
       effect.uri,
       body: <String, String>{
         ...effect.identityFields,
         'pushToken': rawPushToken,
+        'pushEnvironment': ?pushEnvironment,
       },
     );
     return decodePushGatewayRegistrationResponse(
@@ -39,7 +50,9 @@ final class PushGatewayClient {
     // line. `http` has no `delete(body:)`, hence the explicit Request.
     final request = http.Request('DELETE', effect.uri)
       ..bodyFields = effect.identityFields;
-    final response = await http.Response.fromStream(await _client.send(request));
+    final response = await http.Response.fromStream(
+      await _client.send(request),
+    );
     return decodePushGatewayUnregistrationResponse(
       effect: effect,
       statusCode: response.statusCode,

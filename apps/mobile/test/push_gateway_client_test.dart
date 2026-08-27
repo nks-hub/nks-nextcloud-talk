@@ -64,12 +64,17 @@ void main() {
       cloudId: null,
     );
 
-    final completion = await client.register(effect, rawPushToken: 'deadbeef');
+    final completion = await client.register(
+      effect,
+      rawPushToken: 'deadbeef',
+      pushEnvironment: 'production',
+    );
 
     expect(seen.method, 'POST');
     expect(seen.url.path, '/devices');
     final fields = (seen as http.Request).bodyFields;
     expect(fields['pushToken'], 'deadbeef');
+    expect(fields['pushEnvironment'], 'production');
     expect(fields['deviceIdentifier'], _testDeviceIdentifier);
     expect(fields['deviceIdentifierSignature'], _testDeviceSignature);
     expect(fields['userPublicKey'], _testPublicKeyPem);

@@ -115,6 +115,7 @@ void main() {
       api: api,
       keyStore: keyStore,
       gateway: gateway,
+      pushEnvironment: 'production',
       gatewayClient: PushGatewayClient(
         client: MockClient((request) async {
           gatewayRequests.add(request);
@@ -132,6 +133,7 @@ void main() {
     expect(gatewayRequests.single.method, 'POST');
     final fields = (gatewayRequests.single as http.Request).bodyFields;
     expect(fields['pushToken'], 'deadbeef');
+    expect(fields['pushEnvironment'], 'production');
   });
 
   test('a server without push v2 registers nothing', () async {
@@ -205,7 +207,10 @@ void main() {
     await coordinator.unfollow('account-a');
 
     expect(keyStore.destroyed, isNotEmpty);
-    expect(requestedMethods, contains('DELETE /ocs/v2.php/apps/notifications/api/v2/push'));
+    expect(
+      requestedMethods,
+      contains('DELETE /ocs/v2.php/apps/notifications/api/v2/push'),
+    );
   });
 
   test('a transient key failure is retried instead of abandoned', () async {

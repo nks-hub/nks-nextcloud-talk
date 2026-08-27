@@ -305,6 +305,7 @@ final applePushRegistrationCoordinatorProvider =
         api: ref.watch(nextcloudApiProvider),
         keyStore: deviceKeyChannel,
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        pushEnvironment: kDebugMode ? 'development' : 'production',
         recordDeviceKeyAccount: deviceKeyChannel.recordAccount,
       );
       ref.onDispose(() => unawaited(coordinator.dispose()));
