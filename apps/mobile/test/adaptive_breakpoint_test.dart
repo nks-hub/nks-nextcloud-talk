@@ -125,6 +125,33 @@ void main() {
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
 
+  testWidgets('the details panel stays between 300 and 500 wide', (
+    tester,
+  ) async {
+    // `clamp(300px, 27vw, 500px)` is written as a clamp on the WINDOW width
+    // before scaling, which is easy to get backwards; these are the three
+    // points that tell a correct formula from a plausible one.
+    Future<double> panelWidth(double windowWidth) async {
+      tester.view.physicalSize = Size(windowWidth, 900);
+      await pump(tester, token: _conversation.token);
+      await tester.tap(find.byKey(const Key('open-room-details')));
+      await tester.pump();
+      final width = tester
+          .getSize(find.byKey(const Key('room-details-panel')))
+          .width;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+      return width;
+    }
+
+    // Below the lower knee 27vw would be too narrow, so the floor holds.
+    expect(await panelWidth(1000), 300);
+    // In the band it tracks the window.
+    expect(await panelWidth(1400), closeTo(378, 0.5));
+    // Above the upper knee the ceiling holds instead of growing forever.
+    expect(await panelWidth(2200), 500);
+  });
+
   testWidgets('the details open beside the conversation, not over it', (
     tester,
   ) async {
