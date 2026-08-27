@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app.dart';
@@ -219,6 +220,32 @@ void main() {
         expect(find.byType(NewConversationScreen), findsOneWidget);
       },
     );
+
+    testWidgets('${layout.key}: Ctrl+F opens the message search', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      expect(find.byKey(const Key('message-search-field')), findsNothing);
+
+      // A shortcut only reaches its binding through the focused node's
+      // ancestors, so put focus inside the shell first — which is also the
+      // cheapest check that Tab traversal finds anything at all here.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.context,
+        isNotNull,
+        reason: 'Tab must land on something focusable in the shell',
+      );
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byKey(const Key('message-search-field')), findsOneWidget);
+    });
 
     testWidgets('${layout.key}: the shell reaches the settings screen', (
       tester,

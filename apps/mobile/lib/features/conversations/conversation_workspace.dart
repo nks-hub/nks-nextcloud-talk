@@ -50,6 +50,21 @@ final class ConversationWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The same search the toolbar button opens, on the shortcut every desktop
+    // uses for it. Both chords are bound unconditionally: a phone never
+    // produces either, so there is nothing to gate on.
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            _openMessageSearch(context, account.id),
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
+            _openMessageSearch(context, account.id),
+      },
+      child: _buildLayout(context),
+    );
+  }
+
+  Widget _buildLayout(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final selectedConversation = conversations
