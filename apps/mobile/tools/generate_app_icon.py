@@ -21,9 +21,9 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 BRAND = ROOT / "assets" / "brand"
 RES = ROOT / "android" / "app" / "src" / "main" / "res"
-APPICONSET = (
-    ROOT / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
-)
+APPICONSET = ROOT / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
+MACOS_APPICONSET = ROOT / "macos" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
+WINDOWS_ICON = ROOT / "windows" / "runner" / "resources" / "app_icon.ico"
 
 # Seed colour of the app theme (lib/core/app_theme.dart) and a darker tone for
 # the corner-to-corner gradient, so the icon still reads on a white launcher.
@@ -36,17 +36,28 @@ WHITE = (0xFF, 0xFF, 0xFF)
 SUPERSAMPLE = 4
 SIZE = 1024
 
-# Android masks the adaptive foreground down to the middle 72 of 108 dp. A mark
-# drawn edge to edge would lose its rim under the round mask.
-ADAPTIVE_SHARE = 0.66
+# Android masks the adaptive foreground down to the middle 72 of 108 dp. Keep
+# the mark below that outer safe-zone boundary so it has the same calmer scale
+# as the legacy launcher and Apple icons.
+ADAPTIVE_SHARE = 0.55
 
 # Android 12 expands splash foregrounds to 150% of the icon bounds. A 4/9 mark
 # therefore renders at 2/3 of the final mask instead of a clipped 99%.
 SPLASH_MARK_SHARE = 4 / 9
 
-# How much of the square the mark itself fills once re-centred. Below ~0.7 the
-# icon looks timid in a launcher grid; above ~0.8 the tail touches the rim.
+# The internal source scale remains 66% so regenerating the separately tuned
+# Android splash asset stays byte-for-byte stable.
 MARK_SHARE = 0.66
+
+# The previous 66% launcher mark read too large. 55% keeps the same shape at
+# 83.3% of its former scale and leaves a platform-safe visual margin.
+LAUNCHER_MARK_SHARE = 0.55
+
+# Desktop platforms do not apply the same mandatory mask as iOS and Android.
+# Put the branded tile inside a transparent safe zone so Finder, the Dock,
+# Explorer, the title bar and the taskbar do not render a corner-to-corner box.
+DESKTOP_TILE_SHARE = 0.84
+DESKTOP_CORNER_RADIUS_SHARE = 0.22
 
 LAUNCHER_SIZES = {
     "mipmap-mdpi": 48,
@@ -66,7 +77,8 @@ def gradient(size: int) -> Image.Image:
             # Diagonal position, 0 at top-left corner and 1 at bottom-right.
             t = (x + y) / (2 * (size - 1))
             px[x, y] = tuple(
-                round(BLUE_LIGHT[i] + (BLUE_DARK[i] - BLUE_LIGHT[i]) * t) for i in range(3)
+                round(BLUE_LIGHT[i] + (BLUE_DARK[i] - BLUE_LIGHT[i]) * t)
+                for i in range(3)
             )
     return img
 
@@ -78,7 +90,9 @@ def cloud_mask(size: int) -> Image.Image:
     u = size / 100.0  # work in percent of the canvas, so proportions survive resizing
 
     def ellipse(cx, cy, rx, ry):
-        d.ellipse([(cx - rx) * u, (cy - ry) * u, (cx + rx) * u, (cy + ry) * u], fill=255)
+        d.ellipse(
+            [(cx - rx) * u, (cy - ry) * u, (cx + rx) * u, (cy + ry) * u], fill=255
+        )
 
     # Three overlapping lobes plus a slab underneath give the classic cloud
     # silhouette without any single circle reading as a separate dot.
@@ -139,10 +153,14 @@ def centred(mask: Image.Image, share: float) -> Image.Image:
     return canvas
 
 
-def build_mark(size: int, background: Image.Image | None) -> Image.Image:
+def build_mark(
+    size: int,
+    background: Image.Image | None,
+    mark_share: float = MARK_SHARE,
+) -> Image.Image:
     """Renders the icon at `size`, optionally over a background."""
     big = size * SUPERSAMPLE
-    mask = centred(cloud_mask(big), MARK_SHARE)
+    mask = centred(cloud_mask(big), mark_share)
 
     if background is None:
         canvas = Image.new("RGBA", (big, big), (0, 0, 0, 0))
@@ -166,11 +184,46 @@ def adaptive_foreground(size: int, mark_share: float = ADAPTIVE_SHARE) -> Image.
     return canvas
 
 
+def desktop_icon(size: int) -> Image.Image:
+    """Renders the mark on a rounded branded tile with a transparent margin."""
+    tile_size = round(size * DESKTOP_TILE_SHARE)
+    tile = build_mark(tile_size, gradient(tile_size), LAUNCHER_MARK_SHARE)
+
+    tile_mask = Image.new("L", (tile_size, tile_size), 0)
+    ImageDraw.Draw(tile_mask).rounded_rectangle(
+        (0, 0, tile_size - 1, tile_size - 1),
+        radius=round(tile_size * DESKTOP_CORNER_RADIUS_SHARE),
+        fill=255,
+    )
+    tile.putalpha(tile_mask)
+
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    offset = (size - tile_size) // 2
+    canvas.alpha_composite(tile, (offset, offset))
+    return canvas
+
+
+def write_catalog(icon: Image.Image, appiconset: Path, platform: str) -> list[str]:
+    """Writes every raster requested by an Apple asset catalogue."""
+    catalogue = json.loads((appiconset / "Contents.json").read_text(encoding="utf-8"))
+    written = []
+    for image in catalogue["images"]:
+        filename = image.get("filename")
+        if not filename:
+            continue
+        base = float(image["size"].split("x")[0])
+        scale = float(image["scale"].rstrip("x"))
+        px = round(base * scale)
+        icon.resize((px, px), Image.LANCZOS).save(appiconset / filename)
+        written.append(f"{platform}/{filename}")
+    return written
+
+
 def main() -> None:
     BRAND.mkdir(parents=True, exist_ok=True)
     bg = gradient(SIZE)
 
-    icon = build_mark(SIZE, bg)
+    icon = build_mark(SIZE, bg, LAUNCHER_MARK_SHARE)
     icon.save(BRAND / "app-icon.png")
 
     # Play Store listing wants exactly 512x512, 32-bit PNG.
@@ -198,19 +251,32 @@ def main() -> None:
     # the catalogue stays the source of truth for which files exist and this
     # only fills them in. Written flattened onto the gradient rather than with
     # an alpha channel, which the App Store rejects.
-    catalogue = json.loads(
-        (APPICONSET / "Contents.json").read_text(encoding="utf-8")
-    )
     opaque = icon.convert("RGB")
-    for image in catalogue["images"]:
-        filename = image.get("filename")
-        if not filename:
-            continue
-        base = float(image["size"].split("x")[0])
-        scale = float(image["scale"].rstrip("x"))
-        px = round(base * scale)
-        opaque.resize((px, px), Image.LANCZOS).save(APPICONSET / filename)
-        written.append(f"ios/{filename}")
+    written.extend(write_catalog(opaque, APPICONSET, "ios"))
+
+    # macOS and Windows ship the same motif on a rounded tile. The transparent
+    # margin is part of the asset because neither platform supplies the mobile
+    # launcher mask. Generate every catalogued macOS size and every useful ICO
+    # frame from the same 1024 px source.
+    desktop = desktop_icon(SIZE)
+    written.extend(write_catalog(desktop, MACOS_APPICONSET, "macos"))
+    WINDOWS_ICON.parent.mkdir(parents=True, exist_ok=True)
+    desktop.resize((256, 256), Image.LANCZOS).save(
+        WINDOWS_ICON,
+        format="ICO",
+        sizes=[
+            (16, 16),
+            (20, 20),
+            (24, 24),
+            (32, 32),
+            (40, 40),
+            (48, 48),
+            (64, 64),
+            (128, 128),
+            (256, 256),
+        ],
+    )
+    written.append("windows/app_icon.ico")
 
     # Adaptive icon: solid background colour, our mark as the foreground layer.
     values = RES / "values"
