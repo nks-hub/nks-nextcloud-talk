@@ -21,6 +21,9 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 BRAND = ROOT / "assets" / "brand"
 RES = ROOT / "android" / "app" / "src" / "main" / "res"
+APPICONSET = (
+    ROOT / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
+)
 
 # Seed colour of the app theme (lib/core/app_theme.dart) and a darker tone for
 # the corner-to-corner gradient, so the icon still reads on a white launcher.
@@ -190,6 +193,24 @@ def main() -> None:
         icon.resize((px, px), Image.LANCZOS).save(target / "ic_launcher.png")
         adaptive_foreground(px).save(target / "ic_launcher_foreground.png")
         written.append(f"{folder}/{px}px")
+
+    # iOS ships the same mark at the sizes its own Contents.json asks for, so
+    # the catalogue stays the source of truth for which files exist and this
+    # only fills them in. Written flattened onto the gradient rather than with
+    # an alpha channel, which the App Store rejects.
+    catalogue = json.loads(
+        (APPICONSET / "Contents.json").read_text(encoding="utf-8")
+    )
+    opaque = icon.convert("RGB")
+    for image in catalogue["images"]:
+        filename = image.get("filename")
+        if not filename:
+            continue
+        base = float(image["size"].split("x")[0])
+        scale = float(image["scale"].rstrip("x"))
+        px = round(base * scale)
+        opaque.resize((px, px), Image.LANCZOS).save(APPICONSET / filename)
+        written.append(f"ios/{filename}")
 
     # Adaptive icon: solid background colour, our mark as the foreground layer.
     values = RES / "values"
