@@ -157,8 +157,22 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       return;
     }
     final messageId = readableMessages.last.messageId;
+    // A prior successful mark-read for this exact message id does not mean
+    // the room is still read: a conversation-list resync can land afterward
+    // and overwrite the cached row's `unreadMessages` with a value the
+    // server had not yet caught up on, with no newer message to reset this
+    // tracking. Re-checking the live cached row (not just the one-shot
+    // flags) lets that case retry instead of leaving the badge stuck. An
+    // unrecoverable `Error` is the one case that still never retries the
+    // same message id, to avoid spamming reports for a broken row.
+    final sameMessageAsLastAttempt =
+        _lastAutoReadKey == key && _lastAutoReadMessageId == messageId;
+    final alreadyHandled =
+        sameMessageAsLastAttempt &&
+        (_lastAutoReadUnrecoverable ||
+            _readLiveConversation().unreadMessages <= 0);
     if (!_isMessageActuallyVisible(messageId) ||
-        (_lastAutoReadKey == key && _lastAutoReadMessageId == messageId) ||
+        alreadyHandled ||
         (_autoReadInFlightKey == key &&
             _autoReadInFlightMessageId == messageId)) {
       return;
@@ -176,11 +190,13 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
           );
       _lastAutoReadKey = key;
       _lastAutoReadMessageId = messageId;
+      _lastAutoReadUnrecoverable = false;
     } on RoomSettingsException {
       // A later successful foreground cycle retries the same visible marker.
     } on Error catch (error, stackTrace) {
       _lastAutoReadKey = key;
       _lastAutoReadMessageId = messageId;
+      _lastAutoReadUnrecoverable = true;
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,

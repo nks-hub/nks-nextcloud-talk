@@ -201,6 +201,8 @@ final class _EditMessageDialogState extends State<_EditMessageDialog> {
 final class _ChatComposer extends StatelessWidget {
   const _ChatComposer({
     required this.controller,
+    required this.focusNode,
+    required this.autofocus,
     required this.sending,
     required this.readOnly,
     required this.mediaComposer,
@@ -211,6 +213,10 @@ final class _ChatComposer extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
+
+  /// Whether the field should claim focus the moment it is built.
+  final bool autofocus;
   final bool sending;
   final bool readOnly;
   final Widget mediaComposer;
@@ -311,6 +317,8 @@ final class _ChatComposer extends StatelessWidget {
                       child: TextField(
                       key: const Key('chat-composer'),
                       controller: controller,
+                      focusNode: focusNode,
+                      autofocus: autofocus,
                       minLines: 1,
                       maxLines: 5,
                       maxLength: 32000,

@@ -280,6 +280,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   static const _highlightDuration = Duration(seconds: 2);
 
   final TextEditingController _composer = TextEditingController();
+
+  /// Owned explicitly so the emoji panel can hand focus back to the composer
+  /// on desktop instead of leaving the caret nowhere once the panel closes.
+  final FocusNode _composerFocusNode = FocusNode();
   bool _emojiPickerOpen = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _jumpTargetKey = GlobalKey();
@@ -453,6 +457,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _composer
       ..removeListener(_scheduleDraftSave)
       ..dispose();
+    _composerFocusNode.dispose();
     super.dispose();
   }
 
@@ -721,6 +726,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           replyTo: _replyTo,
           onCancelReply: () => setState(() => _replyTo = null),
           controller: _composer,
+          focusNode: _composerFocusNode,
+          // A thread opens beside an existing conversation instead of
+          // replacing it, so it reads as a reply the user is about to type —
+          // but only where a hardware keyboard is the norm. Auto-raising the
+          // soft keyboard on a phone would be hostile.
+          autofocus: widget.threadId != null && context.sendsOnEnter,
           sending: _sending,
           onSubmit: _send,
           readOnly: readOnly,
