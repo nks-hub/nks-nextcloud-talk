@@ -84,6 +84,7 @@ final class AppleDeepLinkDelivery {
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   let deepLinks = AppleDeepLinkDelivery()
   let push = ApplePushDelivery()
+  let deviceKeys = PushDeviceKeyStore()
   private var deepLinkChannel: FlutterMethodChannel?
   private var pushChannel: FlutterMethodChannel?
 
@@ -134,6 +135,10 @@ final class AppleDeepLinkDelivery {
         self?.requestNotificationPermission(result)
       case "getDeviceToken":
         result(self?.push.takeLaunchToken())
+      case "generateDeviceKey":
+        self?.generateDeviceKey(call.arguments, result)
+      case "destroyDeviceKey":
+        self?.destroyDeviceKey(call.arguments, result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -177,6 +182,40 @@ final class AppleDeepLinkDelivery {
         result(granted)
       }
     }
+  }
+
+  /// Generates (or reuses) this account's push device key and returns its
+  /// public half as PEM. `arguments` must be `{"handle": String}` — an
+  /// opaque, already-hashed identifier the Dart side derives from the
+  /// account id, since a raw account id may contain characters a Keychain
+  /// application tag should not carry.
+  private func generateDeviceKey(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let handle = (arguments as? [String: Any])?["handle"] as? String, !handle.isEmpty
+    else {
+      result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
+      return
+    }
+    do {
+      result(try deviceKeys.ensureKey(handle: handle))
+    } catch {
+      result(
+        FlutterError(
+          code: "key_generation_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func destroyDeviceKey(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let handle = (arguments as? [String: Any])?["handle"] as? String, !handle.isEmpty
+    else {
+      result(FlutterError(code: "invalid_arguments", message: "Missing handle", details: nil))
+      return
+    }
+    deviceKeys.destroyKey(handle: handle)
+    result(nil)
   }
 
   override func application(

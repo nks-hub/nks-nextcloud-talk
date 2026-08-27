@@ -10,6 +10,7 @@ part 'nextcloud_api_account.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_profile.dart';
+part 'nextcloud_api_push.dart';
 part 'nextcloud_api_rooms.dart';
 part 'nextcloud_api_transport.dart';
 
@@ -108,7 +109,8 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiRooms,
         _NextcloudApiChat,
         _NextcloudApiCall,
-        _NextcloudApiProfile {
+        _NextcloudApiProfile,
+        _NextcloudApiPush {
   HttpNextcloudApi({
     super.client,
     super.originPolicy = ServerOriginPolicy.production,

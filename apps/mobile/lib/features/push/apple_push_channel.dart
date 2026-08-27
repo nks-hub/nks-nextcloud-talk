@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -6,24 +8,26 @@ import 'package:flutter/services.dart';
 /// Bridges the native `com.nkshub.nextcloudtalk/apple_push` channel that
 /// `AppDelegate.swift` exposes on iOS.
 ///
-/// There is no push proxy able to accept an APNs token yet — the public
-/// Nextcloud push proxy only delivers to the official Talk app's bundle id
-/// (see docs/TODO.md R-018). So this only asks for permission and keeps
-/// whatever token APNs hands back; it does not register it anywhere, and it
-/// never will until a real proxy exists to send it to.
+/// Asks for notification permission and hands every APNs device token it
+/// receives to [onToken], which — once `nks-talk-notify` is registered
+/// downstream — drives the push-v2 registration in
+/// `apple_push_registration_coordinator.dart`. This class itself never
+/// registers anything; it only bridges the platform channel.
 final class ApplePushCoordinator {
-  ApplePushCoordinator({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(channelName) {
+  ApplePushCoordinator({MethodChannel? channel, void Function(String)? onToken})
+    : _channel = channel ?? const MethodChannel(channelName),
+      _onToken = onToken {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
   static const channelName = 'com.nkshub.nextcloudtalk/apple_push';
 
   final MethodChannel _channel;
+  final void Function(String)? _onToken;
   bool _requested = false;
 
   /// Asks the user for notification permission once per app session and
-  /// logs whatever device token APNs hands back.
+  /// forwards whatever device token APNs hands back.
   ///
   /// Safe to call again later (e.g. after a second account signs in): the
   /// system dialog only appears once, so a repeat ask just returns the
@@ -41,7 +45,7 @@ final class ApplePushCoordinator {
     }
     final token = await _channel.invokeMethod<String>('getDeviceToken');
     if (token != null) {
-      _logToken(token);
+      _emitToken(token);
     }
   }
 
@@ -50,16 +54,22 @@ final class ApplePushCoordinator {
       case 'deviceTokenChanged':
         final token = call.arguments;
         if (token is String) {
-          _logToken(token);
+          _emitToken(token);
         }
       case 'notificationReceived':
         // Nothing consumes remote-notification content yet: Client Push
-        // already covers the live wake-up, and APNs has nowhere to register
-        // a token. Left as a no-op instead of faking a handler for it.
+        // already covers the live wake-up while there is no Notification
+        // Service Extension to decrypt a background push's content. Left as
+        // a no-op instead of faking a handler for it.
         break;
       default:
         throw MissingPluginException('Unknown Apple push callback.');
     }
+  }
+
+  void _emitToken(String token) {
+    _logToken(token);
+    _onToken?.call(token);
   }
 
   void _logToken(String token) {
@@ -69,8 +79,7 @@ final class ApplePushCoordinator {
     final preview = token.length > 8 ? '${token.substring(0, 8)}…' : token;
     // ignore: avoid_print
     print(
-      'Apple push device token acquired ($preview, ${token.length} chars) '
-      '— not registered anywhere, no proxy exists yet.',
+      'Apple push device token acquired ($preview, ${token.length} chars).',
     );
   }
 

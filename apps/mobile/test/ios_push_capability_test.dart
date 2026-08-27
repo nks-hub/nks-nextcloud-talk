@@ -45,6 +45,8 @@ void main() {
       'UIApplication.shared.registerForRemoteNotifications()',
       'didRegisterForRemoteNotificationsWithDeviceToken',
       'com.nkshub.nextcloudtalk/apple_push',
+      'generateDeviceKey',
+      'destroyDeviceKey',
     ]) {
       expect(
         delegate.contains(needle),
@@ -54,13 +56,31 @@ void main() {
     }
   });
 
-  test('ApplePushDelivery.swift is compiled into the Runner target', () {
-    // A Swift file that exists on disk but was never added to the Xcode
-    // project's Sources build phase compiles nothing: Xcode simply never
-    // sees it, and AppDelegate's `ApplePushDelivery()` fails with "Cannot
-    // find 'ApplePushDelivery' in scope" the moment anything tries to build
-    // it. `flutter analyze` cannot catch this — Dart has no idea Xcode
-    // exists — so this has to be read out of the project file directly.
+  // A Swift file that exists on disk but was never added to the Xcode
+  // project's Sources build phase compiles nothing: Xcode simply never
+  // sees it, and referencing its type fails with "Cannot find '<Type>' in
+  // scope" the moment anything tries to build it. `flutter analyze` cannot
+  // catch this — Dart has no idea Xcode exists — so this has to be read out
+  // of the project file directly.
+  void expectCompiled(String project, String fileName) {
+    expect(
+      RegExp(
+        'PBXBuildFile;\\s*fileRef = [0-9A-F]{24} /\\* '
+        '${RegExp.escape(fileName)} \\*/',
+      ).hasMatch(project),
+      isTrue,
+      reason: '$fileName has no PBXBuildFile entry, so Xcode never compiles it',
+    );
+    expect(
+      RegExp('/\\* ${RegExp.escape(fileName)} in Sources \\*/,').hasMatch(project),
+      isTrue,
+      reason: '$fileName is not listed in the Sources build phase, so Xcode '
+          'never compiles it',
+    );
+  }
+
+  test('ApplePushDelivery.swift and PushDeviceKeyStore.swift are compiled '
+      'into the Runner target', () {
     final projectFile = File(
       '${Directory.current.path}${Platform.pathSeparator}ios'
       '${Platform.pathSeparator}Runner.xcodeproj'
@@ -69,23 +89,7 @@ void main() {
     expect(projectFile.existsSync(), isTrue);
     final project = projectFile.readAsStringSync();
 
-    expect(
-      RegExp(
-        r'PBXBuildFile;\s*fileRef = [0-9A-F]{24} /\* ApplePushDelivery\.swift \*/',
-      ).hasMatch(project),
-      isTrue,
-      reason:
-          'ApplePushDelivery.swift has no PBXBuildFile entry, so Xcode '
-          'never compiles it',
-    );
-    expect(
-      RegExp(
-        r'/\* ApplePushDelivery\.swift in Sources \*/,',
-      ).hasMatch(project),
-      isTrue,
-      reason:
-          'ApplePushDelivery.swift is not listed in the Sources build '
-          'phase, so Xcode never compiles it',
-    );
+    expectCompiled(project, 'ApplePushDelivery.swift');
+    expectCompiled(project, 'PushDeviceKeyStore.swift');
   });
 }

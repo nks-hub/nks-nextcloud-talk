@@ -85,6 +85,46 @@ void main() {
     );
   });
 
+  test('onToken fires for the token requestPermissionAndLogToken fetches', () async {
+    final tokens = <String>[];
+    final onTokenCoordinator = ApplePushCoordinator(
+      channel: channel,
+      onToken: tokens.add,
+    );
+    addTearDown(onTokenCoordinator.dispose);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          return switch (call.method) {
+            'requestPermission' => true,
+            'getDeviceToken' => 'abcd1234deadbeef',
+            _ => null,
+          };
+        });
+
+    await onTokenCoordinator.requestPermissionAndLogToken();
+
+    expect(tokens, <String>['abcd1234deadbeef']);
+  });
+
+  test('onToken fires for a native token refresh too', () async {
+    final tokens = <String>[];
+    final onTokenCoordinator = ApplePushCoordinator(
+      channel: channel,
+      onToken: tokens.add,
+    );
+    addTearDown(onTokenCoordinator.dispose);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => null);
+
+    final data = const StandardMethodCodec().encodeMethodCall(
+      const MethodCall('deviceTokenChanged', 'fresh-token-1234'),
+    );
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(ApplePushCoordinator.channelName, data, (_) {});
+
+    expect(tokens, <String>['fresh-token-1234']);
+  });
+
   test('rejects an unknown native callback', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async => null);

@@ -48,6 +48,8 @@ import 'features/threads/thread_management_service.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
 import 'features/push/apple_push_channel.dart';
+import 'features/push/apple_push_device_key_store.dart';
+import 'features/push/apple_push_registration_coordinator.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
 import 'network/attachment_transport.dart';
@@ -369,7 +371,9 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   return coordinator;
 });
 
-/// Asks iOS for notification permission and keeps the APNs device token.
+/// Asks iOS for notification permission, keeps the APNs device token, and
+/// hands every token to [applePushRegistrationCoordinatorProvider] so it can
+/// register (or refresh) push v2.
 ///
 /// No macOS equivalent exists: `AppDelegate.swift` only exposes this channel
 /// on the iOS runner, and adding a native macOS side is out of scope here.
@@ -377,7 +381,8 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
   if (!Platform.isIOS) {
     return null;
   }
-  final coordinator = ApplePushCoordinator();
+  final registration = ref.watch(applePushRegistrationCoordinatorProvider);
+  final coordinator = ApplePushCoordinator(onToken: registration?.installToken);
   ref.onDispose(coordinator.dispose);
 
   // Asking only makes sense once someone is signed in, and only needs to
@@ -396,6 +401,49 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
 
   return coordinator;
 });
+
+/// Registers this device for Nextcloud push v2 and the `nks-talk-notify`
+/// APNs proxy — see that project's README for the wire contract each effect
+/// executes. `null` off iOS: there is no APNs token or Keychain device-key
+/// channel to register without it.
+final applePushRegistrationCoordinatorProvider =
+    Provider<ApplePushRegistrationCoordinator?>((ref) {
+      if (!Platform.isIOS) {
+        return null;
+      }
+      final coordinator = ApplePushRegistrationCoordinator(
+        accounts: ref.watch(accountRepositoryProvider),
+        credentials: ref.watch(credentialVaultProvider),
+        api: ref.watch(nextcloudApiProvider),
+        keyStore: ApplePushDeviceKeyChannel(),
+        gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+      );
+      ref.onDispose(() => unawaited(coordinator.dispose()));
+
+      // Same account-following shape as clientPushCoordinatorProvider: track
+      // whoever the UI currently shows, without a second place having to
+      // remember the account list itself.
+      ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (
+        previous,
+        next,
+      ) {
+        final signedIn = next.valueOrNull;
+        if (signedIn == null) {
+          return;
+        }
+        final live = signedIn.map((account) => account.id).toSet();
+        for (final accountId in live) {
+          unawaited(coordinator.follow(accountId));
+        }
+        for (final accountId in previous?.valueOrNull
+                ?.map((account) => account.id)
+                .where((id) => !live.contains(id)) ??
+            const <String>[]) {
+          unawaited(coordinator.unfollow(accountId));
+        }
+      }, fireImmediately: true);
+      return coordinator;
+    });
 
 /// Executes a notification-shade action for exactly `action.accountId`.
 ///
