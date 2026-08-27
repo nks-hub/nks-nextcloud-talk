@@ -34,6 +34,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   taskbar_badge_ = std::make_unique<TaskbarBadge>(
       flutter_controller_->engine()->messenger(), GetHandle());
+  shell_notification_ = std::make_unique<ShellNotification>(
+      flutter_controller_->engine()->messenger(), GetHandle(), deep_links_);
   RegisterDeepLinkChannel();
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
@@ -52,6 +54,7 @@ bool FlutterWindow::OnCreate() {
 void FlutterWindow::OnDestroy() {
   // Before the engine goes away: both hold a channel on its messenger.
   taskbar_badge_ = nullptr;
+  shell_notification_ = nullptr;
   if (deep_links_ != nullptr) {
     deep_links_->Attach(nullptr);
   }
@@ -85,6 +88,13 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_DESTROY:
       SaveWindowBounds(hwnd);
       break;
+    case ShellNotification::kCallbackMessage:
+      if (shell_notification_ != nullptr &&
+          shell_notification_->HandleCallback(wparam, lparam)) {
+        return 0;
+      }
+      break;
+
     case WM_COPYDATA:
       // A second launch handed its link to this instance instead of starting
       // a window of its own.

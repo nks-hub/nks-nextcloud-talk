@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "deep_link_delivery.h"
+#include "shell_notification.h"
 #include "taskbar_badge.h"
 #include "win32_window.h"
 
@@ -44,6 +45,10 @@ class FlutterWindow : public Win32Window {
 
   // Owns the taskbar overlay icon channel; torn down with the window.
   std::unique_ptr<TaskbarBadge> taskbar_badge_;
+
+  // Shows Talk messages while the app runs, and routes a click into
+  // |deep_links_|.
+  std::unique_ptr<ShellNotification> shell_notification_;
 
   DeepLinkDelivery* deep_links_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

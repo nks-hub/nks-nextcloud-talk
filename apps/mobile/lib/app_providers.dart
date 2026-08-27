@@ -57,6 +57,7 @@ import 'features/push/apple_push_registration_coordinator.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
 import 'features/push/push_registration_coordinator.dart';
+import 'features/push/windows_notification.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -548,6 +549,43 @@ Future<void> _ensureAndroidNotificationPermission(
     await platform.requestNotificationPermission();
   }
 }
+
+/// Shows Talk messages as Windows notifications while the app runs. Null
+/// elsewhere: every other platform already has one.
+final windowsNotificationServiceProvider =
+    Provider<WindowsNotificationService?>((ref) {
+      // Same gate as `clientPushEnabledProvider`: a widget test on a Windows
+      // host would otherwise open a live Drift query and leave its timer
+      // pending after the tree is gone.
+      if (!Platform.isWindows || !ref.watch(clientPushEnabledProvider)) {
+        return null;
+      }
+      final service = WindowsNotificationService(
+        accounts: ref.watch(accountRepositoryProvider),
+        channel: WindowsNotificationChannel(),
+      );
+      ref.onDispose(() => unawaited(service.dispose()));
+      ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (
+        previous,
+        next,
+      ) {
+        final signedIn = next.valueOrNull;
+        if (signedIn == null) {
+          return;
+        }
+        final live = signedIn.map((account) => account.id).toSet();
+        for (final account in signedIn) {
+          service.follow(account.id, account.serverUrl);
+        }
+        for (final accountId in previous?.valueOrNull
+                ?.map((account) => account.id)
+                .where((id) => !live.contains(id)) ??
+            const <String>[]) {
+          unawaited(service.unfollow(accountId));
+        }
+      }, fireImmediately: true);
+      return service;
+    });
 
 /// Asks iOS for notification permission, keeps the APNs device token, and
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can
