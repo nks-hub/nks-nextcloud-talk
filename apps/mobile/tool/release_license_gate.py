@@ -26,9 +26,16 @@ BEGIN_NOTICE = "----- BEGIN COMPONENT NOTICE -----"
 NOTICE_TEXT = "----- NOTICE TEXT -----"
 END_NOTICE = "----- END COMPONENT NOTICE -----"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# LicenseRef-Android-SDK is not an open-source licence. It is the proprietary
+# Android Software Development Kit License Agreement, which every
+# com.google.android.gms artefact declares, and SPDX has no identifier for it —
+# LicenseRef- is the prefix SPDX reserves for exactly that. It entered the
+# release with Firebase Cloud Messaging. Naming it truthfully beats forcing it
+# into Apache-2.0, but it does mean the release APK is no longer permissively
+# licensed throughout.
+_LICENSES = r"Apache-2\.0|BSD-3-Clause|LGPL-2\.1-only|LicenseRef-Android-SDK"
 SPDX_EXPRESSION = re.compile(
-    r"^(?:Apache-2\.0|BSD-3-Clause|LGPL-2\.1-only)"
-    r"(?: (?:AND|OR) (?:Apache-2\.0|BSD-3-Clause|LGPL-2\.1-only))*$"
+    rf"^(?:{_LICENSES})(?: (?:AND|OR) (?:{_LICENSES}))*$"
 )
 MAX_ARCHIVE_ENTRY = 64 * 1024 * 1024
 MAX_COMPRESSED_NOTICES = 16 * 1024 * 1024
