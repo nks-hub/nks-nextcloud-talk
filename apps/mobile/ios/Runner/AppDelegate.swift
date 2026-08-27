@@ -105,7 +105,6 @@ final class AppleDeepLinkDelivery {
     // that cold-launched the app is not delivered before anything is
     // listening for it — iOS holds it until a delegate exists.
     UNUserNotificationCenter.current().delegate = self
-    PushNotificationRouteStore.removeLegacyDefaults()
     registerNotificationCategories()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

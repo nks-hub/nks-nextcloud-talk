@@ -144,7 +144,7 @@ void main() {
     );
   });
 
-  test('device keys and notification routes use the shared Keychain', () {
+  test('device keys and routes use Keychain without a dead App Group', () {
     final entitlements = File(
       '$ios${Platform.pathSeparator}Runner.entitlements',
     ).readAsStringSync();
@@ -155,6 +155,11 @@ void main() {
         reason: 'Runner.entitlements is missing $needle',
       );
     }
+    expect(
+      entitlements,
+      isNot(contains('com.apple.security.application-groups')),
+      reason: 'the shipped builds never used the legacy App Group route store',
+    );
 
     final keyStore = File(
       '$ios${Platform.pathSeparator}PushDeviceKeyStore.swift',
@@ -176,11 +181,8 @@ void main() {
       routeStore,
       contains('kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly'),
     );
-    expect(
-      routeStore,
-      contains('removeObject(forKey: legacyStorageKey)'),
-      reason: 'the old App Group route dictionary must be removed at launch',
-    );
+    expect(routeStore, isNot(contains('pushNotificationRoutes')));
+    expect(routeStore, isNot(contains('group.com.nkshub.nextcloudtalk')));
     expect(
       routeStore,
       isNot(contains('defaults?.set(')),

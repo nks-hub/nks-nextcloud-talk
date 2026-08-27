@@ -4,10 +4,6 @@
 <dict>
 	<key>aps-environment</key>
 	<string>$(APS_ENVIRONMENT)</string>
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.com.nkshub.nextcloudtalk</string>
-	</array>
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.nkshub.nextcloudtalk</string>

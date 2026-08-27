@@ -15,9 +15,6 @@ final class PushNotificationRouteStore {
     maximumEntries: 20
   )
 
-  private static let legacySuiteName = "group.com.nkshub.nextcloudtalk"
-  private static let legacyStorageKey = "pushNotificationRoutes"
-
   private let service: String
   private let maximumEntries: Int
   private let accessGroup: String?
@@ -99,12 +96,6 @@ final class PushNotificationRouteStore {
       query[kSecUseDataProtectionKeychain as String] = true
     }
     SecItemDelete(query as CFDictionary)
-  }
-
-  static func removeLegacyDefaults(
-    _ defaults: UserDefaults? = UserDefaults(suiteName: legacySuiteName)
-  ) {
-    defaults?.removeObject(forKey: legacyStorageKey)
   }
 
   private func itemQuery(identifier: String) -> [String: Any] {

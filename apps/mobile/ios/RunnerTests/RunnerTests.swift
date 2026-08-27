@@ -470,14 +470,4 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(try XCTUnwrap(second.take(identifier: identifier)).accountId, "account-b")
   }
 
-  func testLegacyRouteDefaultsAreRemoved() throws {
-    let suiteName = "com.nkshub.nextcloudtalk.tests.\(UUID().uuidString)"
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-    defer { defaults.removePersistentDomain(forName: suiteName) }
-    defaults.set(["notification": ["token": "room-a"]], forKey: "pushNotificationRoutes")
-
-    PushNotificationRouteStore.removeLegacyDefaults(defaults)
-
-    XCTAssertNil(defaults.object(forKey: "pushNotificationRoutes"))
-  }
 }
