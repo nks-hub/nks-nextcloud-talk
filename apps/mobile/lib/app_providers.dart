@@ -47,6 +47,7 @@ import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
+import 'features/push/apple_push_channel.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
 import 'network/attachment_transport.dart';
@@ -365,6 +366,34 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
+  return coordinator;
+});
+
+/// Asks iOS for notification permission and keeps the APNs device token.
+///
+/// No macOS equivalent exists: `AppDelegate.swift` only exposes this channel
+/// on the iOS runner, and adding a native macOS side is out of scope here.
+final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
+  if (!Platform.isIOS) {
+    return null;
+  }
+  final coordinator = ApplePushCoordinator();
+  ref.onDispose(coordinator.dispose);
+
+  // Asking only makes sense once someone is signed in, and only needs to
+  // happen once per session — the coordinator itself guards against asking
+  // twice, this just avoids firing before there is any account at all.
+  ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (
+    previous,
+    next,
+  ) {
+    final signedIn = next.valueOrNull;
+    if (signedIn == null || signedIn.isEmpty) {
+      return;
+    }
+    unawaited(coordinator.requestPermissionAndLogToken());
+  }, fireImmediately: true);
+
   return coordinator;
 });
 

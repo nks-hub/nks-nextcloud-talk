@@ -42,6 +42,7 @@ final class _AppHome extends ConsumerWidget {
     ref.watch(androidPushCoordinatorProvider);
     // Nextcloud's live channel, on every platform the app runs on.
     ref.watch(clientPushCoordinatorProvider);
+    ref.watch(applePushCoordinatorProvider);
     ref.watch(deepLinkCoordinatorProvider);
     final accounts = ref.watch(accountsProvider);
     return accounts.when(

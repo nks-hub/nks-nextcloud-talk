@@ -441,8 +441,10 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       // host.
       throw const NextcloudApiException(NextcloudApiError.unexpectedStatus);
     }
+    // The route is declared as POST in `notify_push`; a GET is answered with
+    // 405 and the socket then never gets a token.
     final request = _authenticatedOcsRequest(
-      'GET',
+      'POST',
       preAuth,
       loginName: loginName,
       appPassword: appPassword,
