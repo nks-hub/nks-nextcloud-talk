@@ -422,4 +422,42 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       json: payload.json,
     );
   }
+
+  /// Fetches a single-use Client Push token from `notify_push`.
+  ///
+  /// Nextcloud's own live channel authenticates the socket with this token
+  /// instead of the account credentials, so the app password never travels
+  /// over the WebSocket. The route answers with the bare token, not OCS JSON.
+  Future<String> fetchClientPushPreAuthToken({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required Uri preAuth,
+    Future<void>? abortTrigger,
+  }) async {
+    if (preAuth.host != server.uri.host || preAuth.scheme != 'https') {
+      // The endpoint comes from capabilities, so it is only as trustworthy as
+      // the response that carried it; a token must never be handed to another
+      // host.
+      throw const NextcloudApiException(NextcloudApiError.unexpectedStatus);
+    }
+    final request = _authenticatedOcsRequest(
+      'GET',
+      preAuth,
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const <int>{200},
+      maximumBytes: 1024,
+    );
+    final token = utf8.decode(payload.body, allowMalformed: false).trim();
+    if (token.isEmpty || token.length > 256) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    return token;
+  }
+
 }
