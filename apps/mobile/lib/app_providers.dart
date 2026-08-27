@@ -406,24 +406,25 @@ Future<void> revokeAndroidPushTransport(
   }
 }
 
-/// The Web Push fallback. Null while the proxy transport is selected: nothing
-/// is registered that way, so there are no native events to drain either.
+/// Runs on both transports, but only subscribes to Web Push on its own.
 ///
-/// ponytail: a notification action queued natively just before a switch drains
-/// only once Web Push is selected again. A switch is a rare, user-initiated
-/// act, and the queue is durable, so nothing is lost.
+/// The notification a user taps and the reply they type come back through the
+/// native layer whichever transport delivered them, so this coordinator has to
+/// be alive either way; `subscribes` is what tells it whether the Web Push
+/// registration is also its job.
 final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   final platform = ref.watch(androidWebPushPlatformProvider);
-  if (platform == null ||
-      ref.watch(androidPushTransportProvider) !=
-          AndroidPushTransport.webPush) {
+  if (platform == null) {
     return null;
   }
+  final subscribes =
+      ref.watch(androidPushTransportProvider) == AndroidPushTransport.webPush;
   final coordinator = AndroidPushCoordinator(
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
     platform: platform,
+    subscribes: subscribes,
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
     onNotificationAction: (action) => _runNotificationAction(ref, action),
@@ -497,6 +498,10 @@ final androidPushRegistrationCoordinatorProvider =
             const <String>[]) {
           unawaited(coordinator.unfollow(accountId));
         }
+        // Always, including when the last account goes: a delivery resolves
+        // its account by trying each key, so a stale list would keep trying a
+        // key that no longer exists.
+        unawaited(fcm.setAccounts(live));
         if (live.isEmpty) {
           return;
         }

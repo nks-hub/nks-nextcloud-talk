@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.security.KeyFactory
 import java.security.KeyStore
+import javax.crypto.Cipher
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.X509EncodedKeySpec
 import java.util.concurrent.CountDownLatch
@@ -27,11 +28,12 @@ class AndroidPushDeviceKeyStoreTest {
     private val store = AndroidPushDeviceKeyStore()
     private val handleA = "a".repeat(64)
     private val handleB = "b".repeat(64)
+    private val extraHandles = mutableListOf<String>()
 
     @After
     fun removeTestKeys() {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        for (handle in listOf(handleA, handleB)) {
+        for (handle in listOf(handleA, handleB) + extraHandles) {
             val alias = AndroidPushDeviceKeyStore.aliasFor(handle)
             if (keyStore.containsAlias(alias)) {
                 keyStore.deleteEntry(alias)
@@ -86,12 +88,59 @@ class AndroidPushDeviceKeyStoreTest {
     }
 
     @Test
+    fun opensASubjectEncryptedForOneAccountAndNamesIt() {
+        val accountA = "11111111-1111-4111-8111-111111111111"
+        val accountB = "22222222-2222-4222-8222-222222222222"
+        val handles = listOf(accountA, accountB)
+            .map(AndroidPushDeviceKeyStore::handleFor)
+        extraHandles.addAll(handles)
+        val pems = handles.map { call("generateDeviceKey", it) as String }
+
+        // Nextcloud encrypts with PHP's openssl_public_encrypt, whose default
+        // padding is PKCS#1 v1.5.
+        val plaintext = """{"app":"spreed","type":"chat","subject":"hello","nid":7}"""
+        val ciphertext = Cipher.getInstance("RSA/ECB/PKCS1Padding").run {
+            init(Cipher.ENCRYPT_MODE, publicKeyOf(pems[1]))
+            doFinal(plaintext.toByteArray())
+        }
+
+        val opened = AndroidPushDeviceKeyStore.decryptSubject(
+            ciphertext,
+            listOf(accountA, accountB),
+        )
+
+        assertNotNull(opened)
+        assertEquals(accountB, opened!!.first)
+        assertEquals(plaintext, String(opened.second))
+    }
+
+    @Test
+    fun refusesASubjectThatNoAccountKeyOpens() {
+        val account = "33333333-3333-4333-8333-333333333333"
+        extraHandles.add(AndroidPushDeviceKeyStore.handleFor(account))
+        call("generateDeviceKey", AndroidPushDeviceKeyStore.handleFor(account))
+
+        val opened = AndroidPushDeviceKeyStore.decryptSubject(
+            ByteArray(256) { 0x41 },
+            listOf(account),
+        )
+
+        assertEquals(null, opened)
+    }
+
+    @Test
     fun refusesAHandleThatIsNotAnAccountDigest() {
         val outcome = callRaw("generateDeviceKey", "../../etc/passwd")
 
         assertEquals("invalid_handle", outcome.errorCode)
         assertNotNull(outcome.errorMessage)
     }
+
+    private fun publicKeyOf(pem: String) = KeyFactory.getInstance("RSA").generatePublic(
+        X509EncodedKeySpec(
+            Base64.decode(pem.lines().drop(1).dropLast(2).joinToString(""), Base64.DEFAULT),
+        ),
+    )
 
     private fun call(method: String, handle: String): Any? {
         val outcome = callRaw(method, handle)

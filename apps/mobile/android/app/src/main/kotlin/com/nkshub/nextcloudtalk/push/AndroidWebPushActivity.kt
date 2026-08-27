@@ -87,7 +87,7 @@ class AndroidWebPushActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             AndroidFcmChannel.CHANNEL_NAME,
         )
-        fcm.setMethodCallHandler(AndroidFcmChannel())
+        fcm.setMethodCallHandler(AndroidFcmChannel(applicationContext))
         fcmChannel = fcm
         AndroidFcmChannel.attach(fcmTokenListener)
     }

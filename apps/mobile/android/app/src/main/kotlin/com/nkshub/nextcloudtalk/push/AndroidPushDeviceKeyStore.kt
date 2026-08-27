@@ -9,7 +9,9 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.concurrent.Executors
+import javax.crypto.Cipher
 
 /**
  * Per-account RSA-2048 push device key, generated inside the Android
@@ -122,6 +124,43 @@ internal class AndroidPushDeviceKeyStore : MethodChannel.MethodCallHandler {
         private val HANDLE_PATTERN = Regex("^[0-9a-f]{64}$")
 
         fun aliasFor(handle: String): String = ALIAS_PREFIX + handle
+
+        /**
+         * Decrypts a push-v2 `subject` and says which account it belongs to.
+         *
+         * One FCM token addresses the whole device, so the account is whichever
+         * one's key opens the ciphertext — the keys are per account. Nextcloud
+         * encrypts with PHP's openssl_public_encrypt, whose default padding is
+         * PKCS#1 v1.5.
+         */
+        fun decryptSubject(
+            ciphertext: ByteArray,
+            accountIds: Collection<String>,
+        ): Pair<String, ByteArray>? {
+            if (ciphertext.size != RSA_KEY_SIZE / 8) {
+                return null
+            }
+            val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
+            for (accountId in accountIds) {
+                val alias = aliasFor(handleFor(accountId))
+                val key = runCatching { keyStore.getKey(alias, null) }.getOrNull() ?: continue
+                val plaintext = runCatching {
+                    Cipher.getInstance("RSA/ECB/PKCS1Padding")
+                        .apply { init(Cipher.DECRYPT_MODE, key) }
+                        .doFinal(ciphertext)
+                }.getOrNull()
+                if (plaintext != null) {
+                    return accountId to plaintext
+                }
+            }
+            return null
+        }
+
+        /** Mirrors the handle the Dart coordinator derives for an account. */
+        fun handleFor(accountId: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(accountId.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
 
         /**
          * Wraps a DER SubjectPublicKeyInfo as PEM. Dart re-canonicalises this

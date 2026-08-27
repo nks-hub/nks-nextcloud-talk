@@ -41,6 +41,15 @@ final class AndroidFcmChannel {
     }
   }
 
+  /// Tells the native side which accounts are signed in. A delivery can wake
+  /// a dead process, and the account a message belongs to is whichever one's
+  /// device key opens it, so the list has to outlive the app.
+  Future<void> setAccounts(Iterable<String> accountIds) {
+    return _channel.invokeMethod<void>('setAccounts', {
+      'accountIds': accountIds.toList(growable: false),
+    });
+  }
+
   Future<void> _handleNativeCall(MethodCall call) async {
     if (call.method != 'tokenRefreshed') {
       throw MissingPluginException('Unknown FCM callback.');
