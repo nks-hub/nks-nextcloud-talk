@@ -125,6 +125,36 @@ void main() {
     expect(tokens, <String>['fresh-token-1234']);
   });
 
+  test(
+    'answers willPresent with whatever shouldSuppressForegroundBanner says',
+    () async {
+      var suppress = false;
+      final dedupCoordinator = ApplePushCoordinator(
+        channel: channel,
+        shouldSuppressForegroundBanner: () => suppress,
+      );
+      addTearDown(dedupCoordinator.dispose);
+
+      Future<Object?> ask() {
+        final data = const StandardMethodCodec().encodeMethodCall(
+          const MethodCall('shouldSuppressForegroundNotification'),
+        );
+        return TestDefaultBinaryMessengerBinding
+            .instance
+            .defaultBinaryMessenger
+            .handlePlatformMessage(ApplePushCoordinator.channelName, data, (_) {})
+            .then(
+              (response) => const StandardMethodCodec().decodeEnvelope(response!),
+            );
+      }
+
+      expect(await ask(), isFalse);
+
+      suppress = true;
+      expect(await ask(), isTrue);
+    },
+  );
+
   test('rejects an unknown native callback', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async => null);

@@ -52,6 +52,7 @@ import 'features/push/android_push_transport.dart';
 import 'features/push/android_web_push_bridge.dart';
 import 'features/push/apple_push_channel.dart';
 import 'features/push/apple_push_device_key_store.dart';
+import 'features/push/apple_push_foreground_dedup.dart';
 import 'features/push/apple_push_registration_coordinator.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
@@ -266,6 +267,14 @@ final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
 /// reason. Production leaves this on.
 final clientPushEnabledProvider = Provider<bool>((ref) => true);
 
+/// Shared between the Client Push and Apple push wiring below so a websocket
+/// wake-up can suppress the APNs banner that would otherwise double up on it
+/// while the app is in the foreground. See
+/// `apple_push_foreground_dedup.dart`.
+final foregroundPushDeduplicatorProvider = Provider<ForegroundPushDeduplicator>(
+  (ref) => ForegroundPushDeduplicator(),
+);
+
 final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
   if (!ref.watch(clientPushEnabledProvider)) {
     return null;
@@ -314,8 +323,10 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
       );
     },
     connector: const IoClientPushConnector(),
-    onWakeUp: (accountId) =>
-        unawaited(ref.read(conversationSyncServiceProvider).sync(accountId)),
+    onWakeUp: (accountId) {
+      ref.read(foregroundPushDeduplicatorProvider).markWakeUp();
+      unawaited(ref.read(conversationSyncServiceProvider).sync(accountId));
+    },
   );
   ref.onDispose(() => unawaited(coordinator.dispose()));
 
@@ -549,7 +560,11 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
     return null;
   }
   final registration = ref.watch(applePushRegistrationCoordinatorProvider);
-  final coordinator = ApplePushCoordinator(onToken: registration?.installToken);
+  final coordinator = ApplePushCoordinator(
+    onToken: registration?.installToken,
+    shouldSuppressForegroundBanner: () =>
+        ref.read(foregroundPushDeduplicatorProvider).shouldSuppress(),
+  );
   ref.onDispose(coordinator.dispose);
 
   // Asking only makes sense once someone is signed in, and only needs to

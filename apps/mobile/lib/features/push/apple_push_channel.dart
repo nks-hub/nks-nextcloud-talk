@@ -13,10 +13,17 @@ import 'package:flutter/services.dart';
 /// downstream — drives the push-v2 registration in
 /// `apple_push_registration_coordinator.dart`. This class itself never
 /// registers anything; it only bridges the platform channel.
+///
+/// Also answers `willPresent`'s foreground-banner question via
+/// [shouldSuppressForegroundBanner] — see `ForegroundPushDeduplicator`.
 final class ApplePushCoordinator {
-  ApplePushCoordinator({MethodChannel? channel, void Function(String)? onToken})
-    : _channel = channel ?? const MethodChannel(channelName),
-      _onToken = onToken {
+  ApplePushCoordinator({
+    MethodChannel? channel,
+    void Function(String)? onToken,
+    bool Function()? shouldSuppressForegroundBanner,
+  }) : _channel = channel ?? const MethodChannel(channelName),
+       _onToken = onToken,
+       _shouldSuppressForegroundBanner = shouldSuppressForegroundBanner {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
@@ -24,6 +31,7 @@ final class ApplePushCoordinator {
 
   final MethodChannel _channel;
   final void Function(String)? _onToken;
+  final bool Function()? _shouldSuppressForegroundBanner;
   bool _requested = false;
 
   /// Asks the user for notification permission once per app session and
@@ -49,19 +57,25 @@ final class ApplePushCoordinator {
     }
   }
 
-  Future<void> _handleNativeCall(MethodCall call) async {
+  Future<Object?> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
       case 'deviceTokenChanged':
         final token = call.arguments;
         if (token is String) {
           _emitToken(token);
         }
+        return null;
       case 'notificationReceived':
         // Nothing consumes remote-notification content yet: Client Push
         // already covers the live wake-up while there is no Notification
         // Service Extension to decrypt a background push's content. Left as
         // a no-op instead of faking a handler for it.
-        break;
+        return null;
+      case 'shouldSuppressForegroundNotification':
+        // AppDelegate asks this from `willPresent`, while the app is already
+        // in the foreground — see ForegroundPushDeduplicator for why a
+        // recent Client Push wake-up is grounds to suppress the banner.
+        return _shouldSuppressForegroundBanner?.call() ?? false;
       default:
         throw MissingPluginException('Unknown Apple push callback.');
     }

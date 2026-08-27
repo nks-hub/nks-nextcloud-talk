@@ -130,6 +130,35 @@ final class AppleDeepLinkDelivery {
     super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
   }
 
+  /// Suppresses the foreground banner for a push that Client Push (the
+  /// notify_push websocket, see `ClientPushCoordinator`) already caused the
+  /// app to sync moments earlier — otherwise the user sees the same message
+  /// announced twice while the app is open. The decision itself lives in
+  /// Dart (`ForegroundPushDeduplicator`), since Client Push's wake-ups are
+  /// Dart-side and this native layer has no view of them on its own.
+  ///
+  /// Deferring to `super` on every path except "suppress" — rather than
+  /// deciding the presentation options here — keeps whatever Flutter's own
+  /// default and any other registered plugin would otherwise do; this only
+  /// ever intervenes to say "not this one".
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    guard let pushChannel else {
+      super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
+      return
+    }
+    pushChannel.invokeMethod("shouldSuppressForegroundNotification", arguments: nil) { response in
+      if (response as? Bool) == true {
+        completionHandler([])
+      } else {
+        super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
+      }
+    }
+  }
+
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     let channel = FlutterMethodChannel(
