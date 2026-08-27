@@ -95,6 +95,7 @@ void main() {
             credentialVaultProvider.overrideWithValue(vault),
             nextcloudApiProvider.overrideWithValue(api),
             deepLinkPlatformProvider.overrideWithValue(deepLinkPlatform),
+            clientPushEnabledProvider.overrideWithValue(false),
             accountsProvider.overrideWith(
               (ref) => Stream.value([otherAccount, targetAccount]),
             ),
