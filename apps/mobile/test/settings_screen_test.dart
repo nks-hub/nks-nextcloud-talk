@@ -57,6 +57,27 @@ Future<void> _settleRealAsync(WidgetTester tester, {int rounds = 24}) async {
   }
 }
 
+/// Flushes real async work until [condition] holds.
+///
+/// A fixed number of rounds is a race against the machine: under load the work
+/// simply has not landed yet and the test then reports a stale read as a bug.
+/// Both removal tests here have flaked that way in a loaded full-suite run
+/// while passing on their own.
+Future<void> _settleUntil(
+  WidgetTester tester,
+  Future<bool> Function() condition, {
+  int rounds = 200,
+}) async {
+  for (var round = 0; round < rounds; round++) {
+    await _flushRealAsync(tester);
+    await tester.pump();
+    if (await tester.runAsync(condition) ?? false) {
+      return;
+    }
+  }
+  fail('the condition was not reached after $rounds rounds');
+}
+
 /// Opens a route whose transition is bounded, without `pumpAndSettle`.
 Future<void> _pumpRouteTransition(WidgetTester tester) async {
   await tester.pump();
@@ -266,7 +287,14 @@ void main() {
     await _pumpRouteTransition(tester);
     await tester.tap(find.byKey(const Key('account-remove-confirm')));
     await _pumpRouteTransition(tester);
-    await _settleRealAsync(tester);
+    await _settleUntil(
+      tester,
+      // Both halves matter: the row leaves the database and the user is told
+      // so. Waiting only for the first returns before the snackbar exists.
+      () async =>
+          await accounts.getAccount('account-a') == null &&
+          find.text('The account was removed.').evaluate().isNotEmpty,
+    );
     await tester.pump(const Duration(milliseconds: 400));
 
     late StoredAccount? removed;
@@ -331,7 +359,15 @@ void main() {
     await _pumpRouteTransition(tester);
     await tester.tap(find.byKey(const Key('account-remove-confirm')));
     await _pumpRouteTransition(tester);
-    await _settleRealAsync(tester);
+    await _settleUntil(
+      tester,
+      () async =>
+          await accounts.getAccount('account-a') == null &&
+          find
+              .textContaining('did not confirm the app password was revoked')
+              .evaluate()
+              .isNotEmpty,
+    );
     await tester.pump(const Duration(milliseconds: 400));
 
     late StoredAccount? removed;
