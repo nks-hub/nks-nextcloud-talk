@@ -57,12 +57,16 @@ PushNextcloudRegistrationCompletion decodePushNextcloudRegistrationResponse({
       r'$.response.ocs.meta.status',
     );
   }
-  if (requireInt(
-        meta['statuscode'],
-        path: r'$.response.ocs.meta.statuscode',
-        code: TalkProtocolErrorCode.invalidPushRegistration,
-      ) !=
-      200) {
+  // PushController::registerDevice() documents its own OCS statuscode as
+  // 200 ("device was already registered") or 201 ("device registered
+  // successfully") — both are success, matching the outer HTTP status check
+  // above.
+  final metaStatusCode = requireInt(
+    meta['statuscode'],
+    path: r'$.response.ocs.meta.statuscode',
+    code: TalkProtocolErrorCode.invalidPushRegistration,
+  );
+  if (metaStatusCode != 200 && metaStatusCode != 201) {
     protocolFailure(
       TalkProtocolErrorCode.invalidPushRegistration,
       r'$.response.ocs.meta.statuscode',

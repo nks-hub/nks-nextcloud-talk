@@ -98,6 +98,39 @@ void main() {
       expect(response.registration!.deviceIdentifier.decodedLength, 64);
     });
 
+    test('accepts the real server pairing of HTTP 201 and OCS statuscode 201', () {
+      // PushController::registerDevice() documents its own OCS statuscode as
+      // 200 ("already registered") or 201 ("registered successfully") — a
+      // live Nextcloud 34 answers a first-time registration with statuscode
+      // 201, not 200, which the decoder used to reject outright.
+      final effect = pushNextcloudRegistrationEffect(
+        authority: pushAuthority(pushAccountA),
+        providerToken: pushProviderToken(),
+        key: pushDeviceKey(pushAccountA),
+        effectId: pushEffectId(900),
+      );
+      final response = decodePushNextcloudRegistrationResponse(
+        effect: effect,
+        statusCode: 201,
+        body: jsonEncode(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'ok',
+              'statuscode': 201,
+              'message': 'OK',
+            },
+            'data': <String, Object?>{
+              'publicKey': pushPublicKeyA,
+              'deviceIdentifier': pushDeviceIdentifier,
+              'signature': pushDeviceSignature,
+            },
+          },
+        }),
+      );
+
+      expect(response.classification, PushCompletionClass.success);
+    });
+
     test('rejects duplicate JSON members and oversized bodies', () {
       final effect = pushNextcloudRegistrationEffect(
         authority: pushAuthority(pushAccountA),
