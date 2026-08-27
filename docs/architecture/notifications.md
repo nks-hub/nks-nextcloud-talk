@@ -8,9 +8,14 @@ a hlavně co je pevně dané platformou a nedá se to obejít.
 
 | kanál | platforma | probudí zavřenou aplikaci | co potřebuje |
 | --- | --- | --- | --- |
+| push v2 přes vlastní proxy | Android, iOS | ano | proxy a token od FCM/APNs |
 | Web Push přes UnifiedPush | Android | ano | VAPID na serveru |
 | Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
-| APNs | iOS, macOS | ano | službu s APNs klíčem |
+
+Na Androidu existují dvě cesty současně a uživatel mezi nimi přepíná
+v Nastavení → Push notifikace, bez nového buildu. Výchozí je proxy, Web Push
+zůstává jako záloha pro případ potíží. Podrobnosti níž v „Dvě cesty na
+Androidu".
 
 Nejsou to alternativy k výběru: doplňují se. Živý kanál doručuje okamžitě,
 dokud aplikace běží, a to úplně všude. Probudit ukončenou aplikaci umí jen
@@ -54,6 +59,55 @@ transport drží Play Services, ne naše aplikace. Tři meze to ale má:
 
 Na iOS se tahle cesta použít nedá: Web Push v nativní aplikaci neexistuje a
 UnifiedPush je Android-only, protože iOS nedovolí držet spojení na pozadí.
+
+## Dvě cesty na Androidu a přepínač mezi nimi
+
+Nativní cestou Androidu je naše vlastní proxy, tedy přesně ten kontrakt, který
+používá iOS: `POST /ocs/v2.php/apps/notifications/api/v2/push` s
+`proxyServer: https://push.example.invalid` a pak registrace u proxy na
+`/devices`. Serverová strana se tím nemění vůbec — `Push.php` platformu
+nerozlišuje, seskupuje podle sloupce `proxyserver` a rozhodnutí, jestli
+notifikaci poslat do APNs nebo do FCM, dělá až proxy podle formátu tokenu.
+Tím se z cesty vyřadí `fcm.distributor.unifiedpush.org`.
+
+Web Push větev se nemaže. Je ověřená naživo a je to jediná cesta, která dnes
+prokazatelně probudí ukončený proces, takže zůstává jako záloha za přepínačem.
+
+Kód je proto rozdělený takhle:
+
+| soubor | co dělá |
+| --- | --- |
+| `push_registration_coordinator.dart` | platformně neutrální smyčka nad `talk_protocol` push-v2 automatem |
+| `android_push_device_key_store.dart` + `AndroidPushDeviceKeyStore.kt` | RSA-2048 klíč zařízení v Android Keystore, jeden na účet |
+| `android_push_coordinator.dart` | stávající Web Push cesta, beze změny až na `revokeAllRegistrations()` |
+| `android_push_transport.dart` | volba cesty, její uložení a čisté přepnutí |
+
+Přepínač je soubor v adresáři aplikace, stejný mechanismus jako volba motivu,
+takže se mění za běhu bez nového buildu. Pořadí při přepnutí je to důležité:
+Nextcloud si registraci klíčuje podle zařízení, ne podle cesty, takže se
+**nejdřív odregistruje stará cesta** u Nextcloudu i u své brány a teprve
+potom se uloží nová volba. Když odregistrace selže, volba se nezmění a
+uživatel to uvidí; zařízení tak zůstane registrované postaru místo aby
+nezůstalo registrované nikde.
+
+Klíč zařízení je per účet: handle je SHA-256 z `accountId` a push automat
+odmítne klíč, který už drží jiný účet, takže jeden účet nikdy nemůže
+dešifrovat notifikaci druhého.
+
+### Co ještě chybí
+
+Proxy cesta zatím **nic neregistruje**, protože aplikace nemá odkud vzít FCM
+token — Firebase projekt ještě není zapojený. Bez tokenu naplánuje
+`planNextPushEffect` nulu efektů (`runtime_effects.dart`, podmínka
+`providerToken == null`), takže se nevytvoří ani klíč zařízení. Do zprovoznění
+patří:
+
+- FCM projekt, `google-services.json` a `FirebaseMessagingService`, který
+  token předá do `installToken`,
+- dešifrování doručeného `subject` privátním klíčem z Keystore a zobrazení
+  notifikace,
+- doplnění `release-licenses/components.tsv` o nové runtime závislosti,
+  jinak `generateReleaseLicenseAssets` shodí release build.
 
 ## Client Push (`notify_push`) — všechny platformy
 
