@@ -4,12 +4,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show
+        Clipboard,
+        ClipboardData,
+        HardwareKeyboard,
+        KeyDownEvent,
+        KeyEvent,
+        LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/foreground_sync_loop.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
@@ -702,6 +710,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           onCancelReply: () => setState(() => _replyTo = null),
           controller: _composer,
           sending: _sending,
+          onSubmit: _send,
           readOnly: readOnly,
           mentionSource: mentionSource?.valueOrNull,
           mediaComposer: attachmentDependencies == null

@@ -41,6 +41,13 @@ extension AppMetrics on BuildContext {
   /// Height of an action row inside a card, such as "Rename thread".
   double get actionRowHeight => _pointerFirst ? 44 : 56;
 
+  /// Whether Enter sends a message and Shift+Enter breaks the line.
+  ///
+  /// The desktop convention, and what `nextcloud/talk-desktop` does. On touch
+  /// the send button is the only way to send and Enter is the only way to get
+  /// a new line, so it stays a plain newline there.
+  bool get sendsOnEnter => _pointerFirst;
+
   /// Maximum width of a settings-style column of rows.
   ///
   /// A row that stretches the whole window puts its label at one edge and its

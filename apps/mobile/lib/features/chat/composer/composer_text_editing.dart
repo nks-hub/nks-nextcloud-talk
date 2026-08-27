@@ -1,6 +1,47 @@
 import 'package:flutter/widgets.dart';
 
+import 'mention_suggestions.dart';
+
 enum ComposerInsertionMode { inline, separatedToken }
+
+/// What a bare Enter pressed in the composer should do.
+enum ComposerEnterAction {
+  /// Send what is in the composer.
+  send,
+
+  /// Leave the key to the field, which inserts a line break.
+  insertNewline,
+
+  /// Swallow the key without sending: there is nothing to send, or a send is
+  /// already in flight, and either way a stray blank line would be wrong.
+  swallow,
+}
+
+/// Decides what Enter does, given the composer's state.
+///
+/// Pure so the rule can be asserted directly instead of through a chat pane
+/// that needs a database, an account and a live room before a key can be
+/// pressed.
+ComposerEnterAction composerEnterAction({
+  required String text,
+  required int caret,
+  required bool shiftPressed,
+  required bool sending,
+}) {
+  // Shift+Enter is the line break, on every platform that sends on Enter.
+  if (shiftPressed) {
+    return ComposerEnterAction.insertNewline;
+  }
+  // The suggestion list is open over an `@mention` token and Enter belongs to
+  // it, not to sending a half-typed name.
+  if (caret >= 0 && extractMentionQuery(text, caret) != null) {
+    return ComposerEnterAction.insertNewline;
+  }
+  if (sending || text.trim().isEmpty) {
+    return ComposerEnterAction.swallow;
+  }
+  return ComposerEnterAction.send;
+}
 
 bool insertComposerText(
   TextEditingController controller,

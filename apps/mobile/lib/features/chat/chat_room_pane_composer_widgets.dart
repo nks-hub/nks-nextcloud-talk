@@ -204,6 +204,7 @@ final class _ChatComposer extends StatelessWidget {
     required this.replyTo,
     required this.onCancelReply,
     required this.mentionSource,
+    required this.onSubmit,
   });
 
   final TextEditingController controller;
@@ -213,6 +214,36 @@ final class _ChatComposer extends StatelessWidget {
   final CachedChatMessage? replyTo;
   final VoidCallback onCancelReply;
   final MentionSuggestionSource? mentionSource;
+
+  /// Sends whatever is in the composer, same as the send button.
+  final VoidCallback onSubmit;
+
+  /// Routes a bare Enter through [composerEnterAction].
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    final key = event.logicalKey;
+    final isEnter =
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter;
+    if (event is! KeyDownEvent || !isEnter) {
+      return KeyEventResult.ignored;
+    }
+    final value = controller.value;
+    final action = composerEnterAction(
+      text: value.text,
+      caret: value.selection.baseOffset,
+      shiftPressed: HardwareKeyboard.instance.isShiftPressed,
+      sending: sending,
+    );
+    switch (action) {
+      case ComposerEnterAction.insertNewline:
+        return KeyEventResult.ignored;
+      case ComposerEnterAction.swallow:
+        return KeyEventResult.handled;
+      case ComposerEnterAction.send:
+        onSubmit();
+        return KeyEventResult.handled;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +283,11 @@ final class _ChatComposer extends StatelessWidget {
                         error: strings.mentionSuggestionsError,
                       ),
                     ),
-                    TextField(
+                    Focus(
+                      onKeyEvent: context.sendsOnEnter
+                          ? _handleKey
+                          : null,
+                      child: TextField(
                       key: const Key('chat-composer'),
                       controller: controller,
                       minLines: 1,
@@ -270,6 +305,7 @@ final class _ChatComposer extends StatelessWidget {
                       decoration: InputDecoration(
                         labelText: strings.messageHint,
                         border: const OutlineInputBorder(),
+                      ),
                       ),
                     ),
                     const SizedBox(height: 4),
