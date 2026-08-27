@@ -108,6 +108,7 @@ void main() {
       Map<String, List<CachedConversation>> conversationsByAccount = const {},
       Set<ChatRoomProviderKey>? observedChatKeys,
       List<Override> overrides = const [],
+      List<String> talkFeatures = const ['unified-search'],
     }) async {
       tester.view.physicalSize = layout.value;
       tester.view.devicePixelRatio = 1;
@@ -116,7 +117,12 @@ void main() {
       final database = openTestDatabase();
       addTearDown(database.close);
       late StoredAccount account;
-      await tester.runAsync(() async => account = await seedAccount(database));
+      await tester.runAsync(
+        () async => account = await seedAccount(
+          database,
+          talkFeatures: talkFeatures.toSet(),
+        ),
+      );
 
       await tester.pumpWidget(
         wrapShell(
@@ -276,6 +282,26 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
       expect(focusedToken(), first, reason: 'Up must come back');
+    });
+
+    testWidgets('${layout.key}: no search without unified-search', (
+      tester,
+    ) async {
+      // The server has no provider to ask, so the entry point would only ever
+      // reach a dead end.
+      await pumpShell(tester, talkFeatures: const ['avatar']);
+
+      expect(find.byKey(const Key('open-message-search')), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byKey(const Key('message-search-field')), findsNothing);
     });
 
     testWidgets('${layout.key}: Ctrl+F opens the message search', (

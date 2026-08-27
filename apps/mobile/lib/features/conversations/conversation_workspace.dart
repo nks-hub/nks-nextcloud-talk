@@ -63,8 +63,11 @@ final class ConversationWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // The same search the toolbar button opens, on the shortcut every desktop
-    // uses for it. Both chords are bound unconditionally: a phone never
-    // produces either, so there is nothing to gate on.
+    // uses for it. Both chords are bound: a phone never produces either, so
+    // the only thing worth gating on is whether the server can search at all.
+    if (!talkFeaturesOf(account).contains('unified-search')) {
+      return _buildLayout(context);
+    }
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
@@ -221,12 +224,15 @@ final class _CompactShell extends StatelessWidget {
           ],
         ),
         actions: [
-          IconButton(
-            key: const Key('open-message-search'),
-            onPressed: () => _openMessageSearch(context, account.id),
-            tooltip: strings.searchMessagesTooltip,
-            icon: const Icon(Icons.search),
-          ),
+          // Without `unified-search` the server has no provider to ask, and
+          // the screen would only ever reach a dead end.
+          if (talkFeaturesOf(account).contains('unified-search'))
+            IconButton(
+              key: const Key('open-message-search'),
+              onPressed: () => _openMessageSearch(context, account.id),
+              tooltip: strings.searchMessagesTooltip,
+              icon: const Icon(Icons.search),
+            ),
           IconButton(
             onPressed: syncing ? null : onRefresh,
             tooltip: strings.refresh,
@@ -358,13 +364,16 @@ final class _ExpandedShell extends StatelessWidget {
                             tooltip: strings.newConversationTitle,
                             icon: const Icon(Icons.chat_bubble_outline_rounded),
                           ),
-                          IconButton(
-                            key: const Key('open-message-search'),
-                            onPressed: () =>
-                                _openMessageSearch(context, account.id),
-                            tooltip: strings.searchMessagesTooltip,
-                            icon: const Icon(Icons.search),
-                          ),
+                          if (talkFeaturesOf(
+                            account,
+                          ).contains('unified-search'))
+                            IconButton(
+                              key: const Key('open-message-search'),
+                              onPressed: () =>
+                                  _openMessageSearch(context, account.id),
+                              tooltip: strings.searchMessagesTooltip,
+                              icon: const Icon(Icons.search),
+                            ),
                           IconButton(
                             onPressed: syncing ? null : onRefresh,
                             tooltip: strings.refresh,

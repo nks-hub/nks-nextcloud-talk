@@ -15,6 +15,7 @@ import '../chat/chat_room_pane.dart' show ChatThreadContext;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
+import '../../core/talk_features.dart';
 import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';
 import '../search/message_search_thread_screen.dart';

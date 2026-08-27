@@ -360,6 +360,9 @@ final class _LifecycleFixture {
         'chat-reference-id',
         'chat-replies',
         'threads',
+        // The search entry point is gated on this; without it the shell has
+        // no button for these tests to reach.
+        'unified-search',
       },
     );
     final credentials = MemoryCredentialVault()
@@ -428,6 +431,9 @@ final class _LifecycleFixture {
         'chat-reference-id',
         'chat-replies',
         'threads',
+        // The search entry point is gated on this; without it the shell has
+        // no button for these tests to reach.
+        'unified-search',
       },
     );
   }
