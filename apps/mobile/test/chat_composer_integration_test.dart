@@ -110,6 +110,11 @@ void main() {
     await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
     await _pumpTransition(tester);
     expect(_composer(tester).text, '👋');
+    // The picker stays open for a second pick; it is the close button that
+    // dismisses it.
+    expect(find.byKey(const Key('emoji-close')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('emoji-close')));
+    await _pumpTransition(tester);
 
     await tester.tap(find.byKey(const Key('open-giphy-picker')));
     final gif = find.byKey(

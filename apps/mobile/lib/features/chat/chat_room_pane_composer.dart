@@ -131,6 +131,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               usageStore: ref.read(emojiUsageStoreProvider),
               labels: _emojiPickerLabels(strings),
               onClose: () => Navigator.of(sheetContext).pop(),
+              // Picking an emoji keeps the picker open: people reach for
+              // several in a row, and closing after each one made every extra
+              // emoji cost a reopen. The sheet is dismissed by its own close
+              // button, by the scrim, or by the back gesture.
               onSelected: (choice) {
                 if (!mounted || _isReadOnlyNow()) {
                   Navigator.of(sheetContext).pop();
@@ -138,9 +142,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
                 }
                 if (!insertComposerText(_composer, choice.glyph)) {
                   _showComposerLimitError();
-                  return;
                 }
-                Navigator.of(sheetContext).pop();
               },
             ),
           ),
