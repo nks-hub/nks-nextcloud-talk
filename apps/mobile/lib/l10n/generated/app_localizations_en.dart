@@ -912,6 +912,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsThemeDark => 'Dark';
 
   @override
+  String get settingsPushSection => 'Push notifications';
+
+  @override
+  String get settingsPushTransportProxy => 'Our own proxy';
+
+  @override
+  String get settingsPushTransportProxySubtitle =>
+      'Notifications take the same path as on iOS, through nks-talk-notify.';
+
+  @override
+  String get settingsPushTransportWebPush => 'Web Push (fallback)';
+
+  @override
+  String get settingsPushTransportWebPushSubtitle =>
+      'Routes through the public UnifiedPush gateway. Use this if the proxy gives trouble.';
+
+  @override
+  String get settingsPushTransportSwitchFailed =>
+      'Could not switch. The previous registration is still in place.';
+
+  @override
   String get settingsDiagnosticsSection => 'Diagnostics';
 
   @override

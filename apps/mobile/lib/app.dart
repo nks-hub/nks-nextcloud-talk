@@ -40,6 +40,7 @@ final class _AppHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(androidPushCoordinatorProvider);
+    ref.watch(androidPushRegistrationCoordinatorProvider);
     // Nextcloud's live channel, on every platform the app runs on.
     ref.watch(clientPushCoordinatorProvider);
     ref.watch(applePushCoordinatorProvider);

@@ -1736,6 +1736,42 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get settingsThemeDark;
 
+  /// No description provided for @settingsPushSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Push notifications'**
+  String get settingsPushSection;
+
+  /// No description provided for @settingsPushTransportProxy.
+  ///
+  /// In en, this message translates to:
+  /// **'Our own proxy'**
+  String get settingsPushTransportProxy;
+
+  /// No description provided for @settingsPushTransportProxySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications take the same path as on iOS, through nks-talk-notify.'**
+  String get settingsPushTransportProxySubtitle;
+
+  /// No description provided for @settingsPushTransportWebPush.
+  ///
+  /// In en, this message translates to:
+  /// **'Web Push (fallback)'**
+  String get settingsPushTransportWebPush;
+
+  /// No description provided for @settingsPushTransportWebPushSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Routes through the public UnifiedPush gateway. Use this if the proxy gives trouble.'**
+  String get settingsPushTransportWebPushSubtitle;
+
+  /// No description provided for @settingsPushTransportSwitchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not switch. The previous registration is still in place.'**
+  String get settingsPushTransportSwitchFailed;
+
   /// No description provided for @settingsDiagnosticsSection.
   ///
   /// In en, this message translates to:

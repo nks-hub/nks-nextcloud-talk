@@ -911,6 +911,27 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsThemeDark => 'Tmavý';
 
   @override
+  String get settingsPushSection => 'Push notifikace';
+
+  @override
+  String get settingsPushTransportProxy => 'Vlastní proxy';
+
+  @override
+  String get settingsPushTransportProxySubtitle =>
+      'Notifikace jdou stejnou cestou jako na iOS, přes nks-talk-notify.';
+
+  @override
+  String get settingsPushTransportWebPush => 'Web Push (záloha)';
+
+  @override
+  String get settingsPushTransportWebPushSubtitle =>
+      'Vede přes veřejnou bránu UnifiedPush. Použijte, když proxy dělá potíže.';
+
+  @override
+  String get settingsPushTransportSwitchFailed =>
+      'Přepnutí se nepovedlo. Platí dál původní registrace.';
+
+  @override
   String get settingsDiagnosticsSection => 'Diagnostika';
 
   @override

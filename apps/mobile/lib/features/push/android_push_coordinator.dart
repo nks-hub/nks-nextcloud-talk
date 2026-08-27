@@ -276,7 +276,7 @@ final class AndroidPushCoordinator {
       return;
     }
     if (!capabilities.supportsNotificationPush('webpush')) {
-      await _revokeUnsupportedWebPush(context, epoch);
+      await _revokeWebPush(context, epoch);
       return;
     }
     await _ensureNotificationPermission();
@@ -315,10 +315,34 @@ final class AndroidPushCoordinator {
     }
   }
 
-  Future<void> _revokeUnsupportedWebPush(
-    _PushAccountContext context,
-    int epoch,
-  ) async {
+  /// Revokes this device's Web Push subscription for every account, at the
+  /// server and natively, and stops registering any of them again.
+  ///
+  /// Used when the device leaves the Web Push transport for the proxy one.
+  /// Nextcloud keys a push registration by device, not by transport, so a
+  /// Web Push row left behind would compete with the proxy registration that
+  /// replaces it and notifications would go down the dead path. A failure
+  /// propagates: the caller must not switch transports on a half-revoked
+  /// device.
+  Future<void> revokeAllRegistrations() async {
+    if (_closed) {
+      return;
+    }
+    final accounts = await _accounts.watchAccounts().first;
+    for (final account in accounts) {
+      await _serialize(account.id, () async {
+        final context = await _loadContext(account.id);
+        if (context == null) {
+          return;
+        }
+        await _revokeWebPush(context, _accountEpochs[account.id] ?? 0);
+      });
+      // Only after the revocation, or `_isAccountActive` would refuse it.
+      _deactivateAccount(account.id);
+    }
+  }
+
+  Future<void> _revokeWebPush(_PushAccountContext context, int epoch) async {
     final accountId = context.account.id;
     final generations = await _platform.prepareServerRevocation(
       accountId: accountId,

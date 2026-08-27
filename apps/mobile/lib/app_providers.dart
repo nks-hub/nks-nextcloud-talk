@@ -46,12 +46,15 @@ import 'features/settings/account_removal_service.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_push_coordinator.dart';
+import 'features/push/android_push_device_key_store.dart';
+import 'features/push/android_push_transport.dart';
 import 'features/push/android_web_push_bridge.dart';
 import 'features/push/apple_push_channel.dart';
 import 'features/push/apple_push_device_key_store.dart';
 import 'features/push/apple_push_registration_coordinator.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
+import 'features/push/push_registration_coordinator.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -340,9 +343,69 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
   return coordinator;
 });
 
+final androidPushTransportStoreProvider = Provider<AndroidPushTransportStore>((
+  ref,
+) {
+  return FileAndroidPushTransportStore();
+});
+
+/// Which of the two Android push paths is live. Switchable at runtime, no new
+/// build needed: the native path is our own proxy, Web Push over UnifiedPush
+/// stays as the fallback.
+final androidPushTransportProvider =
+    NotifierProvider<AndroidPushTransportController, AndroidPushTransport>(
+      AndroidPushTransportController.new,
+    );
+
+final class AndroidPushTransportController extends Notifier<AndroidPushTransport> {
+  @override
+  AndroidPushTransport build() {
+    unawaited(_load());
+    return AndroidPushTransport.proxy;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(androidPushTransportStoreProvider).read();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  /// Hands the device over to [transport]. The old path is revoked first, so
+  /// the two never hold a registration for this device at the same time; a
+  /// failed revocation leaves the old path in force and rethrows.
+  Future<void> select(AndroidPushTransport transport) async {
+    state = await AndroidPushTransportSwitch(
+      store: ref.read(androidPushTransportStoreProvider),
+      revoke: _revoke,
+    ).select(transport, current: state);
+  }
+
+  Future<void> _revoke(AndroidPushTransport transport) async {
+    switch (transport) {
+      case AndroidPushTransport.webPush:
+        await ref
+            .read(androidPushCoordinatorProvider)
+            ?.revokeAllRegistrations();
+      case AndroidPushTransport.proxy:
+        await ref
+            .read(androidPushRegistrationCoordinatorProvider)
+            ?.unfollowAll();
+    }
+  }
+}
+
+/// The Web Push fallback. Null while the proxy transport is selected: nothing
+/// is registered that way, so there are no native events to drain either.
+///
+/// ponytail: a notification action queued natively just before a switch drains
+/// only once Web Push is selected again. A switch is a rare, user-initiated
+/// act, and the queue is durable, so nothing is lost.
 final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   final platform = ref.watch(androidWebPushPlatformProvider);
-  if (platform == null) {
+  if (platform == null ||
+      ref.watch(androidPushTransportProvider) !=
+          AndroidPushTransport.webPush) {
     return null;
   }
   final coordinator = AndroidPushCoordinator(
@@ -370,6 +433,57 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   unawaited(coordinator.start());
   return coordinator;
 });
+
+/// Registers this Android device for push v2 against our own proxy — the same
+/// wire contract iOS uses, which keeps the public UnifiedPush rewrite gateway
+/// out of the path entirely.
+///
+/// Null off Android and while the Web Push fallback is selected.
+///
+/// NOT YET DELIVERING: nothing calls `installToken`, because the app has no
+/// FCM integration to get a token from. Without a provider token the state
+/// machine plans no effect at all, so this registers nowhere until the
+/// Firebase project is wired in. Kept honest by a test.
+final androidPushRegistrationCoordinatorProvider =
+    Provider<PushRegistrationCoordinator?>((ref) {
+      if (!Platform.isAndroid ||
+          ref.watch(androidPushTransportProvider) !=
+              AndroidPushTransport.proxy) {
+        return null;
+      }
+      final coordinator = PushRegistrationCoordinator(
+        accounts: ref.watch(accountRepositoryProvider),
+        credentials: ref.watch(credentialVaultProvider),
+        api: ref.watch(nextcloudApiProvider),
+        keyStore: AndroidPushDeviceKeyChannel(),
+        gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        tokenHandlePrefix: 'fcm-token',
+      );
+      ref.onDispose(() => unawaited(coordinator.dispose()));
+
+      // Same account-following shape as the Apple and Client Push
+      // coordinators: track whoever the UI currently shows.
+      ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (
+        previous,
+        next,
+      ) {
+        final signedIn = next.valueOrNull;
+        if (signedIn == null) {
+          return;
+        }
+        final live = signedIn.map((account) => account.id).toSet();
+        for (final accountId in live) {
+          unawaited(coordinator.follow(accountId));
+        }
+        for (final accountId in previous?.valueOrNull
+                ?.map((account) => account.id)
+                .where((id) => !live.contains(id)) ??
+            const <String>[]) {
+          unawaited(coordinator.unfollow(accountId));
+        }
+      }, fireImmediately: true);
+      return coordinator;
+    });
 
 /// Asks iOS for notification permission, keeps the APNs device token, and
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can

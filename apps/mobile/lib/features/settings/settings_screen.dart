@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
+import '../../features/push/android_push_transport.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -97,6 +98,33 @@ final class SettingsScreen extends ConsumerWidget {
               loading: () => const SizedBox(height: 24),
               error: (_, _) => const SizedBox.shrink(),
             ),
+            // Android is the only platform with two push paths to choose
+            // between; the bridge is null everywhere else.
+            if (ref.watch(androidWebPushPlatformProvider) != null) ...[
+              const Divider(height: 1),
+              _SectionHeader(strings.settingsPushSection),
+              RadioGroup<AndroidPushTransport>(
+                groupValue: ref.watch(androidPushTransportProvider),
+                onChanged: (transport) =>
+                    _setPushTransport(context, ref, transport),
+                child: Column(
+                  children: [
+                    _PushTransportTile(
+                      tileKey: const Key('push-transport-proxy'),
+                      label: strings.settingsPushTransportProxy,
+                      subtitle: strings.settingsPushTransportProxySubtitle,
+                      transport: AndroidPushTransport.proxy,
+                    ),
+                    _PushTransportTile(
+                      tileKey: const Key('push-transport-web-push'),
+                      label: strings.settingsPushTransportWebPush,
+                      subtitle: strings.settingsPushTransportWebPushSubtitle,
+                      transport: AndroidPushTransport.webPush,
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),
             RadioGroup<ThemeMode>(
@@ -136,6 +164,29 @@ final class SettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Hands the device to the other push transport. The switch revokes the old
+  /// registration first and rethrows if that fails, so a failure here means
+  /// the device is still registered the way it was — which is what the
+  /// message says.
+  Future<void> _setPushTransport(
+    BuildContext context,
+    WidgetRef ref,
+    AndroidPushTransport? transport,
+  ) async {
+    if (transport == null) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(androidPushTransportProvider.notifier).select(transport);
+    } on Object {
+      messenger.showSnackBar(
+        SnackBar(content: Text(strings.settingsPushTransportSwitchFailed)),
+      );
+    }
   }
 
   void _setTheme(WidgetRef ref, ThemeMode? mode) {
@@ -304,6 +355,30 @@ final class _ThemeModeTile extends StatelessWidget {
       key: tileKey,
       title: Text(label),
       value: mode,
+    );
+  }
+}
+
+final class _PushTransportTile extends StatelessWidget {
+  const _PushTransportTile({
+    required this.tileKey,
+    required this.label,
+    required this.subtitle,
+    required this.transport,
+  });
+
+  final Key tileKey;
+  final String label;
+  final String subtitle;
+  final AndroidPushTransport transport;
+
+  @override
+  Widget build(BuildContext context) {
+    return RadioListTile<AndroidPushTransport>(
+      key: tileKey,
+      title: Text(label),
+      subtitle: Text(subtitle),
+      value: transport,
     );
   }
 }
