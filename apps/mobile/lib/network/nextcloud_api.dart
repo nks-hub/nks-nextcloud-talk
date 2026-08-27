@@ -100,7 +100,7 @@ final class PendingLogin {
 /// User-Agent. Without this the server stores the bare Dart default, so the
 /// account owner sees a meaningless entry under security settings and cannot
 /// tell which device to revoke.
-const String loginFlowUserAgent = 'NCloudTalk';
+const String loginFlowUserAgent = 'NKS Talk';
 
 final class HttpNextcloudApi extends _HttpNextcloudApiBase
     with

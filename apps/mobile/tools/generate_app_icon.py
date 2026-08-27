@@ -1,4 +1,4 @@
-"""Generates the NCloudTalk app icon and every launcher size from it.
+"""Generates the NKS Talk app icon and every launcher size from it.
 
 The mark is a cloud whose bottom-left corner is pulled into a speech bubble
 tail - the two things the app is about in one shape. Drawn from primitives

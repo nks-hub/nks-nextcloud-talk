@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>NCloudTalk</string>
+	<string>NKS Talk</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NCloudTalk</string>
+	<string>NKS Talk</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -42,11 +42,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>NCloudTalk needs camera access to attach a photo you take to a message.</string>
+	<string>NKS Talk needs camera access to attach a photo you take to a message.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NCloudTalk needs microphone access to record voice messages.</string>
+	<string>NKS Talk needs microphone access to record voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>NCloudTalk saves pictures from your conversations to your photo library.</string>
+	<string>NKS Talk saves pictures from your conversations to your photo library.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
