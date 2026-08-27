@@ -33,7 +33,7 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 # release with Firebase Cloud Messaging. Naming it truthfully beats forcing it
 # into Apache-2.0, but it does mean the release APK is no longer permissively
 # licensed throughout.
-_LICENSES = r"Apache-2\.0|BSD-3-Clause|LGPL-2\.1-only|LicenseRef-Android-SDK"
+_LICENSES = r"Apache-2\.0|BSD-3-Clause|LGPL-2\.1-only|MIT|LicenseRef-Android-SDK"
 SPDX_EXPRESSION = re.compile(
     rf"^(?:{_LICENSES})(?: (?:AND|OR) (?:{_LICENSES}))*$"
 )
