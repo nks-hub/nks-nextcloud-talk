@@ -24,6 +24,34 @@ VAPID veřejný klíč a založí odběr; doručení obstarává UnifiedPush s
 distributorem zabaleným v aplikaci, takže uživatel nic dalšího neinstaluje.
 Šifrovaný obsah rozbaluje nativní vrstva.
 
+Kudy ta zpráva doopravdy teče, je ale potřeba říct přesně, protože zabalený
+distributor není totéž co přímé spojení. Knihovna
+`org.unifiedpush.android:embedded-fcm-distributor` nepoužívá Firebase SDK a
+nepotřebuje `google-services.json`; mluví s Google Play Services přes staré
+C2DM broadcasty (`com.google.android.c2dm.intent.RECEIVE`). Jako endpoint
+odběru registruje `https://fcm.distributor.unifiedpush.org/wpfcm`, veřejnou
+přepisovací bránu projektu UnifiedPush, která Web Push požadavek převede na
+FCM zprávu. V cestě tedy stojí dvě cizí infrastruktury, UnifiedPush a Google.
+Obsah je pro obě nečitelný — Web Push payload je šifrovaný `aes128gcm` klíči
+z odběru, které brána nemá — ale metadata (čas, cílové zařízení, frekvence)
+jim viditelná jsou. Kdo tohle nechce, musí si postavit vlastní bránu nebo
+sáhnout po samostatném distributoru.
+
+Probudit ukončenou aplikaci to umí, protože zprávu doručuje broadcast a
+transport drží Play Services, ne naše aplikace. Tři meze to ale má:
+
+- **Force stop** (Nastavení → Vynutit ukončení, agresivní OEM správci baterie
+  na Xiaomi, Huawei nebo Samsungu) uvede aplikaci do „stopped state" a Android
+  jí broadcasty nedoručí, dokud ji uživatel sám nespustí. Platformní pravidlo,
+  platí i pro oficiální Talk s FCM.
+- **Bez Google Play Services** zabalený distributor nefunguje —
+  `AndroidWebPushChannel.ensureEmbeddedDistributor()` vyhodí
+  `embedded_distributor_unavailable`. Na GrapheneOS bez sandboxed Play, na
+  Huawei nebo /e/OS je nutný samostatný distributor (ntfy).
+- **Doze** odloží zprávy s normální prioritou do údržbového okna. Vysoká
+  priorita, kterou `Push::getNotifTopicAndUrgency` nastavuje hovorům a
+  zmínkám, jím projde okamžitě.
+
 Na iOS se tahle cesta použít nedá: Web Push v nativní aplikaci neexistuje a
 UnifiedPush je Android-only, protože iOS nedovolí držet spojení na pozadí.
 
