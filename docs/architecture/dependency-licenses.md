@@ -1,6 +1,6 @@
 # Audit závislostí a assetů
 
-Datum poslední kontroly: 26. srpna 2026.
+Datum poslední kontroly: 27. srpna 2026.
 
 Tento dokument je průběžná distribuční brána pro projekt licencovaný pod
 `GPL-3.0-or-later`. Evidence vychází z konkrétního lockfilu a licenčního souboru
@@ -20,7 +20,7 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 ## Přímé Flutter runtime závislosti
 
-Následujících osmnáct hostovaných balíků je přímo deklarovaných v
+Následujících dvacet pět hostovaných balíků je přímo deklarovaných v
 `apps/mobile/pubspec.yaml`. Verze a archive SHA-256 jsou z
 `apps/mobile/pubspec.lock`; licence a jejich SHA-256 byly ověřené v odpovídajícím
 staženém balíku v lokální Pub cache.
@@ -47,6 +47,13 @@ staženém balíku v lokální Pub cache.
 | [`drift`](https://pub.dev/packages/drift) | 2.34.3; archive SHA-256 `3a3f1f6f905037d7426e4c445854139fd6a3d592135f7c96d7931682b73d16f4`; LICENSE SHA-256 `31f84e4edff98f0238a5bef1c2ce754e401fbab149782f0ff4dc9b68fd086f75` | MIT; Copyright 2021 Simon Binder | Typované account-scoped SQLite repository a transakce |
 | [`drift_flutter`](https://pub.dev/packages/drift_flutter) | 0.3.1; archive SHA-256 `91acf4bee7c3c84467cba46455aa70e5292a3b889f4582645d74f2e5a8c106f2`; LICENSE SHA-256 `7cf86321e740e4ff631ab6d00962c2d65fa85e4163bdd89334f1d22354ab0306` | MIT; Copyright 2024 Simon Binder | Flutter platformní otevření Drift databáze |
 | [`uuid`](https://pub.dev/packages/uuid) | 4.6.0; archive SHA-256 `9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd`; LICENSE SHA-256 `ad3e5523e51004e94ba9ce728805b1b4242dbccdb65e62b523800e35a8a7cfdc` | MIT; Copyright 2021 Yulian Kuncheff | Náhodné lokální account a operation identity |
+| [`connectivity_plus`](https://pub.dev/packages/connectivity_plus) | 7.3.1; archive SHA-256 `762c99f890ca8bf87f7337236f99edd42793843bc6c3631da294a76653a54bd0`; LICENSE SHA-256 `3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c` | BSD-3-Clause; Copyright 2017 The Chromium Authors | Rozpoznání návratu konektivity jako wake source pro polling a resync |
+| [`open_filex`](https://pub.dev/packages/open_filex) | 4.7.0; archive SHA-256 `9976da61b6a72302cf3b1efbce259200cd40232643a467aac7370addf94d6900`; LICENSE SHA-256 `15fead662602c03b70cedc27bb301ca0722648fbc222dd3d7d06d9dd3c3fc2ad` | BSD-3-Clause; Copyright 2018 crazecoder | Otevření již stažené přílohy v systémové aplikaci přes Android FileProvider |
+| [`gal`](https://pub.dev/packages/gal) | 2.3.3; archive SHA-256 `f71e79840fe023a21f2f949771375444b6efcd34b9e625d5f4f5504971380a77`; LICENSE SHA-256 `4a963156383f276c9214aed3beee1a57e12947c63b58dae134fdae6abd01b3da` | MIT; Copyright 2023 Midori Design Studio | Uložení přílohy do systémové galerie (MediaStore, PHPhotoLibrary) |
+| [`share_plus`](https://pub.dev/packages/share_plus) | 13.3.0; archive SHA-256 `34f00f9becd2743c1fb05363d624f9f70d37f7ccdcdda47450bc0b8c9d327b8c`; LICENSE SHA-256 `eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd` | BSD-3-Clause; Copyright 2017, the Flutter project authors | Systémový share sheet (ACTION_SEND, UIActivityViewController) |
+| [`image_picker`](https://pub.dev/packages/image_picker) | 1.2.3; archive SHA-256 `d8402284df184bc05f4a2210c6c23983b0720f4cd87cbd05c5390a78af602667`; LICENSE SHA-256 `8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Pouze zdroj „fotoaparát“ (ACTION_IMAGE_CAPTURE, UIImagePickerController) |
+| [`sentry_flutter`](https://pub.dev/packages/sentry_flutter) | 9.27.0; archive SHA-256 `ec89cc6ba939ca19155ea83900d9740a36544f50b3b6baf265518e3348fb0f50`; LICENSE SHA-256 `a324d0c2ce63dbdce9e77cbd06a13ad77006d6bf3f82ad3affe03b64e27e83d6` | MIT; Copyright 2019 Sentry | Hlášení pádů pouze v našich buildech; bez `SENTRY_DSN` se SDK vůbec neinicializuje |
+| [`rybbit_flutter_sdk`](https://pub.dev/packages/rybbit_flutter_sdk) | 0.3.0; archive SHA-256 `96581119b39b195690b4cd9a88283293d0bd7efc82aefce817750ec7924761fe`; LICENSE SHA-256 `e57f1c320b8cf8798a7d2ff83a6f9e06a33a03585f6e065fea97f1d86db84052` | GPL-3.0; Copyright Free Software Foundation text, vlastní kód nks-hub; shodná licence jako projekt | Anonymní použití obrazovek pouze v našich buildech; bez `RYBBIT_HOST` a `RYBBIT_SITE_ID` se SDK vůbec neinicializuje |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -116,6 +123,10 @@ nativní dependency graph zatím nepokrývá.
 | Komponenta | Verze a integrita | Licence a notice | Důvod v artefaktu | Stav |
 | --- | --- | --- | --- | --- |
 | [`petitparser`](https://pub.dev/packages/petitparser) | 7.0.2; archive SHA-256 `91bd59303e9f769f108f8df05e371341b15d59e995e6806aefab827b58336675` v `packages/talk_protocol/pubspec.lock`; lokální LICENSE SHA-256 `d2e8ffdbe89acbc10d5d1f2b03e7dbddf0a9f1742e809176682b62ef3d573b3e` | MIT; Copyright 2006–2024 Lukas Renggli; notice musí zůstat ve všech podstatných kopiích | Parser runtime vyžadovaný balíkem `xml`; projekt jej přímo nevolá | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
+| [`sentry`](https://pub.dev/packages/sentry) | 9.27.0; archive SHA-256 `c2ecd8abe82e63cdcb6947f71320612ced56e10ba94db7529d85cc02be47cb3b`; lokální LICENSE SHA-256 `9873d81def9cebb9598b4a2d0a1ad062b17781c35c25cc04b75a0f62fc8667fd` | BSD-3-Clause; Copyright 2014 The Chromium Authors | Dart jádro vyžadované balíkem `sentry_flutter`; projekt jej volá jen přes něj | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
+| [`hive`](https://pub.dev/packages/hive) | 2.2.3; archive SHA-256 `8dcf6db979d7933da8217edcec84e9df1bdb4e4edc7fc77dbd5aa74356d6d941`; lokální LICENSE SHA-256 `343c59f5d64c33a9dad6c7a87d9b4b1c3c6ce628f41b85d9e25ef5f960b8f28e` | Apache-2.0; jednosměrně kompatibilní s GPL-3.0-or-later | Offline fronta balíku `rybbit_flutter_sdk` pro události odeslané bez konektivity | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
+| [`device_info_plus`](https://pub.dev/packages/device_info_plus) | 13.2.0; archive SHA-256 `0891702f96b2e465fe567b7ec448380e6b1c14f60af552a8536d9f583b6b8442`; lokální LICENSE SHA-256 `3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c` | BSD-3-Clause; Copyright 2017 The Chromium Authors | Model zařízení a verze OS v analytics payloadu balíku `rybbit_flutter_sdk` | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
+| [`package_info_plus`](https://pub.dev/packages/package_info_plus) | 10.2.1; archive SHA-256 `127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481`; lokální LICENSE SHA-256 `3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c` | BSD-3-Clause; Copyright 2017 The Chromium Authors | Verze aplikace v analytics payloadu; verze je vynucená `dependency_overrides` v `apps/mobile/pubspec.yaml`, protože `rybbit_flutter_sdk` 0.3.0 zastropuje major 9 a tím i `win32` pod 6, který `share_plus` 13.3 vyžaduje. SDK z balíku volá jen `PackageInfo.fromPlatform()`, nezměněné napříč majory 8–10 | Kompatibilní s GPL-3.0-or-later; zdrojový balík a lokální LICENSE ověřeny |
 
 <!-- markdownlint-enable MD013 -->
 

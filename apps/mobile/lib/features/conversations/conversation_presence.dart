@@ -214,6 +214,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
             onPressed: () => unawaited(
               Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/threads'),
                   builder: (context) => ThreadManagementScreen(
                     account: account,
                     conversation: current,
@@ -229,6 +230,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
             onPressed: () => unawaited(
               Navigator.of(context).push<void>(
                 MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/conversation/details'),
                   builder: (context) => RoomDetailsScreen(
                     account: account,
                     conversation: current,
@@ -326,6 +328,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
                 onPressed: () => unawaited(
                   Navigator.of(context).push<void>(
                     MaterialPageRoute<void>(
+                      settings: const RouteSettings(name: '/threads'),
                       builder: (context) => ThreadManagementScreen(
                         account: account,
                         conversation: conversation,
@@ -343,6 +346,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
                     () => unawaited(
                       Navigator.of(context).push<void>(
                         MaterialPageRoute<void>(
+                          settings: const RouteSettings(name: '/conversation/details'),
                           builder: (context) => RoomDetailsScreen(
                             account: account,
                             conversation: conversation,

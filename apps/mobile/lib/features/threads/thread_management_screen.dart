@@ -207,6 +207,7 @@ final class _ThreadManagementScreenState
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/threads/detail'),
           builder: (context) => ThreadDetailScreen(
             account: widget.account,
             conversation: conversation,
@@ -402,6 +403,7 @@ final class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/chat/thread'),
           builder: (context) => ChatThreadScreen(
             account: widget.account,
             conversation: widget.conversation,

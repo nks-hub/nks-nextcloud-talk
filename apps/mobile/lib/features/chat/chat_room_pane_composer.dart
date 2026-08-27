@@ -398,6 +398,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     unawaited(
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/chat/thread'),
           builder: (context) => ChatThreadScreen(
             account: widget.account,
             conversation: widget.conversation,

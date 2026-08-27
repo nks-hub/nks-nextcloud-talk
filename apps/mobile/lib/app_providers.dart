@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
-import 'package:flutter/widgets.dart' show AppLifecycleListener;
+import 'package:flutter/widgets.dart' show AppLifecycleListener, NavigatorObserver;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -787,6 +787,13 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     },
   );
 });
+
+/// Navigator observers contributed by telemetry, empty in every build that
+/// has no telemetry configured. Overridden once at startup so the widget tree
+/// never has to know whether an SDK is present.
+final telemetryNavigatorObserversProvider = Provider<List<NavigatorObserver>>(
+  (ref) => const [],
+);
 
 final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
   return FileThemePreferenceStore();

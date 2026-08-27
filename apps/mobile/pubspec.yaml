@@ -71,6 +71,12 @@ dependencies:
   # is the first-party plugin for it and is used for the camera source only.
   image_picker: ^1.2.3
 
+  # Crash reporting for our own builds only; without a compiled-in DSN
+  # lib/core/telemetry.dart never initialises it.
+  sentry_flutter: ^9.7.0
+  # Anonymous screen usage for our own builds only, same gate as Sentry.
+  rybbit_flutter_sdk: ^0.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -88,6 +94,12 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
+# rybbit_flutter_sdk 0.3.0 caps package_info_plus below 10, which pins win32
+# below 6; share_plus 13.3 needs win32 6. The SDK only calls
+# PackageInfo.fromPlatform(), unchanged across 8-10, so the newer major is safe.
+dependency_overrides:
+  package_info_plus: ^10.2.1
+
 flutter:
   generate: true
 

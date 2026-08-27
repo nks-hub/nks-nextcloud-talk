@@ -130,6 +130,7 @@ final class SettingsScreen extends ConsumerWidget {
   void _addAccount(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/onboarding'),
         builder: (_) => OnboardingScreen(
           onAccountAdded: (_) => Navigator.of(context).pop(),
         ),
@@ -147,6 +148,7 @@ final class SettingsScreen extends ConsumerWidget {
   void _openProfile(BuildContext context, String accountId) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/settings/profile'),
         builder: (_) => ProfileScreen(accountId: accountId),
       ),
     );
@@ -155,6 +157,7 @@ final class SettingsScreen extends ConsumerWidget {
   void _openDiagnostics(BuildContext context, String accountId) {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/settings/diagnostics'),
         builder: (_) => DiagnosticsScreen(accountId: accountId),
       ),
     );

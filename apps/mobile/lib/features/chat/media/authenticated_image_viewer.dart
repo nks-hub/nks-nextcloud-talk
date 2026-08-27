@@ -20,6 +20,7 @@ Future<void> showAuthenticatedImageViewer(
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/chat/image'),
       fullscreenDialog: true,
       builder: (_) => AuthenticatedImageViewer(
         account: account,

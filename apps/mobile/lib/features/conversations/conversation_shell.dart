@@ -325,6 +325,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   Future<void> _addAccount() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/onboarding'),
         builder: (context) => OnboardingScreen(
           onAccountAdded: (_) => Navigator.of(context).pop(),
         ),
@@ -336,6 +337,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     var completed = false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/onboarding'),
         builder: (routeContext) => OnboardingScreen(
           reauthenticateAccount: account,
           onAccountAdded: (updated) {
@@ -421,6 +423,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 void _openMessageSearch(BuildContext context, String accountId) {
   Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/search/messages'),
       builder: (context) => _MessageSearchRoute(accountId: accountId),
     ),
   );
@@ -533,6 +536,7 @@ final class _MessageSearchRouteState
       }
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/search/messages'),
           builder: (context) => buildMessageSearchDestination(
             account: account,
             conversation: conversation,
@@ -599,7 +603,10 @@ final class _MessageSearchRouteState
 
 void _openSettings(BuildContext context) {
   Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (context) => const SettingsScreen()),
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/settings'),
+      builder: (context) => const SettingsScreen(),
+    ),
   );
 }
 
@@ -618,6 +625,7 @@ void _openNewConversation(
 }) {
   Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/conversation/new'),
       builder: (context) => NewConversationScreen(
         accountId: accountId,
         onConversationCreated: (token) {

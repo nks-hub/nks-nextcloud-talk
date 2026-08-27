@@ -28,6 +28,7 @@ final class NextcloudTalkApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
+      navigatorObservers: ref.watch(telemetryNavigatorObserversProvider),
       home: const _AppHome(),
     );
   }
