@@ -126,16 +126,16 @@ class AndroidWebPushNotificationRoutingTest {
         accountId: String,
         notificationId: Long,
         subject: String,
-        roomToken: String? = null,
+        roomToken: String = "instrumentation-routing-room",
     ) {
         AndroidSystemNotifications.apply(
             context,
             accountId,
             AndroidWebPushPayload.Message(
                 notificationId = notificationId,
-                app = if (roomToken == null) "files" else "spreed",
+                app = "spreed",
                 subject = subject,
-                type = if (roomToken == null) null else "chat",
+                type = "chat",
                 objectId = roomToken,
             ),
         )
