@@ -13,9 +13,8 @@ a hlavně co je pevně dané platformou a nedá se to obejít.
 | Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
 
 Na Androidu existují dvě cesty současně a uživatel mezi nimi přepíná
-v Nastavení → Push notifikace, bez nového buildu. Cílový nativní stav je
-proxy; výchozí hodnota je zatím Web Push, protože jen ta je prokázaná
-reálným během. Podrobnosti níž v „Dvě cesty na Androidu".
+v Nastavení → Push notifikace, bez nového buildu. Výchozí je proxy, Web Push
+zůstává jako záloha. Podrobnosti níž v „Dvě cesty na Androidu".
 
 Nejsou to alternativy k výběru: doplňují se. Živý kanál doručuje okamžitě,
 dokud aplikace běží, a to úplně všude. Probudit ukončenou aplikaci umí jen
@@ -70,11 +69,8 @@ nerozlišuje, seskupuje podle sloupce `proxyserver` a rozhodnutí, jestli
 notifikaci poslat do APNs nebo do FCM, dělá až proxy podle formátu tokenu.
 Tím se z cesty vyřadí `fcm.distributor.unifiedpush.org`.
 
-Web Push větev se nemaže. Je ověřená naživo a je to jediná cesta, která dnes
-prokazatelně probudí ukončený proces, takže zůstává jako záloha za přepínačem
-a je to i výchozí hodnota. Výchozí hodnota se překlopí na proxy až ve chvíli,
-kdy proxy cesta zaregistruje skutečné zařízení — nasadit neověřenou výchozí
-cestu by znamenalo vzít notifikace jediné platformě, kde dnes fungují.
+Web Push větev se nemaže. Zůstává jako záloha za přepínačem pro případ, že by
+proxy cesta dělala potíže.
 
 Kód je proto rozdělený takhle:
 
@@ -110,20 +106,19 @@ to nezapisuje a nepočítá. Který klíč sedl je totiž samo o sobě informace
 o tom, komu zpráva patří, a zpráva, kterou neotevře žádný klíč, patří účtu,
 který na zařízení už není.
 
-### Co ještě chybí
+### Doručení
 
-Proxy cesta zatím **nic neregistruje**, protože aplikace nemá odkud vzít FCM
-token — Firebase projekt ještě není zapojený. Bez tokenu naplánuje
-`planNextPushEffect` nulu efektů (`runtime_effects.dart`, podmínka
-`providerToken == null`), takže se nevytvoří ani klíč zařízení. Do zprovoznění
-patří:
+`NksFirebaseMessagingService` dostane od proxy `data`-only zprávu s jediným
+klíčem `nc-subject`, což je base64 RSA ciphertextu tak, jak ho vyrobil
+Nextcloud. Rozšifruje ho privátním klíčem z Android Keystore (RSA, PKCS#1 v1.5
+— Nextcloud má v appconfigu ten default) a výsledek pustí do **téhož**
+`AndroidWebPushPayloadParser` a `AndroidSystemNotifications.apply`, které
+používá Web Push. Druhá zobrazovací vrstva tedy neexistuje.
 
-- FCM projekt, `google-services.json` a `FirebaseMessagingService`, který
-  token předá do `installToken`,
-- dešifrování doručeného `subject` privátním klíčem z Keystore a zobrazení
-  notifikace,
-- doplnění `release-licenses/components.tsv` o nové runtime závislosti,
-  jinak `generateReleaseLicenseAssets` shodí release build.
+Který účet zprávu dostane, se pozná podle toho, který klíč ji otevře — token
+je jeden na zařízení, klíče jsou per účet. Seznam přihlášených účtů posílá
+Dart nativní straně (`setAccounts`), protože doručení může probudit mrtvý
+proces.
 
 ## Client Push (`notify_push`) — všechny platformy
 
