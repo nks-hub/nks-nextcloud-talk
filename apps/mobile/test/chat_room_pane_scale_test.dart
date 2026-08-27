@@ -242,6 +242,7 @@ void main() {
     }
     final seeded = ProcessInfo.currentRss;
 
+    ProviderContainer? container;
     for (final conversation in conversations) {
       await tester.pumpWidget(
         app(
@@ -249,11 +250,19 @@ void main() {
         ),
       );
       await tester.pump();
+      container ??= ProviderScope.containerOf(
+        tester.element(find.byType(ChatRoomPane)),
+      );
       await tester.pumpWidget(app(const SizedBox.shrink()));
       await tester.pump(const Duration(milliseconds: 16));
     }
 
     final visited = ProcessInfo.currentRss;
+    // Diagnostic only. Resident size is not asserted on: measured on macOS,
+    // six rooms grew 112.5MB while twelve grew 61.9MB and twenty-four grew
+    // 198.9MB, so at this granularity the number tracks GC and allocator
+    // timing rather than retention, and a byte budget tight enough to catch a
+    // leak also fails on a loaded machine.
     // ignore: avoid_print
     print(
       'VISIT rooms=$rooms messages=$messages '
@@ -262,12 +271,17 @@ void main() {
       'growth=${((visited - seeded) / (1024 * 1024)).toStringAsFixed(1)}MB',
     );
 
-    // Each room's list is roughly `messages * 2.9kB` resident while it is
-    // watched. Holding all of them at once costs well over 60MB; holding one
-    // at a time stays far below that even with allocator slack.
+    // What retention would actually look like, and what is deterministic:
+    // an element per visited room left behind in the container. Without
+    // autoDispose every one of the twelve survives.
+    final leaked = [
+      for (final conversation in conversations)
+        if (aliveIn(container!, chatMessagesProvider(keyFor(conversation))))
+          conversation.token,
+    ];
     expect(
-      visited - seeded,
-      lessThan(48 * 1024 * 1024),
+      leaked,
+      isEmpty,
       reason: 'closed rooms must not keep their message lists resident',
     );
 
