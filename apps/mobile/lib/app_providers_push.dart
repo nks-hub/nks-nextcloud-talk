@@ -77,7 +77,12 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   // Read, never watch: this coordinator must outlive a transport switch.
   final coordinator = _buildAndroidPushCoordinator(ref, platform);
   ref.listen<AndroidPushTransport>(androidPushTransportProvider, (_, next) {
-    coordinator.subscribes = next == AndroidPushTransport.webPush;
+    final wasSubscribing = coordinator.subscribes;
+    final subscribes = next == AndroidPushTransport.webPush;
+    coordinator.subscribes = subscribes;
+    if (!wasSubscribing && subscribes) {
+      unawaited(coordinator.reconcileAll().catchError((Object _) {}));
+    }
   }, fireImmediately: true);
   return coordinator;
 });

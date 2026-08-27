@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/push/android_push_transport.dart';
 import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
 import 'test_support.dart';
 
@@ -25,6 +30,49 @@ final class _PresentPushPlatform implements AndroidWebPushPlatform {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('Not used by the settings screen');
+}
+
+final class _ReconcilePushPlatform implements AndroidWebPushPlatform {
+  final _events = StreamController<int>.broadcast();
+  final _opens = StreamController<AndroidNotificationOpen>.broadcast();
+
+  @override
+  Stream<int> get eventsAvailable => _events.stream;
+
+  @override
+  Stream<AndroidNotificationOpen> get notificationOpened => _opens.stream;
+
+  @override
+  Future<AndroidWebPushAvailability> getAvailability() async =>
+      const AndroidWebPushAvailability(
+        available: true,
+        playServicesAvailable: true,
+      );
+
+  @override
+  Future<AndroidNotificationOpen?> getLaunchNotification() async => null;
+
+  @override
+  Future<List<AndroidWebPushEvent>> drainEvents({
+    required String accountId,
+    int limit = 50,
+  }) async => const <AndroidWebPushEvent>[];
+
+  @override
+  Future<List<AndroidNotificationAction>> drainNotificationActions({
+    required String accountId,
+    int limit = 20,
+  }) async => const <AndroidNotificationAction>[];
+
+  @override
+  Future<void> dispose() async {
+    await _events.close();
+    await _opens.close();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('Unexpected Web Push platform call');
 }
 
 final class _MemoryTransportStore implements AndroidPushTransportStore {
@@ -139,6 +187,82 @@ void main() {
 
     expect(store.stored, AndroidPushTransport.webPush);
     expect(store.writes, 1);
+  });
+
+  test('choosing Web Push starts reconciliation immediately', () async {
+    const accountId = 'account-a';
+    final accounts = AccountRepository(database);
+    await accounts.upsertAccount(
+      accountId: accountId,
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026),
+    );
+    final credentials = MemoryCredentialVault()
+      ..values[accountId] = 'fixture-password';
+    final requests = <http.Request>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response('{}', 401);
+      }),
+    );
+    final platform = _ReconcilePushPlatform();
+    final store = _MemoryTransportStore(AndroidPushTransport.proxy);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        accountRepositoryProvider.overrideWithValue(accounts),
+        credentialVaultProvider.overrideWithValue(credentials),
+        nextcloudApiProvider.overrideWithValue(api),
+        androidWebPushPlatformProvider.overrideWithValue(platform),
+        androidPushTransportStoreProvider.overrideWithValue(store),
+        connectivityWakeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
+        appLifecycleResumeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
+      ],
+    );
+    final coordinator = container.read(androidPushCoordinatorProvider)!;
+    addTearDown(() async {
+      await coordinator.close();
+      container.dispose();
+      api.close();
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(requests, isEmpty);
+
+    await container
+        .read(androidPushTransportProvider.notifier)
+        .select(AndroidPushTransport.webPush, revoke: (_) async {});
+    for (var attempt = 0; attempt < 20 && requests.isEmpty; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(
+      requests.where(
+        (request) => request.url.path.endsWith('/cloud/capabilities'),
+      ),
+      hasLength(1),
+    );
+
+    await container
+        .read(androidPushTransportProvider.notifier)
+        .select(AndroidPushTransport.webPush, revoke: (_) async {});
+    await container
+        .read(androidPushTransportProvider.notifier)
+        .select(AndroidPushTransport.proxy, revoke: (_) async {});
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(
+      requests.where(
+        (request) => request.url.path.endsWith('/cloud/capabilities'),
+      ),
+      hasLength(1),
+    );
   });
 
   testWidgets('a failed switch says so instead of pretending', (tester) async {
