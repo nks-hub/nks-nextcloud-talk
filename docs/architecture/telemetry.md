@@ -45,6 +45,10 @@ klienta, ne o white-label aplikaci, takže cizí build nesmí hlásit k nám.
   s osobou ani s tím, jaký Nextcloud kdo používá. Přežije restart, ne
   přeinstalaci.
 
+Rybbit navíc sám doplňuje model zařízení, verzi OS, verzi aplikace a přibližnou
+polohu odvozenou z IP adresy. Nic z toho neposílá klient a nedá se to vypnout
+na naší straně; je to standardní chování serveru.
+
 ## Co se neposílá
 
 `sendDefaultPii`, `attachScreenshot` i performance tracing jsou vypnuté. Obsah
@@ -58,6 +62,23 @@ funkce, o kterou uživatel žádal. Selhání `Rybbit.init` se spolkne a aplikac
 běží dál bez analytiky.
 
 ## Ověření
+
+Živě na Android emulátoru proti `com.nkshub.nextcloudtalk`, build `e5f893d`
+s `--dart-define-from-file=telemetry.env`:
+
+- **Rybbit ověřen (L).** Site `com.nkshub.nextcloudtalk` (org NKS Apps) přijal
+  `app_open` s `environment=development` a pageviews `/` → `/search/messages`
+  → `/`. Žádný token, id účtu ani název konverzace v payloadu není. Soubor
+  `telemetry_installation_id.txt` (32 znaků) vznikl v `files/` aplikace.
+- **Sentry ověřeno jen po inicializaci.** SDK i sentry-native nastartují
+  (`sentry-native: starting backend` v logcatu), ale event z instance
+  nedorazil: Relay na `sentry.example.invalid` v tu dobu nedokázal načíst
+  project config (`error fetching project state …: deadline exceeded`) pro
+  ~230 klíčů, tedy pro celou instanci. `POST /api/43/store/` vrací HTTP 200,
+  přesto nevznikne issue. Je to provozní stav instance, ne chyba integrace —
+  ověření end-to-end zbývá zopakovat, až Relay poběží.
+
+Testy:
 
 - `apps/mobile/test/telemetry_test.dart` — brána konfigurace, scrubber
   a formát id instalace.
