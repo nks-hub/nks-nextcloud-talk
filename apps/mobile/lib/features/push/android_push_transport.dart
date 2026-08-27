@@ -8,14 +8,29 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// [proxy] is the native path: push v2 against our own `nks-talk-notify`
 /// proxy, the same wire contract iOS uses. [webPush] is the Web Push /
-/// UnifiedPush path, kept as a switchable fallback — it routes through the
-/// public `fcm.distributor.unifiedpush.org` rewrite gateway, which is exactly
-/// what [proxy] exists to avoid, but it is the branch that has been proven
-/// end to end on a real device.
+/// UnifiedPush path — it routes through the public
+/// `fcm.distributor.unifiedpush.org` rewrite gateway, which is exactly what
+/// [proxy] exists to avoid.
+///
+/// [webPush] is still the default. It is the only branch proven end to end on
+/// a real device, and shipping an unproven default would take notifications
+/// away on the one platform where they work today. The default flips to
+/// [proxy] once the proxy path has registered a real device.
 enum AndroidPushTransport { proxy, webPush }
+
+/// What an untouched device uses. See [AndroidPushTransport] for why this is
+/// not the proxy yet.
+const _defaultTransport = AndroidPushTransport.webPush;
+
+/// The same value, for the provider that seeds the runtime state before the
+/// stored choice has been read back.
+const androidPushTransportDefault = _defaultTransport;
 
 /// Persists the chosen [AndroidPushTransport]. Not per-account: one device
 /// registers one way, the same shape as the theme preference.
+///
+/// Anything unreadable reads back as the default, so a corrupt file leaves
+/// the device on the proven transport rather than on none.
 abstract interface class AndroidPushTransportStore {
   Future<AndroidPushTransport> read();
 
@@ -38,15 +53,15 @@ final class FileAndroidPushTransportStore implements AndroidPushTransportStore {
     try {
       final file = await _file();
       if (!file.existsSync()) {
-        return AndroidPushTransport.proxy;
+        return _defaultTransport;
       }
       final raw = (await file.readAsString()).trim();
       return AndroidPushTransport.values.firstWhere(
         (transport) => transport.name == raw,
-        orElse: () => AndroidPushTransport.proxy,
+        orElse: () => _defaultTransport,
       );
     } on Object {
-      return AndroidPushTransport.proxy;
+      return _defaultTransport;
     }
   }
 

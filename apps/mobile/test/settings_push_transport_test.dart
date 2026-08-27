@@ -10,10 +10,18 @@ import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 
 import 'test_support.dart';
 
-/// Only its presence matters here: the settings screen shows the transport
-/// choice when the Android bridge exists. Nothing on it is called, because
-/// neither push coordinator is built in a widget test.
+/// A bridge that exists but reports no Web Push on this device, which is what
+/// makes the settings screen show the transport choice while keeping the Web
+/// Push coordinator idle. Its `revokeAllRegistrations` still runs on a switch
+/// away — against an empty account list, so it asks the platform nothing.
 final class _PresentPushPlatform implements AndroidWebPushPlatform {
+  @override
+  Future<AndroidWebPushAvailability> getAvailability() async =>
+      const AndroidWebPushAvailability(
+        available: false,
+        playServicesAvailable: false,
+      );
+
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('Not used by the settings screen');
@@ -50,9 +58,25 @@ Widget _wrap(AppDatabase database, AndroidPushTransportStore store) {
       ),
       androidWebPushPlatformProvider.overrideWithValue(_PresentPushPlatform()),
       androidPushTransportStoreProvider.overrideWithValue(store),
+      // The Web Push coordinator is built for real here, so that switching
+      // away from it actually runs its revocation. Its credential vault is
+      // the only part that reaches for a platform plugin.
+      credentialVaultProvider.overrideWithValue(MemoryCredentialVault()),
     ],
     child: localizedTestApp(home: const SettingsScreen()),
   );
+}
+
+/// Switching away from Web Push revokes the old registration first, and that
+/// reads the account list through Drift. Real I/O needs a genuine event-loop
+/// turn, which the fake clock in testWidgets never gives it.
+Future<void> _settleRealAsync(WidgetTester tester) async {
+  for (var round = 0; round < 8; round++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -61,11 +85,11 @@ void main() {
   setUp(() => database = openTestDatabase());
   tearDown(() => database.close());
 
-  testWidgets('an untouched device shows the proxy transport selected', (
+  testWidgets('an untouched device shows the Web Push transport selected', (
     tester,
   ) async {
     await tester.pumpWidget(
-      _wrap(database, _MemoryTransportStore(AndroidPushTransport.proxy)),
+      _wrap(database, _MemoryTransportStore(AndroidPushTransport.webPush)),
     );
     await tester.pump();
 
@@ -80,15 +104,15 @@ void main() {
             find.byType(RadioGroup<AndroidPushTransport>),
           )
           .groupValue,
-      AndroidPushTransport.proxy,
+      AndroidPushTransport.webPush,
     );
   });
 
-  testWidgets('the stored fallback choice is what the screen shows', (
+  testWidgets('the stored proxy choice is what the screen shows', (
     tester,
   ) async {
     await tester.pumpWidget(
-      _wrap(database, _MemoryTransportStore(AndroidPushTransport.webPush)),
+      _wrap(database, _MemoryTransportStore(AndroidPushTransport.proxy)),
     );
     await tester.pump();
     await tester.pump();
@@ -99,36 +123,35 @@ void main() {
             find.byType(RadioGroup<AndroidPushTransport>),
           )
           .groupValue,
-      AndroidPushTransport.webPush,
+      AndroidPushTransport.proxy,
     );
   });
 
-  testWidgets('choosing the fallback persists it without a rebuild', (
+  testWidgets('choosing the proxy persists it without a rebuild', (
     tester,
   ) async {
-    final store = _MemoryTransportStore(AndroidPushTransport.proxy);
+    final store = _MemoryTransportStore(AndroidPushTransport.webPush);
     await tester.pumpWidget(_wrap(database, store));
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('push-transport-web-push')));
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('push-transport-proxy')));
+    await _settleRealAsync(tester);
 
-    expect(store.stored, AndroidPushTransport.webPush);
+    expect(store.stored, AndroidPushTransport.proxy);
     expect(store.writes, 1);
   });
 
   testWidgets('a failed switch says so instead of pretending', (tester) async {
-    final store = _MemoryTransportStore(AndroidPushTransport.proxy)
+    final store = _MemoryTransportStore(AndroidPushTransport.webPush)
       ..writeFailure = StateError('disk full');
     await tester.pumpWidget(_wrap(database, store));
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('push-transport-web-push')));
-    await tester.pump();
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('push-transport-proxy')));
+    await _settleRealAsync(tester);
 
     expect(find.byType(SnackBar), findsOneWidget);
-    expect(store.stored, AndroidPushTransport.proxy);
+    expect(store.stored, AndroidPushTransport.webPush);
   });
 
   testWidgets('a device without the Android bridge is offered no choice', (

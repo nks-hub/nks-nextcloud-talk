@@ -361,7 +361,7 @@ final class AndroidPushTransportController extends Notifier<AndroidPushTransport
   @override
   AndroidPushTransport build() {
     unawaited(_load());
-    return AndroidPushTransport.proxy;
+    return androidPushTransportDefault;
   }
 
   Future<void> _load() async {
@@ -374,24 +374,34 @@ final class AndroidPushTransportController extends Notifier<AndroidPushTransport
   /// Hands the device over to [transport]. The old path is revoked first, so
   /// the two never hold a registration for this device at the same time; a
   /// failed revocation leaves the old path in force and rethrows.
-  Future<void> select(AndroidPushTransport transport) async {
+  ///
+  /// [revoke] is supplied by the caller rather than read here on purpose: both
+  /// coordinator providers watch this notifier, so reading them back from
+  /// inside it is a dependency cycle and Riverpod refuses it at the first
+  /// switch. [revokeAndroidPushTransport] is the implementation to pass.
+  Future<void> select(
+    AndroidPushTransport transport, {
+    required Future<void> Function(AndroidPushTransport live) revoke,
+  }) async {
     state = await AndroidPushTransportSwitch(
       store: ref.read(androidPushTransportStoreProvider),
-      revoke: _revoke,
+      revoke: revoke,
     ).select(transport, current: state);
   }
+}
 
-  Future<void> _revoke(AndroidPushTransport transport) async {
-    switch (transport) {
-      case AndroidPushTransport.webPush:
-        await ref
-            .read(androidPushCoordinatorProvider)
-            ?.revokeAllRegistrations();
-      case AndroidPushTransport.proxy:
-        await ref
-            .read(androidPushRegistrationCoordinatorProvider)
-            ?.unfollowAll();
-    }
+/// Unregisters this device from [live] — at Nextcloud and at whichever gateway
+/// that transport uses. Call it from outside the provider graph (a widget) and
+/// hand it to [AndroidPushTransportController.select].
+Future<void> revokeAndroidPushTransport(
+  WidgetRef ref,
+  AndroidPushTransport live,
+) async {
+  switch (live) {
+    case AndroidPushTransport.webPush:
+      await ref.read(androidPushCoordinatorProvider)?.revokeAllRegistrations();
+    case AndroidPushTransport.proxy:
+      await ref.read(androidPushRegistrationCoordinatorProvider)?.unfollowAll();
   }
 }
 

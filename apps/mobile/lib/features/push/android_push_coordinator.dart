@@ -328,7 +328,7 @@ final class AndroidPushCoordinator {
     if (_closed) {
       return;
     }
-    final accounts = await _accounts.watchAccounts().first;
+    final accounts = await _accounts.listAccounts();
     for (final account in accounts) {
       await _serialize(account.id, () async {
         final context = await _loadContext(account.id);

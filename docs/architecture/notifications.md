@@ -13,9 +13,9 @@ a hlavně co je pevně dané platformou a nedá se to obejít.
 | Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
 
 Na Androidu existují dvě cesty současně a uživatel mezi nimi přepíná
-v Nastavení → Push notifikace, bez nového buildu. Výchozí je proxy, Web Push
-zůstává jako záloha pro případ potíží. Podrobnosti níž v „Dvě cesty na
-Androidu".
+v Nastavení → Push notifikace, bez nového buildu. Cílový nativní stav je
+proxy; výchozí hodnota je zatím Web Push, protože jen ta je prokázaná
+reálným během. Podrobnosti níž v „Dvě cesty na Androidu".
 
 Nejsou to alternativy k výběru: doplňují se. Živý kanál doručuje okamžitě,
 dokud aplikace běží, a to úplně všude. Probudit ukončenou aplikaci umí jen
@@ -71,7 +71,10 @@ notifikaci poslat do APNs nebo do FCM, dělá až proxy podle formátu tokenu.
 Tím se z cesty vyřadí `fcm.distributor.unifiedpush.org`.
 
 Web Push větev se nemaže. Je ověřená naživo a je to jediná cesta, která dnes
-prokazatelně probudí ukončený proces, takže zůstává jako záloha za přepínačem.
+prokazatelně probudí ukončený proces, takže zůstává jako záloha za přepínačem
+a je to i výchozí hodnota. Výchozí hodnota se překlopí na proxy až ve chvíli,
+kdy proxy cesta zaregistruje skutečné zařízení — nasadit neověřenou výchozí
+cestu by znamenalo vzít notifikace jediné platformě, kde dnes fungují.
 
 Kód je proto rozdělený takhle:
 

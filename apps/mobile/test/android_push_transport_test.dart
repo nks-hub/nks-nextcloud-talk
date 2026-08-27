@@ -20,12 +20,12 @@ final class _RecordingStore implements AndroidPushTransportStore {
 }
 
 void main() {
-  test('an untouched device defaults to the proxy transport', () async {
+  test('an untouched device defaults to the proven Web Push transport', () async {
     final directory = Directory.systemTemp.createTempSync('push-transport');
     addTearDown(() => directory.deleteSync(recursive: true));
     final store = FileAndroidPushTransportStore(directory: directory);
 
-    expect(await store.read(), AndroidPushTransport.proxy);
+    expect(await store.read(), AndroidPushTransport.webPush);
   });
 
   test('a stored choice survives a restart', () async {
@@ -33,15 +33,15 @@ void main() {
     addTearDown(() => directory.deleteSync(recursive: true));
     final store = FileAndroidPushTransportStore(directory: directory);
 
-    await store.write(AndroidPushTransport.webPush);
+    await store.write(AndroidPushTransport.proxy);
 
     expect(
       await FileAndroidPushTransportStore(directory: directory).read(),
-      AndroidPushTransport.webPush,
+      AndroidPushTransport.proxy,
     );
   });
 
-  test('a corrupt preference file falls back to the proxy transport', () async {
+  test('a corrupt preference file falls back to the proven transport', () async {
     final directory = Directory.systemTemp.createTempSync('push-transport');
     addTearDown(() => directory.deleteSync(recursive: true));
     File(
@@ -50,7 +50,7 @@ void main() {
 
     expect(
       await FileAndroidPushTransportStore(directory: directory).read(),
-      AndroidPushTransport.proxy,
+      AndroidPushTransport.webPush,
     );
   });
 

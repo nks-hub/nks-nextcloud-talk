@@ -181,7 +181,9 @@ final class SettingsScreen extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(androidPushTransportProvider.notifier).select(transport);
+      await ref
+          .read(androidPushTransportProvider.notifier)
+          .select(transport, revoke: (live) => revokeAndroidPushTransport(ref, live));
     } on Object {
       messenger.showSnackBar(
         SnackBar(content: Text(strings.settingsPushTransportSwitchFailed)),

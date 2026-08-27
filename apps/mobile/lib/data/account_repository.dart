@@ -11,13 +11,22 @@ final class AccountRepository {
 
   final AppDatabase _database;
 
-  Stream<List<StoredAccount>> watchAccounts() {
-    final query = _database.select(_database.accounts)
+  Stream<List<StoredAccount>> watchAccounts() => _accountsQuery().watch();
+
+  /// One-shot read of the rows [watchAccounts] streams.
+  ///
+  /// A caller that only needs the list once must use this rather than
+  /// `watchAccounts().first`: a live Drift query resolves on its own timers,
+  /// and under a widget test's fake clock those never fire, so the future
+  /// never completes.
+  Future<List<StoredAccount>> listAccounts() => _accountsQuery().get();
+
+  MultiSelectable<StoredAccount> _accountsQuery() {
+    return _database.select(_database.accounts)
       ..orderBy([
         (account) => OrderingTerm.desc(account.selected),
         (account) => OrderingTerm.asc(account.createdAtMillis),
       ]);
-    return query.watch();
   }
 
   Stream<StoredAccount?> watchSelectedAccount() {
