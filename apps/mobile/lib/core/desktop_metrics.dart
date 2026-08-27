@@ -40,4 +40,35 @@ extension AppMetrics on BuildContext {
 
   /// Height of an action row inside a card, such as "Rename thread".
   double get actionRowHeight => _pointerFirst ? 44 : 56;
+
+  /// Maximum width of a settings-style column of rows.
+  ///
+  /// A row that stretches the whole window puts its label at one edge and its
+  /// control at the other, which on a 1400 px window leaves over a thousand
+  /// pixels of nothing between them and reads as a blown-up phone screen.
+  /// Reference is Nextcloud's own `#app-content .section`, which caps at
+  /// 700 px. Touch keeps the full width: a phone is never wide enough for the
+  /// gap to matter.
+  double get contentColumnWidth => _pointerFirst ? 700 : double.infinity;
+}
+
+/// Caps [child] at [AppMetrics.contentColumnWidth] and centres it.
+///
+/// Wraps a whole scroll view rather than each row, so every row inside picks
+/// the cap up at once and none of them can drift out of agreement.
+final class ContentColumn extends StatelessWidget {
+  const ContentColumn({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: context.contentColumnWidth),
+        child: child,
+      ),
+    );
+  }
 }

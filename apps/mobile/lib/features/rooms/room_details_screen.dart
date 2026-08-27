@@ -6,6 +6,7 @@ import 'package:mime/mime.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
@@ -119,282 +120,283 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     return Scaffold(
       key: const Key('room-details-screen'),
       appBar: AppBar(title: Text(strings.roomDetailsTitle)),
-      body: ListView(
-        children: [
-          _RoomSummary(
-            account: widget.account,
-            conversation: widget.conversation,
-            displayName: _room?.displayName ?? widget.conversation.displayName,
-            description: _room?.description ?? widget.conversation.description,
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              strings.roomDetailsActionsHeader,
-              style: Theme.of(context).textTheme.titleMedium,
+      body: ContentColumn(
+        child: ListView(
+          children: [
+            _RoomSummary(
+              account: widget.account,
+              conversation: widget.conversation,
+              displayName: _room?.displayName ?? widget.conversation.displayName,
+              description: _room?.description ?? widget.conversation.description,
             ),
-          ),
-          if (_canEditRoomMetadata)
-            ListTile(
-              key: const Key('room-details-rename'),
-              leading: const Icon(Icons.edit_outlined),
-              title: Text(strings.roomDetailsRenameAction),
-              onTap: _busy ? null : _renameRoom,
-            ),
-          if (_canEditRoomMetadata)
-            ListTile(
-              key: const Key('room-details-description-edit'),
-              leading: const Icon(Icons.short_text),
-              title: Text(strings.roomDetailsDescriptionEditAction),
-              onTap: _busy ? null : _editDescription,
-            ),
-          ListTile(
-            key: const Key('room-details-notification-picker'),
-            leading: const Icon(Icons.notifications_outlined),
-            title: Text(strings.roomDetailsNotificationLabel),
-            subtitle: Text(
-              _notificationLabel(strings, _notificationLevel),
-              key: const Key('room-details-notification-subtitle'),
-            ),
-            onTap: _busy ? null : _changeNotificationLevel,
-          ),
-          if (_room != null)
-            SwitchListTile(
-              key: const Key('room-details-call-notifications-toggle'),
-              secondary: const Icon(Icons.call_outlined),
-              title: Text(strings.roomDetailsCallNotificationsLabel),
-              subtitle: Text(strings.roomDetailsCallNotificationsSubtitle),
-              value: _callNotificationsEnabled,
-              onChanged: _busy ? null : _toggleCallNotifications,
-            ),
-          if (_canSetImportant)
-            SwitchListTile(
-              key: const Key('room-details-important-toggle'),
-              secondary: const Icon(Icons.priority_high),
-              title: Text(strings.roomDetailsImportantLabel),
-              subtitle: Text(strings.roomDetailsImportantSubtitle),
-              value: _room!.isImportant,
-              onChanged: _busy ? null : _toggleImportant,
-            ),
-          if (_canSetSensitive)
-            SwitchListTile(
-              key: const Key('room-details-sensitive-toggle'),
-              secondary: const Icon(Icons.visibility_off_outlined),
-              title: Text(strings.roomDetailsSensitiveLabel),
-              subtitle: Text(
-                _isClassified
-                    ? strings.roomDetailsSensitiveClassifiedSubtitle
-                    : strings.roomDetailsSensitiveSubtitle,
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                strings.roomDetailsActionsHeader,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              value: _room!.isSensitive,
-              onChanged: _busy || _isClassified ? null : _toggleSensitive,
             ),
-          if (_canSetMessageExpiration)
-            ListTile(
-              key: const Key('room-details-message-expiration'),
-              leading: const Icon(Icons.auto_delete_outlined),
-              title: Text(strings.roomDetailsMessageExpirationLabel),
-              subtitle: Text(
-                _messageExpirationLabel(strings, _messageExpirationSeconds),
-                key: const Key('room-details-message-expiration-subtitle'),
+            if (_canEditRoomMetadata)
+              ListTile(
+                key: const Key('room-details-rename'),
+                leading: const Icon(Icons.edit_outlined),
+                title: Text(strings.roomDetailsRenameAction),
+                onTap: _busy ? null : _renameRoom,
               ),
-              onTap: _busy ? null : _changeMessageExpiration,
-            ),
-          if (_canManageConversationTags)
+            if (_canEditRoomMetadata)
+              ListTile(
+                key: const Key('room-details-description-edit'),
+                leading: const Icon(Icons.short_text),
+                title: Text(strings.roomDetailsDescriptionEditAction),
+                onTap: _busy ? null : _editDescription,
+              ),
             ListTile(
-              key: const Key('room-details-conversation-tags'),
-              leading: const Icon(Icons.label_outline),
-              title: Text(strings.roomDetailsConversationTagsAction),
+              key: const Key('room-details-notification-picker'),
+              leading: const Icon(Icons.notifications_outlined),
+              title: Text(strings.roomDetailsNotificationLabel),
               subtitle: Text(
-                strings.roomDetailsConversationTagsSelectedCount(
-                  _room!.tagIds.length,
+                _notificationLabel(strings, _notificationLevel),
+                key: const Key('room-details-notification-subtitle'),
+              ),
+              onTap: _busy ? null : _changeNotificationLevel,
+            ),
+            if (_room != null)
+              SwitchListTile(
+                key: const Key('room-details-call-notifications-toggle'),
+                secondary: const Icon(Icons.call_outlined),
+                title: Text(strings.roomDetailsCallNotificationsLabel),
+                subtitle: Text(strings.roomDetailsCallNotificationsSubtitle),
+                value: _callNotificationsEnabled,
+                onChanged: _busy ? null : _toggleCallNotifications,
+              ),
+            if (_canSetImportant)
+              SwitchListTile(
+                key: const Key('room-details-important-toggle'),
+                secondary: const Icon(Icons.priority_high),
+                title: Text(strings.roomDetailsImportantLabel),
+                subtitle: Text(strings.roomDetailsImportantSubtitle),
+                value: _room!.isImportant,
+                onChanged: _busy ? null : _toggleImportant,
+              ),
+            if (_canSetSensitive)
+              SwitchListTile(
+                key: const Key('room-details-sensitive-toggle'),
+                secondary: const Icon(Icons.visibility_off_outlined),
+                title: Text(strings.roomDetailsSensitiveLabel),
+                subtitle: Text(
+                  _isClassified
+                      ? strings.roomDetailsSensitiveClassifiedSubtitle
+                      : strings.roomDetailsSensitiveSubtitle,
                 ),
-                key: const Key('room-details-conversation-tags-subtitle'),
+                value: _room!.isSensitive,
+                onChanged: _busy || _isClassified ? null : _toggleSensitive,
               ),
-              onTap: _busy ? null : _manageConversationTags,
-            ),
-          SwitchListTile(
-            key: const Key('room-details-favorite-toggle'),
-            secondary: const Icon(Icons.star_outline),
-            title: Text(strings.roomDetailsFavoriteLabel),
-            value: _isFavorite,
-            onChanged: _busy ? null : _toggleFavorite,
-          ),
-          if (_canSetAvatar)
-            ListTile(
-              key: const Key('room-details-avatar'),
-              leading: const Icon(Icons.photo_outlined),
-              title: Text(strings.roomDetailsAvatarAction),
-              onTap: _busy ? null : _changeAvatar,
-            ),
-          if (_canRemoveAvatar)
-            ListTile(
-              key: const Key('room-details-avatar-remove'),
-              leading: const Icon(Icons.hide_image_outlined),
-              title: Text(strings.roomDetailsAvatarRemoveAction),
-              onTap: _busy ? null : _removeAvatar,
-            ),
-          if (_canToggleGuests)
+            if (_canSetMessageExpiration)
+              ListTile(
+                key: const Key('room-details-message-expiration'),
+                leading: const Icon(Icons.auto_delete_outlined),
+                title: Text(strings.roomDetailsMessageExpirationLabel),
+                subtitle: Text(
+                  _messageExpirationLabel(strings, _messageExpirationSeconds),
+                  key: const Key('room-details-message-expiration-subtitle'),
+                ),
+                onTap: _busy ? null : _changeMessageExpiration,
+              ),
+            if (_canManageConversationTags)
+              ListTile(
+                key: const Key('room-details-conversation-tags'),
+                leading: const Icon(Icons.label_outline),
+                title: Text(strings.roomDetailsConversationTagsAction),
+                subtitle: Text(
+                  strings.roomDetailsConversationTagsSelectedCount(
+                    _room!.tagIds.length,
+                  ),
+                  key: const Key('room-details-conversation-tags-subtitle'),
+                ),
+                onTap: _busy ? null : _manageConversationTags,
+              ),
             SwitchListTile(
-              key: const Key('room-details-guests-toggle'),
-              secondary: const Icon(Icons.public),
-              title: Text(strings.roomDetailsGuestsLabel),
-              subtitle: Text(
-                _isPublic
-                    ? strings.roomDetailsGuestsAllowed
-                    : strings.roomDetailsGuestsBlocked,
-                key: const Key('room-details-guests-subtitle'),
+              key: const Key('room-details-favorite-toggle'),
+              secondary: const Icon(Icons.star_outline),
+              title: Text(strings.roomDetailsFavoriteLabel),
+              value: _isFavorite,
+              onChanged: _busy ? null : _toggleFavorite,
+            ),
+            if (_canSetAvatar)
+              ListTile(
+                key: const Key('room-details-avatar'),
+                leading: const Icon(Icons.photo_outlined),
+                title: Text(strings.roomDetailsAvatarAction),
+                onTap: _busy ? null : _changeAvatar,
               ),
-              value: _isPublic,
-              onChanged: _busy ? null : _toggleGuests,
-            ),
-          if (_isPublic)
-            ListTile(
-              key: const Key('room-details-invite-link'),
-              leading: const Icon(Icons.link),
-              title: Text(strings.roomDetailsInviteLinkAction),
-              subtitle: Text(strings.roomDetailsInviteLinkSubtitle),
-              onTap: _busy ? null : _shareGuestLink,
-            ),
-          if (_canSetPassword)
-            ListTile(
-              key: const Key('room-details-password'),
-              leading: const Icon(Icons.password_outlined),
-              title: Text(strings.roomDetailsPasswordLabel),
-              subtitle: Text(
-                _hasPassword
-                    ? strings.roomDetailsPasswordSet
-                    : strings.roomDetailsPasswordUnset,
-                key: const Key('room-details-password-subtitle'),
+            if (_canRemoveAvatar)
+              ListTile(
+                key: const Key('room-details-avatar-remove'),
+                leading: const Icon(Icons.hide_image_outlined),
+                title: Text(strings.roomDetailsAvatarRemoveAction),
+                onTap: _busy ? null : _removeAvatar,
               ),
-              onTap: _busy ? null : _setPassword,
-            ),
-          if (_canSetPassword && _hasPassword)
-            ListTile(
-              key: const Key('room-details-password-remove'),
-              leading: const Icon(Icons.lock_open_outlined),
-              title: Text(strings.roomDetailsPasswordRemoveAction),
-              onTap: _busy ? null : _removePassword,
-            ),
-          if (_canSetLobby)
-            SwitchListTile(
-              key: const Key('room-details-lobby-toggle'),
-              secondary: const Icon(Icons.meeting_room_outlined),
-              title: Text(strings.roomDetailsLobbyLabel),
-              subtitle: Text(
-                _lobbyLabel(strings),
-                key: const Key('room-details-lobby-subtitle'),
+            if (_canToggleGuests)
+              SwitchListTile(
+                key: const Key('room-details-guests-toggle'),
+                secondary: const Icon(Icons.public),
+                title: Text(strings.roomDetailsGuestsLabel),
+                subtitle: Text(
+                  _isPublic
+                      ? strings.roomDetailsGuestsAllowed
+                      : strings.roomDetailsGuestsBlocked,
+                  key: const Key('room-details-guests-subtitle'),
+                ),
+                value: _isPublic,
+                onChanged: _busy ? null : _toggleGuests,
               ),
-              value: _lobbyState != 0,
-              onChanged: _busy ? null : _toggleLobby,
-            ),
-          if (_canSetReadOnly)
-            SwitchListTile(
-              key: const Key('room-details-read-only-toggle'),
-              secondary: const Icon(Icons.edit_off_outlined),
-              title: Text(strings.roomDetailsReadOnlyToggleLabel),
-              subtitle: Text(
-                _readOnly != 0
-                    ? strings.roomDetailsReadOnlyToggleOn
-                    : strings.roomDetailsReadOnlyToggleOff,
-                key: const Key('room-details-read-only-subtitle'),
+            if (_isPublic)
+              ListTile(
+                key: const Key('room-details-invite-link'),
+                leading: const Icon(Icons.link),
+                title: Text(strings.roomDetailsInviteLinkAction),
+                subtitle: Text(strings.roomDetailsInviteLinkSubtitle),
+                onTap: _busy ? null : _shareGuestLink,
               ),
-              value: _readOnly != 0,
-              onChanged: _busy ? null : _toggleReadOnly,
-            ),
-          if (_canBan)
-            ListTile(
-              key: const Key('room-details-bans'),
-              leading: const Icon(Icons.block_outlined),
-              title: Text(strings.roomDetailsBansAction),
-              onTap: _busy ? null : _showBans,
-            ),
-          if (_canClearHistory)
-            ListTile(
-              key: const Key('room-details-clear-history'),
-              leading: Icon(
-                Icons.delete_sweep_outlined,
-                color: Theme.of(context).colorScheme.error,
+            if (_canSetPassword)
+              ListTile(
+                key: const Key('room-details-password'),
+                leading: const Icon(Icons.password_outlined),
+                title: Text(strings.roomDetailsPasswordLabel),
+                subtitle: Text(
+                  _hasPassword
+                      ? strings.roomDetailsPasswordSet
+                      : strings.roomDetailsPasswordUnset,
+                  key: const Key('room-details-password-subtitle'),
+                ),
+                onTap: _busy ? null : _setPassword,
               ),
-              title: Text(
-                strings.roomDetailsClearHistoryAction,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+            if (_canSetPassword && _hasPassword)
+              ListTile(
+                key: const Key('room-details-password-remove'),
+                leading: const Icon(Icons.lock_open_outlined),
+                title: Text(strings.roomDetailsPasswordRemoveAction),
+                onTap: _busy ? null : _removePassword,
               ),
-              onTap: _busy ? null : _confirmClearHistory,
+            if (_canSetLobby)
+              SwitchListTile(
+                key: const Key('room-details-lobby-toggle'),
+                secondary: const Icon(Icons.meeting_room_outlined),
+                title: Text(strings.roomDetailsLobbyLabel),
+                subtitle: Text(
+                  _lobbyLabel(strings),
+                  key: const Key('room-details-lobby-subtitle'),
+                ),
+                value: _lobbyState != 0,
+                onChanged: _busy ? null : _toggleLobby,
+              ),
+            if (_canSetReadOnly)
+              SwitchListTile(
+                key: const Key('room-details-read-only-toggle'),
+                secondary: const Icon(Icons.edit_off_outlined),
+                title: Text(strings.roomDetailsReadOnlyToggleLabel),
+                subtitle: Text(
+                  _readOnly != 0
+                      ? strings.roomDetailsReadOnlyToggleOn
+                      : strings.roomDetailsReadOnlyToggleOff,
+                  key: const Key('room-details-read-only-subtitle'),
+                ),
+                value: _readOnly != 0,
+                onChanged: _busy ? null : _toggleReadOnly,
+              ),
+            if (_canBan)
+              ListTile(
+                key: const Key('room-details-bans'),
+                leading: const Icon(Icons.block_outlined),
+                title: Text(strings.roomDetailsBansAction),
+                onTap: _busy ? null : _showBans,
+              ),
+            if (_canClearHistory)
+              ListTile(
+                key: const Key('room-details-clear-history'),
+                leading: Icon(
+                  Icons.delete_sweep_outlined,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  strings.roomDetailsClearHistoryAction,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                onTap: _busy ? null : _confirmClearHistory,
+              ),
+            if (_canLeave)
+              ListTile(
+                key: const Key('room-details-leave'),
+                leading: Icon(
+                  Icons.logout,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  strings.roomDetailsLeaveAction,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                onTap: _busy ? null : _confirmLeave,
+              ),
+            if (_canDelete)
+              ListTile(
+                key: const Key('room-details-delete'),
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  strings.roomDetailsDeleteAction,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                onTap: _busy ? null : _confirmDelete,
+              ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                strings.roomDetailsParticipantsHeader,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
-          if (_canLeave)
-            ListTile(
-              key: const Key('room-details-leave'),
-              leading: Icon(
-                Icons.logout,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(
-                strings.roomDetailsLeaveAction,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: _busy ? null : _confirmLeave,
-            ),
-          if (_canDelete)
-            ListTile(
-              key: const Key('room-details-delete'),
-              leading: Icon(
-                Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              title: Text(
-                strings.roomDetailsDeleteAction,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: _busy ? null : _confirmDelete,
-            ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              strings.roomDetailsParticipantsHeader,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          FutureBuilder<List<Participant>>(
-            key: const Key('room-details-participants'),
-            future: _participants,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+            FutureBuilder<List<Participant>>(
+              key: const Key('room-details-participants'),
+              future: _participants,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return _ParticipantsError(onRetry: _retry);
+                }
+                final participants = snapshot.data ?? const <Participant>[];
+                if (participants.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(strings.roomDetailsParticipantsEmpty),
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final participant in participants)
+                      _ParticipantTile(
+                        account: widget.account,
+                        participant: participant,
+                        actions: _availableActions(participant),
+                        onAction: _busy
+                            ? null
+                            : (action) =>
+                                  _runParticipantAction(participant, action),
+                      ),
+                  ],
                 );
-              }
-              if (snapshot.hasError) {
-                return _ParticipantsError(onRetry: _retry);
-              }
-              final participants = snapshot.data ?? const <Participant>[];
-              if (participants.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(strings.roomDetailsParticipantsEmpty),
-                );
-              }
-              return Column(
-                children: [
-                  for (final participant in participants)
-                    _ParticipantTile(
-                      account: widget.account,
-                      participant: participant,
-                      actions: _availableActions(participant),
-                      onAction: _busy
-                          ? null
-                          : (action) =>
-                                _runParticipantAction(participant, action),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+              },
+            ),
+          ],
+        )),
     );
   }
 }

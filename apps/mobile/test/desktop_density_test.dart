@@ -155,4 +155,56 @@ void main() {
       );
     }
   });
+
+  /// The measured symptom this guards: on a 1400 px window a settings row put
+  /// its label at the left edge and its switch at x ~ 1353, leaving over a
+  /// thousand pixels of nothing between them.
+  ///
+  /// Driven by [VisualDensity] rather than a platform override, because that
+  /// is the signal `AppMetrics` actually reads.
+  testWidgets('a settings row does not stretch across a wide window', (
+    tester,
+  ) async {
+    Future<double> rowWidth(VisualDensity density) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(visualDensity: density),
+          home: Scaffold(
+            body: ContentColumn(
+              child: ListView(
+                children: [
+                  SwitchListTile(
+                    key: const Key('probe-row'),
+                    title: const Text('Call notifications'),
+                    value: true,
+                    onChanged: (_) {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final width = tester.getSize(find.byKey(const Key('probe-row'))).width;
+      // Unmount between measurements: reusing the element tree would let the
+      // second density silently inherit the first one's layout.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      return width;
+    }
+
+    expect(
+      await rowWidth(VisualDensity.compact),
+      lessThanOrEqualTo(700),
+      reason: 'a pointer-first row must stay inside the content column',
+    );
+    // A phone is never wide enough for the gap to matter, and capping there
+    // would waste the little width it has.
+    expect(await rowWidth(VisualDensity.standard), 1400);
+  });
 }

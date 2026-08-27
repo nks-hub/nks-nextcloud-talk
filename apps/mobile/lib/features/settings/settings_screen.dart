@@ -7,6 +7,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
+import '../../core/desktop_metrics.dart';
 
 /// Accounts and appearance settings. Reached from the account menu in the
 /// compact shell and from the account rail in the expanded one.
@@ -34,94 +35,95 @@ final class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(strings.settingsTitle)),
-      body: ListView(
-        children: [
-          _SectionHeader(strings.settingsAccountsSection),
-          accounts.when(
-            data: (items) => Column(
-              children: [for (final account in items) _AccountTile(account)],
+      body: ContentColumn(
+        child: ListView(
+          children: [
+            _SectionHeader(strings.settingsAccountsSection),
+            accounts.when(
+              data: (items) => Column(
+                children: [for (final account in items) _AccountTile(account)],
+              ),
+              // Deliberately not an indeterminate spinner: an endless animation
+              // keeps the frame scheduler busy forever, which makes any
+              // pumpAndSettle hang. The account list resolves from local
+              // storage, so a quiet placeholder is enough.
+              loading: () => const SizedBox(height: 24),
+              error: (error, stackTrace) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(strings.settingsAccountsLoadFailed),
+              ),
             ),
-            // Deliberately not an indeterminate spinner: an endless animation
-            // keeps the frame scheduler busy forever, which makes any
-            // pumpAndSettle hang. The account list resolves from local
-            // storage, so a quiet placeholder is enough.
-            loading: () => const SizedBox(height: 24),
-            error: (error, stackTrace) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(strings.settingsAccountsLoadFailed),
+            ListTile(
+              key: const Key('settings-add-account'),
+              leading: const Icon(Icons.add_rounded),
+              title: Text(strings.settingsAddAccount),
+              onTap: () => _addAccount(context),
             ),
-          ),
-          ListTile(
-            key: const Key('settings-add-account'),
-            leading: const Icon(Icons.add_rounded),
-            title: Text(strings.settingsAddAccount),
-            onTap: () => _addAccount(context),
-          ),
-          const Divider(height: 1),
-          _SectionHeader(strings.settingsProfileSection),
-          accounts.when(
-            data: (items) {
-              final selected = _selectedAccount(items);
-              return ListTile(
-                key: const Key('settings-open-profile'),
-                leading: const Icon(Icons.account_circle_outlined),
-                title: Text(strings.settingsOpenProfile),
-                subtitle: Text(strings.settingsOpenProfileSubtitle),
-                enabled: selected != null,
-                onTap: selected == null
-                    ? null
-                    : () => _openProfile(context, selected.id),
-              );
-            },
-            loading: () => const SizedBox(height: 24),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-          const Divider(height: 1),
-          _SectionHeader(strings.settingsDiagnosticsSection),
-          accounts.when(
-            data: (items) {
-              final selected = _selectedAccount(items);
-              return ListTile(
-                key: const Key('settings-open-diagnostics'),
-                leading: const Icon(Icons.troubleshoot_rounded),
-                title: Text(strings.settingsOpenDiagnostics),
-                subtitle: Text(strings.settingsOpenDiagnosticsSubtitle),
-                enabled: selected != null,
-                onTap: selected == null
-                    ? null
-                    : () => _openDiagnostics(context, selected.id),
-              );
-            },
-            loading: () => const SizedBox(height: 24),
-            error: (_, _) => const SizedBox.shrink(),
-          ),
-          const Divider(height: 1),
-          _SectionHeader(strings.settingsThemeSection),
-          RadioGroup<ThemeMode>(
-            groupValue: themeMode,
-            onChanged: (mode) => _setTheme(ref, mode),
-            child: Column(
-              children: [
-                _ThemeModeTile(
-                  tileKey: const Key('theme-mode-system'),
-                  label: strings.settingsThemeSystem,
-                  mode: ThemeMode.system,
-                ),
-                _ThemeModeTile(
-                  tileKey: const Key('theme-mode-light'),
-                  label: strings.settingsThemeLight,
-                  mode: ThemeMode.light,
-                ),
-                _ThemeModeTile(
-                  tileKey: const Key('theme-mode-dark'),
-                  label: strings.settingsThemeDark,
-                  mode: ThemeMode.dark,
-                ),
-              ],
+            const Divider(height: 1),
+            _SectionHeader(strings.settingsProfileSection),
+            accounts.when(
+              data: (items) {
+                final selected = _selectedAccount(items);
+                return ListTile(
+                  key: const Key('settings-open-profile'),
+                  leading: const Icon(Icons.account_circle_outlined),
+                  title: Text(strings.settingsOpenProfile),
+                  subtitle: Text(strings.settingsOpenProfileSubtitle),
+                  enabled: selected != null,
+                  onTap: selected == null
+                      ? null
+                      : () => _openProfile(context, selected.id),
+                );
+              },
+              loading: () => const SizedBox(height: 24),
+              error: (_, _) => const SizedBox.shrink(),
             ),
-          ),
-        ],
-      ),
+            const Divider(height: 1),
+            _SectionHeader(strings.settingsDiagnosticsSection),
+            accounts.when(
+              data: (items) {
+                final selected = _selectedAccount(items);
+                return ListTile(
+                  key: const Key('settings-open-diagnostics'),
+                  leading: const Icon(Icons.troubleshoot_rounded),
+                  title: Text(strings.settingsOpenDiagnostics),
+                  subtitle: Text(strings.settingsOpenDiagnosticsSubtitle),
+                  enabled: selected != null,
+                  onTap: selected == null
+                      ? null
+                      : () => _openDiagnostics(context, selected.id),
+                );
+              },
+              loading: () => const SizedBox(height: 24),
+              error: (_, _) => const SizedBox.shrink(),
+            ),
+            const Divider(height: 1),
+            _SectionHeader(strings.settingsThemeSection),
+            RadioGroup<ThemeMode>(
+              groupValue: themeMode,
+              onChanged: (mode) => _setTheme(ref, mode),
+              child: Column(
+                children: [
+                  _ThemeModeTile(
+                    tileKey: const Key('theme-mode-system'),
+                    label: strings.settingsThemeSystem,
+                    mode: ThemeMode.system,
+                  ),
+                  _ThemeModeTile(
+                    tileKey: const Key('theme-mode-light'),
+                    label: strings.settingsThemeLight,
+                    mode: ThemeMode.light,
+                  ),
+                  _ThemeModeTile(
+                    tileKey: const Key('theme-mode-dark'),
+                    label: strings.settingsThemeDark,
+                    mode: ThemeMode.dark,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        )),
     );
   }
 
