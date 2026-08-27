@@ -38,6 +38,7 @@ final class AndroidPushCoordinator {
     required AndroidWebPushPlatform platform,
     required AndroidPushWakeUp onWakeUp,
     AndroidPushActionHandler? onNotificationAction,
+    bool subscribes = true,
     Iterable<Stream<void>> reconciliationWakeEvents = const <Stream<void>>[],
     this.reconciliationInterval = const Duration(hours: 6),
     this.retryDelay = const Duration(seconds: 30),
@@ -52,6 +53,7 @@ final class AndroidPushCoordinator {
        _platform = platform,
        _onWakeUp = onWakeUp,
        _onNotificationAction = onNotificationAction,
+       _subscribes = subscribes,
        _reconciliationWakeEvents = List<Stream<void>>.unmodifiable(
          reconciliationWakeEvents,
        ),
@@ -81,6 +83,14 @@ final class AndroidPushCoordinator {
   final AndroidWebPushPlatform _platform;
   final AndroidPushWakeUp _onWakeUp;
   final AndroidPushActionHandler? _onNotificationAction;
+
+  /// Whether this coordinator owns the Web Push subscription.
+  ///
+  /// False while the proxy transport is live: that path registers itself, but
+  /// the notification the user taps and the reply they type still arrive
+  /// through this native layer, so everything except registration keeps
+  /// running.
+  final bool _subscribes;
   final List<Stream<void>> _reconciliationWakeEvents;
   final Duration reconciliationInterval;
   final Duration retryDelay;
@@ -265,6 +275,10 @@ final class AndroidPushCoordinator {
     }
     final context = await _loadContext(accountId);
     if (context == null || !_isAccountActive(accountId, epoch)) {
+      return;
+    }
+    if (!_subscribes) {
+      await _drainAccount(accountId, context: context);
       return;
     }
     final capabilities = await _api.getAuthenticatedCapabilities(
