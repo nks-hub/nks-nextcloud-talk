@@ -1,0 +1,138 @@
+# Notifikace
+
+Aplikace běží na Androidu, iOS, Windows a macOS a na každé z těch platforem
+doručuje notifikace jinudy. Tenhle dokument popisuje, kudy, proč zrovna tak,
+a hlavně co je pevně dané platformou a nedá se to obejít.
+
+## Tři kanály, ne jeden
+
+| kanál | platforma | probudí zavřenou aplikaci | co potřebuje |
+| --- | --- | --- | --- |
+| Web Push přes UnifiedPush | Android | ano | VAPID na serveru |
+| Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
+| APNs | iOS, macOS | ano | službu s APNs klíčem |
+
+Nejsou to alternativy k výběru: doplňují se. Živý kanál doručuje okamžitě,
+dokud aplikace běží, a to úplně všude. Probudit ukončenou aplikaci umí jen
+Web Push na Androidu a APNs na Apple zařízeních.
+
+## Web Push (Android)
+
+Registrace jde na `/ocs/v2.php/apps/notifications/api/v2/webpush`, což je
+novější endpoint notifikační aplikace bez prostředníka. Klient si vyzvedne
+VAPID veřejný klíč a založí odběr; doručení obstarává UnifiedPush s
+distributorem zabaleným v aplikaci, takže uživatel nic dalšího neinstaluje.
+Šifrovaný obsah rozbaluje nativní vrstva.
+
+Na iOS se tahle cesta použít nedá: Web Push v nativní aplikaci neexistuje a
+UnifiedPush je Android-only, protože iOS nedovolí držet spojení na pozadí.
+
+## Client Push (`notify_push`) — všechny platformy
+
+Nextcloudem navržený živý kanál. Server ho nabízí v capabilities:
+
+```
+notify_push.type      → ["files", "activities", "notifications"]
+notify_push.endpoints → { websocket: "wss://…/push/ws", pre_auth: "https://…" }
+```
+
+Že posílá i notifikace, ne jen změny souborů, plyne z toho, že
+`apps/notify_push/lib/Listener.php` implementuje `INotifier` a volá
+`$this->queue->push('notify_notification', …)`.
+
+Postup klienta:
+
+1. `POST` na `pre_auth` přes autentizované HTTPS → jednorázový token.
+   **Route je POST**; `GET` server odmítne s `405` a socket pak token nikdy
+   nedostane. Kanál se v takovém případě tiše nepřipojí a aplikace se tváří
+   normálně — proto to hlídá test.
+2. Připojit `wss://…/push/ws`, poslat **prázdné uživatelské jméno** a pak ten
+   token. Heslo aplikace po socketu necestuje.
+3. Server odpoví `authenticated`, pak posílá rámce. `notify_notification`
+   znamená „něco přišlo, synchronizuj".
+
+Implementace: protokol v `packages/talk_protocol/lib/src/client_push/`,
+spojení a koordinace v `apps/mobile/lib/features/push/client_push_*.dart`.
+Endpoint z capabilities musí patřit témuž hostu jako účet, jinak se token
+nikam neposílá; `ws` bez TLS se odmítá a rámce doručené před přijetím tokenu
+se zahazují.
+
+Ověření, že kanál skutečně běží, se dělá ze serveru, ne z logu aplikace:
+
+```sh
+occ notify_push:metrics   # Active connection count / Active user count
+```
+
+## APNs (iOS, macOS) a proč k tomu je potřeba proxy
+
+Tohle je část, která překvapí, takže je popsaná podrobně.
+
+Nextcloud **do APNs neumí**. V `apps/notifications/lib/Push.php` není jediná
+zmínka o Apple; server jen seskupí notifikace podle sloupce `proxyserver` a
+udělá `POST <proxyServer>/notifications`. Doručení do APNs obstarává až ta
+adresa.
+
+Oficiální aplikace Nextcloud Talk pro iOS proto míří na
+`https://push-notifications.nextcloud.com` — službu, kterou provozuje
+Nextcloud GmbH a která notifikaci podepíše **jejich** Apple certifikátem pro
+**jejich** bundle id. Dokumentace `nextcloud/notifications/docs/push-v2.md`
+to říká přímo: klíče a certifikáty nemohou být součástí serveru, jinak by je
+měl každý; proxy notifikaci ověří veřejným klíčem uživatele a pak ji
+„signs with Google or Apple Developer certificate".
+
+Z toho plyne, co platí i pro nás:
+
+- Proxy **není součástí self-hosted Nextcloudu**. Váš server na ni jen posílá
+  odchozí požadavek.
+- Do aplikace s jiným bundle id přes ni notifikace nedorazí, protože ji
+  Nextcloud svým certifikátem podepsat nemůže.
+- Adresu si volí **klient** při registraci zařízení, ne administrátor.
+  `PushController::registerDevice` přijme parametr `proxyServer` a jen ho
+  zvaliduje (platná URL do 256 znaků, `https://`, pro test i `localhost` a
+  `*.internal` / `*.local`). V UI Nextcloudu se nenastavuje nikde — admin
+  sekce notifikací vystavuje jen `setting_batchtime`.
+
+Náš klient tedy posílá vlastní adresu; pole je v
+`packages/talk_protocol/lib/src/push/effects.dart`:
+
+```dart
+Map<String, String> get formFields => <String, String>{
+  'pushTokenHash': providerToken.sha512,
+  'devicePublicKey': key.publicKey.pem,
+  'proxyServer': context.gateway.value,
+};
+```
+
+Co server na tu adresu pošle:
+
+```
+POST <proxyServer>/notifications
+{"notifications": [{deviceIdentifier, pushTokenHash, subject,
+                    signature, priority, type}, …]}
+```
+
+`subject` je payload zašifrovaný veřejným klíčem zařízení. Proxy ho
+**nedešifruje a nemůže** — rozbalí ho až Notification Service Extension přímo
+v telefonu. `pushTokenHash` je SHA-512 skutečného push tokenu, takže proxy
+potřebuje vlastní registraci, kde si klient uloží dvojici hash → token.
+
+Na straně Apple je k tomu potřeba:
+
+| položka | hodnota |
+| --- | --- |
+| Tým | `TEAMID0000` |
+| App ID | `com.nkshub.nextcloudtalk` s capability Push Notifications |
+| App ID rozšíření | `com.nkshub.nextcloudtalk.NotificationService` |
+| App Group | `group.com.nkshub.nextcloudtalk` |
+| APNs klíč | token-based `.p8`, Sandbox i Production |
+
+Rozšíření má vlastní App ID a přes App Group se dostane k privátnímu klíči,
+kterým notifikaci dešifruje. Certifikáty potřeba nejsou, `.p8` je nahrazuje a
+nevyprší.
+
+## Jen Talk, nic jiného
+
+Nextcloud posílá na registrované zařízení notifikace **všech** aplikací, ne
+jen Talku, takže karta z Decku dorazí na stejný kanál jako zpráva. Pole `app`
+v payloadu je proto brána: zobrazí se jen `spreed`. Payload bez `app` se za
+Talk nepovažuje — nehádá se.
