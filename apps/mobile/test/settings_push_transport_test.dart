@@ -96,6 +96,23 @@ final class _MemoryTransportStore implements AndroidPushTransportStore {
   }
 }
 
+final class _DelayedReadTransportStore implements AndroidPushTransportStore {
+  _DelayedReadTransportStore(this.stored);
+
+  AndroidPushTransport stored;
+  final readResult = Completer<AndroidPushTransport>();
+  final events = <String>[];
+
+  @override
+  Future<AndroidPushTransport> read() => readResult.future;
+
+  @override
+  Future<void> write(AndroidPushTransport transport) async {
+    events.add('write:${transport.name}');
+    stored = transport;
+  }
+}
+
 Widget _wrap(AppDatabase database, AndroidPushTransportStore store) {
   return ProviderScope(
     overrides: [
@@ -237,7 +254,11 @@ void main() {
 
     await container
         .read(androidPushTransportProvider.notifier)
-        .select(AndroidPushTransport.webPush, revoke: (_) async {});
+        .select(
+          AndroidPushTransport.webPush,
+          revoke: (_) async {},
+          restore: (_) async {},
+        );
     for (var attempt = 0; attempt < 20 && requests.isEmpty; attempt++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
@@ -251,10 +272,18 @@ void main() {
 
     await container
         .read(androidPushTransportProvider.notifier)
-        .select(AndroidPushTransport.webPush, revoke: (_) async {});
+        .select(
+          AndroidPushTransport.webPush,
+          revoke: (_) async {},
+          restore: (_) async {},
+        );
     await container
         .read(androidPushTransportProvider.notifier)
-        .select(AndroidPushTransport.proxy, revoke: (_) async {});
+        .select(
+          AndroidPushTransport.proxy,
+          revoke: (_) async {},
+          restore: (_) async {},
+        );
     await Future<void>.delayed(const Duration(milliseconds: 30));
 
     expect(
@@ -277,6 +306,72 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
     expect(store.stored, AndroidPushTransport.proxy);
   });
+
+  test('late hydration cannot overwrite a user selection', () async {
+    final store = _DelayedReadTransportStore(AndroidPushTransport.proxy);
+    final container = ProviderContainer(
+      overrides: [androidPushTransportStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(container.dispose);
+    expect(
+      container.read(androidPushTransportProvider),
+      AndroidPushTransport.proxy,
+    );
+
+    await container
+        .read(androidPushTransportProvider.notifier)
+        .select(
+          AndroidPushTransport.webPush,
+          revoke: (live) async => store.events.add('revoke:${live.name}'),
+          restore: (live) async => store.events.add('restore:${live.name}'),
+        );
+    store.readResult.complete(AndroidPushTransport.proxy);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      container.read(androidPushTransportProvider),
+      AndroidPushTransport.webPush,
+    );
+    expect(store.events, ['revoke:proxy', 'write:webPush']);
+  });
+
+  test(
+    'rapid selections are serialized and preserve the last intent',
+    () async {
+      final store = _MemoryTransportStore(AndroidPushTransport.proxy);
+      final firstRevocation = Completer<void>();
+      final events = <String>[];
+      final container = ProviderContainer(
+        overrides: [androidPushTransportStoreProvider.overrideWithValue(store)],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(androidPushTransportProvider.notifier);
+
+      final first = notifier.select(
+        AndroidPushTransport.webPush,
+        revoke: (live) async {
+          events.add('revoke:${live.name}');
+          await firstRevocation.future;
+        },
+        restore: (_) async {},
+      );
+      final last = notifier.select(
+        AndroidPushTransport.proxy,
+        revoke: (live) async => events.add('revoke:${live.name}'),
+        restore: (_) async {},
+      );
+      await Future<void>.delayed(Duration.zero);
+      firstRevocation.complete();
+      await Future.wait([first, last]);
+
+      expect(
+        container.read(androidPushTransportProvider),
+        AndroidPushTransport.proxy,
+      );
+      expect(events, ['revoke:proxy', 'revoke:webPush']);
+      expect(store.writes, 2);
+    },
+  );
 
   testWidgets('a device without the Android bridge is offered no choice', (
     tester,

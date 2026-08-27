@@ -50,7 +50,10 @@ final class SettingsScreen extends ConsumerWidget {
               // storage, so a quiet placeholder is enough.
               loading: () => const SizedBox(height: 24),
               error: (error, stackTrace) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Text(strings.settingsAccountsLoadFailed),
               ),
             ),
@@ -114,16 +117,26 @@ final class SettingsScreen extends ConsumerWidget {
                       label: strings.settingsPushTransportProxy,
                       subtitle: strings.settingsPushTransportProxySubtitle,
                       transport: AndroidPushTransport.proxy,
+                      enabled: !ref.watch(
+                        androidPushTransportSwitchingProvider,
+                      ),
                     ),
                     _PushTransportTile(
                       tileKey: const Key('push-transport-web-push'),
                       label: strings.settingsPushTransportWebPush,
                       subtitle: strings.settingsPushTransportWebPushSubtitle,
                       transport: AndroidPushTransport.webPush,
+                      enabled: !ref.watch(
+                        androidPushTransportSwitchingProvider,
+                      ),
                     ),
                   ],
                 ),
               ),
+              if (ref.watch(androidPushTransportSwitchingProvider))
+                const LinearProgressIndicator(
+                  key: Key('push-transport-switch-progress'),
+                ),
             ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),
@@ -151,7 +164,8 @@ final class SettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
-        )),
+        ),
+      ),
     );
   }
 
@@ -178,12 +192,19 @@ final class SettingsScreen extends ConsumerWidget {
     if (transport == null) {
       return;
     }
+    if (ref.read(androidPushTransportSwitchingProvider)) {
+      return;
+    }
     final strings = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ref
           .read(androidPushTransportProvider.notifier)
-          .select(transport, revoke: (live) => revokeAndroidPushTransport(ref, live));
+          .select(
+            transport,
+            revoke: (live) => revokeAndroidPushTransport(ref, live),
+            restore: (live) => restoreAndroidPushTransport(ref, live),
+          );
     } on Object {
       messenger.showSnackBar(
         SnackBar(content: Text(strings.settingsPushTransportSwitchFailed)),
@@ -367,12 +388,14 @@ final class _PushTransportTile extends StatelessWidget {
     required this.label,
     required this.subtitle,
     required this.transport,
+    this.enabled = true,
   });
 
   final Key tileKey;
   final String label;
   final String subtitle;
   final AndroidPushTransport transport;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -381,6 +404,7 @@ final class _PushTransportTile extends StatelessWidget {
       title: Text(label),
       subtitle: Text(subtitle),
       value: transport,
+      enabled: enabled,
     );
   }
 }

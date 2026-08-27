@@ -1,6 +1,59 @@
 part of 'android_push_coordinator_test.dart';
 
 void _registerAndroidPushReconciliationTests() {
+  test('an explicit follow-up reconcile survives an in-flight run', () async {
+    final fixture = await _createAccounts(const <String>['account-a']);
+    final firstRequestStarted = Completer<void>();
+    final releaseFirstRequest = Completer<void>();
+    var vapidRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['webpush'],
+              ),
+            ),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush/vapid')) {
+          vapidRequests++;
+          if (vapidRequests == 1) {
+            firstRequestStarted.complete();
+            await releaseFirstRequest.future;
+          }
+          return http.Response(
+            jsonEncode(_ocs(<String, Object>{'vapid': 'B${'a' * 86}'})),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/webpush')) {
+          return http.Response(jsonEncode(_ocs(const <Object>[], 201)), 201);
+        }
+        fail('Unexpected request: ${request.method} ${request.url.path}');
+      }),
+    );
+    addTearDown(api.close);
+    final coordinator = AndroidPushCoordinator(
+      accounts: fixture.accounts,
+      credentials: fixture.credentials,
+      api: api,
+      platform: _FakeAndroidWebPushPlatform(),
+      onWakeUp: (_) async {},
+    );
+    addTearDown(coordinator.close);
+
+    final first = coordinator.reconcileAll();
+    await firstRequestStarted.future;
+    final followUp = coordinator.reconcileAllAfterCurrent();
+    releaseFirstRequest.complete();
+    await Future.wait([first, followUp]);
+
+    expect(vapidRequests, 2);
+  });
+
   test(
     'coalesces periodic, resume and connectivity reconciliation signals',
     () async {

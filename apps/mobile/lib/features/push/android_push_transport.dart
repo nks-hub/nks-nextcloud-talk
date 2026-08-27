@@ -18,12 +18,12 @@ import 'package:path_provider/path_provider.dart';
 /// switch in settings.
 enum AndroidPushTransport { proxy, webPush }
 
-/// What an untouched device uses. See [AndroidPushTransport] for why this is
-/// not the proxy yet.
+/// What an untouched device uses. See [AndroidPushTransport] for why proxy is
+/// the default.
 const _defaultTransport = AndroidPushTransport.proxy;
 
-/// The same value, for the provider that seeds the runtime state before the
-/// stored choice has been read back.
+/// The same value, for the provider that seeds runtime state before storage
+/// hydration completes.
 const androidPushTransportDefault = _defaultTransport;
 
 /// Persists the chosen [AndroidPushTransport]. Not per-account: one device
@@ -81,17 +81,19 @@ final class FileAndroidPushTransportStore implements AndroidPushTransportStore {
 /// notifications start arriving twice, or down the dead path. [select]
 /// therefore revokes the current transport at Nextcloud *and* at its gateway
 /// first, and only stores the new choice once that came back clean. A failed
-/// revocation keeps the old transport in place — a device that still works
-/// the old way beats a device registered nowhere.
+/// store write restores the revoked path before surfacing the error.
 final class AndroidPushTransportSwitch {
   AndroidPushTransportSwitch({
     required AndroidPushTransportStore store,
     required Future<void> Function(AndroidPushTransport transport) revoke,
+    required Future<void> Function(AndroidPushTransport transport) restore,
   }) : _store = store,
-       _revoke = revoke;
+       _revoke = revoke,
+       _restore = restore;
 
   final AndroidPushTransportStore _store;
   final Future<void> Function(AndroidPushTransport transport) _revoke;
+  final Future<void> Function(AndroidPushTransport transport) _restore;
 
   Future<AndroidPushTransport> load() => _store.read();
 
@@ -106,7 +108,12 @@ final class AndroidPushTransportSwitch {
       return current;
     }
     await _revoke(current);
-    await _store.write(next);
+    try {
+      await _store.write(next);
+    } on Object {
+      await _restore(current);
+      rethrow;
+    }
     return next;
   }
 }

@@ -124,6 +124,7 @@ final class AndroidPushCoordinator {
   Timer? _periodicReconciliationTimer;
   Future<void>? _startFuture;
   Future<void>? _reconcileAllFuture;
+  Future<void>? _reconcileAfterCurrentFuture;
   Future<void>? _permissionFuture;
   var _permissionChecked = false;
   var _closed = false;
@@ -193,7 +194,10 @@ final class AndroidPushCoordinator {
 
   /// Whether [next] needs a push reconcile compared to the previously known
   /// [previous] row. A missing [previous] means the account is new here.
-  static bool _pushIdentityChanged(StoredAccount? previous, StoredAccount next) {
+  static bool _pushIdentityChanged(
+    StoredAccount? previous,
+    StoredAccount next,
+  ) {
     return previous == null ||
         previous.serverUrl != next.serverUrl ||
         previous.loginName != next.loginName;
@@ -214,6 +218,34 @@ final class AndroidPushCoordinator {
       }
     });
     _reconcileAllFuture = current;
+    return current;
+  }
+
+  /// Runs once after any active reconcile instead of joining and losing it.
+  Future<void> reconcileAllAfterCurrent() {
+    final existing = _reconcileAfterCurrentFuture;
+    if (existing != null) {
+      return existing;
+    }
+    late final Future<void> current;
+    current =
+        () async {
+          final active = _reconcileAllFuture;
+          if (active != null) {
+            await active;
+          }
+          while (_reconciliationFlights.isNotEmpty) {
+            await Future.wait(
+              _reconciliationFlights.values.toList(growable: false),
+            );
+          }
+          await _reconcileAll();
+        }().whenComplete(() {
+          if (identical(_reconcileAfterCurrentFuture, current)) {
+            _reconcileAfterCurrentFuture = null;
+          }
+        });
+    _reconcileAfterCurrentFuture = current;
     return current;
   }
 
@@ -852,6 +884,10 @@ final class AndroidPushCoordinator {
     final reconcileAll = _reconcileAllFuture;
     if (reconcileAll != null) {
       await reconcileAll.catchError((Object _) {});
+    }
+    final reconcileAfterCurrent = _reconcileAfterCurrentFuture;
+    if (reconcileAfterCurrent != null) {
+      await reconcileAfterCurrent.catchError((Object _) {});
     }
     await Future.wait(
       _accountTails.values.map((tail) => tail.catchError((Object _) {})),

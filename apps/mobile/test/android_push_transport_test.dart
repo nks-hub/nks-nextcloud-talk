@@ -8,6 +8,7 @@ final class _RecordingStore implements AndroidPushTransportStore {
 
   AndroidPushTransport stored;
   final List<String> events = [];
+  Object? writeFailure;
 
   @override
   Future<AndroidPushTransport> read() async => stored;
@@ -15,6 +16,10 @@ final class _RecordingStore implements AndroidPushTransportStore {
   @override
   Future<void> write(AndroidPushTransport transport) async {
     events.add('write:${transport.name}');
+    final failure = writeFailure;
+    if (failure != null) {
+      throw failure;
+    }
     stored = transport;
   }
 }
@@ -54,23 +59,29 @@ void main() {
     );
   });
 
-  test('switching revokes the old transport before storing the new one', () async {
-    final store = _RecordingStore(AndroidPushTransport.webPush);
-    final transportSwitch = AndroidPushTransportSwitch(
-      store: store,
-      revoke: (transport) async {
-        store.events.add('revoke:${transport.name}');
-      },
-    );
+  test(
+    'switching revokes the old transport before storing the new one',
+    () async {
+      final store = _RecordingStore(AndroidPushTransport.webPush);
+      final transportSwitch = AndroidPushTransportSwitch(
+        store: store,
+        revoke: (transport) async {
+          store.events.add('revoke:${transport.name}');
+        },
+        restore: (transport) async {
+          store.events.add('restore:${transport.name}');
+        },
+      );
 
-    final result = await transportSwitch.select(
-      AndroidPushTransport.proxy,
-      current: AndroidPushTransport.webPush,
-    );
+      final result = await transportSwitch.select(
+        AndroidPushTransport.proxy,
+        current: AndroidPushTransport.webPush,
+      );
 
-    expect(result, AndroidPushTransport.proxy);
-    expect(store.events, ['revoke:webPush', 'write:proxy']);
-  });
+      expect(result, AndroidPushTransport.proxy);
+      expect(store.events, ['revoke:webPush', 'write:proxy']);
+    },
+  );
 
   test('switching back revokes the proxy registration first', () async {
     final store = _RecordingStore(AndroidPushTransport.proxy);
@@ -78,6 +89,9 @@ void main() {
       store: store,
       revoke: (transport) async {
         store.events.add('revoke:${transport.name}');
+      },
+      restore: (transport) async {
+        store.events.add('restore:${transport.name}');
       },
     );
 
@@ -94,6 +108,7 @@ void main() {
     final transportSwitch = AndroidPushTransportSwitch(
       store: store,
       revoke: (_) async => throw const SocketException('offline'),
+      restore: (_) async {},
     );
 
     await expectLater(
@@ -114,6 +129,9 @@ void main() {
       revoke: (transport) async {
         store.events.add('revoke:${transport.name}');
       },
+      restore: (transport) async {
+        store.events.add('restore:${transport.name}');
+      },
     );
 
     final result = await transportSwitch.select(
@@ -123,5 +141,30 @@ void main() {
 
     expect(result, AndroidPushTransport.proxy);
     expect(store.events, isEmpty);
+  });
+
+  test('a failed store write restores the revoked transport', () async {
+    final store = _RecordingStore(AndroidPushTransport.proxy)
+      ..writeFailure = const FileSystemException('disk full');
+    final transportSwitch = AndroidPushTransportSwitch(
+      store: store,
+      revoke: (transport) async {
+        store.events.add('revoke:${transport.name}');
+      },
+      restore: (transport) async {
+        store.events.add('restore:${transport.name}');
+      },
+    );
+
+    await expectLater(
+      transportSwitch.select(
+        AndroidPushTransport.webPush,
+        current: AndroidPushTransport.proxy,
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    expect(store.stored, AndroidPushTransport.proxy);
+    expect(store.events, ['revoke:proxy', 'write:webPush', 'restore:proxy']);
   });
 }

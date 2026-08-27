@@ -23,22 +23,43 @@ final class AndroidFcmChannel {
   final MethodChannel _channel;
   final void Function(String)? _onToken;
   var _started = false;
+  var _disposed = false;
+  Future<void>? _startFuture;
 
   /// Fetches the current token once per session and forwards it.
   ///
   /// A rotation while the app runs arrives later as `tokenRefreshed`; one that
   /// happened while it was dead is already reflected in what this returns.
-  /// A failure is left to the caller's own retry — Play Services can be
-  /// missing or offline, and there is nothing useful to do about it here.
-  Future<void> start() async {
-    if (_started) {
+  /// A failed request clears the single-flight slot so the provider's bounded
+  /// retry can ask Play Services again in this process.
+  Future<void> start() {
+    if (_disposed || _started) {
+      return Future<void>.value();
+    }
+    final existing = _startFuture;
+    if (existing != null) {
+      return existing;
+    }
+    late final Future<void> current;
+    current = _fetchToken().whenComplete(() {
+      if (identical(_startFuture, current)) {
+        _startFuture = null;
+      }
+    });
+    _startFuture = current;
+    return current;
+  }
+
+  Future<void> _fetchToken() async {
+    final token = await _channel.invokeMethod<String>('getToken');
+    if (_disposed) {
       return;
     }
-    _started = true;
-    final token = await _channel.invokeMethod<String>('getToken');
-    if (token != null && token.isNotEmpty) {
-      _onToken?.call(token);
+    if (token == null || token.isEmpty) {
+      throw StateError('FCM returned an empty registration token');
     }
+    _onToken?.call(token);
+    _started = true;
   }
 
   /// Tells the native side which accounts are signed in. A delivery can wake
@@ -61,6 +82,7 @@ final class AndroidFcmChannel {
   }
 
   void dispose() {
+    _disposed = true;
     _channel.setMethodCallHandler(null);
   }
 }

@@ -141,7 +141,7 @@ void main() {
     List<http.Request> gatewayRequests,
     PushGatewayClient gatewayClient,
   })
-  wire() {
+  wire({int gatewayDeleteStatus = 202}) {
     final nextcloudRequests = <http.Request>[];
     final gatewayRequests = <http.Request>[];
     final api = HttpNextcloudApi(
@@ -169,7 +169,10 @@ void main() {
     final gatewayClient = PushGatewayClient(
       client: MockClient((request) async {
         gatewayRequests.add(request);
-        return http.Response('', request.method == 'DELETE' ? 202 : 200);
+        return http.Response(
+          '',
+          request.method == 'DELETE' ? gatewayDeleteStatus : 200,
+        );
       }),
     );
     return (
@@ -311,6 +314,46 @@ void main() {
     );
     expect(coordinator.isSettled, isTrue);
   });
+
+  test('revokeAll rejects a transient gateway deletion', () async {
+    await seedAccount('account-a');
+    final wired = wire(gatewayDeleteStatus: 503);
+    final coordinator = build(wired, _FakeDeviceKeyStore());
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+
+    await expectLater(coordinator.revokeAll(), throwsStateError);
+
+    expect(coordinator.isSettled, isFalse);
+  });
+
+  test(
+    'followAll restores proxy registrations after a compensated switch',
+    () async {
+      await seedAccount('account-a');
+      final wired = wire();
+      final coordinator = build(wired, _FakeDeviceKeyStore());
+      coordinator.installToken(_fcmToken);
+      await coordinator.follow('account-a');
+      await coordinator.revokeAll();
+
+      await coordinator.followAll();
+
+      expect(
+        wired.nextcloudRequests
+            .where((request) => request.method == 'POST')
+            .length,
+        2,
+      );
+      expect(
+        wired.gatewayRequests
+            .where((request) => request.method == 'POST')
+            .length,
+        2,
+      );
+      expect(coordinator.isSettled, isTrue);
+    },
+  );
 
   test('each account gets its own device key', () async {
     await seedAccount('account-a');

@@ -6,6 +6,22 @@ final androidPushTransportStoreProvider = Provider<AndroidPushTransportStore>((
   return FileAndroidPushTransportStore();
 });
 
+final androidPushTransportHydrationProvider = FutureProvider(
+  (ref) => ref.watch(androidPushTransportStoreProvider).read(),
+);
+
+final androidPushTransportSwitchingProvider =
+    NotifierProvider<AndroidPushTransportSwitchingController, bool>(
+      AndroidPushTransportSwitchingController.new,
+    );
+
+final class AndroidPushTransportSwitchingController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setSwitching(bool value) => state = value;
+}
+
 /// Which of the two Android push paths is live. Switchable at runtime, no new
 /// build needed: the native path is our own proxy, Web Push over UnifiedPush
 /// stays as the fallback.
@@ -16,17 +32,18 @@ final androidPushTransportProvider =
 
 final class AndroidPushTransportController
     extends Notifier<AndroidPushTransport> {
+  var _displayed = androidPushTransportDefault;
+  var _userSelected = false;
+  var _pendingSelections = 0;
+  Future<void> _selectionTail = Future<void>.value();
+
   @override
   AndroidPushTransport build() {
-    unawaited(_load());
-    return androidPushTransportDefault;
-  }
-
-  Future<void> _load() async {
-    final stored = await ref.read(androidPushTransportStoreProvider).read();
-    if (state != stored) {
-      state = stored;
+    final stored = ref.watch(androidPushTransportHydrationProvider).valueOrNull;
+    if (!_userSelected && stored != null) {
+      _displayed = stored;
     }
+    return _displayed;
   }
 
   /// Hands the device over to [transport]. The old path is revoked first, so
@@ -40,11 +57,36 @@ final class AndroidPushTransportController
   Future<void> select(
     AndroidPushTransport transport, {
     required Future<void> Function(AndroidPushTransport live) revoke,
-  }) async {
-    state = await AndroidPushTransportSwitch(
-      store: ref.read(androidPushTransportStoreProvider),
-      revoke: revoke,
-    ).select(transport, current: state);
+    required Future<void> Function(AndroidPushTransport live) restore,
+  }) {
+    _userSelected = true;
+    _pendingSelections++;
+    final store = ref.read(androidPushTransportStoreProvider);
+    final switching = ref.read(androidPushTransportSwitchingProvider.notifier);
+    switching.setSwitching(true);
+    final completion = Completer<void>();
+    final previous = _selectionTail;
+    _selectionTail = () async {
+      await previous;
+      try {
+        final selected = await AndroidPushTransportSwitch(
+          store: store,
+          revoke: revoke,
+          restore: restore,
+        ).select(transport, current: _displayed);
+        _displayed = selected;
+        state = selected;
+        completion.complete();
+      } on Object catch (error, stackTrace) {
+        completion.completeError(error, stackTrace);
+      } finally {
+        _pendingSelections--;
+        if (_pendingSelections == 0) {
+          switching.setSwitching(false);
+        }
+      }
+    }();
+    return completion.future;
   }
 }
 
@@ -59,7 +101,23 @@ Future<void> revokeAndroidPushTransport(
     case AndroidPushTransport.webPush:
       await ref.read(androidPushCoordinatorProvider)?.revokeAllRegistrations();
     case AndroidPushTransport.proxy:
-      await ref.read(androidPushRegistrationCoordinatorProvider)?.unfollowAll();
+      await ref.read(androidPushRegistrationCoordinatorProvider)?.revokeAll();
+  }
+}
+
+Future<void> restoreAndroidPushTransport(
+  WidgetRef ref,
+  AndroidPushTransport live,
+) async {
+  switch (live) {
+    case AndroidPushTransport.webPush:
+      final coordinator = ref.read(androidPushCoordinatorProvider);
+      if (coordinator != null) {
+        coordinator.subscribes = true;
+        await coordinator.reconcileAllAfterCurrent();
+      }
+    case AndroidPushTransport.proxy:
+      await ref.read(androidPushRegistrationCoordinatorProvider)?.followAll();
   }
 }
 
@@ -81,7 +139,9 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
     final subscribes = next == AndroidPushTransport.webPush;
     coordinator.subscribes = subscribes;
     if (!wasSubscribing && subscribes) {
-      unawaited(coordinator.reconcileAll().catchError((Object _) {}));
+      unawaited(
+        coordinator.reconcileAllAfterCurrent().catchError((Object _) {}),
+      );
     }
   }, fireImmediately: true);
   return coordinator;
@@ -132,6 +192,7 @@ AndroidPushCoordinator _buildAndroidPushCoordinator(
 final androidPushRegistrationCoordinatorProvider =
     Provider<PushRegistrationCoordinator?>((ref) {
       if (!Platform.isAndroid ||
+          !ref.watch(androidPushTransportHydrationProvider).hasValue ||
           ref.watch(androidPushTransportProvider) !=
               AndroidPushTransport.proxy) {
         return null;
@@ -145,8 +206,29 @@ final androidPushRegistrationCoordinatorProvider =
         tokenHandlePrefix: 'fcm-token',
       );
       final fcm = AndroidFcmChannel(onToken: coordinator.installToken);
+      var fcmDisposed = false;
+      Future<void>? fcmStart;
+      void startFcm() {
+        if (fcmDisposed || fcmStart != null) {
+          return;
+        }
+        late final Future<void> current;
+        current = _startAndroidFcmWithRetry(fcm, cancelled: () => fcmDisposed)
+            .whenComplete(() {
+              if (identical(fcmStart, current)) {
+                fcmStart = null;
+              }
+            });
+        fcmStart = current;
+      }
+
+      final resumeSubscription = ref
+          .watch(appLifecycleResumeEventsProvider)
+          .listen((_) => startFcm());
       final platform = ref.watch(androidWebPushPlatformProvider);
       ref.onDispose(() {
+        fcmDisposed = true;
+        unawaited(resumeSubscription.cancel());
         fcm.dispose();
         unawaited(coordinator.dispose());
       });
@@ -184,10 +266,36 @@ final androidPushRegistrationCoordinatorProvider =
         // permission call is the same one the Web Push path uses — it is an
         // activity-level Android 13 prompt, not a Web Push detail.
         unawaited(_ensureAndroidNotificationPermission(platform));
-        unawaited(fcm.start());
+        startFcm();
       }, fireImmediately: true);
       return coordinator;
     });
+
+Future<void> _startAndroidFcmWithRetry(
+  AndroidFcmChannel fcm, {
+  required bool Function() cancelled,
+}) async {
+  const delays = <Duration>[
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+  ];
+  for (var attempt = 0; attempt <= delays.length; attempt++) {
+    if (cancelled()) {
+      return;
+    }
+    try {
+      await fcm.start();
+      return;
+    } on Object {
+      if (attempt == delays.length) {
+        return;
+      }
+      await Future<void>.delayed(delays[attempt]);
+    }
+  }
+}
 
 Future<void> _ensureAndroidNotificationPermission(
   AndroidWebPushPlatform? platform,

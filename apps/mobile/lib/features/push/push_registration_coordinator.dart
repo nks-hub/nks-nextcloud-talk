@@ -185,6 +185,36 @@ final class PushRegistrationCoordinator {
     }
   }
 
+  /// Revokes every proxy registration or fails while retryable work remains.
+  Future<void> revokeAll() async {
+    await unfollowAll();
+    if (!isSettled) {
+      throw StateError('Proxy push revocation is still pending');
+    }
+  }
+
+  /// Re-registers every account after a failed transport handover.
+  Future<void> followAll() async {
+    if (_snapshot.accounts.values.any(
+      (account) => account.phase != PushAccountPhase.removed,
+    )) {
+      throw StateError(
+        'Proxy push restoration requires a completed revocation',
+      );
+    }
+    final providerToken = _snapshot.providerToken;
+    _snapshot = PushRuntimeSnapshot.empty();
+    if (providerToken != null) {
+      _apply(installPushProviderToken(_snapshot, providerToken));
+    }
+    for (final account in await _accounts.listAccounts()) {
+      await follow(account.id);
+    }
+    if (!isSettled) {
+      throw StateError('Proxy push restoration is still pending');
+    }
+  }
+
   /// Whether no account is still mid-flight or stuck. The transport switch
   /// reads this after [unfollowAll] to tell a clean revocation from one that
   /// only got as far as a retry.
