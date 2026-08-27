@@ -25,11 +25,6 @@ final class PushGatewayClient {
         'pushToken': rawPushToken,
       },
     );
-    // ignore: avoid_print
-    print(
-      'PUSHV2DIAG registerGateway status=${response.statusCode} '
-      'body=${response.body} tokenLen=${rawPushToken.length}',
-    );
     return decodePushGatewayRegistrationResponse(
       effect: effect,
       statusCode: response.statusCode,

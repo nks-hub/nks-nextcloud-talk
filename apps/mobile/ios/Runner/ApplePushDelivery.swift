@@ -33,7 +33,6 @@ final class ApplePushDelivery {
   /// replaces the earlier one rather than queueing behind it: registering the
   /// stale one would send notifications to a device that no longer listens.
   func registered(deviceToken: Data) {
-    NSLog("PUSHV2DIAG raw token bytes=%d", deviceToken.count)
     let hex = Self.hexString(from: deviceToken)
     if !launchTokenWasTaken {
       launchToken = hex
