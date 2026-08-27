@@ -1,9 +1,41 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+/// A tapped push notification's routing target, straight from the account
+/// whose key actually decrypted it — see `PushNotificationRouteStore.swift`.
+/// Never reconstructed from a server host, which is ambiguous when two
+/// signed-in accounts share one server. Mirrors Android's
+/// `AndroidNotificationOpen`.
+final class ApplePushNotificationOpen {
+  const ApplePushNotificationOpen({
+    required this.accountId,
+    required this.roomToken,
+  });
+
+  final String accountId;
+  final String roomToken;
+
+  factory ApplePushNotificationOpen.fromMap(Map<Object?, Object?> map) {
+    final accountId = map['accountId'];
+    final roomToken = map['roomToken'];
+    if (accountId is! String ||
+        accountId.isEmpty ||
+        roomToken is! String ||
+        roomToken.isEmpty) {
+      throw const FormatException('Native push notification open is invalid.');
+    }
+    return ApplePushNotificationOpen(accountId: accountId, roomToken: roomToken);
+  }
+
+  @override
+  String toString() =>
+      'ApplePushNotificationOpen(accountId: <redacted>, roomToken: <redacted>)';
+}
 
 /// Bridges the native `com.nkshub.nextcloudtalk/apple_push` channel that
 /// `AppDelegate.swift` exposes on iOS.
@@ -14,24 +46,22 @@ import 'package:flutter/services.dart';
 /// `apple_push_registration_coordinator.dart`. This class itself never
 /// registers anything; it only bridges the platform channel.
 ///
-/// Also answers `willPresent`'s foreground-banner question via
-/// [shouldSuppressForegroundBanner] — see `ForegroundPushDeduplicator` — and
-/// runs a tapped Reply/Mark-as-read notification action via
-/// [onNotificationAction].
+/// Also queues a tapped notification's [ApplePushNotificationOpen] (cold
+/// start included, see [checkLaunchNotificationOpen]) and runs a tapped
+/// Reply/Mark-as-read notification action via [onNotificationAction].
 final class ApplePushCoordinator {
   ApplePushCoordinator({
     MethodChannel? channel,
     void Function(String)? onToken,
-    bool Function()? shouldSuppressForegroundBanner,
     Future<void> Function({
       required String kind,
-      required String uri,
+      required String accountId,
+      required String roomToken,
       String? replyText,
     })?
     onNotificationAction,
   }) : _channel = channel ?? const MethodChannel(channelName),
        _onToken = onToken,
-       _shouldSuppressForegroundBanner = shouldSuppressForegroundBanner,
        _onNotificationAction = onNotificationAction {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
@@ -40,14 +70,41 @@ final class ApplePushCoordinator {
 
   final MethodChannel _channel;
   final void Function(String)? _onToken;
-  final bool Function()? _shouldSuppressForegroundBanner;
   final Future<void> Function({
     required String kind,
-    required String uri,
+    required String accountId,
+    required String roomToken,
     String? replyText,
   })?
   _onNotificationAction;
   bool _requested = false;
+
+  final ListQueue<ApplePushNotificationOpen> _pendingOpens = ListQueue();
+  final StreamController<void> _notificationOpenedController =
+      StreamController<void>.broadcast();
+
+  /// Fires whenever a newly queued notification open is ready to be taken.
+  Stream<void> get notificationOpened => _notificationOpenedController.stream;
+
+  ApplePushNotificationOpen? takeNextNotificationOpen() =>
+      _pendingOpens.isEmpty ? null : _pendingOpens.removeFirst();
+
+  /// Asks native for the notification that cold-launched the app, if any.
+  /// Safe to call once at startup regardless of whether any account is
+  /// signed in yet — the queue just holds it until a consumer drains it.
+  Future<void> checkLaunchNotificationOpen() async {
+    final Object? response;
+    try {
+      response = await _channel.invokeMethod<Object?>(
+        'getLaunchNotificationOpen',
+      );
+    } on MissingPluginException {
+      return;
+    }
+    if (response is Map<Object?, Object?>) {
+      _queueOpen(response);
+    }
+  }
 
   /// Asks the user for notification permission once per app session and
   /// forwards whatever device token APNs hands back.
@@ -86,11 +143,12 @@ final class ApplePushCoordinator {
         // Service Extension to decrypt a background push's content. Left as
         // a no-op instead of faking a handler for it.
         return null;
-      case 'shouldSuppressForegroundNotification':
-        // AppDelegate asks this from `willPresent`, while the app is already
-        // in the foreground — see ForegroundPushDeduplicator for why a
-        // recent Client Push wake-up is grounds to suppress the banner.
-        return _shouldSuppressForegroundBanner?.call() ?? false;
+      case 'notificationOpened':
+        final args = call.arguments;
+        if (args is Map<Object?, Object?>) {
+          _queueOpen(args);
+        }
+        return null;
       case 'notificationAction':
         // A tap on the Reply or Mark-as-read banner action — AppDelegate
         // waits for this to complete before it releases the OS's background
@@ -98,17 +156,28 @@ final class ApplePushCoordinator {
         // can suspend the app.
         final args = call.arguments as Map<Object?, Object?>?;
         final kind = args?['kind'] as String?;
-        final uri = args?['uri'] as String?;
-        if (kind != null && uri != null) {
+        final accountId = args?['accountId'] as String?;
+        final roomToken = args?['roomToken'] as String?;
+        if (kind != null && accountId != null && roomToken != null) {
           await _onNotificationAction?.call(
             kind: kind,
-            uri: uri,
+            accountId: accountId,
+            roomToken: roomToken,
             replyText: args?['replyText'] as String?,
           );
         }
         return null;
       default:
         throw MissingPluginException('Unknown Apple push callback.');
+    }
+  }
+
+  void _queueOpen(Map<Object?, Object?> map) {
+    try {
+      _pendingOpens.add(ApplePushNotificationOpen.fromMap(map));
+      _notificationOpenedController.add(null);
+    } on FormatException {
+      // Malformed native payload — nothing sane to route to.
     }
   }
 
@@ -133,5 +202,6 @@ final class ApplePushCoordinator {
 
   void dispose() {
     _channel.setMethodCallHandler(null);
+    unawaited(_notificationOpenedController.close());
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -249,6 +251,74 @@ void main() {
     expect(retried, isTrue);
     expect(keyStore.ensured, isNotEmpty);
   });
+
+  test(
+    'dispose waits for an in-flight drain before closing the gateway client',
+    () async {
+      await seedAccount('account-a');
+      final keyStore = _FakeDeviceKeyStore();
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.contains('/capabilities')) {
+            return capabilitiesResponse();
+          }
+          if (request.url.path.endsWith('/push')) {
+            if (request.method == 'DELETE') {
+              return http.Response('', 200);
+            }
+            return nextcloudRegisterResponse();
+          }
+          return http.Response('unexpected: ${request.url}', 404);
+        }),
+      );
+      addTearDown(api.close);
+
+      final gatewayGate = Completer<void>();
+      var gatewayRequestSeen = false;
+      final coordinator = ApplePushRegistrationCoordinator(
+        accounts: accounts,
+        credentials: credentials,
+        api: api,
+        keyStore: keyStore,
+        gateway: gateway,
+        gatewayClient: PushGatewayClient(
+          client: MockClient((request) async {
+            if (request.method == 'DELETE') {
+              gatewayRequestSeen = true;
+              await gatewayGate.future;
+            }
+            return http.Response('', 200);
+          }),
+        ),
+      );
+
+      coordinator.installToken('deadbeef');
+      await coordinator.follow('account-a');
+
+      final unfollowFuture = coordinator.unfollow('account-a');
+      // Let the unregister effect reach the now-blocked gateway DELETE call.
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(gatewayRequestSeen, isTrue);
+
+      var disposeCompleted = false;
+      final disposeFuture = coordinator.dispose().then(
+        (_) => disposeCompleted = true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        disposeCompleted,
+        isFalse,
+        reason: 'dispose must wait for the in-flight drain',
+      );
+
+      gatewayGate.complete();
+      await unfollowFuture;
+      await disposeFuture;
+      expect(disposeCompleted, isTrue);
+    },
+  );
 }
 
 String _jsonEncode(Map<String, Object?> value) {

@@ -23,6 +23,14 @@ enum PushEnvelopeDecryptor {
     let matchedKeyIndex: Int
   }
 
+  /// An RSA-2048 ciphertext is always exactly this many bytes — the
+  /// ciphertext length equals the modulus size regardless of padding
+  /// (PKCS#1 v1.5 or OAEP). `nc-subject` reaches this code straight from an
+  /// APNs payload anyone who knows the device token can send, so this is
+  /// checked before the first RSA call rather than trusted from the proxy's
+  /// own 344-character base64 cap.
+  private static let expectedCiphertextLength = 256
+
   /// Tries every RSA private key in `candidates` against `ciphertext`,
   /// PKCS#1 v1.5 first (Nextcloud's default), then OAEP-SHA1 (its only
   /// configurable alternative). Returns the decoded payload only if exactly
@@ -32,6 +40,9 @@ enum PushEnvelopeDecryptor {
     ciphertext: Data,
     candidates: [SecKey]
   ) -> DecodedEnvelope? {
+    guard ciphertext.count == expectedCiphertextLength else {
+      return nil
+    }
     let matches = candidates.indices.compactMap { index -> DecodedEnvelope? in
       guard
         let payload = decrypt(ciphertext: ciphertext, with: candidates[index])
@@ -57,12 +68,15 @@ enum PushEnvelopeDecryptor {
   /// Nextcloud's plaintext wake-up payload is small JSON — `app`, `subject`,
   /// `type`, `id`/`nid`, or one of the `delete*` flags
   /// (`Push::encryptAndSign()` / `decodePushWakeUpPayload` on the Dart side).
-  /// A structurally valid, non-empty object is enough to treat a decrypt as
-  /// genuine rather than PKCS#1 v1.5 padding that happened to look valid.
+  /// `app` is the one field every real payload carries (push-v2.md's own
+  /// examples all include it), so requiring it — not just "parses as some
+  /// non-empty JSON object" — is what actually distinguishes a genuine
+  /// decrypt from PKCS#1 v1.5 padding that happened to unwrap into valid but
+  /// unrelated JSON.
   private static func validWakeUpPayload(from plaintext: Data) -> [String: Any]? {
     guard plaintext.count <= 4096,
       let object = try? JSONSerialization.jsonObject(with: plaintext) as? [String: Any],
-      !object.isEmpty
+      let app = object["app"] as? String, !app.isEmpty
     else {
       return nil
     }

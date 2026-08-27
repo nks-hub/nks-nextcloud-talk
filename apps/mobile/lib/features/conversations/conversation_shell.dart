@@ -15,6 +15,7 @@ import '../chat/chat_room_pane.dart' show ChatThreadContext;
 import '../newconversation/new_conversation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
+import '../push/apple_push_channel.dart' show ApplePushNotificationOpen;
 import '../../core/talk_features.dart';
 import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';
@@ -49,10 +50,12 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   String? _selectedAccountId;
   ForegroundSyncLoop? _liveSyncLoop;
   StreamSubscription<void>? _pushOpenSubscription;
+  StreamSubscription<void>? _applePushOpenSubscription;
   StreamSubscription<void>? _deepLinkSubscription;
   var _liveSyncGeneration = 0;
   var _isForeground = true;
   var _handlingPushOpen = false;
+  var _handlingApplePushOpen = false;
   var _handlingDeepLink = false;
 
   @override
@@ -65,6 +68,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _attachPushNavigation();
+        _attachApplePushNavigation();
         _attachDeepLinkNavigation();
       }
     });
@@ -109,6 +113,43 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       return;
     }
     await _openAccountConversation(open.accountId, roomToken);
+  }
+
+  void _attachApplePushNavigation() {
+    final coordinator = ref.read(applePushCoordinatorProvider);
+    if (coordinator == null || _applePushOpenSubscription != null) {
+      return;
+    }
+    _applePushOpenSubscription = coordinator.notificationOpened.listen((_) {
+      unawaited(_drainApplePushNavigation());
+    });
+    unawaited(_drainApplePushNavigation());
+  }
+
+  Future<void> _drainApplePushNavigation() async {
+    if (_handlingApplePushOpen) {
+      return;
+    }
+    final coordinator = ref.read(applePushCoordinatorProvider);
+    if (coordinator == null) {
+      return;
+    }
+    _handlingApplePushOpen = true;
+    try {
+      while (mounted) {
+        final open = coordinator.takeNextNotificationOpen();
+        if (open == null) {
+          return;
+        }
+        await _openApplePushNotification(open);
+      }
+    } finally {
+      _handlingApplePushOpen = false;
+    }
+  }
+
+  Future<void> _openApplePushNotification(ApplePushNotificationOpen open) {
+    return _openAccountConversation(open.accountId, open.roomToken);
   }
 
   void _attachDeepLinkNavigation() {
@@ -293,6 +334,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_pushOpenSubscription?.cancel());
+    unawaited(_applePushOpenSubscription?.cancel());
     unawaited(_deepLinkSubscription?.cancel());
     unawaited(_stopLiveSync());
     super.dispose();

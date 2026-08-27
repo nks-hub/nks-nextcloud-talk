@@ -11,13 +11,26 @@ import Foundation
 /// `UserDefaults` suite, which is the standard way around that limitation.
 /// Entries are keyed by the notification's own `request.identifier`, which
 /// both processes see unchanged.
+///
+/// ponytail: stored unencrypted in a plist, not the Keychain. What lives
+/// here is an opaque account id and a room token — a routing hint, not a
+/// credential or the message content, and it self-evicts (bounded to
+/// `maximumEntries`, consumed on the first tap). Move to a Keychain access
+/// group shared with the extension if that stops being an acceptable
+/// exposure for a room token specifically.
 enum PushNotificationRouteStore {
   private static let suiteName = "group.com.nkshub.nextcloudtalk"
   private static let storageKey = "pushNotificationRoutes"
   private static let maximumEntries = 20
 
+  /// [accountId] is the account whose key actually decrypted the push —
+  /// known for certain at decrypt time. Carrying it through here, rather
+  /// than having the tap/action handler reconstruct "which account" from the
+  /// server host afterwards, is what keeps this correct when two signed-in
+  /// accounts share a server: a host match alone cannot tell them apart, but
+  /// the decrypting key already could.
   struct Route {
-    let host: String
+    let accountId: String
     let roomToken: String
   }
 
@@ -35,7 +48,7 @@ enum PushNotificationRouteStore {
         stored.removeValue(forKey: oldest)
       }
     }
-    stored[identifier] = ["host": route.host, "token": route.roomToken]
+    stored[identifier] = ["accountId": route.accountId, "token": route.roomToken]
     defaults.set(stored, forKey: storageKey)
   }
 
@@ -46,11 +59,11 @@ enum PushNotificationRouteStore {
     }
     var stored = defaults.dictionary(forKey: storageKey) ?? [:]
     guard let entry = stored.removeValue(forKey: identifier) as? [String: String],
-      let host = entry["host"], let token = entry["token"]
+      let accountId = entry["accountId"], let token = entry["token"]
     else {
       return nil
     }
     defaults.set(stored, forKey: storageKey)
-    return Route(host: host, roomToken: token)
+    return Route(accountId: accountId, roomToken: token)
   }
 }

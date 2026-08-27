@@ -80,6 +80,68 @@ final class AppleDeepLinkDelivery {
   }
 }
 
+/// Queues a tapped push notification's `(accountId, roomToken)` for Flutter
+/// to open, cold start included — same launch/pending/emit shape as
+/// `AppleDeepLinkDelivery` above, kept as a separate type because a push
+/// open and a universal link are different domains that happen to need the
+/// same queueing behavior (mirrors how `AndroidNotificationOpen` is its own
+/// stream on Android, distinct from that platform's deep-link handling).
+///
+/// The account id here is never a guess: the Notification Service Extension
+/// only ever recorded it once its own key had already decrypted the push
+/// (see `PushNotificationRouteStore`), so there is nothing left to resolve
+/// by matching a server host — which is exactly what would go wrong with two
+/// signed-in accounts on the same server.
+final class ApplePushNotificationOpenDelivery {
+  private static let maximumPendingOpens = 16
+
+  private var launchOpen: [String: Any]?
+  private var launchOpenWasTaken = false
+  private var pendingOpens: [[String: Any]] = []
+  private var emit: (([String: Any]) -> Void)?
+
+  func attach(_ emit: @escaping ([String: Any]) -> Void) {
+    self.emit = emit
+    deliverPendingOpensIfReady()
+  }
+
+  func enqueue(accountId: String, roomToken: String) {
+    let payload: [String: Any] = ["accountId": accountId, "roomToken": roomToken]
+
+    if !launchOpenWasTaken, launchOpen == nil {
+      launchOpen = payload
+      return
+    }
+    if let emit {
+      emit(payload)
+      return
+    }
+    if pendingOpens.count == Self.maximumPendingOpens {
+      pendingOpens.removeFirst()
+    }
+    pendingOpens.append(payload)
+  }
+
+  func takeLaunchOpen() -> [String: Any]? {
+    launchOpenWasTaken = true
+    let result = launchOpen
+    launchOpen = nil
+    deliverPendingOpensIfReady()
+    return result
+  }
+
+  private func deliverPendingOpensIfReady() {
+    guard launchOpenWasTaken, let emit else {
+      return
+    }
+    let opens = pendingOpens
+    pendingOpens.removeAll(keepingCapacity: true)
+    for open in opens {
+      emit(open)
+    }
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   /// Matches `NotificationService.swift`'s `content.categoryIdentifier`,
@@ -90,6 +152,7 @@ final class AppleDeepLinkDelivery {
   static let markReadActionIdentifier = "MARK_READ_ACTION"
 
   let deepLinks = AppleDeepLinkDelivery()
+  let pushOpens = ApplePushNotificationOpenDelivery()
   let push = ApplePushDelivery()
   let deviceKeys = PushDeviceKeyStore()
   private var deepLinkChannel: FlutterMethodChannel?
@@ -132,16 +195,16 @@ final class AppleDeepLinkDelivery {
   }
 
   /// Routes a tapped push notification to the conversation it decrypted to,
-  /// by replaying it through the same `AppleDeepLinkDelivery` queue a
-  /// universal link would use — cold start included, since that queue
-  /// already handles "opened before the Flutter engine exists" — or, for the
-  /// Reply/Mark-as-read banner actions, hands the action straight to Dart.
+  /// via `pushOpens` (cold start included), or, for the Reply/Mark-as-read
+  /// banner actions, hands the action straight to Dart — both carrying the
+  /// `accountId` the Notification Service Extension already established by
+  /// decrypting the push, not a host to be matched back to an account here.
   ///
-  /// The room token only exists because the Notification Service Extension
-  /// decrypted it and stashed it in `PushNotificationRouteStore`
-  /// (`content.userInfo` cannot carry it — see that type's doc comment). A
-  /// push with no matching route (decrypt failed, or this build predates
-  /// route tracking) is silently not routed rather than treated as an error.
+  /// The route only exists because the extension decrypted it and stashed it
+  /// in `PushNotificationRouteStore` (`content.userInfo` cannot carry it —
+  /// see that type's doc comment). A push with no matching route (decrypt
+  /// failed, or this build predates route tracking) is silently not routed
+  /// rather than treated as an error.
   ///
   /// `FlutterAppDelegate` already conforms to `UNUserNotificationCenterDelegate`
   /// and forwards this to any plugin that registered for it, so a plain tap
@@ -160,11 +223,10 @@ final class AppleDeepLinkDelivery {
     let route = PushNotificationRouteStore.take(
       identifier: response.notification.request.identifier
     )
-    let url = route.flatMap { URL(string: "https://\($0.host)/call/\($0.roomToken)") }
 
     switch response.actionIdentifier {
     case Self.replyActionIdentifier, Self.markReadActionIdentifier:
-      guard let url, let pushChannel else {
+      guard let route, let pushChannel else {
         completionHandler()
         return
       }
@@ -174,46 +236,18 @@ final class AppleDeepLinkDelivery {
         "notificationAction",
         arguments: [
           "kind": kind,
-          "uri": url.absoluteString,
+          "accountId": route.accountId,
+          "roomToken": route.roomToken,
           "replyText": replyText as Any,
         ]
       ) { _ in
         completionHandler()
       }
     default:
-      if let url {
-        _ = deepLinks.open(url)
+      if let route {
+        pushOpens.enqueue(accountId: route.accountId, roomToken: route.roomToken)
       }
       super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
-    }
-  }
-
-  /// Suppresses the foreground banner for a push that Client Push (the
-  /// notify_push websocket, see `ClientPushCoordinator`) already caused the
-  /// app to sync moments earlier — otherwise the user sees the same message
-  /// announced twice while the app is open. The decision itself lives in
-  /// Dart (`ForegroundPushDeduplicator`), since Client Push's wake-ups are
-  /// Dart-side and this native layer has no view of them on its own.
-  ///
-  /// Deferring to `super` on every path except "suppress" — rather than
-  /// deciding the presentation options here — keeps whatever Flutter's own
-  /// default and any other registered plugin would otherwise do; this only
-  /// ever intervenes to say "not this one".
-  override func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification,
-    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-  ) {
-    guard let pushChannel else {
-      super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
-      return
-    }
-    pushChannel.invokeMethod("shouldSuppressForegroundNotification", arguments: nil) { response in
-      if (response as? Bool) == true {
-        completionHandler([])
-      } else {
-        super.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
-      }
     }
   }
 
@@ -261,8 +295,10 @@ final class AppleDeepLinkDelivery {
         self?.generateDeviceKey(call.arguments, result)
       case "destroyDeviceKey":
         self?.destroyDeviceKey(call.arguments, result)
-      case "recordDeviceKeyHost":
-        self?.recordDeviceKeyHost(call.arguments, result)
+      case "recordDeviceKeyAccount":
+        self?.recordDeviceKeyAccount(call.arguments, result)
+      case "getLaunchNotificationOpen":
+        result(self?.pushOpens.takeLaunchOpen())
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -275,6 +311,9 @@ final class AppleDeepLinkDelivery {
         pushMethods?.invokeMethod("notificationReceived", arguments: payload)
       }
     )
+    pushOpens.attach { [weak pushMethods] payload in
+      pushMethods?.invokeMethod("notificationOpened", arguments: payload)
+    }
     pushChannel = pushMethods
   }
 
@@ -342,26 +381,32 @@ final class AppleDeepLinkDelivery {
     result(nil)
   }
 
-  /// Records which Nextcloud server host owns `handle`'s device key, so the
-  /// Notification Service Extension can resolve a decrypted room token back
-  /// to a server. `arguments` must be `{"handle": String, "host": String}`.
-  private func recordDeviceKeyHost(_ arguments: Any?, _ result: @escaping FlutterResult) {
+  /// Records which account owns `handle`'s device key, so the Notification
+  /// Service Extension learns the account directly once a candidate key
+  /// decrypts a push, instead of it being reconstructed later from a server
+  /// host — which is ambiguous with two accounts on one server. `arguments`
+  /// must be `{"handle": String, "accountId": String}`.
+  private func recordDeviceKeyAccount(_ arguments: Any?, _ result: @escaping FlutterResult) {
     guard let args = arguments as? [String: Any],
       let handle = args["handle"] as? String, !handle.isEmpty,
-      let host = args["host"] as? String, !host.isEmpty
+      let accountId = args["accountId"] as? String, !accountId.isEmpty
     else {
       result(
-        FlutterError(code: "invalid_arguments", message: "Missing handle or host", details: nil)
+        FlutterError(
+          code: "invalid_arguments",
+          message: "Missing handle or accountId",
+          details: nil
+        )
       )
       return
     }
     do {
-      try deviceKeys.setHost(handle: handle, host: host)
+      try deviceKeys.setAccount(handle: handle, accountId: accountId)
       result(nil)
     } catch {
       result(
         FlutterError(
-          code: "host_update_failed",
+          code: "account_update_failed",
           message: error.localizedDescription,
           details: nil
         )

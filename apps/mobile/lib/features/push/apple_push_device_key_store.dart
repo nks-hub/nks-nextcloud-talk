@@ -45,15 +45,16 @@ final class ApplePushDeviceKeyChannel implements PushDeviceKeyStore {
     await _channel.invokeMethod<void>('destroyDeviceKey', {'handle': handle});
   }
 
-  /// Records which Nextcloud server host owns the key at [handle], so the
-  /// Notification Service Extension can look it back up once a push
-  /// decrypts, to route a tap to the right server. iOS-only: kept off
+  /// Records which account owns the key at [handle], so the Notification
+  /// Service Extension learns the account directly once a push decrypts,
+  /// rather than having to reconstruct it later from the server host — which
+  /// is ambiguous when two accounts share one server. iOS-only: kept off
   /// [PushDeviceKeyStore] itself because Android, which implements that same
   /// shared interface, has no equivalent need.
-  Future<void> recordHost(String handle, String host) async {
-    await _channel.invokeMethod<void>('recordDeviceKeyHost', {
+  Future<void> recordAccount(String handle, String accountId) async {
+    await _channel.invokeMethod<void>('recordDeviceKeyAccount', {
       'handle': handle,
-      'host': host,
+      'accountId': accountId,
     });
   }
 }

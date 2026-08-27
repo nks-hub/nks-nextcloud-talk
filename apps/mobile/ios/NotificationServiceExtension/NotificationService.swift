@@ -50,8 +50,15 @@ final class NotificationService: UNNotificationServiceExtension {
     // deliberately minimal for privacy. A real conversation title would need
     // an authenticated API round-trip from inside the extension, which risks
     // blowing the ~30s NSE time budget; skipped until that's needed.
-    if let app = payload["app"] as? String, app == "spreed" {
-      content.title = "Nextcloud Talk"
+    //
+    // Matches Android's AndroidWebPushNotifier.kt exactly (own app: the
+    // display name; anything else: the raw app id) so the two platforms
+    // never show different text for the same push. "NKS Talk" duplicates
+    // Runner's Info.plist CFBundleDisplayName — this extension has its own
+    // bundle (CFBundleDisplayName "NotificationService"), so Bundle.main
+    // here can't read Runner's; update both if the app is ever renamed.
+    if let app = payload["app"] as? String {
+      content.title = app == "spreed" ? "NKS Talk" : app
     }
 
     // Chat pushes carry the room token as `id` (push-v2.md:
@@ -60,11 +67,11 @@ final class NotificationService: UNNotificationServiceExtension {
     // why this can't just be added to content.userInfo.
     if payload["app"] as? String == "spreed", payload["type"] as? String == "chat",
       let roomToken = payload["id"] as? String, !roomToken.isEmpty,
-      let host = candidates[envelope.matchedKeyIndex].host
+      let accountId = candidates[envelope.matchedKeyIndex].accountId
     {
       PushNotificationRouteStore.remember(
         identifier: request.identifier,
-        route: PushNotificationRouteStore.Route(host: host, roomToken: roomToken)
+        route: PushNotificationRouteStore.Route(accountId: accountId, roomToken: roomToken)
       )
       // Matches AppDelegate's registered category — without this the banner
       // offers no Reply/Mark-as-read actions at all.

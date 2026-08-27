@@ -145,4 +145,39 @@ class RunnerTests: XCTestCase {
       )
     )
   }
+
+  func testDecryptorRejectsInputThatIsNotExactlyOneRsaBlock() throws {
+    let (privateKey, _) = try makeTestKeyPair()
+
+    // Anyone who knows the device token can send `nc-subject` — this must
+    // never reach SecKeyCreateDecryptedData at all, not just fail to match.
+    XCTAssertNil(
+      PushEnvelopeDecryptor.decodeWakeUpPayload(
+        ciphertext: Data(repeating: 0, count: 4096),
+        candidates: [privateKey]
+      )
+    )
+    XCTAssertNil(
+      PushEnvelopeDecryptor.decodeWakeUpPayload(
+        ciphertext: Data(),
+        candidates: [privateKey]
+      )
+    )
+  }
+
+  func testDecryptorRejectsJsonWithoutAnAppField() throws {
+    let (privateKey, publicKey) = try makeTestKeyPair()
+    // Valid JSON, valid padding, but none of Nextcloud's real payloads ever
+    // omit `app` — this is what actually tells a genuine decrypt apart from
+    // padding that happened to unwrap into unrelated JSON.
+    let plaintext = try XCTUnwrap("{\"subject\":\"New message\"}".data(using: .utf8))
+    let ciphertext = try encrypt(plaintext, with: publicKey)
+
+    XCTAssertNil(
+      PushEnvelopeDecryptor.decodeWakeUpPayload(
+        ciphertext: ciphertext,
+        candidates: [privateKey]
+      )
+    )
+  }
 }

@@ -36,7 +36,8 @@ final class ApplePushRegistrationCoordinator {
     Duration firstRetry = const Duration(seconds: 5),
     Duration maximumRetry = const Duration(minutes: 30),
     Future<void> Function(Duration)? delay,
-    Future<void> Function(String handle, String host)? recordDeviceKeyHost,
+    Future<void> Function(String handle, String accountId)?
+    recordDeviceKeyAccount,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
@@ -46,7 +47,7 @@ final class ApplePushRegistrationCoordinator {
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
        _delay = delay ?? _sleep,
-       _recordDeviceKeyHost = recordDeviceKeyHost ?? _noHostRecording {
+       _recordDeviceKeyAccount = recordDeviceKeyAccount ?? _noAccountRecording {
     if (firstRetry <= Duration.zero || maximumRetry < firstRetry) {
       throw ArgumentError('Invalid Apple push retry timing');
     }
@@ -55,7 +56,7 @@ final class ApplePushRegistrationCoordinator {
   static Future<void> _sleep(Duration duration) =>
       Future<void>.delayed(duration);
 
-  static Future<void> _noHostRecording(String handle, String host) async {}
+  static Future<void> _noAccountRecording(String handle, String accountId) async {}
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -66,7 +67,8 @@ final class ApplePushRegistrationCoordinator {
   final Duration _firstRetry;
   final Duration _maximumRetry;
   final Future<void> Function(Duration) _delay;
-  final Future<void> Function(String handle, String host) _recordDeviceKeyHost;
+  final Future<void> Function(String handle, String accountId)
+  _recordDeviceKeyAccount;
 
   PushRuntimeSnapshot _snapshot = PushRuntimeSnapshot.empty();
   final Map<String, PushRegistrationAuthority> _authorities = {};
@@ -75,6 +77,7 @@ final class ApplePushRegistrationCoordinator {
   var _effectSeq = 0;
   var _providerGeneration = 0;
   String? _rawToken;
+  Future<void>? _activeDrain;
   var _draining = false;
   var _disposed = false;
 
@@ -161,8 +164,14 @@ final class ApplePushRegistrationCoordinator {
     await _drain();
   }
 
+  /// Waits for a currently in-flight [_drain] to actually stop before
+  /// closing the gateway client — closing it out from under a mid-flight
+  /// register/unregister call would abort that HTTP request, potentially
+  /// leaving a device registered with Nextcloud but not the proxy (or the
+  /// reverse), the exact split state a clean unregister exists to avoid.
   Future<void> dispose() async {
     _disposed = true;
+    await _activeDrain;
     _gatewayClient.close();
   }
 
@@ -191,6 +200,8 @@ final class ApplePushRegistrationCoordinator {
       return;
     }
     _draining = true;
+    final completer = Completer<void>();
+    _activeDrain = completer.future;
     try {
       while (!_disposed) {
         final planned = planNextPushEffect(
@@ -213,6 +224,7 @@ final class ApplePushRegistrationCoordinator {
       }
     } finally {
       _draining = false;
+      completer.complete();
     }
     _scheduleRetries();
   }
@@ -240,11 +252,14 @@ final class ApplePushRegistrationCoordinator {
       }
       final handle = _keyHandleFor(effect.context.accountId);
       final pem = await _keyStore.ensureKey(handle.value);
-      // Lets the Notification Service Extension later resolve a decrypted
-      // room token to a server — see PushNotificationRouteStore.swift.
+      // Lets the Notification Service Extension learn the account directly
+      // once a decrypt succeeds — see PushNotificationRouteStore.swift.
       // `ensureKey` above is idempotent, so retrying this whole effect on
       // failure (the same path every other exception here takes) is safe.
-      await _recordDeviceKeyHost(handle.value, authority.server.uri.host);
+      await _recordDeviceKeyAccount(
+        handle.value,
+        effect.context.accountId.value,
+      );
       final key = PushDeviceKeyBinding(
         handle: handle,
         publicKey: PushRsaPublicKey.parse(pem),

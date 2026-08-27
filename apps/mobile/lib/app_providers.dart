@@ -52,7 +52,6 @@ import 'features/push/android_push_transport.dart';
 import 'features/push/android_web_push_bridge.dart';
 import 'features/push/apple_push_channel.dart';
 import 'features/push/apple_push_device_key_store.dart';
-import 'features/push/apple_push_foreground_dedup.dart';
 import 'features/push/apple_push_registration_coordinator.dart';
 import 'features/push/client_push_coordinator.dart';
 import 'features/push/client_push_session.dart';
@@ -268,14 +267,6 @@ final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
 /// reason. Production leaves this on.
 final clientPushEnabledProvider = Provider<bool>((ref) => true);
 
-/// Shared between the Client Push and Apple push wiring below so a websocket
-/// wake-up can suppress the APNs banner that would otherwise double up on it
-/// while the app is in the foreground. See
-/// `apple_push_foreground_dedup.dart`.
-final foregroundPushDeduplicatorProvider = Provider<ForegroundPushDeduplicator>(
-  (ref) => ForegroundPushDeduplicator(),
-);
-
 final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
   if (!ref.watch(clientPushEnabledProvider)) {
     return null;
@@ -324,10 +315,8 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
       );
     },
     connector: const IoClientPushConnector(),
-    onWakeUp: (accountId) {
-      ref.read(foregroundPushDeduplicatorProvider).markWakeUp();
-      unawaited(ref.read(conversationSyncServiceProvider).sync(accountId));
-    },
+    onWakeUp: (accountId) =>
+        unawaited(ref.read(conversationSyncServiceProvider).sync(accountId)),
   );
   ref.onDispose(() => unawaited(coordinator.dispose()));
 
@@ -600,17 +589,18 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
   final registration = ref.watch(applePushRegistrationCoordinatorProvider);
   final coordinator = ApplePushCoordinator(
     onToken: registration?.installToken,
-    shouldSuppressForegroundBanner: () =>
-        ref.read(foregroundPushDeduplicatorProvider).shouldSuppress(),
-    onNotificationAction: ({required kind, required uri, replyText}) =>
-        _runAppleNotificationAction(
-          ref,
-          kind: kind,
-          uri: uri,
-          replyText: replyText,
-        ),
+    onNotificationAction:
+        ({required kind, required accountId, required roomToken, replyText}) =>
+            _runAppleNotificationAction(
+              ref,
+              kind: kind,
+              accountId: accountId,
+              roomToken: roomToken,
+              replyText: replyText,
+            ),
   );
   ref.onDispose(coordinator.dispose);
+  unawaited(coordinator.checkLaunchNotificationOpen());
 
   // Asking only makes sense once someone is signed in, and only needs to
   // happen once per session — the coordinator itself guards against asking
@@ -645,7 +635,7 @@ final applePushRegistrationCoordinatorProvider =
         api: ref.watch(nextcloudApiProvider),
         keyStore: deviceKeyChannel,
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
-        recordDeviceKeyHost: deviceKeyChannel.recordHost,
+        recordDeviceKeyAccount: deviceKeyChannel.recordAccount,
       );
       ref.onDispose(() => unawaited(coordinator.dispose()));
 
@@ -756,12 +746,13 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
   }
 }
 
-/// Executes a tapped Reply/Mark-as-read action from an iOS notification —
-/// `AppDelegate.swift`'s `didReceive` override sends [uri] as the same
-/// `https://<host>/call/<token>` shape a universal link uses, so
-/// [DeepLinkResolver] (already the one place that matches a link's host to a
-/// signed-in account) resolves it to an account the same way tap-to-open
-/// does. A [uri] matching no account, or a reply with empty text, is a no-op.
+/// Executes a tapped Reply/Mark-as-read action from an iOS notification.
+///
+/// [accountId] comes straight from `AppDelegate.swift`'s `didReceive`
+/// override, which got it from `PushNotificationRouteStore` — the account
+/// whose key actually decrypted the push, recorded at decrypt time. It is
+/// never re-derived from a server host, which would be ambiguous with two
+/// signed-in accounts on the same server. A reply with empty text is a no-op.
 ///
 /// iOS has no durable action queue like Android's to retry from — its window
 /// to call the OS completion handler is short and one-shot — so a failure
@@ -771,17 +762,10 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
 Future<void> _runAppleNotificationAction(
   Ref ref, {
   required String kind,
-  required String uri,
+  required String accountId,
+  required String roomToken,
   String? replyText,
 }) async {
-  final parsed = Uri.tryParse(uri);
-  if (parsed == null) {
-    return;
-  }
-  final resolved = await ref.read(deepLinkResolverProvider).resolve(parsed);
-  if (resolved == null) {
-    return;
-  }
   switch (kind) {
     case 'reply':
       final text = replyText?.trim();
@@ -790,15 +774,15 @@ Future<void> _runAppleNotificationAction(
       }
       await _sendNotificationReply(
         ref,
-        accountId: resolved.accountId,
-        roomToken: resolved.token.value,
+        accountId: accountId,
+        roomToken: roomToken,
         text: text,
       );
     case 'markRead':
       await _markNotificationRead(
         ref,
-        accountId: resolved.accountId,
-        roomToken: resolved.token.value,
+        accountId: accountId,
+        roomToken: roomToken,
       );
   }
 }

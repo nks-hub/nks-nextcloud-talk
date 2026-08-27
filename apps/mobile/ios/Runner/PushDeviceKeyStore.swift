@@ -62,12 +62,13 @@ final class PushDeviceKeyStore {
     SecItemDelete(query as CFDictionary)
   }
 
-  /// Records `host` (the account's Nextcloud server host) as `handle`'s
-  /// Keychain label, so the Notification Service Extension — which cannot
-  /// otherwise tell which signed-in account a push belongs to — can look it
-  /// back up once a candidate key decrypts a push (see `allKeys()`). A no-op
-  /// if `handle` has no key yet.
-  func setHost(handle: String, host: String) throws {
+  /// Records `accountId` as `handle`'s Keychain label, so the Notification
+  /// Service Extension — which cannot otherwise tell which signed-in account
+  /// a push belongs to — learns it directly once a candidate key decrypts a
+  /// push (see `allKeys()`), instead of it having to be reconstructed later
+  /// from the server host, which is ambiguous when two accounts share one
+  /// server. A no-op if `handle` has no key yet.
+  func setAccount(handle: String, accountId: String) throws {
     let tag = applicationTag(for: handle)
     let query: [String: Any] = [
       kSecClass as String: kSecClassKey,
@@ -77,22 +78,22 @@ final class PushDeviceKeyStore {
     ]
     let status = SecItemUpdate(
       query as CFDictionary,
-      [kSecAttrLabel as String: host] as CFDictionary
+      [kSecAttrLabel as String: accountId] as CFDictionary
     )
     guard status == errSecSuccess || status == errSecItemNotFound else {
-      throw PushDeviceKeyStoreError.hostUpdateFailed(status: status)
+      throw PushDeviceKeyStoreError.accountUpdateFailed(status: status)
     }
   }
 
   /// Every private key this app has ever generated in the shared access
-  /// group, with the server host recorded at creation time (`nil` for keys
-  /// created before host tracking existed). The Notification Service
+  /// group, with the owning account id recorded at creation time (`nil` for
+  /// keys created before account tracking existed). The Notification Service
   /// Extension uses this to try each candidate against an incoming push and,
-  /// once one decrypts it, to learn which server the routed room token
-  /// belongs to.
+  /// once one decrypts it, to learn which account the routed room token
+  /// belongs to — directly, not by guessing from the server host.
   struct Candidate {
     let key: SecKey
-    let host: String?
+    let accountId: String?
   }
 
   static func allKeys() -> [Candidate] {
@@ -119,7 +120,7 @@ final class PushDeviceKeyStore {
       // success status guarantees this cast holds.
       return Candidate(
         key: key as! SecKey,
-        host: attributes[kSecAttrLabel as String] as? String
+        accountId: attributes[kSecAttrLabel as String] as? String
       )
     }
   }
@@ -199,5 +200,5 @@ final class PushDeviceKeyStore {
 
 enum PushDeviceKeyStoreError: Error {
   case publicKeyUnavailable
-  case hostUpdateFailed(status: OSStatus)
+  case accountUpdateFailed(status: OSStatus)
 }

@@ -252,6 +252,15 @@ Rozšíření má vlastní App ID a přes App Group se dostane k privátnímu kl
 kterým notifikaci dešifruje. Certifikáty potřeba nejsou, `.p8` je nahrazuje a
 nevyprší.
 
+Stejně jako na Androidu (výš) je i tady notifikaci schopen zobrazit jen jeden
+zdroj: `pubspec.yaml` neobsahuje balíček na lokální notifikace a Dart nikde
+nevolá nic, co by notifikaci vyrobilo — Client Push po websocketu jen spustí
+`ConversationSyncService.sync`. Banner na obrazovce vzniká výhradně z toho, co
+sestaví Notification Service Extension z APNs payloadu. Běžící aplikace tedy
+nemůže dostat tutéž zprávu viditelně dvakrát, i kdyby jí Client Push i APNs
+oznámily prakticky současně — druhý zobrazovací zdroj neexistuje, není co
+deduplikovat.
+
 ## Windows: běžící aplikace ano, zavřená ne
 
 Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push ji
