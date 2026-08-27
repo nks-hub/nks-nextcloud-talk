@@ -226,6 +226,28 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+  testWidgets(
+    'the emoji panel fits a short phone window',
+    (tester) async {
+      // Telemetry reported `A RenderFlex overflowed by 17 pixels on the
+      // bottom` from a phone with the panel open, so the panel is pumped at
+      // that phone's size: 1080x2072 physical at 2.75. An overflow makes
+      // `flutter_test` fail on its own, so laying out at all is the assertion.
+      tester.view.physicalSize = const Size(1080, 2072);
+      tester.view.devicePixelRatio = 2.75;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpRoom(tester, desktop: false);
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
+      expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }
 
 Map<String, Object?> _roomJson() {
