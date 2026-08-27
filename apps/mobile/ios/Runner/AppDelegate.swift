@@ -82,6 +82,13 @@ final class AppleDeepLinkDelivery {
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  /// Matches `NotificationService.swift`'s `content.categoryIdentifier`,
+  /// which is how iOS knows to offer these two actions on a Talk chat
+  /// notification's banner/long-press instead of showing no actions at all.
+  static let messageCategoryIdentifier = "TALK_MESSAGE"
+  static let replyActionIdentifier = "REPLY_ACTION"
+  static let markReadActionIdentifier = "MARK_READ_ACTION"
+
   let deepLinks = AppleDeepLinkDelivery()
   let push = ApplePushDelivery()
   let deviceKeys = PushDeviceKeyStore()
@@ -96,13 +103,39 @@ final class AppleDeepLinkDelivery {
     // that cold-launched the app is not delivered before anything is
     // listening for it — iOS holds it until a delegate exists.
     UNUserNotificationCenter.current().delegate = self
+    registerNotificationCategories()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Registering ahead of time (rather than only when permission is granted)
+  /// costs nothing and means a category is never missing because of
+  /// ordering — `UNUserNotificationCenter.setNotificationCategories` is safe
+  /// to call before authorization is requested.
+  private func registerNotificationCategories() {
+    let reply = UNTextInputNotificationAction(
+      identifier: Self.replyActionIdentifier,
+      title: NSLocalizedString("Reply", comment: "Notification action"),
+      options: [.authenticationRequired]
+    )
+    let markRead = UNNotificationAction(
+      identifier: Self.markReadActionIdentifier,
+      title: NSLocalizedString("Mark as Read", comment: "Notification action"),
+      options: []
+    )
+    let category = UNNotificationCategory(
+      identifier: Self.messageCategoryIdentifier,
+      actions: [reply, markRead],
+      intentIdentifiers: [],
+      options: []
+    )
+    UNUserNotificationCenter.current().setNotificationCategories([category])
   }
 
   /// Routes a tapped push notification to the conversation it decrypted to,
   /// by replaying it through the same `AppleDeepLinkDelivery` queue a
   /// universal link would use — cold start included, since that queue
-  /// already handles "opened before the Flutter engine exists".
+  /// already handles "opened before the Flutter engine exists" — or, for the
+  /// Reply/Mark-as-read banner actions, hands the action straight to Dart.
   ///
   /// The room token only exists because the Notification Service Extension
   /// decrypted it and stashed it in `PushNotificationRouteStore`
@@ -111,23 +144,48 @@ final class AppleDeepLinkDelivery {
   /// route tracking) is silently not routed rather than treated as an error.
   ///
   /// `FlutterAppDelegate` already conforms to `UNUserNotificationCenterDelegate`
-  /// and forwards this to any plugin that registered for it, so this override
+  /// and forwards this to any plugin that registered for it, so a plain tap
   /// does its own routing first and then defers to `super` for that
   /// forwarding and the single `completionHandler()` call, instead of also
-  /// calling it here.
+  /// calling it here. A Reply/Mark-as-read action instead waits for Dart to
+  /// finish before calling the completion handler at all — iOS gives this
+  /// method a limited window to keep the app alive for exactly that, and
+  /// letting `super` release the handler immediately risked the process
+  /// being suspended before the reply actually sent.
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     didReceive response: UNNotificationResponse,
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
-    if let route = PushNotificationRouteStore.take(
+    let route = PushNotificationRouteStore.take(
       identifier: response.notification.request.identifier
-    ),
-      let url = URL(string: "https://\(route.host)/call/\(route.roomToken)")
-    {
-      _ = deepLinks.open(url)
+    )
+    let url = route.flatMap { URL(string: "https://\($0.host)/call/\($0.roomToken)") }
+
+    switch response.actionIdentifier {
+    case Self.replyActionIdentifier, Self.markReadActionIdentifier:
+      guard let url, let pushChannel else {
+        completionHandler()
+        return
+      }
+      let kind = response.actionIdentifier == Self.replyActionIdentifier ? "reply" : "markRead"
+      let replyText = (response as? UNTextInputNotificationResponse)?.userText
+      pushChannel.invokeMethod(
+        "notificationAction",
+        arguments: [
+          "kind": kind,
+          "uri": url.absoluteString,
+          "replyText": replyText as Any,
+        ]
+      ) { _ in
+        completionHandler()
+      }
+    default:
+      if let url {
+        _ = deepLinks.open(url)
+      }
+      super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
     }
-    super.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
   }
 
   /// Suppresses the foreground banner for a push that Client Push (the

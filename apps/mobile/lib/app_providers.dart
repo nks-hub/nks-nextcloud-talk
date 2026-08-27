@@ -564,6 +564,13 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
     onToken: registration?.installToken,
     shouldSuppressForegroundBanner: () =>
         ref.read(foregroundPushDeduplicatorProvider).shouldSuppress(),
+    onNotificationAction: ({required kind, required uri, replyText}) =>
+        _runAppleNotificationAction(
+          ref,
+          kind: kind,
+          uri: uri,
+          replyText: replyText,
+        ),
   );
   ref.onDispose(coordinator.dispose);
 
@@ -629,14 +636,43 @@ final applePushRegistrationCoordinatorProvider =
       return coordinator;
     });
 
-/// Executes a notification-shade action for exactly `action.accountId`.
+/// Sends a notification-shade reply through [ChatService.sendText] and
+/// therefore through the durable text-send outbox: the same `referenceId`
+/// correlation, the same ambiguous-send rules and the same visible retry
+/// entry in the room as a reply typed in the composer. Sending straight from
+/// the notification would be a second, uncorrelated POST and the documented
+/// duplicate risk of `docs/architecture/chat-messages-api.md` would apply.
 ///
-/// A reply goes through [ChatService.sendText] and therefore through the
-/// durable text-send outbox: the same `referenceId` correlation, the same
-/// ambiguous-send rules and the same visible retry entry in the room as a
-/// reply typed in the composer. Sending straight from the notification would
-/// be a second, uncorrelated POST and the documented duplicate risk of
-/// `docs/architecture/chat-messages-api.md` would apply to it.
+/// Shared by Android's and iOS's notification-action handlers below, so the
+/// two platforms cannot diverge on what "reply from a notification" means.
+Future<void> _sendNotificationReply(
+  Ref ref, {
+  required String accountId,
+  required String roomToken,
+  required String text,
+}) {
+  return ref
+      .read(chatServiceProvider)
+      .sendText(accountId: accountId, roomToken: roomToken, message: text);
+}
+
+/// Marks a conversation read from a notification-shade action. The read
+/// marker is an explicit message id, so the cached room has to know the
+/// newest message before the marker can move — hence syncing both before and
+/// after. Shared with iOS for the same reason as [_sendNotificationReply].
+Future<void> _markNotificationRead(
+  Ref ref, {
+  required String accountId,
+  required String roomToken,
+}) async {
+  await ref.read(conversationSyncServiceProvider).sync(accountId);
+  await ref
+      .read(roomSettingsServiceProvider)
+      .markConversationRead(accountId: accountId, roomToken: roomToken);
+  await ref.read(conversationSyncServiceProvider).sync(accountId);
+}
+
+/// Executes a notification-shade action for exactly `action.accountId`.
 Future<AndroidPushActionOutcome> _runNotificationAction(
   Ref ref,
   AndroidNotificationAction action,
@@ -644,24 +680,18 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
   try {
     switch (action.kind) {
       case AndroidNotificationActionKind.reply:
-        await ref
-            .read(chatServiceProvider)
-            .sendText(
-              accountId: action.accountId,
-              roomToken: action.roomToken,
-              message: action.replyText ?? '',
-            );
+        await _sendNotificationReply(
+          ref,
+          accountId: action.accountId,
+          roomToken: action.roomToken,
+          text: action.replyText ?? '',
+        );
       case AndroidNotificationActionKind.markRead:
-        // The read marker is an explicit message id, so the cached room has
-        // to know the newest message before the marker can move.
-        await ref.read(conversationSyncServiceProvider).sync(action.accountId);
-        await ref
-            .read(roomSettingsServiceProvider)
-            .markConversationRead(
-              accountId: action.accountId,
-              roomToken: action.roomToken,
-            );
-        await ref.read(conversationSyncServiceProvider).sync(action.accountId);
+        await _markNotificationRead(
+          ref,
+          accountId: action.accountId,
+          roomToken: action.roomToken,
+        );
     }
     return AndroidPushActionOutcome.completed;
   } on ChatServiceException catch (error) {
@@ -685,6 +715,53 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
       NextcloudApiError.timeout => AndroidPushActionOutcome.retry,
       _ => AndroidPushActionOutcome.failed,
     };
+  }
+}
+
+/// Executes a tapped Reply/Mark-as-read action from an iOS notification —
+/// `AppDelegate.swift`'s `didReceive` override sends [uri] as the same
+/// `https://<host>/call/<token>` shape a universal link uses, so
+/// [DeepLinkResolver] (already the one place that matches a link's host to a
+/// signed-in account) resolves it to an account the same way tap-to-open
+/// does. A [uri] matching no account, or a reply with empty text, is a no-op.
+///
+/// iOS has no durable action queue like Android's to retry from — its window
+/// to call the OS completion handler is short and one-shot — so a failure
+/// here simply doesn't send/mark-read, the same outcome as a reply typed in
+/// the composer while offline. That's why this has no return value or retry
+/// classification, unlike [_runNotificationAction].
+Future<void> _runAppleNotificationAction(
+  Ref ref, {
+  required String kind,
+  required String uri,
+  String? replyText,
+}) async {
+  final parsed = Uri.tryParse(uri);
+  if (parsed == null) {
+    return;
+  }
+  final resolved = await ref.read(deepLinkResolverProvider).resolve(parsed);
+  if (resolved == null) {
+    return;
+  }
+  switch (kind) {
+    case 'reply':
+      final text = replyText?.trim();
+      if (text == null || text.isEmpty) {
+        return;
+      }
+      await _sendNotificationReply(
+        ref,
+        accountId: resolved.accountId,
+        roomToken: resolved.token.value,
+        text: text,
+      );
+    case 'markRead':
+      await _markNotificationRead(
+        ref,
+        accountId: resolved.accountId,
+        roomToken: resolved.token.value,
+      );
   }
 }
 

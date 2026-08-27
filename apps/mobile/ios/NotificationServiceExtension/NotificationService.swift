@@ -66,6 +66,9 @@ final class NotificationService: UNNotificationServiceExtension {
         identifier: request.identifier,
         route: PushNotificationRouteStore.Route(host: host, roomToken: roomToken)
       )
+      // Matches AppDelegate's registered category — without this the banner
+      // offers no Reply/Mark-as-read actions at all.
+      content.categoryIdentifier = "TALK_MESSAGE"
     }
   }
 

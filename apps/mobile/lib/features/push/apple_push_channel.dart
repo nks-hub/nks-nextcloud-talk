@@ -15,15 +15,24 @@ import 'package:flutter/services.dart';
 /// registers anything; it only bridges the platform channel.
 ///
 /// Also answers `willPresent`'s foreground-banner question via
-/// [shouldSuppressForegroundBanner] — see `ForegroundPushDeduplicator`.
+/// [shouldSuppressForegroundBanner] — see `ForegroundPushDeduplicator` — and
+/// runs a tapped Reply/Mark-as-read notification action via
+/// [onNotificationAction].
 final class ApplePushCoordinator {
   ApplePushCoordinator({
     MethodChannel? channel,
     void Function(String)? onToken,
     bool Function()? shouldSuppressForegroundBanner,
+    Future<void> Function({
+      required String kind,
+      required String uri,
+      String? replyText,
+    })?
+    onNotificationAction,
   }) : _channel = channel ?? const MethodChannel(channelName),
        _onToken = onToken,
-       _shouldSuppressForegroundBanner = shouldSuppressForegroundBanner {
+       _shouldSuppressForegroundBanner = shouldSuppressForegroundBanner,
+       _onNotificationAction = onNotificationAction {
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
@@ -32,6 +41,12 @@ final class ApplePushCoordinator {
   final MethodChannel _channel;
   final void Function(String)? _onToken;
   final bool Function()? _shouldSuppressForegroundBanner;
+  final Future<void> Function({
+    required String kind,
+    required String uri,
+    String? replyText,
+  })?
+  _onNotificationAction;
   bool _requested = false;
 
   /// Asks the user for notification permission once per app session and
@@ -76,6 +91,22 @@ final class ApplePushCoordinator {
         // in the foreground — see ForegroundPushDeduplicator for why a
         // recent Client Push wake-up is grounds to suppress the banner.
         return _shouldSuppressForegroundBanner?.call() ?? false;
+      case 'notificationAction':
+        // A tap on the Reply or Mark-as-read banner action — AppDelegate
+        // waits for this to complete before it releases the OS's background
+        // completion handler, so the reply/read actually lands before iOS
+        // can suspend the app.
+        final args = call.arguments as Map<Object?, Object?>?;
+        final kind = args?['kind'] as String?;
+        final uri = args?['uri'] as String?;
+        if (kind != null && uri != null) {
+          await _onNotificationAction?.call(
+            kind: kind,
+            uri: uri,
+            replyText: args?['replyText'] as String?,
+          );
+        }
+        return null;
       default:
         throw MissingPluginException('Unknown Apple push callback.');
     }
