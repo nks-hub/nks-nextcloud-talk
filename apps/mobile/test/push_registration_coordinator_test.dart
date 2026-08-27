@@ -360,6 +360,30 @@ void main() {
     );
   });
 
+  test('unregistering keeps the device identity out of the URL', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    final coordinator = build(wired, _FakeDeviceKeyStore());
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await coordinator.unfollow('account-a');
+
+    final delete = wired.gatewayRequests.singleWhere(
+      (request) => request.method == 'DELETE',
+    );
+    // Every proxy on the way logs the request line. The identifier and its
+    // signature are what a device proves itself with, so they go in the body.
+    expect(delete.url.query, isEmpty);
+    expect(delete.url.toString(), isNot(contains('deviceIdentifier')));
+    expect(delete.bodyFields['deviceIdentifier'], _testDeviceIdentifier);
+    expect(
+      delete.bodyFields['deviceIdentifierSignature'],
+      _testDeviceSignature,
+    );
+    expect(delete.bodyFields['userPublicKey'], isNotEmpty);
+  });
+
   test('a device key shared with another account is refused', () async {
     await seedAccount('account-a');
     await seedAccount('account-b');

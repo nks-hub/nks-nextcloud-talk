@@ -359,8 +359,12 @@ void main() {
       planned = planNextPushEffect(snapshot, effectId: pushEffectId(91));
       final gateway = planned.effect! as UnregisterPushFromGatewayEffect;
       expect(gateway.uri.path, '/devices');
+      // The identity goes in the body, never the URL: a request line is
+      // recorded by every proxy and access log on the way, and this pair is
+      // what a device proves itself with.
+      expect(gateway.uri.query, isEmpty);
       expect(
-        gateway.uri.queryParameters.keys,
+        gateway.identityFields.keys,
         containsAll(<String>[
           'deviceIdentifier',
           'deviceIdentifierSignature',

@@ -98,7 +98,7 @@ void main() {
     expect(completion.classification, PushCompletionClass.conflict);
   });
 
-  test('unregisters with DELETE and the identity in the query string', () async {
+  test('unregisters with DELETE and the identity in the body', () async {
     late http.BaseRequest seen;
     final client = PushGatewayClient(
       client: MockClient((request) async {
@@ -116,8 +116,11 @@ void main() {
     final completion = await client.unregister(effect);
 
     expect(seen.method, 'DELETE');
+    // Never in the URL: the request line reaches every access log on the way,
+    // and this pair is what a device proves itself with.
+    expect(seen.url.query, isEmpty);
     expect(
-      seen.url.queryParameters['deviceIdentifier'],
+      (seen as http.Request).bodyFields['deviceIdentifier'],
       _testDeviceIdentifier,
     );
     expect(completion.classification, PushCompletionClass.success);

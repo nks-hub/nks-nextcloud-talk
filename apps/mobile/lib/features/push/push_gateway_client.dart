@@ -35,7 +35,11 @@ final class PushGatewayClient {
   Future<PushGatewayUnregistrationCompletion> unregister(
     UnregisterPushFromGatewayEffect effect,
   ) async {
-    final response = await _client.delete(effect.uri);
+    // DELETE with a body, so the device identity stays out of the request
+    // line. `http` has no `delete(body:)`, hence the explicit Request.
+    final request = http.Request('DELETE', effect.uri)
+      ..bodyFields = effect.identityFields;
+    final response = await http.Response.fromStream(await _client.send(request));
     return decodePushGatewayUnregistrationResponse(
       effect: effect,
       statusCode: response.statusCode,

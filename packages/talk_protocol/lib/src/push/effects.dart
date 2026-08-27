@@ -229,15 +229,17 @@ final class UnregisterPushFromGatewayEffect extends PushEffect {
   @override
   PushEffectKind get kind => PushEffectKind.unregisterGateway;
 
-  Map<String, String> get identityQueryParameters => <String, String>{
+  /// Sent as a form body, never as query parameters: every proxy and access
+  /// log on the way records a request line, and this pair is what a device
+  /// proves itself with — a leaked log would let a reader unregister someone
+  /// else's device.
+  Map<String, String> get identityFields => <String, String>{
     'deviceIdentifier': registration.deviceIdentifier.value,
     'deviceIdentifierSignature': registration.deviceIdentifierSignature.value,
     'userPublicKey': registration.userPublicKey.pem,
   };
 
-  Uri get uri => context.gateway.devicesUri.replace(
-    queryParameters: identityQueryParameters,
-  );
+  Uri get uri => context.gateway.devicesUri;
 
   @override
   bool bindingEquals(PushEffect other) =>
