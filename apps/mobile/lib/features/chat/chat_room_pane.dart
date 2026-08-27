@@ -311,6 +311,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int? _pendingJumpMessageId;
   ChatRoomProviderKey? _lastAutoReadKey;
   int? _lastAutoReadMessageId;
+
+  /// Whether the last attempt for [_lastAutoReadMessageId] gave up for good
+  /// (a Dart `Error`, not a retryable service failure). Only this case skips
+  /// retrying the same message id outright; see `_markVisibleRead`.
+  bool _lastAutoReadUnrecoverable = false;
   ChatRoomProviderKey? _autoReadInFlightKey;
   int? _autoReadInFlightMessageId;
 
