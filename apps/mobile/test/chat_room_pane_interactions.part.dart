@@ -414,6 +414,18 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.tapAt(const Offset(1, 1));
     await tester.pumpAndSettle();
 
+    // The same sheet on a right click: holding a mouse button down is the
+    // wrong gesture on a desktop.
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('chat-message-target-70'))),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-reply')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-edit')), findsOneWidget);
+    await tester.tapAt(const Offset(1, 1));
+    await tester.pumpAndSettle();
+
     // Message 10 belongs to someone else: edit/delete stay hidden even
     // though this account is fully capable of both.
     await tester.longPress(find.byKey(const Key('chat-message-target-10')));

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -223,6 +224,40 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Archive conversation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a right click opens the same actions as a long press', (
+    tester,
+  ) async {
+    await setTalkFeatures(_markUnreadAndArchiveTalkFeatures);
+    final conversation = await insertConversation(token: 'roomread');
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    // Holding a mouse button down is the wrong gesture on a desktop, so the
+    // sheet has to be reachable with the secondary button.
+    final tile = find.byKey(const Key('conversation-tile-roomread'));
+    await tester.tapAt(
+      tester.getCenter(tile),
+      buttons: kSecondaryButton,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('conversation-action-mark-unread')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('conversation-action-archive')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

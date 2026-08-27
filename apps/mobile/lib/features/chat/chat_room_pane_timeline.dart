@@ -354,6 +354,11 @@ final class _MessageBubble extends StatelessWidget {
                     onLongPress: message.deleted
                         ? null
                         : () => onMessageActions(message, parsed),
+                    // Same actions on right-click, for the same reason as the
+                    // conversation rows.
+                    onSecondaryTap: message.deleted
+                        ? null
+                        : () => onMessageActions(message, parsed),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOut,

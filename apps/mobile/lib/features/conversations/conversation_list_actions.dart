@@ -342,126 +342,136 @@ final class _ConversationTile extends StatelessWidget {
       child: ExcludeSemantics(
         child: Material(
           color: selected ? scheme.secondaryContainer : Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: context.listRowHeight),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    ConversationAvatar(
-                      account: account,
-                      conversation: conversation,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              if (conversation.favorite) ...[
-                                Icon(
-                                  Icons.star_rounded,
-                                  size: 18,
-                                  color: scheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              if (conversation.isArchived) ...[
-                                Icon(
-                                  Icons.archive_outlined,
-                                  size: 18,
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              if (hasCall) ...[
-                                // Announced through the tile's semantics
-                                // value, which this subtree is excluded from.
-                                Icon(
-                                  Icons.videocam_rounded,
-                                  key: Key(
-                                    'conversation-call-'
-                                    '${conversation.token}',
+          // Right-click reaches the same sheet as a long press: holding a
+          // mouse button down is the wrong gesture on a desktop, and the two
+          // never collide because no pointer produces both.
+          child: GestureDetector(
+            onSecondaryTap: onLongPress,
+            child: InkWell(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: context.listRowHeight),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      ConversationAvatar(
+                        account: account,
+                        conversation: conversation,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                if (conversation.favorite) ...[
+                                  Icon(
+                                    Icons.star_rounded,
+                                    size: 18,
+                                    color: scheme.primary,
                                   ),
-                                  size: 18,
-                                  color: scheme.primary,
+                                  const SizedBox(width: 4),
+                                ],
+                                if (conversation.isArchived) ...[
+                                  Icon(
+                                    Icons.archive_outlined,
+                                    size: 18,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                if (hasCall) ...[
+                                  // Announced through the tile's semantics
+                                  // value, which this subtree is excluded from.
+                                  Icon(
+                                    Icons.videocam_rounded,
+                                    key: Key(
+                                      'conversation-call-'
+                                      '${conversation.token}',
+                                    ),
+                                    size: 18,
+                                    color: scheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    conversation.displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  conversation.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
+                                if (presence != null) ...[
+                                  const SizedBox(width: 7),
+                                  ConversationPresenceBadge(
+                                    conversation: conversation,
+                                  ),
+                                ],
+                                const SizedBox(width: 8),
+                                Text(
+                                  _formatActivity(
                                     context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ),
-                              if (presence != null) ...[
-                                const SizedBox(width: 7),
-                                ConversationPresenceBadge(
-                                  conversation: conversation,
-                                ),
-                              ],
-                              const SizedBox(width: 8),
-                              Text(
-                                _formatActivity(
-                                  context,
-                                  conversation.lastActivity,
-                                ),
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                          if (statusMessage != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              statusMessage,
-                              key: Key(
-                                'conversation-presence-message-'
-                                '${conversation.token}',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  preview,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
+                                    conversation.lastActivity,
+                                  ),
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
                                         color: scheme.onSurfaceVariant,
                                       ),
                                 ),
-                              ),
-                              if (conversation.unreadMessages > 0) ...[
-                                const SizedBox(width: 8),
-                                _UnreadBadge(
-                                  count: conversation.unreadMessages,
-                                ),
                               ],
+                            ),
+                            if (statusMessage != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                statusMessage,
+                                key: Key(
+                                  'conversation-presence-message-'
+                                  '${conversation.token}',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
                             ],
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    preview,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ),
+                                if (conversation.unreadMessages > 0) ...[
+                                  const SizedBox(width: 8),
+                                  _UnreadBadge(
+                                    count: conversation.unreadMessages,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
