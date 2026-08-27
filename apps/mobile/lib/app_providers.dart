@@ -417,14 +417,25 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   if (platform == null) {
     return null;
   }
-  final subscribes =
-      ref.watch(androidPushTransportProvider) == AndroidPushTransport.webPush;
+  // Read, never watch: this coordinator must outlive a transport switch.
+  final coordinator = _buildAndroidPushCoordinator(ref, platform);
+  ref.listen<AndroidPushTransport>(androidPushTransportProvider, (_, next) {
+    coordinator.subscribes = next == AndroidPushTransport.webPush;
+  }, fireImmediately: true);
+  return coordinator;
+});
+
+AndroidPushCoordinator _buildAndroidPushCoordinator(
+  Ref ref,
+  AndroidWebPushPlatform platform,
+) {
   final coordinator = AndroidPushCoordinator(
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
     platform: platform,
-    subscribes: subscribes,
+    subscribes:
+        ref.read(androidPushTransportProvider) == AndroidPushTransport.webPush,
     onWakeUp: (accountId) =>
         ref.read(conversationSyncServiceProvider).sync(accountId),
     onNotificationAction: (action) => _runNotificationAction(ref, action),
@@ -444,7 +455,7 @@ final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
   return coordinator;
-});
+}
 
 /// Registers this Android device for push v2 against our own proxy — the same
 /// wire contract iOS uses, which keeps the public UnifiedPush rewrite gateway

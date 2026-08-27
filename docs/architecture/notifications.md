@@ -97,6 +97,19 @@ Klíč zařízení je per účet: handle je SHA-256 z `accountId` a push automat
 odmítne klíč, který už drží jiný účet, takže jeden účet nikdy nemůže
 dešifrovat notifikaci druhého.
 
+Notifikaci na Androidu vyrábí **výhradně nativní vrstva** z push transportu.
+Aplikace nemá žádný balíček na lokální notifikace a v Dartu se notifikace
+neposílá nikde; Client Push po websocketu jen spouští synchronizaci. Běžící
+aplikace tedy nemůže dostat tutéž událost dvakrát viditelně, i když dorazí
+po websocketu i z FCM — není druhý zdroj, který by ji zobrazil. Opakované
+doručení téže zprávy druhou notifikaci nevytvoří: platformní ID je stabilní
+podle `(accountId, nid)`, takže se první přepíše.
+
+Nerozšifrovatelná zpráva se zahazuje beze stopy — nezobrazí se nic, nikam se
+to nezapisuje a nepočítá. Který klíč sedl je totiž samo o sobě informace
+o tom, komu zpráva patří, a zpráva, kterou neotevře žádný klíč, patří účtu,
+který na zařízení už není.
+
 ### Co ještě chybí
 
 Proxy cesta zatím **nic neregistruje**, protože aplikace nemá odkud vzít FCM

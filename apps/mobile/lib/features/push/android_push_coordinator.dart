@@ -53,7 +53,7 @@ final class AndroidPushCoordinator {
        _platform = platform,
        _onWakeUp = onWakeUp,
        _onNotificationAction = onNotificationAction,
-       _subscribes = subscribes,
+       subscribes = subscribes,
        _reconciliationWakeEvents = List<Stream<void>>.unmodifiable(
          reconciliationWakeEvents,
        ),
@@ -90,7 +90,12 @@ final class AndroidPushCoordinator {
   /// the notification the user taps and the reply they type still arrive
   /// through this native layer, so everything except registration keeps
   /// running.
-  final bool _subscribes;
+  ///
+  /// Deliberately mutable, so a transport switch does not rebuild the whole
+  /// coordinator. The platform hands a launch notification over exactly once
+  /// and the native action queue is drained per instance, so an instance
+  /// disposed mid-flight loses whatever it was holding.
+  bool subscribes;
   final List<Stream<void>> _reconciliationWakeEvents;
   final Duration reconciliationInterval;
   final Duration retryDelay;
@@ -277,7 +282,7 @@ final class AndroidPushCoordinator {
     if (context == null || !_isAccountActive(accountId, epoch)) {
       return;
     }
-    if (!_subscribes) {
+    if (!subscribes) {
       await _drainAccount(accountId, context: context);
       return;
     }
@@ -330,7 +335,7 @@ final class AndroidPushCoordinator {
   }
 
   /// Revokes this device's Web Push subscription for every account, at the
-  /// server and natively, and stops registering any of them again.
+  /// server and natively, and stops subscribing again.
   ///
   /// Used when the device leaves the Web Push transport for the proxy one.
   /// Nextcloud keys a push registration by device, not by transport, so a
@@ -342,6 +347,10 @@ final class AndroidPushCoordinator {
     if (_closed) {
       return;
     }
+    // Before the first request, so nothing re-registers behind the revocation.
+    // Suspending the accounts instead would also stop the taps and replies
+    // this coordinator keeps serving on the other transport.
+    subscribes = false;
     final accounts = await _accounts.listAccounts();
     for (final account in accounts) {
       await _serialize(account.id, () async {
@@ -351,8 +360,6 @@ final class AndroidPushCoordinator {
         }
         await _revokeWebPush(context, _accountEpochs[account.id] ?? 0);
       });
-      // Only after the revocation, or `_isAccountActive` would refuse it.
-      _deactivateAccount(account.id);
     }
   }
 
