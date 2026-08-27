@@ -47,10 +47,14 @@ mixin _NextcloudApiPush on _HttpNextcloudApiBase {
       maximumBytes: PushWireLimits.maximumOcsBodyBytes,
     );
     final body = utf8.decode(payload.body, allowMalformed: true);
+    // The OCS body carries `deviceIdentifier` and its `signature` — the pair
+    // that proves device ownership to the push proxy. It must never reach a
+    // log, so only the shape of the response is reported here.
     // ignore: avoid_print
     print(
       'PUSHV2DIAG registerNextcloud status=${payload.statusCode} '
-      'keyLen=${effect.formFields['devicePublicKey']?.length} body=$body',
+      'keyLen=${effect.formFields['devicePublicKey']?.length} '
+      'bodyBytes=${payload.body.length}',
     );
     return decodePushNextcloudRegistrationResponse(
       effect: effect,
