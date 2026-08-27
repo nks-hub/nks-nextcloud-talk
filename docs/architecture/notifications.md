@@ -8,7 +8,7 @@ a hlavně co je pevně dané platformou a nedá se to obejít.
 
 | kanál | platforma | probudí zavřenou aplikaci | co potřebuje |
 | --- | --- | --- | --- |
-| push v2 přes vlastní proxy | Android, iOS | ano | proxy a token od FCM/APNs |
+| push v2 přes vlastní proxy | Android, iOS, macOS | ano | proxy a token od FCM/APNs |
 | Web Push přes UnifiedPush | Android | ano | VAPID na serveru |
 | Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
 
@@ -119,6 +119,18 @@ Který účet zprávu dostane, se pozná podle toho, který klíč ji otevře �
 je jeden na zařízení, klíče jsou per účet. Seznam přihlášených účtů posílá
 Dart nativní straně (`setAccounts`), protože doručení může probudit mrtvý
 proces.
+
+Živý průchod 27. srpna 2026 na Androidu 14 prokázal celý primární řetěz
+Nextcloud → vlastní proxy → FCM → ukončený proces. Balíček nebyl ve stavu
+force-stop, ale proces neběžel. Notifikace zobrazila skutečný obsah, klepnutí
+otevřelo správný účet a místnost, Reply vytvořilo právě jednu serverovou
+zprávu a Mark as read posunulo serverový read marker. Web Push byl potom
+samostatně ověřen jako funkční záloha včetně přepnutí oběma směry.
+
+Commit `18bb4f0` uzavírá chybové stavy předání mezi transporty: volba se načte
+před startem koordinátoru, souběžná přepnutí se serializují a selhaný zápis
+nové volby znovu obnoví už odregistrovanou původní cestu. Uživatel tak po
+neúspěšném přepnutí nezůstane bez registrace.
 
 ### Kdy notifikace dorazí okamžitě a kdy ne
 
@@ -238,6 +250,14 @@ POST <proxyServer>/notifications
 v telefonu. `pushTokenHash` je SHA-512 skutečného push tokenu, takže proxy
 potřebuje vlastní registraci, kde si klient uloží dvojici hash → token.
 
+Registrace u proxy navíc výslovně nese `pushProvider=apns|fcm`. Provider se
+ukládá k zařízení a proxy podle něj volí odesílací větev; tvar tokenu není
+autoritativní. APNs registrace musí nést také
+`pushEnvironment=development|production`, zatímco FCM tuto hodnotu odmítá.
+Debug Apple build používá development, Profile a Release production. Proxy
+drží oba APNs klienty současně a endpoint vybírá per zařízení, takže souběžný
+simulátorový a TestFlight provoz si navzájem nemaže platné registrace.
+
 Na straně Apple je k tomu potřeba:
 
 | položka | hodnota |
@@ -261,10 +281,10 @@ nemůže dostat tutéž zprávu viditelně dvakrát, i kdyby jí Client Push i A
 oznámily prakticky současně — druhý zobrazovací zdroj neexistuje, není co
 deduplikovat.
 
-### Stav implementace: iOS hotové a testované, živé doručení na zavřenou appku neověřené
+### Stav implementace: iOS hotové a živě ověřené přes vlastní proxy
 
-HOTOVO A OVĚŘENO (build přes `flutter run` + `xcodebuild test`, ne jen
-`analyze`), stav 2026-08-27/28:
+HOTOVO A OVĚŘENO v `d75d0b8` (build přes `flutter run` + `xcodebuild test`,
+ne jen `analyze`), stav 2026-08-27/28:
 
 - Notification Service Extension jako vlastní Xcode target (dva reálné
   build-blocking bugy v ručně psaném `project.pbxproj` nalezené a opravené
@@ -297,60 +317,39 @@ HOTOVO A OVĚŘENO (build přes `flutter run` + `xcodebuild test`, ne jen
   ověřeno (grep), že druhý zobrazovací zdroj vůbec neexistuje (viz odstavec
   výš), takže nebylo co deduplikovat.
 
-ZBÝVÁ, ŽIVĚ NEOVĚŘENO: doručení na zavřenou aplikaci a rozklik na reálném
-zařízení. Push-v2 registrace samotná byla dřív ověřená (`/health` proxy
-ukázal reálné registrace), ale finální test „zpráva dorazí na zavřenou
-appku" neproběhl kvůli čtyřem nezávislým překážkám, ne kódu:
+Živý APNs development průchod přes vlastní proxy prokázal doručení při
+ukončeném procesu, dešifrování v Notification Service Extension a studený
+Open do správného účtu a místnosti. Reply vytvořilo právě jednu zprávu pod
+účtem určeným dešifrujícím klíčem a Mark as read posunulo serverový marker.
+Účet se nikde nedohledává podle hostitele. Pod-wired iOS XCTest skončil
+`TEST SUCCEEDED`.
 
-1. Testovací účty `fixture-user`/`fixture-user2` sdílí Android emulátor i iOS
-   simulátor. `deviceIdentifier = sha512([cloudId, tokenId])` je identita
-   dvojice účet+heslo aplikace, ne zařízení — dvě zařízení na stejném účtu
-   si navzájem přepisují registraci na proxy. iOS potřebuje vlastní účet.
-2. `flutter build ios --no-codesign` + ruční `simctl install` dává Keychain
-   operacím `errSecMissingEntitlement (-34018)`; funguje jen `flutter run`
-   (skutečný codesign i pro simulátor), který ale při reinstalaci smaže
-   přihlášení.
-3. Nextcloud login flow v2 ve WKWebView: potvrzovací dialog hesla před
-   grant-access nereaguje spolehlivě na simulované tapy ani na Tab+Enter
-   přes `idb` — opakovaně vyzkoušeno, bez jasného vzorce.
-4. Doručení APNs na iOS Simulator je samo o sobě nespolehlivé, stejná třída
-   problému jako Android emulátor + FCM.
+### Stav implementace: macOS in progress, runtime pending
 
-Domluveno: finální živý test přesunout na fyzické zařízení přes TestFlight,
-jakmile bude mít iOS vlastní testovací účet.
-
-### Stav implementace: macOS nezačaté
-
-Kanál `apple_push` v `apps/mobile/macos/Runner/` dnes neexistuje vůbec.
-Potřeba pro budoucí implementaci: entitlement `aps-environment` v macOS
-`Runner.entitlements` i `Release.entitlements`, APNs registrace analogická
-iOS, a NSE ekvivalent (macOS Notification Service Extension existuje jako
-koncept stejně jako na iOS, ale je to samostatný target s vlastním code
-signing — macOS se podepisuje jinak než iOS/simulator, takže postup z iOS se
-nedá zkopírovat beze změny). Odloženo na pokyn majitele; nezačínat bez
-výslovného zadání.
+Commit `d75d0b8` zapojuje macOS kanál `apple_push`, APNs entitlementy a vlastní
+Notification Service Extension. Universal Release build i hluboká kontrola
+podpisu Runneru a rozšíření prošly s produkčním APNs prostředím; přesný
+LaunchServices proces běží z nainstalované aplikace. Finální runtime oprávnění
+notifikací, produkční APNs token a živé doručení zatím nejsou doložené;
+implementace se proto nesmí označit za runtime hotovou.
 
 ## Windows: běžící aplikace ano, zavřená ne
 
-Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push ji
-probudí, synchronizace doběhne a to, co přibylo, se ukáže jako systémová
-notifikace; klepnutí otevře konverzaci.
+Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push vyvolá
+synchronizaci a nová Talk zpráva se zobrazí jako WinRT `ToastGeneric`.
+Notifikace nabízí explicitní akce Open, Reply a Mark as read.
 
-**Zavřenou aplikaci na Windows probudit nelze a není to nedodělek.** Jediná
-systémová cesta vede přes Windows Notification Service, a ta vyžaduje
-distribuci přes Microsoft Store a registraci aplikace u Microsoftu. Je to
-tedy rozhodnutí o distribuci s vlastní cenou, ne kus chybějícího kódu — kdo
-by to chtěl „dodělat", narazí po dvou dnech na totéž. Dokud aplikaci
-distribuujeme mimo Store, je běžící aplikace strop platformy.
+**Současný nepackagovaný build neumí probudit ukončený proces.** Takové
+doručení vyžaduje Windows Notification Service, packaged identitu z Microsoft
+Store a out-of-process COM aktivátor. Dokud aplikaci distribuujeme mimo Store,
+je běžící proces záměrná platformní hranice, ne předstíraně hotová funkce.
 
-Zobrazení dělá `Shell_NotifyIcon` (`windows/runner/shell_notification.cpp`),
-ne WinRT toast. Důvod je package identity: `ToastNotificationManager` chce
-AppUserModelID a zástupce v nabídce Start, které by nepackagovaný Flutter
-runner musel registrovat při instalaci. Windows 10 i 11 přitom balon stejně
-vykreslí jako toast, takže výsledek je pro uživatele týž za zlomek zařizování.
-Viditelná cena je ikona v oznamovací oblasti — bez ní shell balon nezobrazí.
-Ta ikona tam tedy není omylem a není to tray menu; existuje jen jako nosič
-notifikací.
+Toast XML neobsahuje `accountId` ani room token. Nativní vrstva pro každou
+notifikaci vytvoří náhodný opaque GUID a drží bounded mapu nejvýše 64 tras.
+Aktivace předá do Dartu teprve odpovídající `{accountId, roomToken}`; fronta
+rozkliků v Dartu má nejvýše 32 položek. Reply se zařadí do stejného durable
+outboxu jako odpověď z aplikace a Mark as read používá stejný account-scoped
+read service. Dva účty na stejném serveru se proto nerozlišují hostitelem.
 
 Obsah se nikde nedotahuje znovu. Skládá se z řádků, které už zapsala
 synchronizace a které renderuje seznam konverzací, a spouštěčem je vzestup
@@ -359,9 +358,11 @@ vyletěla dávka notifikací na všechno dávno nepřečtené. Filtr na Talk je
 splněný konstrukcí — v `cachedConversations` jsou výhradně Talk konverzace,
 karta z Decku se do té tabulky nedostane.
 
-Rozklik nemá vlastní cestu. Klepnutí předá URL místnosti do
-`DeepLinkDelivery::Open`, tedy do téhož handleru, který obsluhuje `nctalk://`
-odkazy, a dál se to chová jako každý jiný odkaz do konverzace.
+Živý průchod na Windows 11 nad commity `ef80b04` a `ea63609` prokázal release
+build, doručení do Notification Center, jednu serverovou zprávu po Reply,
+serverový `unreadMessages=0` po Mark as read a explicitní Open do správného
+účtu a místnosti. Focused Windows sada prošla 12/12, integrační testy 2/2 a
+`flutter analyze` bez nálezu.
 
 ## Jen Talk, nic jiného
 
