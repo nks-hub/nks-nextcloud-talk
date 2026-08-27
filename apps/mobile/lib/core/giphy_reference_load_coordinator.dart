@@ -21,6 +21,7 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
 
   final int Function(T value) byteSizeOf;
   final int maximumCacheBytes;
+
   final Map<String, _AccountLoadQueue> _accountQueues = {};
   final ListQueue<String> _readyAccounts = ListQueue();
   final Set<String> _readyAccountIds = {};
@@ -101,6 +102,25 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
     }
   }
 
+  /// Keeps [release] until the entry for [resourceUrl] leaves the cache.
+  ///
+  /// A reference that is still cached costs nothing to hand out again, so the
+  /// caller may hold on to whatever it built from it. Once the LRU drops the
+  /// bytes, the retention has to go with them.
+  void retainWhileCached({
+    required String accountId,
+    required Uri resourceUrl,
+    required void Function() release,
+  }) {
+    final entry = _cache[_GiphyReferenceKey(accountId, resourceUrl)];
+    if (entry == null) {
+      release();
+      return;
+    }
+    entry.release?.call();
+    entry.release = release;
+  }
+
   void _cacheValue(_GiphyReferenceKey key, T value) {
     final byteLength = byteSizeOf(value);
     if (byteLength < 0) {
@@ -113,6 +133,7 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
     final previous = _cache.remove(key);
     if (previous != null) {
       _cachedBytes -= previous.byteLength;
+      previous.release?.call();
     }
     while ((_cachedBytes + byteLength > maximumCacheBytes ||
             _cache.length >= maximumCacheEntries) &&
@@ -120,6 +141,7 @@ final class GiphyReferenceLoadCoordinator<T extends Object> {
       final oldestKey = _cache.keys.first;
       final oldest = _cache.remove(oldestKey)!;
       _cachedBytes -= oldest.byteLength;
+      oldest.release?.call();
     }
     _cache[key] = _CachedReference(value, byteLength);
     _cachedBytes += byteLength;
@@ -148,8 +170,11 @@ final class _GiphyReferenceKey {
 }
 
 final class _CachedReference<T extends Object> {
-  const _CachedReference(this.value, this.byteLength);
+  _CachedReference(this.value, this.byteLength);
 
   final T value;
   final int byteLength;
+
+  /// Released when this entry leaves the cache; see [retainWhileCached].
+  void Function()? release;
 }

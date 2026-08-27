@@ -347,6 +347,87 @@ void main() {
     await Future.wait([second, third]);
   });
 
+  test('retainWhileCached releases immediately when key is not cached', () async {
+    final coordinator = _coordinator();
+    var released = 0;
+
+    coordinator.retainWhileCached(
+      accountId: 'account-a',
+      resourceUrl: _resource(0),
+      release: () => released++,
+    );
+
+    expect(released, 1);
+  });
+
+  test('retainWhileCached release runs when the LRU evicts the entry', () async {
+    final coordinator = _coordinator(maximumCacheBytes: 4);
+    var released = 0;
+
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(0),
+      loader: () async => _bytes(2, 0),
+    );
+    coordinator.retainWhileCached(
+      accountId: 'account-a',
+      resourceUrl: _resource(0),
+      release: () => released++,
+    );
+    expect(released, 0);
+
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(1),
+      loader: () async => _bytes(2, 1),
+    );
+    await coordinator.load(
+      accountId: 'account-a',
+      resourceUrl: _resource(2),
+      loader: () async => _bytes(2, 2),
+    );
+
+    expect(released, 1);
+  });
+
+  test(
+    'retainWhileCached release runs when the key is re-cached with a new value',
+    () async {
+      // Two concurrent loads for the same key can both miss the cache before
+      // either finishes; the second one's _cacheValue call then replaces the
+      // first entry, which must release any retained keep-alive for it.
+      final coordinator = _coordinator();
+      final gate1 = Completer<Uint8List>();
+      final gate2 = Completer<Uint8List>();
+      var released = 0;
+
+      final future1 = coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        loader: () => gate1.future,
+      );
+      final future2 = coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        loader: () => gate2.future,
+      );
+      await _flushAsyncWork();
+
+      gate1.complete(_bytes(2, 1));
+      await future1;
+      coordinator.retainWhileCached(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        release: () => released++,
+      );
+      expect(released, 0);
+
+      gate2.complete(_bytes(2, 2));
+      await future2;
+      expect(released, 1);
+    },
+  );
+
   test('a cancelled queued load does not poison the same key', () async {
     final coordinator = _coordinator();
     final blockers = List.generate(2, (_) => Completer<Uint8List>());

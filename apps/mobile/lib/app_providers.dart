@@ -562,7 +562,7 @@ final giphyReferenceMediaProvider = FutureProvider.autoDispose
       if (repository == null) {
         throw const GiphyException(GiphyError.integrationUnavailable);
       }
-      return coordinator.load(
+      final media = await coordinator.load(
         accountId: request.accountId,
         resourceUrl: request.resourceUrl,
         loader: () => repository.loadReference(
@@ -570,6 +570,18 @@ final giphyReferenceMediaProvider = FutureProvider.autoDispose
           abortTrigger: abort.future,
         ),
       );
+      // Scrolling a GIF out of view used to dispose this provider and the
+      // repository behind it, so scrolling back re-ran the whole capabilities
+      // round trip before the already cached bytes were even consulted. The
+      // keep-alive lives exactly as long as the coordinator keeps the bytes,
+      // so retention stays inside the cache budget it already enforces.
+      final link = ref.keepAlive();
+      coordinator.retainWhileCached(
+        accountId: request.accountId,
+        resourceUrl: request.resourceUrl,
+        release: link.close,
+      );
+      return media;
     });
 
 final accountsProvider = StreamProvider<List<StoredAccount>>((ref) {
