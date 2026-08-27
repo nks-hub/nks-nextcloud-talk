@@ -47,6 +47,8 @@ import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_push_coordinator.dart';
 import 'features/push/android_web_push_bridge.dart';
+import 'features/push/client_push_coordinator.dart';
+import 'features/push/client_push_session.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/media/durable_attachment_source_store.dart';
@@ -242,6 +244,97 @@ final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
   final bridge = AndroidWebPushBridge();
   ref.onDispose(() => unawaited(bridge.dispose()));
   return bridge;
+});
+
+/// Nextcloud's own live channel, running for every signed-in account.
+///
+/// `notify_push` reaches every platform the app builds for, which is what
+/// makes it worth having next to the Android-only Web Push path: it delivers
+/// the moment a notification appears rather than at the next poll. It never
+/// replaces Web Push, which is the only channel that can wake a killed app.
+/// Whether the live channel should run at all.
+///
+/// Widget tests mount the app without a server behind it, and a socket that
+/// starts there would reach for the account store and the network for no
+/// reason. Production leaves this on.
+final clientPushEnabledProvider = Provider<bool>((ref) => true);
+
+final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
+  if (!ref.watch(clientPushEnabledProvider)) {
+    return null;
+  }
+  final accounts = ref.watch(accountRepositoryProvider);
+  final credentials = ref.watch(credentialVaultProvider);
+  final api = ref.watch(nextcloudApiProvider);
+
+  Future<({StoredAccount account, String appPassword})?> credentialsFor(
+    String accountId,
+  ) async {
+    final account = await accounts.getAccount(accountId);
+    if (account == null) {
+      return null;
+    }
+    final appPassword = await credentials.readAppPassword(accountId);
+    if (appPassword == null) {
+      return null;
+    }
+    return (account: account, appPassword: appPassword);
+  }
+
+  final coordinator = ClientPushCoordinator(
+    resolve: (accountId) async {
+      final resolved = await credentialsFor(accountId);
+      if (resolved == null) {
+        return null;
+      }
+      final capabilities = await api.getAuthenticatedCapabilities(
+        server: ServerBase.parse(resolved.account.serverUrl),
+        loginName: resolved.account.loginName,
+        appPassword: resolved.appPassword,
+      );
+      return readClientPushEndpoints(capabilities.capabilities);
+    },
+    fetchToken: (accountId, endpoints) async {
+      final resolved = await credentialsFor(accountId);
+      if (resolved == null) {
+        throw const ClientPushException(ClientPushFailure.rejected);
+      }
+      return api.fetchClientPushPreAuthToken(
+        server: ServerBase.parse(resolved.account.serverUrl),
+        loginName: resolved.account.loginName,
+        appPassword: resolved.appPassword,
+        preAuth: endpoints.preAuth,
+      );
+    },
+    connector: const IoClientPushConnector(),
+    onWakeUp: (accountId) =>
+        unawaited(ref.read(conversationSyncServiceProvider).sync(accountId)),
+  );
+  ref.onDispose(() => unawaited(coordinator.dispose()));
+
+  // Following the same account list the UI shows keeps the sockets in step
+  // with sign-in and sign-out without a second place having to remember it,
+  // and without reaching for the account store before an account exists.
+  ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (
+    previous,
+    next,
+  ) {
+    final signedIn = next.valueOrNull;
+    if (signedIn == null) {
+      return;
+    }
+    final live = signedIn.map((account) => account.id).toSet();
+    for (final accountId in live) {
+      coordinator.follow(accountId);
+    }
+    for (final accountId in previous?.valueOrNull
+            ?.map((account) => account.id)
+            .where((id) => !live.contains(id)) ??
+        const <String>[]) {
+      unawaited(coordinator.unfollow(accountId));
+    }
+  }, fireImmediately: true);
+  return coordinator;
 });
 
 final androidPushCoordinatorProvider = Provider<AndroidPushCoordinator?>((ref) {

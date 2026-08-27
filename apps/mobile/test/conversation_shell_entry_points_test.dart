@@ -53,6 +53,7 @@ void main() {
     return ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWithValue(database),
+        clientPushEnabledProvider.overrideWithValue(false),
         credentialVaultProvider.overrideWithValue(MemoryCredentialVault()),
         accountsProvider.overrideWith(
           (ref) => Stream.value(availableAccounts ?? [account]),
@@ -436,6 +437,8 @@ void main() {
         ProviderScope(
           overrides: [
             themePreferenceStoreProvider.overrideWithValue(store),
+            // No server behind this tree, so the live channel stays off.
+            clientPushEnabledProvider.overrideWithValue(false),
             accountsProvider.overrideWith(
               (ref) => Stream.value(const <StoredAccount>[]),
             ),
