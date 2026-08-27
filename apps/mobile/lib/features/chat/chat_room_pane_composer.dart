@@ -111,44 +111,40 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     return mounted && generation == _sendGeneration && targetKey == _key;
   }
 
-  Future<void> _showEmojiPicker() async {
+  /// Opens the emoji panel above the compose row, or closes it again.
+  ///
+  /// It used to be a modal bottom sheet, which covered most of the screen
+  /// including the line being typed into. The panel takes the space the
+  /// keyboard would use instead, so the composer and the last messages stay
+  /// visible while picking.
+  void _toggleEmojiPicker() {
     if (_sending || _isReadOnlyNow()) {
       return;
     }
-    final strings = AppLocalizations.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => Align(
-        alignment: Alignment.bottomCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: SizedBox(
-            height: MediaQuery.sizeOf(sheetContext).height * 0.72,
-            child: EmojiPicker(
-              accountId: AccountId.parse(_key.accountId),
-              usageStore: ref.read(emojiUsageStoreProvider),
-              labels: _emojiPickerLabels(strings),
-              onClose: () => Navigator.of(sheetContext).pop(),
-              // Picking an emoji keeps the picker open: people reach for
-              // several in a row, and closing after each one made every extra
-              // emoji cost a reopen. The sheet is dismissed by its own close
-              // button, by the scrim, or by the back gesture.
-              onSelected: (choice) {
-                if (!mounted || _isReadOnlyNow()) {
-                  Navigator.of(sheetContext).pop();
-                  return;
-                }
-                if (!insertComposerText(_composer, choice.glyph)) {
-                  _showComposerLimitError();
-                }
-              },
-            ),
-          ),
-        ),
-      ),
-    );
+    if (!_emojiPickerOpen) {
+      // The soft keyboard and the panel want the same space; the panel wins
+      // while it is open, exactly as the keyboard does while it is up.
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+    _update(() => _emojiPickerOpen = !_emojiPickerOpen);
+  }
+
+  void _closeEmojiPicker() {
+    if (_emojiPickerOpen) {
+      _update(() => _emojiPickerOpen = false);
+    }
+  }
+
+  void _insertEmoji(EmojiChoice choice) {
+    if (!mounted || _isReadOnlyNow()) {
+      _closeEmojiPicker();
+      return;
+    }
+    // Picking keeps the panel open: people reach for several in a row, and
+    // closing after each one made every extra emoji cost a reopen.
+    if (!insertComposerText(_composer, choice.glyph)) {
+      _showComposerLimitError();
+    }
   }
 
   EmojiPickerLabels _emojiPickerLabels(AppLocalizations strings) {

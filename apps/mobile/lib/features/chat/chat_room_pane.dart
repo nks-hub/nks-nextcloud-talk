@@ -35,6 +35,7 @@ import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
 import 'composer/emoji_picker.dart';
+import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
 import 'composer/mention_suggestions.dart';
 
@@ -279,6 +280,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   static const _highlightDuration = Duration(seconds: 2);
 
   final TextEditingController _composer = TextEditingController();
+  bool _emojiPickerOpen = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _jumpTargetKey = GlobalKey();
   final ChatMediaComposerController _mediaComposerController =
@@ -609,9 +611,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final idleComposerActions = <Widget>[
       IconButton(
         key: const Key('open-emoji-picker'),
-        onPressed: _sending ? null : () => unawaited(_showEmojiPicker()),
+        onPressed: _sending ? null : _toggleEmojiPicker,
         tooltip: strings.openEmojiPicker,
+        isSelected: _emojiPickerOpen,
         icon: const Icon(Icons.emoji_emotions_outlined),
+        selectedIcon: const Icon(Icons.emoji_emotions),
       ),
       IconButton(
         key: const Key('open-giphy-picker'),
@@ -705,6 +709,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   lastCommonRead: _cursorValue(scope?.lastCommonRead),
                 ),
         ),
+        if (_emojiPickerOpen && !readOnly)
+          _InlineEmojiPanel(
+            accountId: AccountId.parse(_key.accountId),
+            usageStore: ref.read(emojiUsageStoreProvider),
+            labels: _emojiPickerLabels(strings),
+            onClose: _closeEmojiPicker,
+            onSelected: _insertEmoji,
+          ),
         _ChatComposer(
           replyTo: _replyTo,
           onCancelReply: () => setState(() => _replyTo = null),

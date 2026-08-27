@@ -105,6 +105,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('open-emoji-picker')));
     await _pumpTransition(tester);
+    // The picker expands above the compose row instead of covering it: the
+    // line being typed into has to stay on screen while picking.
+    expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
+    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const Key('inline-emoji-panel'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(const Key('chat-composer'))).dy),
+    );
     await tester.tap(find.byKey(const Key('emoji-category-people')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
@@ -115,6 +123,7 @@ void main() {
     expect(find.byKey(const Key('emoji-close')), findsOneWidget);
     await tester.tap(find.byKey(const Key('emoji-close')));
     await _pumpTransition(tester);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
 
     await tester.tap(find.byKey(const Key('open-giphy-picker')));
     final gif = find.byKey(
