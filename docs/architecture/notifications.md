@@ -120,6 +120,35 @@ je jeden na zařízení, klíče jsou per účet. Seznam přihlášených účt�
 Dart nativní straně (`setAccounts`), protože doručení může probudit mrtvý
 proces.
 
+### Kdy notifikace dorazí okamžitě a kdy ne
+
+Talk má u Nextcloudu vždy vysokou naléhavost, i běžná zpráva —
+`Push.php` nastaví `urgency = high` pro `spreed`, `talk`
+i `admin_notification_talk`. Proxy to mapuje jedna ku jedné na
+`android.priority: high`.
+
+ZMĚŘENO 2026-08-27 na `chatujmePixel` (Android 14) přes
+`RemoteMessage.getOriginalPriority()` a `getPriority()`, dočasnou
+instrumentací, která ve stromě nezůstala. Obojí vrátilo `1`, tedy
+`PRIORITY_HIGH`, a to i ve stavu, který prioritu měl podle očekávání srazit:
+aplikace odebraná z výjimek úsporného režimu, standby bucket `RESTRICTED`
+(45) a zařízení ve `deviceidle` stavu `IDLE`. Zpráva dorazila za 471 ms od
+`sentTime`. **Vysokou prioritu tedy nese celý řetěz správně a Android ji
+nesnižuje ani v hlubokém úsporném režimu**; App Standby Buckets jako
+vysvětlení odpadají.
+
+Zdržení, které jsme přesto pozorovali, mělo jinou příčinu: na emulátoru po
+delší nečinnosti zvětrá spojení Play Services a zprávy se nakupí, dokud ho
+něco neprobudí. Nic se přitom neztratí — když se spojení obnovilo, dorazily
+i všechny odložené zprávy. Log proxy to potvrdil z druhé strany: šest
+odeslání, šest `200 OK` od Googlu.
+
+Praktický důsledek: **hlášení „notifikace chodí pozdě" nehledejte v našem
+kódu.** Priorita je správně od Nextcloudu až po `getPriority()` na zařízení.
+Před testováním push na emulátoru ho vytáhněte z úsporného režimu
+(`adb shell cmd deviceidle unforce`, případně balíček na whitelist), jinak
+měříte Googlův plánovač, ne naši cestu. Fyzické zařízení se takhle nechová.
+
 ## Client Push (`notify_push`) — všechny platformy
 
 Nextcloudem navržený živý kanál. Server ho nabízí v capabilities:
