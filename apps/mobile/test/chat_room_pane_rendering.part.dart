@@ -170,6 +170,9 @@ void _registerChatRoomPaneRenderingTests() {
       expect(openedPreview.queryParameters['fileId'], '77');
       expect(openedPreview.queryParameters['x'], '2048');
       expect(openedPreview.queryParameters['y'], '2048');
+      // `a=1` keeps the aspect ratio; `a=0` makes Nextcloud crop the photo to
+      // the requested box instead of fitting the whole image inside it.
+      expect(openedPreview.queryParameters['a'], '1');
       await tester.tap(find.byKey(const Key('authenticated-image-close')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('chat-reaction-20-0')), findsOneWidget);
@@ -302,6 +305,7 @@ void _registerChatRoomPaneRenderingTests() {
     expect(openedPreview.queryParameters['fileId'], '88');
     expect(openedPreview.queryParameters['x'], '2048');
     expect(openedPreview.queryParameters['y'], '2048');
+    expect(openedPreview.queryParameters['a'], '1');
   });
 
   testWidgets('failed image thumbnail retries and keeps internal viewer', (

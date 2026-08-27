@@ -504,9 +504,14 @@ Uri? _previewUri(
     return null;
   }
   final server = ServerBase.parse(account.serverUrl);
+  // `a` is Nextcloud's "preserve the aspect ratio" flag (see
+  // core/Controller/PreviewController.php). With `a=0` the server crops the
+  // image to exactly x by y, so a wide photo came back as a square cut out of
+  // its middle instead of the whole picture. The box below is a bound, not a
+  // target shape.
   return server.uri.replace(
     pathSegments: [...server.uri.pathSegments, 'index.php', 'core', 'preview'],
-    queryParameters: {'fileId': '$fileId', 'x': '1024', 'y': '1024', 'a': '0'},
+    queryParameters: {'fileId': '$fileId', 'x': '1024', 'y': '1024', 'a': '1'},
   );
 }
 
