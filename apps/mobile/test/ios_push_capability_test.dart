@@ -53,4 +53,39 @@ void main() {
       );
     }
   });
+
+  test('ApplePushDelivery.swift is compiled into the Runner target', () {
+    // A Swift file that exists on disk but was never added to the Xcode
+    // project's Sources build phase compiles nothing: Xcode simply never
+    // sees it, and AppDelegate's `ApplePushDelivery()` fails with "Cannot
+    // find 'ApplePushDelivery' in scope" the moment anything tries to build
+    // it. `flutter analyze` cannot catch this — Dart has no idea Xcode
+    // exists — so this has to be read out of the project file directly.
+    final projectFile = File(
+      '${Directory.current.path}${Platform.pathSeparator}ios'
+      '${Platform.pathSeparator}Runner.xcodeproj'
+      '${Platform.pathSeparator}project.pbxproj',
+    );
+    expect(projectFile.existsSync(), isTrue);
+    final project = projectFile.readAsStringSync();
+
+    expect(
+      RegExp(
+        r'PBXBuildFile;\s*fileRef = [0-9A-F]{24} /\* ApplePushDelivery\.swift \*/',
+      ).hasMatch(project),
+      isTrue,
+      reason:
+          'ApplePushDelivery.swift has no PBXBuildFile entry, so Xcode '
+          'never compiles it',
+    );
+    expect(
+      RegExp(
+        r'/\* ApplePushDelivery\.swift in Sources \*/,',
+      ).hasMatch(project),
+      isTrue,
+      reason:
+          'ApplePushDelivery.swift is not listed in the Sources build '
+          'phase, so Xcode never compiles it',
+    );
+  });
 }
