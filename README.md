@@ -77,10 +77,22 @@ Jde o implementovaný a automatizovaný platformní řez, ne o hotové live push
 doručení. Skutečný Nextcloud → FCM → background/killed tok na fyzickém zařízení
 je stále otevřený.
 
-iOS je odlišná platformní hranice: APNs a budoucí PushKit vyžadují
-publisher-owned relay s Apple credentials. Nextcloud addon ani runtime stažení
-konfigurace tuto Apple hranici neobejdou. Podrobnosti a přesné omezení jsou v
-[push analýze](docs/research/push-fcm.md).
+Na všech platformách navíc běží **Nextcloud Client Push** (`notify_push`) —
+websocket, který Nextcloud sám nabízí v capabilities. Doručí zprávu okamžitě,
+dokud aplikace běží, a nepotřebuje k tomu nic navíc.
+
+iOS je odlišná platformní hranice a stojí za to říct proč přesně. Nextcloud do
+APNs neumí; `apps/notifications/lib/Push.php` jen seskupí notifikace podle
+sloupce `proxyserver` a pošle je na tu adresu. Doručení do APNs obstarává až
+ona. Oficiální aplikace Talk míří na `push-notifications.nextcloud.com`, což
+je služba Nextcloud GmbH podepisující **jejich** Apple certifikátem pro
+**jejich** bundle id — do klienta třetí strany přes ni nedorazí nic. Ta adresa
+tedy **není součástí self-hosted Nextcloudu** a v jeho administraci se
+nenastavuje; volí ji klient při registraci zařízení parametrem `proxyServer`.
+
+Kompletní popis všech tří kanálů, kontraktu s Nextcloudem a toho, co je pevně
+dané platformou, je v [dokumentu o notifikacích](docs/architecture/notifications.md).
+Starší analýza je v [push analýze](docs/research/push-fcm.md).
 
 ## Dokumentace
 
@@ -88,6 +100,7 @@ konfigurace tuto Apple hranici neobejdou. Podrobnosti a přesné omezení jsou v
 - [Flutter aplikační základ](docs/architecture/flutter-foundation.md)
 - [Požadavky a důkaz dokončení](docs/architecture/requirements.md)
 - [Systémový návrh](docs/architecture/system-design.md)
+- [Notifikace na všech platformách](docs/architecture/notifications.md)
 - [Implementační řezy a testovací brány](docs/architecture/delivery-plan.md)
 - [Rozhodnutí a otevřené volby](docs/architecture/decisions.md)
 - [Výzkum oficiálních klientů](docs/research/README.md)
