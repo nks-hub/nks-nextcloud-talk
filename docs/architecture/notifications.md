@@ -252,6 +252,39 @@ Rozšíření má vlastní App ID a přes App Group se dostane k privátnímu kl
 kterým notifikaci dešifruje. Certifikáty potřeba nejsou, `.p8` je nahrazuje a
 nevyprší.
 
+## Windows: běžící aplikace ano, zavřená ne
+
+Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push ji
+probudí, synchronizace doběhne a to, co přibylo, se ukáže jako systémová
+notifikace; klepnutí otevře konverzaci.
+
+**Zavřenou aplikaci na Windows probudit nelze a není to nedodělek.** Jediná
+systémová cesta vede přes Windows Notification Service, a ta vyžaduje
+distribuci přes Microsoft Store a registraci aplikace u Microsoftu. Je to
+tedy rozhodnutí o distribuci s vlastní cenou, ne kus chybějícího kódu — kdo
+by to chtěl „dodělat", narazí po dvou dnech na totéž. Dokud aplikaci
+distribuujeme mimo Store, je běžící aplikace strop platformy.
+
+Zobrazení dělá `Shell_NotifyIcon` (`windows/runner/shell_notification.cpp`),
+ne WinRT toast. Důvod je package identity: `ToastNotificationManager` chce
+AppUserModelID a zástupce v nabídce Start, které by nepackagovaný Flutter
+runner musel registrovat při instalaci. Windows 10 i 11 přitom balon stejně
+vykreslí jako toast, takže výsledek je pro uživatele týž za zlomek zařizování.
+Viditelná cena je ikona v oznamovací oblasti — bez ní shell balon nezobrazí.
+Ta ikona tam tedy není omylem a není to tray menu; existuje jen jako nosič
+notifikací.
+
+Obsah se nikde nedotahuje znovu. Skládá se z řádků, které už zapsala
+synchronizace a které renderuje seznam konverzací, a spouštěčem je vzestup
+počtu nepřečtených. První načtení se jen zapamatuje: jinak by po každém startu
+vyletěla dávka notifikací na všechno dávno nepřečtené. Filtr na Talk je
+splněný konstrukcí — v `cachedConversations` jsou výhradně Talk konverzace,
+karta z Decku se do té tabulky nedostane.
+
+Rozklik nemá vlastní cestu. Klepnutí předá URL místnosti do
+`DeepLinkDelivery::Open`, tedy do téhož handleru, který obsluhuje `nctalk://`
+odkazy, a dál se to chová jako každý jiný odkaz do konverzace.
+
 ## Jen Talk, nic jiného
 
 Nextcloud posílá na registrované zařízení notifikace **všech** aplikací, ne
