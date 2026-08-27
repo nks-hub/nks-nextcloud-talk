@@ -342,6 +342,17 @@ void main() {
         ).classification,
         PushCompletionClass.success,
       );
+      // nks-talk-notify/README.md: 200 means "nothing was registered"
+      // (idempotent), 202 means a registration actually existed and was
+      // deleted — both are success, not just 200.
+      expect(
+        decodePushGatewayUnregistrationResponse(
+          effect: gateway,
+          statusCode: 202,
+          body: '',
+        ).classification,
+        PushCompletionClass.success,
+      );
       expect(
         decodePushGatewayUnregistrationResponse(
           effect: gateway,

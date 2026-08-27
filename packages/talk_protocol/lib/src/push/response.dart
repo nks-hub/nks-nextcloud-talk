@@ -156,6 +156,12 @@ PushGatewayUnregistrationCompletion decodePushGatewayUnregistrationResponse({
     }
     return PushGatewayUnregistrationCompletion.success(effect: effect);
   }
+  // 200 means "nothing was registered" (idempotent), 202 means the
+  // registration actually existed and was deleted — both are success, see
+  // nks-talk-notify/README.md, "3. DELETE /devices".
+  if (statusCode == 202) {
+    return PushGatewayUnregistrationCompletion.success(effect: effect);
+  }
   if (statusCode == 408 || statusCode == 429 || statusCode >= 500) {
     return PushGatewayUnregistrationCompletion.transientFailure(effect: effect);
   }
