@@ -12,15 +12,15 @@ import 'package:path_provider/path_provider.dart';
 /// `fcm.distributor.unifiedpush.org` rewrite gateway, which is exactly what
 /// [proxy] exists to avoid.
 ///
-/// [webPush] is still the default. It is the only branch proven end to end on
-/// a real device, and shipping an unproven default would take notifications
-/// away on the one platform where they work today. The default flips to
-/// [proxy] once the proxy path has registered a real device.
+/// [proxy] is the default since the whole chain was proven on a real device:
+/// a message to a closed app arrived, showed the right text, and the tap
+/// opened the right conversation. [webPush] stays as the fallback behind the
+/// switch in settings.
 enum AndroidPushTransport { proxy, webPush }
 
 /// What an untouched device uses. See [AndroidPushTransport] for why this is
 /// not the proxy yet.
-const _defaultTransport = AndroidPushTransport.webPush;
+const _defaultTransport = AndroidPushTransport.proxy;
 
 /// The same value, for the provider that seeds the runtime state before the
 /// stored choice has been read back.
