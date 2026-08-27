@@ -61,14 +61,6 @@ Ani jedno SDK nesmí shodit start aplikace: telemetrie je diagnostika, ne
 funkce, o kterou uživatel žádal. Selhání `Rybbit.init` se spolkne a aplikace
 běží dál bez analytiky.
 
-## Verze Sentry
-
-`sentry_flutter` je držené na 8.x. Od 9.0 SDK závisí na balíku `jni`, který se
-hlásí jako ffi plugin i pro Windows a Linux, takže jeho CMake volá
-`find_package(JNI)` a desktop build bez JDK skončí chybou. Windows je tady
-cílová platforma s vlastním C++ runnerem, takže požadavek na JDK jen kvůli
-telemetrii je horší obchod než starší major SDK.
-
 ## Ověření
 
 Živě na Android emulátoru proti `com.nkshub.nextcloudtalk`, build `e5f893d`

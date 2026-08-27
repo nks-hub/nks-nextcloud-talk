@@ -4,15 +4,14 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 void main() {
   group('scrubSentryEvent', () {
-    test('empties the request, which names the server and the room', () {
+    test('drops the request, which names the server and the room', () {
       final event = SentryEvent(
         request: SentryRequest(
           url: 'https://talk.example.com/ocs/v2.php/apps/spreed/api/v4/room',
         ),
       );
 
-      final scrubbed = scrubSentryEvent(event).request;
-      expect(scrubbed?.url, isNull);
+      expect(scrubSentryEvent(event).request, isNull);
     });
 
     test('reduces a URL in the message to its scheme', () {

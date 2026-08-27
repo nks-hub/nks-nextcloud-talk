@@ -74,26 +74,22 @@ const _scrubber = TelemetryScrubber();
 
 /// Removes URLs and credentials from everything an event carries as text.
 ///
-/// The request is replaced by an empty one rather than kept: a Talk request
-/// URL names the server and the room, and the failing call is already
-/// identifiable from the stack.
+/// [SentryEvent.request] goes entirely: a Talk request URL names the server
+/// and the room, and the failing call is already identifiable from the stack.
 @visibleForTesting
 SentryEvent scrubSentryEvent(SentryEvent event) {
+  event.request = null;
   final message = event.message;
-  final exceptions = event.exceptions;
-  return event.copyWith(
-    request: SentryRequest(),
-    message: message == null
-        ? null
-        : SentryMessage(_scrubber.scrub(message.formatted)),
-    exceptions: exceptions
-        ?.map(
-          (exception) => exception.value == null
-              ? exception
-              : exception.copyWith(value: _scrubber.scrub(exception.value!)),
-        )
-        .toList(growable: false),
-  );
+  if (message != null) {
+    event.message = SentryMessage(_scrubber.scrub(message.formatted));
+  }
+  for (final exception in event.exceptions ?? const <SentryException>[]) {
+    final value = exception.value;
+    if (value != null) {
+      exception.value = _scrubber.scrub(value);
+    }
+  }
+  return event;
 }
 
 @visibleForTesting
@@ -102,16 +98,17 @@ Breadcrumb? scrubSentryBreadcrumb(Breadcrumb? breadcrumb, Hint hint) {
     return null;
   }
   final message = breadcrumb.message;
+  if (message != null) {
+    breadcrumb.message = _scrubber.scrub(message);
+  }
   final data = breadcrumb.data;
-  return breadcrumb.copyWith(
-    message: message == null ? null : _scrubber.scrub(message),
-    data: data == null
-        ? null
-        : <String, dynamic>{
-            for (final entry in data.entries)
-              entry.key: entry.value is String
-                  ? _scrubber.scrub(entry.value as String)
-                  : entry.value,
-          },
-  );
+  if (data != null) {
+    for (final entry in data.entries.toList()) {
+      final value = entry.value;
+      if (value is String) {
+        data[entry.key] = _scrubber.scrub(value);
+      }
+    }
+  }
+  return breadcrumb;
 }
