@@ -614,7 +614,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -808,6 +808,52 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 14) {
         await migrator.createTable(cachedThreads);
+      }
+      if (from < 15) {
+        // Reactions and deletion notices arrive as system messages carrying
+        // the thread they belong to. Counting them made a bubble claim "1
+        // reply" the moment somebody reacted, and the wrong number then
+        // survived every later recount because it was reused as a floor.
+        // The projection stopped producing it; this clears what is already
+        // stored.
+        //
+        // Only a count that exactly matches the buggy rule is rewritten, and
+        // only downwards. A root whose number came from the server is left
+        // alone even when the cache holds fewer replies than the server
+        // reported, because the cache is a window, not the truth.
+        await customStatement(r'''
+          UPDATE cached_chat_messages AS root
+          SET raw_json = json_set(
+                root.raw_json,
+                '$.threadReplies',
+                (SELECT COUNT(*)
+                   FROM cached_chat_messages AS clean
+                  WHERE clean.account_id = root.account_id
+                    AND clean.room_token = root.room_token
+                    AND clean.thread_id = root.thread_id
+                    AND clean.message_id <> root.thread_id
+                    AND clean.system_message = '')
+              )
+          WHERE root.thread_id IS NOT NULL
+            AND root.message_id = root.thread_id
+            AND json_valid(root.raw_json)
+            AND json_type(root.raw_json, '$.threadReplies') = 'integer'
+            AND json_extract(root.raw_json, '$.threadReplies') = (
+                  SELECT COUNT(*)
+                    FROM cached_chat_messages AS counted
+                   WHERE counted.account_id = root.account_id
+                     AND counted.room_token = root.room_token
+                     AND counted.thread_id = root.thread_id
+                     AND counted.message_id <> root.thread_id)
+            AND json_extract(root.raw_json, '$.threadReplies') > (
+                  SELECT COUNT(*)
+                    FROM cached_chat_messages AS clean
+                   WHERE clean.account_id = root.account_id
+                     AND clean.room_token = root.room_token
+                     AND clean.thread_id = root.thread_id
+                     AND clean.message_id <> root.thread_id
+                     AND clean.system_message = '')
+        ''');
       }
     },
     beforeOpen: (_) async {

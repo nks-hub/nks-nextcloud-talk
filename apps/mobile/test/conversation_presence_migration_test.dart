@@ -56,7 +56,7 @@ void main() {
         });
 
         final room = providerRoom!;
-        expect(database!.schemaVersion, 14);
+        expect(database!.schemaVersion, 15);
         expect(room.peerStatus, 'away');
         expect(room.peerStatusIcon, '☕');
         expect(room.peerStatusMessage, 'Coffee break');
@@ -134,7 +134,7 @@ void main() {
         database = AppDatabase.forTesting(NativeDatabase(fixture.file));
 
         var rooms = await _roomsByToken(database);
-        expect(database.schemaVersion, 14);
+        expect(database.schemaVersion, 15);
         expect(rooms['repair-room']!.peerStatus, 'online');
         expect(rooms['repair-room']!.peerStatusIcon, '🟢');
         expect(rooms['repair-room']!.peerStatusMessage, 'Available');
@@ -163,7 +163,7 @@ void main() {
         database = AppDatabase.forTesting(NativeDatabase(fixture.file));
         rooms = await _roomsByToken(database);
 
-        expect(database.schemaVersion, 14);
+        expect(database.schemaVersion, 15);
         expect(rooms['repair-room']!.peerStatus, 'online');
         expect(rooms['repair-room']!.peerStatusIcon, '🟢');
         expect(rooms['repair-room']!.peerStatusMessage, 'Available');

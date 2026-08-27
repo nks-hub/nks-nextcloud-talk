@@ -10,14 +10,14 @@ void main() {
   for (final release in _supportedReleaseSchemas) {
     test(
       'release schema v${release.version} (${release.sha.substring(0, 7)}) '
-      'upgrades to v14 with account data intact',
+      'upgrades to v15 with account data intact',
       () => _verifyReleaseUpgrade(release),
     );
   }
 
   test(
     'schema left ahead of user_version by an interrupted migration '
-    'still upgrades to v14',
+    'still upgrades to v15',
     _verifyInterruptedUpgrade,
   );
 }
@@ -63,7 +63,7 @@ Future<void> _verifyInterruptedUpgrade() async {
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
         .get();
 
-    expect(version.read<int>('user_version'), 14);
+    expect(version.read<int>('user_version'), 15);
     expect(room.isArchived, isTrue);
     expect(room.peerStatus, 'away');
     expect(
@@ -112,7 +112,7 @@ Future<void> _verifyReleaseUpgrade(_ReleaseSchema release) async {
         .customSelect('PRAGMA foreign_key_check')
         .get();
 
-    expect(version.read<int>('user_version'), 14);
+    expect(version.read<int>('user_version'), 15);
     expect(account.id, 'account-matrix');
     expect(account.loginName, 'fixture-user');
     expect(room.token, 'matrix-room');
