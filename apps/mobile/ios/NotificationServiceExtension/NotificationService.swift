@@ -43,6 +43,14 @@ final class NotificationService: UNNotificationServiceExtension {
     if let subject = payload["subject"] as? String, !subject.isEmpty {
       content.body = subject
     }
+    // ponytail: the encrypted payload only ever carries an app id ("spreed"
+    // for every Talk push), never a room name — Nextcloud's push envelope is
+    // deliberately minimal for privacy. A real conversation title would need
+    // an authenticated API round-trip from inside the extension, which risks
+    // blowing the ~30s NSE time budget; skipped until that's needed.
+    if let app = payload["app"] as? String, app == "spreed" {
+      content.title = "Nextcloud Talk"
+    }
   }
 
   override func serviceExtensionTimeWillExpire() {
