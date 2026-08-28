@@ -2,12 +2,57 @@ package com.nkshub.nextcloudtalk.push
 
 import android.content.Context
 import android.util.Base64
+import com.google.android.gms.tasks.Task
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
+
+internal class FirstInstallFcmTokenReset(
+    private val isFirstInstall: () -> Boolean,
+    private val isComplete: () -> Boolean,
+    private val deleteToken: () -> Task<Void>,
+    private val markComplete: () -> Boolean,
+) {
+    private val lock = Any()
+    private var inFlight: Task<Void>? = null
+
+    fun beforeGetToken(): Task<Void> {
+        if (!isFirstInstall() || isComplete()) {
+            return Tasks.forResult<Void>(null)
+        }
+        return synchronized(lock) {
+            if (!isFirstInstall() || isComplete()) {
+                return@synchronized Tasks.forResult<Void>(null)
+            }
+            inFlight?.let { return@synchronized it }
+            val reset = deleteToken().continueWith<Void>(DIRECT_EXECUTOR) { task ->
+                if (!task.isSuccessful) {
+                    throw task.exception ?: IllegalStateException("FCM token deletion failed")
+                }
+                check(markComplete()) { "FCM reset marker could not be persisted" }
+                null
+            }
+            inFlight = reset
+            reset.addOnCompleteListener(DIRECT_EXECUTOR) {
+                synchronized(lock) {
+                    if (inFlight === reset) {
+                        inFlight = null
+                    }
+                }
+            }
+            reset
+        }
+    }
+
+    private companion object {
+        val DIRECT_EXECUTOR = Executor { command -> command.run() }
+    }
+}
 
 /**
  * Hands the FCM registration token to Dart and remembers which accounts are
@@ -23,10 +68,39 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 internal class AndroidFcmChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
+    private val firstInstallReset = FirstInstallFcmTokenReset(
+        isFirstInstall = {
+            context.packageManager.getPackageInfo(context.packageName, 0).run {
+                firstInstallTime == lastUpdateTime
+            }
+        },
+        isComplete = {
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .getBoolean(FIRST_INSTALL_RESET_COMPLETE, false)
+        },
+        deleteToken = { FirebaseMessaging.getInstance().deleteToken() },
+        markComplete = {
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(FIRST_INSTALL_RESET_COMPLETE, true)
+                .commit()
+        },
+    )
+
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "getToken" -> FirebaseMessaging.getInstance().token
-                .addOnSuccessListener { token -> result.success(token) }
+            "getToken" -> firstInstallReset.beforeGetToken()
+                .addOnSuccessListener {
+                    FirebaseMessaging.getInstance().token
+                        .addOnSuccessListener { token -> result.success(token) }
+                        .addOnFailureListener {
+                            result.error(
+                                "fcm_token_unavailable",
+                                "No FCM registration token is available.",
+                                null,
+                            )
+                        }
+                }
                 .addOnFailureListener {
                     result.error(
                         "fcm_token_unavailable",
@@ -52,6 +126,7 @@ internal class AndroidFcmChannel(private val context: Context) :
 
         private const val PREFERENCES = "android_fcm_accounts"
         private const val ACCOUNT_IDS = "accountIds"
+        internal const val FIRST_INSTALL_RESET_COMPLETE = "firstInstallResetComplete"
         private val ACCOUNT_ID = Regex("^[0-9a-fA-F-]{1,64}$")
         private val listeners = CopyOnWriteArrayList<(String) -> Unit>()
 
