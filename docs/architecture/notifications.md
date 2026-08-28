@@ -324,14 +324,16 @@ Open do správného účtu a místnosti. Reply vytvořilo právě jednu zprávu 
 Účet se nikde nedohledává podle hostitele. Pod-wired iOS XCTest skončil
 `TEST SUCCEEDED`.
 
-### Stav implementace: macOS in progress, runtime pending
+### Stav implementace: macOS production ověřeno
 
-Commit `d75d0b8` zapojuje macOS kanál `apple_push`, APNs entitlementy a vlastní
-Notification Service Extension. Universal Release build i hluboká kontrola
-podpisu Runneru a rozšíření prošly s produkčním APNs prostředím; přesný
-LaunchServices proces běží z nainstalované aplikace. Finální runtime oprávnění
-notifikací, produkční APNs token a živé doručení zatím nejsou doložené;
-implementace se proto nesmí označit za runtime hotovou.
+Podepsaný Universal Release z 28. srpna 2026 se přes vlastní proxy registroval
+jako `apns/production`. Při ukončeném procesu prošel celý tok Nextcloud → proxy
+→ APNs production → macOS Notification Service Extension. NSE dešifrovalo
+obsah a systém zobrazil skutečnou kartu NKS Talk. Cold Open otevřel správný účet
+a místnost, Reply vytvořilo právě jednu serverovou zprávu pod příjemcem a Mark
+as Read skončilo s `lastReadMessage == lastMessage.id` a nulovým počtem
+nepřečtených. Commity `9d8e7ac` a `5f8ee50` navíc hlídají, že NSE nelinkuje
+Runner pody a deklaruje macOS `NSExtensionService_Subsystem`.
 
 ## Windows: běžící aplikace ano, zavřená ne
 
