@@ -26,7 +26,7 @@ void main() {
         ],
       );
     }, (database) async {
-      expect(database.schemaVersion, 15);
+      expect(database.schemaVersion, 16);
       expect(await _storedReplyCount(database, 500), 1);
     });
   });

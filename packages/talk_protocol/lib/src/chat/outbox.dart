@@ -166,6 +166,7 @@ final class TextSendOutboxDraft {
     required this.threadId,
     required this.replyToToken,
     required this.parentRoomToken,
+    this.silent = false,
     this.privateReplyEligibility,
   }) {
     if (operationKind.isEmpty ||
@@ -205,6 +206,7 @@ final class TextSendOutboxDraft {
   final ChatReferenceId referenceId;
   final String message;
   final String replayContractRevision;
+  final bool silent;
   final int enqueueSequence;
   final int? replyTo;
   final int? threadId;
@@ -264,6 +266,7 @@ ChatOutboxResult admitTextSendOperation(
     threadId: draft.threadId,
     replyToToken: draft.replyToToken,
     parentRoomToken: draft.parentRoomToken,
+    silent: draft.silent,
   );
   return _replaceOperation(
     snapshot,

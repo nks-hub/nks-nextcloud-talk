@@ -630,6 +630,7 @@ void _registerChatRoomPaneRenderingTests() {
       referenceId: 'reference-40',
       message: 'Confirmed outgoing',
       replayContractRevision: 'fixture-r1',
+      silent: false,
       enqueueSequence: 1,
       outboxState: 'completed',
       attemptCount: 1,

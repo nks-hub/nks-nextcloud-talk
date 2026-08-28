@@ -5620,6 +5620,19 @@ class $TextSendOperationsTable extends TextSendOperations
         type: DriftSqlType.string,
         requiredDuringInsert: true,
       );
+  static const VerificationMeta _silentMeta = const VerificationMeta('silent');
+  @override
+  late final GeneratedColumn<bool> silent = GeneratedColumn<bool>(
+    'silent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("silent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _enqueueSequenceMeta = const VerificationMeta(
     'enqueueSequence',
   );
@@ -5774,6 +5787,7 @@ class $TextSendOperationsTable extends TextSendOperations
     referenceId,
     message,
     replayContractRevision,
+    silent,
     enqueueSequence,
     outboxState,
     attemptCount,
@@ -5856,6 +5870,12 @@ class $TextSendOperationsTable extends TextSendOperations
       );
     } else if (isInserting) {
       context.missing(_replayContractRevisionMeta);
+    }
+    if (data.containsKey('silent')) {
+      context.handle(
+        _silentMeta,
+        silent.isAcceptableOrUnknown(data['silent']!, _silentMeta),
+      );
     }
     if (data.containsKey('enqueue_sequence')) {
       context.handle(
@@ -6020,6 +6040,10 @@ class $TextSendOperationsTable extends TextSendOperations
         DriftSqlType.string,
         data['${effectivePrefix}replay_contract_revision'],
       )!,
+      silent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}silent'],
+      )!,
       enqueueSequence: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}enqueue_sequence'],
@@ -6089,6 +6113,13 @@ class StoredTextSendOperation extends DataClass
   final String referenceId;
   final String message;
   final String replayContractRevision;
+
+  /// Whether this message must raise no notification on delivery.
+  ///
+  /// Durable on purpose: the outbox replays after process death, and a
+  /// message that went out loud because the flag lived only in memory would
+  /// be the opposite of what the switch promised.
+  final bool silent;
   final int enqueueSequence;
   final String outboxState;
   final int attemptCount;
@@ -6109,6 +6140,7 @@ class StoredTextSendOperation extends DataClass
     required this.referenceId,
     required this.message,
     required this.replayContractRevision,
+    required this.silent,
     required this.enqueueSequence,
     required this.outboxState,
     required this.attemptCount,
@@ -6132,6 +6164,7 @@ class StoredTextSendOperation extends DataClass
     map['reference_id'] = Variable<String>(referenceId);
     map['message'] = Variable<String>(message);
     map['replay_contract_revision'] = Variable<String>(replayContractRevision);
+    map['silent'] = Variable<bool>(silent);
     map['enqueue_sequence'] = Variable<int>(enqueueSequence);
     map['outbox_state'] = Variable<String>(outboxState);
     map['attempt_count'] = Variable<int>(attemptCount);
@@ -6170,6 +6203,7 @@ class StoredTextSendOperation extends DataClass
       referenceId: Value(referenceId),
       message: Value(message),
       replayContractRevision: Value(replayContractRevision),
+      silent: Value(silent),
       enqueueSequence: Value(enqueueSequence),
       outboxState: Value(outboxState),
       attemptCount: Value(attemptCount),
@@ -6212,6 +6246,7 @@ class StoredTextSendOperation extends DataClass
       replayContractRevision: serializer.fromJson<String>(
         json['replayContractRevision'],
       ),
+      silent: serializer.fromJson<bool>(json['silent']),
       enqueueSequence: serializer.fromJson<int>(json['enqueueSequence']),
       outboxState: serializer.fromJson<String>(json['outboxState']),
       attemptCount: serializer.fromJson<int>(json['attemptCount']),
@@ -6241,6 +6276,7 @@ class StoredTextSendOperation extends DataClass
       'replayContractRevision': serializer.toJson<String>(
         replayContractRevision,
       ),
+      'silent': serializer.toJson<bool>(silent),
       'enqueueSequence': serializer.toJson<int>(enqueueSequence),
       'outboxState': serializer.toJson<String>(outboxState),
       'attemptCount': serializer.toJson<int>(attemptCount),
@@ -6266,6 +6302,7 @@ class StoredTextSendOperation extends DataClass
     String? referenceId,
     String? message,
     String? replayContractRevision,
+    bool? silent,
     int? enqueueSequence,
     String? outboxState,
     int? attemptCount,
@@ -6287,6 +6324,7 @@ class StoredTextSendOperation extends DataClass
     message: message ?? this.message,
     replayContractRevision:
         replayContractRevision ?? this.replayContractRevision,
+    silent: silent ?? this.silent,
     enqueueSequence: enqueueSequence ?? this.enqueueSequence,
     outboxState: outboxState ?? this.outboxState,
     attemptCount: attemptCount ?? this.attemptCount,
@@ -6320,6 +6358,7 @@ class StoredTextSendOperation extends DataClass
       replayContractRevision: data.replayContractRevision.present
           ? data.replayContractRevision.value
           : this.replayContractRevision,
+      silent: data.silent.present ? data.silent.value : this.silent,
       enqueueSequence: data.enqueueSequence.present
           ? data.enqueueSequence.value
           : this.enqueueSequence,
@@ -6367,6 +6406,7 @@ class StoredTextSendOperation extends DataClass
           ..write('referenceId: $referenceId, ')
           ..write('message: $message, ')
           ..write('replayContractRevision: $replayContractRevision, ')
+          ..write('silent: $silent, ')
           ..write('enqueueSequence: $enqueueSequence, ')
           ..write('outboxState: $outboxState, ')
           ..write('attemptCount: $attemptCount, ')
@@ -6392,6 +6432,7 @@ class StoredTextSendOperation extends DataClass
     referenceId,
     message,
     replayContractRevision,
+    silent,
     enqueueSequence,
     outboxState,
     attemptCount,
@@ -6416,6 +6457,7 @@ class StoredTextSendOperation extends DataClass
           other.referenceId == this.referenceId &&
           other.message == this.message &&
           other.replayContractRevision == this.replayContractRevision &&
+          other.silent == this.silent &&
           other.enqueueSequence == this.enqueueSequence &&
           other.outboxState == this.outboxState &&
           other.attemptCount == this.attemptCount &&
@@ -6439,6 +6481,7 @@ class TextSendOperationsCompanion
   final Value<String> referenceId;
   final Value<String> message;
   final Value<String> replayContractRevision;
+  final Value<bool> silent;
   final Value<int> enqueueSequence;
   final Value<String> outboxState;
   final Value<int> attemptCount;
@@ -6460,6 +6503,7 @@ class TextSendOperationsCompanion
     this.referenceId = const Value.absent(),
     this.message = const Value.absent(),
     this.replayContractRevision = const Value.absent(),
+    this.silent = const Value.absent(),
     this.enqueueSequence = const Value.absent(),
     this.outboxState = const Value.absent(),
     this.attemptCount = const Value.absent(),
@@ -6482,6 +6526,7 @@ class TextSendOperationsCompanion
     required String referenceId,
     required String message,
     required String replayContractRevision,
+    this.silent = const Value.absent(),
     required int enqueueSequence,
     required String outboxState,
     required int attemptCount,
@@ -6516,6 +6561,7 @@ class TextSendOperationsCompanion
     Expression<String>? referenceId,
     Expression<String>? message,
     Expression<String>? replayContractRevision,
+    Expression<bool>? silent,
     Expression<int>? enqueueSequence,
     Expression<String>? outboxState,
     Expression<int>? attemptCount,
@@ -6539,6 +6585,7 @@ class TextSendOperationsCompanion
       if (message != null) 'message': message,
       if (replayContractRevision != null)
         'replay_contract_revision': replayContractRevision,
+      if (silent != null) 'silent': silent,
       if (enqueueSequence != null) 'enqueue_sequence': enqueueSequence,
       if (outboxState != null) 'outbox_state': outboxState,
       if (attemptCount != null) 'attempt_count': attemptCount,
@@ -6564,6 +6611,7 @@ class TextSendOperationsCompanion
     Value<String>? referenceId,
     Value<String>? message,
     Value<String>? replayContractRevision,
+    Value<bool>? silent,
     Value<int>? enqueueSequence,
     Value<String>? outboxState,
     Value<int>? attemptCount,
@@ -6587,6 +6635,7 @@ class TextSendOperationsCompanion
       message: message ?? this.message,
       replayContractRevision:
           replayContractRevision ?? this.replayContractRevision,
+      silent: silent ?? this.silent,
       enqueueSequence: enqueueSequence ?? this.enqueueSequence,
       outboxState: outboxState ?? this.outboxState,
       attemptCount: attemptCount ?? this.attemptCount,
@@ -6627,6 +6676,9 @@ class TextSendOperationsCompanion
       map['replay_contract_revision'] = Variable<String>(
         replayContractRevision.value,
       );
+    }
+    if (silent.present) {
+      map['silent'] = Variable<bool>(silent.value);
     }
     if (enqueueSequence.present) {
       map['enqueue_sequence'] = Variable<int>(enqueueSequence.value);
@@ -6684,6 +6736,7 @@ class TextSendOperationsCompanion
           ..write('referenceId: $referenceId, ')
           ..write('message: $message, ')
           ..write('replayContractRevision: $replayContractRevision, ')
+          ..write('silent: $silent, ')
           ..write('enqueueSequence: $enqueueSequence, ')
           ..write('outboxState: $outboxState, ')
           ..write('attemptCount: $attemptCount, ')
@@ -16740,6 +16793,7 @@ typedef $$TextSendOperationsTableCreateCompanionBuilder =
       required String referenceId,
       required String message,
       required String replayContractRevision,
+      Value<bool> silent,
       required int enqueueSequence,
       required String outboxState,
       required int attemptCount,
@@ -16763,6 +16817,7 @@ typedef $$TextSendOperationsTableUpdateCompanionBuilder =
       Value<String> referenceId,
       Value<String> message,
       Value<String> replayContractRevision,
+      Value<bool> silent,
       Value<int> enqueueSequence,
       Value<String> outboxState,
       Value<int> attemptCount,
@@ -16841,6 +16896,11 @@ class $$TextSendOperationsTableFilterComposer
 
   ColumnFilters<String> get replayContractRevision => $composableBuilder(
     column: $table.replayContractRevision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get silent => $composableBuilder(
+    column: $table.silent,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16967,6 +17027,11 @@ class $$TextSendOperationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get silent => $composableBuilder(
+    column: $table.silent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get enqueueSequence => $composableBuilder(
     column: $table.enqueueSequence,
     builder: (column) => ColumnOrderings(column),
@@ -17085,6 +17150,9 @@ class $$TextSendOperationsTableAnnotationComposer
     column: $table.replayContractRevision,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get silent =>
+      $composableBuilder(column: $table.silent, builder: (column) => column);
 
   GeneratedColumn<int> get enqueueSequence => $composableBuilder(
     column: $table.enqueueSequence,
@@ -17210,6 +17278,7 @@ class $$TextSendOperationsTableTableManager
                 Value<String> referenceId = const Value.absent(),
                 Value<String> message = const Value.absent(),
                 Value<String> replayContractRevision = const Value.absent(),
+                Value<bool> silent = const Value.absent(),
                 Value<int> enqueueSequence = const Value.absent(),
                 Value<String> outboxState = const Value.absent(),
                 Value<int> attemptCount = const Value.absent(),
@@ -17231,6 +17300,7 @@ class $$TextSendOperationsTableTableManager
                 referenceId: referenceId,
                 message: message,
                 replayContractRevision: replayContractRevision,
+                silent: silent,
                 enqueueSequence: enqueueSequence,
                 outboxState: outboxState,
                 attemptCount: attemptCount,
@@ -17254,6 +17324,7 @@ class $$TextSendOperationsTableTableManager
                 required String referenceId,
                 required String message,
                 required String replayContractRevision,
+                Value<bool> silent = const Value.absent(),
                 required int enqueueSequence,
                 required String outboxState,
                 required int attemptCount,
@@ -17275,6 +17346,7 @@ class $$TextSendOperationsTableTableManager
                 referenceId: referenceId,
                 message: message,
                 replayContractRevision: replayContractRevision,
+                silent: silent,
                 enqueueSequence: enqueueSequence,
                 outboxState: outboxState,
                 attemptCount: attemptCount,

@@ -175,6 +175,7 @@ final class TextSendOutboxOperation {
     required this.threadId,
     required this.replyToToken,
     required this.parentRoomToken,
+    this.silent = false,
   }) : messageIds = List.unmodifiable(messageIds) {
     _validate();
   }
@@ -195,6 +196,10 @@ final class TextSendOutboxOperation {
   final int? threadId;
   final ConversationToken? replyToToken;
   final ConversationToken? parentRoomToken;
+
+  /// Whether delivery must raise no notification. Survives a replay because
+  /// it is stored with the operation, not held in the composer.
+  final bool silent;
 
   TextSendOutboxOperation copyWith({
     TextSendOutboxState? state,
@@ -226,6 +231,7 @@ final class TextSendOutboxOperation {
         : nextAttemptAt as int?,
     replyTo: replyTo ?? this.replyTo,
     threadId: threadId,
+    silent: silent,
     replyToToken: identical(replyToToken, _unchanged)
         ? this.replyToToken
         : replyToToken as ConversationToken?,

@@ -77,6 +77,7 @@ ChatSendRequest _restoreSendRequest({
     threadId: operation.threadId,
     parentRoomToken: operation.parentRoomToken,
     replyToToken: operation.replyToToken,
+    silent: operation.silent,
   );
 }
 

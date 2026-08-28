@@ -205,6 +205,7 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     required String message,
+    bool silent = false,
     int? threadId,
     int? replyTo,
     String? replyToToken,
@@ -237,6 +238,12 @@ final class ChatService {
           throw const ChatServiceException(ChatServiceError.readOnly);
         }
         if (!prepared.profile.sendText) {
+          throw const ChatServiceException(ChatServiceError.sendUnsupported);
+        }
+        // Fail closed rather than send loudly: a server without silent-send
+        // ignores the flag and notifies anyway, which is the opposite of what
+        // the switch promised.
+        if (silent && !prepared.profile.silentSend) {
           throw const ChatServiceException(ChatServiceError.sendUnsupported);
         }
         if (prepared.threadId != null && prepared.namedThread == null) {
@@ -279,6 +286,7 @@ final class ChatService {
           operationId: ChatOperationId.parse(_uuid.v4()),
           referenceId: ChatReferenceId.parse(_uuid.v4()),
           message: normalized,
+          silent: silent,
           replyTo: effectiveReplyTo,
           threadId: prepared.namedThread == true ? prepared.threadId : null,
           replyToToken: crossRoomReply ? parentRoomToken : null,

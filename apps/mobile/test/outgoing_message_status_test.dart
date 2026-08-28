@@ -253,6 +253,7 @@ StoredTextSendOperation _operation({
   referenceId: '00000000-0000-4000-8000-000000000002',
   message: 'Synthetic outgoing message',
   replayContractRevision: 'talk-chat-text-send-f2958bb-f9b9e947-r2',
+  silent: false,
   enqueueSequence: 1,
   outboxState: outboxState,
   attemptCount: 1,

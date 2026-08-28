@@ -258,6 +258,13 @@ class TextSendOperations extends Table {
 
   TextColumn get replayContractRevision => text()();
 
+  /// Whether this message must raise no notification on delivery.
+  ///
+  /// Durable on purpose: the outbox replays after process death, and a
+  /// message that went out loud because the flag lived only in memory would
+  /// be the opposite of what the switch promised.
+  BoolColumn get silent => boolean().withDefault(const Constant(false))();
+
   IntColumn get enqueueSequence => integer()();
 
   TextColumn get outboxState => text()();
@@ -614,7 +621,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -854,6 +861,13 @@ final class AppDatabase extends _$AppDatabase {
                      AND clean.message_id <> root.thread_id
                      AND clean.system_message = '')
         ''');
+      }
+      if (from < 16) {
+        await _addColumnIfMissing(
+          migrator,
+          textSendOperations,
+          textSendOperations.silent,
+        );
       }
     },
     beforeOpen: (_) async {

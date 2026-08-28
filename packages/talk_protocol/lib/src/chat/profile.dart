@@ -14,6 +14,7 @@ final class ChatCapabilityProfile {
     required this.setReadMarker,
     required this.markUnread,
     required this.commonReadStatus,
+    required this.silentSend,
   });
 
   factory ChatCapabilityProfile.fromSnapshot(
@@ -77,6 +78,7 @@ final class ChatCapabilityProfile {
           features.contains('chat-read-status') &&
           readPrivacyIsPublic &&
           !federated,
+      silentSend: sendText && features.contains('silent-send'),
     );
   }
 
@@ -90,6 +92,9 @@ final class ChatCapabilityProfile {
   final bool setReadMarker;
   final bool markUnread;
   final bool commonReadStatus;
+
+  /// Whether the server accepts a message that raises no notification.
+  final bool silentSend;
 
   @override
   String toString() =>

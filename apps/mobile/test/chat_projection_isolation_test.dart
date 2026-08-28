@@ -180,6 +180,38 @@ void main() {
     expect(wire['reactionsSelf'], <String>['🔥']);
   });
 
+
+  test('a silent send stays silent across a process restart', () async {
+    // The whole point of the durable column: the flag lives with the
+    // operation, not in the composer, so an outbox replayed after process
+    // death cannot send loudly what the switch promised to send quietly.
+    final operation = await repository.admitTextSend(
+      accountId: 'account-a',
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+      authority: _silentAuthority(),
+      operationId: ChatOperationId.parse(
+        '11111111-1111-4111-8111-111111111111',
+      ),
+      referenceId: ChatReferenceId.parse(
+        '22222222-2222-4222-8222-222222222222',
+      ),
+      message: 'Quiet one',
+      silent: true,
+    );
+    expect(operation.silent, isTrue);
+
+    // A fresh repository over the same file is what a restart looks like:
+    // the flag has to come back off disk, not out of the object above.
+    final restored = ChatRepository(database);
+    final replayed = await restored
+        .watchTextSendOperations(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        )
+        .first;
+    expect(replayed.single.silent, isTrue);
+  });
+
   test('root merge projects only into the matching account and room', () async {
     await _insertScope(
       database,
@@ -566,3 +598,15 @@ Future<StoredChatScope> _scope(
       ))
       .getSingle();
 }
+
+ChatTextSendAuthority _silentAuthority() => ChatTextSendAuthority(
+  accountId: AccountId.parse('account-a'),
+  server: ServerBase.parse('https://cloud.example.invalid'),
+  capabilityGeneration: 1,
+  profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+    'chat-v2',
+    'chat-reference-id',
+    'silent-send',
+  ], federated: false),
+  replayContractRevision: textSendReplayContractRevision,
+);

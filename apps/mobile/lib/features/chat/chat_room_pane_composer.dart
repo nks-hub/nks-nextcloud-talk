@@ -79,6 +79,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             message: message,
+            silent: _silentSend,
             threadId: targetKey.threadId,
             replyTo: rootReply?.messageId,
           );

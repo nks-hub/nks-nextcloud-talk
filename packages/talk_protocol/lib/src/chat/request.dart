@@ -188,6 +188,7 @@ final class ChatSendRequest extends ChatRequest {
     int? threadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
+    bool silent = false,
     String userAgent = chatContractUserAgent,
   }) => ChatSendRequest._(
     accountId: accountId,
@@ -202,6 +203,7 @@ final class ChatSendRequest extends ChatRequest {
     threadId: threadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
+    silent: silent,
     userAgent: userAgent,
     restored: false,
   );
@@ -220,6 +222,7 @@ final class ChatSendRequest extends ChatRequest {
     int? threadId,
     ConversationToken? parentRoomToken,
     ConversationToken? replyToToken,
+    bool silent = false,
     String userAgent = chatContractUserAgent,
   }) => ChatSendRequest._(
     accountId: accountId,
@@ -234,6 +237,7 @@ final class ChatSendRequest extends ChatRequest {
     threadId: threadId,
     parentRoomToken: parentRoomToken,
     replyToToken: replyToToken,
+    silent: silent,
     userAgent: userAgent,
     restored: true,
   );
@@ -251,6 +255,7 @@ final class ChatSendRequest extends ChatRequest {
     required this.threadId,
     required this.parentRoomToken,
     required this.replyToToken,
+    required this.silent,
     required bool restored,
     super.userAgent,
   }) {
@@ -259,6 +264,12 @@ final class ChatSendRequest extends ChatRequest {
     }
     if (message.trim().isEmpty) {
       _requestFailure(r'$.body.message');
+    }
+    // Fail closed: a server without `silent-send` treats the flag as noise
+    // and notifies anyway, so a caller who asked for silence would get the
+    // opposite of what the switch promised.
+    if (silent && !profile.silentSend) {
+      _requestFailure(r'$.capabilities.silent-send');
     }
     if (threadId != null &&
         (threadId! < 1 || !profile.threadFetch || replyTo != null)) {
@@ -297,6 +308,7 @@ final class ChatSendRequest extends ChatRequest {
   final int? threadId;
   final ConversationToken? parentRoomToken;
   final ConversationToken? replyToToken;
+  final bool silent;
 
   @override
   Object get formBody => UnmodifiableMapView(<String, Object>{
@@ -305,6 +317,7 @@ final class ChatSendRequest extends ChatRequest {
     'replyTo': ?replyTo,
     'threadId': ?threadId,
     'replyToToken': ?replyToToken?.value,
+    if (silent) 'silent': 'true',
   });
 
   @override
