@@ -335,6 +335,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jumpToNewestMessages => 'Jump to newest messages';
 
   @override
+  String get silentSendOff => 'Send without notification';
+
+  @override
+  String get silentSendOn => 'Sending without notification';
+
+  @override
   String get chatHistoryGapNotice => 'Some messages between here are missing';
 
   @override

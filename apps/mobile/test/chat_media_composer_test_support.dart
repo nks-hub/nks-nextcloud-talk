@@ -12,6 +12,7 @@ Widget _composerApp({
   ChatMediaComposerController? controller,
   ChatMediaReplyTarget? replyTarget,
   ValueChanged<int>? onReplyDurablyAccepted,
+  bool silent = false,
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -26,6 +27,7 @@ Widget _composerApp({
         sourceStore: sourceStore,
         capabilityProfile: profile ?? _profile(),
         submissionBridge: bridge,
+        silent: silent,
         controller: controller,
         idleActions: idleActions,
         imageSelectionBackend: imageSelectionBackend,
@@ -399,44 +401,47 @@ AttachmentEnqueueRequest _enqueueRequest({
   ),
 );
 
-AttachmentCapabilityProfile _profile({bool voice = true}) =>
-    AttachmentCapabilityProfile.fromSnapshot(
-      CapabilitySnapshot.fromJson(<String, Object?>{
-        'ocs': <String, Object?>{
-          'meta': <String, Object?>{
-            'status': 'ok',
-            'statuscode': 200,
-            'message': 'OK',
-          },
-          'data': <String, Object?>{
-            'version': <String, Object?>{
-              'major': 34,
-              'minor': 0,
-              'micro': 0,
-              'string': '34.0.0',
-              'edition': '',
-            },
-            'capabilities': <String, Object?>{
-              'spreed': <String, Object?>{
-                'features': <String>[
-                  'chat-reference-id',
-                  'chat-replies',
-                  if (voice) 'voice-message-sharing',
-                  'threads',
-                ],
-                'config': <String, Object?>{
-                  'attachments': <String, Object?>{
-                    'allowed': true,
-                    'conversation-subfolders': true,
-                  },
-                },
+AttachmentCapabilityProfile _profile({
+  bool voice = true,
+  bool silent = false,
+}) => AttachmentCapabilityProfile.fromSnapshot(
+  CapabilitySnapshot.fromJson(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': <String, Object?>{
+        'version': <String, Object?>{
+          'major': 34,
+          'minor': 0,
+          'micro': 0,
+          'string': '34.0.0',
+          'edition': '',
+        },
+        'capabilities': <String, Object?>{
+          'spreed': <String, Object?>{
+            'features': <String>[
+              'chat-reference-id',
+              'chat-replies',
+              if (voice) 'voice-message-sharing',
+              if (silent) 'silent-send',
+              'threads',
+            ],
+            'config': <String, Object?>{
+              'attachments': <String, Object?>{
+                'allowed': true,
+                'conversation-subfolders': true,
               },
             },
           },
         },
-      }, context: CapabilityContext.authenticated),
-      federated: false,
-    );
+      },
+    },
+  }, context: CapabilityContext.authenticated),
+  federated: false,
+);
 
 AttachmentJobProgress _progress(
   AttachmentJobPhase phase, {

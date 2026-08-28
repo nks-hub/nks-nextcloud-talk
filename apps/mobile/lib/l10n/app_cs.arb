@@ -99,6 +99,8 @@
   "loadOlderMessages": "Načíst starší zprávy",
   "loadingOlderMessages": "Načítám starší zprávy…",
   "jumpToNewestMessages": "Skočit na nejnovější zprávy",
+  "silentSendOff": "Odeslat bez upozornění",
+  "silentSendOn": "Odesílá se bez upozornění",
   "chatHistoryGapNotice": "Část zpráv zde chybí",
   "readOnlyConversation": "Tato konverzace je jen pro čtení.",
   "deletedMessage": "Zpráva byla smazána",

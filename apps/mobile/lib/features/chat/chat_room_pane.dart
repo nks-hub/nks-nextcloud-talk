@@ -324,6 +324,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
   bool _awayFromNewest = false;
+  bool _silentSend = false;
   ChatRoomProviderKey? _lastAutoReadKey;
   int? _lastAutoReadMessageId;
 
@@ -629,7 +630,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             kind: AttachmentMessageKind.file,
             replyTo: _replyTo?.messageId,
             threadId: null,
-            silent: false,
+            silent: _silentSend,
           )
         : threadContext == null
         ? null
@@ -637,7 +638,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             kind: AttachmentMessageKind.file,
             replyTo: threadContext.replyTo,
             threadId: threadContext.networkThreadId,
-            silent: false,
+            silent: _silentSend,
           );
     final giphyAttachmentSupported =
         giphyMetadata != null &&
@@ -667,7 +668,20 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       giphyTooltip = strings.openGiphyPicker;
       giphyAction = () => unawaited(_requestGiphy());
     }
+    final canSendSilently =
+        attachmentDependencies?.valueOrNull?.profile.silent ?? false;
     final idleComposerActions = <Widget>[
+      if (canSendSilently)
+        IconButton(
+          key: const Key('toggle-silent-send'),
+          onPressed: _sending
+              ? null
+              : () => setState(() => _silentSend = !_silentSend),
+          tooltip: _silentSend ? strings.silentSendOn : strings.silentSendOff,
+          isSelected: _silentSend,
+          icon: const Icon(Icons.notifications_outlined),
+          selectedIcon: const Icon(Icons.notifications_off),
+        ),
       IconButton(
         key: const Key('open-emoji-picker'),
         onPressed: _sending ? null : _toggleEmojiPicker,

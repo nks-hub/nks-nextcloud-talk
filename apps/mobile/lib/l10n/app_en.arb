@@ -99,6 +99,8 @@
   "loadOlderMessages": "Load older messages",
   "loadingOlderMessages": "Loading older messages…",
   "jumpToNewestMessages": "Jump to newest messages",
+  "silentSendOff": "Send without notification",
+  "silentSendOn": "Sending without notification",
   "chatHistoryGapNotice": "Some messages between here are missing",
   "readOnlyConversation": "This conversation is read-only.",
   "deletedMessage": "Message deleted",

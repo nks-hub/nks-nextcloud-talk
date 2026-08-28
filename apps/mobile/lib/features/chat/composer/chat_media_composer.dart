@@ -134,6 +134,7 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.sourceStore,
     required this.capabilityProfile,
     required this.submissionBridge,
+    this.silent = false,
     this.controller,
     this.idleActions = const <Widget>[],
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
@@ -151,6 +152,11 @@ final class ChatMediaComposer extends StatefulWidget {
   final DurableAttachmentSourceStore sourceStore;
   final AttachmentCapabilityProfile capabilityProfile;
   final AttachmentSubmissionBridge submissionBridge;
+
+  /// Suppresses the recipients' notification for whatever this composer
+  /// sends next. [AttachmentCapabilityProfile.supports] rejects it where the
+  /// server has no `silent-send`, so this stays a preference, not a promise.
+  final bool silent;
   final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
   final ImageSelectionBackend imageSelectionBackend;
@@ -189,7 +195,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           kind: kind,
           replyTo: null,
           threadId: null,
-          silent: false,
+          silent: widget.silent,
         );
       }
       if (threadBinding == null ||
@@ -204,7 +210,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         kind: kind,
         replyTo: threadBinding.replyTo,
         threadId: threadBinding.threadId,
-        silent: false,
+        silent: widget.silent,
       );
     }
     if (widget.threadId != null ||
@@ -222,7 +228,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       kind: kind,
       replyTo: replyTarget.messageId,
       threadId: null,
-      silent: false,
+      silent: widget.silent,
     );
   }
 
