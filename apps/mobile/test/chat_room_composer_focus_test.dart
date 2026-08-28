@@ -10,6 +10,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -23,12 +24,20 @@ import 'test_support.dart';
 /// standard) — the exact signal `context.sendsOnEnter` reads — rather than
 /// `debugDefaultTargetPlatformOverride`.
 void main() {
-  Future<({StoredAccount account, CachedConversation conversation})> pumpRoom(
+  Future<
+    ({
+      StoredAccount account,
+      CachedConversation conversation,
+      ValueNotifier<CachedConversation> selected,
+    })
+  >
+  pumpRoom(
     WidgetTester tester, {
     required bool desktop,
     int? threadId,
     Size physicalSize = const Size(1400, 900),
     double devicePixelRatio = 1,
+    double textScaleFactor = 1,
   }) async {
     final database = openTestDatabase();
     addTearDown(database.close);
@@ -64,6 +73,8 @@ void main() {
       accountId: account.id,
       roomToken: room.token.value,
     ))!;
+    final selected = ValueNotifier(conversation);
+    addTearDown(selected.dispose);
     await chat.ensureRootScope(account: account, conversation: conversation);
     if (threadId != null) {
       await chat.ensureThreadScope(
@@ -124,11 +135,18 @@ void main() {
                 ? VisualDensity.compact
                 : VisualDensity.standard,
           ),
-          home: Scaffold(
-            body: ChatRoomPane(
-              account: account,
-              conversation: conversation,
-              threadId: threadId,
+          home: MediaQuery.withClampedTextScaling(
+            minScaleFactor: textScaleFactor,
+            maxScaleFactor: textScaleFactor,
+            child: Scaffold(
+              body: ValueListenableBuilder<CachedConversation>(
+                valueListenable: selected,
+                builder: (context, conversation, _) => ChatRoomPane(
+                  account: account,
+                  conversation: conversation,
+                  threadId: threadId,
+                ),
+              ),
             ),
           ),
         ),
@@ -143,7 +161,7 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 1)),
       );
     }
-    return (account: account, conversation: conversation);
+    return (account: account, conversation: conversation, selected: selected);
   }
 
   /// Unmounts the tree before the test body returns, so a drift stream's
@@ -302,11 +320,132 @@ void main() {
       expect(composerHasFocus(tester), isFalse);
       expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
 
+      tester.view.viewInsets = const FakeViewPadding(bottom: 500);
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 200);
+      await tester.pump();
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+
       tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
       await tester.pump();
 
       expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
       expect(composerRect(tester), baseline);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'second emoji tap cancels a pending keyboard close',
+    (tester) async {
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 825);
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'pending emoji panel does not cross into another conversation',
+    (tester) async {
+      final room = await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 825);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+
+      room.selected.value = room.conversation.copyWith(token: 'roombravo');
+      await tester.pump();
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'unmount before keyboard close drops the pending emoji panel',
+    (tester) async {
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
+      tester.view.viewInsets = const FakeViewPadding(bottom: 825);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+
+      await settle(tester);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'empty chat stays scrollable and labelled with large phone text',
+    (tester) async {
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+        textScaleFactor: 2,
+      );
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+
+      final paneContext = tester.element(
+        find.byKey(const Key('chat-room-pane')),
+      );
+      final strings = AppLocalizations.of(paneContext);
+      final emptyTitle = find.text(strings.chatEmpty);
+      final emptyBody = find.text(strings.chatEmptyBody);
+      expect(emptyTitle, findsOneWidget);
+      expect(emptyBody, findsOneWidget);
+      final scrollView = find.ancestor(
+        of: emptyTitle,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(scrollView, findsOneWidget);
+      final scrollable = find.descendant(
+        of: scrollView,
+        matching: find.byType(Scrollable),
+      );
+      expect(
+        tester.state<ScrollableState>(scrollable).position.maxScrollExtent,
+        greaterThan(0),
+      );
+      expect(tester.getSemantics(emptyTitle).label, strings.chatEmpty);
+      expect(tester.getSemantics(emptyBody).label, strings.chatEmptyBody);
       await settle(tester);
     },
     timeout: const Timeout(Duration(seconds: 30)),

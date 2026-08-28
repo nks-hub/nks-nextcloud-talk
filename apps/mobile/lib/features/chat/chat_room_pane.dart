@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -42,6 +43,7 @@ import 'composer/mention_suggestions.dart';
 part 'chat_room_pane_actions.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_composer_widgets.dart';
+part 'chat_room_pane_timeline_states.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
@@ -286,6 +288,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   final FocusNode _composerFocusNode = FocusNode();
   bool _emojiPickerOpen = false;
   bool _emojiPickerPending = false;
+  ui.FlutterView? _view;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _jumpTargetKey = GlobalKey();
   final ChatMediaComposerController _mediaComposerController =
@@ -436,6 +439,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _localError = null;
     _initialAttemptFinished = false;
     _giphyRequested = false;
+    _emojiPickerOpen = false;
+    _emojiPickerPending = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
@@ -443,8 +448,21 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _view = View.of(context);
+  }
+
+  @override
+  void deactivate() {
+    _emojiPickerPending = false;
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _view = null;
     _syncGeneration++;
     _sendGeneration++;
     _giphyGeneration++;
@@ -488,7 +506,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       _emojiPickerPending = false;
       return;
     }
-    if (View.of(context).viewInsets.bottom > 0) {
+    final view = _view;
+    if (view == null || view.viewInsets.bottom > 0) {
       return;
     }
     setState(() {
