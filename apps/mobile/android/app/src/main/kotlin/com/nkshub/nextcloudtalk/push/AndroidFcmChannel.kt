@@ -18,39 +18,43 @@ internal class FirstInstallFcmTokenReset(
     private val deleteToken: () -> Task<Void>,
     private val markComplete: () -> Boolean,
 ) {
-    private val lock = Any()
-    private var inFlight: Task<Void>? = null
-
     fun beforeGetToken(): Task<Void> {
-        if (!isFirstInstall() || isComplete()) {
-            return Tasks.forResult<Void>(null)
-        }
-        return synchronized(lock) {
+        return try {
             if (!isFirstInstall() || isComplete()) {
-                return@synchronized Tasks.forResult<Void>(null)
+                return Tasks.forResult<Void>(null)
             }
-            inFlight?.let { return@synchronized it }
-            val reset = deleteToken().continueWith<Void>(DIRECT_EXECUTOR) { task ->
-                if (!task.isSuccessful) {
-                    throw task.exception ?: IllegalStateException("FCM token deletion failed")
+            synchronized(PROCESS_LOCK) {
+                if (!isFirstInstall() || isComplete()) {
+                    return@synchronized Tasks.forResult<Void>(null)
                 }
-                check(markComplete()) { "FCM reset marker could not be persisted" }
-                null
-            }
-            inFlight = reset
-            reset.addOnCompleteListener(DIRECT_EXECUTOR) {
-                synchronized(lock) {
-                    if (inFlight === reset) {
-                        inFlight = null
+                processInFlight?.let { return@synchronized it }
+                val reset = deleteToken().continueWith<Void>(DIRECT_EXECUTOR) { task ->
+                    if (!task.isSuccessful) {
+                        throw task.exception
+                            ?: IllegalStateException("FCM token deletion failed")
+                    }
+                    check(markComplete()) { "FCM reset marker could not be persisted" }
+                    null
+                }
+                processInFlight = reset
+                reset.addOnCompleteListener(DIRECT_EXECUTOR) {
+                    synchronized(PROCESS_LOCK) {
+                        if (processInFlight === reset) {
+                            processInFlight = null
+                        }
                     }
                 }
+                reset
             }
-            reset
+        } catch (failure: Exception) {
+            Tasks.forException(failure)
         }
     }
 
     private companion object {
         val DIRECT_EXECUTOR = Executor { command -> command.run() }
+        val PROCESS_LOCK = Any()
+        var processInFlight: Task<Void>? = null
     }
 }
 
@@ -91,7 +95,7 @@ internal class AndroidFcmChannel(private val context: Context) :
         when (call.method) {
             "getToken" -> firstInstallReset.beforeGetToken()
                 .addOnSuccessListener {
-                    FirebaseMessaging.getInstance().token
+                    currentToken()
                         .addOnSuccessListener { token -> result.success(token) }
                         .addOnFailureListener {
                             result.error(
@@ -119,6 +123,12 @@ internal class AndroidFcmChannel(private val context: Context) :
             }
             else -> result.notImplemented()
         }
+    }
+
+    private fun currentToken(): Task<String> = try {
+        FirebaseMessaging.getInstance().token
+    } catch (failure: Exception) {
+        Tasks.forException(failure)
     }
 
     internal companion object {

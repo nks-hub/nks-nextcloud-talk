@@ -75,11 +75,11 @@ class AndroidFcmFirstInstallResetTest {
     }
 
     @Test
-    fun concurrentRequestsShareOneProviderDeletion() {
+    fun concurrentRequestsAcrossInstancesShareOneProviderDeletion() {
         val provider = TaskCompletionSource<Void>()
         var deletes = 0
         var complete = false
-        val reset = FirstInstallFcmTokenReset(
+        fun reset() = FirstInstallFcmTokenReset(
             isFirstInstall = { true },
             isComplete = { complete },
             deleteToken = {
@@ -92,13 +92,45 @@ class AndroidFcmFirstInstallResetTest {
             },
         )
 
-        val first = reset.beforeGetToken()
-        val second = reset.beforeGetToken()
+        val first = reset().beforeGetToken()
+        val second = reset().beforeGetToken()
         assertSame(first, second)
         assertEquals(1, deletes)
 
         provider.setResult(null)
         assertTrue(first.isSuccessful)
         assertTrue(complete)
+    }
+
+    @Test
+    fun synchronousProviderFailureIsReturnedAsAFailedTask() {
+        val reset = FirstInstallFcmTokenReset(
+            isFirstInstall = { true },
+            isComplete = { false },
+            deleteToken = { throw IllegalStateException("provider unavailable") },
+            markComplete = { true },
+        )
+
+        val task = reset.beforeGetToken()
+
+        assertTrue(task.isComplete)
+        assertFalse(task.isSuccessful)
+        assertEquals("provider unavailable", task.exception?.message)
+    }
+
+    @Test
+    fun synchronousPackageInfoFailureIsReturnedAsAFailedTask() {
+        val reset = FirstInstallFcmTokenReset(
+            isFirstInstall = { throw IllegalStateException("package info unavailable") },
+            isComplete = { false },
+            deleteToken = { Tasks.forResult(null) },
+            markComplete = { true },
+        )
+
+        val task = reset.beforeGetToken()
+
+        assertTrue(task.isComplete)
+        assertFalse(task.isSuccessful)
+        assertEquals("package info unavailable", task.exception?.message)
     }
 }
