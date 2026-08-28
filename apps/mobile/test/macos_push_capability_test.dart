@@ -125,6 +125,33 @@ void main() {
     );
   });
 
+  test('macOS notification extension does not inherit Runner pods', () {
+    final config = read(
+      '$runner$separator'
+      'Configs$separator'
+      'NotificationServiceExtension.xcconfig',
+    );
+    expect(config, contains('Flutter-Generated.xcconfig'));
+    expect(config, contains('Warnings.xcconfig'));
+    expect(config, contains('OTHER_LDFLAGS ='));
+    expect(config, contains('FRAMEWORK_SEARCH_PATHS ='));
+    expect(config, isNot(contains('Pods-Runner')));
+    expect(config, isNot(contains('Flutter-Release.xcconfig')));
+    expect(config, isNot(contains('Flutter-Debug.xcconfig')));
+
+    final project = read(
+      '$macos${separator}Runner.xcodeproj${separator}project.pbxproj',
+    );
+    expect(
+      RegExp(
+        r'baseConfigurationReference = [^;]+ '
+        r'/\* NotificationServiceExtension\.xcconfig \*/;',
+      ).allMatches(project).length,
+      3,
+      reason: 'all three extension configurations need the isolated config',
+    );
+  });
+
   test('shared Apple push sources are compiled into the required targets', () {
     final project = read(
       '$macos${separator}Runner.xcodeproj${separator}project.pbxproj',

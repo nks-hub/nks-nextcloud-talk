@@ -1,0 +1,5 @@
+#include "../../Flutter/ephemeral/Flutter-Generated.xcconfig"
+#include "Warnings.xcconfig"
+
+OTHER_LDFLAGS =
+FRAMEWORK_SEARCH_PATHS =
