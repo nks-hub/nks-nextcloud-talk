@@ -285,6 +285,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// on desktop instead of leaving the caret nowhere once the panel closes.
   final FocusNode _composerFocusNode = FocusNode();
   bool _emojiPickerOpen = false;
+  bool _emojiPickerPending = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _jumpTargetKey = GlobalKey();
   final ChatMediaComposerController _mediaComposerController =
@@ -476,6 +477,24 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // its debounce.
     unawaited(_flushDraft(_key, _composer.text));
     unawaited(_stopLiveSync());
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (!_emojiPickerPending || !mounted) {
+      return;
+    }
+    if (_sending || _isReadOnlyNow()) {
+      _emojiPickerPending = false;
+      return;
+    }
+    if (View.of(context).viewInsets.bottom > 0) {
+      return;
+    }
+    setState(() {
+      _emojiPickerPending = false;
+      _emojiPickerOpen = true;
+    });
   }
 
   @override

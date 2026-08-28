@@ -23,11 +23,12 @@ import 'test_support.dart';
 /// standard) — the exact signal `context.sendsOnEnter` reads — rather than
 /// `debugDefaultTargetPlatformOverride`.
 void main() {
-  Future<({StoredAccount account, CachedConversation conversation})>
-  pumpRoom(
+  Future<({StoredAccount account, CachedConversation conversation})> pumpRoom(
     WidgetTester tester, {
     required bool desktop,
     int? threadId,
+    Size physicalSize = const Size(1400, 900),
+    double devicePixelRatio = 1,
   }) async {
     final database = openTestDatabase();
     addTearDown(database.close);
@@ -100,8 +101,8 @@ void main() {
 
     // The default 800x600 test surface clips the emoji panel plus the
     // composer below it; a desktop window is never that short.
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = devicePixelRatio;
+    tester.view.physicalSize = physicalSize;
     addTearDown(tester.view.reset);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
@@ -123,10 +124,12 @@ void main() {
                 ? VisualDensity.compact
                 : VisualDensity.standard,
           ),
-          home: ChatRoomPane(
-            account: account,
-            conversation: conversation,
-            threadId: threadId,
+          home: Scaffold(
+            body: ChatRoomPane(
+              account: account,
+              conversation: conversation,
+              threadId: threadId,
+            ),
           ),
         ),
       ),
@@ -156,6 +159,9 @@ void main() {
     );
     return textField.focusNode!.hasFocus;
   }
+
+  Rect composerRect(WidgetTester tester) =>
+      tester.getRect(find.byKey(const Key('chat-composer')));
 
   // The touch side of the same rule is not mounted here on purpose. Both
   // production call sites read `context.sendsOnEnter`, and that flag already
@@ -233,17 +239,74 @@ void main() {
       // bottom` from a phone with the panel open, so the panel is pumped at
       // that phone's size: 1080x2072 physical at 2.75. An overflow makes
       // `flutter_test` fail on its own, so laying out at all is the assertion.
-      tester.view.physicalSize = const Size(1080, 2072);
-      tester.view.devicePixelRatio = 2.75;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await pumpRoom(tester, desktop: false);
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
       await tester.tap(find.byKey(const Key('open-emoji-picker')));
       await tester.pump();
 
       expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
       expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'phone layout follows a keyboard metrics close while focus stays',
+    (tester) async {
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
+      final baseline = composerRect(tester);
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 825);
+      await tester.pump();
+
+      expect(composerHasFocus(tester), isTrue);
+      expect(composerRect(tester).bottom, lessThan(baseline.bottom));
+
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+
+      expect(composerHasFocus(tester), isTrue);
+      expect(composerRect(tester), baseline);
+      await settle(tester);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets(
+    'phone emoji panel waits for the keyboard metrics close',
+    (tester) async {
+      await pumpRoom(
+        tester,
+        desktop: false,
+        physicalSize: const Size(1080, 2072),
+        devicePixelRatio: 2.75,
+      );
+      final baseline = composerRect(tester);
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 825);
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('open-emoji-picker')));
+      await tester.pump();
+
+      expect(composerHasFocus(tester), isFalse);
+      expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+
+      expect(find.byKey(const Key('inline-emoji-panel')), findsOneWidget);
+      expect(composerRect(tester), baseline);
       await settle(tester);
     },
     timeout: const Timeout(Duration(seconds: 30)),
