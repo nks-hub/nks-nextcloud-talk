@@ -802,6 +802,74 @@ class AndroidWebPushRuntimeTest {
         store.resolveNotificationAction(accountId, queued.token)
     }
 
+    @Test
+    fun actionActivityLifecycleQueuesRemoteInputOnceAcrossCreateAndNewIntent() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-action-lifecycle"
+        drainAllActions(store, accountId)
+        manager.cancelAll()
+        val replyToken = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4109,
+            roomToken = "roomhotel",
+        )
+        val replyInput = RemoteInput.Builder(AndroidSystemNotifications.REPLY_RESULT_KEY)
+            .build()
+        val replyIntent = AndroidSystemNotifications.notificationActionIntent(
+            context,
+            NotificationActionKind.REPLY,
+            replyToken,
+        )
+        RemoteInput.addResultsToIntent(
+            arrayOf(replyInput),
+            replyIntent,
+            android.os.Bundle().apply {
+                putCharSequence(AndroidSystemNotifications.REPLY_RESULT_KEY, "lifecycle reply")
+            },
+        )
+
+        val launchIntent = Intent(replyIntent).addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK,
+        )
+        val scenario = ActivityScenario.launch<AndroidWebPushActivity>(launchIntent)
+        val first = store.claimNotificationActions(accountId, 10).ready.single()
+        assertEquals("lifecycle reply", first.replyText)
+        store.resolveNotificationAction(accountId, first.token)
+
+        scenario.onActivity { activity ->
+            InstrumentationRegistry.getInstrumentation()
+                .callActivityOnNewIntent(activity, replyIntent)
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        assertTrue(store.claimNotificationActions(accountId, 10).ready.isEmpty())
+
+        val markReadToken = store.armNotificationAction(
+            kind = NotificationActionKind.MARK_READ,
+            accountId = accountId,
+            notificationId = 4110,
+            roomToken = "roomhotel",
+        )
+        val markReadIntent = AndroidSystemNotifications.notificationActionIntent(
+            context,
+            NotificationActionKind.MARK_READ,
+            markReadToken,
+        )
+        scenario.onActivity { activity ->
+            InstrumentationRegistry.getInstrumentation()
+                .callActivityOnNewIntent(activity, markReadIntent)
+        }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        val second = store.claimNotificationActions(accountId, 10).ready.single()
+        assertEquals(NotificationActionKind.MARK_READ, second.kind)
+        assertNull(second.replyText)
+        store.resolveNotificationAction(accountId, second.token)
+        scenario.onActivity { activity -> activity.finish() }
+        manager.cancelAll()
+    }
+
     private fun drainAllActions(store: AndroidWebPushStore, accountId: String) {
         var guard = 0
         while (guard++ < 20) {
