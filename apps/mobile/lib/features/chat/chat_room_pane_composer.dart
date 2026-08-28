@@ -62,6 +62,15 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
     final rootReply = targetKey.threadId == null ? _replyTo : null;
     final generation = ++_sendGeneration;
+    // Emptied before the request, not after it. Clearing on the way back
+    // compared the whole field against the sent text, so typing the next line
+    // while the send was in flight left the sent one sitting in the composer.
+    // At this instant the field holds exactly what is being sent, so nothing
+    // the user has typed since can be thrown away.
+    final String? sentDraft = clearComposer ? _composer.text : null;
+    if (clearComposer) {
+      _composer.clear();
+    }
     _update(() => _sending = true);
     try {
       await ref
@@ -79,9 +88,6 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       if (rootReply != null && _replyTo?.messageId == rootReply.messageId) {
         _update(() => _replyTo = null);
       }
-      if (clearComposer && _composer.text.trim() == message) {
-        _composer.clear();
-      }
       if (_scrollController.hasClients) {
         await _scrollController.animateTo(
           0,
@@ -93,10 +99,12 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         _update(() => _localError = null);
       }
     } on ChatServiceException catch (error) {
+      _restoreSentDraft(sentDraft);
       if (_isCurrentSendScope(targetKey, generation)) {
         _update(() => _localError = error.code);
       }
     } on Object {
+      _restoreSentDraft(sentDraft);
       if (_isCurrentSendScope(targetKey, generation)) {
         _update(() => _localError = ChatServiceError.invalidResponse);
       }
@@ -105,6 +113,19 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         _update(() => _sending = false);
       }
     }
+  }
+
+  /// Puts a refused message back so it is not lost with the failure notice.
+  ///
+  /// Only into a field the user has left alone: once they have started the
+  /// next line, restoring would overwrite what they are writing, and the
+  /// failure is already reported above the composer.
+  void _restoreSentDraft(String? draft) {
+    if (draft == null || draft.isEmpty || _composer.text.isNotEmpty) {
+      return;
+    }
+    _composer.text = draft;
+    _composer.selection = TextSelection.collapsed(offset: draft.length);
   }
 
   bool _isCurrentSendScope(ChatRoomProviderKey targetKey, int generation) {

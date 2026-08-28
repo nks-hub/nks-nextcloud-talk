@@ -1,6 +1,41 @@
 part of 'chat_room_pane_test.dart';
 
 void _registerChatRoomPaneInteractionTests() {
+  testWidgets('a send in flight never lands back on the next line typed', (
+    tester,
+  ) async {
+    // The composer used to be emptied only after the send returned, and only
+    // while its whole content still equalled what was sent. Typing the next
+    // line during the request broke that comparison, so the sent text stayed
+    // in the field and went out again on the next tap. It is now emptied when
+    // the send starts, and a refusal puts it back only into a field the user
+    // has left alone.
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+
+    final composer = find.byKey(const Key('chat-composer'));
+    final controller = tester.widget<TextField>(composer).controller!;
+
+    await tester.enterText(composer, 'First line');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('send-message')));
+
+    // Still in flight: the field is already the user's again.
+    expect(controller.text, isEmpty);
+
+    await tester.enterText(composer, 'Second line typed during the send');
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      controller.text,
+      'Second line typed during the send',
+      reason: 'the finished send must not overwrite what is being typed now',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('composer text survives losing the pane', (tester) async {
     // A send can be refused before the outbox admits it, for example while
     // offline, so the typed text must not depend on the widget staying alive.
