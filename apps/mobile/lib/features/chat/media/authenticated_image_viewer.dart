@@ -4,6 +4,7 @@ import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'chat_image_exporter.dart';
+import 'proportional_image.dart';
 
 const double _minimumScale = 1;
 const double _maximumScale = 6;
@@ -265,13 +266,10 @@ final class _AuthenticatedImageViewerState
                       },
                       child: SizedBox.expand(
                         child: Center(
-                          child: Image.memory(
-                            image.body,
+                          child: proportionalMemoryImage(
+                            bytes: image.body,
                             key: const Key('authenticated-image-fullscreen'),
-                            cacheWidth: 2048,
-                            cacheHeight: 2048,
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.medium,
+                            maxEdge: 2048,
                             gaplessPlayback: true,
                             errorBuilder: (_, _, _) =>
                                 _ImageLoadFailure(onRetry: _retry),

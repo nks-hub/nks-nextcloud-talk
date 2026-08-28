@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import 'image_attachment_upload_controller.dart';
+import 'proportional_image.dart';
 
 typedef PrepareAttachmentFromSource =
     Future<ImageAttachmentUploadRequest?> Function(
@@ -303,13 +304,11 @@ final class _UploadPreview extends StatelessWidget {
                           : scheme.onSurfaceVariant,
                     ),
                   )
-                : Image.memory(
-                    bytes!,
-                    cacheWidth: 192,
-                    cacheHeight: 192,
-                    // Same reason as the composer thumbnail: what is shown
-                    // before sending must match what is sent.
-                    fit: BoxFit.contain,
+                // Same reason as the composer thumbnail: what is shown
+                // before sending must match what is sent.
+                : proportionalMemoryImage(
+                    bytes: bytes!,
+                    maxEdge: 192,
                     errorBuilder: (_, _, _) => ColoredBox(
                       color: scheme.surfaceContainerHighest,
                       child: Icon(

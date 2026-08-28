@@ -32,6 +32,7 @@ import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_service.dart';
 import 'outgoing_message_status.dart';
+import 'media/proportional_image.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';

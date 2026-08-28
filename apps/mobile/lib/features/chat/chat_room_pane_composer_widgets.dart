@@ -51,15 +51,13 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
                 color: scheme.onSurfaceVariant,
               );
             }
-            return Image.memory(
-              thumbnail.body,
-              // The whole picture, not a square crop of it: the upload sends
-              // the original bytes, so a preview that cuts the edges off
-              // shows something the recipient will never see.
-              fit: BoxFit.contain,
+            // The whole picture, not a square crop of it: the upload sends
+            // the original bytes, so a preview that cuts the edges off shows
+            // something the recipient will never see.
+            return proportionalMemoryImage(
+              bytes: thumbnail.body,
+              maxEdge: 480,
               gaplessPlayback: true,
-              cacheWidth: 480,
-              cacheHeight: 480,
               errorBuilder: (_, _, _) => Icon(
                 Icons.broken_image_outlined,
                 color: scheme.onSurfaceVariant,
