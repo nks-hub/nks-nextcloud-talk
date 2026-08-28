@@ -10,7 +10,7 @@ final class _ChatHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const Key('chat-room-header'),
-      constraints: const BoxConstraints(minHeight: 72),
+      constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         border: Border(
