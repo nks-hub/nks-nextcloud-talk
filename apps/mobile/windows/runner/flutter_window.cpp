@@ -32,8 +32,15 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  tray_icon_ = std::make_unique<TrayIcon>(GetHandle(),
+                                          [this]() { this->Restore(); });
   taskbar_badge_ = std::make_unique<TaskbarBadge>(
       flutter_controller_->engine()->messenger(), GetHandle());
+  taskbar_badge_->SetObserver([this](int count) {
+    if (tray_icon_ != nullptr) {
+      tray_icon_->SetUnread(count);
+    }
+  });
   shell_notification_ = std::make_unique<ShellNotification>(
       flutter_controller_->engine()->messenger(), GetHandle());
   RegisterDeepLinkChannel();
@@ -55,6 +62,8 @@ void FlutterWindow::OnDestroy() {
   // Before the engine goes away: both hold a channel on its messenger.
   taskbar_badge_ = nullptr;
   shell_notification_ = nullptr;
+  // Removes the icon while the window handle is still worth something.
+  tray_icon_ = nullptr;
   if (deep_links_ != nullptr) {
     deep_links_->Attach(nullptr);
   }
@@ -80,6 +89,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     }
   }
 
+  // Explorer restarts take every notification area icon with them and then ask
+  // for them back through this registered message, whose value is not a
+  // compile time constant.
+  if (tray_icon_ != nullptr && tray_icon_->taskbar_created_message() != 0 &&
+      message == tray_icon_->taskbar_created_message()) {
+    tray_icon_->Restore();
+    return 0;
+  }
+
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
@@ -95,21 +113,29 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       }
       break;
 
-    case WM_COPYDATA:
-      // A second launch handed its link to this instance instead of starting
-      // a window of its own.
-      if (deep_links_ != nullptr) {
-        auto* data = reinterpret_cast<COPYDATASTRUCT*>(lparam);
-        if (data != nullptr && data->dwData == kDeepLinkCopyDataId &&
-            data->cbData >= sizeof(wchar_t)) {
-          const std::wstring url(
-              static_cast<const wchar_t*>(data->lpData),
-              data->cbData / sizeof(wchar_t) - 1);
-          deep_links_->Open(url);
-          SetForegroundWindow(hwnd);
-        }
+    case TrayIcon::kCallbackMessage:
+      if (tray_icon_ != nullptr && tray_icon_->HandleCallback(wparam, lparam)) {
+        return 0;
       }
+      break;
+
+    case WM_COPYDATA: {
+      // A second launch handed its arguments to this instance instead of
+      // starting a window of its own. The link is optional: a plain second
+      // launch asks for nothing but the window.
+      auto* data = reinterpret_cast<COPYDATASTRUCT*>(lparam);
+      if (data == nullptr || data->dwData != kDeepLinkCopyDataId ||
+          data->cbData < sizeof(wchar_t)) {
+        break;
+      }
+      const std::wstring url(static_cast<const wchar_t*>(data->lpData),
+                             data->cbData / sizeof(wchar_t) - 1);
+      if (!url.empty() && deep_links_ != nullptr) {
+        deep_links_->Open(url);
+      }
+      Restore();
       return TRUE;
+    }
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);

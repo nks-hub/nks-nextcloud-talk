@@ -11,13 +11,14 @@ using std::min;
 #include <gdiplus.h>
 #include <shobjidl_core.h>
 
+#include <memory>
 #include <string>
 
 namespace {
 
 // The shell scales the overlay down to 16x16 or 20x20 depending on DPI, so the
 // bitmap is drawn larger and antialiased rather than at the final size.
-constexpr int kIconSize = 32;
+constexpr int kIconSize = kBadgeIconSize;
 
 // Same red as the in-app badge (`ColorScheme.error` in the Material palette
 // the app ships), so the taskbar and the account avatar agree.
@@ -75,6 +76,39 @@ HICON CreateBadgeIcon(int count) {
 
 }  // namespace
 
+HICON CreateBadgedIcon(HICON base, int count) {
+  if (base == nullptr || count <= 0 || EnsureGdiplus() == 0) {
+    return nullptr;
+  }
+  HICON badge = CreateBadgeIcon(count);
+  if (badge == nullptr) {
+    return nullptr;
+  }
+  std::unique_ptr<Gdiplus::Bitmap> base_bitmap(Gdiplus::Bitmap::FromHICON(base));
+  std::unique_ptr<Gdiplus::Bitmap> badge_bitmap(
+      Gdiplus::Bitmap::FromHICON(badge));
+  ::DestroyIcon(badge);
+  if (base_bitmap == nullptr || badge_bitmap == nullptr) {
+    return nullptr;
+  }
+
+  Gdiplus::Bitmap canvas(kIconSize, kIconSize, PixelFormat32bppARGB);
+  Gdiplus::Graphics graphics(&canvas);
+  graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+  graphics.DrawImage(base_bitmap.get(), 0, 0, kIconSize, kIconSize);
+  // Nine sixteenths leaves the app icon recognisable while keeping the digit
+  // as large as the corner allows.
+  constexpr int kBadgeSize = kIconSize * 9 / 16;
+  graphics.DrawImage(badge_bitmap.get(), kIconSize - kBadgeSize,
+                     kIconSize - kBadgeSize, kBadgeSize, kBadgeSize);
+
+  HICON result = nullptr;
+  if (canvas.GetHICON(&result) != Gdiplus::Ok) {
+    return nullptr;
+  }
+  return result;
+}
+
 TaskbarBadge::TaskbarBadge(flutter::BinaryMessenger* messenger, HWND window)
     : window_(window) {
   channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -93,12 +127,19 @@ TaskbarBadge::TaskbarBadge(flutter::BinaryMessenger* messenger, HWND window)
           result->Error("bad-argument", "setBadge expects an int count");
           return;
         }
+        if (observer_) {
+          observer_(*count);
+        }
         if (!SetCount(*count)) {
           result->Error("unavailable", "the shell refused the overlay icon");
           return;
         }
         result->Success();
       });
+}
+
+void TaskbarBadge::SetObserver(std::function<void(int)> observer) {
+  observer_ = std::move(observer);
 }
 
 TaskbarBadge::~TaskbarBadge() {

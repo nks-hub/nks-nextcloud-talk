@@ -13,6 +13,7 @@ add_executable(${BINARY_NAME} WIN32
   "deep_link_url.cpp"
   "shell_notification.cpp"
   "taskbar_badge.cpp"
+  "tray_icon.cpp"
   "utils.cpp"
   "win32_window.cpp"
   "window_state.cpp"
@@ -35,6 +36,10 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTT
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
+# The notification area menu carries Czech text, so the sources are UTF-8
+# rather than whatever code page the build machine happens to run.
+target_compile_options(${BINARY_NAME} PRIVATE "/utf-8")
+
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
@@ -43,6 +48,7 @@ target_link_libraries(${BINARY_NAME} PRIVATE "advapi32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "gdiplus.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "propsys.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "runtimeobject.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "shlwapi.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "windowsapp.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")

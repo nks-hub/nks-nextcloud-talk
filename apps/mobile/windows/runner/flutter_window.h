@@ -9,6 +9,7 @@
 #include "deep_link_delivery.h"
 #include "shell_notification.h"
 #include "taskbar_badge.h"
+#include "tray_icon.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -45,6 +46,10 @@ class FlutterWindow : public Win32Window {
 
   // Owns the taskbar overlay icon channel; torn down with the window.
   std::unique_ptr<TaskbarBadge> taskbar_badge_;
+
+  // Keeps the app reachable from the notification area while its window is
+  // hidden, and repeats the unread count the taskbar button loses there.
+  std::unique_ptr<TrayIcon> tray_icon_;
 
   // Shows Talk messages while the app runs, and routes a click into
   // |deep_links_|.

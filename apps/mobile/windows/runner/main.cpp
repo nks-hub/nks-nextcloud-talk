@@ -34,24 +34,52 @@ std::wstring DeepLinkFromCommandLine() {
   return found;
 }
 
-// Hands |url| to the instance that already owns the mutex. Returns false when
-// no window answered, so the caller can decide to start one after all.
+// The mutex exists from the first instance's first instruction, but its window
+// only after the Flutter engine is up. A double click lands in that gap, so the
+// second launch waits it out rather than opening the window the mutex is there
+// to prevent.
+constexpr int kWindowWaitAttempts = 60;
+constexpr DWORD kWindowWaitStepMs = 50;
+
+// Time to allow the running instance to act on the message before giving up on
+// it; a busy engine is still worth waiting for, a hung one is not.
+constexpr UINT kForwardTimeoutMs = 5000;
+
+// Hands |url|, which may be empty, to the instance that already owns the mutex
+// and asks it to come forward. Returns false when no window answered, so the
+// caller can decide to start one after all.
 bool ForwardToRunningInstance(const std::wstring& url) {
-  HWND window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"NKS Talk");
+  HWND window = nullptr;
+  for (int attempt = 0; attempt < kWindowWaitAttempts && window == nullptr;
+       attempt++) {
+    if (attempt > 0) {
+      ::Sleep(kWindowWaitStepMs);
+    }
+    window = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"NKS Talk");
+  }
   if (window == nullptr) {
     return false;
   }
-  ::SetForegroundWindow(window);
-  if (url.empty()) {
-    return true;
+
+  // This process holds the foreground right, having just been started by the
+  // user; the running one needs it to raise itself.
+  DWORD owner = 0;
+  ::GetWindowThreadProcessId(window, &owner);
+  if (owner != 0) {
+    ::AllowSetForegroundWindow(owner);
   }
+
   COPYDATASTRUCT payload{};
   payload.dwData = FlutterWindow::kDeepLinkCopyDataId;
   payload.cbData =
       static_cast<DWORD>((url.size() + 1) * sizeof(wchar_t));
   payload.lpData = const_cast<wchar_t*>(url.c_str());
-  return ::SendMessageW(window, WM_COPYDATA, 0,
-                        reinterpret_cast<LPARAM>(&payload)) != 0;
+  DWORD_PTR answer = 0;
+  return ::SendMessageTimeoutW(window, WM_COPYDATA, 0,
+                               reinterpret_cast<LPARAM>(&payload),
+                               SMTO_ABORTIFHUNG, kForwardTimeoutMs,
+                               &answer) != 0 &&
+         answer != 0;
 }
 
 }  // namespace

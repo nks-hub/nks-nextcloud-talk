@@ -154,6 +154,33 @@ bool Win32Window::Show() {
   return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }
 
+bool Win32Window::Restore() {
+  if (window_handle_ == nullptr) {
+    return false;
+  }
+  if (!IsWindowVisible(window_handle_)) {
+    ShowWindow(window_handle_, SW_SHOW);
+  }
+  if (IsIconic(window_handle_)) {
+    ShowWindow(window_handle_, SW_RESTORE);
+  }
+
+  // Windows only lets the process that owns the foreground window hand it over.
+  // A second launch of this app is not that process, so borrow the current
+  // owner's input queue for the length of the call; without this the window
+  // only blinks in the taskbar when it was already visible.
+  const DWORD owner =
+      GetWindowThreadProcessId(GetForegroundWindow(), nullptr);
+  const DWORD self = GetCurrentThreadId();
+  const bool attached =
+      owner != 0 && owner != self && AttachThreadInput(owner, self, TRUE);
+  const bool ok = SetForegroundWindow(window_handle_) != FALSE;
+  if (attached) {
+    AttachThreadInput(owner, self, FALSE);
+  }
+  return ok;
+}
+
 // static
 LRESULT CALLBACK Win32Window::WndProc(HWND const window,
                                       UINT const message,
