@@ -297,6 +297,9 @@ Widget _wrapShell(
   return ProviderScope(
     overrides: <Override>[
       appDatabaseProvider.overrideWithValue(fixture.database),
+      // Push owns separate call-chain coverage; lifecycle search tests must
+      // not open its unrelated Drift watcher.
+      clientPushEnabledProvider.overrideWithValue(false),
       credentialVaultProvider.overrideWithValue(fixture.credentials),
       accountsProvider.overrideWith(
         (ref) =>
