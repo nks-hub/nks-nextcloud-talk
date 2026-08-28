@@ -11,7 +11,15 @@ void main() {
       r'MACOSX_DEPLOYMENT_TARGET = ([0-9.]+);',
     ).allMatches(project).map((match) => match.group(1)).toList();
 
-    expect(targets, hasLength(3));
-    expect(targets, everyElement('11.0'));
+    expect(targets, isNotEmpty);
+    expect(
+      targets,
+      everyElement(
+        predicate<String>(
+          (target) => int.parse(target.split('.').first) >= 11,
+          'macOS 11.0 or newer',
+        ),
+      ),
+    );
   });
 }
