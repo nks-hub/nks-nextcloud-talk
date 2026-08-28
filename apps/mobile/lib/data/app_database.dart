@@ -525,23 +525,6 @@ class CallLifecycleSessions extends Table {
   Set<Column<Object>> get primaryKey => {accountId, roomToken};
 }
 
-@DriftDatabase(
-  tables: [
-    Accounts,
-    CachedConversations,
-    ConversationAvatars,
-    ChatCapabilities,
-    ChatScopes,
-    CachedChatMessages,
-    CachedThreads,
-    TextSendOperations,
-    ChatDrafts,
-    AttachmentRuntimeAccounts,
-    AttachmentJobs,
-    CallSessions,
-    CallLifecycleSessions,
-  ],
-)
 const _databaseName = 'nks_nextcloud_talk';
 
 /// Every file SQLite keeps for one database, including the write-ahead log.
@@ -598,6 +581,23 @@ Future<Directory> _resolveDatabaseDirectory() async {
   return support;
 }
 
+@DriftDatabase(
+  tables: [
+    Accounts,
+    CachedConversations,
+    ConversationAvatars,
+    ChatCapabilities,
+    ChatScopes,
+    CachedChatMessages,
+    CachedThreads,
+    TextSendOperations,
+    ChatDrafts,
+    AttachmentRuntimeAccounts,
+    AttachmentJobs,
+    CallSessions,
+    CallLifecycleSessions,
+  ],
+)
 final class AppDatabase extends _$AppDatabase {
   AppDatabase()
     : super(
