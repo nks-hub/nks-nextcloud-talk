@@ -94,6 +94,7 @@ void main() {
         '$macos${separator}NotificationServiceExtension$separator';
     final info = read('${extension}Info.plist');
     expect(info, contains('com.apple.usernotifications.service'));
+    expect(info, contains('NSExtensionService_Subsystem'));
 
     final entitlements = read(
       '${extension}NotificationServiceExtension.entitlements',
