@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

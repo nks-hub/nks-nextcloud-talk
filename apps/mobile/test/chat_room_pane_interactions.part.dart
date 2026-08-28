@@ -26,6 +26,51 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('the chat header follows the platform pane header height', (
+    tester,
+  ) async {
+    Future<double> headerHeight(TargetPlatform platform) async {
+      debugDefaultTargetPlatformOverride = platform;
+      await tester.pumpWidget(
+        app(
+          home: const MediaQuery(
+            data: MediaQueryData(size: Size(1400, 900)),
+            child: SizedBox.shrink(),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        app(
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(1400, 900)),
+            child: ChatRoomPane(
+              account: account,
+              conversation: conversation,
+              showHeader: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final height = tester
+          .getSize(find.byKey(const Key('chat-room-header')))
+          .height;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+      debugDefaultTargetPlatformOverride = null;
+      return height;
+    }
+
+    // The conversation list header already reads `paneHeaderHeight`, so a
+    // chat header pinned to the touch value leaves the two panes misaligned
+    // by exactly the density difference.
+    final touch = await headerHeight(TargetPlatform.android);
+    final pointer = await headerHeight(TargetPlatform.windows);
+    expect(touch, 72);
+    expect(pointer, lessThan(touch));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('chat header and composer remain accessible at 200% text', (
     tester,
   ) async {

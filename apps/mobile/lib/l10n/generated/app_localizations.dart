@@ -686,6 +686,24 @@ abstract class AppLocalizations {
   /// **'Loading older messages…'**
   String get loadingOlderMessages;
 
+  /// No description provided for @jumpToNewestMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to newest messages'**
+  String get jumpToNewestMessages;
+
+  /// No description provided for @silentSendOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without notification'**
+  String get silentSendOff;
+
+  /// No description provided for @silentSendOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending without notification'**
+  String get silentSendOn;
+
   /// No description provided for @chatHistoryGapNotice.
   ///
   /// In en, this message translates to:

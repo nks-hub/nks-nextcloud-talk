@@ -487,6 +487,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               service: value.service,
             ),
             idleActions: idleActions,
+            silent: _silentSend,
           );
         } on TalkProtocolException {
           return ChatMediaComposerStatus.unavailable(

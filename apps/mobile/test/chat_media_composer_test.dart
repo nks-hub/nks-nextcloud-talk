@@ -39,6 +39,64 @@ void main() {
 
   _registerChatMediaComposerThreadContextTests(() => sourceStore);
 
+  testWidgets('a silent composer marks the attachment it submits silent', (
+    tester,
+  ) async {
+    final profile = _profile(silent: true);
+    final bridge = _RecordingBridge(profile: profile);
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        profile: profile,
+        silent: true,
+        voiceBackends: voiceBackends,
+      ),
+    );
+    await _pickAttachmentSource(tester);
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(bridge.metadata.single.silent, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a server without silent-send refuses a silent attachment', (
+    tester,
+  ) async {
+    // The capability profile is the guard, not the button: a stale toggle must
+    // not turn into a request the server never agreed to.
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        silent: true,
+        voiceBackends: voiceBackends,
+      ),
+    );
+    // No admission, so the media actions never arm: the request the server
+    // would refuse cannot be built in the first place.
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('pick-image-attachment')))
+          .onPressed,
+      isNull,
+    );
+    expect(bridge.metadata, isEmpty);
+    expect(bridge.sessions, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('root image reply is accepted before later upload confirmation', (
     tester,
   ) async {
