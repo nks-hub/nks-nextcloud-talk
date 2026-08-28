@@ -290,8 +290,11 @@ final class ConversationMergePlanner {
               .toSet()
         : <ConversationToken>{};
     final previousHash = current.configurationHash;
+    final responseHash = response.configurationHash;
     final hashChanged =
-        previousHash != null && previousHash != response.configurationHash;
+        previousHash != null &&
+        responseHash != null &&
+        previousHash != responseHash;
     final nextProof =
         mode == ConversationFetchMode.incremental && response.rooms.isEmpty
         ? current.emptyConfirmation
@@ -299,8 +302,10 @@ final class ConversationMergePlanner {
     final next = ConversationAccountState._(
       server: current.server,
       rooms: nextRooms,
+      // A legacy snapshot carries no cursor and clears the stored one, so the
+      // next fetch stays full instead of claiming incremental progress.
       cursor: response.cursor,
-      configurationHash: response.configurationHash,
+      configurationHash: responseHash ?? previousHash,
       emptyConfirmation: nextProof,
       capabilityRefreshRequired:
           current.capabilityRefreshRequired || hashChanged,

@@ -28,7 +28,7 @@ void main() {
             )
             as ConversationListSuccess;
 
-    expect(response.cursor.value, '1724300001');
+    expect(response.cursor!.value, '1724300001');
     expect(response.federationInvites?.value, '0');
   });
 
@@ -196,7 +196,7 @@ void main() {
     final rendered = <Object>[
       AccountId.parse('account-private'),
       room.token,
-      response.configurationHash,
+      response.configurationHash!,
       response.responseHeaders,
       room,
       preview,

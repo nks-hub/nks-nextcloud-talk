@@ -105,10 +105,19 @@ ConversationProfile resolveConversationProfile({
           deferralReason: ConversationProfileDeferralReason.fullProbeRequired,
         );
       }
+      if (response.cursor != null && response.configurationHash != null) {
+        return const ConversationProfile._(
+          status: ConversationProfileStatus.cursorV4,
+          candidatePath: conversationV4Path,
+          activePath: conversationV4Path,
+        );
+      }
+      // A legacy conversation-v4 server. Full snapshots stay usable, but no
+      // cursor profile is activated and no incremental fetch may be sent.
       return const ConversationProfile._(
-        status: ConversationProfileStatus.cursorV4,
+        status: ConversationProfileStatus.unsupportedWireProfile,
         candidatePath: conversationV4Path,
-        activePath: conversationV4Path,
+        activePath: null,
       );
     }
     if (response is ConversationReauthenticationRequired) {

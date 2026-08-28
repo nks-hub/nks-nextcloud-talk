@@ -8,7 +8,13 @@ const int conversationMaximumRooms = 100000;
 const int _conversationMaximumJsonDepth = 64;
 const int _conversationMaximumJsonNodes = 250000;
 
-/// Validated response headers required by the cursor-v4 wire profile.
+/// Validated conversation-list response headers.
+///
+/// A cursor-v4 server sends both the cursor and the configuration hash. Legacy
+/// `conversation-v4` servers answer full snapshots without `modifiedSince`
+/// support and may omit either header, which is why both are nullable.
+/// [requireCursorProfile] restores the strict contract for requests that depend
+/// on it. Malformed values stay rejected in both cases.
 final class ConversationResponseHeaders {
   ConversationResponseHeaders._({
     required this.configurationHash,
@@ -16,7 +22,10 @@ final class ConversationResponseHeaders {
     required this.federationInvites,
   });
 
-  factory ConversationResponseHeaders.parse(Map<String, String> headers) {
+  factory ConversationResponseHeaders.parse(
+    Map<String, String> headers, {
+    bool requireCursorProfile = true,
+  }) {
     const relevantNames = <String>{
       'x-nextcloud-talk-hash',
       'x-nextcloud-talk-modified-before',
@@ -38,14 +47,14 @@ final class ConversationResponseHeaders {
     }
 
     final rawHash = normalized['x-nextcloud-talk-hash'];
-    if (rawHash == null) {
+    if (rawHash == null && requireCursorProfile) {
       protocolFailure(
         TalkProtocolErrorCode.invalidConversationHeaders,
         r'$.headers.xNextcloudTalkHash',
       );
     }
     final rawCursor = normalized['x-nextcloud-talk-modified-before'];
-    if (rawCursor == null) {
+    if (rawCursor == null && requireCursorProfile) {
       protocolFailure(
         TalkProtocolErrorCode.invalidConversationHeaders,
         r'$.headers.xNextcloudTalkModifiedBefore',
@@ -55,15 +64,19 @@ final class ConversationResponseHeaders {
     final rawFederationInvites =
         normalized['x-nextcloud-talk-federation-invites'];
     return ConversationResponseHeaders._(
-      configurationHash: ConversationConfigurationHash.parse(
-        rawHash,
-        path: r'$.headers.xNextcloudTalkHash',
-      ),
-      cursor: ConversationCursor.parse(
-        rawCursor,
-        path: r'$.headers.xNextcloudTalkModifiedBefore',
-        code: TalkProtocolErrorCode.invalidConversationHeaders,
-      ),
+      configurationHash: rawHash == null
+          ? null
+          : ConversationConfigurationHash.parse(
+              rawHash,
+              path: r'$.headers.xNextcloudTalkHash',
+            ),
+      cursor: rawCursor == null
+          ? null
+          : ConversationCursor.parse(
+              rawCursor,
+              path: r'$.headers.xNextcloudTalkModifiedBefore',
+              code: TalkProtocolErrorCode.invalidConversationHeaders,
+            ),
       federationInvites: rawFederationInvites == null
           ? null
           : ConversationCursor.parse(
@@ -74,8 +87,8 @@ final class ConversationResponseHeaders {
     );
   }
 
-  final ConversationConfigurationHash configurationHash;
-  final ConversationCursor cursor;
+  final ConversationConfigurationHash? configurationHash;
+  final ConversationCursor? cursor;
   final ConversationCursor? federationInvites;
 
   @override
@@ -104,9 +117,10 @@ final class ConversationListSuccess extends ConversationListResponse {
   final List<ConversationRoom> rooms;
   final ConversationResponseHeaders responseHeaders;
 
-  ConversationCursor get cursor => responseHeaders.cursor;
+  /// `null` for a legacy snapshot server; the next fetch must stay full.
+  ConversationCursor? get cursor => responseHeaders.cursor;
 
-  ConversationConfigurationHash get configurationHash =>
+  ConversationConfigurationHash? get configurationHash =>
       responseHeaders.configurationHash;
 
   ConversationCursor? get federationInvites =>
@@ -235,7 +249,12 @@ ConversationListResponse _decodeSuccessOrOcsFailure({
     );
   }
 
-  final responseHeaders = ConversationResponseHeaders.parse(headers);
+  // Only an incremental fetch depends on the cursor profile. A full fetch
+  // accepts a legacy conversation-v4 snapshot without cursor and hash.
+  final responseHeaders = ConversationResponseHeaders.parse(
+    headers,
+    requireCursorProfile: request.mode == ConversationFetchMode.incremental,
+  );
   final session = JsonFreezeSession(
     maximumDepth: _conversationMaximumJsonDepth,
     maximumNodes: _conversationMaximumJsonNodes,
