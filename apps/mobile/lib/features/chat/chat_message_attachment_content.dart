@@ -310,6 +310,17 @@ final class _ChatAttachment extends ConsumerWidget {
           );
     final openAttachment = openImage ?? openFile;
     final opensFile = openImage == null && openFile != null;
+    Widget loadingImage() => Container(
+      key: Key('chat-image-loading-$messageId-$index'),
+      width: 240,
+      height: 120,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const CircularProgressIndicator(strokeWidth: 2),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -346,6 +357,15 @@ final class _ChatAttachment extends ConsumerWidget {
                         key: Key('chat-image-$messageId-$index'),
                         fit: BoxFit.contain,
                         gaplessPlayback: true,
+                        frameBuilder:
+                            (_, image, frame, wasSynchronouslyLoaded) =>
+                                _showAfterFirstImageFrame(
+                                  image: image,
+                                  frame: frame,
+                                  wasSynchronouslyLoaded:
+                                      wasSynchronouslyLoaded,
+                                  placeholder: loadingImage(),
+                                ),
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ),
@@ -355,17 +375,7 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           ),
         ] else if (image?.isLoading ?? false) ...[
-          Container(
-            key: Key('chat-image-loading-$messageId-$index'),
-            width: 240,
-            height: 120,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const CircularProgressIndicator(strokeWidth: 2),
-          ),
+          loadingImage(),
         ] else if (imageFailed) ...[
           Container(
             key: Key('chat-image-error-$messageId-$index'),

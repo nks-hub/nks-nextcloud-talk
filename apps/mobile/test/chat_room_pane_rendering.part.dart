@@ -134,6 +134,11 @@ void _registerChatRoomPaneRenderingTests() {
       );
       await tester.pump();
       await tester.pump();
+      await _pumpUntil(
+        tester,
+        () =>
+            find.byKey(const Key('chat-image-loading-20-0')).evaluate().isEmpty,
+      );
 
       expect(find.byKey(const Key('chat-rich-content-20')), findsOneWidget);
       expect(
@@ -292,6 +297,13 @@ void _registerChatRoomPaneRenderingTests() {
     );
     await tester.pump();
 
+    expect(find.byKey(const Key('chat-image-loading-30-0')), findsOneWidget);
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-image-loading-30-0')).evaluate().isEmpty,
+    );
+
+    expect(find.byKey(const Key('chat-image-loading-30-0')), findsNothing);
     final openImage = find.byKey(const Key('chat-open-image-30-0'));
     expect(openImage, findsOneWidget);
     await tester.tap(openImage);

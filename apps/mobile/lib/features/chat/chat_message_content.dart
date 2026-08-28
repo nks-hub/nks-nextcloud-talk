@@ -101,3 +101,12 @@ final class ChatMessageContent extends StatelessWidget {
     );
   }
 }
+
+Widget _showAfterFirstImageFrame({
+  required Widget image,
+  required int? frame,
+  required bool wasSynchronouslyLoaded,
+  required Widget placeholder,
+}) {
+  return wasSynchronouslyLoaded || frame != null ? image : placeholder;
+}

@@ -75,8 +75,22 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump();
+    expect(
+      find.byKey(const Key('chat-giphy-reference-loading-0')),
+      findsOneWidget,
+    );
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('chat-giphy-reference-loading-0'))
+          .evaluate()
+          .isEmpty,
+    );
 
+    expect(
+      find.byKey(const Key('chat-giphy-reference-loading-0')),
+      findsNothing,
+    );
     final memoryImage = find.byWidgetPredicate(
       (widget) => widget is Image && widget.image is ResizeImage,
     );
@@ -422,10 +436,13 @@ void main() {
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
   for (var attempt = 0; attempt < 100; attempt++) {
-    await tester.pump(const Duration(milliseconds: 10));
     if (condition()) {
       return;
     }
+    await tester.pump(const Duration(milliseconds: 10));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
+    );
   }
   fail('Condition was not reached');
 }

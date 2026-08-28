@@ -194,6 +194,13 @@ final class _GiphyReferenceImage extends StatelessWidget {
             fit: BoxFit.contain,
             cacheWidth: 1080,
             gaplessPlayback: true,
+            frameBuilder: (_, image, frame, wasSynchronouslyLoaded) =>
+                _showAfterFirstImageFrame(
+                  image: image,
+                  frame: frame,
+                  wasSynchronouslyLoaded: wasSynchronouslyLoaded,
+                  placeholder: _GiphyReferenceLoading(index: index),
+                ),
             errorBuilder: (_, _, _) => _GiphyReferenceFailure(
               index: index,
               foregroundColor: foregroundColor,
