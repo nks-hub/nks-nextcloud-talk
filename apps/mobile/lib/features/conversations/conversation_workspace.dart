@@ -188,10 +188,13 @@ final class _CompactShell extends StatelessWidget {
         child: Scaffold(
           key: const Key('conversation-shell-compact-conversation'),
           body: SafeArea(
-            child: PresenceChatRoomPane(
-              account: account,
-              conversation: selected,
-              onClose: onCloseConversation,
+            child: _EdgeSwipeBack(
+              onDismiss: onCloseConversation,
+              child: PresenceChatRoomPane(
+                account: account,
+                conversation: selected,
+                onClose: onCloseConversation,
+              ),
             ),
           ),
         ),
@@ -342,7 +345,9 @@ final class _ExpandedShell extends StatelessWidget {
                 children: [
                   ConstrainedBox(
                     key: const Key('conversation-list-header'),
-                    constraints: BoxConstraints(minHeight: context.paneHeaderHeight),
+                    constraints: BoxConstraints(
+                      minHeight: context.paneHeaderHeight,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
                       child: Row(
@@ -419,9 +424,11 @@ final class _ExpandedShell extends StatelessWidget {
               SizedBox(
                 // `clamp(300px, 27vw, 500px)`, which is what Nextcloud's own
                 // sidebar uses.
-                width: MediaQuery.sizeOf(
-                  context,
-                ).width.clamp(300 / 0.27, 500 / 0.27) * 0.27,
+                width:
+                    MediaQuery.sizeOf(
+                      context,
+                    ).width.clamp(300 / 0.27, 500 / 0.27) *
+                    0.27,
                 child: RoomDetailsScreen(
                   account: account,
                   conversation: selectedConversation!,
@@ -541,4 +548,86 @@ String _syncErrorMessage(AppLocalizations strings, String errorCode) {
     ConversationSyncError.network => strings.syncNetwork,
     ConversationSyncError.accountMissing || null => strings.syncInvalidResponse,
   };
+}
+
+/// Drag from the left edge to put the conversation list back.
+///
+/// The compact shell swaps the list for the conversation inside one Scaffold
+/// rather than pushing a route, so the platform's own back-edge gesture has
+/// nothing to pop and simply did nothing - reported against the original iOS
+/// app, where the same drag returns to the list.
+///
+/// The gesture lives on a narrow strip instead of the whole pane on purpose:
+/// a message bubble takes horizontal drags of its own to open a reply, and
+/// those start anywhere but the edge. Twenty-four points matches the width
+/// iOS itself treats as the screen edge.
+final class _EdgeSwipeBack extends StatefulWidget {
+  const _EdgeSwipeBack({required this.onDismiss, required this.child});
+
+  final VoidCallback onDismiss;
+  final Widget child;
+
+  @override
+  State<_EdgeSwipeBack> createState() => _EdgeSwipeBackState();
+}
+
+const double _edgeSwipeStripWidth = 24;
+const double _edgeSwipeThreshold = 96;
+const double _edgeSwipeMaximum = 160;
+const double _edgeSwipeFlickDistance = 48;
+const double _edgeSwipeFlickVelocity = 400;
+
+final class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
+  double _offset = 0;
+
+  void _release({required bool dismiss}) {
+    if (_offset != 0) {
+      setState(() => _offset = 0);
+    }
+    if (dismiss) {
+      widget.onDismiss();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Transform.translate(offset: Offset(_offset, 0), child: widget.child),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: _edgeSwipeStripWidth,
+          child: GestureDetector(
+            key: const Key('conversation-edge-swipe-back'),
+            // Translucent so a tap on whatever sits under the strip still
+            // reaches it; only horizontal drags are claimed here.
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: (details) {
+              final next = (_offset + details.delta.dx).clamp(
+                0.0,
+                _edgeSwipeMaximum,
+              );
+              if (next != _offset) {
+                setState(() => _offset = next);
+              }
+            },
+            // A flick counts short of the full distance, but not on any
+            // movement at all: the velocity estimate at the end of a slow
+            // 30 point tug still clears 300, so the flick path asks for a
+            // deliberate distance of its own.
+            onHorizontalDragEnd: (details) => _release(
+              dismiss:
+                  _offset >= _edgeSwipeThreshold ||
+                  (_offset >= _edgeSwipeFlickDistance &&
+                      (details.primaryVelocity ?? 0) >
+                          _edgeSwipeFlickVelocity),
+            ),
+            onHorizontalDragCancel: () => _release(dismiss: false),
+          ),
+        ),
+      ],
+    );
+  }
 }

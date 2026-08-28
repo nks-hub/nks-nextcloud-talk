@@ -125,6 +125,52 @@ void main() {
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
 
+  testWidgets('a drag from the left edge puts the conversation list back', (
+    tester,
+  ) async {
+    // The compact shell swaps the list for the conversation inside one
+    // Scaffold instead of pushing a route, so the platform's own back-edge
+    // gesture had nothing to pop and did nothing at all.
+    tester.view.physicalSize = const Size(400, 900);
+    await pump(tester, token: _conversation.token);
+    expect(compactConversation, findsOneWidget);
+    expect(compactList, findsNothing);
+
+    await tester.timedDrag(
+      find.byKey(const Key('conversation-edge-swipe-back')),
+      const Offset(200, 0),
+      const Duration(milliseconds: 200),
+    );
+    await tester.pumpAndSettle();
+
+    expect(compactList, findsOneWidget);
+    expect(compactConversation, findsNothing);
+
+    await settle(tester);
+  });
+
+  testWidgets('a short tug from the edge keeps the conversation open', (
+    tester,
+  ) async {
+    // Anything that closes on the first few pixels would fire while somebody
+    // is only scrolling the timeline near the edge.
+    tester.view.physicalSize = const Size(400, 900);
+    await pump(tester, token: _conversation.token);
+
+    await tester.timedDrag(
+      find.byKey(const Key('conversation-edge-swipe-back')),
+      const Offset(30, 0),
+      const Duration(milliseconds: 400),
+    );
+    // Not pumpAndSettle: the conversation that stays open keeps its live sync
+    // loop scheduling frames, so the tree never settles.
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(compactConversation, findsOneWidget);
+
+    await settle(tester);
+  });
+
   testWidgets('the details panel stays between 300 and 500 wide', (
     tester,
   ) async {
