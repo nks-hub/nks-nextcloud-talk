@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:nextcloudtalk/core/app_version.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -155,9 +156,42 @@ void main() {
     );
 
     expect(seen.method, 'DELETE');
+    expect(seen.headers['User-Agent'], matches(_talkClientUserAgent));
     expect(completion.classification, PushCompletionClass.success);
   });
+
+  test('the registration announces itself as a Talk client', () async {
+    late http.BaseRequest seen;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        seen = request;
+        return http.Response('', 503);
+      }),
+    );
+    addTearDown(api.close);
+
+    await api.registerPushWithNextcloud(
+      effect: _registerEffect(server),
+      loginName: 'tester',
+      appPassword: 'secret',
+    );
+
+    // Nextcloud stores `apptype` purely from this header (PushController
+    // against IRequest.USER_AGENT_TALK_*). Without a match the account is
+    // registered as `unknown` and Push.filterProxyDeviceList drops it as soon
+    // as the same account has an official Talk device.
+    expect(seen.headers['User-Agent'], matches(_talkClientUserAgent));
+    expect(pushRegistrationUserAgent, endsWith(' v$appVersionName'));
+    expect(pushRegistrationUserAgent, isNot(contains(loginFlowUserAgent)));
+  });
 }
+
+/// Mirrors `IRequest::USER_AGENT_TALK_ANDROID`, `_IOS` and `_DESKTOP`, so the
+/// header keeps matching whichever platform the suite happens to run on.
+final RegExp _talkClientUserAgent = RegExp(
+  r'^Mozilla/5\.0 \((?:Android|iOS|Macintosh|Windows|Linux)\) '
+  r'Nextcloud-Talk v[^ ]+$',
+);
 
 String _jsonString(String value) =>
     '"${value.replaceAll('\\', r'\\').replaceAll('"', r'\"').replaceAll('\n', r'\n')}"';

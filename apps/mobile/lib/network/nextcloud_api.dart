@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
+
+import '../core/app_version.dart';
 
 part 'nextcloud_api_account.dart';
 part 'nextcloud_api_call.dart';
@@ -102,6 +105,38 @@ final class PendingLogin {
 /// account owner sees a meaningless entry under security settings and cannot
 /// tell which device to revoke.
 const String loginFlowUserAgent = 'NKS Talk';
+
+/// User-Agent for the OCS push registration route.
+///
+/// Nextcloud classifies a push registration solely by this header:
+/// `PushController::register` matches it against `IRequest::USER_AGENT_TALK_*`
+/// and stores `apptype = talk`, `nextcloud` or `unknown`. `Push` then filters
+/// per notification — a Talk notification goes to the `talk` devices and only
+/// falls back to the others when the account has none at all. Registering
+/// without this header therefore silently costs every Talk notification on any
+/// account that also uses the official Talk app.
+///
+/// Only Android and iOS are classified as `talk` upstream; the desktop pattern
+/// exists but `PushController` does not consult it, so desktop registrations
+/// stay `unknown` exactly like the official Talk Desktop client.
+String get pushRegistrationUserAgent =>
+    'Mozilla/5.0 ($_pushUserAgentPlatform) Nextcloud-Talk v$appVersionName';
+
+String get _pushUserAgentPlatform {
+  if (Platform.isAndroid) {
+    return 'Android';
+  }
+  if (Platform.isIOS) {
+    return 'iOS';
+  }
+  if (Platform.isMacOS) {
+    return 'Macintosh';
+  }
+  if (Platform.isWindows) {
+    return 'Windows';
+  }
+  return 'Linux';
+}
 
 final class HttpNextcloudApi extends _HttpNextcloudApiBase
     with
