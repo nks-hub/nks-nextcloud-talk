@@ -1,6 +1,7 @@
 package com.nkshub.nextcloudtalk.push
 
 import android.Manifest
+import android.app.RemoteInput
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -42,6 +43,7 @@ class AndroidWebPushActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        notificationAction(intent)?.route?.let(notificationOpenDelivery::opened)
         notificationOpen(intent)?.let(notificationOpenDelivery::opened)
         deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
         super.onCreate(savedInstanceState)
@@ -95,6 +97,7 @@ class AndroidWebPushActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        notificationAction(intent)?.route?.let(notificationOpenDelivery::opened)
         notificationOpen(intent)?.let(notificationOpenDelivery::opened)
         deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
     }
@@ -190,6 +193,32 @@ class AndroidWebPushActivity : FlutterActivity() {
             ?: return null
         return runCatching {
             AndroidWebPushStore(applicationContext).consumeNotificationOpen(token)
+        }.getOrNull()
+    }
+
+    internal fun notificationAction(intent: Intent?): NotificationActionLaunch? {
+        val actionIntent = intent ?: return null
+        val request = AndroidSystemNotifications.notificationActionRequest(
+            actionIntent,
+            packageName,
+        ) ?: return null
+        val (kind, token) = request
+        val replyText = if (kind == NotificationActionKind.REPLY) {
+            RemoteInput.getResultsFromIntent(actionIntent)
+                ?.getCharSequence(AndroidSystemNotifications.REPLY_RESULT_KEY)
+                ?.toString()
+                ?.trim()
+                ?.take(AndroidSystemNotifications.MAX_REPLY_LENGTH)
+        } else {
+            null
+        }
+        return runCatching {
+            AndroidSystemNotifications.performAction(
+                applicationContext,
+                kind,
+                token,
+                replyText,
+            )
         }.getOrNull()
     }
 

@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.RemoteInput
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -486,7 +485,7 @@ class AndroidWebPushRuntimeTest {
         )
         assertEquals(context.packageName, intent.component?.packageName)
         assertEquals(
-            AndroidNotificationActionReceiver::class.java.name,
+            AndroidWebPushActivity::class.java.name,
             intent.component?.className,
         )
         val serialized = intent.toUri(Intent.URI_INTENT_SCHEME)
@@ -538,6 +537,8 @@ class AndroidWebPushRuntimeTest {
         assertNotEquals(replyIntent, markReadIntent)
         assertNotEquals(replyIntent.intentSender, markReadIntent.intentSender)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue(markReadIntent.isActivity)
+            assertTrue(replyIntent.isActivity)
             assertFalse(markReadIntent.isImmutable == false)
             assertTrue(replyIntent.isImmutable == false)
         }
@@ -688,18 +689,17 @@ class AndroidWebPushRuntimeTest {
         assertNull(actions[1].remoteInputs)
 
         // Reproduce what the system does when the user submits the reply.
-        val replyIntent = Intent(
-            AndroidSystemNotifications.ACTION_NOTIFICATION_ACTION,
-        )
         val armed = store.armNotificationAction(
             kind = NotificationActionKind.REPLY,
             accountId = accountId,
             notificationId = 4106,
             roomToken = "roomfoxtrot",
         )
-        replyIntent.data = AndroidSystemNotifications
-            .notificationActionIntent(context, NotificationActionKind.REPLY, armed)
-            .data
+        val replyIntent = AndroidSystemNotifications.notificationActionIntent(
+            context,
+            NotificationActionKind.REPLY,
+            armed,
+        )
         RemoteInput.addResultsToIntent(
             remoteInputs,
             replyIntent,
@@ -710,26 +710,18 @@ class AndroidWebPushRuntimeTest {
                 )
             },
         )
-        var startedActivity: Intent? = null
-        val actionContext = object : ContextWrapper(context) {
-            override fun startActivity(intent: Intent) {
-                startedActivity = intent
+        ActivityScenario.launch(AndroidWebPushActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val launch = activity.notificationAction(replyIntent)
+                assertNotNull(launch)
+                val wakeRoute = launch!!.route
+                assertEquals(accountId, wakeRoute["accountId"])
+                assertEquals("roomfoxtrot", wakeRoute["objectId"])
+                val statusRoute = store.consumeNotificationOpen(launch.statusOpenToken)
+                assertEquals(accountId, statusRoute?.get("accountId"))
+                assertEquals("roomfoxtrot", statusRoute?.get("objectId"))
             }
         }
-        AndroidNotificationActionReceiver().onReceive(actionContext, replyIntent)
-
-        val wakeIntent = startedActivity
-        assertNotNull(wakeIntent)
-        assertTrue(wakeIntent!!.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
-        assertTrue(wakeIntent.extras == null || wakeIntent.extras!!.isEmpty)
-        val wakeToken = AndroidSystemNotifications.notificationOpenToken(
-            wakeIntent,
-            context.packageName,
-        )
-        assertNotNull(wakeToken)
-        val wakeRoute = store.consumeNotificationOpen(wakeToken!!)
-        assertEquals(accountId, wakeRoute?.get("accountId"))
-        assertEquals("roomfoxtrot", wakeRoute?.get("objectId"))
 
         val queued = store.claimNotificationActions(accountId, 10).ready.single()
         assertEquals("runtime reply", queued.replyText)
@@ -740,6 +732,9 @@ class AndroidWebPushRuntimeTest {
         // status without actions instead of silently staying as it was.
         val queuedNotification = manager.activeNotifications.single {
             it.tag == posted.tag
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue(queuedNotification.notification.contentIntent.isActivity)
         }
         assertTrue(queuedNotification.notification.actions.isNullOrEmpty())
         assertNotEquals(
