@@ -166,12 +166,20 @@ final class PushRegistrationCoordinator {
 
   /// Unregisters [accountId] and stops tracking it.
   Future<void> unfollow(String accountId) async {
-    final authority = _authorities.remove(accountId);
+    await revokeAccount(accountId);
+  }
+
+  /// Requests account-scoped proxy cleanup and reports whether the complete
+  /// Nextcloud, gateway and key-destruction chain settled synchronously.
+  /// Retryable state remains owned by this coordinator for its bounded retry.
+  Future<bool> revokeAccount(String accountId) async {
+    final authority = _authorities[accountId];
     if (authority == null) {
-      return;
+      return true;
     }
     _apply(requestPushAccountRemoval(_snapshot, authority));
     await _drain();
+    return _retireAuthorityIfRemoved(authority.accountId);
   }
 
   /// Unregisters every account this coordinator still tracks, at Nextcloud
@@ -433,5 +441,16 @@ final class PushRegistrationCoordinator {
     }
     _apply(retryPushAccount(_snapshot, authority));
     await _drain();
+    _retireAuthorityIfRemoved(accountId);
+  }
+
+  bool _retireAuthorityIfRemoved(AccountId accountId) {
+    if (_snapshot.accounts[accountId]?.phase != PushAccountPhase.removed) {
+      return false;
+    }
+    _authorities.remove(accountId.value);
+    _retryInFlight.remove(accountId);
+    _retryBackoff.remove(accountId);
+    return true;
   }
 }

@@ -140,10 +140,13 @@ void main() {
     List<http.Request> nextcloudRequests,
     List<http.Request> gatewayRequests,
     PushGatewayClient gatewayClient,
+    List<String> steps,
   })
-  wire({int gatewayDeleteStatus = 202}) {
+  wire({List<int> gatewayDeleteStatuses = const <int>[202]}) {
     final nextcloudRequests = <http.Request>[];
     final gatewayRequests = <http.Request>[];
+    final steps = <String>[];
+    var gatewayDeleteIndex = 0;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         nextcloudRequests.add(request);
@@ -159,6 +162,7 @@ void main() {
         }
         if (request.url.path.endsWith('/push')) {
           if (request.method == 'DELETE') {
+            steps.add('DELETE Nextcloud');
             return http.Response('', 200);
           }
           return nextcloudRegisterResponse();
@@ -169,9 +173,20 @@ void main() {
     final gatewayClient = PushGatewayClient(
       client: MockClient((request) async {
         gatewayRequests.add(request);
+        if (request.method == 'DELETE') {
+          steps.add('DELETE gateway');
+        }
+        final deleteStatus =
+            gatewayDeleteStatuses[gatewayDeleteIndex <
+                    gatewayDeleteStatuses.length
+                ? gatewayDeleteIndex
+                : gatewayDeleteStatuses.length - 1];
+        if (request.method == 'DELETE') {
+          gatewayDeleteIndex++;
+        }
         return http.Response(
           '',
-          request.method == 'DELETE' ? gatewayDeleteStatus : 200,
+          request.method == 'DELETE' ? deleteStatus : 200,
         );
       }),
     );
@@ -180,6 +195,7 @@ void main() {
       nextcloudRequests: nextcloudRequests,
       gatewayRequests: gatewayRequests,
       gatewayClient: gatewayClient,
+      steps: steps,
     );
   }
 
@@ -189,6 +205,7 @@ void main() {
       List<http.Request> nextcloudRequests,
       List<http.Request> gatewayRequests,
       PushGatewayClient gatewayClient,
+      List<String> steps,
     })
     wired,
     PushDeviceKeyStore keyStore,
@@ -317,7 +334,7 @@ void main() {
 
   test('revokeAll rejects a transient gateway deletion', () async {
     await seedAccount('account-a');
-    final wired = wire(gatewayDeleteStatus: 503);
+    final wired = wire(gatewayDeleteStatuses: const <int>[503]);
     final coordinator = build(wired, _FakeDeviceKeyStore());
     coordinator.installToken(_fcmToken);
     await coordinator.follow('account-a');
@@ -421,7 +438,9 @@ void main() {
 
     coordinator.installToken(_fcmToken);
     await coordinator.follow('account-a');
-    await coordinator.unfollow('account-a');
+    wired.steps.clear();
+    expect(await coordinator.revokeAccount('account-a'), isTrue);
+    expect(wired.steps, <String>['DELETE Nextcloud', 'DELETE gateway']);
 
     final delete = wired.gatewayRequests.singleWhere(
       (request) => request.method == 'DELETE',
@@ -436,6 +455,61 @@ void main() {
       _testDeviceSignature,
     );
     expect(delete.bodyFields['userPublicKey'], isNotEmpty);
+
+    expect(await coordinator.revokeAccount('account-a'), isTrue);
+    expect(
+      wired.nextcloudRequests.where((request) => request.method == 'DELETE'),
+      hasLength(1),
+    );
+    expect(
+      wired.gatewayRequests.where((request) => request.method == 'DELETE'),
+      hasLength(1),
+    );
+  });
+
+  test('a transient gateway DELETE keeps the removal retryable', () async {
+    await seedAccount('account-a');
+    final wired = wire(gatewayDeleteStatuses: <int>[503, 202]);
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: wired.api,
+      keyStore: _FakeDeviceKeyStore(),
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      gatewayClient: wired.gatewayClient,
+      firstRetry: const Duration(milliseconds: 1),
+      maximumRetry: const Duration(milliseconds: 2),
+      delay: (_) async {},
+    );
+    addTearDown(wired.api.close);
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    wired.steps.clear();
+
+    expect(await coordinator.revokeAccount('account-a'), isFalse);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (wired.gatewayRequests
+              .where((request) => request.method == 'DELETE')
+              .length >=
+          2) {
+        break;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(
+      wired.gatewayRequests.where((request) => request.method == 'DELETE'),
+      hasLength(2),
+    );
+    expect(wired.steps, <String>[
+      'DELETE Nextcloud',
+      'DELETE gateway',
+      'DELETE gateway',
+    ]);
+    expect(await coordinator.revokeAccount('account-a'), isTrue);
   });
 
   test('a device key shared with another account is refused', () async {

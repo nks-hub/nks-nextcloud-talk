@@ -67,6 +67,7 @@ void main() {
   AccountRemovalService buildService(
     HttpNextcloudApi api, {
     AccountRemovalStarted? onRemovalStarted,
+    AccountPushRevocation? revokePush,
   }) {
     return AccountRemovalService(
       accounts: accounts,
@@ -79,8 +80,73 @@ void main() {
       chatAttachmentDirectory: () async => chatAttachmentRoot,
       attachmentSources: () async => sources,
       onRemovalStarted: onRemovalStarted,
+      revokePush: revokePush,
     );
   }
+
+  test(
+    'revokes proxy and Nextcloud push before credentials and account data',
+    () async {
+      final steps = <String>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          expect(await accounts.getAccount('account-a'), isNotNull);
+          expect(await vault.readAppPassword('account-a'), isNotNull);
+          steps.add('${request.method} ${request.url.path}');
+          return http.Response(_okOcs(), 200);
+        }),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+      final outcome = await buildService(
+        api,
+        onRemovalStarted: (accountId) async {
+          steps.add('suspend $accountId');
+        },
+        revokePush: (accountId) async {
+          expect(await accounts.getAccount(accountId), isNotNull);
+          expect(await vault.readAppPassword(accountId), isNotNull);
+          steps.add('DELETE proxy Nextcloud $accountId');
+          steps.add('DELETE proxy gateway $accountId');
+          return true;
+        },
+      ).removeAccount('account-a');
+
+      expect(steps, <String>[
+        'suspend account-a',
+        'DELETE proxy Nextcloud account-a',
+        'DELETE proxy gateway account-a',
+        'DELETE /ocs/v2.php/apps/notifications/api/v2/webpush',
+        'DELETE /ocs/v2.php/core/apppassword',
+      ]);
+      expect(outcome.pushRegistrationRevoked, isTrue);
+      expect(outcome.appPasswordRevoked, isTrue);
+      expect(await accounts.getAccount('account-a'), isNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
+
+  test(
+    'reports a pending proxy cleanup instead of silently losing it',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async => http.Response(_okOcs(), 200)),
+      );
+      addTearDown(api.close);
+      await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+
+      final outcome = await buildService(
+        api,
+        revokePush: (_) async => false,
+      ).removeAccount('account-a');
+
+      expect(outcome.pushRegistrationRevoked, isFalse);
+      expect(outcome.appPasswordRevoked, isFalse);
+      expect(await accounts.getAccount('account-a'), isNull);
+      expect(await vault.readAppPassword('account-a'), isNull);
+    },
+  );
 
   test('suspends account push before remote revocation starts', () async {
     final steps = <String>[];

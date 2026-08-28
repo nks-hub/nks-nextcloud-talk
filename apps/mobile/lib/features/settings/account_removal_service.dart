@@ -14,6 +14,7 @@ import '../chat/composer/emoji_usage_store.dart';
 import '../chat/media/chat_attachment_opener.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
+typedef AccountPushRevocation = Future<bool> Function(String accountId);
 
 /// What a finished removal managed to do on the server.
 ///
@@ -24,12 +25,18 @@ typedef AccountRemovalStarted = Future<void> Function(String accountId);
 final class AccountRemovalOutcome {
   const AccountRemovalOutcome({
     required this.accountExisted,
+    required this.pushRegistrationRevoked,
     required this.appPasswordRevoked,
   });
 
   /// False when the account was already gone, for example because a second
   /// tap arrived while the first removal was still running.
   final bool accountExisted;
+
+  /// False when proxy push cleanup remains retryable or failed. The local
+  /// wipe still completes, but the caller must not report a clean remote
+  /// removal while the account-scoped cleanup state is unresolved.
+  final bool pushRegistrationRevoked;
 
   /// False whenever the server did not confirm the app password is destroyed:
   /// offline, unreachable, already revoked from the web UI, or an older
@@ -58,6 +65,7 @@ final class AccountRemovalService {
     required Future<Directory> Function() chatAttachmentDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
+    AccountPushRevocation? revokePush,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
@@ -67,7 +75,8 @@ final class AccountRemovalService {
        _voiceDirectory = voiceDirectory,
        _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
-       _onRemovalStarted = onRemovalStarted;
+       _onRemovalStarted = onRemovalStarted,
+       _revokePush = revokePush;
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -79,17 +88,23 @@ final class AccountRemovalService {
   final Future<Directory> Function() _chatAttachmentDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
+  final AccountPushRevocation? _revokePush;
 
   Future<AccountRemovalOutcome> removeAccount(String accountId) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {
       return const AccountRemovalOutcome(
         accountExisted: false,
+        pushRegistrationRevoked: false,
         appPasswordRevoked: false,
       );
     }
 
     await _onRemovalStarted?.call(accountId);
+
+    final pushRegistrationRevoked = _revokePush == null
+        ? true
+        : await _bestEffortResult(() => _revokePush(accountId));
 
     final appPassword = await _credentials.readAppPassword(accountId);
     var appPasswordRevoked = false;
@@ -97,20 +112,22 @@ final class AccountRemovalService {
       final server = ServerBase.parse(account.serverUrl);
       // Push registration first: revoking the password takes away the only
       // credential that can address it.
-      await _bestEffort(
+      final webPushRevoked = await _bestEffort(
         () => _api.unregisterWebPush(
           server: server,
           loginName: account.loginName,
           appPassword: appPassword,
         ),
       );
-      appPasswordRevoked = await _bestEffort(
+      final passwordRevoked = await _bestEffort(
         () => _api.revokeAppPassword(
           server: server,
           loginName: account.loginName,
           appPassword: appPassword,
         ),
       );
+      appPasswordRevoked =
+          pushRegistrationRevoked && webPushRevoked && passwordRevoked;
     }
 
     // From here on nothing may be skipped, whatever the server did.
@@ -144,8 +161,17 @@ final class AccountRemovalService {
 
     return AccountRemovalOutcome(
       accountExisted: true,
+      pushRegistrationRevoked: pushRegistrationRevoked,
       appPasswordRevoked: appPasswordRevoked,
     );
+  }
+
+  Future<bool> _bestEffortResult(Future<bool> Function() action) async {
+    try {
+      return await action();
+    } on Object {
+      return false;
+    }
   }
 
   /// Runs [action] and reports whether it succeeded.

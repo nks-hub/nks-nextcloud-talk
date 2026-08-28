@@ -785,6 +785,10 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     onRemovalStarted: (accountId) async {
       await ref.read(androidPushCoordinatorProvider)?.suspendAccount(accountId);
     },
+    revokePush: (accountId) async {
+      final coordinator = ref.read(androidPushRegistrationCoordinatorProvider);
+      return coordinator == null || await coordinator.revokeAccount(accountId);
+    },
   );
 });
 
