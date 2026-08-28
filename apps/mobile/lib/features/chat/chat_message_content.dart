@@ -10,6 +10,7 @@ import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'emoji_only_message.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
 import 'media/chat_attachment_opener.dart';
@@ -74,7 +75,20 @@ final class ChatMessageContent extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         if (giphySelection.references.isEmpty)
-          _RichDocument(document: document, foregroundColor: foregroundColor)
+          if (attachments.isEmpty &&
+              parsed.messageParameters.isEmpty &&
+              isEmojiOnlyMessage(parsed.message))
+            Text(
+              parsed.message.trim(),
+              key: Key('chat-enlarged-emoji-${parsed.messageId}'),
+              style: TextStyle(
+                color: foregroundColor,
+                fontSize: enlargedEmojiFontSize,
+                height: 1.15,
+              ),
+            )
+          else
+            _RichDocument(document: document, foregroundColor: foregroundColor)
         else
           _GiphyRichDocument(
             accountId: account.id,

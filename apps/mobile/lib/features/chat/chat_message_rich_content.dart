@@ -568,8 +568,19 @@ final class _ReactionSummary extends StatelessWidget {
                     color: selected ? scheme.primary : scheme.outlineVariant,
                   ),
                 ),
-                child: Text(
-                  '$emoji ${reactions[index].value}',
+                // The emoji carries the meaning here and the count only
+                // qualifies it, so the glyph is set larger than the label it
+                // sits next to instead of sharing its size.
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: emoji,
+                        style: const TextStyle(fontSize: 18, height: 1.2),
+                      ),
+                      TextSpan(text: ' ${reactions[index].value}'),
+                    ],
+                  ),
                   style: Theme.of(
                     context,
                   ).textTheme.labelMedium?.copyWith(color: foreground),
