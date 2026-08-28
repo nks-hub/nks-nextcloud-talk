@@ -204,6 +204,7 @@ final androidPushRegistrationCoordinatorProvider =
         keyStore: AndroidPushDeviceKeyChannel(),
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
         tokenHandlePrefix: 'fcm-token',
+        pushProvider: PushGatewayProvider.fcm,
       );
       final fcm = AndroidFcmChannel(onToken: coordinator.installToken);
       var fcmDisposed = false;
@@ -407,17 +408,19 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
 /// executes. `null` outside Apple platforms: there is no APNs token or
 /// Keychain device-key channel to register without it.
 final applePushRegistrationCoordinatorProvider =
-    Provider<ApplePushRegistrationCoordinator?>((ref) {
+    Provider<PushRegistrationCoordinator?>((ref) {
       if (!Platform.isIOS && !Platform.isMacOS) {
         return null;
       }
       final deviceKeyChannel = ApplePushDeviceKeyChannel();
-      final coordinator = ApplePushRegistrationCoordinator(
+      final coordinator = PushRegistrationCoordinator(
         accounts: ref.watch(accountRepositoryProvider),
         credentials: ref.watch(credentialVaultProvider),
         api: ref.watch(nextcloudApiProvider),
         keyStore: deviceKeyChannel,
         gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        tokenHandlePrefix: 'apns-token',
+        pushProvider: PushGatewayProvider.apns,
         pushEnvironment: kDebugMode ? 'development' : 'production',
         recordDeviceKeyAccount: deviceKeyChannel.recordAccount,
       );

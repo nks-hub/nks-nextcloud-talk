@@ -218,6 +218,7 @@ void main() {
       keyStore: keyStore,
       gateway: gateway,
       tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
       gatewayClient: wired.gatewayClient,
     );
     addTearDown(coordinator.dispose);
@@ -477,6 +478,7 @@ void main() {
       keyStore: _FakeDeviceKeyStore(),
       gateway: gateway,
       tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
       gatewayClient: wired.gatewayClient,
       firstRetry: const Duration(milliseconds: 1),
       maximumRetry: const Duration(milliseconds: 2),

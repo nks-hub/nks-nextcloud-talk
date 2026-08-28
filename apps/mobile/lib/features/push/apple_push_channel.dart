@@ -43,7 +43,7 @@ final class ApplePushNotificationOpen {
 /// Asks for notification permission and hands every APNs device token it
 /// receives to [onToken], which — once `nks-talk-notify` is registered
 /// downstream — drives the push-v2 registration in
-/// `apple_push_registration_coordinator.dart`. This class itself never
+/// `push_registration_coordinator.dart`. This class itself never
 /// registers anything; it only bridges the platform channel.
 ///
 /// Also queues a tapped notification's [ApplePushNotificationOpen] (cold

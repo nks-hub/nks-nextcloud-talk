@@ -6,7 +6,7 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/push/apple_push_device_key_store.dart';
-import 'package:nextcloudtalk/features/push/apple_push_registration_coordinator.dart';
+import 'package:nextcloudtalk/features/push/push_registration_coordinator.dart';
 import 'package:nextcloudtalk/features/push/push_gateway_client.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -109,12 +109,14 @@ void main() {
     );
     addTearDown(api.close);
     final gatewayRequests = <http.BaseRequest>[];
-    final coordinator = ApplePushRegistrationCoordinator(
+    final coordinator = PushRegistrationCoordinator(
       accounts: accounts,
       credentials: credentials,
       api: api,
       keyStore: keyStore,
       gateway: gateway,
+      tokenHandlePrefix: 'apns-token',
+      pushProvider: PushGatewayProvider.apns,
       pushEnvironment: 'production',
       gatewayClient: PushGatewayClient(
         client: MockClient((request) async {
@@ -149,12 +151,15 @@ void main() {
       }),
     );
     addTearDown(api.close);
-    final coordinator = ApplePushRegistrationCoordinator(
+    final coordinator = PushRegistrationCoordinator(
       accounts: accounts,
       credentials: credentials,
       api: api,
       keyStore: keyStore,
       gateway: gateway,
+      tokenHandlePrefix: 'apns-token',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'development',
     );
     addTearDown(coordinator.dispose);
 
@@ -184,12 +189,15 @@ void main() {
       }),
     );
     addTearDown(api.close);
-    final coordinator = ApplePushRegistrationCoordinator(
+    final coordinator = PushRegistrationCoordinator(
       accounts: accounts,
       credentials: credentials,
       api: api,
       keyStore: keyStore,
       gateway: gateway,
+      tokenHandlePrefix: 'apns-token',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'development',
       gatewayClient: PushGatewayClient(
         client: MockClient((request) async {
           if (request.method == 'DELETE') {
@@ -230,12 +238,15 @@ void main() {
     );
     addTearDown(api.close);
     var retried = false;
-    final coordinator = ApplePushRegistrationCoordinator(
+    final coordinator = PushRegistrationCoordinator(
       accounts: accounts,
       credentials: credentials,
       api: api,
       keyStore: keyStore,
       gateway: gateway,
+      tokenHandlePrefix: 'apns-token',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'development',
       gatewayClient: PushGatewayClient(
         client: MockClient((request) async => http.Response('', 200)),
       ),
@@ -281,12 +292,15 @@ void main() {
 
       final gatewayGate = Completer<void>();
       var gatewayRequestSeen = false;
-      final coordinator = ApplePushRegistrationCoordinator(
+      final coordinator = PushRegistrationCoordinator(
         accounts: accounts,
         credentials: credentials,
         api: api,
         keyStore: keyStore,
         gateway: gateway,
+        tokenHandlePrefix: 'apns-token',
+        pushProvider: PushGatewayProvider.apns,
+        pushEnvironment: 'development',
         gatewayClient: PushGatewayClient(
           client: MockClient((request) async {
             if (request.method == 'DELETE') {

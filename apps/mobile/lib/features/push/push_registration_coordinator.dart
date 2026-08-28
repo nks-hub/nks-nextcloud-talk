@@ -10,7 +10,7 @@ import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
-import 'apple_push_device_key_store.dart';
+import 'push_device_key_store.dart';
 import 'push_gateway_client.dart';
 
 /// Drives `talk_protocol`'s push-v2 state machine for one account at a time:
@@ -36,30 +36,52 @@ final class PushRegistrationCoordinator {
     required PushDeviceKeyStore keyStore,
     required PushGatewayOrigin gateway,
     required String tokenHandlePrefix,
+    required PushGatewayProvider pushProvider,
+    String? pushEnvironment,
     PushGatewayClient? gatewayClient,
     Duration firstRetry = const Duration(seconds: 5),
     Duration maximumRetry = const Duration(minutes: 30),
     Future<void> Function(Duration)? delay,
+    Future<void> Function(String handle, String accountId)?
+    recordDeviceKeyAccount,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _keyStore = keyStore,
        _gateway = gateway,
        _tokenHandlePrefix = tokenHandlePrefix,
+       _pushProvider = pushProvider,
+       _pushEnvironment = pushEnvironment,
        _gatewayClient = gatewayClient ?? PushGatewayClient(),
        _firstRetry = firstRetry,
        _maximumRetry = maximumRetry,
-       _delay = delay ?? _sleep {
+       _delay = delay ?? _sleep,
+       _recordDeviceKeyAccount = recordDeviceKeyAccount ?? _noAccountRecording {
     if (firstRetry <= Duration.zero || maximumRetry < firstRetry) {
       throw ArgumentError('Invalid push registration retry timing');
     }
     if (tokenHandlePrefix.isEmpty) {
       throw ArgumentError('Missing push token handle prefix');
     }
+    // APNs needs the sandbox told apart from production; FCM has no such
+    // split and the gateway rejects the field for it.
+    if (pushProvider == PushGatewayProvider.apns &&
+        pushEnvironment != 'development' &&
+        pushEnvironment != 'production') {
+      throw ArgumentError('Invalid APNs environment');
+    }
+    if (pushProvider != PushGatewayProvider.apns && pushEnvironment != null) {
+      throw ArgumentError('Push environment applies to APNs only');
+    }
   }
 
   static Future<void> _sleep(Duration duration) =>
       Future<void>.delayed(duration);
+
+  static Future<void> _noAccountRecording(
+    String handle,
+    String accountId,
+  ) async {}
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -67,10 +89,14 @@ final class PushRegistrationCoordinator {
   final PushDeviceKeyStore _keyStore;
   final PushGatewayOrigin _gateway;
   final String _tokenHandlePrefix;
+  final PushGatewayProvider _pushProvider;
+  final String? _pushEnvironment;
   final PushGatewayClient _gatewayClient;
   final Duration _firstRetry;
   final Duration _maximumRetry;
   final Future<void> Function(Duration) _delay;
+  final Future<void> Function(String handle, String accountId)
+  _recordDeviceKeyAccount;
 
   PushRuntimeSnapshot _snapshot = PushRuntimeSnapshot.empty();
   final Map<String, PushRegistrationAuthority> _authorities = {};
@@ -81,6 +107,7 @@ final class PushRegistrationCoordinator {
   String? _rawToken;
   var _draining = false;
   var _disposed = false;
+  Future<void>? _activeDrain;
 
   /// Feeds a freshly issued (or refreshed) provider token in. Every account
   /// still needing to register picks this up on the next drain.
@@ -232,8 +259,14 @@ final class PushRegistrationCoordinator {
         account.phase == PushAccountPhase.removed,
   );
 
+  /// Waits for a currently in-flight [_drain] to actually stop before closing
+  /// the gateway client — closing it out from under a mid-flight
+  /// register/unregister call would abort that HTTP request, potentially
+  /// leaving a device registered with Nextcloud but not the proxy (or the
+  /// reverse), the exact split state a clean unregister exists to avoid.
   Future<void> dispose() async {
     _disposed = true;
+    await _activeDrain;
     _gatewayClient.close();
   }
 
@@ -262,6 +295,8 @@ final class PushRegistrationCoordinator {
       return;
     }
     _draining = true;
+    final completer = Completer<void>();
+    _activeDrain = completer.future;
     try {
       while (!_disposed) {
         final planned = planNextPushEffect(
@@ -284,6 +319,7 @@ final class PushRegistrationCoordinator {
       }
     } finally {
       _draining = false;
+      completer.complete();
     }
     _scheduleRetries();
   }
@@ -303,6 +339,14 @@ final class PushRegistrationCoordinator {
     try {
       final handle = _keyHandleFor(effect.context.accountId);
       final pem = await _keyStore.ensureKey(handle.value);
+      // Lets the Notification Service Extension learn the account directly
+      // once a decrypt succeeds — see PushNotificationRouteStore.swift.
+      // `ensureKey` above is idempotent, so retrying this whole effect on
+      // failure (the same path every other exception here takes) is safe.
+      await _recordDeviceKeyAccount(
+        handle.value,
+        effect.context.accountId.value,
+      );
       final key = PushDeviceKeyBinding(
         handle: handle,
         publicKey: PushRsaPublicKey.parse(pem),
@@ -385,7 +429,8 @@ final class PushRegistrationCoordinator {
       return await _gatewayClient.register(
         effect,
         rawPushToken: rawToken,
-        pushProvider: PushGatewayProvider.fcm,
+        pushProvider: _pushProvider,
+        pushEnvironment: _pushEnvironment,
       );
     } on Object {
       return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
