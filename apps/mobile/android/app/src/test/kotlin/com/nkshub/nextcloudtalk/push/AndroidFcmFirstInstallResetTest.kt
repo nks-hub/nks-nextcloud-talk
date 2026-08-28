@@ -133,4 +133,46 @@ class AndroidFcmFirstInstallResetTest {
         assertFalse(task.isSuccessful)
         assertEquals("package info unavailable", task.exception?.message)
     }
+
+    @Test
+    fun tokenRefreshDuringResetIsSuppressedUntilFreshTokenIsAvailable() {
+        val provider = TaskCompletionSource<Void>()
+        var complete = false
+        val forwarded = mutableListOf<String>()
+        val reset = FirstInstallFcmTokenReset(
+            isFirstInstall = { true },
+            isComplete = { complete },
+            deleteToken = { provider.task },
+            markComplete = {
+                complete = true
+                true
+            },
+        )
+
+        val task = reset.beforeGetToken()
+        reset.forwardTokenRefresh("cached-token", forwarded::add)
+        provider.setResult(null)
+        assertTrue(task.isSuccessful)
+        reset.forwardTokenRefresh("fresh-token", forwarded::add)
+
+        assertEquals(listOf("fresh-token"), forwarded)
+    }
+
+    @Test
+    fun updatesAndCompletedInstallsForwardTokenRefreshesImmediately() {
+        val forwarded = mutableListOf<String>()
+        fun reset(firstInstall: Boolean, complete: Boolean) = FirstInstallFcmTokenReset(
+            isFirstInstall = { firstInstall },
+            isComplete = { complete },
+            deleteToken = { Tasks.forResult(null) },
+            markComplete = { true },
+        )
+
+        reset(firstInstall = false, complete = false)
+            .forwardTokenRefresh("update-token", forwarded::add)
+        reset(firstInstall = true, complete = true)
+            .forwardTokenRefresh("completed-token", forwarded::add)
+
+        assertEquals(listOf("update-token", "completed-token"), forwarded)
+    }
 }

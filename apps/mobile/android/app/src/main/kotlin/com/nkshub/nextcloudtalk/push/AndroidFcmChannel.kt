@@ -51,6 +51,17 @@ internal class FirstInstallFcmTokenReset(
         }
     }
 
+    fun forwardTokenRefresh(token: String, forward: (String) -> Unit) {
+        val ready = try {
+            !isFirstInstall() || isComplete()
+        } catch (_: Exception) {
+            false
+        }
+        if (ready) {
+            forward(token)
+        }
+    }
+
     private companion object {
         val DIRECT_EXECUTOR = Executor { command -> command.run() }
         val PROCESS_LOCK = Any()
@@ -72,24 +83,7 @@ internal class FirstInstallFcmTokenReset(
  */
 internal class AndroidFcmChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
-    private val firstInstallReset = FirstInstallFcmTokenReset(
-        isFirstInstall = {
-            context.packageManager.getPackageInfo(context.packageName, 0).run {
-                firstInstallTime == lastUpdateTime
-            }
-        },
-        isComplete = {
-            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-                .getBoolean(FIRST_INSTALL_RESET_COMPLETE, false)
-        },
-        deleteToken = { FirebaseMessaging.getInstance().deleteToken() },
-        markComplete = {
-            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean(FIRST_INSTALL_RESET_COMPLETE, true)
-                .commit()
-        },
-    )
+    private val firstInstallReset = firstInstallReset(context)
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -139,6 +133,8 @@ internal class AndroidFcmChannel(private val context: Context) :
         internal const val FIRST_INSTALL_RESET_COMPLETE = "firstInstallResetComplete"
         private val ACCOUNT_ID = Regex("^[0-9a-fA-F-]{1,64}$")
         private val listeners = CopyOnWriteArrayList<(String) -> Unit>()
+        private val resetLock = Any()
+        private var sharedFirstInstallReset: FirstInstallFcmTokenReset? = null
 
         fun attach(listener: (String) -> Unit) {
             listeners.add(listener)
@@ -152,6 +148,10 @@ internal class AndroidFcmChannel(private val context: Context) :
             for (listener in listeners) {
                 listener(token)
             }
+        }
+
+        fun tokenRefreshed(context: Context, token: String) {
+            firstInstallReset(context).forwardTokenRefresh(token, ::tokenRefreshed)
         }
 
         /**
@@ -170,6 +170,33 @@ internal class AndroidFcmChannel(private val context: Context) :
             context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
                 .getStringSet(ACCOUNT_IDS, emptySet())
                 .orEmpty()
+
+        private fun firstInstallReset(context: Context): FirstInstallFcmTokenReset {
+            sharedFirstInstallReset?.let { return it }
+            return synchronized(resetLock) {
+                sharedFirstInstallReset ?: createFirstInstallReset(context.applicationContext)
+                    .also { sharedFirstInstallReset = it }
+            }
+        }
+
+        private fun createFirstInstallReset(context: Context) = FirstInstallFcmTokenReset(
+            isFirstInstall = {
+                context.packageManager.getPackageInfo(context.packageName, 0).run {
+                    firstInstallTime == lastUpdateTime
+                }
+            },
+            isComplete = {
+                context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                    .getBoolean(FIRST_INSTALL_RESET_COMPLETE, false)
+            },
+            deleteToken = { FirebaseMessaging.getInstance().deleteToken() },
+            markComplete = {
+                context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(FIRST_INSTALL_RESET_COMPLETE, true)
+                    .commit()
+            },
+        )
     }
 }
 
@@ -184,7 +211,7 @@ internal class AndroidFcmChannel(private val context: Context) :
  */
 class NksFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
-        AndroidFcmChannel.tokenRefreshed(token)
+        AndroidFcmChannel.tokenRefreshed(applicationContext, token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
