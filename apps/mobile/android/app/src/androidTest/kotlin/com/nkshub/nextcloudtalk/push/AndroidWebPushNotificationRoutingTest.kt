@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.os.SystemClock
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -98,7 +99,22 @@ class AndroidWebPushNotificationRoutingTest {
         val postedB = awaitNotificationWithText(manager, "routing action b")
         assertNotEquals(postedA.id, postedB.id)
 
-        postedA.notification.actions[1].actionIntent.send()
+        val markReadToken = store.armNotificationAction(
+            kind = NotificationActionKind.MARK_READ,
+            accountId = accountA,
+            notificationId = notificationId,
+            roomToken = "roomroutea",
+        )
+        val markReadIntent = AndroidSystemNotifications.notificationActionIntent(
+            context,
+            NotificationActionKind.MARK_READ,
+            markReadToken,
+        )
+        ActivityScenario.launch(AndroidWebPushActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertTrue(activity.notificationAction(markReadIntent) != null)
+            }
+        }
         val claimA = awaitClaim(store, accountA)
         assertEquals(1, claimA.ready.size)
         assertTrue(store.claimNotificationActions(accountB, 10).ready.isEmpty())
