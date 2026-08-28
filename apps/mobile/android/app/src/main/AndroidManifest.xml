@@ -10,6 +10,22 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29"/>
+    <!-- open_filex declares the three Android 13 media permissions in its own
+         manifest for callers that hand it a shared-storage path. This app only
+         ever opens attachments it wrote into its own application cache
+         directory and hands them to another app through a FileProvider URI,
+         which grants access per intent and needs no permission at all. Keeping
+         them merged in would make Google Play demand a photo-and-video
+         declaration for a capability the app does not use. -->
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:node="remove"/>
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        tools:node="remove"/>
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_AUDIO"
+        tools:node="remove"/>
     <!-- App icon unread badge on launchers that predate Android 8's native
          badges or need a manufacturer-specific API (app_badge_plus). These
          are normal, non-dangerous permissions; a launcher without support
