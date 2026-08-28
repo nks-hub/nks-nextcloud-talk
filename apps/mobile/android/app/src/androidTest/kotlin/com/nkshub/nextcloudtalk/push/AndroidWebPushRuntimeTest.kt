@@ -717,7 +717,8 @@ class AndroidWebPushRuntimeTest {
                 val wakeRoute = launch!!.route
                 assertEquals(accountId, wakeRoute["accountId"])
                 assertEquals("roomfoxtrot", wakeRoute["objectId"])
-                val statusRoute = store.consumeNotificationOpen(launch.statusOpenToken)
+                assertNotNull(launch.statusOpenToken)
+                val statusRoute = store.consumeNotificationOpen(launch.statusOpenToken!!)
                 assertEquals(accountId, statusRoute?.get("accountId"))
                 assertEquals("roomfoxtrot", statusRoute?.get("objectId"))
             }
@@ -744,6 +745,61 @@ class AndroidWebPushRuntimeTest {
 
         store.resolveNotificationAction(accountId, queued.token)
         manager.cancelAll()
+    }
+
+    @Test
+    fun durableActionSurvivesEveryBestEffortUiFailure() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val store = AndroidWebPushStore(context)
+        val accountId = "instrumentation-action-effects"
+        drainAllActions(store, accountId)
+        val token = store.armNotificationAction(
+            kind = NotificationActionKind.REPLY,
+            accountId = accountId,
+            notificationId = 4108,
+            roomToken = "roomgolf",
+        )
+        var failuresAttempted = false
+        var statusAttempted = false
+        var publishAttempted = false
+        val effects = object : NotificationActionEffects {
+            override fun showFailures(actions: List<StoredNotificationAction>) {
+                failuresAttempted = true
+                throw IllegalStateException("failure UI unavailable")
+            }
+
+            override fun showStatus(
+                action: StoredNotificationAction,
+                statusResource: Int,
+            ): String {
+                statusAttempted = true
+                throw IllegalStateException("notification manager unavailable")
+            }
+
+            override fun publish(count: Int) {
+                publishAttempted = true
+                throw IllegalStateException("listener unavailable")
+            }
+        }
+
+        val launch = AndroidSystemNotifications.performAction(
+            context = context,
+            kind = NotificationActionKind.REPLY,
+            actionToken = token,
+            replyText = "durable reply",
+            effects = effects,
+        )
+
+        assertNotNull(launch)
+        assertNull(launch!!.statusOpenToken)
+        assertEquals(accountId, launch.route["accountId"])
+        assertEquals("roomgolf", launch.route["objectId"])
+        assertTrue(failuresAttempted)
+        assertTrue(statusAttempted)
+        assertTrue(publishAttempted)
+        val queued = store.claimNotificationActions(accountId, 10).ready.single()
+        assertEquals("durable reply", queued.replyText)
+        store.resolveNotificationAction(accountId, queued.token)
     }
 
     private fun drainAllActions(store: AndroidWebPushStore, accountId: String) {

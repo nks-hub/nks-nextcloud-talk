@@ -392,23 +392,25 @@ internal object AndroidSystemNotifications {
         kind: NotificationActionKind,
         actionToken: String,
         replyText: String?,
+        effects: NotificationActionEffects = notificationActionEffects(context),
     ): NotificationActionLaunch? {
         val store = AndroidWebPushStore(context)
         val fired = store.fireNotificationAction(actionToken, kind, replyText) ?: return null
-        fired.evicted.forEach { showActionFailure(context, store, it) }
+        runCatching { effects.showFailures(fired.evicted) }
         val queued = fired.queued
         if (queued.kind == NotificationActionKind.REPLY && queued.replyText.isNullOrBlank()) {
             store.resolveNotificationAction(queued.accountId, queued.token)
-            showActionStatus(context, store, queued, R.string.push_action_reply_empty)
+            runCatching {
+                effects.showStatus(queued, R.string.push_action_reply_empty)
+            }
             return null
         }
-        val prepared = showActionStatus(
-            context,
-            store,
-            queued,
-            queuedStatusResource(queued.kind),
-        )
-        AndroidWebPushNotifier.publish(store.pendingEventCount(queued.accountId))
+        val statusOpenToken = runCatching {
+            effects.showStatus(queued, queuedStatusResource(queued.kind))
+        }.getOrNull()
+        runCatching {
+            effects.publish(store.pendingEventCount(queued.accountId))
+        }
         return NotificationActionLaunch(
             route = mapOf(
                 "accountId" to queued.accountId,
@@ -417,7 +419,7 @@ internal object AndroidSystemNotifications {
                 "type" to "chat",
                 "objectId" to queued.roomToken,
             ),
-            statusOpenToken = prepared.openToken,
+            statusOpenToken = statusOpenToken,
         )
     }
 
@@ -504,6 +506,31 @@ internal object AndroidSystemNotifications {
     private fun actionUriHost(kind: NotificationActionKind): String = when (kind) {
         NotificationActionKind.REPLY -> REPLY_URI_HOST
         NotificationActionKind.MARK_READ -> MARK_READ_URI_HOST
+    }
+
+    private fun notificationActionEffects(context: Context): NotificationActionEffects {
+        val store = AndroidWebPushStore(context)
+        return object : NotificationActionEffects {
+            override fun showFailures(actions: List<StoredNotificationAction>) {
+                actions.forEach { action ->
+                    runCatching { showActionFailure(context, store, action) }
+                }
+            }
+
+            override fun showStatus(
+                action: StoredNotificationAction,
+                statusResource: Int,
+            ): String = showActionStatus(
+                context,
+                store,
+                action,
+                statusResource,
+            ).openToken
+
+            override fun publish(count: Int) {
+                AndroidWebPushNotifier.publish(count)
+            }
+        }
     }
 
     private fun chatActions(
@@ -704,5 +731,13 @@ internal object AndroidSystemNotifications {
 
 internal data class NotificationActionLaunch(
     val route: Map<String, Any?>,
-    val statusOpenToken: String,
+    val statusOpenToken: String?,
 )
+
+internal interface NotificationActionEffects {
+    fun showFailures(actions: List<StoredNotificationAction>)
+
+    fun showStatus(action: StoredNotificationAction, statusResource: Int): String
+
+    fun publish(count: Int)
+}
