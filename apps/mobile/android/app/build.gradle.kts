@@ -1,5 +1,6 @@
 import groovy.json.JsonOutput
 import java.security.MessageDigest
+import java.util.Properties
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.attributes.Attribute
 
@@ -11,6 +12,39 @@ plugins {
     // the build fails loudly rather than producing an app that silently has
     // no FCM.
     id("com.google.gms.google-services")
+}
+
+// Release signing is driven by android/key.properties, which is gitignored and
+// points at the upload keystore. It is deliberately not backed by a fallback:
+// a release signed with the debug key is rejected by Play, and a silent
+// fallback would only surface that at upload time.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun requiredKeystoreProperty(name: String): String {
+    val value = keystoreProperties.getProperty(name)
+    require(!value.isNullOrBlank()) {
+        "${keystorePropertiesFile.absolutePath} is missing the '$name' entry."
+    }
+    return value
+}
+
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any {
+        it.project == project && (it.name == "assembleRelease" || it.name == "bundleRelease")
+    }
+    if (buildsRelease && !keystorePropertiesFile.isFile) {
+        throw GradleException(
+            "Release builds need the upload keystore, but " +
+                "${keystorePropertiesFile.absolutePath} does not exist. Create it with " +
+                "storeFile, storePassword, keyAlias and keyPassword pointing at the " +
+                "upload keystore.",
+        )
+    }
 }
 
 android {
@@ -34,11 +68,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.isFile) {
+                storeFile = rootProject.file(requiredKeystoreProperty("storeFile"))
+                storePassword = requiredKeystoreProperty("storePassword")
+                keyAlias = requiredKeystoreProperty("keyAlias")
+                keyPassword = requiredKeystoreProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
