@@ -187,4 +187,62 @@ class AndroidFcmFirstInstallResetTest {
 
         assertEquals(listOf("update-token", "completed-token"), forwarded)
     }
+
+    @Test
+    fun onlyNewestOutOfOrderProviderComparisonMayForward() {
+        val lookups = mutableListOf<TaskCompletionSource<String>>()
+        val forwarded = mutableListOf<String>()
+        val reset = FirstInstallFcmTokenReset(
+            isFirstInstall = { false },
+            isComplete = { false },
+            deleteToken = { Tasks.forResult(null) },
+            markComplete = { true },
+            currentToken = {
+                TaskCompletionSource<String>().also(lookups::add).task
+            },
+        )
+
+        reset.forwardTokenRefresh("token-b", forwarded::add)
+        reset.forwardTokenRefresh("token-c", forwarded::add)
+        assertEquals(2, lookups.size)
+
+        lookups[1].setResult("token-c")
+        lookups[0].setResult("token-b")
+
+        assertEquals(listOf("token-c"), forwarded)
+    }
+
+    @Test
+    fun callbackDuringExplicitEstablishIsReconciledAgainstCurrentProviderToken() {
+        val deletion = TaskCompletionSource<Void>()
+        val lookups = mutableListOf<TaskCompletionSource<String>>()
+        val forwarded = mutableListOf<String>()
+        var complete = false
+        val reset = FirstInstallFcmTokenReset(
+            isFirstInstall = { true },
+            isComplete = { complete },
+            deleteToken = { deletion.task },
+            markComplete = {
+                complete = true
+                true
+            },
+            currentToken = {
+                TaskCompletionSource<String>().also(lookups::add).task
+            },
+        )
+
+        val resetTask = reset.beforeGetToken()
+        deletion.setResult(null)
+        assertTrue(resetTask.isSuccessful)
+        val establish = reset.establishCurrentToken()
+        assertEquals(1, lookups.size)
+
+        reset.forwardTokenRefresh("token-c", forwarded::add)
+        lookups[0].setResult("token-b")
+        assertTrue(establish.isSuccessful)
+        assertEquals(2, lookups.size)
+        lookups[1].setResult("token-c")
+
+        assertEquals(listOf("token-c"), forwarded)
+    }
 }

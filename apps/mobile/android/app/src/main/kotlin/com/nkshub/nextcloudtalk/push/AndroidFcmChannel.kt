@@ -24,6 +24,8 @@ internal class FirstInstallFcmTokenReset(
     private val refreshLock = Any()
     private var blockRefreshUntilFreshToken = false
     private var establishedToken: String? = null
+    private var refreshGeneration = 0L
+    private var latestRefresh: PendingFcmTokenRefresh? = null
 
     fun beforeGetToken(): Task<Void> {
         return try {
@@ -73,15 +75,24 @@ internal class FirstInstallFcmTokenReset(
                     ?: IllegalStateException("FCM token lookup failed")
             }
             val token = completed.result
-            synchronized(refreshLock) {
+            val pending = synchronized(refreshLock) {
                 establishedToken = token
                 blockRefreshUntilFreshToken = false
+                latestRefresh
             }
+            pending?.let(::validateRefresh)
             token
         }
     }
 
     fun forwardTokenRefresh(token: String, forward: (String) -> Unit) {
+        val candidate = synchronized(refreshLock) {
+            PendingFcmTokenRefresh(
+                generation = ++refreshGeneration,
+                token = token,
+                forward = forward,
+            ).also { latestRefresh = it }
+        }
         val ready = try {
             !isFirstInstall() || isComplete()
         } catch (_: Exception) {
@@ -90,6 +101,10 @@ internal class FirstInstallFcmTokenReset(
         if (!ready || synchronized(refreshLock) { blockRefreshUntilFreshToken }) {
             return
         }
+        validateRefresh(candidate)
+    }
+
+    private fun validateRefresh(candidate: PendingFcmTokenRefresh) {
         val providerTask = try {
             currentToken()
         } catch (_: Exception) {
@@ -102,20 +117,27 @@ internal class FirstInstallFcmTokenReset(
             } catch (_: Exception) {
                 false
             }
-            if (!stillReady || providerToken != token) {
+            if (!stillReady) {
                 return@addOnSuccessListener
             }
-            val shouldForward = synchronized(refreshLock) {
-                if (establishedToken == token) {
-                    false
-                } else {
-                    establishedToken = token
-                    true
+            var forward: ((String) -> Unit)? = null
+            synchronized(refreshLock) {
+                if (latestRefresh?.generation != candidate.generation ||
+                    blockRefreshUntilFreshToken
+                ) {
+                    return@synchronized
+                }
+                if (providerToken != candidate.token) {
+                    latestRefresh = null
+                    return@synchronized
+                }
+                latestRefresh = null
+                if (establishedToken != candidate.token) {
+                    establishedToken = candidate.token
+                    forward = candidate.forward
                 }
             }
-            if (shouldForward) {
-                forward(token)
-            }
+            forward?.invoke(candidate.token)
         }
     }
 
@@ -125,6 +147,12 @@ internal class FirstInstallFcmTokenReset(
         var processInFlight: Task<Void>? = null
     }
 }
+
+private data class PendingFcmTokenRefresh(
+    val generation: Long,
+    val token: String,
+    val forward: (String) -> Unit,
+)
 
 /**
  * Hands the FCM registration token to Dart and remembers which accounts are
