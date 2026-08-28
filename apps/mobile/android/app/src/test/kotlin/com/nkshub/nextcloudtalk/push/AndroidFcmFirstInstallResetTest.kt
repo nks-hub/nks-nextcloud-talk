@@ -138,6 +138,7 @@ class AndroidFcmFirstInstallResetTest {
     fun tokenRefreshDuringResetIsSuppressedUntilFreshTokenIsAvailable() {
         val provider = TaskCompletionSource<Void>()
         var complete = false
+        var providerToken = "cached-token"
         val forwarded = mutableListOf<String>()
         val reset = FirstInstallFcmTokenReset(
             isFirstInstall = { true },
@@ -147,30 +148,41 @@ class AndroidFcmFirstInstallResetTest {
                 complete = true
                 true
             },
+            currentToken = { Tasks.forResult(providerToken) },
         )
 
         val task = reset.beforeGetToken()
         reset.forwardTokenRefresh("cached-token", forwarded::add)
         provider.setResult(null)
         assertTrue(task.isSuccessful)
+        providerToken = "fresh-token"
+        assertTrue(reset.establishCurrentToken().isSuccessful)
+        reset.forwardTokenRefresh("cached-token", forwarded::add)
         reset.forwardTokenRefresh("fresh-token", forwarded::add)
+        providerToken = "rotated-token"
+        reset.forwardTokenRefresh("rotated-token", forwarded::add)
 
-        assertEquals(listOf("fresh-token"), forwarded)
+        assertEquals(listOf("rotated-token"), forwarded)
     }
 
     @Test
     fun updatesAndCompletedInstallsForwardTokenRefreshesImmediately() {
         val forwarded = mutableListOf<String>()
-        fun reset(firstInstall: Boolean, complete: Boolean) = FirstInstallFcmTokenReset(
+        fun reset(
+            firstInstall: Boolean,
+            complete: Boolean,
+            token: String,
+        ) = FirstInstallFcmTokenReset(
             isFirstInstall = { firstInstall },
             isComplete = { complete },
             deleteToken = { Tasks.forResult(null) },
             markComplete = { true },
+            currentToken = { Tasks.forResult(token) },
         )
 
-        reset(firstInstall = false, complete = false)
+        reset(firstInstall = false, complete = false, token = "update-token")
             .forwardTokenRefresh("update-token", forwarded::add)
-        reset(firstInstall = true, complete = true)
+        reset(firstInstall = true, complete = true, token = "completed-token")
             .forwardTokenRefresh("completed-token", forwarded::add)
 
         assertEquals(listOf("update-token", "completed-token"), forwarded)

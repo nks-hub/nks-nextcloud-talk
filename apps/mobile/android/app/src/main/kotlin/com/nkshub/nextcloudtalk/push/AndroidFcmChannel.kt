@@ -17,7 +17,14 @@ internal class FirstInstallFcmTokenReset(
     private val isComplete: () -> Boolean,
     private val deleteToken: () -> Task<Void>,
     private val markComplete: () -> Boolean,
+    private val currentToken: () -> Task<String> = {
+        Tasks.forException(IllegalStateException("FCM token provider is not configured"))
+    },
 ) {
+    private val refreshLock = Any()
+    private var blockRefreshUntilFreshToken = false
+    private var establishedToken: String? = null
+
     fun beforeGetToken(): Task<Void> {
         return try {
             if (!isFirstInstall() || isComplete()) {
@@ -26,6 +33,9 @@ internal class FirstInstallFcmTokenReset(
             synchronized(PROCESS_LOCK) {
                 if (!isFirstInstall() || isComplete()) {
                     return@synchronized Tasks.forResult<Void>(null)
+                }
+                synchronized(refreshLock) {
+                    blockRefreshUntilFreshToken = true
                 }
                 processInFlight?.let { return@synchronized it }
                 val reset = deleteToken().continueWith<Void>(DIRECT_EXECUTOR) { task ->
@@ -51,14 +61,61 @@ internal class FirstInstallFcmTokenReset(
         }
     }
 
+    fun establishCurrentToken(): Task<String> {
+        val task = try {
+            currentToken()
+        } catch (failure: Exception) {
+            return Tasks.forException(failure)
+        }
+        return task.continueWith(DIRECT_EXECUTOR) { completed ->
+            if (!completed.isSuccessful) {
+                throw completed.exception
+                    ?: IllegalStateException("FCM token lookup failed")
+            }
+            val token = completed.result
+            synchronized(refreshLock) {
+                establishedToken = token
+                blockRefreshUntilFreshToken = false
+            }
+            token
+        }
+    }
+
     fun forwardTokenRefresh(token: String, forward: (String) -> Unit) {
         val ready = try {
             !isFirstInstall() || isComplete()
         } catch (_: Exception) {
             false
         }
-        if (ready) {
-            forward(token)
+        if (!ready || synchronized(refreshLock) { blockRefreshUntilFreshToken }) {
+            return
+        }
+        val providerTask = try {
+            currentToken()
+        } catch (_: Exception) {
+            return
+        }
+        providerTask.addOnSuccessListener(DIRECT_EXECUTOR) { providerToken ->
+            val stillReady = try {
+                (!isFirstInstall() || isComplete()) &&
+                    !synchronized(refreshLock) { blockRefreshUntilFreshToken }
+            } catch (_: Exception) {
+                false
+            }
+            if (!stillReady || providerToken != token) {
+                return@addOnSuccessListener
+            }
+            val shouldForward = synchronized(refreshLock) {
+                if (establishedToken == token) {
+                    false
+                } else {
+                    establishedToken = token
+                    true
+                }
+            }
+            if (shouldForward) {
+                forward(token)
+            }
         }
     }
 
@@ -89,7 +146,7 @@ internal class AndroidFcmChannel(private val context: Context) :
         when (call.method) {
             "getToken" -> firstInstallReset.beforeGetToken()
                 .addOnSuccessListener {
-                    currentToken()
+                    firstInstallReset.establishCurrentToken()
                         .addOnSuccessListener { token -> result.success(token) }
                         .addOnFailureListener {
                             result.error(
@@ -117,12 +174,6 @@ internal class AndroidFcmChannel(private val context: Context) :
             }
             else -> result.notImplemented()
         }
-    }
-
-    private fun currentToken(): Task<String> = try {
-        FirebaseMessaging.getInstance().token
-    } catch (failure: Exception) {
-        Tasks.forException(failure)
     }
 
     internal companion object {
@@ -196,6 +247,7 @@ internal class AndroidFcmChannel(private val context: Context) :
                     .putBoolean(FIRST_INSTALL_RESET_COMPLETE, true)
                     .commit()
             },
+            currentToken = { FirebaseMessaging.getInstance().token },
         )
     }
 }
