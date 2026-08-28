@@ -331,13 +331,43 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   }
 
   void _handleScroll() {
-    if (!_scrollController.hasClients || _loadingOlder) {
+    if (!_scrollController.hasClients) {
       return;
     }
     final position = _scrollController.position;
+    // The timeline is reversed, so offset zero is the newest message.
+    final awayFromNewest =
+        position.pixels > _ChatRoomPaneState._jumpToNewestThreshold;
+    if (awayFromNewest != _awayFromNewest) {
+      _update(() => _awayFromNewest = awayFromNewest);
+    }
+    if (_loadingOlder) {
+      return;
+    }
     if (position.pixels >= position.maxScrollExtent - 160) {
       unawaited(_loadOlder());
     }
+  }
+
+  /// Returns the reader to the newest message.
+  ///
+  /// Paging back through history is the only way to reach an old message and
+  /// there was no way back short of scrolling the same distance again.
+  Future<void> _jumpToNewest() async {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    // A long history makes an animated scroll take an unbounded time, so the
+    // far part is cut in one step and only the last screen is animated.
+    final position = _scrollController.position;
+    if (position.pixels > _ChatRoomPaneState._jumpToNewestAnimatedExtent) {
+      _scrollController.jumpTo(_ChatRoomPaneState._jumpToNewestAnimatedExtent);
+    }
+    await _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
   }
 
   void _startPendingJump() {

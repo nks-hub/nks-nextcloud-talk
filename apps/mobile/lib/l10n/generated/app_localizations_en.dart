@@ -332,6 +332,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingOlderMessages => 'Loading older messages…';
 
   @override
+  String get jumpToNewestMessages => 'Jump to newest messages';
+
+  @override
   String get chatHistoryGapNotice => 'Some messages between here are missing';
 
   @override

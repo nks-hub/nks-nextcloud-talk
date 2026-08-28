@@ -686,6 +686,12 @@ abstract class AppLocalizations {
   /// **'Loading older messages…'**
   String get loadingOlderMessages;
 
+  /// No description provided for @jumpToNewestMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to newest messages'**
+  String get jumpToNewestMessages;
+
   /// No description provided for @chatHistoryGapNotice.
   ///
   /// In en, this message translates to:

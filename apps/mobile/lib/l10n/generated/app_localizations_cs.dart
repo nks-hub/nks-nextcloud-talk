@@ -334,6 +334,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get loadingOlderMessages => 'Načítám starší zprávy…';
 
   @override
+  String get jumpToNewestMessages => 'Skočit na nejnovější zprávy';
+
+  @override
   String get chatHistoryGapNotice => 'Část zpráv zde chybí';
 
   @override

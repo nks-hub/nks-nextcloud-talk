@@ -755,3 +755,24 @@ String _formatMessageClock(BuildContext context, int unixSeconds) {
   final localizations = MaterialLocalizations.of(context);
   return localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value));
 }
+
+/// Returns the reader to the newest message after they have scrolled back.
+///
+/// It floats over the timeline rather than sitting in the column, so showing
+/// it does not reflow the messages the reader is looking at.
+final class _JumpToNewestButton extends StatelessWidget {
+  const _JumpToNewestButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = AppLocalizations.of(context).jumpToNewestMessages;
+    return FloatingActionButton.small(
+      key: const Key('chat-jump-to-newest'),
+      onPressed: onPressed,
+      tooltip: label,
+      child: Icon(Icons.arrow_downward_rounded, semanticLabel: label),
+    );
+  }
+}
