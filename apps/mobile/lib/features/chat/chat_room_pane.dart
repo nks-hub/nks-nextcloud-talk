@@ -748,6 +748,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                   onCancel: (operation) => unawaited(_cancelPending(operation)),
                   onOpenThread: _openThread,
                   onMessageActions: handleMessageActions,
+                  onReplySwipe: canReplyToMessage ? _startReply : null,
                   onReactionTap: handleReactionTap,
                   onJumpToMessage: (messageId) =>
                       unawaited(_jumpToMessage(messageId)),
