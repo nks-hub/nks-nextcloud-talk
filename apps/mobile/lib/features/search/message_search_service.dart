@@ -32,15 +32,15 @@ const int messageSearchDefaultLimit = 20;
 
 /// Searches Talk messages, scoped to one account.
 ///
-/// Only [MessageSearchScope.global] is wired up. Room-scoped search
-/// (`MessageSearchScope.currentRoom`) stays unused here because the
-/// protocol layer's `from=/call/{token}` scoping hint is unverified against
-/// a live server (see `MessageSearchRequest._fromRoute`) — activate it once
-/// that's confirmed.
+/// Passing [roomToken] searches that one conversation instead of all of them.
+/// Both scopes are verified against a live Talk 24.0.2 server; the wire
+/// details and why the two must not be mixed are on
+/// `MessageSearchRequest._fromRoute`.
 abstract interface class MessageSearchService {
   Future<List<MessageSearchResult>> search({
     required String accountId,
     required String term,
+    String? roomToken,
     int limit = messageSearchDefaultLimit,
   });
 }
@@ -65,6 +65,7 @@ final class HttpMessageSearchService implements MessageSearchService {
   Future<List<MessageSearchResult>> search({
     required String accountId,
     required String term,
+    String? roomToken,
     int limit = messageSearchDefaultLimit,
   }) async {
     final trimmed = term.trim();
@@ -79,7 +80,12 @@ final class HttpMessageSearchService implements MessageSearchService {
         accountId: AccountId.parse(accountId),
         requestId: SearchRequestId.parse(_uuid.v4()),
         server: credentials.server,
-        scope: MessageSearchScope.global,
+        scope: roomToken == null
+            ? MessageSearchScope.global
+            : MessageSearchScope.currentRoom,
+        roomToken: roomToken == null
+            ? null
+            : ConversationToken.parse(roomToken, path: r'$.roomToken'),
         term: trimmed,
         limit: limit,
       );

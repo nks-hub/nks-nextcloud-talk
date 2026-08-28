@@ -36,6 +36,7 @@ final class _FakeMessageSearchService implements MessageSearchService {
   Future<List<MessageSearchResult>> search({
     required String accountId,
     required String term,
+    String? roomToken,
     int limit = messageSearchDefaultLimit,
   }) async {
     searchedTerms.add(term);

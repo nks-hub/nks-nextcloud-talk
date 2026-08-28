@@ -91,14 +91,17 @@ final class MessageSearchRequest {
 
   /// Route context sent as the unified search `from` parameter.
   ///
-  /// ASSUMPTION (unverified against a live server): Nextcloud's unified
-  /// search scopes a "current context" provider such as
-  /// [messageSearchCurrentRoomProviderId] through the generic `from` route
-  /// parameter rather than a Talk-specific room parameter. This builds that
-  /// route from Talk's web frontend path (`/call/{token}`). Confirm this
-  /// against a real server before relying on room-scoped results — if the
-  /// assumption is wrong, the server may ignore the scoping hint and return
-  /// conversation-wide results instead.
+  /// MEASURED against Talk 24.0.2: `from` is what selects the room, and the
+  /// two providers read it in opposite directions.
+  /// [messageSearchCurrentRoomProviderId] returns only the messages of that
+  /// room, while [messageSearchGlobalProviderId] EXCLUDES it and returns
+  /// everything else — so the two must never be mixed. That is why the
+  /// constructor above refuses a room token on a global search: it would
+  /// silently hide exactly the room the user is looking at.
+  ///
+  /// The current-room provider is not listed by `/search/providers` and
+  /// answers 200 with no entries when `from` is missing, so a wrong pairing
+  /// fails silently rather than loudly.
   String? get _fromRoute =>
       roomToken == null ? null : '/call/${roomToken!.value}';
 
