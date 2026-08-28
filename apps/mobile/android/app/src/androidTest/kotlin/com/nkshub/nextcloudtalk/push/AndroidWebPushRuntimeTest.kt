@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.RemoteInput
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -709,7 +710,26 @@ class AndroidWebPushRuntimeTest {
                 )
             },
         )
-        AndroidNotificationActionReceiver().onReceive(context, replyIntent)
+        var startedActivity: Intent? = null
+        val actionContext = object : ContextWrapper(context) {
+            override fun startActivity(intent: Intent) {
+                startedActivity = intent
+            }
+        }
+        AndroidNotificationActionReceiver().onReceive(actionContext, replyIntent)
+
+        val wakeIntent = startedActivity
+        assertNotNull(wakeIntent)
+        assertTrue(wakeIntent!!.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertTrue(wakeIntent.extras == null || wakeIntent.extras!!.isEmpty)
+        val wakeToken = AndroidSystemNotifications.notificationOpenToken(
+            wakeIntent,
+            context.packageName,
+        )
+        assertNotNull(wakeToken)
+        val wakeRoute = store.consumeNotificationOpen(wakeToken!!)
+        assertEquals(accountId, wakeRoute?.get("accountId"))
+        assertEquals("roomfoxtrot", wakeRoute?.get("objectId"))
 
         val queued = store.claimNotificationActions(accountId, 10).ready.single()
         assertEquals("runtime reply", queued.replyText)

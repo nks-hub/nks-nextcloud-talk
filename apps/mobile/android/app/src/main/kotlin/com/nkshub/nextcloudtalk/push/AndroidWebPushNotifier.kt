@@ -392,21 +392,32 @@ internal object AndroidSystemNotifications {
         kind: NotificationActionKind,
         actionToken: String,
         replyText: String?,
-    ): Boolean {
+    ): Intent? {
         val store = AndroidWebPushStore(context)
-        val fired = store.fireNotificationAction(actionToken, kind, replyText) ?: return false
+        val fired = store.fireNotificationAction(actionToken, kind, replyText) ?: return null
         fired.evicted.forEach { showActionFailure(context, store, it) }
         val queued = fired.queued
         if (queued.kind == NotificationActionKind.REPLY && queued.replyText.isNullOrBlank()) {
             store.resolveNotificationAction(queued.accountId, queued.token)
             showActionStatus(context, store, queued, R.string.push_action_reply_empty)
-            return true
+            return null
         }
         showActionStatus(context, store, queued, queuedStatusResource(queued.kind))
         // Wakes a running Flutter engine; a dead process picks the queue up on
-        // its next start instead.
+        // the account-scoped activity started below. The route is a separate
+        // one-shot token from the status notification's content intent, so
+        // neither intent contains the account id or room token.
         AndroidWebPushNotifier.publish(store.pendingEventCount(queued.accountId))
-        return true
+        val wakeToken = store.storeNotificationOpen(
+            accountId = queued.accountId,
+            notificationId = queued.notificationId,
+            app = DEFAULT_TALK_APP,
+            type = "chat",
+            objectId = queued.roomToken,
+        )
+        return notificationOpenIntent(context, wakeToken).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
     }
 
     fun cancelNotification(context: Context, accountId: String, notificationId: Long) {
@@ -711,9 +722,14 @@ class AndroidNotificationActionReceiver : BroadcastReceiver() {
         // thread; the payload is a few hundred bytes. Move to goAsync() with a
         // worker if a slow device ever trips the receiver timeout. A failure
         // here has no user-visible surface left, so it must not crash the app.
-        runCatching {
+        val wakeIntent = runCatching {
             AndroidSystemNotifications.performAction(context, kind, token, replyText)
-        }
+        }.getOrNull() ?: return
+        // This receiver is reached only from the system-held PendingIntent the
+        // user just triggered, which is allowed to start the activity. If the
+        // platform still refuses, the durable queue remains for the next app
+        // start instead of losing the action.
+        runCatching { context.startActivity(wakeIntent) }
     }
 
     private companion object {
