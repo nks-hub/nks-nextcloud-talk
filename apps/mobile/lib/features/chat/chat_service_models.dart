@@ -74,12 +74,19 @@ final class _PreparedCapabilities {
     required this.fingerprint,
     required this.generation,
     required this.verifiedOnline,
+    required this.readPrivacyIsPublic,
   });
 
   final Set<String> talkFeatures;
   final String fingerprint;
   final int generation;
   final bool verifiedOnline;
+
+  /// Whether this account shares its read markers, which decides if the
+  /// server reports a common read cursor at all. It is not part of the Talk
+  /// feature list, so it only survives alongside a live snapshot; the cached
+  /// path leaves it false rather than assuming a marker that may never come.
+  final bool readPrivacyIsPublic;
 }
 
 bool _conversationIsFederated(CachedConversation conversation) {

@@ -389,6 +389,7 @@ final class ChatService {
     final profile = ChatCapabilityProfile.fromTalkFeatures(
       preparedCapabilities.talkFeatures.toList(growable: false),
       federated: room.isFederated,
+      readPrivacyIsPublic: preparedCapabilities.readPrivacyIsPublic,
     );
     if (!profile.read) {
       throw const ChatServiceException(ChatServiceError.chatUnsupported);
@@ -484,6 +485,9 @@ final class ChatService {
         generation: storedCapability.generation,
         verifiedOnline:
             capabilityRead.source == CapabilitySnapshotSource.network,
+        readPrivacyIsPublic:
+            capabilities.context == CapabilityContext.authenticated &&
+            capabilities.chatReadPrivacy == ChatReadPrivacy.public,
       );
     } on NextcloudApiException catch (error) {
       if (error.statusCode == 401) {
@@ -533,6 +537,7 @@ final class ChatService {
         fingerprint: fingerprint,
         generation: stored.generation,
         verifiedOnline: false,
+        readPrivacyIsPublic: false,
       );
     } on FormatException {
       return null;

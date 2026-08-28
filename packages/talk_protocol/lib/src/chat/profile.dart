@@ -20,31 +20,27 @@ final class ChatCapabilityProfile {
     CapabilitySnapshot snapshot, {
     required bool federated,
   }) {
-    final profile = ChatCapabilityProfile.fromTalkFeatures(
+    return ChatCapabilityProfile.fromTalkFeatures(
       snapshot.talkFeatures.toList(growable: false),
       federated: federated,
-    );
-    return ChatCapabilityProfile._(
-      federated: profile.federated,
-      read: profile.read,
-      sendText: profile.sendText,
-      reply: profile.reply,
-      privateReply: profile.privateReply,
-      backgroundCatchUp: profile.backgroundCatchUp,
-      threadFetch: profile.threadFetch,
-      setReadMarker: profile.setReadMarker,
-      markUnread: profile.markUnread,
-      commonReadStatus:
+      readPrivacyIsPublic:
           snapshot.context == CapabilityContext.authenticated &&
-          snapshot.supportsTalk('chat-read-status') &&
-          snapshot.chatReadPrivacy == ChatReadPrivacy.public &&
-          !federated,
+          snapshot.chatReadPrivacy == ChatReadPrivacy.public,
     );
   }
 
+  /// Builds the profile from the Talk feature list alone.
+  ///
+  /// [readPrivacyIsPublic] has to be supplied by the caller because the
+  /// feature list does not carry it: whether other people's read markers are
+  /// visible is an account setting, not a server capability. Callers that
+  /// only have the cached feature list leave it at its default, which turns
+  /// the common read status off rather than claiming a marker the server may
+  /// refuse to share.
   factory ChatCapabilityProfile.fromTalkFeatures(
     Object? rawFeatures, {
     required bool federated,
+    bool readPrivacyIsPublic = false,
   }) {
     final features = requireUniqueStringSet(
       rawFeatures,
@@ -76,7 +72,11 @@ final class ChatCapabilityProfile {
       threadFetch: read && features.contains('threads') && !federated,
       setReadMarker: marker && features.contains('chat-read-last'),
       markUnread: marker && features.contains('chat-unread'),
-      commonReadStatus: false,
+      commonReadStatus:
+          read &&
+          features.contains('chat-read-status') &&
+          readPrivacyIsPublic &&
+          !federated,
     );
   }
 

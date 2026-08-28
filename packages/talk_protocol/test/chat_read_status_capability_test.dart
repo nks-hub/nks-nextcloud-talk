@@ -19,6 +19,51 @@ void main() {
       expect(profile.commonReadStatus, isTrue);
     });
 
+    test('the feature list carries the marker once privacy is supplied', () {
+      // `fromTalkFeatures` used to hardcode the marker off, and the chat
+      // service builds every profile through it, so the aggregate read cursor
+      // was never enabled on any server. `mergeChatGetResponse` then passed a
+      // null `lastCommonRead` on each sync and `ChatScopeState.copyWith`
+      // treats an explicit null as a clear, so the second tick appeared only
+      // between setting the read marker and the very next fetch.
+      const features = <String>['chat-v2', 'chat-read-status'];
+
+      expect(
+        ChatCapabilityProfile.fromTalkFeatures(
+          features,
+          federated: false,
+          readPrivacyIsPublic: true,
+        ).commonReadStatus,
+        isTrue,
+      );
+      expect(
+        ChatCapabilityProfile.fromTalkFeatures(
+          features,
+          federated: false,
+        ).commonReadStatus,
+        isFalse,
+        reason: 'a caller without the account setting must not assume it',
+      );
+      expect(
+        ChatCapabilityProfile.fromTalkFeatures(
+          features,
+          federated: true,
+          readPrivacyIsPublic: true,
+        ).commonReadStatus,
+        isFalse,
+        reason: 'a federated room has no aggregate marker to report',
+      );
+      expect(
+        ChatCapabilityProfile.fromTalkFeatures(
+          const <String>['chat-v2'],
+          federated: false,
+          readPrivacyIsPublic: true,
+        ).commonReadStatus,
+        isFalse,
+        reason: 'the server has to support chat-read-status',
+      );
+    });
+
     test('private policy disables the aggregate marker', () {
       final snapshot = _snapshot(
         context: CapabilityContext.authenticated,
