@@ -142,6 +142,44 @@ void main() {
     );
   });
 
+
+  test("someone else's reaction reaches the message it is about", () async {
+    // The notice is stored like any other message, but nothing used to touch
+    // the row it is about, so the pill only ever showed reactions this device
+    // had added itself. Reproduced live 2026-08-28: the server confirmed both
+    // reactions, the app showed none, not even after reopening the room.
+    await _insertScope(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      scopeKey: 'root',
+      threadId: null,
+      cursor: 20,
+    );
+    await _insertMessage(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+
+    expect(
+      await repository.applyChatGetResponse(_reactionCountsResponse()),
+      ChatMergeOutcome.applied,
+    );
+
+    final row =
+        await (database.select(database.cachedChatMessages)..where(
+              (r) =>
+                  r.accountId.equals('account-a') &
+                  r.roomToken.equals('rooma123') &
+                  r.messageId.equals(20),
+            ))
+            .getSingle();
+    final wire = jsonDecode(row.rawJson) as Map<String, Object?>;
+    expect(wire['reactions'], {'👍': 2, '🔥': 1});
+    expect(wire['reactionsSelf'], <String>['🔥']);
+  });
+
   test('root merge projects only into the matching account and room', () async {
     await _insertScope(
       database,
@@ -352,6 +390,54 @@ ChatGetResponse _threadReplyResponse() {
     ),
     headers: ChatResponseHeaders.fromMap(const {
       'X-Chat-Last-Given': '30',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
+}
+
+
+ChatGetResponse _reactionCountsResponse() {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('projection-reaction-counts'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+      'chat-replies',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('20'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  // The parent a reaction notice carries is the reacted message with its
+  // current tally, which is the only place those numbers ever arrive.
+  final reacted = _messageJson(id: 20, roomToken: 'rooma123', threadId: null)
+    ..['reactions'] = {'👍': 2, '🔥': 1}
+    ..['reactionsSelf'] = <String>['🔥'];
+  final notice = _messageJson(id: 32, roomToken: 'rooma123', threadId: null)
+    ..['systemMessage'] = 'reaction'
+    ..['message'] = 'thumbs-up'
+    ..['parent'] = reacted;
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': [notice],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(const {
+      'X-Chat-Last-Given': '32',
       'X-Chat-Last-Common-Read': '0',
     }),
   );
