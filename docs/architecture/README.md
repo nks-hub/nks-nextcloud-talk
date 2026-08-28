@@ -22,15 +22,16 @@ Přijatá nejmenší úplná architektura má dvě povinné samostatně testovat
 1. Flutter aplikaci pro mobil i desktop.
 2. Pure Dart Talk protokolový balík bez Flutter závislostí.
 
-Android používá přímo Notifications Web Push přes UnifiedPush connector a
-vestavěný FCM distributor; vlastní gateway ani Nextcloud addon nejsou součástí
-základní instalace. iOS APNs a budoucí PushKit vyžadují pozdější
-publisher-owned relay jako samostatnou Apple platformní hranici.
+Výchozí transport na Androidu i na Apple platformách je podle D-038 vlastní
+proxy `nks-talk-notify`, která drží odesílací větev na FCM v1 a na APNs.
+Notifications Web Push přes UnifiedPush connector a vestavěný FCM distributor
+zůstává na Androidu jako přepínatelná záloha; jen ta se obejde bez vlastní
+gateway. Nextcloud addon není v žádné z obou větví součástí instalace.
 
-Toto je přijatá topologie, nikoli tvrzení o dokončeném push delivery. Nativní
-Android push řez je po bezpečnostním review implementovaný a automatizovaný v
-`3c74165`. Skutečný Nextcloud → FCM → background/killed běh a fyzické zařízení
-zůstávají otevřené brány.
+Nextcloud → proxy → FCM/APNs → ukončená aplikace je od 28. srpna 2026 živě
+prokázané na Androidu i na iOS nad `140b0a9`, včetně dešifrovaného obsahu,
+akcí notifikace a delete payloadů. Otevřenou branou zůstává fyzické zařízení
+a dva skutečné servery současně.
 
 Uvnitř mobilní aplikace zůstávají storage, sync a feature moduly, dokud reálná
 druhá implementace neodůvodní další package. Call subsystem má od začátku
@@ -54,6 +55,7 @@ nevytváří jako prázdný stub.
 - [Internal/HPB signaling kontrakt a runtime](signaling-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)
 - [Rozhodnutí a otevřené volby](decisions.md)
+- [Technická rozhodnutí](decisions-technical.md)
 - [Audit závislostí a assetů](dependency-licenses.md)
 - [Pure Dart talk_protocol](../../packages/talk_protocol/README.md)
 - [Historický veřejný multi-server push-v2 návrh](../plans/2026-08-22-public-multi-server-push-design.md)

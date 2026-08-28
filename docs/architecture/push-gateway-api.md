@@ -4,7 +4,7 @@ Datum ověření: 23. srpna 2026.
 
 Stav produktu: historická, spustitelně ověřená varianta Notifications push-v2.
 Pro Android byla nahrazena přímým Notifications Web Push tokem podle
-[D-025](decisions.md#d-025-android-přes-notifications-web-push) a
+[D-025](decisions-technical.md#d-025-android-přes-notifications-web-push) a
 [aktuální push analýzy](../research/push-fcm.md). Gateway se neimplementuje ani
 nenasazuje jako povinná součást Android aplikace. Dokument zůstává důkazem
 historické wire kompatibility. Budoucí iOS APNs relay a PushKit větev vyžadují
