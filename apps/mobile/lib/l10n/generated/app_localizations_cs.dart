@@ -956,7 +956,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsAppVersion => 'Verze';
 
   @override
-  String get diagnosticsAppBuild => 'Build';
+  String get diagnosticsAppBuild => 'Sestavení';
 
   @override
   String get diagnosticsPlatform => 'Platforma';
@@ -1034,7 +1034,7 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
-  String get diagnosticsCapabilitiesSection => 'Talk capabilities';
+  String get diagnosticsCapabilitiesSection => 'Funkce Talku';
 
   @override
   String get diagnosticsTalkFeatureCount => 'Nahlášené featury';

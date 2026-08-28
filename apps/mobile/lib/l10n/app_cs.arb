@@ -299,7 +299,7 @@
   "diagnosticsLoadFailed": "Lokální stav se nepodařilo načíst.",
   "diagnosticsAppSection": "Aplikace",
   "diagnosticsAppVersion": "Verze",
-  "diagnosticsAppBuild": "Build",
+  "diagnosticsAppBuild": "Sestavení",
   "diagnosticsPlatform": "Platforma",
   "diagnosticsDatabaseSection": "Databáze",
   "diagnosticsSchemaVersion": "Verze schématu",
@@ -331,7 +331,7 @@
       }
     }
   },
-  "diagnosticsCapabilitiesSection": "Talk capabilities",
+  "diagnosticsCapabilitiesSection": "Funkce Talku",
   "diagnosticsTalkFeatureCount": "Nahlášené featury",
   "diagnosticsValueNone": "Žádná",
   "diagnosticsValueNever": "Nikdy",
