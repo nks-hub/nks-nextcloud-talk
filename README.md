@@ -41,6 +41,11 @@ Vývojový počítač je ale ve Visual Studio pending-reboot stavu, takže tento
 artefakt není důkazem opakovatelného čistého buildu přes výchozí toolchain před
 restartem počítače.
 
+Windows build navíc potřebuje JDK a nastavené `JAVA_HOME`. Není to kvůli
+Androidu: `sentry_flutter` závisí na balíčku `jni`, ten se registruje jako FFI
+plugin i na Windows a jeho `find_package(JNI)` bez JDK shodí CMake hláškou
+`FindJNI.cmake`, ve které se Java nikde nezmiňuje.
+
 Pure Dart balík [`talk_protocol`](packages/talk_protocol) navíc implementuje a
 testuje bootstrap, conversations, chat, rich chat, attachment, signaling
 preparation a původní Notifications push-v2 wire modely. Tyto protokolové řezy
