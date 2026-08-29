@@ -12,6 +12,16 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (14) — 29. 8. 2026
+
+Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- Ztracené spojení s notifikačním kanálem se přestalo hlásit jako pád
+  aplikace. Když systém uspí telefon a spojení zahodí, jeho zavírání
+  selže — to je běžný konec spojení, ne havárie.
+- Aplikace se při tom navíc přestala zasekávat: úklid toho spojení
+  v takovém případě nikdy nedoběhl.
+
 ## 0.1.0 (13) — 29. 8. 2026
 
 Play: publikováno. TestFlight: build `VALID`, obě skupiny.
