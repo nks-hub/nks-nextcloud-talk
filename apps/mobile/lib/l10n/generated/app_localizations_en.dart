@@ -972,6 +972,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsAppSection => 'Application';
 
   @override
+  String get diagnosticsLicenses => 'Open source licences';
+
+  @override
+  String get diagnosticsLicensesSubtitle =>
+      'Licences of the libraries this app is built from';
+
+  @override
   String get diagnosticsAppVersion => 'Version';
 
   @override

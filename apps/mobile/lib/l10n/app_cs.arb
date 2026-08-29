@@ -303,6 +303,8 @@
   "diagnosticsRefresh": "Načíst znovu",
   "diagnosticsLoadFailed": "Lokální stav se nepodařilo načíst.",
   "diagnosticsAppSection": "Aplikace",
+  "diagnosticsLicenses": "Licence otevřeného softwaru",
+  "diagnosticsLicensesSubtitle": "Licence knihoven, ze kterých je aplikace složená",
   "diagnosticsAppVersion": "Verze",
   "diagnosticsAppBuild": "Sestavení",
   "diagnosticsPlatform": "Platforma",

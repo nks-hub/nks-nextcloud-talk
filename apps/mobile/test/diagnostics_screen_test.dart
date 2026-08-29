@@ -437,6 +437,40 @@ String _valueOf(WidgetTester tester, String key) {
 }
 
 void main() {
+  testWidgets('the bundled third-party licences are reachable', (
+    tester,
+  ) async {
+    // The app is GPL-3.0 and ships 171 third-party packages, most of them BSD
+    // or MIT, whose terms require their notices to travel with the binary.
+    // Flutter collects them; until this entry existed there was no way in.
+    _useTallSurface(tester);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await tester.runAsync(() => _seedFixture(database));
+
+    await tester.pumpWidget(
+      _wrapDiagnostics(database: database, push: null),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await _settleRealAsync(tester);
+
+    final entry = find.byKey(const Key('diagnostics-licenses'));
+    expect(entry, findsOneWidget);
+    await tester.ensureVisible(entry);
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(LicensePage),
+      findsOneWidget,
+      reason: 'the notices have to be readable, not merely bundled',
+    );
+    expect(find.text('NKS Talk'), findsWidgets);
+  });
+
   testWidgets('reports the local state of exactly the requested account', (
     tester,
   ) async {

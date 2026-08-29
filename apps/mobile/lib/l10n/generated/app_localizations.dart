@@ -1844,6 +1844,18 @@ abstract class AppLocalizations {
   /// **'Application'**
   String get diagnosticsAppSection;
 
+  /// No description provided for @diagnosticsLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Open source licences'**
+  String get diagnosticsLicenses;
+
+  /// No description provided for @diagnosticsLicensesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Licences of the libraries this app is built from'**
+  String get diagnosticsLicensesSubtitle;
+
   /// No description provided for @diagnosticsAppVersion.
   ///
   /// In en, this message translates to:

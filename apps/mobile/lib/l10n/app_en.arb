@@ -310,6 +310,8 @@
   "diagnosticsRefresh": "Read again",
   "diagnosticsLoadFailed": "The local state could not be read.",
   "diagnosticsAppSection": "Application",
+  "diagnosticsLicenses": "Open source licences",
+  "diagnosticsLicensesSubtitle": "Licences of the libraries this app is built from",
   "diagnosticsAppVersion": "Version",
   "diagnosticsAppBuild": "Build",
   "diagnosticsPlatform": "Platform",

@@ -78,6 +78,21 @@ final class _DiagnosticsList extends StatelessWidget {
           label: strings.diagnosticsPlatform,
           value: data.operatingSystem,
         ),
+        // The app is GPL-3.0 and ships 171 third-party packages, most of them
+        // BSD or MIT, whose terms require their notices to travel with the
+        // binary. Flutter collects every bundled licence itself, so the only
+        // thing missing was a way to reach the page.
+        ListTile(
+          key: const Key('diagnostics-licenses'),
+          title: Text(strings.diagnosticsLicenses),
+          subtitle: Text(strings.diagnosticsLicensesSubtitle),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => showLicensePage(
+            context: context,
+            applicationName: 'NKS Talk',
+            applicationVersion: '$appVersionName ($appBuildNumber)',
+          ),
+        ),
         const Divider(height: 1),
         _SectionHeader(strings.diagnosticsDatabaseSection),
         _Entry(

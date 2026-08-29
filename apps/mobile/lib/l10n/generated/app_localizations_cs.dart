@@ -970,6 +970,13 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsAppSection => 'Aplikace';
 
   @override
+  String get diagnosticsLicenses => 'Licence otevřeného softwaru';
+
+  @override
+  String get diagnosticsLicensesSubtitle =>
+      'Licence knihoven, ze kterých je aplikace složená';
+
+  @override
   String get diagnosticsAppVersion => 'Verze';
 
   @override
