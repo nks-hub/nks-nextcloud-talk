@@ -57,6 +57,9 @@ final class _ChatHeader extends StatelessWidget {
   }
 }
 
+/// Identifies the sliver that stays put while messages arrive.
+final GlobalKey _centreSliverKey = GlobalKey();
+
 final class _ChatTimeline extends StatelessWidget {
   const _ChatTimeline({
     required this.account,
@@ -82,6 +85,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.highlightedMessageId,
     required this.deliveryStates,
     required this.lastCommonRead,
+    required this.anchorMessageId,
   });
 
   final StoredAccount account;
@@ -125,20 +129,18 @@ final class _ChatTimeline extends StatelessWidget {
   final Map<int, OutgoingMessageDeliveryState> deliveryStates;
   final int? lastCommonRead;
 
+  /// Newest message the reader had seen before they scrolled away, or null
+  /// while they are still at the newest end. Splits the timeline so arrivals
+  /// cannot push what they are reading; see the centre sliver in `build`.
+  final int? anchorMessageId;
+
   @override
   Widget build(BuildContext context) {
     if (messages.isEmpty && pending.isEmpty && !hasOlder) {
       return const _EmptyChat();
     }
     final itemCount = messages.length + pending.length + (hasOlder ? 1 : 0);
-    return ListView.builder(
-      key: const Key('chat-message-list'),
-      controller: controller,
-      reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: itemCount,
-      itemBuilder: (context, reverseIndex) {
-        final chronologicalIndex = itemCount - reverseIndex - 1;
+    Widget buildAt(BuildContext context, int chronologicalIndex) {
         if (hasOlder && chronologicalIndex == 0) {
           return Center(
             key: const Key('chat-load-older'),
@@ -216,17 +218,82 @@ final class _ChatTimeline extends StatelessWidget {
             ),
           );
         }
-        final operation = pending[contentIndex - messages.length];
-        return _PendingMessageBubble(
-          key: ValueKey('chat-pending-${operation.operationId}'),
-          account: account,
-          operation: operation,
-          onRetry: onRetry,
-          onResend: () => onResend(operation),
-          onCancel: () => onCancel(operation),
-        );
-      },
+      final operation = pending[contentIndex - messages.length];
+      return _PendingMessageBubble(
+        key: ValueKey('chat-pending-${operation.operationId}'),
+        account: account,
+        operation: operation,
+        onRetry: onRetry,
+        onResend: () => onResend(operation),
+        onCancel: () => onCancel(operation),
+      );
+    }
+
+    // Everything newer than the anchor is laid out BEFORE the centre sliver,
+    // which is what stops an arriving message from moving the history the
+    // reader is looking at. A reversed `ListView` puts the newest item at
+    // scroll offset zero, so every arrival re-indexed the whole list and
+    // pushed the read position along the axis by that bubble's height. Slivers
+    // before `center` grow away from offset zero instead, so the centre and
+    // everything after it keep their positions.
+    //
+    // With no anchor the newer sliver is empty and this behaves exactly like
+    // the reversed list did: the view stays pinned to the newest message,
+    // which is what a reader sitting at the bottom wants.
+    final anchorIndex = _anchorChronologicalIndex(itemCount);
+    final newerCount = itemCount - 1 - anchorIndex;
+    return CustomScrollView(
+      key: const Key('chat-message-list'),
+      controller: controller,
+      reverse: true,
+      center: _centreSliverKey,
+      slivers: [
+        // Always present, even with nothing in it: dropping the sliver would
+        // change the slivers list and move which one `center` refers to, and
+        // the reader's offset would then mean somewhere else. Its padding goes
+        // to zero instead, because a SliverPadding contributes its padding
+        // around nothing and that stray extent alone shifts the scroll range.
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, newerCount > 0 ? 12 : 0),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => buildAt(context, itemCount - 1 - index),
+              childCount: newerCount,
+            ),
+          ),
+        ),
+        SliverPadding(
+          key: _centreSliverKey,
+          padding: EdgeInsets.fromLTRB(16, 12, 16, newerCount > 0 ? 0 : 12),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => buildAt(context, anchorIndex - index),
+              childCount: anchorIndex + 1,
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  /// Chronological index the centre sliver ends at.
+  ///
+  /// Without an anchor that is the newest item, so nothing lands in the sliver
+  /// before the centre. Once the reader has scrolled away the pane freezes the
+  /// anchor on the newest message they had seen, and everything that arrives
+  /// after it goes into the sliver that cannot move them.
+  int _anchorChronologicalIndex(int itemCount) {
+    final anchor = anchorMessageId;
+    if (anchor == null) {
+      return itemCount - 1;
+    }
+    final offset = hasOlder ? 1 : 0;
+    for (var index = messages.length - 1; index >= 0; index--) {
+      if (messages[index].messageId <= anchor) {
+        return index + offset;
+      }
+    }
+    return itemCount - 1;
   }
 
   /// Whether the scope's confirmed ranges show a gap between the message at

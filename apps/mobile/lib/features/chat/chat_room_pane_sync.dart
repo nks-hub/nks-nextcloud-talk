@@ -339,7 +339,13 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     final awayFromNewest =
         position.pixels > _ChatRoomPaneState._jumpToNewestThreshold;
     if (awayFromNewest != _awayFromNewest) {
-      _update(() => _awayFromNewest = awayFromNewest);
+      _update(() {
+        _awayFromNewest = awayFromNewest;
+        // Freezing the anchor on the way up is what lets arriving messages be
+        // laid out below the reader instead of pushing them along. Releasing
+        // it at the bottom puts the view back to following the newest message.
+        _anchorMessageId = awayFromNewest ? _newestCachedMessageId() : null;
+      });
     }
     if (_loadingOlder) {
       return;
@@ -368,6 +374,13 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
+  }
+
+  /// Newest message id in the cached timeline, or null when there is nothing
+  /// to anchor on.
+  int? _newestCachedMessageId() {
+    final messages = _visibleMessages();
+    return messages.isEmpty ? null : messages.last.messageId;
   }
 
   void _startPendingJump() {

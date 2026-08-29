@@ -324,6 +324,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int? _highlightedMessageId;
   int? _pendingJumpMessageId;
   bool _awayFromNewest = false;
+
+  /// Newest message id the reader had seen when they scrolled away from the
+  /// bottom. Null while they are at the newest end, where an arrival should
+  /// keep them pinned there.
+  int? _anchorMessageId;
   bool _silentSend = false;
   ChatRoomProviderKey? _lastAutoReadKey;
   int? _lastAutoReadMessageId;
@@ -784,6 +789,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                       highlightedMessageId: _highlightedMessageId,
                       deliveryStates: deliveryStates,
                       lastCommonRead: _cursorValue(scope?.lastCommonRead),
+                      anchorMessageId: _anchorMessageId,
                     ),
                     if (_awayFromNewest)
                       Positioned(

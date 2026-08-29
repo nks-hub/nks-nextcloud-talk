@@ -329,19 +329,17 @@ void main() {
     );
     await closeRoom(tester);
 
-    // The defect: a reversed [ListView] lays its newest item out at scroll
-    // offset zero, so a message arriving while the reader is up in the history
-    // pushes everything they are reading along the axis by that bubble's
-    // height. The offset itself does not move, which is why nothing corrects
-    // it. Correcting it from here is not possible either: maxScrollExtent is
-    // an estimate over the unbuilt children and grows by far more than the one
-    // bubble that was actually inserted, so it cannot serve as the correction.
-    // The fix is structural - a CustomScrollView whose `center` key separates
-    // the history sliver from the arriving-messages sliver, so neither end
-    // re-indexes the other. It also has to move `_scrollTowards` and
-    // `_handleScroll` in chat_room_pane_sync.dart off maxScrollExtent.
-    // When that lands, this expectation becomes `lessThan(1)`.
-    expect(shift, greaterThan(1));
+    // A reversed [ListView] used to lay its newest item out at scroll offset
+    // zero, so a message arriving while the reader was up in the history
+    // pushed everything they were reading along the axis by that bubble's
+    // height. The offset itself never moved, which is why nothing corrected
+    // it, and correcting it from here was impossible too: maxScrollExtent is
+    // an estimate over the unbuilt children and grew by far more than the one
+    // bubble that was actually inserted.
+    // The timeline is now a CustomScrollView whose `center` key separates the
+    // history from the arriving messages, so neither end re-indexes the other
+    // and the reader stays exactly where they were.
+    expect(shift, lessThan(1));
     expect(scrollable.position.pixels, pixelsBefore);
   });
 }
