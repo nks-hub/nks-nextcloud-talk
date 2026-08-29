@@ -151,20 +151,38 @@ final class ClientPushSession {
     try {
       await authenticated.future.timeout(handshakeTimeout);
     } on Object {
-      await subscription.cancel();
-      await socket.close();
+      await _release(subscription, socket);
       await controller.close();
       throw const ClientPushException(ClientPushFailure.rejected);
     }
 
-    unawaited(
-      controller.done.then((_) async {
-        await subscription.cancel();
-        await socket.close();
-      }),
-    );
+    unawaited(controller.done.then((_) => _release(subscription, socket)));
     return ClientPushSession._(socket, controller.stream);
   }
 
-  Future<void> close() => _socket.close();
+  Future<void> close() => _release(null, _socket);
+
+  /// Lets go of a socket, whatever state it is in.
+  ///
+  /// Every caller is tearing down: the frame stream ended, the handshake was
+  /// refused, or the account is going away. A close that fails at that point
+  /// fails because the handle is already gone, which is the ordinary end of
+  /// a connection and nothing anybody can act on. It used to escape instead:
+  /// the teardown after the stream ends runs behind `unawaited`, so the
+  /// failure reached the zone and was filed as a crash.
+  static Future<void> _release(
+    StreamSubscription<String>? subscription,
+    ClientPushSocket socket,
+  ) async {
+    try {
+      await subscription?.cancel();
+    } on Object {
+      // Cancelling twice, or after the stream already ended, is not a fault.
+    }
+    try {
+      await socket.close();
+    } on Object {
+      // See above: the handle is gone, which is what we wanted anyway.
+    }
+  }
 }
