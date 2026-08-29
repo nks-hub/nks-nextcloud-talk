@@ -7,9 +7,19 @@ drží stejné číslo, aby se hlášení od testerů daly spárovat napříč p
 Zdrojem pravdy o verzi je `apps/mobile/pubspec.yaml`; `apps/mobile/lib/core/app_version.dart`
 ji zrcadlí a test hlídá, aby se ty dvě nerozešly.
 
-## 0.1.0 (8) — 29. 8. 2026
+## 0.1.0 (9) — 29. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- Odkaz na konverzaci už aplikaci neshodí. Odkaz dorazil dvakrát: jednou naším
+  kanálem, který ho vyhodnotí proti přihlášeným účtům, a podruhé jako
+  pojmenovaná trasa od systému. Na tu druhou aplikace neměla čím odpovědět
+  a padala na každém otevřeném odkazu. Nahlásila to telemetrie ze skutečného
+  zařízení.
+
+## 0.1.0 (8) — 29. 8. 2026
+
+Play: publikováno 29. 8. 9:29. TestFlight: build `VALID`, obě skupiny.
 
 - Prázdný seznam vláken už neplete. Odpověď na zprávu vlákno nezaloží, což
   obrazovka doteď zamlčovala a vypadalo to, že aplikace zatajuje odpovědi,
