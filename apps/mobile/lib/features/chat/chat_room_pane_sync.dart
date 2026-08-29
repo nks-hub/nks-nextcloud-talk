@@ -257,18 +257,26 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       }
       ancestor = ancestor.parent;
     }
-    final viewport = RenderAbstractViewport.of(renderObject);
-    final scrollable = Scrollable.maybeOf(target!);
-    if (scrollable == null || !scrollable.position.hasContentDimensions) {
+    // Compared as rectangles rather than as scroll offsets. The timeline is a
+    // CustomScrollView with a `center` key, so its scroll range starts below
+    // zero and `getOffsetToReveal` no longer lines up with `position.pixels`
+    // the way it does in a plain list. Where the box actually paints is the
+    // same question asked without that arithmetic.
+    final RenderObject viewport = RenderAbstractViewport.of(renderObject);
+    if (viewport is! RenderBox) {
       return false;
     }
-    final start = viewport.getOffsetToReveal(renderObject, 0).offset;
-    final end = viewport.getOffsetToReveal(renderObject, 1).offset;
-    final targetStart = math.min(start, end);
-    final targetEnd = math.max(start, end);
-    final visibleStart = scrollable.position.pixels;
-    final visibleEnd = visibleStart + scrollable.position.viewportDimension;
-    return targetEnd > visibleStart && targetStart < visibleEnd;
+    final RenderBox viewportBox = viewport;
+    if (!viewportBox.hasSize) {
+      return false;
+    }
+    final topLeft = renderObject.localToGlobal(
+      Offset.zero,
+      ancestor: viewportBox,
+    );
+    return (topLeft & renderObject.size).overlaps(
+      Offset.zero & viewportBox.size,
+    );
   }
 
   void _setSyncError(int generation, Object error) {

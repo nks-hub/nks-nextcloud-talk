@@ -57,9 +57,6 @@ final class _ChatHeader extends StatelessWidget {
   }
 }
 
-/// Identifies the sliver that stays put while messages arrive.
-final GlobalKey _centreSliverKey = GlobalKey();
-
 final class _ChatTimeline extends StatelessWidget {
   const _ChatTimeline({
     required this.account,
@@ -241,20 +238,26 @@ final class _ChatTimeline extends StatelessWidget {
     // the reversed list did: the view stays pinned to the newest message,
     // which is what a reader sitting at the bottom wants.
     final anchorIndex = _anchorChronologicalIndex(itemCount);
+    // Scoped, not global: a room pane and a thread pane are on screen at the
+    // same time on a wide window, and one shared key left the second viewport
+    // without a centre at all ('center != null' inside the framework).
+    final centreKey = ValueKey(
+      'chat-centre-${account.id}-${conversation.token}-$threadId',
+    );
     final newerCount = itemCount - 1 - anchorIndex;
     return CustomScrollView(
       key: const Key('chat-message-list'),
       controller: controller,
       reverse: true,
-      center: _centreSliverKey,
+      center: centreKey,
       slivers: [
-        // Always present, even with nothing in it: dropping the sliver would
-        // change the slivers list and move which one `center` refers to, and
-        // the reader's offset would then mean somewhere else. Its padding goes
-        // to zero instead, because a SliverPadding contributes its padding
-        // around nothing and that stray extent alone shifts the scroll range.
+        // Always present with the same padding, even with nothing in it:
+        // dropping it would change the slivers list and move which one
+        // `center` refers to, and changing its padding as the first arrival
+        // lands would move the scroll range under the reader at exactly the
+        // wrong moment. A constant extent before the centre costs nothing.
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, newerCount > 0 ? 12 : 0),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) => buildAt(context, itemCount - 1 - index),
@@ -263,8 +266,8 @@ final class _ChatTimeline extends StatelessWidget {
           ),
         ),
         SliverPadding(
-          key: _centreSliverKey,
-          padding: EdgeInsets.fromLTRB(16, 12, 16, newerCount > 0 ? 0 : 12),
+          key: centreKey,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) => buildAt(context, anchorIndex - index),
