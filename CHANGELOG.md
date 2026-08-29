@@ -14,7 +14,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (14) — 29. 8. 2026
 
-Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
 
 - Ztracené spojení s notifikačním kanálem se přestalo hlásit jako pád
   aplikace. Když systém uspí telefon a spojení zahodí, jeho zavírání
