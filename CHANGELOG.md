@@ -14,7 +14,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (13) — 29. 8. 2026
 
-Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
 
 - Moderátor může smazat i zprávu, kterou nenapsal. Server to dovoluje
   odjakživa, aplikace ale nabízela mazání jen u vlastních zpráv, takže
