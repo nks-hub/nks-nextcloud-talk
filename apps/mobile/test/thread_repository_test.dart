@@ -81,7 +81,61 @@ void main() {
       2,
       reason: 'a reaction carries the thread but is not a reply',
     );
-    expect(recent.single.title, isEmpty, reason: 'the thread has no name');
+    expect(
+      recent.single.title,
+      'Root of an unnamed thread',
+      reason: 'the root message stands in for the name the server lacks',
+    );
+  });
+
+  test('a derived title collapses whitespace and stays one short line', () async {
+    final root = 'Koren  s\n  vice radky ${'a' * 200}';
+    for (final row in <({int id, int thread, String text})>[
+      (id: 700, thread: 700, text: root),
+      (id: 701, thread: 700, text: 'Odpoved'),
+    ]) {
+      await database
+          .into(database.cachedChatMessages)
+          .insert(
+            CachedChatMessagesCompanion.insert(
+              accountId: 'account-a',
+              roomToken: 'rooma123',
+              messageId: row.id,
+              actorType: 'users',
+              actorId: 'someone',
+              actorDisplayName: 'Someone',
+              timestamp: 1724300000 + row.id,
+              systemMessage: '',
+              messageType: 'comment',
+              referenceId: 'reference-${row.id}',
+              displayText: row.text,
+              deleted: false,
+              threadId: Value(row.thread),
+              rawJson: '{}',
+            ),
+          );
+    }
+
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+
+    final title = (await threads
+            .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+            .first)
+        .singleWhere((thread) => thread.threadId == 700)
+        .title;
+    expect(title.contains('\n'), isFalse, reason: 'the row shows one line');
+    expect(title.startsWith('Koren s vice radky'), isTrue);
+    expect(
+      title.length,
+      lessThanOrEqualTo(121),
+      reason: 'capped at 120 plus the ellipsis',
+    );
+    expect(title.endsWith('…'), isTrue);
   });
 
   test(

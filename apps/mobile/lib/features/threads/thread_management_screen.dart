@@ -32,6 +32,11 @@ final class _ThreadManagementScreenState
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   var _recentLoading = false;
+  // Kept apart from `_recentLoading`, which doubles as the re-entrancy guard
+  // in `_refreshRecent`. The first refresh only starts in a post-frame
+  // callback, so without this the frame before it painted "no recent threads"
+  // for a room that has them - the screen answered before it had asked.
+  var _recentSettled = false;
   var _subscribedLoading = false;
   var _subscribedStarted = false;
   Object? _recentError;
@@ -85,7 +90,10 @@ final class _ThreadManagementScreenState
       }
     } finally {
       if (mounted) {
-        setState(() => _recentLoading = false);
+        setState(() {
+          _recentLoading = false;
+          _recentSettled = true;
+        });
       }
     }
   }
@@ -162,7 +170,7 @@ final class _ThreadManagementScreenState
             _ThreadListTab(
               tabKey: const Key('thread-management-recent-list'),
               threads: recent.valueOrNull ?? const <CachedThread>[],
-              loading: _recentLoading || recent.isLoading,
+              loading: _recentLoading || !_recentSettled || recent.isLoading,
               error: _recentError ?? recent.error,
               emptyTitle: strings.threadManagementRecentEmpty,
               emptyBody: strings.threadManagementRecentEmptyBody,
@@ -621,6 +629,9 @@ final class _ThreadListTab extends StatelessWidget {
                                   )
                                 : error == null
                                 ? _ThreadEmptyState(
+                                    key: const Key(
+                                      'thread-management-empty-state',
+                                    ),
                                     title: emptyTitle,
                                     body: emptyBody,
                                   )
@@ -823,7 +834,11 @@ final class _ThreadFullErrorState extends StatelessWidget {
 }
 
 final class _ThreadEmptyState extends StatelessWidget {
-  const _ThreadEmptyState({required this.title, required this.body});
+  const _ThreadEmptyState({
+    required this.title,
+    required this.body,
+    super.key,
+  });
 
   final String title;
   final String body;

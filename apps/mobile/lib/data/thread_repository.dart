@@ -181,7 +181,12 @@ final class ThreadRepository {
               accountId: accountId,
               roomToken: roomToken,
               threadId: entry.key,
-              title: '',
+              // The server has no name for this thread, so the root message
+              // stands in for one. Without it every derived row read just
+              // "Vlákno" and two threads in the same room were impossible to
+              // tell apart. A rename dialog opened on such a row starts from
+              // this text, which is the label the reader already sees.
+              title: _derivedThreadTitle(entry.value.displayText),
               lastMessageId: lastMessage[entry.key] ?? entry.key,
               lastActivity: lastActivity[entry.key] ?? entry.value.timestamp,
               numReplies: replies[entry.key] ?? 0,
@@ -402,6 +407,20 @@ final class ThreadRepository {
           ),
         );
   }
+
+  /// Collapses a root message into a one-line label for a derived thread.
+  ///
+  /// Kept short deliberately: the row shows one line and a long root would be
+  /// clipped anyway, while the full text stays available in the thread itself.
+  static String _derivedThreadTitle(String displayText) {
+    final flattened = displayText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (flattened.length <= _derivedTitleLimit) {
+      return flattened;
+    }
+    return '${flattened.substring(0, _derivedTitleLimit).trimRight()}…';
+  }
+
+  static const int _derivedTitleLimit = 120;
 
   Future<void> _deleteUnlisted(String accountId) {
     return (_database.delete(_database.cachedThreads)..where(

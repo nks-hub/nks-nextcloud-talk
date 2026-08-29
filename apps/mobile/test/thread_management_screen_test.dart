@@ -199,6 +199,37 @@ void main() {
     await disposeHarness(tester);
   });
 
+  testWidgets('opens busy instead of claiming there are no threads', (
+    tester,
+  ) async {
+    // The first refresh only starts in a post-frame callback. With the screen
+    // opening idle, the frame before that painted the empty state, so a room
+    // full of thread replies greeted the reader with "no recent threads".
+    await _setLargeSurface(tester);
+    await tester.pumpWidget(
+      buildApp(
+        home: ThreadManagementScreen(
+          account: account,
+          conversation: conversation,
+        ),
+        handler: _successfulHandler,
+      ),
+    );
+    await tester.pump(Duration.zero);
+
+    expect(
+      find.byKey(const Key('thread-management-empty-progress')),
+      findsOneWidget,
+      reason: 'the first frame is still waiting on the server',
+    );
+    expect(
+      find.byKey(const Key('thread-management-empty-state')),
+      findsNothing,
+      reason: 'nothing may claim the room has no threads yet',
+    );
+    await disposeHarness(tester);
+  });
+
   testWidgets('recent tab keeps cached rows visible while refresh is pending', (
     tester,
   ) async {
