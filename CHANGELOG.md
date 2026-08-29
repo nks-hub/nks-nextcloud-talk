@@ -7,6 +7,19 @@ drží stejné číslo, aby se hlášení od testerů daly spárovat napříč p
 Zdrojem pravdy o verzi je `apps/mobile/pubspec.yaml`; `apps/mobile/lib/core/app_version.dart`
 ji zrcadlí a test hlídá, aby se ty dvě nerozešly.
 
+Buildy 1 a 3 vznikly ještě před uzavřeným testováním na Play a šly jen na
+TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se číslo
+buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
+proto jen to, co je doložitelné z App Store Connect.
+
+## 0.1.0 (10) — 29. 8. 2026
+
+Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- Seznam vláken ukazuje i vlákna, která vznikla odpovídáním. Server v seznamu
+  hlásí jen pojmenovaná vlákna, takže konverzace plná odpovědí vypadala prázdně.
+  Aplikace teď doplní ta, která zná ze svých uložených zpráv.
+
 ## 0.1.0 (9) — 29. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
@@ -69,6 +82,11 @@ buildy 1 až 3 a čísla se sjednocovala.
 
 - Stejný obsah jako 0.1.0 (2) plus telemetrie zkompilovaná do buildu.
 
+## 0.1.0 (3) — 28. 8. 2026
+
+Jen TestFlight, build `VALID` od 28. 8., přiřazený do interní i externí skupiny.
+První build, který dostal české poznámky pro testery.
+
 ## 0.1.0 (2) — 28. 8. 2026
 
 Play: publikováno 28. 8. 23:10, první vydání dostupné testerům.
@@ -78,3 +96,9 @@ Play: publikováno 28. 8. 23:10, první vydání dostupné testerům.
   určuje typ aplikace.
 - Obrázky se nedeformují ani v náhledu, ani po rozkliknutí.
 - Bundle přestal žádat oprávnění k fotkám a videím, která aplikace nepoužívá.
+
+## 0.1.0 (1) — 27. 8. 2026
+
+Jen TestFlight, build `VALID` od 27. 8. První build aplikace, který se vůbec
+dostal k testerům. Cestu k němu a čtyři blokády, které přitom padly, popisuje
+`docs/architecture/apple-distribution.md`.
