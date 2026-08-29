@@ -25,6 +25,7 @@ void main() {
           'canReact': profile.canReact,
           'edit': profile.edit,
           'delete': profile.delete,
+          'deleteAny': profile.deleteAny,
           'pin': profile.pin,
           'hidePinned': profile.hidePinned,
           'reminders': profile.reminders,

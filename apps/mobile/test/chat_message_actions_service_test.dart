@@ -48,6 +48,60 @@ void main() {
   // case; the effective value lives in `permissions`. Reading the override
   // instead silently closed every permission-gated action, so reactions were
   // unreachable for every ordinary user even though the server allowed them.
+  test('only a moderator may delete somebody else\'s message', () async {
+    // Measured against Nextcloud 34 before this was wired: the owner of a room
+    // deleted a message written by another participant and the server answered
+    // 200, turning it into a `message_deleted` notice. An ordinary participant
+    // has no such right, so the two roles must not share one flag.
+    for (final (participantType, expected) in const <(int, bool)>[
+      (1, true), // owner
+      (2, true), // moderator
+      (6, true), // guest moderator
+      (3, false), // ordinary user
+      (4, false), // guest
+    ]) {
+      final room = _roomJson()
+        ..['permissions'] = 510
+        ..['attendeePermissions'] = 0
+        ..['participantType'] = participantType;
+      await _insertRoom(database, room);
+
+      final api = _api((request) async {
+        expect(request.url.path, endsWith('/capabilities'));
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const ['chat-v2', 'delete-messages'],
+            ),
+          ),
+          200,
+        );
+      });
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+
+      final profile = await service.resolveProfile(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      expect(
+        profile.delete,
+        isTrue,
+        reason: 'everybody may still delete their own message',
+      );
+      expect(
+        profile.deleteAny,
+        expected,
+        reason: 'participant type $participantType',
+      );
+    }
+  });
+
   test('the default participant may react', () async {
     // PERMISSIONS_MAX_DEFAULT: every permission granted without an override.
     const maxDefaultPermissions = 510;

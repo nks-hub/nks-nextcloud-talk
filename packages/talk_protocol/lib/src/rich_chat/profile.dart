@@ -15,6 +15,7 @@ final class RichChatCapabilityProfile {
     required this.canReact,
     required this.edit,
     required this.delete,
+    required this.deleteAny,
     required this.pin,
     required this.hidePinned,
     required this.reminders,
@@ -54,6 +55,12 @@ final class RichChatCapabilityProfile {
       canReact: reactions && reactionPermission,
       edit: base && global.contains('edit-messages'),
       delete: base && global.contains('delete-messages'),
+      // A moderator deletes anyone's message, not just their own. Measured
+      // against Nextcloud 34: the owner of a room deleted a message written
+      // by another participant and the server answered 200, turning it into
+      // a `message_deleted` notice. The time window stays the server's
+      // business, exactly as it already is for one's own messages.
+      deleteAny: base && global.contains('delete-messages') && moderator,
       pin: pinned && moderator,
       hidePinned: pinned,
       reminders: base && global.contains('remind-me-later'),
@@ -70,6 +77,9 @@ final class RichChatCapabilityProfile {
   final bool canReact;
   final bool edit;
   final bool delete;
+
+  /// Whether this account may delete a message somebody else wrote.
+  final bool deleteAny;
   final bool pin;
   final bool hidePinned;
   final bool reminders;

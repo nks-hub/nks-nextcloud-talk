@@ -569,6 +569,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         (actionsProfile?.reply ?? false);
     final profileCanEdit = actionsProfile?.edit ?? false;
     final profileCanDelete = actionsProfile?.delete ?? false;
+    final profileCanDeleteAny = actionsProfile?.deleteAny ?? false;
     final profileCanReact = !readOnly && (actionsProfile?.canReact ?? false);
     final pinned = PinnedMessageState.fromCachedConversation(liveConversation);
     // Pins are a whole-room concept, so a thread pane neither shows nor
@@ -587,7 +588,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         parsed,
         canReply: canReplyToMessage,
         canEdit: !readOnly && profileCanEdit && outgoing,
-        canDelete: !readOnly && profileCanDelete && outgoing,
+        // A moderator deletes anyone's message; everybody else only
+        // their own. Measured, not assumed: the server accepts it.
+        canDelete:
+            !readOnly &&
+            (outgoing ? profileCanDelete : profileCanDeleteAny),
         canReact: profileCanReact,
         canPin: profileCanPin && message.systemMessage.isEmpty,
         isPinned: pinned.messageId == message.messageId,
