@@ -9,11 +9,51 @@ import 'features/conversations/conversation_shell.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'l10n/generated/app_localizations.dart';
 
-final class NextcloudTalkApp extends ConsumerWidget {
+final class NextcloudTalkApp extends ConsumerStatefulWidget {
   const NextcloudTalkApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NextcloudTalkApp> createState() => _NextcloudTalkAppState();
+}
+
+/// Swallows the route the platform pushes when a link opens the app.
+///
+/// A link arrives twice: once through our own `deep_link` channel, which
+/// resolves it against the signed-in accounts, and once through Flutter's
+/// `pushRouteInformation`, which turns the link's path into a route name and
+/// hands it to `Navigator.pushNamed`. This app has no named routes, so that
+/// second delivery reached `WidgetsApp._onUnknownRoute`, whose `onUnknownRoute!`
+/// is null here - a fatal `Null check operator used on a null value` on every
+/// link, reported by a real device (Sentry NKS-TALK-6).
+///
+/// Reporting the push as handled stops it before the navigator ever sees it.
+/// It must be registered before `WidgetsApp` registers itself, which is why it
+/// lives in the state above the `MaterialApp` rather than inside it: the
+/// binding asks observers in registration order and stops at the first that
+/// says yes.
+final class _PlatformRouteSink with WidgetsBindingObserver {
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation routeInformation) async =>
+      true;
+}
+
+final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
+  final _PlatformRouteSink _routeSink = _PlatformRouteSink();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(_routeSink);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_routeSink);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
