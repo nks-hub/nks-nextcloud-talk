@@ -14,7 +14,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (16) — 29. 8. 2026
 
-Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
 
 - V nastavení přibyly licence knihoven, ze kterých je aplikace složená.
   Najdete je v Lokální diagnostice. Aplikace stojí na 171 balíčcích
