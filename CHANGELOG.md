@@ -12,9 +12,17 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## 0.1.0 (12) — 29. 8. 2026
+## 0.1.0 (13) — 29. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- Moderátor může smazat i zprávu, kterou nenapsal. Server to dovoluje
+  odjakživa, aplikace ale nabízela mazání jen u vlastních zpráv, takže
+  moderátor s nevhodným příspěvkem nemohl udělat nic.
+
+## 0.1.0 (12) — 29. 8. 2026
+
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
 
 - Konverzace, do které psát nesmíte, už nenabízí psací pole. Doteď šlo
   zprávu napsat a odeslat a teprve pak přišlo odmítnutí. Týká se dvou
