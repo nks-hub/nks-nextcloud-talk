@@ -433,14 +433,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get threadManagementRecentEmptyBody =>
-      'Threads used in this conversation will appear here.';
+      'Replying to a message does not start a thread. One appears here once you start it from a message.';
 
   @override
   String get threadManagementSubscribedEmpty => 'No subscribed threads';
 
   @override
   String get threadManagementSubscribedEmptyBody =>
-      'Threads you follow across this account will appear here.';
+      'Threads you follow across this account appear here, including ones from other conversations.';
 
   @override
   String get threadManagementConversationMissing =>

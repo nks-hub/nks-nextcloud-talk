@@ -436,14 +436,14 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get threadManagementRecentEmptyBody =>
-      'Vlákna použitá v této konverzaci se zobrazí tady.';
+      'Odpověď na zprávu vlákno nezaloží. Vlákno vznikne, až ho z některé zprávy založíte, a pak se objeví tady.';
 
   @override
   String get threadManagementSubscribedEmpty => 'Žádná sledovaná vlákna';
 
   @override
   String get threadManagementSubscribedEmptyBody =>
-      'Vlákna sledovaná v tomto účtu se zobrazí tady.';
+      'Vlákna sledovaná v tomto účtu se zobrazí tady, i z jiných konverzací.';
 
   @override
   String get threadManagementConversationMissing =>

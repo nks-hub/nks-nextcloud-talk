@@ -863,7 +863,7 @@ abstract class AppLocalizations {
   /// No description provided for @threadManagementRecentEmptyBody.
   ///
   /// In en, this message translates to:
-  /// **'Threads used in this conversation will appear here.'**
+  /// **'Replying to a message does not start a thread. One appears here once you start it from a message.'**
   String get threadManagementRecentEmptyBody;
 
   /// No description provided for @threadManagementSubscribedEmpty.
@@ -875,7 +875,7 @@ abstract class AppLocalizations {
   /// No description provided for @threadManagementSubscribedEmptyBody.
   ///
   /// In en, this message translates to:
-  /// **'Threads you follow across this account will appear here.'**
+  /// **'Threads you follow across this account appear here, including ones from other conversations.'**
   String get threadManagementSubscribedEmptyBody;
 
   /// No description provided for @threadManagementConversationMissing.
