@@ -165,6 +165,9 @@ final class _GiphyReferenceLoading extends StatelessWidget {
   }
 }
 
+/// Longest side a Giphy is ever drawn at inside a bubble.
+const double _giphyMaximumExtent = 360;
+
 final class _GiphyReferenceImage extends StatelessWidget {
   const _GiphyReferenceImage({
     required this.media,
@@ -182,8 +185,18 @@ final class _GiphyReferenceImage extends StatelessWidget {
     final aspectRatio = rawAspectRatio == null || !rawAspectRatio.isFinite
         ? 4 / 3
         : rawAspectRatio.clamp(0.1, 10.0).toDouble();
+    // Every frame of an animation is decoded, so the decode size is paid over
+    // and over rather than once. 1080 was right only on a 3x screen; asking
+    // for the box the bubble actually gives it means a 2x phone stops
+    // decoding half again as many pixels per frame, and a denser screen stops
+    // getting a picture softer than it could be.
+    final decodeWidth =
+        (_giphyMaximumExtent * MediaQuery.devicePixelRatioOf(context)).round();
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 360, maxHeight: 360),
+      constraints: const BoxConstraints(
+        maxWidth: _giphyMaximumExtent,
+        maxHeight: _giphyMaximumExtent,
+      ),
       child: AspectRatio(
         key: Key('chat-giphy-reference-media-$index'),
         aspectRatio: aspectRatio,
@@ -192,7 +205,7 @@ final class _GiphyReferenceImage extends StatelessWidget {
           child: Image.memory(
             media.body,
             fit: BoxFit.contain,
-            cacheWidth: 1080,
+            cacheWidth: decodeWidth,
             gaplessPlayback: true,
             frameBuilder: (_, image, frame, wasSynchronouslyLoaded) =>
                 _showAfterFirstImageFrame(
