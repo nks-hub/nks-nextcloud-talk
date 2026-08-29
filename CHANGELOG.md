@@ -12,6 +12,18 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (11) — 29. 8. 2026
+
+- Vlákna v seznamu se jmenují podle zprávy, ze které vznikla. Vlákno bez
+  názvu se doteď jmenovalo jen „Vlákno", takže dvě vlákna v jedné konverzaci
+  nešla od sebe rozeznat.
+- Seznam vláken už netvrdí, že žádná nejsou, dokud se nezeptá serveru.
+  Načítání se pouštělo až po prvním vykreslení, takže obrazovka odpověděla
+  dřív, než se stačila zeptat.
+- Výpadek sítě při probuzení na notifikaci se přestal hlásit jako pád
+  aplikace. Sync se v takové chvíli běžně nepovede, protože se zařízení
+  teprve připojuje; druhá probouzecí cesta to tak brala odjakživa.
+
 ## 0.1.0 (10) — 29. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
