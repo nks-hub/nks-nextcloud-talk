@@ -39,6 +39,11 @@ class Win32Window {
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 
+  // Brings the window back from hidden or minimized and focuses it. Returns
+  // false when the shell refused to change the foreground window, which it
+  // does unless the caller currently owns it.
+  bool Restore();
+
   // Release OS resources associated with window.
   void Destroy();
 
