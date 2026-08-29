@@ -6,6 +6,9 @@ import FlutterMacOS
 private let minimumWindowWidth: CGFloat = 600
 private let minimumWindowHeight: CGFloat = 400
 
+/// Key AppKit stores the window frame under between launches.
+private let windowFrameAutosaveName = "NKSTalkMainWindow"
+
 class MainFlutterWindow: NSWindow {
   private var deepLinkChannel: FlutterMethodChannel?
 
@@ -16,6 +19,15 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
     self.minSize = NSSize(width: minimumWindowWidth, height: minimumWindowHeight)
     self.title = "NKS Talk"
+    // Remember where the window was left. AppKit stores the frame under this
+    // name in the user's defaults and restores it on the next launch, which
+    // is what the Windows runner does through its own saved bounds; without
+    // it macOS opened at the nib's size every time.
+    //
+    // Set after `minSize` on purpose: a restored frame smaller than the
+    // minimum is clamped to it rather than reopening a window the adaptive
+    // layout cannot fill.
+    self.setFrameAutosaveName(windowFrameAutosaveName)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
