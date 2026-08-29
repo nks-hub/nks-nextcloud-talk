@@ -318,8 +318,23 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
       );
     },
     connector: const IoClientPushConnector(),
-    onWakeUp: (accountId) =>
-        unawaited(ref.read(conversationSyncServiceProvider).sync(accountId)),
+    onWakeUp: (accountId) => unawaited(
+      // `unawaited` marks the future as deliberately not awaited; it does not
+      // handle its failure. A sync that failed here escaped to the zone and
+      // was reported as a fatal crash - seen on build 7 as a plain
+      // "network" code, moments after the device fell back to cellular.
+      // The push transport already treats the same codes as retryable, so
+      // swallowing them here keeps the two wake-up paths consistent. Anything
+      // the service did not classify still surfaces with its own stack.
+      ref
+          .read(conversationSyncServiceProvider)
+          .sync(accountId)
+          .catchError(
+            (Object _, StackTrace _) {},
+            test: (error) =>
+                error is ConversationSyncException && error.isTransient,
+          ),
+    ),
   );
   ref.onDispose(() => unawaited(coordinator.dispose()));
 

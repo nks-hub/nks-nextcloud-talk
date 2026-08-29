@@ -28,6 +28,19 @@ final class ConversationSyncException implements Exception {
 
   final ConversationSyncError code;
 
+  /// Whether the same call is worth making again shortly.
+  ///
+  /// These are conditions of the moment - no route to the server, the server
+  /// pushing back - not something the caller did wrong. A wake-up sync hits
+  /// them routinely, because the radio is still settling when the push
+  /// arrives, so they must not be treated as failures worth crashing over.
+  bool get isTransient => switch (code) {
+    ConversationSyncError.network ||
+    ConversationSyncError.rateLimited ||
+    ConversationSyncError.serviceUnavailable => true,
+    _ => false,
+  };
+
   @override
   String toString() => 'ConversationSyncException(${code.name})';
 }

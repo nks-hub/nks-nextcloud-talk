@@ -14,6 +14,25 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  test('every sync failure is decided transient or not', () {
+    // Two wake-up paths lean on this: the push transport retries on it, and
+    // the client-push wake swallows it instead of letting the zone report a
+    // fatal crash. A new code must land on one side deliberately, so the
+    // whole enum is listed here rather than a sample of it.
+    const transient = <ConversationSyncError>{
+      ConversationSyncError.network,
+      ConversationSyncError.rateLimited,
+      ConversationSyncError.serviceUnavailable,
+    };
+    for (final code in ConversationSyncError.values) {
+      expect(
+        ConversationSyncException(code).isTransient,
+        transient.contains(code),
+        reason: '${code.name} is classified the same way on both paths',
+      );
+    }
+  });
+
   late AppDatabase database;
   late AccountRepository repository;
   late MemoryCredentialVault vault;

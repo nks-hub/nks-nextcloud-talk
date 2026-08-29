@@ -166,13 +166,7 @@ AndroidPushCoordinator _buildAndroidPushCoordinator(
       ref.watch(appLifecycleResumeEventsProvider),
     ],
     retryableError: (error) =>
-        error is ConversationSyncException &&
-        switch (error.code) {
-          ConversationSyncError.network ||
-          ConversationSyncError.rateLimited ||
-          ConversationSyncError.serviceUnavailable => true,
-          _ => false,
-        },
+        error is ConversationSyncException && error.isTransient,
   );
   ref.onDispose(() => unawaited(coordinator.close()));
   unawaited(coordinator.start());
