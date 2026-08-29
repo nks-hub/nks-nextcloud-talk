@@ -24,6 +24,66 @@ void main() {
 
   tearDown(() => database.close());
 
+
+  test('a thread started by replying shows up even when the server omits it', () async {
+    // Measured on the reference server: `threads/recent` lists only threads
+    // that were given a name. Three replies under root 77777 left it
+    // returning nothing while every message carried `threadId: 77777`, so the
+    // screen was empty for somebody who demonstrably had thread replies.
+    for (final row in <({int id, int thread, String text, String system})>[
+      (id: 500, thread: 500, text: 'Root of an unnamed thread', system: ''),
+      (id: 501, thread: 500, text: 'First reply', system: ''),
+      (id: 502, thread: 500, text: 'Second reply', system: ''),
+      (id: 503, thread: 500, text: '', system: 'reaction'),
+      // Every message on the reference server carries its own id as threadId,
+      // so a root nobody answered must not become an entry of its own.
+      (id: 600, thread: 600, text: 'A message nobody replied to', system: ''),
+    ]) {
+      await database
+          .into(database.cachedChatMessages)
+          .insert(
+            CachedChatMessagesCompanion.insert(
+              accountId: 'account-a',
+              roomToken: 'rooma123',
+              messageId: row.id,
+              actorType: 'users',
+              actorId: 'someone',
+              actorDisplayName: 'Someone',
+              timestamp: 1724300000 + row.id,
+              systemMessage: row.system,
+              messageType: 'comment',
+              referenceId: 'reference-${row.id}',
+              displayText: row.text,
+              deleted: false,
+              threadId: Value(row.thread),
+              rawJson: '{}',
+            ),
+          );
+    }
+
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+
+    final recent = await threads
+        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+        .first;
+    expect(
+      recent.map((thread) => thread.threadId),
+      <int>[500],
+      reason: 'a root nobody answered is not a thread',
+    );
+    expect(
+      recent.single.numReplies,
+      2,
+      reason: 'a reaction carries the thread but is not a reply',
+    );
+    expect(recent.single.title, isEmpty, reason: 'the thread has no name');
+  });
+
   test(
     'recent replacement is room scoped and preserves subscriptions',
     () async {

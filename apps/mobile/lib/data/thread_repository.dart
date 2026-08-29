@@ -109,8 +109,91 @@ final class ThreadRepository {
           detailed: current?.detailed ?? false,
         );
       }
+      await _mergeCachedRootsInCurrentTransaction(accountId, roomToken);
       await _deleteUnlisted(accountId);
     });
+  }
+
+  /// Adds the threads the server's recent list leaves out.
+  ///
+  /// `GET /chat/{token}/threads/recent` only reports threads that were given
+  /// a name. A thread started by replying to a message carries its `threadId`
+  /// on every message and is a thread everywhere else in Talk, but never
+  /// appears in that list - measured on the reference server, where three
+  /// replies under root 77777 left `threads/recent` returning nothing while
+  /// the messages themselves all carried `threadId: 77777`. The screen then
+  /// showed an empty list to somebody who demonstrably had thread replies.
+  ///
+  /// Rows the server did list are left exactly as they are; this only fills
+  /// the gap, and the count comes from the cached messages, so it is a floor
+  /// rather than the server's total.
+  Future<void> _mergeCachedRootsInCurrentTransaction(
+    String accountId,
+    String roomToken,
+  ) async {
+    final messages = _database.cachedChatMessages;
+    final rows =
+        await (_database.select(messages)..where(
+              (row) =>
+                  row.accountId.equals(accountId) &
+                  row.roomToken.equals(roomToken) &
+                  row.threadId.isNotNull() &
+                  row.deleted.equals(false),
+            ))
+            .get();
+    if (rows.isEmpty) {
+      return;
+    }
+    final roots = <int, CachedChatMessage>{};
+    final replies = <int, int>{};
+    final lastActivity = <int, int>{};
+    final lastMessage = <int, int>{};
+    for (final row in rows) {
+      final threadId = row.threadId!;
+      if (threadId < 1) {
+        continue;
+      }
+      if (row.messageId == threadId) {
+        roots[threadId] = row;
+      } else if (row.systemMessage.isEmpty) {
+        // Same rule as the reply count elsewhere: a reaction or a deletion
+        // notice carries the thread it belongs to but is not a reply.
+        replies[threadId] = (replies[threadId] ?? 0) + 1;
+      }
+      if (row.timestamp > (lastActivity[threadId] ?? 0)) {
+        lastActivity[threadId] = row.timestamp;
+        lastMessage[threadId] = row.messageId;
+      }
+    }
+    final listed = await _rowsForRoom(accountId, roomToken);
+    for (final entry in roots.entries) {
+      // Every message on the reference server carries `threadId` equal to its
+      // own id, so a root alone means nothing - measured, and without this the
+      // list filled up with one entry per message, each reading "0 replies".
+      // A thread is a root that somebody answered.
+      if (listed.containsKey(entry.key) || (replies[entry.key] ?? 0) == 0) {
+        continue;
+      }
+      await _database
+          .into(_database.cachedThreads)
+          .insertOnConflictUpdate(
+            CachedThreadsCompanion.insert(
+              accountId: accountId,
+              roomToken: roomToken,
+              threadId: entry.key,
+              title: '',
+              lastMessageId: lastMessage[entry.key] ?? entry.key,
+              lastActivity: lastActivity[entry.key] ?? entry.value.timestamp,
+              numReplies: replies[entry.key] ?? 0,
+              notificationLevel: 0,
+              recent: const Value(true),
+              // No server payload to keep: this row was derived from the
+              // messages, and an empty object says so honestly instead of
+              // pretending a thread object arrived.
+              rawJson: '{}',
+            ),
+          );
+    }
   }
 
   Future<void> replaceSubscribed({
