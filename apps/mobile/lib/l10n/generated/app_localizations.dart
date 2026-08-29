@@ -2618,6 +2618,54 @@ abstract class AppLocalizations {
   /// **'Forward'**
   String get messageActionForward;
 
+  /// No description provided for @messageActionPrivateReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply privately'**
+  String get messageActionPrivateReply;
+
+  /// No description provided for @privateReplyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Private reply'**
+  String get privateReplyTitle;
+
+  /// No description provided for @privateReplyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write your reply'**
+  String get privateReplyHint;
+
+  /// No description provided for @privateReplyExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'The reply goes to your private conversation with the author, not here.'**
+  String get privateReplyExplanation;
+
+  /// No description provided for @privateReplySend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get privateReplySend;
+
+  /// No description provided for @privateReplySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply sent to your private conversation with {author}'**
+  String privateReplySent(String author);
+
+  /// No description provided for @privateReplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The private reply could not be sent.'**
+  String get privateReplyFailed;
+
+  /// No description provided for @privateReplyUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'The server does not support private replies.'**
+  String get privateReplyUnsupported;
+
   /// No description provided for @forwardMessageTitle.
   ///
   /// In en, this message translates to:

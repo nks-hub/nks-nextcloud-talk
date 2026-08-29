@@ -1399,6 +1399,33 @@ class AppLocalizationsCs extends AppLocalizations {
   String get messageActionForward => 'Přeposlat';
 
   @override
+  String get messageActionPrivateReply => 'Odpovědět soukromě';
+
+  @override
+  String get privateReplyTitle => 'Soukromá odpověď';
+
+  @override
+  String get privateReplyHint => 'Napište odpověď';
+
+  @override
+  String get privateReplyExplanation =>
+      'Odpověď se odešle do soukromé konverzace s autorem, ne sem.';
+
+  @override
+  String get privateReplySend => 'Odeslat';
+
+  @override
+  String privateReplySent(String author) {
+    return 'Odpověď odeslána do soukromé konverzace s $author';
+  }
+
+  @override
+  String get privateReplyFailed => 'Soukromou odpověď se nepodařilo odeslat.';
+
+  @override
+  String get privateReplyUnsupported => 'Server soukromé odpovědi nepodporuje.';
+
+  @override
   String get forwardMessageTitle => 'Přeposlat do konverzace';
 
   @override

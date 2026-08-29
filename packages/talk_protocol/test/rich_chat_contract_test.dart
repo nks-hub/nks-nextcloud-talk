@@ -30,6 +30,7 @@ void main() {
           'hidePinned': profile.hidePinned,
           'reminders': profile.reminders,
           'scheduled': profile.scheduled,
+          'privateReply': profile.privateReply,
         }, expected);
       });
     }

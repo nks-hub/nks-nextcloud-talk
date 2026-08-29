@@ -12,6 +12,17 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (17) — 30. 8. 2026
+
+- Na zprávu ve skupině jde odpovědět soukromě. V nabídce u cizí zprávy
+  přibylo „Odpovědět soukromě": napsaná odpověď se odešle do vaší
+  soukromé konverzace s autorem a nese s sebou odkaz na původní zprávu,
+  takže druhá strana vidí, čeho se týká. Konverzace se založí sama,
+  pokud ještě neexistuje.
+- Soukromá odpověď by přitom doteď neprošla vůbec. Aplikace čekala, že
+  server pojmenuje soukromou konverzaci seznamem obou účastníků, jenže
+  ten posílá jméno druhého člověka. Ověřování tak selhalo pokaždé.
+
 ## 0.1.0 (16) — 29. 8. 2026
 
 Play: publikováno. TestFlight: build `VALID`, obě skupiny.

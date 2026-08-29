@@ -48,6 +48,40 @@ void main() {
       );
     });
 
+    test('accepts the one-to-one room name the real server reports', () {
+      // Measured on Nextcloud 34: `GET /room` reports a one-to-one room's
+      // `name` as the other participant's user id, not the sorted JSON array
+      // Talk stores internally. Requiring only the stored form meant every
+      // eligibility failed against a live server.
+      expect(
+        () => _eligibility(
+          conversations: _conversations(
+            targetRoom: _roomJson(
+              token: _targetToken,
+              type: 1,
+              name: _parentActorId,
+            ),
+          ),
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('still rejects a one-to-one room naming somebody else', () {
+      expect(
+        () => _eligibility(
+          conversations: _conversations(
+            targetRoom: _roomJson(
+              token: _targetToken,
+              type: 1,
+              name: 'unrelated-user',
+            ),
+          ),
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
     test('admits, claims and restores the exact cross-room wire binding', () {
       final eligibility = _eligibility();
       var runtime = _runtime();

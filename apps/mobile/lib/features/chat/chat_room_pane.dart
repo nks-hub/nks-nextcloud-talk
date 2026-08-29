@@ -258,6 +258,9 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
   ConsumerState<ChatRoomPane> createState() => _ChatRoomPaneState();
 }
 
+/// Talk's `roomType` for a one-to-one conversation.
+const int _oneToOneRoomType = 1;
+
 final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     with WidgetsBindingObserver {
   static const _quickReactionEmoji = <String>[
@@ -581,6 +584,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final profileCanRemind = actionsProfile?.reminders ?? false;
     final profileCanSchedule =
         !readOnly && inRootRoom && (actionsProfile?.scheduled ?? false);
+    // A private reply only makes sense from a room that is not already the
+    // one-to-one with the author, and only for a message a real user wrote:
+    // the target room is derived from the author's user id, and the server
+    // rejects the eligibility outright for guests, bots and federated rooms.
+    final profileCanPrivateReply =
+        !readOnly &&
+        inRootRoom &&
+        (actionsProfile?.privateReply ?? false) &&
+        liveConversation.roomType != _oneToOneRoomType;
     void handleMessageActions(CachedChatMessage message, ChatMessage? parsed) {
       final outgoing = message.actorId == widget.account.loginName;
       _showMessageActions(
@@ -597,6 +609,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         canPin: profileCanPin && message.systemMessage.isEmpty,
         isPinned: pinned.messageId == message.messageId,
         canRemind: profileCanRemind && message.systemMessage.isEmpty,
+        canPrivateReply:
+            profileCanPrivateReply &&
+            !outgoing &&
+            !message.deleted &&
+            message.actorType == 'users' &&
+            message.actorId.isNotEmpty &&
+            message.systemMessage.isEmpty,
       );
     }
 

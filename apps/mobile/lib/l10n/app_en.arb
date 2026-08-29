@@ -474,6 +474,21 @@
   "callTransportInternal": "internal",
   "callTransportExternalHpb": "external HPB",
   "messageActionForward": "Forward",
+  "messageActionPrivateReply": "Reply privately",
+  "privateReplyTitle": "Private reply",
+  "privateReplyHint": "Write your reply",
+  "privateReplyExplanation": "The reply goes to your private conversation with the author, not here.",
+  "privateReplySend": "Send",
+  "privateReplySent": "Reply sent to your private conversation with {author}",
+  "@privateReplySent": {
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
+  "privateReplyFailed": "The private reply could not be sent.",
+  "privateReplyUnsupported": "The server does not support private replies.",
   "forwardMessageTitle": "Forward to conversation",
   "forwardNoConversations": "No other conversation is available.",
   "messageForwarded": "Message forwarded to {conversation}",

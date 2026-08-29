@@ -252,8 +252,20 @@ final class PrivateReplyEligibilitySnapshot {
       _eligibilityFailure(r'$.privateReply.actors');
     }
 
+    // Measured against Nextcloud 34, not assumed: the conversation list
+    // reports a one-to-one room's `name` as the OTHER participant's user id
+    // ("fixture-user2"), while Talk stores it internally as the sorted JSON
+    // array of both ids. This check accepted only the stored form, so on a
+    // real server every eligibility failed here and no private reply could
+    // ever have been admitted. Both shapes are accepted now.
+    //
+    // Accepting the shorter form loses nothing: `targetRoom.type == 1` above
+    // and the target participants evidence below already prove the room is
+    // the one-to-one holding exactly the sender and the parent's author.
     final canonicalActors = <String>[senderActorId, parentActorId]..sort();
-    if (targetRoom.name != jsonEncode(canonicalActors)) {
+    final targetRoomName = targetRoom.name;
+    if (targetRoomName != jsonEncode(canonicalActors) &&
+        targetRoomName != parentActorId) {
       _eligibilityFailure(r'$.privateReply.targetRoom.name');
     }
 

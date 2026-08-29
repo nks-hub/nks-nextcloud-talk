@@ -302,14 +302,16 @@ RichChatCapabilityProfile _capabilityProfile({
   bool edit = false,
   bool delete = false,
   bool react = false,
+  bool privateReply = false,
 }) {
   return RichChatCapabilityProfile.fromTalkFeatures(
     talkFeatures: <String>[
       'chat-v2',
-      if (reply) ...['chat-reference-id', 'chat-replies'],
+      if (reply || privateReply) ...['chat-reference-id', 'chat-replies'],
       if (edit) 'edit-messages',
       if (delete) 'delete-messages',
       if (react) 'reactions',
+      if (privateReply) 'private-reply',
     ],
     talkLocalFeatures: const <String>[],
     federated: false,

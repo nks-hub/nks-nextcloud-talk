@@ -1059,4 +1059,206 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+  testWidgets('offers a private reply for somebody else\'s message', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 91,
+        actorId: 'other-user',
+        actorDisplayName: 'Other User',
+        timestamp: 1724300700,
+        message: 'Said in the group',
+      ),
+      displayText: 'Said in the group',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(privateReply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-91')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('message-action-private-reply')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('does not offer a private reply on one\'s own message', (
+    tester,
+  ) async {
+    // The target room is derived from the author, so answering yourself
+    // privately has no room to go to.
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 92,
+        actorId: account.loginName,
+        actorDisplayName: 'Fixture User',
+        timestamp: 1724300800,
+        message: 'My own message',
+      ),
+      displayText: 'My own message',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(privateReply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-92')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('message-action-private-reply')), findsNothing);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('hides the private reply when the server lacks the feature', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 93,
+        actorId: 'other-user',
+        actorDisplayName: 'Other User',
+        timestamp: 1724300900,
+        message: 'Said in the group',
+      ),
+      displayText: 'Said in the group',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(reply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-93')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('message-action-private-reply')), findsNothing);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('the private reply dialog refuses to send empty text', (
+    tester,
+  ) async {
+    await _insertCachedMessage(
+      database,
+      _messageJson(
+        id: 94,
+        actorId: 'other-user',
+        actorDisplayName: 'Other User',
+        timestamp: 1724301000,
+        message: 'Said in the group',
+      ),
+      displayText: 'Said in the group',
+    );
+
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(privateReply: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-94')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action-private-reply')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('private-reply-dialog')), findsOneWidget);
+    // The quoted source message is shown, because the reply lands where the
+    // reader of this room cannot see it.
+    expect(find.text('Said in the group'), findsWidgets);
+
+    final send = tester.widget<ButtonStyleButton>(
+      find.byKey(const Key('private-reply-send')),
+    );
+    expect(send.onPressed, isNull);
+
+    // Whitespace is not text either.
+    await tester.enterText(
+      find.byKey(const Key('private-reply-field')),
+      '   ',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ButtonStyleButton>(
+            find.byKey(const Key('private-reply-send')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('private-reply-field')),
+      'Answering you privately',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ButtonStyleButton>(
+            find.byKey(const Key('private-reply-send')),
+          )
+          .onPressed,
+      isA<VoidCallback>(),
+    );
+
+    await tester.tap(find.byKey(const Key('private-reply-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('private-reply-dialog')), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
 }

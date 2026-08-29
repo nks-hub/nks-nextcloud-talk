@@ -29,7 +29,8 @@
         "pin": true,
         "hidePinned": true,
         "reminders": true,
-        "scheduled": true
+        "scheduled": true,
+        "privateReply": false
       }
     },
     {
@@ -61,7 +62,8 @@
         "pin": false,
         "hidePinned": true,
         "reminders": true,
-        "scheduled": true
+        "scheduled": true,
+        "privateReply": false
       }
     },
     {
@@ -93,7 +95,8 @@
         "pin": true,
         "hidePinned": true,
         "reminders": true,
-        "scheduled": false
+        "scheduled": false,
+        "privateReply": false
       }
     },
     {
@@ -119,7 +122,8 @@
         "pin": false,
         "hidePinned": false,
         "reminders": false,
-        "scheduled": false
+        "scheduled": false,
+        "privateReply": false
       }
     },
     {
@@ -145,7 +149,8 @@
         "pin": false,
         "hidePinned": false,
         "reminders": false,
-        "scheduled": false
+        "scheduled": false,
+        "privateReply": false
       }
     },
     {
@@ -170,7 +175,8 @@
         "pin": false,
         "hidePinned": false,
         "reminders": false,
-        "scheduled": false
+        "scheduled": false,
+        "privateReply": false
       }
     },
     {
@@ -201,7 +207,8 @@
         "pin": false,
         "hidePinned": false,
         "reminders": false,
-        "scheduled": false
+        "scheduled": false,
+        "privateReply": false
       }
     },
     {
@@ -230,6 +237,113 @@
       "moderator": false,
       "participantPermissions": 0,
       "expectedError": true
+    },
+    {
+      "id": "private-reply-needs-reply-and-feature",
+      "talkFeatures": [
+        "chat-v2",
+        "threads",
+        "reactions",
+        "edit-messages",
+        "delete-messages",
+        "pinned-messages",
+        "remind-me-later",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply"
+      ],
+      "talkLocalFeatures": [
+        "scheduled-messages"
+      ],
+      "federated": false,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": {
+        "mentions": true,
+        "threadMetadata": true,
+        "threadMessageFetch": true,
+        "reactions": true,
+        "canReact": true,
+        "edit": true,
+        "delete": true,
+        "deleteAny": true,
+        "pin": true,
+        "hidePinned": true,
+        "reminders": true,
+        "scheduled": true,
+        "privateReply": true
+      }
+    },
+    {
+      "id": "private-reply-excluded-when-federated",
+      "talkFeatures": [
+        "chat-v2",
+        "threads",
+        "reactions",
+        "edit-messages",
+        "delete-messages",
+        "pinned-messages",
+        "remind-me-later",
+        "chat-reference-id",
+        "chat-replies",
+        "private-reply"
+      ],
+      "talkLocalFeatures": [
+        "scheduled-messages"
+      ],
+      "federated": true,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": {
+        "mentions": true,
+        "threadMetadata": true,
+        "threadMessageFetch": true,
+        "reactions": true,
+        "canReact": true,
+        "edit": true,
+        "delete": true,
+        "deleteAny": true,
+        "pin": true,
+        "hidePinned": true,
+        "reminders": true,
+        "scheduled": false,
+        "privateReply": false
+      }
+    },
+    {
+      "id": "private-reply-without-feature-flag",
+      "talkFeatures": [
+        "chat-v2",
+        "threads",
+        "reactions",
+        "edit-messages",
+        "delete-messages",
+        "pinned-messages",
+        "remind-me-later",
+        "chat-reference-id",
+        "chat-replies"
+      ],
+      "talkLocalFeatures": [
+        "scheduled-messages"
+      ],
+      "federated": false,
+      "moderator": true,
+      "participantPermissions": 256,
+      "expected": {
+        "mentions": true,
+        "threadMetadata": true,
+        "threadMessageFetch": true,
+        "reactions": true,
+        "canReact": true,
+        "edit": true,
+        "delete": true,
+        "deleteAny": true,
+        "pin": true,
+        "hidePinned": true,
+        "reminders": true,
+        "scheduled": true,
+        "privateReply": false
+      }
     }
   ]
 }

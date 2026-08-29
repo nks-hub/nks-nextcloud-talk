@@ -452,3 +452,106 @@ final class _InlineEmojiPanel extends StatelessWidget {
     );
   }
 }
+
+/// Collects the text of one private reply.
+///
+/// Deliberately a dialog rather than a hand-off into the target room's
+/// composer: the eligibility snapshot binds source room, target room and
+/// parent message together, so the whole interaction has to stay in one
+/// place. The quoted source message is shown because the reply lands
+/// somewhere the reader cannot see it.
+final class _PrivateReplyDialog extends StatefulWidget {
+  const _PrivateReplyDialog({
+    required this.authorDisplayName,
+    required this.quotedText,
+  });
+
+  final String authorDisplayName;
+  final String quotedText;
+
+  @override
+  State<_PrivateReplyDialog> createState() => _PrivateReplyDialogState();
+}
+
+final class _PrivateReplyDialogState extends State<_PrivateReplyDialog> {
+  final _controller = TextEditingController();
+  var _canSend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      final canSend = _controller.text.trim().isNotEmpty;
+      if (canSend != _canSend) {
+        setState(() => _canSend = canSend);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return AlertDialog(
+      key: const Key('private-reply-dialog'),
+      title: Text(strings.privateReplyTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.privateReplyExplanation,
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          if (widget.quotedText.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                widget.quotedText,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('private-reply-field'),
+            controller: _controller,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 1,
+            decoration: InputDecoration(
+              hintText: strings.privateReplyHint,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          key: const Key('private-reply-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(
+          key: const Key('private-reply-send'),
+          onPressed: _canSend
+              ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+          child: Text(strings.privateReplySend),
+        ),
+      ],
+    );
+  }
+}

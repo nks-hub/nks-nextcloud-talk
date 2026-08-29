@@ -11,6 +11,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     required bool canPin,
     required bool isPinned,
     required bool canRemind,
+    required bool canPrivateReply,
   }) {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
@@ -38,6 +39,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                   onTap: () {
                     Navigator.of(sheetContext).pop();
                     unawaited(_copyMessageText(copyText));
+                  },
+                ),
+              if (canPrivateReply)
+                ListTile(
+                  key: const Key('message-action-private-reply'),
+                  leading: const Icon(Icons.lock_outline_rounded),
+                  title: Text(strings.messageActionPrivateReply),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_startPrivateReply(message));
                   },
                 ),
               if (copyText.isNotEmpty)
@@ -166,6 +177,83 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
           SnackBar(
             key: const Key('chat-forward-failure'),
             content: Text(strings.messageForwardFailed),
+          ),
+        );
+    }
+  }
+
+  /// Answers [message] in the one-to-one conversation with its author.
+  ///
+  /// The reply text is collected first and the eligibility snapshot only
+  /// afterwards, because the snapshot is bound to the source room, the target
+  /// room and the parent message and is rechecked when the outbox admits the
+  /// operation. Preparing it before the user has written anything would mean
+  /// racing the capability generation for no reason.
+  Future<void> _startPrivateReply(CachedChatMessage message) async {
+    final strings = AppLocalizations.of(context);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _PrivateReplyDialog(
+        authorDisplayName: message.actorDisplayName,
+        quotedText: message.displayText,
+      ),
+    );
+    if (text == null || !mounted) {
+      return;
+    }
+    final accountId = widget.account.id;
+    final sourceRoomToken = widget.conversation.token;
+    final messenger = ScaffoldMessenger.of(context);
+    final chatService = ref.read(chatServiceProvider);
+    try {
+      final targetToken = await ref
+          .read(newConversationServiceProvider)
+          .createOneToOneWithUser(
+            accountId: accountId,
+            userId: message.actorId,
+          );
+      final eligibility = await chatService.preparePrivateReplyEligibility(
+        accountId: accountId,
+        sourceRoomToken: sourceRoomToken,
+        targetRoomToken: targetToken.value,
+        parentMessageId: message.messageId,
+      );
+      await chatService.sendText(
+        accountId: accountId,
+        roomToken: targetToken.value,
+        message: text,
+        replyTo: message.messageId,
+        replyToToken: sourceRoomToken,
+        privateReplyEligibility: eligibility,
+      );
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('private-reply-success'),
+            content: Text(strings.privateReplySent(message.actorDisplayName)),
+          ),
+        );
+    } on ChatServiceException catch (error) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('private-reply-failure'),
+            content: Text(
+              error.code == ChatServiceError.sendUnsupported
+                  ? strings.privateReplyUnsupported
+                  : strings.privateReplyFailed,
+            ),
+          ),
+        );
+    } on Object {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('private-reply-failure'),
+            content: Text(strings.privateReplyFailed),
           ),
         );
     }

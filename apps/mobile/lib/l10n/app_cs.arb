@@ -446,6 +446,21 @@
   "callTransportInternal": "interní",
   "callTransportExternalHpb": "externí HPB",
   "messageActionForward": "Přeposlat",
+  "messageActionPrivateReply": "Odpovědět soukromě",
+  "privateReplyTitle": "Soukromá odpověď",
+  "privateReplyHint": "Napište odpověď",
+  "privateReplyExplanation": "Odpověď se odešle do soukromé konverzace s autorem, ne sem.",
+  "privateReplySend": "Odeslat",
+  "privateReplySent": "Odpověď odeslána do soukromé konverzace s {author}",
+  "@privateReplySent": {
+    "placeholders": {
+      "author": {
+        "type": "String"
+      }
+    }
+  },
+  "privateReplyFailed": "Soukromou odpověď se nepodařilo odeslat.",
+  "privateReplyUnsupported": "Server soukromé odpovědi nepodporuje.",
   "forwardMessageTitle": "Přeposlat do konverzace",
   "forwardNoConversations": "Žádná jiná konverzace není k dispozici.",
   "messageForwarded": "Zpráva přeposlána do {conversation}",

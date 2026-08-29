@@ -1402,6 +1402,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageActionForward => 'Forward';
 
   @override
+  String get messageActionPrivateReply => 'Reply privately';
+
+  @override
+  String get privateReplyTitle => 'Private reply';
+
+  @override
+  String get privateReplyHint => 'Write your reply';
+
+  @override
+  String get privateReplyExplanation =>
+      'The reply goes to your private conversation with the author, not here.';
+
+  @override
+  String get privateReplySend => 'Send';
+
+  @override
+  String privateReplySent(String author) {
+    return 'Reply sent to your private conversation with $author';
+  }
+
+  @override
+  String get privateReplyFailed => 'The private reply could not be sent.';
+
+  @override
+  String get privateReplyUnsupported =>
+      'The server does not support private replies.';
+
+  @override
   String get forwardMessageTitle => 'Forward to conversation';
 
   @override

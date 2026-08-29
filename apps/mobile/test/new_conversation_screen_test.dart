@@ -176,6 +176,22 @@ final class _FakeNewConversationService implements NewConversationService {
     return searchResult;
   }
 
+  String? lastOneToOneUserId;
+
+  @override
+  Future<ConversationToken> createOneToOneWithUser({
+    required String accountId,
+    required String userId,
+  }) async {
+    lastCreateAccountId = accountId;
+    lastOneToOneUserId = userId;
+    final error = createError;
+    if (error != null) {
+      throw error;
+    }
+    return createResult!;
+  }
+
   @override
   Future<ConversationToken> createConversation({
     required String accountId,

@@ -43,6 +43,20 @@ abstract interface class NewConversationService {
     required ConversationRecipient recipient,
     String? roomName,
   });
+
+  /// Returns the one-to-one conversation with [userId], creating it when it
+  /// does not exist yet.
+  ///
+  /// Talk's create-room endpoint is get-or-create for one-to-one rooms: given
+  /// the same invitee it answers with the existing room instead of a second
+  /// one. Callers that only hold a user id — a private reply knows the author
+  /// of a message, not a recipient search result — use this instead of
+  /// [createConversation], whose [ConversationRecipient] cannot be built
+  /// outside a search response.
+  Future<ConversationToken> createOneToOneWithUser({
+    required String accountId,
+    required String userId,
+  });
 }
 
 final class HttpNewConversationService implements NewConversationService {
@@ -152,6 +166,43 @@ final class HttpNewConversationService implements NewConversationService {
       );
     }
 
+    return _createRoom(request, credentials);
+  }
+
+  @override
+  Future<ConversationToken> createOneToOneWithUser({
+    required String accountId,
+    required String userId,
+  }) async {
+    if (userId.trim().isEmpty) {
+      throw const NewConversationException(
+        NewConversationError.invalidResponse,
+      );
+    }
+    final credentials = await _resolveCredentials(accountId);
+    final CreateConversationRequest request;
+    try {
+      request = CreateConversationRequest(
+        accountId: AccountId.parse(accountId),
+        requestId: ConversationRequestId.parse(_uuid.v4()),
+        server: credentials.server,
+        roomType: CreateConversationRoomType.oneToOne,
+        inviteId: userId,
+        inviteSource: 'users',
+        roomName: null,
+      );
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.invalidResponse,
+      );
+    }
+    return _createRoom(request, credentials);
+  }
+
+  Future<ConversationToken> _createRoom(
+    CreateConversationRequest request,
+    _AccountCredentials credentials,
+  ) async {
     final CreateConversationResponse response;
     try {
       response = await _api.createConversation(

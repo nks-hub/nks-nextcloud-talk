@@ -8,6 +8,7 @@ final class RichChatCapabilityProfile {
   const RichChatCapabilityProfile._({
     required this.federated,
     required this.reply,
+    required this.privateReply,
     required this.mentions,
     required this.threadMetadata,
     required this.threadMessageFetch,
@@ -48,6 +49,11 @@ final class RichChatCapabilityProfile {
     return RichChatCapabilityProfile._(
       federated: federated,
       reply: reply,
+      // Same derivation the send-side `ChatCapabilityProfile` uses, so the
+      // action offered in the sheet and the operation the outbox admits
+      // cannot disagree. A federated room is excluded on both sides: the
+      // eligibility snapshot rejects it outright.
+      privateReply: reply && global.contains('private-reply') && !federated,
       mentions: base,
       threadMetadata: threads,
       threadMessageFetch: threads,
@@ -70,6 +76,10 @@ final class RichChatCapabilityProfile {
 
   final bool federated;
   final bool reply;
+
+  /// Whether this account may answer a message privately in the one-to-one
+  /// conversation with its author.
+  final bool privateReply;
   final bool mentions;
   final bool threadMetadata;
   final bool threadMessageFetch;
