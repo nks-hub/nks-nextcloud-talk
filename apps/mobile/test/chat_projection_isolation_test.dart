@@ -212,6 +212,44 @@ void main() {
     expect(replayed.single.silent, isTrue);
   });
 
+
+  test('the outbox never leaks between two servers sharing a room token', () async {
+    // Two accounts on two servers can hold the same room token; Talk tokens
+    // are unique per server, not globally. A queued message that showed up
+    // under the other account would be sent to the wrong server entirely.
+    final onA = await repository.admitTextSend(
+      accountId: 'account-a',
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+      authority: _silentAuthority(),
+      operationId: ChatOperationId.parse(
+        '33333333-3333-4333-8333-333333333333',
+      ),
+      referenceId: ChatReferenceId.parse(
+        '44444444-4444-4444-8444-444444444444',
+      ),
+      message: 'Only account A may see this',
+    );
+
+    final seenByA = await repository
+        .watchTextSendOperations(accountId: 'account-a', roomToken: 'rooma123')
+        .first;
+    expect(seenByA.single.operationId, onA.operationId.value);
+
+    final seenByB = await repository
+        .watchTextSendOperations(accountId: 'account-b', roomToken: 'rooma123')
+        .first;
+    expect(
+      seenByB,
+      isEmpty,
+      reason: 'the same token on another server is another conversation',
+    );
+
+    // And the row itself carries the account it was admitted for, so a query
+    // that forgets to scope cannot silently pick it up either.
+    final rows = await database.select(database.textSendOperations).get();
+    expect(rows.single.accountId, 'account-a');
+  });
+
   test('root merge projects only into the matching account and room', () async {
     await _insertScope(
       database,
