@@ -12,6 +12,14 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (15) — 29. 8. 2026
+
+Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- Napsaný text se odešle jako popisek přílohy. Když máte něco rozepsaného
+  a připnete obrázek nebo soubor, text půjde s ním místo aby zůstal
+  v poli. Prázdné pole popisek neposílá a hlasovka ho nebere.
+
 ## 0.1.0 (14) — 29. 8. 2026
 
 Play: publikováno. TestFlight: build `VALID`, obě skupiny.
