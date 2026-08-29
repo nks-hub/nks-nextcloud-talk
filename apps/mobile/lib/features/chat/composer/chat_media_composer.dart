@@ -135,6 +135,8 @@ final class ChatMediaComposer extends StatefulWidget {
     required this.capabilityProfile,
     required this.submissionBridge,
     this.silent = false,
+    this.captionSource,
+    this.onCaptionConsumed,
     this.controller,
     this.idleActions = const <Widget>[],
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
@@ -157,6 +159,18 @@ final class ChatMediaComposer extends StatefulWidget {
   /// sends next. [AttachmentCapabilityProfile.supports] rejects it where the
   /// server has no `silent-send`, so this stays a preference, not a promise.
   final bool silent;
+
+  /// Reads whatever the host's message field holds right now.
+  ///
+  /// Talk sends a file with a caption by putting the text on the share
+  /// itself, so an attachment picked while something is typed carries that
+  /// text instead of leaving it stranded in the field. Read on submit, never
+  /// cached: the picker sits open long enough for the text to change.
+  final String Function()? captionSource;
+
+  /// Fires once a caption has actually gone out with an attachment, so the
+  /// host can clear the field it came from.
+  final VoidCallback? onCaptionConsumed;
   final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
   final ImageSelectionBackend imageSelectionBackend;
@@ -182,6 +196,19 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Timer? _voiceResetTimer;
   bool _disposed = false;
 
+  /// The caption this submission should carry, or null when it carries none.
+  ///
+  /// A voice message is its own content, so it never takes the field's text,
+  /// and a server without `media-caption` would only refuse the share.
+  String? _captionFor(AttachmentMessageKind kind) {
+    if (kind != AttachmentMessageKind.file ||
+        !widget.capabilityProfile.caption) {
+      return null;
+    }
+    final text = widget.captionSource?.call().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
+
   AttachmentMetadata? _metadataFor(AttachmentMessageKind kind) {
     final replyTarget = widget.replyTarget;
     if (replyTarget == null) {
@@ -193,6 +220,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         }
         return AttachmentMetadata(
           kind: kind,
+          caption: _captionFor(kind),
           replyTo: null,
           threadId: null,
           silent: widget.silent,
@@ -208,6 +236,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       }
       return AttachmentMetadata(
         kind: kind,
+        caption: _captionFor(kind),
         replyTo: threadBinding.replyTo,
         threadId: threadBinding.threadId,
         silent: widget.silent,
@@ -226,6 +255,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     }
     return AttachmentMetadata(
       kind: kind,
+      caption: _captionFor(kind),
       replyTo: replyTarget.messageId,
       threadId: null,
       silent: widget.silent,
@@ -357,6 +387,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     try {
       final session = await bridge.startImageUpload(request);
       durablyAccepted = true;
+      if (request.metadata.caption != null) {
+        widget.onCaptionConsumed?.call();
+      }
       if (_sameSource(_preparedImageSource, request.source)) {
         _preparedImageSource = null;
       }

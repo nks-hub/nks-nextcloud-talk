@@ -13,6 +13,8 @@ Widget _composerApp({
   ChatMediaReplyTarget? replyTarget,
   ValueChanged<int>? onReplyDurablyAccepted,
   bool silent = false,
+  String Function()? captionSource,
+  VoidCallback? onCaptionConsumed,
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -28,6 +30,8 @@ Widget _composerApp({
         capabilityProfile: profile ?? _profile(),
         submissionBridge: bridge,
         silent: silent,
+        captionSource: captionSource,
+        onCaptionConsumed: onCaptionConsumed,
         controller: controller,
         idleActions: idleActions,
         imageSelectionBackend: imageSelectionBackend,
@@ -404,6 +408,7 @@ AttachmentEnqueueRequest _enqueueRequest({
 AttachmentCapabilityProfile _profile({
   bool voice = true,
   bool silent = false,
+  bool caption = false,
 }) => AttachmentCapabilityProfile.fromSnapshot(
   CapabilitySnapshot.fromJson(<String, Object?>{
     'ocs': <String, Object?>{
@@ -427,6 +432,7 @@ AttachmentCapabilityProfile _profile({
               'chat-replies',
               if (voice) 'voice-message-sharing',
               if (silent) 'silent-send',
+              if (caption) 'media-caption',
               'threads',
             ],
             'config': <String, Object?>{

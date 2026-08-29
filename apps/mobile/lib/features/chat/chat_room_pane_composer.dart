@@ -445,6 +445,14 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     );
   }
 
+  /// Empties the message field once its text has left as a caption.
+  void _clearConsumedCaption() {
+    if (!mounted) {
+      return;
+    }
+    _composer.clear();
+  }
+
   Widget _buildMediaComposer(
     AsyncValue<ChatAttachmentDependencies> dependencies, {
     required List<Widget> idleActions,
@@ -510,6 +518,8 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             ),
             idleActions: idleActions,
             silent: _silentSend,
+            captionSource: () => _composer.text,
+            onCaptionConsumed: _clearConsumedCaption,
           );
         } on TalkProtocolException {
           return ChatMediaComposerStatus.unavailable(
