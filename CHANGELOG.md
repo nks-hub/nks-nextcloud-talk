@@ -12,6 +12,15 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (16) — 29. 8. 2026
+
+Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+
+- V nastavení přibyly licence knihoven, ze kterých je aplikace složená.
+  Najdete je v Lokální diagnostice. Aplikace stojí na 171 balíčcích
+  a jejich licence vyžadují, aby jejich znění šlo s programem — dosud
+  se v aplikaci nedalo dostat nikam, kde by bylo k přečtení.
+
 ## 0.1.0 (15) — 29. 8. 2026
 
 Play: publikováno. TestFlight: build `VALID`, obě skupiny.
