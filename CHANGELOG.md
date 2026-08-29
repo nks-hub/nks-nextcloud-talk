@@ -14,6 +14,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (11) — 29. 8. 2026
 
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
+
 - Vlákna v seznamu se jmenují podle zprávy, ze které vznikla. Vlákno bez
   názvu se doteď jmenovalo jen „Vlákno", takže dvě vlákna v jedné konverzaci
   nešla od sebe rozeznat.
