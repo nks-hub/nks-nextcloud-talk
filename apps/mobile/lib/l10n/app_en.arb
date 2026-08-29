@@ -103,6 +103,8 @@
   "silentSendOn": "Sending without notification",
   "chatHistoryGapNotice": "Some messages between here are missing",
   "readOnlyConversation": "This conversation is read-only.",
+  "noChatPermissionConversation": "You do not have permission to post in this conversation.",
+  "lobbyConversation": "The conversation has not started yet. You can post once a moderator opens it.",
   "deletedMessage": "Message deleted",
   "outboxQueued": "Waiting to send",
   "outboxSending": "Sending…",

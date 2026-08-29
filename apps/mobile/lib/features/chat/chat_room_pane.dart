@@ -30,6 +30,7 @@ import 'chat_message_actions_service.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
+import 'chat_posting_access.dart';
 import 'chat_service.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
@@ -540,7 +541,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final statusesValue = ref.watch(outgoingMessageStatusesProvider(_key));
     final scopeValue = ref.watch(chatScopeProvider(_key));
     final liveConversation = _watchLiveConversation();
-    final readOnly = liveConversation.readOnly != 0;
+    // Read-only is not the only way a conversation refuses messages: the
+    // chat permission can be taken away from one participant, and a lobby
+    // holds everyone but moderators. Both used to leave the composer open,
+    // so the refusal only showed up as a failed send.
+    final postingAccess = ChatPostingAccess.fromCachedConversation(
+      liveConversation,
+    );
+    final readOnly = !postingAccess.canPost;
     final attachmentDependencies = !readOnly
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
@@ -822,7 +830,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           autofocus: widget.threadId != null && context.sendsOnEnter,
           sending: _sending,
           onSubmit: _send,
-          readOnly: readOnly,
+          postingBlock: postingAccess.block,
           mentionSource: mentionSource?.valueOrNull,
           mediaComposer: attachmentDependencies == null
               ? const SizedBox.shrink()

@@ -103,6 +103,8 @@
   "silentSendOn": "Odesílá se bez upozornění",
   "chatHistoryGapNotice": "Část zpráv zde chybí",
   "readOnlyConversation": "Tato konverzace je jen pro čtení.",
+  "noChatPermissionConversation": "V této konverzaci nemáte oprávnění psát.",
+  "lobbyConversation": "Konverzace zatím nezačala. Až ji moderátor otevře, budete moct psát.",
   "deletedMessage": "Zpráva byla smazána",
   "outboxQueued": "Čeká na odeslání",
   "outboxSending": "Odesílám…",

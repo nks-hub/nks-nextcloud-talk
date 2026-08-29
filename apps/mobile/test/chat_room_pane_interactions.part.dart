@@ -226,6 +226,91 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('losing the chat permission closes the composer', (
+    tester,
+  ) async {
+    // Read-only was the only refusal the pane knew, so a participant whose
+    // chat permission had been taken away kept a working-looking composer and
+    // only learned otherwise when the send failed.
+    await tester.pumpWidget(
+      app(
+        home: ChatRoomPane(
+          account: account,
+          conversation: conversation,
+          threadId: null,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
+
+    Future<void> writeRoom(Map<String, Object?> room) async {
+      await (database.update(database.cachedConversations)..where(
+            (row) =>
+                row.accountId.equals(account.id) &
+                row.token.equals(conversation.token),
+          ))
+          .write(
+            CachedConversationsCompanion(rawJson: Value(jsonEncode(room))),
+          );
+    }
+
+    // 502 is what the reference server reports for an ordinary participant.
+    await writeRoom(const {
+      'permissions': 502,
+      'lobbyState': 0,
+      'participantType': 3,
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      find.byKey(const Key('chat-composer')),
+      findsOneWidget,
+      reason: 'an ordinary participant still writes',
+    );
+
+    // The same value with the chat bit taken away.
+    await writeRoom(const {
+      'permissions': 374,
+      'lobbyState': 0,
+      'participantType': 3,
+    });
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isEmpty,
+    );
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+
+    await writeRoom(const {
+      'permissions': 502,
+      'lobbyState': 1,
+      'participantType': 3,
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      find.byKey(const Key('chat-composer')),
+      findsNothing,
+      reason: 'a lobby holds an ordinary participant too',
+    );
+
+    await writeRoom(const {
+      'permissions': 502,
+      'lobbyState': 1,
+      'participantType': 2,
+    });
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('named thread follows live read-only conversation updates', (
     tester,
   ) async {

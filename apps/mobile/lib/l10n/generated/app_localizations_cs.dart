@@ -349,6 +349,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get readOnlyConversation => 'Tato konverzace je jen pro čtení.';
 
   @override
+  String get noChatPermissionConversation =>
+      'V této konverzaci nemáte oprávnění psát.';
+
+  @override
+  String get lobbyConversation =>
+      'Konverzace zatím nezačala. Až ji moderátor otevře, budete moct psát.';
+
+  @override
   String get deletedMessage => 'Zpráva byla smazána';
 
   @override

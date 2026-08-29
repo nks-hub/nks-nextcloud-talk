@@ -347,6 +347,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readOnlyConversation => 'This conversation is read-only.';
 
   @override
+  String get noChatPermissionConversation =>
+      'You do not have permission to post in this conversation.';
+
+  @override
+  String get lobbyConversation =>
+      'The conversation has not started yet. You can post once a moderator opens it.';
+
+  @override
   String get deletedMessage => 'Message deleted';
 
   @override

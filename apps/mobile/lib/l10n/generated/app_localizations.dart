@@ -716,6 +716,18 @@ abstract class AppLocalizations {
   /// **'This conversation is read-only.'**
   String get readOnlyConversation;
 
+  /// No description provided for @noChatPermissionConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to post in this conversation.'**
+  String get noChatPermissionConversation;
+
+  /// No description provided for @lobbyConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation has not started yet. You can post once a moderator opens it.'**
+  String get lobbyConversation;
+
   /// No description provided for @deletedMessage.
   ///
   /// In en, this message translates to:

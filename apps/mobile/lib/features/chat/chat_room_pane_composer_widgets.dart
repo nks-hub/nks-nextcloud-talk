@@ -95,7 +95,11 @@ final class _ForwardTargetSheet extends ConsumerWidget {
             .where(
               (conversation) =>
                   conversation.token != excludedToken &&
-                  conversation.readOnly == 0,
+                  // Forwarding into a room this account may not post in only
+                  // fails at the server, so it is not offered.
+                  ChatPostingAccess.fromCachedConversation(
+                    conversation,
+                  ).canPost,
             )
             .toList(growable: false);
     return SafeArea(
@@ -202,7 +206,7 @@ final class _ChatComposer extends StatelessWidget {
     required this.focusNode,
     required this.autofocus,
     required this.sending,
-    required this.readOnly,
+    required this.postingBlock,
     required this.mediaComposer,
     required this.replyTo,
     required this.onCancelReply,
@@ -216,8 +220,12 @@ final class _ChatComposer extends StatelessWidget {
   /// Whether the field should claim focus the moment it is built.
   final bool autofocus;
   final bool sending;
-  final bool readOnly;
+
+  /// Null while this account may post; otherwise why it may not.
+  final ChatPostingBlock? postingBlock;
   final Widget mediaComposer;
+
+  bool get readOnly => postingBlock != null;
   final CachedChatMessage? replyTo;
   final VoidCallback onCancelReply;
   final MentionSuggestionSource? mentionSource;
@@ -288,7 +296,15 @@ final class _ChatComposer extends StatelessWidget {
                     children: [
                       const Icon(Icons.lock_outline_rounded),
                       const SizedBox(width: 8),
-                      Flexible(child: Text(strings.readOnlyConversation)),
+                      Flexible(
+                        child: Text(switch (postingBlock!) {
+                          ChatPostingBlock.readOnly =>
+                            strings.readOnlyConversation,
+                          ChatPostingBlock.noChatPermission =>
+                            strings.noChatPermissionConversation,
+                          ChatPostingBlock.lobby => strings.lobbyConversation,
+                        }),
+                      ),
                     ],
                   ),
                 )
