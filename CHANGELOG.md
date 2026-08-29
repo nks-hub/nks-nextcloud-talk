@@ -26,7 +26,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (10) — 29. 8. 2026
 
-Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno. TestFlight: build `VALID`, obě skupiny.
 
 - Seznam vláken ukazuje i vlákna, která vznikla odpovídáním. Server v seznamu
   hlásí jen pojmenovaná vlákna, takže konverzace plná odpovědí vypadala prázdně.
