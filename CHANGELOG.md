@@ -14,6 +14,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (17) — 30. 8. 2026
 
+Play: odesláno ke kontrole. TestFlight: čeká, build-mac je mimo relay.
+
 - Na zprávu ve skupině jde odpovědět soukromě. V nabídce u cizí zprávy
   přibylo „Odpovědět soukromě": napsaná odpověď se odešle do vaší
   soukromé konverzace s autorem a nese s sebou odkaz na původní zprávu,
