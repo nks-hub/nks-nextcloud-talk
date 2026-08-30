@@ -18,7 +18,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (22) — 30. 8. 2026
 
-Play: připravuje se. TestFlight: připravuje se.
+Play: build 22 odeslán ke kontrole. TestFlight: upload přijatý, zpracovává se.
 
 - „Vybrat obrázek“ na iOS otevírá knihovnu Fotek. Dříve tato volba omylem
   otevřela prohlížeč dokumentů, takže screenshot uložený jen ve Fotkách nešel
