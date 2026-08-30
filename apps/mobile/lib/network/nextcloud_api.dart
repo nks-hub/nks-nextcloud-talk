@@ -40,6 +40,114 @@ enum AvatarResponseStatus { image, notModified, notFound }
 
 enum WebPushRegistrationStatus { active, activationRequired }
 
+final class CurrentOutOfOffice {
+  const CurrentOutOfOffice._({
+    required this.id,
+    required this.userId,
+    required this.start,
+    required this.end,
+    required this.shortMessage,
+    required this.message,
+    required this.replacementUserId,
+    required this.replacementUserDisplayName,
+  });
+
+  factory CurrentOutOfOffice.fromOcsJson(
+    Object? json, {
+    required String expectedUserId,
+  }) {
+    final root = _object(json);
+    final ocs = _object(root['ocs']);
+    final meta = _object(ocs['meta']);
+    final data = _object(ocs['data']);
+    final userId = _boundedString(data['userId'], 4096);
+    final startSeconds = _nonNegativeInt(data['startDate']);
+    final endSeconds = _nonNegativeInt(data['endDate']);
+    if (meta['status'] != 'ok' ||
+        meta['statuscode'] != 200 ||
+        userId != expectedUserId ||
+        startSeconds > endSeconds) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    try {
+      return CurrentOutOfOffice._(
+        id: _boundedString(data['id'], 4096),
+        userId: userId,
+        start: DateTime.fromMillisecondsSinceEpoch(
+          startSeconds * Duration.millisecondsPerSecond,
+          isUtc: true,
+        ),
+        end: DateTime.fromMillisecondsSinceEpoch(
+          endSeconds * Duration.millisecondsPerSecond,
+          isUtc: true,
+        ),
+        shortMessage: _boundedString(
+          data['shortMessage'],
+          4096,
+          allowEmpty: true,
+        ),
+        message: _boundedString(data['message'], 4096, allowEmpty: true),
+        replacementUserId: _optionalBoundedString(
+          data['replacementUserId'],
+          4096,
+        ),
+        replacementUserDisplayName: _optionalBoundedString(
+          data['replacementUserDisplayName'],
+          4096,
+        ),
+      );
+    } on RangeError {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+  }
+
+  final String id;
+  final String userId;
+  final DateTime start;
+  final DateTime end;
+  final String shortMessage;
+  final String message;
+  final String? replacementUserId;
+  final String? replacementUserDisplayName;
+
+  static Map<String, Object?> _object(Object? value) {
+    if (value is! Map<String, Object?>) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    return value;
+  }
+
+  static String _boundedString(
+    Object? value,
+    int maximum, {
+    bool allowEmpty = false,
+  }) {
+    if (value is! String ||
+        (!allowEmpty && value.isEmpty) ||
+        value.runes.length > maximum) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    return value;
+  }
+
+  static String? _optionalBoundedString(Object? value, int maximum) {
+    if (value == null) {
+      return null;
+    }
+    return _boundedString(value, maximum);
+  }
+
+  static int _nonNegativeInt(Object? value) {
+    if (value is! int || value < 0) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    return value;
+  }
+
+  @override
+  String toString() => 'CurrentOutOfOffice(<redacted>)';
+}
+
 /// Identifies whether an authenticated capability read reached the server.
 enum CapabilitySnapshotSource { network, memoryCache }
 

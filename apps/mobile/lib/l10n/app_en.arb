@@ -155,6 +155,33 @@
       }
     }
   },
+  "outOfOffice": "{user} is out of office and might not respond.",
+  "@outOfOffice": {
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "absencePeriod": "Absence period: {startDate} – {endDate}",
+  "@absencePeriod": {
+    "placeholders": {
+      "startDate": {
+        "type": "String"
+      },
+      "endDate": {
+        "type": "String"
+      }
+    }
+  },
+  "absenceReplacement": "Replacement: {name}",
+  "@absenceReplacement": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Image attachment",
   "openImage": "Open image",
   "loadingImage": "Loading image…",

@@ -155,6 +155,33 @@
       }
     }
   },
+  "outOfOffice": "{user} je mimo kancelář a nemusí odpovědět.",
+  "@outOfOffice": {
+    "placeholders": {
+      "user": {
+        "type": "String"
+      }
+    }
+  },
+  "absencePeriod": "Období nepřítomnosti: {startDate} – {endDate}",
+  "@absencePeriod": {
+    "placeholders": {
+      "startDate": {
+        "type": "String"
+      },
+      "endDate": {
+        "type": "String"
+      }
+    }
+  },
+  "absenceReplacement": "Zástup: {name}",
+  "@absenceReplacement": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Obrázková příloha",
   "openImage": "Otevřít obrázek",
   "loadingImage": "Načítám obrázek…",

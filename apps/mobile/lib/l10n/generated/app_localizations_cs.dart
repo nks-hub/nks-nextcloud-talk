@@ -510,6 +510,21 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String outOfOffice(String user) {
+    return '$user je mimo kancelář a nemusí odpovědět.';
+  }
+
+  @override
+  String absencePeriod(String startDate, String endDate) {
+    return 'Období nepřítomnosti: $startDate – $endDate';
+  }
+
+  @override
+  String absenceReplacement(String name) {
+    return 'Zástup: $name';
+  }
+
+  @override
   String get imageAttachment => 'Obrázková příloha';
 
   @override

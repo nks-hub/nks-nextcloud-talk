@@ -12,6 +12,7 @@ import '../rooms/room_details_screen.dart';
 import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
+import 'conversation_absence.dart';
 
 const int _oneToOneConversationType = 1;
 
@@ -257,6 +258,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
         top: false,
         child: Column(
           children: [
+            ConversationAbsenceBanner(account: account, conversation: current),
             OngoingCallBanner(account: account, conversation: current),
             Expanded(
               child: ChatRoomPane(
@@ -369,7 +371,9 @@ final class PresenceChatRoomPane extends StatelessWidget {
                     () => unawaited(
                       Navigator.of(context).push<void>(
                         MaterialPageRoute<void>(
-                          settings: const RouteSettings(name: '/conversation/details'),
+                          settings: const RouteSettings(
+                            name: '/conversation/details',
+                          ),
                           builder: (context) => RoomDetailsScreen(
                             account: account,
                             conversation: conversation,
@@ -381,6 +385,7 @@ final class PresenceChatRoomPane extends StatelessWidget {
             ],
           ),
         ),
+        ConversationAbsenceBanner(account: account, conversation: conversation),
         OngoingCallBanner(account: account, conversation: conversation),
         Expanded(
           child: ChatRoomPane(account: account, conversation: conversation),

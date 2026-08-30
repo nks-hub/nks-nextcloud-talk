@@ -1,6 +1,47 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
+  Future<CurrentOutOfOffice?> getCurrentOutOfOffice({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String userId,
+    Future<void>? abortTrigger,
+  }) async {
+    final uri = server.uri.replace(
+      pathSegments: <String>[
+        ...server.uri.pathSegments,
+        'ocs',
+        'v2.php',
+        'apps',
+        'dav',
+        'api',
+        'v1',
+        'outOfOffice',
+        userId,
+        'now',
+      ],
+      queryParameters: const <String, String>{'format': 'json'},
+    );
+    final request = _authenticatedOcsRequest(
+      'GET',
+      uri,
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const <int>{200, 404},
+      maximumBytes: 64 * 1024,
+      parseBodyForStatusCodes: const <int>{200},
+    );
+    if (payload.statusCode == 404) {
+      return null;
+    }
+    return CurrentOutOfOffice.fromOcsJson(payload.json, expectedUserId: userId);
+  }
+
   Future<ServerStatus> getServerStatus(ServerBase server) async {
     final payload = await _sendJson(
       http.Request('GET', server.statusUri),
@@ -461,5 +502,4 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     }
     return token;
   }
-
 }

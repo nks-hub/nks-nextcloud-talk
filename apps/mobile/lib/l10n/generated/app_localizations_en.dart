@@ -508,6 +508,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String outOfOffice(String user) {
+    return '$user is out of office and might not respond.';
+  }
+
+  @override
+  String absencePeriod(String startDate, String endDate) {
+    return 'Absence period: $startDate – $endDate';
+  }
+
+  @override
+  String absenceReplacement(String name) {
+    return 'Replacement: $name';
+  }
+
+  @override
   String get imageAttachment => 'Image attachment';
 
   @override

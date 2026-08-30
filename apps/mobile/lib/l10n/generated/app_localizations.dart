@@ -986,6 +986,24 @@ abstract class AppLocalizations {
   /// **'Open location: {name}'**
   String openLocation(String name);
 
+  /// No description provided for @outOfOffice.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} is out of office and might not respond.'**
+  String outOfOffice(String user);
+
+  /// No description provided for @absencePeriod.
+  ///
+  /// In en, this message translates to:
+  /// **'Absence period: {startDate} – {endDate}'**
+  String absencePeriod(String startDate, String endDate);
+
+  /// No description provided for @absenceReplacement.
+  ///
+  /// In en, this message translates to:
+  /// **'Replacement: {name}'**
+  String absenceReplacement(String name);
+
   /// No description provided for @imageAttachment.
   ///
   /// In en, this message translates to:
