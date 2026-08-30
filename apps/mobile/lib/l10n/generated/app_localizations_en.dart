@@ -1131,6 +1131,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusClear => 'Clear message';
 
   @override
+  String get profileStatusExpiryLabel => 'Clear status';
+
+  @override
+  String get profileStatusExpiryNever => 'Never';
+
+  @override
+  String get profileStatusExpiryHalfHour => 'In 30 minutes';
+
+  @override
+  String get profileStatusExpiryHour => 'In an hour';
+
+  @override
+  String get profileStatusExpiryFourHours => 'In 4 hours';
+
+  @override
+  String get profileStatusExpiryToday => 'Today';
+
+  @override
+  String get profileStatusExpiryWeek => 'This week';
+
+  @override
   String get profileStatusSaved => 'Status updated.';
 
   @override

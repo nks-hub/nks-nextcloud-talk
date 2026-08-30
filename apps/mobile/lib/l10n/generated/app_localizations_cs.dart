@@ -1129,6 +1129,27 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusClear => 'Smazat zprávu';
 
   @override
+  String get profileStatusExpiryLabel => 'Vymazat stav';
+
+  @override
+  String get profileStatusExpiryNever => 'Nikdy';
+
+  @override
+  String get profileStatusExpiryHalfHour => 'Za 30 minut';
+
+  @override
+  String get profileStatusExpiryHour => 'Za hodinu';
+
+  @override
+  String get profileStatusExpiryFourHours => 'Za 4 hodiny';
+
+  @override
+  String get profileStatusExpiryToday => 'Dnes';
+
+  @override
+  String get profileStatusExpiryWeek => 'Tento týden';
+
+  @override
   String get profileStatusSaved => 'Stav byl aktualizován.';
 
   @override

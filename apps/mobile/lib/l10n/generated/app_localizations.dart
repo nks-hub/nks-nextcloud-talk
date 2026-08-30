@@ -2150,6 +2150,48 @@ abstract class AppLocalizations {
   /// **'Clear message'**
   String get profileStatusClear;
 
+  /// No description provided for @profileStatusExpiryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear status'**
+  String get profileStatusExpiryLabel;
+
+  /// No description provided for @profileStatusExpiryNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never'**
+  String get profileStatusExpiryNever;
+
+  /// No description provided for @profileStatusExpiryHalfHour.
+  ///
+  /// In en, this message translates to:
+  /// **'In 30 minutes'**
+  String get profileStatusExpiryHalfHour;
+
+  /// No description provided for @profileStatusExpiryHour.
+  ///
+  /// In en, this message translates to:
+  /// **'In an hour'**
+  String get profileStatusExpiryHour;
+
+  /// No description provided for @profileStatusExpiryFourHours.
+  ///
+  /// In en, this message translates to:
+  /// **'In 4 hours'**
+  String get profileStatusExpiryFourHours;
+
+  /// No description provided for @profileStatusExpiryToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get profileStatusExpiryToday;
+
+  /// No description provided for @profileStatusExpiryWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get profileStatusExpiryWeek;
+
   /// No description provided for @profileStatusSaved.
   ///
   /// In en, this message translates to:

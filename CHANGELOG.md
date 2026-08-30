@@ -12,6 +12,15 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (18) — 30. 8. 2026
+
+- Stav si můžete nechat vymazat sám. K poli se zprávou přibyla volba
+  „Vymazat stav": za 30 minut, za hodinu, za 4 hodiny, dnes nebo tento
+  týden. Doteď šel stav nastavit, ale ne zrušit časem, takže „Jsem na
+  obědě" viselo u jména do večera.
+- „Dnes" končí o půlnoci a „Tento týden" v neděli, obojí podle času
+  vašeho telefonu.
+
 ## 0.1.0 (17) — 30. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: čeká, build-mac je mimo relay.

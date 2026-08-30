@@ -58,7 +58,13 @@ void main() {
       find.byKey(const Key('profile-status-message')),
       'In a workshop',
     );
-    await tester.ensureVisible(find.byKey(const Key('profile-status-save')));
+    // The status controls sit below the fold of a lazily built
+    // ListView, so they are not in the tree until scrolled to.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-status-save')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('profile-status-save')));
     await tester.pump();
     await _settleRealAsync(tester);
@@ -66,7 +72,13 @@ void main() {
     expect(server.icon, '🛠️');
     expect(server.message, 'In a workshop');
 
-    await tester.ensureVisible(find.byKey(const Key('profile-status-clear')));
+    // The status controls sit below the fold of a lazily built
+    // ListView, so they are not in the tree until scrolled to.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-status-clear')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('profile-status-clear')));
     await tester.pump();
     await _settleRealAsync(tester);
@@ -89,6 +101,57 @@ void main() {
         .map((request) => request.method)
         .toList();
     expect(statusMethods.sublist(statusMethods.length - 2), ['DELETE', 'GET']);
+  });
+
+  testWidgets('the chosen expiry reaches the request', (tester) async {
+    final server = _ProfileServer(supportsBusy: true);
+    final fixture = (await tester.runAsync(() => _Fixture.create(server)))!;
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await fixture.dispose();
+    });
+
+    await tester.pumpWidget(fixture.profileApp());
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    // Never is the default, so a save without touching the dropdown must not
+    // put an expiry on a status the user never asked to expire.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-status-save')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('profile-status-save')));
+    await tester.pump();
+    await _settleRealAsync(tester);
+    expect(server.clearAt, isNull);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-status-expiry')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('profile-status-expiry')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('In an hour').last);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-status-save')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(const Key('profile-status-save')));
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    final sent = int.parse(server.clearAt!);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    // An hour ahead, with room for a slow test machine on either side.
+    expect(sent - now, greaterThan(3500));
+    expect(sent - now, lessThan(3700));
   });
 
   testWidgets('settings opens the active account profile', (tester) async {
@@ -205,6 +268,7 @@ final class _ProfileServer {
   var status = 'online';
   String? message = 'Focusing';
   String? icon = '🎯';
+  String? clearAt;
 
   Future<http.Response> call(http.Request request) async {
     requests.add(request);
@@ -227,6 +291,7 @@ final class _ProfileServer {
       final fields = Uri.splitQueryString(request.body);
       message = fields['message'];
       icon = fields['statusIcon'];
+      clearAt = fields['clearAt'];
       return _ocsResponse(_status());
     }
     if (path.endsWith('/user_status/message')) {

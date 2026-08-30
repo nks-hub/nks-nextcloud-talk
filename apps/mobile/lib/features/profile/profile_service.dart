@@ -72,6 +72,8 @@ final class ProfileService {
     required String accountId,
     required String message,
     String? statusIcon,
+    StatusExpiry expiry = StatusExpiry.never,
+    DateTime? now,
   }) async {
     final normalizedMessage = message.trim();
     final normalizedIcon = statusIcon?.trim();
@@ -92,6 +94,7 @@ final class ProfileService {
         appPassword: context.base.appPassword,
         message: normalizedMessage,
         statusIcon: normalizedIcon?.isEmpty == true ? null : normalizedIcon,
+        clearAt: expiry.clearAt(now ?? DateTime.now()),
       ),
     );
     _requireIdentity(context.base, response.userId);

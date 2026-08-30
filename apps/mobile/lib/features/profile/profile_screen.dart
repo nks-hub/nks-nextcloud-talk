@@ -22,6 +22,7 @@ final class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   OwnProfileError? _error;
   var _loading = true;
   var _submitting = false;
+  var _expiry = StatusExpiry.never;
   var _generation = 0;
 
   @override
@@ -84,6 +85,7 @@ final class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             accountId: widget.accountId,
             message: _messageController.text,
             statusIcon: _iconController.text,
+            expiry: _expiry,
           ),
       synchronizeFields: true,
     );
@@ -145,6 +147,9 @@ final class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             snapshot: snapshot,
             messageController: _messageController,
             iconController: _iconController,
+            expiry: _expiry,
+            onExpiryChanged: (value) =>
+                setState(() => _expiry = value ?? StatusExpiry.never),
             submitting: _submitting,
             onStatusType: _setStatusType,
             onSaveMessage: _saveMessage,
@@ -165,6 +170,8 @@ final class _ProfileContent extends StatelessWidget {
     required this.snapshot,
     required this.messageController,
     required this.iconController,
+    required this.expiry,
+    required this.onExpiryChanged,
     required this.submitting,
     required this.onStatusType,
     required this.onSaveMessage,
@@ -174,6 +181,8 @@ final class _ProfileContent extends StatelessWidget {
   final OwnProfileSnapshot snapshot;
   final TextEditingController messageController;
   final TextEditingController iconController;
+  final StatusExpiry expiry;
+  final ValueChanged<StatusExpiry?> onExpiryChanged;
   final bool submitting;
   final ValueChanged<OwnUserStatusType> onStatusType;
   final VoidCallback onSaveMessage;
@@ -274,6 +283,22 @@ final class _ProfileContent extends StatelessWidget {
             decoration: InputDecoration(
               labelText: strings.profileStatusMessageLabel,
             ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<StatusExpiry>(
+            key: const Key('profile-status-expiry'),
+            initialValue: expiry,
+            decoration: InputDecoration(
+              labelText: strings.profileStatusExpiryLabel,
+            ),
+            onChanged: submitting ? null : onExpiryChanged,
+            items: [
+              for (final value in StatusExpiry.values)
+                DropdownMenuItem<StatusExpiry>(
+                  value: value,
+                  child: Text(_expiryLabel(strings, value)),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -395,3 +420,13 @@ String _initials(String displayName) {
   final value = initials.join().toUpperCase();
   return value.isEmpty ? '?' : value;
 }
+
+String _expiryLabel(AppLocalizations strings, StatusExpiry expiry) =>
+    switch (expiry) {
+      StatusExpiry.never => strings.profileStatusExpiryNever,
+      StatusExpiry.halfHour => strings.profileStatusExpiryHalfHour,
+      StatusExpiry.hour => strings.profileStatusExpiryHour,
+      StatusExpiry.fourHours => strings.profileStatusExpiryFourHours,
+      StatusExpiry.today => strings.profileStatusExpiryToday,
+      StatusExpiry.week => strings.profileStatusExpiryWeek,
+    };

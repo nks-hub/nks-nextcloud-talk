@@ -188,6 +188,55 @@ void main() {
     expect(mutationRequests, 1);
   });
 
+  test('a status expiry becomes an absolute clearAt on the wire', () async {
+    String? body;
+    final subject = service(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return _jsonResponse(_capabilities(statusEnabled: true));
+        }
+        body = request.body;
+        return _ocsResponse(_status('alice'));
+      }),
+    );
+
+    // Pinned clock: the server only ever sees the resolved instant, so the
+    // test asserts the arithmetic, not "roughly half an hour from now".
+    final now = DateTime(2026, 8, 30, 14, 0);
+    await subject.setCustomMessage(
+      accountId: 'account-a',
+      message: 'Working',
+      expiry: StatusExpiry.halfHour,
+      now: now,
+    );
+
+    final expected =
+        DateTime(2026, 8, 30, 14, 30).millisecondsSinceEpoch ~/ 1000;
+    expect(body, contains('clearAt=$expected'));
+  });
+
+  test('never leaves clearAt off the request entirely', () async {
+    String? body;
+    final subject = service(
+      MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return _jsonResponse(_capabilities(statusEnabled: true));
+        }
+        body = request.body;
+        return _ocsResponse(_status('alice'));
+      }),
+    );
+
+    await subject.setCustomMessage(
+      accountId: 'account-a',
+      message: 'Working',
+      now: DateTime(2026, 8, 30, 14, 0),
+    );
+
+    expect(body, isNotNull);
+    expect(body, isNot(contains('clearAt')));
+  });
+
   test(
     'a response for another user is rejected instead of changing scope',
     () async {

@@ -85,3 +85,40 @@ final class OwnProfileException implements Exception {
   @override
   String toString() => 'OwnProfileException(${code.name})';
 }
+
+/// How long a custom status stays before the server clears it.
+///
+/// Nextcloud stores the expiry as an absolute unix timestamp, but offering an
+/// absolute time to pick would be a date picker for something everyone thinks
+/// of as "in half an hour". The choices mirror the ones the Nextcloud web UI
+/// offers, so a status set here reads the same in the browser.
+enum StatusExpiry {
+  never,
+  halfHour,
+  hour,
+  fourHours,
+  today,
+  week;
+
+  /// The absolute unix timestamp to send, resolved against [now].
+  ///
+  /// `today` means the end of the current day and `week` the end of the
+  /// current one, both in the device's own timezone: the server only ever
+  /// sees the resolved instant, so a traveller's status expires when their
+  /// day ends, not when the server's does.
+  int? clearAt(DateTime now) => switch (this) {
+    StatusExpiry.never => null,
+    StatusExpiry.halfHour => _seconds(now.add(const Duration(minutes: 30))),
+    StatusExpiry.hour => _seconds(now.add(const Duration(hours: 1))),
+    StatusExpiry.fourHours => _seconds(now.add(const Duration(hours: 4))),
+    StatusExpiry.today => _seconds(
+      DateTime(now.year, now.month, now.day + 1),
+    ),
+    StatusExpiry.week => _seconds(
+      DateTime(now.year, now.month, now.day + (8 - now.weekday)),
+    ),
+  };
+
+  static int _seconds(DateTime value) =>
+      value.millisecondsSinceEpoch ~/ Duration.millisecondsPerSecond;
+}
