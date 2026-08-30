@@ -344,12 +344,31 @@ final class _LobbyDialogState extends State<_LobbyDialog> {
 /// What the avatar dialog answers with: either a picked emoji, or a request
 /// to open the gallery instead.
 final class _AvatarChoice {
-  const _AvatarChoice.emoji(this.emoji) : pickImage = false;
-  const _AvatarChoice.image() : emoji = null, pickImage = true;
+  const _AvatarChoice.emoji(this.emoji, {this.hexColor}) : pickImage = false;
+  const _AvatarChoice.image() : emoji = null, hexColor = null, pickImage = true;
 
   final String? emoji;
+
+  /// Six hex digits without the leading `#`, or null for the server's own
+  /// bright/dark-mode default. The contract validates the shape.
+  final String? hexColor;
   final bool pickImage;
 }
+
+/// Background colours offered for an emoji avatar.
+///
+/// Six digits without `#`, which is the shape Talk documents. The first entry
+/// is null on purpose: leaving the colour out lets the server pick the one
+/// that follows the reader's bright or dark mode, which is a better default
+/// than any fixed choice here.
+const List<String?> _avatarColors = <String?>[
+  null,
+  '0082C9',
+  '4CAF50',
+  'FFB300',
+  'E64A19',
+  '8E24AA',
+];
 
 /// Picks an emoji or a picture as the conversation avatar.
 final class _AvatarDialog extends StatefulWidget {
@@ -363,6 +382,7 @@ final class _AvatarDialog extends StatefulWidget {
 
 final class _AvatarDialogState extends State<_AvatarDialog> {
   String _selected = _avatarEmoji.first;
+  String? _color = _avatarColors.first;
 
   @override
   Widget build(BuildContext context) {
@@ -424,6 +444,50 @@ final class _AvatarDialogState extends State<_AvatarDialog> {
                 ),
             ],
           ),
+          const SizedBox(height: 16),
+          Text(strings.roomDetailsAvatarColorLabel),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final color in _avatarColors)
+                Semantics(
+                  label: color == null
+                      ? strings.roomDetailsAvatarColorDefault
+                      : strings.roomDetailsAvatarColorSemantics(color),
+                  selected: color == _color,
+                  button: true,
+                  child: InkWell(
+                    key: Key('room-details-avatar-color-${color ?? 'default'}'),
+                    onTap: () => setState(() => _color = color),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: color == null
+                            ? null
+                            : Color(int.parse('FF$color', radix: 16)),
+                        border: Border.all(
+                          color: color == _color
+                              ? scheme.primary
+                              : scheme.outlineVariant,
+                          width: color == _color ? 3 : 1,
+                        ),
+                      ),
+                      child: color == null
+                          ? const ExcludeSemantics(
+                              child: Icon(Icons.brightness_auto_rounded),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
       actions: [
@@ -433,8 +497,9 @@ final class _AvatarDialogState extends State<_AvatarDialog> {
         ),
         TextButton(
           key: const Key('room-details-avatar-save'),
-          onPressed: () =>
-              Navigator.of(context).pop(_AvatarChoice.emoji(_selected)),
+          onPressed: () => Navigator.of(
+            context,
+          ).pop(_AvatarChoice.emoji(_selected, hexColor: _color)),
           child: Text(strings.roomDetailsAvatarSetAction),
         ),
       ],

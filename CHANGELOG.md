@@ -12,6 +12,12 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (20) — 30. 8. 2026
+
+- Emoji jako obrázek konverzace si můžete obarvit. K výběru emoji přibyla
+  řada barev pozadí. Ve výchozím stavu se barva neposílá vůbec, takže se
+  pozadí řídí světlým nebo tmavým režimem, jak to dělal doteď.
+
 ## 0.1.0 (19) — 30. 8. 2026
 
 Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.

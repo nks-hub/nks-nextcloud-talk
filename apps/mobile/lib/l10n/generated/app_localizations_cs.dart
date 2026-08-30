@@ -1751,6 +1751,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsAvatarSetAction => 'Použít toto emoji';
 
   @override
+  String get roomDetailsAvatarColorLabel => 'Barva pozadí';
+
+  @override
+  String get roomDetailsAvatarColorDefault =>
+      'Podle světlého nebo tmavého režimu';
+
+  @override
+  String roomDetailsAvatarColorSemantics(String color) {
+    return 'Barva $color';
+  }
+
+  @override
   String get roomDetailsAvatarRemoveAction => 'Odebrat obrázek';
 
   @override

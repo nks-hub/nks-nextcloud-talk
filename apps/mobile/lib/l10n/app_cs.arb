@@ -581,6 +581,16 @@
   "roomDetailsAvatarDialogTitle": "Obrázek konverzace",
   "roomDetailsAvatarDialogMessage": "Vyberte emoji, které bude sloužit jako obrázek konverzace.",
   "roomDetailsAvatarSetAction": "Použít toto emoji",
+  "roomDetailsAvatarColorLabel": "Barva pozadí",
+  "roomDetailsAvatarColorDefault": "Podle světlého nebo tmavého režimu",
+  "roomDetailsAvatarColorSemantics": "Barva {color}",
+  "@roomDetailsAvatarColorSemantics": {
+    "placeholders": {
+      "color": {
+        "type": "String"
+      }
+    }
+  },
   "roomDetailsAvatarRemoveAction": "Odebrat obrázek",
   "roomDetailsAvatarEmojiSemantics": "Emoji {emoji}",
   "roomDetailsBanParticipant": "Zabanovat v konverzaci",

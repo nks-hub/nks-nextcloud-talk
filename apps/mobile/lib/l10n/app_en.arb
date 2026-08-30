@@ -725,6 +725,16 @@
     "description": "Body of the dialog that picks an emoji as the conversation picture."
   },
   "roomDetailsAvatarSetAction": "Use this emoji",
+  "roomDetailsAvatarColorLabel": "Background colour",
+  "roomDetailsAvatarColorDefault": "Follow bright or dark mode",
+  "roomDetailsAvatarColorSemantics": "Colour {color}",
+  "@roomDetailsAvatarColorSemantics": {
+    "placeholders": {
+      "color": {
+        "type": "String"
+      }
+    }
+  },
   "@roomDetailsAvatarSetAction": {
     "description": "Confirm button that sets the picked emoji as the conversation picture."
   },

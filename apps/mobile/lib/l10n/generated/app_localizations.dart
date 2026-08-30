@@ -3242,6 +3242,24 @@ abstract class AppLocalizations {
   /// **'Use this emoji'**
   String get roomDetailsAvatarSetAction;
 
+  /// No description provided for @roomDetailsAvatarColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Background colour'**
+  String get roomDetailsAvatarColorLabel;
+
+  /// No description provided for @roomDetailsAvatarColorDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow bright or dark mode'**
+  String get roomDetailsAvatarColorDefault;
+
+  /// No description provided for @roomDetailsAvatarColorSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour {color}'**
+  String roomDetailsAvatarColorSemantics(String color);
+
   /// Action that removes a custom conversation picture.
   ///
   /// In en, this message translates to:

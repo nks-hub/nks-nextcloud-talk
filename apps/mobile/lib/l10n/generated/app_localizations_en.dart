@@ -1754,6 +1754,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsAvatarSetAction => 'Use this emoji';
 
   @override
+  String get roomDetailsAvatarColorLabel => 'Background colour';
+
+  @override
+  String get roomDetailsAvatarColorDefault => 'Follow bright or dark mode';
+
+  @override
+  String roomDetailsAvatarColorSemantics(String color) {
+    return 'Colour $color';
+  }
+
+  @override
   String get roomDetailsAvatarRemoveAction => 'Remove the picture';
 
   @override

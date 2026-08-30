@@ -600,6 +600,7 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
             accountId: widget.account.id,
             roomToken: widget.conversation.token,
             emoji: emoji,
+            hexColor: choice.hexColor,
           ),
       fallback: () => {'isCustomAvatar': true},
     );

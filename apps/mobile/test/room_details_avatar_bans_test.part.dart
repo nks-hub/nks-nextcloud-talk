@@ -57,6 +57,59 @@ void _registerAvatarAndBanTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a chosen background colour rides along with the emoji', (
+    tester,
+  ) async {
+    // The default is deliberately no colour at all, so the server can follow
+    // the reader's bright or dark mode. Only an explicit pick sends `color`.
+    final capable = await withCapabilities({'avatar'});
+    Map<String, String>? sent;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/avatar/emoji')) {
+        sent = request.bodyFields;
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['isCustomAvatar'] = true,
+        );
+      }
+      return http.Response('', 404);
+    });
+
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: conversation,
+      client: client,
+    );
+    await tester.tap(find.byKey(const Key('room-details-avatar')));
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const Key('room-details-avatar-emoji-\u{1F680}')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const Key('room-details-avatar-color-0082C9')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-avatar-save')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('room-details-avatar-remove'))
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(sent, {'emoji': '\u{1F680}', 'color': '0082C9'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('a picked picture is uploaded as a multipart avatar', (
     tester,
   ) async {
