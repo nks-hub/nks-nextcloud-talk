@@ -16,6 +16,14 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Připraveno pro další build
+
+- Když na iOS nezačne nahrávání hlasové zprávy, čekání po 10 sekundách skončí
+  chybou a aplikace zůstane použitelná. Další pokus už neblokuje předchozí
+  nativní nahrávání.
+- Česká chybová hláška hlasové zprávy se vejde do spodní lišty i se všemi
+  akcemi. Dříve přetékala mimo obrazovku.
+
 ## 0.1.0 (23) — 30. 8. 2026
 
 Play: odesláno ke kontrole. TestFlight: build `VALID`, obě skupiny.
