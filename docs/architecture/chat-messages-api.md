@@ -445,6 +445,21 @@ Jiné parent ID, cizí room token nebo jiný parent thread confirmation odmítno
 U quoted reply zůstává `parent.id` bezprostřední quoted message `P`, která se
 může lišit od rootu `T`; outer i full-parent `threadId` musí být `T`.
 
+## Příchozí sdílená poloha
+
+Commit `c1aa49c` typuje upstream `geo-location` parametr. `latitude` a
+`longitude` smějí přijít jako JSON číslo nebo desetinný string, ale obě hodnoty
+musí být konečné a ležet v inkluzivních rozsazích −90 až 90 a −180 až 180.
+Klient nepoužívá serverové pole `link`; mapový HTTPS origin i cesta jsou pevné
+a query/fragment vzniknou pouze z validovaných double hodnot.
+
+Flutter vykreslí validní polohu jako mapovou ikonu a jméno v jediném link
+semantics uzlu s minimálním cílem 48 dp. Při 200% textu se název omezí na dva
+řádky. Nevalidní `geo-location` se nezmění v aktivní odkaz a zůstane obecným
+rich-object pillem. Živý serverový share se na iOS 18.6 zobrazil a otevřel
+správný bod v OpenStreetMap; text `#394857` proti pillu `#D4E4F6` měl ve
+světlém i tmavém tématu 7,2492:1 a testovací zpráva byla po důkazu smazána.
+
 Flutter schema v5 přidalo do `text_send_operations` nullable `threadId` a
 aktuální schema v7 jej zachovává.
 File-backed reopen test zachová queued i sending named-thread operaci a

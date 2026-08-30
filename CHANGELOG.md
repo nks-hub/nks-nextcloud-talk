@@ -25,6 +25,9 @@ proto jen to, co je doložitelné z App Store Connect.
   akcemi. Dříve přetékala mimo obrazovku.
 - Z obrazovky nové konverzace lze vytvořit prázdnou skupinovou nebo veřejnou
   místnost bez hledání a pozvání prvního účastníka.
+- Sdílená poloha se v chatu zobrazí se jménem místa a ikonou mapy. Klepnutí ji
+  otevře v OpenStreetMap; neplatné nebo podvržené souřadnice zůstanou bezpečně
+  neaktivní.
 - V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
   do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
   respektuje nastavení soukromí Nextcloud Talk. Vlastní indikátor se správně
