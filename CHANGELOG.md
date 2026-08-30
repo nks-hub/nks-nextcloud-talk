@@ -24,7 +24,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (21) — 30. 8. 2026
 
-Play: build 21 odeslán ke kontrole. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno 30. 8. 13:36, k dispozici testerům, 177 zemí.
+TestFlight: build `VALID`, obě skupiny.
 
 - Při tažení otevřené konverzace zpět je nově vidět skutečný seznam
   konverzací pod ní. Dříve se chat sice posouval správně, ale odkrýval jen
