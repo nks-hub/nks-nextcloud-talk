@@ -2486,6 +2486,12 @@ abstract class AppLocalizations {
   /// **'Name this group conversation'**
   String get newConversationNameDialogTitle;
 
+  /// No description provided for @newConversationPublicNameDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Name this public conversation'**
+  String get newConversationPublicNameDialogTitle;
+
   /// No description provided for @newConversationNameLabel.
   ///
   /// In en, this message translates to:
@@ -2497,6 +2503,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create'**
   String get newConversationCreate;
+
+  /// No description provided for @newConversationCreateGroupAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create group conversation'**
+  String get newConversationCreateGroupAction;
+
+  /// No description provided for @newConversationCreatePublicAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create public conversation'**
+  String get newConversationCreatePublicAction;
 
   /// No description provided for @newConversationErrorAccountMissing.
   ///

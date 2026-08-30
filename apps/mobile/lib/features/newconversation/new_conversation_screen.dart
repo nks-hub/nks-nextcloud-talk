@@ -103,20 +103,56 @@ final class _NewConversationScreenState
   Future<void> _selectRecipient(ConversationRecipient recipient) async {
     String? roomName;
     if (recipient.shareType == RecipientShareType.group) {
-      roomName = await _promptRoomName(recipient.label);
+      roomName = await _promptRoomName(
+        initialValue: recipient.label,
+        title: AppLocalizations.of(context).newConversationNameDialogTitle,
+      );
       if (roomName == null) {
         return;
       }
     }
 
-    setState(() => _creating = true);
-    final service = ref.read(newConversationServiceProvider);
-    try {
-      final token = await service.createConversation(
+    await _runCreation(
+      (service) => service.createConversation(
         accountId: widget.accountId,
         recipient: recipient,
         roomName: roomName,
-      );
+      ),
+    );
+  }
+
+  Future<void> _createStandaloneConversation(
+    StandaloneConversationType type,
+  ) async {
+    final strings = AppLocalizations.of(context);
+    final roomName = await _promptRoomName(
+      initialValue: '',
+      title: switch (type) {
+        StandaloneConversationType.group =>
+          strings.newConversationNameDialogTitle,
+        StandaloneConversationType.public =>
+          strings.newConversationPublicNameDialogTitle,
+      },
+    );
+    if (roomName == null) {
+      return;
+    }
+    await _runCreation(
+      (service) => service.createStandaloneConversation(
+        accountId: widget.accountId,
+        type: type,
+        roomName: roomName,
+      ),
+    );
+  }
+
+  Future<void> _runCreation(
+    Future<ConversationToken> Function(NewConversationService service) create,
+  ) async {
+    setState(() => _creating = true);
+    final service = ref.read(newConversationServiceProvider);
+    try {
+      final token = await create(service);
       if (!mounted) {
         return;
       }
@@ -135,15 +171,20 @@ final class _NewConversationScreenState
     }
   }
 
-  Future<String?> _promptRoomName(String groupLabel) async {
+  Future<String?> _promptRoomName({
+    required String initialValue,
+    required String title,
+  }) async {
     final strings = AppLocalizations.of(context);
     final name = await showTextPromptDialog(
       context: context,
-      title: strings.newConversationNameDialogTitle,
-      initialValue: groupLabel,
+      title: title,
+      initialValue: initialValue,
       fieldLabel: strings.newConversationNameLabel,
       cancelLabel: strings.cancel,
       confirmLabel: strings.newConversationCreate,
+      maxLength: 200,
+      emptyErrorText: strings.newConversationErrorRoomNameRequired,
     );
     final trimmed = name?.trim();
     return trimmed == null || trimmed.isEmpty ? null : trimmed;
@@ -174,6 +215,35 @@ final class _NewConversationScreenState
                   _runSearch(term);
                 }
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  key: const Key('create-empty-group-conversation'),
+                  onPressed: _creating
+                      ? null
+                      : () => _createStandaloneConversation(
+                          StandaloneConversationType.group,
+                        ),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: Text(strings.newConversationCreateGroupAction),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('create-public-conversation'),
+                  onPressed: _creating
+                      ? null
+                      : () => _createStandaloneConversation(
+                          StandaloneConversationType.public,
+                        ),
+                  icon: const Icon(Icons.public_outlined),
+                  label: Text(strings.newConversationCreatePublicAction),
+                ),
+              ],
             ),
           ),
           Expanded(child: _buildBody(context)),

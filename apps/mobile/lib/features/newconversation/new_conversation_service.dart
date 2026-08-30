@@ -20,6 +20,8 @@ enum NewConversationError {
   network,
 }
 
+enum StandaloneConversationType { group, public }
+
 final class NewConversationException implements Exception {
   const NewConversationException(this.code);
 
@@ -42,6 +44,12 @@ abstract interface class NewConversationService {
     required String accountId,
     required ConversationRecipient recipient,
     String? roomName,
+  });
+
+  Future<ConversationToken> createStandaloneConversation({
+    required String accountId,
+    required StandaloneConversationType type,
+    required String roomName,
   });
 
   /// Returns the one-to-one conversation with [userId], creating it when it
@@ -166,6 +174,40 @@ final class HttpNewConversationService implements NewConversationService {
       );
     }
 
+    return _createRoom(request, credentials);
+  }
+
+  @override
+  Future<ConversationToken> createStandaloneConversation({
+    required String accountId,
+    required StandaloneConversationType type,
+    required String roomName,
+  }) async {
+    final name = roomName.trim();
+    if (name.isEmpty) {
+      throw const NewConversationException(
+        NewConversationError.roomNameRequired,
+      );
+    }
+    final credentials = await _resolveCredentials(accountId);
+    final CreateConversationRequest request;
+    try {
+      request = CreateConversationRequest(
+        accountId: AccountId.parse(accountId),
+        requestId: ConversationRequestId.parse(_uuid.v4()),
+        server: credentials.server,
+        roomType: switch (type) {
+          StandaloneConversationType.group => CreateConversationRoomType.group,
+          StandaloneConversationType.public =>
+            CreateConversationRoomType.public,
+        },
+        roomName: name,
+      );
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.roomNameRequired,
+      );
+    }
     return _createRoom(request, credentials);
   }
 

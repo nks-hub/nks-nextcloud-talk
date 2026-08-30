@@ -115,6 +115,106 @@ void main() {
     expect(service.lastCreateRoomName, 'Eng Room');
     expect(created?.value, 'newroom2');
   });
+
+  testWidgets('creates an empty group without selecting a recipient', (
+    tester,
+  ) async {
+    service.createResult = ConversationToken.parse(
+      'newroom3',
+      path: r'$.token',
+    );
+    ConversationToken? created;
+
+    await tester.pumpWidget(app(onCreated: (token) => created = token));
+    await tester.tap(find.byKey(const Key('create-empty-group-conversation')));
+    await tester.pumpAndSettle();
+    expect(find.text('Name this group conversation'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Project room');
+    await tester.tap(find.text('Create'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(service.lastStandaloneType, StandaloneConversationType.group);
+    expect(service.lastCreateRoomName, 'Project room');
+    expect(service.lastCreateRecipient, isNull);
+    expect(created?.value, 'newroom3');
+  });
+
+  testWidgets('creates a public room without selecting a recipient', (
+    tester,
+  ) async {
+    service.createResult = ConversationToken.parse(
+      'newroom4',
+      path: r'$.token',
+    );
+    ConversationToken? created;
+
+    await tester.pumpWidget(app(onCreated: (token) => created = token));
+    await tester.tap(find.byKey(const Key('create-public-conversation')));
+    await tester.pumpAndSettle();
+    expect(find.text('Name this public conversation'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Town hall');
+    await tester.tap(find.text('Create'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(service.lastStandaloneType, StandaloneConversationType.public);
+    expect(service.lastCreateRoomName, 'Town hall');
+    expect(service.lastCreateRecipient, isNull);
+    expect(created?.value, 'newroom4');
+  });
+
+  testWidgets('standalone room actions wrap on a narrow Czech screen', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [newConversationServiceProvider.overrideWithValue(service)],
+        child: localizedTestApp(
+          locale: const Locale('cs'),
+          home: NewConversationScreen(
+            accountId: 'account-a',
+            onConversationCreated: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    for (final key in const <String>[
+      'create-empty-group-conversation',
+      'create-public-conversation',
+    ]) {
+      final action = find.byKey(Key(key));
+      expect(action, findsOneWidget);
+      expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('standalone room name stays open when empty and caps input', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app(onCreated: (_) {}));
+    await tester.tap(find.byKey(const Key('create-empty-group-conversation')));
+    await tester.pumpAndSettle();
+
+    final field = find.byType(TextFormField);
+    final textField = tester.widget<TextField>(
+      find.descendant(of: field, matching: find.byType(TextField)),
+    );
+    expect(textField.maxLength, 200);
+    await tester.tap(find.text('Create'));
+    await tester.pump();
+
+    expect(find.text('The conversation needs a name.'), findsOneWidget);
+    expect(find.text('Name this group conversation'), findsOneWidget);
+    expect(service.lastStandaloneType, isNull);
+  });
 }
 
 ConversationRecipient _syntheticUser() => _decodeRecipient({
@@ -161,6 +261,7 @@ final class _FakeNewConversationService implements NewConversationService {
   String? lastCreateAccountId;
   ConversationRecipient? lastCreateRecipient;
   String? lastCreateRoomName;
+  StandaloneConversationType? lastStandaloneType;
 
   @override
   Future<List<ConversationRecipient>> searchRecipients({
@@ -201,6 +302,23 @@ final class _FakeNewConversationService implements NewConversationService {
     lastCreateAccountId = accountId;
     lastCreateRecipient = recipient;
     lastCreateRoomName = roomName;
+    final error = createError;
+    if (error != null) {
+      throw error;
+    }
+    return createResult!;
+  }
+
+  @override
+  Future<ConversationToken> createStandaloneConversation({
+    required String accountId,
+    required StandaloneConversationType type,
+    required String roomName,
+  }) async {
+    lastCreateAccountId = accountId;
+    lastCreateRecipient = null;
+    lastCreateRoomName = roomName;
+    lastStandaloneType = type;
     final error = createError;
     if (error != null) {
       throw error;

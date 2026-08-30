@@ -11,43 +11,66 @@ const String createConversationContractUserAgent =
 /// The Talk v4 `roomType` values this contract is willing to create.
 enum CreateConversationRoomType {
   oneToOne(1),
-  group(2);
+  group(2),
+  public(3);
 
   const CreateConversationRoomType(this.wireValue);
 
   final int wireValue;
 }
 
-/// A request to create a new conversation for a recipient found through a
-/// recipient search. Posts to the same `apps/spreed/api/v4/room` endpoint
-/// that the conversation list reads from.
+/// A request to create a recipient conversation or a standalone group/public
+/// room. Posts to the same `apps/spreed/api/v4/room` endpoint that the
+/// conversation list reads from.
 final class CreateConversationRequest {
   CreateConversationRequest({
     required this.accountId,
     required this.requestId,
     required this.server,
     required this.roomType,
-    required this.inviteId,
-    required this.inviteSource,
+    this.inviteId,
+    this.inviteSource,
     this.roomName,
     this.userAgent = createConversationContractUserAgent,
   }) {
-    if (inviteId.isEmpty ||
-        inviteId.length > 256 ||
-        _hasControlCharacter(inviteId)) {
+    final invite = inviteId;
+    final source = inviteSource;
+    if ((invite == null) != (source == null)) {
       protocolFailure(
         TalkProtocolErrorCode.invalidCreateConversationRequest,
         r'$.body.invite',
       );
     }
-    if (inviteSource != 'users' && inviteSource != 'groups') {
+    if (invite != null &&
+        (invite.isEmpty ||
+            invite.length > 256 ||
+            _hasControlCharacter(invite))) {
+      protocolFailure(
+        TalkProtocolErrorCode.invalidCreateConversationRequest,
+        r'$.body.invite',
+      );
+    }
+    if (source != null && source != 'users' && source != 'groups') {
       protocolFailure(
         TalkProtocolErrorCode.invalidCreateConversationRequest,
         r'$.body.source',
       );
     }
     final name = roomName;
-    if (roomType == CreateConversationRoomType.group) {
+    if (roomType == CreateConversationRoomType.oneToOne) {
+      if (invite == null || source != 'users') {
+        protocolFailure(
+          TalkProtocolErrorCode.invalidCreateConversationRequest,
+          r'$.body.invite',
+        );
+      }
+      if (name != null) {
+        protocolFailure(
+          TalkProtocolErrorCode.invalidCreateConversationRequest,
+          r'$.body.roomName',
+        );
+      }
+    } else {
       if (name == null ||
           name.trim().isEmpty ||
           name.length > 200 ||
@@ -57,11 +80,12 @@ final class CreateConversationRequest {
           r'$.body.roomName',
         );
       }
-    } else if (name != null) {
-      protocolFailure(
-        TalkProtocolErrorCode.invalidCreateConversationRequest,
-        r'$.body.roomName',
-      );
+      if (roomType == CreateConversationRoomType.public && invite != null) {
+        protocolFailure(
+          TalkProtocolErrorCode.invalidCreateConversationRequest,
+          r'$.body.invite',
+        );
+      }
     }
     if (userAgent.isEmpty ||
         userAgent.length > 256 ||
@@ -79,17 +103,18 @@ final class CreateConversationRequest {
   final CreateConversationRoomType roomType;
 
   /// The user id or group id to invite, matching a recipient's `id`.
-  final String inviteId;
+  /// Empty group and public rooms omit it together with [inviteSource].
+  final String? inviteId;
 
   /// Either `users` or `groups`, matching a recipient's share type.
-  final String inviteSource;
+  final String? inviteSource;
   final String? roomName;
   final String userAgent;
 
   Map<String, String> get formBody => UnmodifiableMapView({
     'roomType': roomType.wireValue.toString(),
-    'invite': inviteId,
-    'source': inviteSource,
+    'invite': ?inviteId,
+    'source': ?inviteSource,
     'roomName': ?roomName,
   });
 

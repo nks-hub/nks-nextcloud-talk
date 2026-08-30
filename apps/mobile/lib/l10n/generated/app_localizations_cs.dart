@@ -1317,10 +1317,22 @@ class AppLocalizationsCs extends AppLocalizations {
       'Pojmenujte skupinovou konverzaci';
 
   @override
+  String get newConversationPublicNameDialogTitle =>
+      'Pojmenujte veřejnou konverzaci';
+
+  @override
   String get newConversationNameLabel => 'Název konverzace';
 
   @override
   String get newConversationCreate => 'Vytvořit';
+
+  @override
+  String get newConversationCreateGroupAction =>
+      'Vytvořit skupinovou konverzaci';
+
+  @override
+  String get newConversationCreatePublicAction =>
+      'Vytvořit veřejnou konverzaci';
 
   @override
   String get newConversationErrorAccountMissing =>

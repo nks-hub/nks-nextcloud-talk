@@ -1319,10 +1319,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newConversationNameDialogTitle => 'Name this group conversation';
 
   @override
+  String get newConversationPublicNameDialogTitle =>
+      'Name this public conversation';
+
+  @override
   String get newConversationNameLabel => 'Conversation name';
 
   @override
   String get newConversationCreate => 'Create';
+
+  @override
+  String get newConversationCreateGroupAction => 'Create group conversation';
+
+  @override
+  String get newConversationCreatePublicAction => 'Create public conversation';
 
   @override
   String get newConversationErrorAccountMissing =>

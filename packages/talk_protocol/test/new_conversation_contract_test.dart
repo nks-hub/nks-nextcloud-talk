@@ -207,6 +207,83 @@ void main() {
       });
     });
 
+    test('builds an empty group without invite fields', () {
+      final request = CreateConversationRequest(
+        accountId: AccountId.parse('fixture-account'),
+        requestId: ConversationRequestId.parse('create-empty-group'),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        roomType: CreateConversationRoomType.group,
+        roomName: 'Project room',
+      );
+
+      expect(request.formBody, {'roomType': '2', 'roomName': 'Project room'});
+    });
+
+    test('builds a public room without invite fields', () {
+      final request = CreateConversationRequest(
+        accountId: AccountId.parse('fixture-account'),
+        requestId: ConversationRequestId.parse('create-public'),
+        server: ServerBase.parse('https://cloud.example.invalid'),
+        roomType: CreateConversationRoomType.public,
+        roomName: 'Town hall',
+      );
+
+      expect(request.formBody, {'roomType': '3', 'roomName': 'Town hall'});
+    });
+
+    test('rejects a one-to-one room without an invite', () {
+      expect(
+        () => CreateConversationRequest(
+          accountId: AccountId.parse('fixture-account'),
+          requestId: ConversationRequestId.parse('create-missing-invite'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomType: CreateConversationRoomType.oneToOne,
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
+    test('rejects a public room carrying an invite', () {
+      expect(
+        () => CreateConversationRequest(
+          accountId: AccountId.parse('fixture-account'),
+          requestId: ConversationRequestId.parse('create-public-invite'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomType: CreateConversationRoomType.public,
+          inviteId: 'alice',
+          inviteSource: 'users',
+          roomName: 'Town hall',
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
+    test('rejects a public room without a name', () {
+      expect(
+        () => CreateConversationRequest(
+          accountId: AccountId.parse('fixture-account'),
+          requestId: ConversationRequestId.parse('create-public-no-name'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomType: CreateConversationRoomType.public,
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
+    test('rejects an invite id without its source', () {
+      expect(
+        () => CreateConversationRequest(
+          accountId: AccountId.parse('fixture-account'),
+          requestId: ConversationRequestId.parse('create-partial-invite'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomType: CreateConversationRoomType.group,
+          inviteId: 'alice',
+          roomName: 'Project room',
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
     test('rejects a group invite without a room name', () {
       expect(
         () => CreateConversationRequest(
