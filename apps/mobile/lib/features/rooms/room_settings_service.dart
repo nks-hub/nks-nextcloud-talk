@@ -28,6 +28,7 @@ enum RoomSettingsError {
 
   /// The server refused the change, e.g. leaving as the last moderator.
   rejected,
+  preconditionFailed,
   rateLimited,
   serviceUnavailable,
   invalidResponse,
@@ -638,6 +639,25 @@ final class RoomSettingsService {
     );
   }
 
+  /// Changes the room's SIP dial-in mode. The caller gates this on the
+  /// server's `sip-support` capability and authoritative `canEnableSIP` flag.
+  Future<ConversationRoom?> setSip({
+    required String accountId,
+    required String roomToken,
+    required RoomSipState state,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomSipRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        state: state,
+      ),
+    );
+  }
+
   /// Puts a group or public conversation into read-only mode or back. Needs
   /// the server's `read-only-rooms` capability, which the caller gates on.
   Future<ConversationRoom?> setReadOnly({
@@ -784,6 +804,8 @@ final class RoomSettingsService {
       RoomAdministrationRoomMissing() => throw const RoomSettingsException(
         RoomSettingsError.roomMissing,
       ),
+      RoomAdministrationPreconditionFailed() =>
+        throw const RoomSettingsException(RoomSettingsError.preconditionFailed),
       RoomAdministrationHttpFailure(:final kind) => throw RoomSettingsException(
         _mapHttpFailure(kind),
       ),

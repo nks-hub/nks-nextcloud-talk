@@ -1740,6 +1740,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsLobbyDialogConfirm => 'Turn the lobby on';
 
   @override
+  String get roomDetailsSipLabel => 'Phone and SIP dial-in';
+
+  @override
+  String get roomDetailsSipDisabled => 'Disabled';
+
+  @override
+  String get roomDetailsSipWithPin => 'Enabled with a personal PIN';
+
+  @override
+  String get roomDetailsSipWithoutPin => 'Enabled without a PIN';
+
+  @override
+  String get roomDetailsSipDialogTitle => 'Phone and SIP dial-in';
+
+  @override
+  String get roomDetailsSipNotConfigured =>
+      'SIP dial-in is not configured on this server.';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Read-only';
 
   @override

@@ -45,10 +45,7 @@ const _clearHistoryAllowedStatusCodes = {200, 202, 401, 403, 404, 429, 503};
 /// the required role.
 const _roomRemovalAllowedStatusCodes = {200, 400, 401, 403, 404, 429, 503};
 
-/// Shared by every moderator-only administration endpoint (public,
-/// password, lobby, read-only, avatar) and by the ban API: all of them
-/// answer `400` for a refusal the caller has to explain, `403` for a
-/// non-moderator and `404` for an unknown room.
+/// Shared by moderator-only room administration endpoints.
 const _roomAdministrationAllowedStatusCodes = {
   200,
   400,
@@ -58,6 +55,11 @@ const _roomAdministrationAllowedStatusCodes = {
   429,
   503,
 };
+const _sipAdministrationAllowedStatusCodes = {
+  ..._roomAdministrationAllowedStatusCodes,
+  412,
+};
+const _banAllowedStatusCodes = {200, 400, 401, 403, 404, 429, 503};
 const _chatReadAllowedStatusCodes = {200, 401, 404, 429, 503};
 final Set<int> _chatSendAllowedStatusCodes = Set.unmodifiable({
   200,

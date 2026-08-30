@@ -78,6 +78,12 @@ String _avatarErrorMessage(AppLocalizations strings, RoomSettingsError code) {
       : _actionErrorMessage(strings, code);
 }
 
+String _sipErrorMessage(AppLocalizations strings, RoomSettingsError code) {
+  return code == RoomSettingsError.preconditionFailed
+      ? strings.roomDetailsSipNotConfigured
+      : _actionErrorMessage(strings, code);
+}
+
 /// Reduces a device file name to something a multipart part header accepts.
 ///
 /// The name comes from the user's own gallery, so it is never treated as a
@@ -189,6 +195,7 @@ String _actionErrorMessage(AppLocalizations strings, RoomSettingsError code) {
     RoomSettingsError.forbidden => strings.roomDetailsActionErrorForbidden,
     RoomSettingsError.roomMissing => strings.roomDetailsActionErrorRoomMissing,
     RoomSettingsError.rejected => strings.roomDetailsLeaveRejected,
+    RoomSettingsError.preconditionFailed ||
     RoomSettingsError.accountMissing ||
     RoomSettingsError.credentialMissing ||
     RoomSettingsError.rateLimited ||

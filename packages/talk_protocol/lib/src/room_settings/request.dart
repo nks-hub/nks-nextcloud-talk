@@ -160,8 +160,7 @@ final class UpdateNotificationLevelRequest {
   Uri get uri => _roomUri(server, roomToken, 'notify');
 
   @override
-  String toString() =>
-      'UpdateNotificationLevelRequest(level: ${level.name})';
+  String toString() => 'UpdateNotificationLevelRequest(level: ${level.name})';
 }
 
 /// Marks or unmarks a conversation as one of the caller's favorites. This is
@@ -320,6 +319,17 @@ enum RoomLobbyState {
   moderatorsOnly(1);
 
   const RoomLobbyState(this.wireValue);
+
+  final int wireValue;
+}
+
+/// SIP dial-in states from Talk `docs/constants.md`, section "SIP states".
+enum RoomSipState {
+  disabled(0),
+  enabledWithPin(1),
+  enabledWithoutPin(2);
+
+  const RoomSipState(this.wireValue);
 
   final int wireValue;
 }
@@ -536,6 +546,41 @@ final class SetRoomLobbyRequest extends RoomAdministrationRequest {
       'timed: ${timerSecondsSinceEpoch != null})';
 }
 
+/// Enables or disables SIP dial-in for a conversation.
+///
+/// `PUT /ocs/v2.php/apps/spreed/api/v4/room/{token}/webinar/sip` with a
+/// `state` form field, from Talk `docs/webinar.md`, section "Enable or disable
+/// SIP dial-in". The endpoint requires `sip-support`; state 2 additionally
+/// requires `sip-support-nopin`. Talk can refuse a repeated/forced value with
+/// 400, a caller without permission with 403, a missing room with 404, and an
+/// instance without configured SIP with 412.
+final class SetRoomSipRequest extends RoomAdministrationRequest {
+  SetRoomSipRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.state,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final RoomSipState state;
+
+  @override
+  String get httpMethod => 'PUT';
+
+  @override
+  Map<String, String>? get formBody =>
+      UnmodifiableMapView({'state': state.wireValue.toString()});
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'webinar/sip');
+
+  @override
+  String toString() => 'SetRoomSipRequest(state: ${state.name})';
+}
+
 /// Puts a group or public conversation into read-only mode or back into
 /// read-write.
 ///
@@ -619,10 +664,8 @@ final class SetRoomEmojiAvatarRequest extends RoomAdministrationRequest {
   String get httpMethod => 'POST';
 
   @override
-  Map<String, String>? get formBody => UnmodifiableMapView({
-    'emoji': emoji,
-    'color': ?hexColor,
-  });
+  Map<String, String>? get formBody =>
+      UnmodifiableMapView({'emoji': emoji, 'color': ?hexColor});
 
   @override
   Uri get uri => _roomV1Uri(server, roomToken, 'avatar/emoji');
@@ -707,8 +750,7 @@ final class SetRoomAvatarRequest extends RoomAdministrationRequest {
   late final String _boundary = _randomBoundary();
 
   /// The `Content-Type` header that goes with [multipartBody].
-  String get multipartContentType =>
-      'multipart/form-data; boundary=$_boundary';
+  String get multipartContentType => 'multipart/form-data; boundary=$_boundary';
 
   /// The encoded `multipart/form-data` body carrying [imageBytes] as the
   /// single `file` part.

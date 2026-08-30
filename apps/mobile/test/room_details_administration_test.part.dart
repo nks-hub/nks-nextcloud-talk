@@ -426,6 +426,280 @@ void _registerAdministrationTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('SIP settings need both capability and server permission', (
+    tester,
+  ) async {
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true},
+    );
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: permitted,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-sip')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+
+    final capable = await withCapabilities({'sip-support'});
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: conversation,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-sip')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-sip')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+
+    final classified = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true, 'attributes': 4},
+    );
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: classified,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-sip')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('SIP without PIN stays hidden without its own capability', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'sip-support'});
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true},
+    );
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: participantsClient(const <Object?>[]),
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-sip')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('room-details-sip-enabledWithPin')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('room-details-sip-enabledWithoutPin')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('enabling SIP with PIN sends state 1 and uses the server room', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'sip-support'});
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true},
+    );
+    Map<String, String>? sent;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' &&
+          request.url.path.endsWith('/webinar/sip')) {
+        sent = request.bodyFields;
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['canEnableSIP'] = true
+            ..['sipEnabled'] = 1,
+        );
+      }
+      return http.Response('', 404);
+    });
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: client,
+    );
+    expect(_textByKey(tester, 'room-details-sip-subtitle'), 'Disabled');
+
+    await tester.tap(find.byKey(const Key('room-details-sip')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-sip-enabledWithPin')));
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-sip-subtitle') ==
+          'Enabled with a personal PIN',
+    );
+
+    expect(sent, {'state': '1'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('SIP no-PIN mode sends state 2 and patches an empty response', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({
+      'sip-support',
+      'sip-support-nopin',
+    });
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true, 'sipEnabled': 1},
+    );
+    Map<String, String>? sent;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' &&
+          request.url.path.endsWith('/webinar/sip')) {
+        sent = request.bodyFields;
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: client,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-sip')));
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const Key('room-details-sip-enabledWithoutPin')),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-sip-subtitle') ==
+          'Enabled without a PIN',
+    );
+
+    expect(sent, {'state': '2'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('disabling SIP sends state 0 and patches an empty response', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'sip-support'});
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true, 'sipEnabled': 1},
+    );
+    Map<String, String>? sent;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' &&
+          request.url.path.endsWith('/webinar/sip')) {
+        sent = request.bodyFields;
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: client,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-sip')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-sip-disabled')));
+    await _pumpUntil(
+      tester,
+      () => _textByKey(tester, 'room-details-sip-subtitle') == 'Disabled',
+    );
+
+    expect(sent, {'state': '0'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets(
+    'an unconfigured SIP bridge keeps the old state and explains it',
+    (tester) async {
+      final capable = await withCapabilities({'sip-support'});
+      final permitted = await _insertConversation(
+        database,
+        account,
+        overrides: {'canEnableSIP': true},
+      );
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/participants')) {
+          return _ocsSuccess(const <Object?>[]);
+        }
+        if (request.method == 'PUT' &&
+            request.url.path.endsWith('/webinar/sip')) {
+          return _ocsFailure(412);
+        }
+        return http.Response('', 404);
+      });
+      await openDetails(
+        tester,
+        forAccount: capable,
+        forConversation: permitted,
+        client: client,
+      );
+
+      await tester.tap(find.byKey(const Key('room-details-sip')));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const Key('room-details-sip-enabledWithPin')),
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .text('SIP dial-in is not configured on this server.')
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      expect(_textByKey(tester, 'room-details-sip-subtitle'), 'Disabled');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+  );
+
   testWidgets('the read-only switch needs the read-only-rooms feature', (
     tester,
   ) async {

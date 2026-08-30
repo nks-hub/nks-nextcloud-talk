@@ -693,6 +693,18 @@
   "@roomDetailsLobbyDialogConfirm": {
     "description": "Confirm button that turns the lobby on."
   },
+  "roomDetailsSipLabel": "Phone and SIP dial-in",
+  "@roomDetailsSipLabel": {"description": "Label of the SIP dial-in room setting."},
+  "roomDetailsSipDisabled": "Disabled",
+  "@roomDetailsSipDisabled": {"description": "SIP room setting option that disables dial-in."},
+  "roomDetailsSipWithPin": "Enabled with a personal PIN",
+  "@roomDetailsSipWithPin": {"description": "SIP room setting option that requires each attendee's PIN."},
+  "roomDetailsSipWithoutPin": "Enabled without a PIN",
+  "@roomDetailsSipWithoutPin": {"description": "SIP room setting option that allows dial-in without a PIN."},
+  "roomDetailsSipDialogTitle": "Phone and SIP dial-in",
+  "@roomDetailsSipDialogTitle": {"description": "Title of the SIP dial-in mode picker."},
+  "roomDetailsSipNotConfigured": "SIP dial-in is not configured on this server.",
+  "@roomDetailsSipNotConfigured": {"description": "Error shown when a server advertises SIP but has no configured bridge."},
   "roomDetailsReadOnlyToggleLabel": "Read-only",
   "@roomDetailsReadOnlyToggleLabel": {
     "description": "Label of the read-only switch."

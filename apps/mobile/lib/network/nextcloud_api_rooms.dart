@@ -555,7 +555,9 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     }
     final payload = await _sendBody(
       request,
-      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      allowedStatusCodes: administrationRequest is SetRoomSipRequest
+          ? _sipAdministrationAllowedStatusCodes
+          : _roomAdministrationAllowedStatusCodes,
       maximumBytes: _roomSettingsMaximumBytes,
     );
     return decodeRoomAdministrationResponse(
@@ -612,7 +614,7 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       });
     final payload = await _sendBody(
       request,
-      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      allowedStatusCodes: _banAllowedStatusCodes,
       maximumBytes: bansMaximumWireBytes,
     );
     return decodeListBansResponse(
@@ -639,7 +641,7 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       ..bodyFields = banRequest.formBody;
     final payload = await _sendBody(
       request,
-      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      allowedStatusCodes: _banAllowedStatusCodes,
       maximumBytes: bansMaximumWireBytes,
     );
     return decodeBanActorResponse(
@@ -664,7 +666,7 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       });
     final payload = await _sendBody(
       request,
-      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      allowedStatusCodes: _banAllowedStatusCodes,
       maximumBytes: bansMaximumWireBytes,
     );
     return decodeUnbanActorResponse(

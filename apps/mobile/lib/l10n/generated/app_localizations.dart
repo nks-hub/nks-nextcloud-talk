@@ -3212,6 +3212,42 @@ abstract class AppLocalizations {
   /// **'Turn the lobby on'**
   String get roomDetailsLobbyDialogConfirm;
 
+  /// Label of the SIP dial-in room setting.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone and SIP dial-in'**
+  String get roomDetailsSipLabel;
+
+  /// SIP room setting option that disables dial-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get roomDetailsSipDisabled;
+
+  /// SIP room setting option that requires each attendee's PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled with a personal PIN'**
+  String get roomDetailsSipWithPin;
+
+  /// SIP room setting option that allows dial-in without a PIN.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled without a PIN'**
+  String get roomDetailsSipWithoutPin;
+
+  /// Title of the SIP dial-in mode picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone and SIP dial-in'**
+  String get roomDetailsSipDialogTitle;
+
+  /// Error shown when a server advertises SIP but has no configured bridge.
+  ///
+  /// In en, this message translates to:
+  /// **'SIP dial-in is not configured on this server.'**
+  String get roomDetailsSipNotConfigured;
+
   /// Label of the read-only switch.
   ///
   /// In en, this message translates to:

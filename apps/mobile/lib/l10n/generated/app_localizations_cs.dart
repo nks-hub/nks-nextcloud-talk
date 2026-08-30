@@ -1739,6 +1739,25 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsLobbyDialogConfirm => 'Zapnout čekárnu';
 
   @override
+  String get roomDetailsSipLabel => 'Telefonické a SIP připojení';
+
+  @override
+  String get roomDetailsSipDisabled => 'Vypnuto';
+
+  @override
+  String get roomDetailsSipWithPin => 'Zapnuto s osobním PINem';
+
+  @override
+  String get roomDetailsSipWithoutPin => 'Zapnuto bez PINu';
+
+  @override
+  String get roomDetailsSipDialogTitle => 'Telefonické a SIP připojení';
+
+  @override
+  String get roomDetailsSipNotConfigured =>
+      'SIP připojení není na tomto serveru nakonfigurované.';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Jen ke čtení';
 
   @override

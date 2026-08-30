@@ -122,6 +122,7 @@ final class ConversationRoom {
     required this.canDeleteConversation,
     required this.canLeaveConversation,
     required this.canEnableSip,
+    required this.sipEnabled,
     required this.hasPassword,
     required this.notificationCalls,
     required this.notificationLevel,
@@ -199,6 +200,11 @@ final class ConversationRoom {
   final bool canDeleteConversation;
   final bool canLeaveConversation;
   final bool canEnableSip;
+
+  /// SIP dial-in state: disabled, enabled with per-attendee PINs, or enabled
+  /// without a PIN (Talk `docs/constants.md`, "SIP states").
+  final int sipEnabled;
+
   final bool hasPassword;
   final int notificationCalls;
   final int notificationLevel;
@@ -327,7 +333,13 @@ ConversationRoom parseConversationRoom(
     path: '$path.sessionId',
     code: _responseCode,
   );
-  _requireInt(room, 'sipEnabled', path);
+  final sipEnabled = _requireInt(
+    room,
+    'sipEnabled',
+    path,
+    minimum: 0,
+    maximum: 2,
+  );
   final status = _optionalString(room, 'status', path);
   final statusClearAt = _optionalNullableInt(room, 'statusClearAt', path);
   final statusIcon = _requireNullableString(room, 'statusIcon', path);
@@ -410,6 +422,7 @@ ConversationRoom parseConversationRoom(
     canDeleteConversation: canDeleteConversation,
     canLeaveConversation: canLeaveConversation,
     canEnableSip: canEnableSip,
+    sipEnabled: sipEnabled,
     hasPassword: hasPassword,
     notificationCalls: notificationCalls,
     notificationLevel: notificationLevel,

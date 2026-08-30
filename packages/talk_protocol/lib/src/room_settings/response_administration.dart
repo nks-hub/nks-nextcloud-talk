@@ -253,14 +253,13 @@ LeaveRoomResponse decodeLeaveRoomResponse({
 }
 
 // ---------------------------------------------------------------------------
-// Conversation administration (public, password, lobby, read-only, avatar)
+// Conversation administration
 // ---------------------------------------------------------------------------
 
 /// A classified response to any [RoomAdministrationRequest].
 ///
-/// The six administration endpoints answer with the same status codes and the
-/// same meaning for each of them, so they share one response family the way
-/// the three participant-moderation endpoints do.
+/// The administration endpoints share their common response family. SIP also
+/// uses 412 when the instance has no configured bridge.
 sealed class RoomAdministrationResponse {
   const RoomAdministrationResponse(this.request);
 
@@ -358,6 +357,21 @@ final class RoomAdministrationRoomMissing extends RoomAdministrationResponse {
   String toString() => 'RoomAdministrationRoomMissing()';
 }
 
+/// HTTP 412. A server-side component required for this setting is not
+/// configured. Talk uses it for SIP when no SIP bridge is available.
+final class RoomAdministrationPreconditionFailed
+    extends RoomAdministrationResponse {
+  const RoomAdministrationPreconditionFailed._({
+    required RoomAdministrationRequest request,
+  }) : super(request);
+
+  @override
+  int get statusCode => 412;
+
+  @override
+  String toString() => 'RoomAdministrationPreconditionFailed()';
+}
+
 /// A supported non-body HTTP failure.
 final class RoomAdministrationHttpFailure extends RoomAdministrationResponse {
   const RoomAdministrationHttpFailure._({
@@ -396,6 +410,9 @@ RoomAdministrationResponse decodeRoomAdministrationResponse({
     case 404:
       _decodeOcsEnvelope(body);
       return RoomAdministrationRoomMissing._(request: request);
+    case 412:
+      _decodeOcsEnvelope(body);
+      return RoomAdministrationPreconditionFailed._(request: request);
     case 429:
       return RoomAdministrationHttpFailure._(
         request: request,

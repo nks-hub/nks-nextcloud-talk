@@ -40,11 +40,14 @@ const int _notificationNever = 3;
 
 /// Talk capability names that gate the administration actions, from
 /// `docs/capabilities.md`: `avatar` (Talk 17), `read-only-rooms` (6.0),
-/// `webinary-lobby` (7.0) and `ban-v1` (20). Making a conversation public and
-/// setting its password need no capability at all.
+/// `webinary-lobby` (7.0), `sip-support` / `sip-support-nopin` and `ban-v1`
+/// (20). Making a conversation public and setting its password need no
+/// capability at all.
 const String _avatarCapability = 'avatar';
 const String _readOnlyCapability = 'read-only-rooms';
 const String _lobbyCapability = 'webinary-lobby';
+const String _sipCapability = 'sip-support';
+const String _sipNoPinCapability = 'sip-support-nopin';
 const String _banCapability = 'ban-v1';
 const String _messageExpirationCapability = 'message-expiration';
 const String _clearHistoryCapability = 'clear-history';
@@ -79,7 +82,7 @@ enum ParticipantAction { promote, demote, remove, ban }
 
 /// Conversation details: room metadata, the moderator-gated settings
 /// actions (rename, description, notification level, favorite, avatar,
-/// public/private, password, message expiration, lobby, read-only, leave,
+/// public/private, password, message expiration, lobby, SIP, read-only, leave,
 /// delete) and the participant list with each attendee's role, status and
 /// moderation menu.
 final class RoomDetailsScreen extends ConsumerStatefulWidget {
@@ -344,6 +347,17 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               value: _lobbyState != 0,
               onChanged: _busy ? null : _toggleLobby,
+            ),
+          if (_canSetSip)
+            ListTile(
+              key: const Key('room-details-sip'),
+              leading: const Icon(Icons.dialpad_outlined),
+              title: Text(strings.roomDetailsSipLabel),
+              subtitle: Text(
+                _sipLabel(strings),
+                key: const Key('room-details-sip-subtitle'),
+              ),
+              onTap: _busy ? null : _changeSip,
             ),
           if (_canSetReadOnly)
             SwitchListTile(
