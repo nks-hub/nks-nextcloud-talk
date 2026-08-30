@@ -7,6 +7,10 @@ drží stejné číslo, aby se hlášení od testerů daly spárovat napříč p
 Zdrojem pravdy o verzi je `apps/mobile/pubspec.yaml`; `apps/mobile/lib/core/app_version.dart`
 ji zrcadlí a test hlídá, aby se ty dvě nerozešly.
 
+Buildy 17 až 19 tag nemají, a mít ho nebudou: na Play je nahradil build 20
+ještě před schválením a na TestFlight se vůbec nedostaly. Tag drží jen to,
+co se opravdu dostalo k testerům.
+
 Buildy 1 a 3 vznikly ještě před uzavřeným testováním na Play a šly jen na
 TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se číslo
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
@@ -14,7 +18,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (20) — 30. 8. 2026
 
-Play: prochází kontrolou. TestFlight: build `VALID`, obě skupiny.
+Play: publikováno 30. 8. 8:51, k dispozici testerům, 177 zemí.
+TestFlight: build `VALID`, obě skupiny.
 
 - Emoji jako obrázek konverzace si můžete obarvit. K výběru emoji přibyla
   řada barev pozadí. Ve výchozím stavu se barva neposílá vůbec, takže se
@@ -22,7 +27,8 @@ Play: prochází kontrolou. TestFlight: build `VALID`, obě skupiny.
 
 ## 0.1.0 (19) — 30. 8. 2026
 
-Play: prochází kontrolou. TestFlight: přeskočeno, nahradil ho build 20.
+Play: odesláno ke kontrole, ještě před schválením nahrazeno buildem 20.
+TestFlight: přeskočeno, nahradil ho build 20.
 
 - Hledat jde i uvnitř jedné konverzace. V její liště přibyla lupa, která
   prohledá jen ji; hledání ze seznamu konverzací zůstává přes všechny.
@@ -30,7 +36,8 @@ Play: prochází kontrolou. TestFlight: přeskočeno, nahradil ho build 20.
 
 ## 0.1.0 (18) — 30. 8. 2026
 
-Play: prochází kontrolou, 177 zemí. TestFlight: přeskočeno, nahradil ho build 20.
+Play: odesláno ke kontrole, ještě před schválením nahrazeno buildem 20.
+TestFlight: přeskočeno, nahradil ho build 20.
 
 - Stav si můžete nechat vymazat sám. K poli se zprávou přibyla volba
   „Vymazat stav": za 30 minut, za hodinu, za 4 hodiny, dnes nebo tento
