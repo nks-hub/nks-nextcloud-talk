@@ -31,6 +31,10 @@ proto jen to, co je doložitelné z App Store Connect.
 - GIF přijatý ze serveru bez aktivní Giphy integrace už nenabízí nefunkční
   opakování. Místo něj ukáže, že GIFy na serveru nejsou dostupné; samotný odkaz
   přitom nezobrazí.
+- Moderátor může v detailu podporované konverzace zapnout telefonické a SIP
+  připojení s osobním PINem, bez PINu nebo jej vypnout. Volby se zobrazí jen
+  tehdy, když je server i účet skutečně podporují. Po zapnutí uvidí každý
+  účastník serverové pokyny, ID schůzky a případně svůj osobní PIN.
 
 ## 0.1.0 (23) — 30. 8. 2026
 

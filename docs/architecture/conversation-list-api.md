@@ -167,7 +167,9 @@ Balík `talk_protocol` nyní implementuje celou platformně neutrální hranici:
 - `ConversationRoom` a `ConversationPreview` typují list, unread, permission,
   call a preview hodnoty a zachovávají hluboce neměnný wire objekt. Room model
   po validaci zpřístupňuje také `objectType`, `avatarVersion`,
-  `isCustomAvatar`, volitelný `remoteServer` a odvozený `isFederated`;
+  `isCustomAvatar`, volitelný `remoteServer`, odvozený `isFederated`,
+  autoritativní `canEnableSip`, bounded `sipEnabled` v rozsahu 0 až 2 a
+  redigovaný osobní `attendeePin`;
 - `messageParameters` a `reactions` jsou mapy. Kvůli PHP JSON serializaci se
   přijme také pouze prázdné pole `[]` a normalizuje se na prázdnou mapu;
   neprázdné pole se odmítne jako neplatná conversation response;

@@ -68,6 +68,11 @@ hranici; lokální credentials se na vzdálený server nepřeposílají.
 Ticket, JWT, TURN credential, federation token, resume ID, SDP a ICE candidate
 nejsou součástí `toString()`, výjimky ani durable snapshotu.
 
+Settings response navíc nese bounded `sipDialinInfo` s room-specific
+telefonními instrukcemi. Flutter jej používá jen transientně v detailu
+konverzace; hodnota může obsahovat telefonní čísla, proto se neloguje ani
+neukládá do durable call snapshotu.
+
 ## HPB handshake a epochy
 
 Po otevření socketu runtime čeká nejvýše jednu sekundu na volitelný `welcome`,

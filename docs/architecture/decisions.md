@@ -69,6 +69,16 @@ participant-scoped, nikoli moderator-only. Klient za capability
 úplnou výslednou množinu `tagIds`; lokální delta ani skryté predefined tagy
 nesmějí serverový stav přepsat.
 
+SIP room nastavení na ověřeném serverovém SHA `f2958bb` používá
+`PUT .../room/{token}/webinar/sip` a absolutní stavy 0 (vypnuto), 1 (osobní
+PIN) a 2 (bez PINu). UI vyžaduje `sip-support`, autoritativní room příznak
+`canEnableSIP` a neclassified room; stav 2 navíc `sip-support-nopin`. HTTP 412
+znamená chybějící serverový SIP bridge, nikoli úspěch ani obecnou síťovou chybu.
+Response room je autoritativní a prázdná success odpověď se odmítne, protože by
+klient neznal osobní `attendeePin`. Room-specific `sipDialinInfo` se načte z
+bounded signaling settings GET; instrukce ani PIN se nepersistují v call
+snapshotu a diagnostické řetězce je vždy redigují.
+
 `clear-history` je destruktivní moderator-only online operace bez klientského
 idempotency key. Po fresh authenticated capability snapshotu používá jediný
 DELETE bez body a nikdy nevstoupí do outboxu ani automatického retry. HTTP 200
