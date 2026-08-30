@@ -1,6 +1,6 @@
 # Kontrakt seznamu konverzací
 
-Datum ověření: 25. srpna 2026.
+Datum ověření: 31. srpna 2026.
 
 Stav: OpenAPI, syntetické response fixture, capability a runtime wire scénáře,
 produkční pure Dart parser a merge planner, privacy guard i autentizovaný
@@ -74,6 +74,31 @@ Merge je zpracuje takto: inkrementální odpověď bez klíče `status` předcho
 hodnotu zachová, plná odpověď je autoritativní a přepíše ji i na prázdnou.
 `offline` a `invisible` se nevykreslují jako presence. Vlastní status se
 prezentuje jen do `statusClearAt`. Detail rozhodnutí je v D-029.
+
+### Aktuální absence v soukromé konverzaci
+
+DAV kontrakt byl ověřen 31. srpna 2026 proti Nextcloud `stable34` na SHA
+`a32bcea9cb0e0dec3329d8d8b17be190cea1a767`. Klient se na absenci ptá pouze
+pro 1:1 room stejného účtu s neprázdným `roomName`, které je serverovým user ID
+protistrany. Nejdřív musí konkrétní account snapshot obsahovat přesné
+`dav.absence-supported = true`; missing nebo malformed capability je
+fail-closed.
+
+GET jde na account origin
+`/ocs/v2.php/apps/dav/api/v1/outOfOffice/{userId}/now?format=json` se stejným
+loginem a credentialem. `404` znamená žádnou aktuální absenci. Úspěšná odpověď
+musí mít OCS `ok/200`, přesně požadované `userId`, nezáporné timestampy v
+platném pořadí a řetězce nejvýše 4096 Unicode code points. Tělo je omezené na
+64 KiB. Změna roomu, účtu nebo zavření obrazovky zruší capability i DAV
+request; opožděný výsledek se do nové konverzace nepřenese.
+
+`16101db` vykresluje období, zprávu a volitelný zástup bez durable cache.
+Vizuální title má nejvýše dva řádky, zpráva tři a zástup dva; celý bounded text
+zůstává v jediném leaf semantics labelu. Přesný 200% test s téměř maximálním
+multiline payloadem nemá overflow. Živý POST → GET → DELETE round trip na iOS
+18.6 prokázal banner v obou tématech a accessibility-large layout; pixelový
+pár `#4F4061` / `#EDDCFF` má v light i dark kontrast 7,2739:1. Následný
+`GET /now` po úklidu vrátil 404.
 
 Server zachytí hodnotu `X-Nextcloud-Talk-Modified-Before` jako první operaci
 metody, tedy před eventem, status update i načtením rooms. Další request s tímto

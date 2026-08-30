@@ -657,3 +657,20 @@ nefocusovaný root nezastaví aktivní thread v desktop split view.
 Live web → iOS round trip na referenční instanci prokázal start i stop bez
 odeslání zprávy. Pixelově změřený banner měl 4,72:1 ve světlém a 11,15:1 v
 tmavém režimu.
+
+### D-040: Absence protistrany je transientní account-scoped DAV pohled
+
+Stav: Přijato 31. srpna 2026, commit `16101db`.
+
+Aktuální absence se načítá pouze pro otevřenou 1:1 konverzaci a jen za
+`dav.absence-supported = true`. User ID pochází z account-bound roomu a GET
+používá origin, login i credential stejného účtu. Account mismatch, skupina,
+prázdné user ID nebo chybějící capability nesmí spustit žádný request.
+
+Absence není chat zpráva ani durable synchronizační stav. Neukládá se do Drift
+databáze a po otevření nebo změně konverzace se načte z autoritativního DAV
+endpointu. Vlastníkem requestu je banner; při změně scope nebo dispose zruší
+capability i navazující GET, aby starý výsledek nemohl přeskočit do jiné room.
+
+Serverový text zůstává celý pro čtečku obrazovky, ale vizuální řádky jsou
+omezené. Tím validní bounded payload neznepřístupní chat při zvětšeném písmu.
