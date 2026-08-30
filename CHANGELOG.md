@@ -14,6 +14,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (19) — 30. 8. 2026
 
+Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.
+
 - Hledat jde i uvnitř jedné konverzace. V její liště přibyla lupa, která
   prohledá jen ji; hledání ze seznamu konverzací zůstává přes všechny.
   Aplikace to uměla odjakživa, ale nikde se na to nedalo kliknout.
