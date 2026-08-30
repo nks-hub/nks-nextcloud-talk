@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/push/client_push_coordinator.dart';
 import 'package:nextcloudtalk/features/push/client_push_session.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 final class _FakeSocket implements ClientPushSocket {
@@ -98,6 +99,46 @@ void main() {
     expect(connector.sockets, isEmpty);
     expect(woken, isEmpty);
     await coordinator.dispose();
+  });
+
+  test('a capability timeout stays inside the retry loop', () async {
+    final connector = _Connector();
+    final secondRetryStarted = Completer<void>();
+    final releaseSecondRetry = Completer<void>();
+    final uncaught = <Object>[];
+    var resolves = 0;
+    var delays = 0;
+    final coordinator = ClientPushCoordinator(
+      resolve: (_) async {
+        resolves++;
+        throw const NextcloudApiException(NextcloudApiError.timeout);
+      },
+      fetchToken: (_, _) async => 'token',
+      connector: connector,
+      onWakeUp: (_) {},
+      delay: (_) async {
+        delays++;
+        if (delays == 2) {
+          secondRetryStarted.complete();
+          await releaseSecondRetry.future;
+        }
+      },
+    );
+
+    runZonedGuarded(
+      () => coordinator.follow('account-a'),
+      (error, _) => uncaught.add(error),
+    );
+    await secondRetryStarted.future.timeout(const Duration(seconds: 1));
+
+    expect(connector.sockets, isEmpty);
+    expect(uncaught, isEmpty);
+    expect(resolves, 2);
+    await coordinator.dispose();
+    releaseSecondRetry.complete();
+    await _settle();
+    expect(resolves, 2);
+    expect(uncaught, isEmpty);
   });
 
   test('a dropped socket is reconnected', () async {
