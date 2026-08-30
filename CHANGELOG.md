@@ -16,6 +16,14 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (21) — 30. 8. 2026
+
+Play: připravuje se. TestFlight: připravuje se.
+
+- Při tažení otevřené konverzace zpět je nově vidět skutečný seznam
+  konverzací pod ní. Dříve se chat sice posouval správně, ale odkrýval jen
+  prázdné pozadí.
+
 ## 0.1.0 (20) — 30. 8. 2026
 
 Play: publikováno 30. 8. 8:51, k dispozici testerům, 177 zemí.
