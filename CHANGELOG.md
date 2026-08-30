@@ -14,7 +14,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (20) — 30. 8. 2026
 
-Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.
+Play: prochází kontrolou. TestFlight: build se archivuje na build-mac.
 
 - Emoji jako obrázek konverzace si můžete obarvit. K výběru emoji přibyla
   řada barev pozadí. Ve výchozím stavu se barva neposílá vůbec, takže se
@@ -22,7 +22,7 @@ Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.
 
 ## 0.1.0 (19) — 30. 8. 2026
 
-Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.
+Play: prochází kontrolou. TestFlight: přeskočeno, nahradil ho build 20.
 
 - Hledat jde i uvnitř jedné konverzace. V její liště přibyla lupa, která
   prohledá jen ji; hledání ze seznamu konverzací zůstává přes všechny.
@@ -30,7 +30,7 @@ Play: prochází kontrolou. TestFlight: čeká, build-mac je mimo relay.
 
 ## 0.1.0 (18) — 30. 8. 2026
 
-Play: prochází kontrolou, 177 zemí. TestFlight: čeká, build-mac je mimo relay.
+Play: prochází kontrolou, 177 zemí. TestFlight: přeskočeno, nahradil ho build 20.
 
 - Stav si můžete nechat vymazat sám. K poli se zprávou přibyla volba
   „Vymazat stav": za 30 minut, za hodinu, za 4 hodiny, dnes nebo tento
@@ -42,7 +42,7 @@ Play: prochází kontrolou, 177 zemí. TestFlight: čeká, build-mac je mimo rel
 ## 0.1.0 (17) — 30. 8. 2026
 
 Play: odesláno ke kontrole, ještě před schválením nahrazeno buildem 18.
-TestFlight: čeká, build-mac je mimo relay.
+TestFlight: přeskočeno, nahradil ho build 20.
 
 - Na zprávu ve skupině jde odpovědět soukromě. V nabídce u cizí zprávy
   přibylo „Odpovědět soukromě": napsaná odpověď se odešle do vaší
