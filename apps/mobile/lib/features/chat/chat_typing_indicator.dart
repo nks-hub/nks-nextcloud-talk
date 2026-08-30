@@ -21,6 +21,23 @@ typedef ChatTypingActivity = Future<void> Function(Object source, bool active);
 
 enum ChatTypingAvailability { connecting, available, unavailable }
 
+enum ChatTypingActivityUpdate { unchanged, active, inactive }
+
+ChatTypingActivityUpdate chatTypingActivityUpdate({
+  required bool composerChanged,
+  required bool canPost,
+  required bool hasFocus,
+  required String text,
+  bool forceInactive = false,
+}) {
+  if (forceInactive || !canPost || !hasFocus || text.trim().isEmpty) {
+    return ChatTypingActivityUpdate.inactive;
+  }
+  return composerChanged
+      ? ChatTypingActivityUpdate.active
+      : ChatTypingActivityUpdate.unchanged;
+}
+
 final class ChatTypingParticipant {
   const ChatTypingParticipant({
     required this.peerId,

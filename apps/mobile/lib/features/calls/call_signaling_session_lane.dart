@@ -80,11 +80,14 @@ final class _CallSignalingLane {
   Future<bool> sendPeerMessages(Iterable<SignalingPeerMessage> messages) {
     final queued = messages.toList(growable: false);
     return _enqueue(() async {
+      final renegotiationBlocksBatch =
+          _state.renegotiationRequired && !_canSendDuringRenegotiation(queued);
       if (_disposed ||
           _failed ||
           !_state.signalingReady ||
           queued.isEmpty ||
           queued.any((message) => message.recipient == null) ||
+          renegotiationBlocksBatch ||
           _peerMessageQueue.length + queued.length >
               maximumSignalingParticipants) {
         return false;
@@ -95,15 +98,18 @@ final class _CallSignalingLane {
   }
 
   Future<bool> _flushPeerMessages() async {
+    final renegotiationBlocksQueue =
+        _state.renegotiationRequired &&
+        !_canSendDuringRenegotiation(_peerMessageQueue);
     if (_disposed ||
         _failed ||
         _peerMessageQueue.isEmpty ||
         !_state.signalingReady ||
-        _state.renegotiationRequired) {
-      if (_disposed || _failed || _state.renegotiationRequired) {
+        renegotiationBlocksQueue) {
+      if (_disposed || _failed || renegotiationBlocksQueue) {
         _peerMessageQueue.clear();
       }
-      return !_disposed && !_failed && !_state.renegotiationRequired;
+      return !_disposed && !_failed && !renegotiationBlocksQueue;
     }
 
     final SignalingRuntimeResult result;
@@ -156,6 +162,19 @@ final class _CallSignalingLane {
     }
     return true;
   }
+
+  bool _canSendDuringRenegotiation(Iterable<SignalingPeerMessage> messages) =>
+      _state.transport == SignalingTransportKind.externalHpb &&
+      messages.isNotEmpty &&
+      messages.every(_isPayloadFreeTypingPeerMessage);
+
+  bool _isPayloadFreeTypingPeerMessage(SignalingPeerMessage message) =>
+      (message.type == 'startedTyping' || message.type == 'stoppedTyping') &&
+      message.roomType.isEmpty &&
+      message.sid == null &&
+      message.sender == null &&
+      message.recipient != null &&
+      message.payload == null;
 
   Future<bool> sendControl(HpbControlMessage control) {
     return _enqueue(() async {

@@ -3,7 +3,7 @@ part of 'chat_room_pane.dart';
 extension _ChatRoomPaneTyping on _ChatRoomPaneState {
   void _handleComposerChanged() {
     _scheduleDraftSave();
-    _syncTypingActivity();
+    _syncTypingActivity(composerChanged: true);
   }
 
   void _handleComposerFocusChanged() => _syncTypingActivity();
@@ -31,16 +31,25 @@ extension _ChatRoomPaneTyping on _ChatRoomPaneState {
     });
   }
 
-  void _syncTypingActivity({bool forceInactive = false}) {
+  void _syncTypingActivity({
+    bool composerChanged = false,
+    bool forceInactive = false,
+  }) {
     final key = _activeTypingKey;
     if (key == null) {
       return;
     }
-    final active =
-        !forceInactive &&
-        _typingCanPost &&
-        _composerFocusNode.hasFocus &&
-        _composer.text.trim().isNotEmpty;
+    final update = chatTypingActivityUpdate(
+      composerChanged: composerChanged,
+      canPost: _typingCanPost,
+      hasFocus: _composerFocusNode.hasFocus,
+      text: _composer.text,
+      forceInactive: forceInactive,
+    );
+    if (update == ChatTypingActivityUpdate.unchanged) {
+      return;
+    }
+    final active = update == ChatTypingActivityUpdate.active;
     unawaited(ref.read(chatTypingActivityProvider(key))(_typingSource, active));
   }
 

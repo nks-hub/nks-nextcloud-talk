@@ -10,6 +10,36 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  test('stale draft is not typing activity during a lifecycle sync', () {
+    expect(
+      chatTypingActivityUpdate(
+        composerChanged: false,
+        canPost: true,
+        hasFocus: true,
+        text: 'Existing draft',
+      ),
+      ChatTypingActivityUpdate.unchanged,
+    );
+    expect(
+      chatTypingActivityUpdate(
+        composerChanged: true,
+        canPost: true,
+        hasFocus: true,
+        text: 'Existing draft plus a key',
+      ),
+      ChatTypingActivityUpdate.active,
+    );
+    expect(
+      chatTypingActivityUpdate(
+        composerChanged: false,
+        canPost: true,
+        hasFocus: false,
+        text: 'Existing draft',
+      ),
+      ChatTypingActivityUpdate.inactive,
+    );
+  });
+
   test(
     'projects peer-scoped typing, stop, timeout and transport loss',
     () async {

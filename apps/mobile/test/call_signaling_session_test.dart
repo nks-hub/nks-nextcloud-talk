@@ -197,6 +197,14 @@ void main() {
 
   test('HPB peer batch serializes every recipient frame', () async {
     await _insertAccount(accounts, credentials, accountId: 'account-a');
+    await sessions.persist(
+      _initialState(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        connectionEpoch: 4,
+        roomEpoch: 6,
+      ).copyWith(renegotiationRequired: true),
+    );
     final api = HttpNextcloudApi(client: _ExternalSettingsClient());
     final sockets = _FakeSocketConnector();
     final coordinator = CallSignalingCoordinator(
@@ -216,7 +224,7 @@ void main() {
     final session = await coordinator.start(
       accountId: 'account-a',
       roomToken: 'rooma123',
-      nextcloudSessionId: 'session-a',
+      nextcloudSessionId: 'session-account-a',
     );
     await _waitFor(
       session,
@@ -247,15 +255,16 @@ void main() {
       (update) => update.phase == SignalingAccountPhase.signalingReady,
     );
 
-    expect(
-      await session.sendPeerMessages([
-        _typingPeerMessage('peer-a'),
-        _typingPeerMessage('peer-b'),
-      ]),
-      isTrue,
-    );
+    socket.holdNextSend();
+    final typing = session.sendPeerMessages([
+      _typingPeerMessage('peer-a'),
+      _typingPeerMessage('peer-b'),
+    ]);
     final first =
         jsonDecode(await socket.waitForSent(2)) as Map<String, Object?>;
+    expect(await typing, isTrue);
+    expect(await session.sendPeerMessage(_peerMessage()), isFalse);
+    socket.releaseHeldSend();
     final second =
         jsonDecode(await socket.waitForSent(3)) as Map<String, Object?>;
     expect(_peerRecipient(first), 'peer-a');
@@ -268,6 +277,11 @@ void main() {
       (second['message']! as Map<String, Object?>)['data'],
       <String, Object?>{'type': 'startedTyping'},
     );
+    expect(
+      await session.sendPeerMessage(_typingPeerMessageWithPayload()),
+      isFalse,
+    );
+    expect(socket.sent, hasLength(4));
 
     await session.release();
   });
@@ -410,6 +424,17 @@ SignalingPeerMessage _typingPeerMessage(String peerId) => SignalingPeerMessage(
   recipient: SignalingPeerId.parse(peerId),
   sender: null,
   payload: null,
+);
+
+SignalingPeerMessage _typingPeerMessageWithPayload() => SignalingPeerMessage(
+  type: 'startedTyping',
+  roomType: 'video',
+  sid: 'stream-a',
+  recipient: SignalingPeerId.parse('peer-b'),
+  sender: null,
+  payload: SignalingOpaquePayload.fromJson(<String, Object?>{
+    'sdp': 'synthetic-sdp',
+  }),
 );
 
 String _peerRecipient(Map<String, Object?> frame) =>
@@ -617,6 +642,7 @@ final class _FakeSocket implements HpbSocketConnection {
   );
   final List<String> sent = <String>[];
   final List<Completer<void>> _sendEvents = <Completer<void>>[];
+  Completer<void>? _heldSend;
   bool _closed = false;
 
   @override
@@ -638,6 +664,15 @@ final class _FakeSocket implements HpbSocketConnection {
     return sent[index];
   }
 
+  void holdNextSend() {
+    _heldSend = Completer<void>();
+  }
+
+  void releaseHeldSend() {
+    _heldSend?.complete();
+    _heldSend = null;
+  }
+
   Future<void> disconnect() async {
     if (!_closed) {
       _closed = true;
@@ -654,6 +689,7 @@ final class _FakeSocket implements HpbSocketConnection {
       }
     }
     _sendEvents.clear();
+    await _heldSend?.future;
   }
 
   @override
