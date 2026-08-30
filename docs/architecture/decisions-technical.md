@@ -674,3 +674,21 @@ capability i navazující GET, aby starý výsledek nemohl přeskočit do jiné 
 
 Serverový text zůstává celý pro čtečku obrazovky, ale vizuální řádky jsou
 omezené. Tím validní bounded payload neznepřístupní chat při zvětšeném písmu.
+
+### D-041: Kalendářový reminder patří k přesné call location
+
+Stav: Přijato 31. srpna 2026, commit `be6cfe5`.
+
+Nadcházející událost se nehledá podle názvu místnosti ani účastníků. Klíčem je
+přesná absolutní location `{accountOrigin}/call/{roomToken}`, kterou používá i
+upstream Talk Android. Endpoint se volá jen za `upcoming-reminders` a se stejným
+account originem, loginem a credentialem jako otevřená room.
+
+Reminder je transientní serverový pohled, ne chat zpráva ani durable cache.
+Zobrazuje se první použitelný event a zavření platí pro aktuálně otevřený pane.
+Při změně scope se request zruší a generation-bound widget zahodí stará data
+ještě před dokončením nové odpovědi.
+
+Location v odpovědi se musí přesně rovnat request filtru. Tím ani validní OCS
+payload nemůže přeskočit mezi dvěma rooms stejného účtu nebo mezi účty se
+shodným tokenem.

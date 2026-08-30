@@ -100,6 +100,33 @@ multiline payloadem nemá overflow. Živý POST → GET → DELETE round trip na
 pár `#4F4061` / `#EDDCFF` má v light i dark kontrast 7,2739:1. Následný
 `GET /now` po úklidu vrátil 404.
 
+### Nadcházející událost místnosti
+
+Talk Android `5428960` staví location filtr jako přesnou absolutní adresu
+`{accountOrigin}/call/{roomToken}` a Nextcloud `stable34` na SHA
+`a32bcea9cb0e0dec3329d8d8b17be190cea1a767` ji přijímá přes
+`GET /ocs/v2.php/apps/dav/api/v1/events/upcoming`. Klient endpoint volá pouze
+za feature `upcoming-reminders`; missing capability je fail-closed.
+
+Request používá origin, login a credential účtu otevřené room. Location vzniká
+z kanonického `ServerBase` a tokenu stejného account-scoped conversation
+snapshotu. Odpověď je omezená na 64 KiB a nejvýše 100 eventů. První zobrazitelný
+event musí mít bounded `uri`, `calendarUri`, volitelný nezáporný `start`,
+bounded summary a location přesně shodnou s requestem. Jiná location odmítne
+celou odpověď místo zobrazení události cizí room.
+
+`be6cfe5` drží reminder pouze v otevřeném pane. Změna accountu nebo room zruší
+request a generation key synchronně odstraní předchozí `FutureBuilder` data;
+pozdní výsledek staré room se nevykreslí. Banner ukazuje nejvýše dva řádky
+názvu a dva řádky času, celý bounded text ponechá v leaf semantics a zavření
+má samostatný 48dp přístupný prvek.
+
+Živý CalDAV create → DAV filter → iOS 18.6 render → dismiss round trip prošel
+ve světlém, tmavém i accessibility-large režimu; přesný 200% test pokrývá
+téměř 4096znakový název bez overflow. Pixelový pár `#394857` / `#D4E4F6` má v
+obou tématech kontrast 7,2492:1. Všechny čtyři dočasné fixture byly smazané a
+následný endpoint vrátil prázdný seznam.
+
 Server zachytí hodnotu `X-Nextcloud-Talk-Modified-Before` jako první operaci
 metody, tedy před eventem, status update i načtením rooms. Další request s tímto
 cursorem proto nevytváří časovou mezeru. Delta zahrnuje nejen novou aktivitu,

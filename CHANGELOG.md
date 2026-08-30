@@ -31,6 +31,8 @@ proto jen to, co je doložitelné z App Store Connect.
 - V soukromé konverzaci se zobrazí aktuální nepřítomnost druhého člověka,
   včetně období, zprávy a případného zástupu. Dlouhý text banner neroztáhne
   přes celý chat ani při zvětšeném systémovém písmu.
+- Nad chatem se připomene nejbližší událost kalendáře, která odkazuje na danou
+  konverzaci. Banner ukazuje název a čas a lze jej zavřít.
 - V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
   do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
   respektuje nastavení soukromí Nextcloud Talk. Vlastní indikátor se správně
