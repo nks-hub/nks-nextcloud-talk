@@ -125,6 +125,44 @@ void main() {
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
 
+  testWidgets('an edge drag previews the conversation list underneath', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    await pump(tester, token: _conversation.token);
+
+    expect(compactConversation, findsOneWidget);
+    expect(compactList, findsNothing);
+
+    final gesture = await tester.startGesture(const Offset(1, 450));
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+
+    final preview = find.byKey(const Key('conversation-edge-swipe-preview'));
+    expect(tester.widget<IgnorePointer>(preview).ignoring, isTrue);
+    expect(
+      tester
+          .widget<HeroMode>(
+            find.descendant(of: preview, matching: find.byType(HeroMode)),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      find.ancestor(of: preview, matching: find.byType(ExcludeSemantics)),
+      findsOneWidget,
+    );
+    expect(tester.getTopLeft(compactList).dx, 0);
+    expect(tester.getTopLeft(compactConversation).dx, 80);
+
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(compactConversation, findsOneWidget);
+    expect(preview, findsNothing);
+
+    await settle(tester);
+  });
+
   testWidgets('a drag from the left edge puts the conversation list back', (
     tester,
   ) async {
@@ -145,6 +183,10 @@ void main() {
 
     expect(compactList, findsOneWidget);
     expect(compactConversation, findsNothing);
+    expect(
+      find.byKey(const Key('conversation-edge-swipe-preview')),
+      findsNothing,
+    );
 
     await settle(tester);
   });

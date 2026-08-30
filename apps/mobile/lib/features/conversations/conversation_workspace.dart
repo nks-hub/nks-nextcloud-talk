@@ -173,6 +173,7 @@ final class _CompactShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final conversationList = _buildConversationList(context, strings);
     final selected = selectedConversation;
     if (selected != null) {
       // One pane, so the conversation takes the list's place instead of being
@@ -185,11 +186,12 @@ final class _CompactShell extends StatelessWidget {
             onCloseConversation();
           }
         },
-        child: Scaffold(
-          key: const Key('conversation-shell-compact-conversation'),
-          body: SafeArea(
-            child: _EdgeSwipeBack(
-              onDismiss: onCloseConversation,
+        child: _EdgeSwipeBack(
+          background: conversationList,
+          onDismiss: onCloseConversation,
+          child: Scaffold(
+            key: const Key('conversation-shell-compact-conversation'),
+            body: SafeArea(
               child: PresenceChatRoomPane(
                 account: account,
                 conversation: selected,
@@ -200,6 +202,13 @@ final class _CompactShell extends StatelessWidget {
         ),
       );
     }
+    return conversationList;
+  }
+
+  Widget _buildConversationList(
+    BuildContext context,
+    AppLocalizations strings,
+  ) {
     return Scaffold(
       key: const Key('conversation-shell-compact'),
       appBar: AppBar(
@@ -562,8 +571,13 @@ String _syncErrorMessage(AppLocalizations strings, String errorCode) {
 /// those start anywhere but the edge. Twenty-four points matches the width
 /// iOS itself treats as the screen edge.
 final class _EdgeSwipeBack extends StatefulWidget {
-  const _EdgeSwipeBack({required this.onDismiss, required this.child});
+  const _EdgeSwipeBack({
+    required this.background,
+    required this.onDismiss,
+    required this.child,
+  });
 
+  final Widget background;
   final VoidCallback onDismiss;
   final Widget child;
 
@@ -593,6 +607,15 @@ final class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        if (_offset > 0)
+          Positioned.fill(
+            child: ExcludeSemantics(
+              child: IgnorePointer(
+                key: const Key('conversation-edge-swipe-preview'),
+                child: HeroMode(enabled: false, child: widget.background),
+              ),
+            ),
+          ),
         Transform.translate(offset: Offset(_offset, 0), child: widget.child),
         Positioned(
           left: 0,
@@ -621,8 +644,7 @@ final class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
               dismiss:
                   _offset >= _edgeSwipeThreshold ||
                   (_offset >= _edgeSwipeFlickDistance &&
-                      (details.primaryVelocity ?? 0) >
-                          _edgeSwipeFlickVelocity),
+                      (details.primaryVelocity ?? 0) > _edgeSwipeFlickVelocity),
             ),
             onHorizontalDragCancel: () => _release(dismiss: false),
           ),
