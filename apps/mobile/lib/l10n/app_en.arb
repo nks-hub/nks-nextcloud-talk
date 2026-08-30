@@ -147,6 +147,14 @@
   "edited": "edited",
   "attachment": "Attachment",
   "openAttachment": "Open attachment",
+  "openLocation": "Open location: {name}",
+  "@openLocation": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Image attachment",
   "openImage": "Open image",
   "loadingImage": "Loading image…",

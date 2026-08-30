@@ -100,6 +100,70 @@ final class ChatRichObjectParameter {
   String toString() => 'ChatRichObjectParameter(<redacted>)';
 }
 
+final class ChatGeoLocation {
+  const ChatGeoLocation._({
+    required this.latitude,
+    required this.longitude,
+    required this.name,
+  });
+
+  static ChatGeoLocation? fromParameter(ChatRichObjectParameter parameter) {
+    if (parameter.type != 'geo-location') {
+      return null;
+    }
+    final latitude = _coordinate(parameter.wire['latitude']);
+    final longitude = _coordinate(parameter.wire['longitude']);
+    if (latitude == null ||
+        longitude == null ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return null;
+    }
+    return ChatGeoLocation._(
+      latitude: latitude,
+      longitude: longitude,
+      name: parameter.name?.trim(),
+    );
+  }
+
+  final double latitude;
+  final double longitude;
+  final String? name;
+
+  String get label => name?.isNotEmpty == true
+      ? name!
+      : '${latitude.toString()}, ${longitude.toString()}';
+
+  Uri get openStreetMapUri {
+    final latitudeText = latitude.toString();
+    final longitudeText = longitude.toString();
+    return Uri(
+      scheme: 'https',
+      host: 'www.openstreetmap.org',
+      path: '/',
+      queryParameters: <String, String>{
+        'mlat': latitudeText,
+        'mlon': longitudeText,
+      },
+      fragment: 'map=16/$latitudeText/$longitudeText',
+    );
+  }
+
+  static double? _coordinate(Object? value) {
+    final parsed = switch (value) {
+      final num number => number.toDouble(),
+      final String text => double.tryParse(text.trim()),
+      _ => null,
+    };
+    return parsed?.isFinite == true ? parsed : null;
+  }
+
+  @override
+  String toString() => 'ChatGeoLocation(<redacted>)';
+}
+
 final class ChatMessage {
   const ChatMessage._({
     required this.messageId,

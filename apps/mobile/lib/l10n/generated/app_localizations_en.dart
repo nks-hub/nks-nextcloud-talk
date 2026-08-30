@@ -503,6 +503,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openAttachment => 'Open attachment';
 
   @override
+  String openLocation(String name) {
+    return 'Open location: $name';
+  }
+
+  @override
   String get imageAttachment => 'Image attachment';
 
   @override

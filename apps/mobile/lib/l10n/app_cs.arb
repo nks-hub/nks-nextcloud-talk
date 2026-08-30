@@ -147,6 +147,14 @@
   "edited": "upraveno",
   "attachment": "Příloha",
   "openAttachment": "Otevřít přílohu",
+  "openLocation": "Otevřít polohu: {name}",
+  "@openLocation": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Obrázková příloha",
   "openImage": "Otevřít obrázek",
   "loadingImage": "Načítám obrázek…",

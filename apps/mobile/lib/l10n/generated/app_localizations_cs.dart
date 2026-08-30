@@ -505,6 +505,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openAttachment => 'Otevřít přílohu';
 
   @override
+  String openLocation(String name) {
+    return 'Otevřít polohu: $name';
+  }
+
+  @override
   String get imageAttachment => 'Obrázková příloha';
 
   @override

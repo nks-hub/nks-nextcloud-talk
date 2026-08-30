@@ -404,21 +404,30 @@ final class _RichObjectPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final strings = AppLocalizations.of(context);
     final parameter = node.parameter!;
     final label = parameter.name ?? parameter.id ?? node.parameterKey ?? '';
-    final icon = switch (node.objectKind) {
-      RichChatObjectKind.user ||
-      RichChatObjectKind.guest ||
-      RichChatObjectKind.federatedUser => Icons.alternate_email_rounded,
-      RichChatObjectKind.userGroup ||
-      RichChatObjectKind.circle => Icons.groups_rounded,
-      RichChatObjectKind.call => Icons.call_rounded,
-      RichChatObjectKind.email => Icons.mail_outline_rounded,
-      RichChatObjectKind.generic || null => Icons.attachment_rounded,
-    };
-    return Container(
+    final location = ChatGeoLocation.fromParameter(parameter);
+    final icon = location != null
+        ? Icons.location_on_outlined
+        : switch (node.objectKind) {
+            RichChatObjectKind.user ||
+            RichChatObjectKind.guest ||
+            RichChatObjectKind.federatedUser => Icons.alternate_email_rounded,
+            RichChatObjectKind.userGroup ||
+            RichChatObjectKind.circle => Icons.groups_rounded,
+            RichChatObjectKind.call => Icons.call_rounded,
+            RichChatObjectKind.email => Icons.mail_outline_rounded,
+            RichChatObjectKind.generic || null => Icons.attachment_rounded,
+          };
+    final pill = Container(
       margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      constraints: BoxConstraints(
+        minWidth: location == null ? 0 : 48,
+        minHeight: location == null ? 0 : 48,
+        maxWidth: MediaQuery.sizeOf(context).width - 32,
+      ),
       decoration: BoxDecoration(
         color: scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(8),
@@ -428,8 +437,42 @@ final class _RichObjectPill extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: scheme.onSecondaryContainer),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: scheme.onSecondaryContainer)),
+          Flexible(
+            child: Text(
+              location?.label ?? label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: scheme.onSecondaryContainer),
+            ),
+          ),
         ],
+      ),
+    );
+    if (location == null) {
+      return pill;
+    }
+    void openLocation() {
+      unawaited(
+        launchUrl(
+          location.openStreetMapUri,
+          mode: LaunchMode.externalApplication,
+        ),
+      );
+    }
+
+    return Semantics(
+      container: true,
+      link: true,
+      label: strings.openLocation(location.label),
+      onTap: openLocation,
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: openLocation,
+          borderRadius: BorderRadius.circular(8),
+          child: pill,
+        ),
       ),
     );
   }

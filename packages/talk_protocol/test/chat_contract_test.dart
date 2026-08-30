@@ -133,6 +133,49 @@ void main() {
     });
   });
 
+  group('chat geo location', () {
+    test('accepts the upstream string coordinates and builds an OSM URI', () {
+      final parameter = ChatRichObjectParameter.fromJson(<String, Object?>{
+        'type': 'geo-location',
+        'id': 'geo:48.85837,2.29448',
+        'name': 'Eiffel Tower',
+        'latitude': '48.85837',
+        'longitude': '2.29448',
+      });
+
+      final location = ChatGeoLocation.fromParameter(parameter);
+
+      expect(location, isNotNull);
+      expect(location!.name, 'Eiffel Tower');
+      expect(location.latitude, 48.85837);
+      expect(location.longitude, 2.29448);
+      expect(
+        location.openStreetMapUri.toString(),
+        'https://www.openstreetmap.org/'
+        '?mlat=48.85837&mlon=2.29448#map=16/48.85837/2.29448',
+      );
+    });
+
+    test('rejects malformed and out of range coordinates', () {
+      for (final coordinates in <(Object?, Object?)>[
+        ('not-a-number', '2.29448'),
+        ('91', '2.29448'),
+        ('48.85837', '-181'),
+        (double.nan, 2.29448),
+      ]) {
+        final parameter = ChatRichObjectParameter.fromJson(<String, Object?>{
+          'type': 'geo-location',
+          'id': 'geo:fixture',
+          'name': 'Invalid place',
+          'latitude': coordinates.$1,
+          'longitude': coordinates.$2,
+        });
+
+        expect(ChatGeoLocation.fromParameter(parameter), isNull);
+      }
+    });
+  });
+
   group('chat response fixtures', () {
     final fixtures = manifestFixtures.where(
       (fixture) => fixture['direction'] == 'response',

@@ -980,6 +980,12 @@ abstract class AppLocalizations {
   /// **'Open attachment'**
   String get openAttachment;
 
+  /// No description provided for @openLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Open location: {name}'**
+  String openLocation(String name);
+
   /// No description provided for @imageAttachment.
   ///
   /// In en, this message translates to:

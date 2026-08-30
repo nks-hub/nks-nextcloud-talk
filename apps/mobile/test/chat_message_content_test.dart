@@ -75,6 +75,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a valid location is a scalable 48dp map link', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _app(const TextScaler.linear(2), message: _locationMessage),
+    );
+
+    final location = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.link == true &&
+          widget.properties.label == 'Open location: Eiffel Tower',
+    );
+    expect(location, findsOneWidget);
+    expect(find.byIcon(Icons.location_on_outlined), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Open location: Eiffel Tower'),
+      findsOneWidget,
+    );
+    final size = tester.getSize(location);
+    expect(size.width, greaterThanOrEqualTo(48));
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('an invalid location remains inert', (tester) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _invalidLocationMessage),
+    );
+
+    expect(find.bySemanticsLabel('Open location: Invalid place'), findsNothing);
+    expect(find.byIcon(Icons.attachment_rounded), findsOneWidget);
+    expect(find.byType(InkWell), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a fully shaped deleted parent uses the deleted preview', (
     tester,
   ) async {
@@ -340,4 +376,35 @@ final _voiceMessage = ChatMessage.fromJson(<String, Object?>{
   'reactions': <String, Object?>{},
   'reactionsSelf': <Object?>[],
   'deleted': null,
+});
+
+final _locationMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._message.wire,
+  'id': 45,
+  'referenceId': 'reference-45',
+  'message': '{object}',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'geo-location',
+      'id': 'geo:48.85837,2.29448',
+      'name': 'Eiffel Tower',
+      'latitude': '48.85837',
+      'longitude': '2.29448',
+    },
+  },
+});
+
+final _invalidLocationMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._locationMessage.wire,
+  'id': 46,
+  'referenceId': 'reference-46',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'geo-location',
+      'id': 'geo:invalid',
+      'name': 'Invalid place',
+      'latitude': '91',
+      'longitude': '2.29448',
+    },
+  },
 });
