@@ -25,6 +25,15 @@ TestFlight: build `VALID`, obě skupiny.
   řada barev pozadí. Ve výchozím stavu se barva neposílá vůbec, takže se
   pozadí řídí světlým nebo tmavým režimem, jak to dělal doteď.
 
+Tento build zároveň přináší všechno z buildů 17 až 19, které Play nestihl
+schválit a nahradil je:
+
+- Hledat jde i uvnitř jedné konverzace. V její liště přibyla lupa, která
+  prohledá jen ji; hledání ze seznamu konverzací zůstává přes všechny.
+- Stav si můžete nechat vymazat sám: za 30 minut, za hodinu, za 4 hodiny,
+  dnes nebo tento týden.
+- Na zprávu ve skupině jde odpovědět soukromě.
+
 ## 0.1.0 (19) — 30. 8. 2026
 
 Play: odesláno ke kontrole, ještě před schválením nahrazeno buildem 20.
