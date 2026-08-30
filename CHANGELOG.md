@@ -14,7 +14,7 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (20) — 30. 8. 2026
 
-Play: prochází kontrolou. TestFlight: build se archivuje na build-mac.
+Play: prochází kontrolou. TestFlight: nahráno, `UPLOAD SUCCEEDED with no errors`.
 
 - Emoji jako obrázek konverzace si můžete obarvit. K výběru emoji přibyla
   řada barev pozadí. Ve výchozím stavu se barva neposílá vůbec, takže se
