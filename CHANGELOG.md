@@ -16,7 +16,9 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydané
+## 0.1.0 (22) — 30. 8. 2026
+
+Play: připravuje se. TestFlight: připravuje se.
 
 - „Vybrat obrázek“ na iOS otevírá knihovnu Fotek. Dříve tato volba omylem
   otevřela prohlížeč dokumentů, takže screenshot uložený jen ve Fotkách nešel
