@@ -28,6 +28,9 @@ proto jen to, co je doložitelné z App Store Connect.
 - V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
   do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
   respektuje nastavení soukromí Nextcloud Talk.
+- GIF přijatý ze serveru bez aktivní Giphy integrace už nenabízí nefunkční
+  opakování. Místo něj ukáže, že GIFy na serveru nejsou dostupné; samotný odkaz
+  přitom nezobrazí.
 
 ## 0.1.0 (23) — 30. 8. 2026
 
