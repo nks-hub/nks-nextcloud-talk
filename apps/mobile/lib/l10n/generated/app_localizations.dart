@@ -2930,6 +2930,18 @@ abstract class AppLocalizations {
   /// **'No camera is available on this device.'**
   String get attachmentCameraUnavailable;
 
+  /// No description provided for @attachmentGalleryDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Choosing a photo needs gallery access. Grant it in the system settings and try again.'**
+  String get attachmentGalleryDenied;
+
+  /// No description provided for @attachmentGalleryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo library is unavailable on this device.'**
+  String get attachmentGalleryUnavailable;
+
   /// No description provided for @attachmentTypeUnsupported.
   ///
   /// In en, this message translates to:

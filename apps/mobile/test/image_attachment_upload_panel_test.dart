@@ -221,6 +221,42 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('explains a refused gallery without offering a blind retry', (
+    tester,
+  ) async {
+    final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
+    addTearDown(events.close);
+    final controller = ImageAttachmentUploadController(
+      startUpload: (_) async => ImageAttachmentUploadSession(
+        events: events.stream,
+        cancel: () async {},
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.startPrepared(_request);
+    events.add(
+      ImageAttachmentUploadEvent.failed(
+        'gallery-permission-denied',
+        retryAllowed: false,
+      ),
+    );
+
+    await tester.pumpWidget(_app(controller));
+
+    expect(
+      find.text(
+        'Choosing a photo needs gallery access. Grant it in the system '
+        'settings and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('retry-image-attachment-upload')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _app(

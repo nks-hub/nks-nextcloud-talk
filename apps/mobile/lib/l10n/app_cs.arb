@@ -519,6 +519,8 @@
   "attachFromFile": "Vybrat soubor",
   "attachmentCameraDenied": "Focení vyžaduje přístup ke kameře. Povolte ho v nastavení systému a zkuste to znovu.",
   "attachmentCameraUnavailable": "Toto zařízení nemá dostupnou kameru.",
+  "attachmentGalleryDenied": "Výběr obrázku vyžaduje přístup ke galerii. Povolte ho v nastavení systému a zkuste to znovu.",
+  "attachmentGalleryUnavailable": "Knihovna fotek není na tomto zařízení dostupná.",
   "attachmentTypeUnsupported": "Tento typ souboru sem nelze připojit.",
   "pauseVoiceRecording": "Pozastavit nahrávání",
   "resumeVoiceRecording": "Pokračovat v nahrávání",

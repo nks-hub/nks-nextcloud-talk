@@ -341,6 +341,8 @@ String _statusText(
   ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
     'dav-quota-exceeded' => strings.imageUploadFailedQuota,
     'dav-permission-denied' => strings.imageUploadFailedPermission,
+    'gallery-permission-denied' => strings.attachmentGalleryDenied,
+    'gallery-unavailable' => strings.attachmentGalleryUnavailable,
     'camera-permission-denied' => strings.attachmentCameraDenied,
     'camera-unavailable' => strings.attachmentCameraUnavailable,
     'unsupported-attachment-type' => strings.attachmentTypeUnsupported,

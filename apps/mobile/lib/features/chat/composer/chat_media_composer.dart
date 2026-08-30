@@ -445,6 +445,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       );
     } on ImageAttachmentPickerException catch (error) {
       throw ImageAttachmentPreparationFailure(switch (error.code) {
+        ImageAttachmentPickerError.galleryPermissionDenied =>
+          'gallery-permission-denied',
+        ImageAttachmentPickerError.galleryUnavailable => 'gallery-unavailable',
         ImageAttachmentPickerError.cameraPermissionDenied =>
           'camera-permission-denied',
         ImageAttachmentPickerError.cameraUnavailable => 'camera-unavailable',

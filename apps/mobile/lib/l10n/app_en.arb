@@ -547,6 +547,8 @@
   "attachFromFile": "Choose a file",
   "attachmentCameraDenied": "Taking a picture needs camera access. Grant it in the system settings and try again.",
   "attachmentCameraUnavailable": "No camera is available on this device.",
+  "attachmentGalleryDenied": "Choosing a photo needs gallery access. Grant it in the system settings and try again.",
+  "attachmentGalleryUnavailable": "The photo library is unavailable on this device.",
   "attachmentTypeUnsupported": "That file type cannot be attached here.",
   "pauseVoiceRecording": "Pause recording",
   "resumeVoiceRecording": "Resume recording",

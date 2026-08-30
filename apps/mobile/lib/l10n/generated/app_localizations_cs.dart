@@ -1578,6 +1578,14 @@ class AppLocalizationsCs extends AppLocalizations {
       'Toto zařízení nemá dostupnou kameru.';
 
   @override
+  String get attachmentGalleryDenied =>
+      'Výběr obrázku vyžaduje přístup ke galerii. Povolte ho v nastavení systému a zkuste to znovu.';
+
+  @override
+  String get attachmentGalleryUnavailable =>
+      'Knihovna fotek není na tomto zařízení dostupná.';
+
+  @override
   String get attachmentTypeUnsupported =>
       'Tento typ souboru sem nelze připojit.';
 

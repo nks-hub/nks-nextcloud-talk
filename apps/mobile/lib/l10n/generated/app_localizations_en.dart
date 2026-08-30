@@ -1581,6 +1581,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'No camera is available on this device.';
 
   @override
+  String get attachmentGalleryDenied =>
+      'Choosing a photo needs gallery access. Grant it in the system settings and try again.';
+
+  @override
+  String get attachmentGalleryUnavailable =>
+      'The photo library is unavailable on this device.';
+
+  @override
   String get attachmentTypeUnsupported =>
       'That file type cannot be attached here.';
 

@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
-import 'package:image_picker/image_picker.dart' as camera;
+import 'package:image_picker/image_picker.dart' as platform_picker;
 import 'package:mime/mime.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -19,6 +20,8 @@ enum AttachmentPickerSource { gallery, camera, file }
 enum ImageAttachmentPickerError {
   unsupportedType,
   invalidSelection,
+  galleryPermissionDenied,
+  galleryUnavailable,
   cameraPermissionDenied,
   cameraUnavailable,
 }
@@ -52,11 +55,41 @@ abstract interface class ImageSelectionBackend {
   Future<ImageSelection?> selectImage(AttachmentPickerSource source);
 }
 
-/// Gallery and generic file selection run through `file_selector`; the camera
-/// goes through `image_picker`, which is the only one of the two that wraps
-/// `ACTION_IMAGE_CAPTURE` / `UIImagePickerController`.
-final class PlatformAttachmentSelectionBackend implements ImageSelectionBackend {
-  static const XTypeGroup _imageTypes = XTypeGroup(
+typedef OpenAttachmentFile = Future<XFile?> Function({required bool imageOnly});
+typedef PickAttachmentImage =
+    Future<XFile?> Function(platform_picker.ImageSource source);
+
+/// iOS gallery selection uses the native photo picker. Other gallery and file
+/// selections keep the document picker; the camera always uses image_picker.
+final class PlatformAttachmentSelectionBackend
+    implements ImageSelectionBackend {
+  const PlatformAttachmentSelectionBackend()
+    : _targetPlatform = null,
+      _isWeb = null,
+      _openFile = null,
+      _pickImage = null;
+
+  const PlatformAttachmentSelectionBackend._testing({
+    required this._targetPlatform,
+    required this._isWeb,
+    required this._openFile,
+    required this._pickImage,
+  });
+
+  @visibleForTesting
+  static PlatformAttachmentSelectionBackend forTesting({
+    required TargetPlatform targetPlatform,
+    required bool isWeb,
+    required OpenAttachmentFile openFile,
+    required PickAttachmentImage pickImage,
+  }) => PlatformAttachmentSelectionBackend._testing(
+    targetPlatform: targetPlatform,
+    isWeb: isWeb,
+    openFile: openFile,
+    pickImage: pickImage,
+  );
+
+  static const _imageTypes = XTypeGroup(
     label: 'Images',
     extensions: <String>[
       'avif',
@@ -83,16 +116,19 @@ final class PlatformAttachmentSelectionBackend implements ImageSelectionBackend 
     webWildCards: <String>['image/*'],
   );
 
-  const PlatformAttachmentSelectionBackend();
+  final TargetPlatform? _targetPlatform;
+  final bool? _isWeb;
+  final OpenAttachmentFile? _openFile;
+  final PickAttachmentImage? _pickImage;
 
   @override
   Future<ImageSelection?> selectImage(AttachmentPickerSource source) async {
     final file = switch (source) {
-      AttachmentPickerSource.gallery => await openFile(
-        acceptedTypeGroups: const <XTypeGroup>[_imageTypes],
+      AttachmentPickerSource.gallery => await _selectGallery(),
+      AttachmentPickerSource.file => await _selectFile(imageOnly: false),
+      AttachmentPickerSource.camera => await _selectImage(
+        platform_picker.ImageSource.camera,
       ),
-      AttachmentPickerSource.file => await openFile(),
-      AttachmentPickerSource.camera => await _capture(),
     };
     if (file == null) {
       return null;
@@ -105,20 +141,50 @@ final class PlatformAttachmentSelectionBackend implements ImageSelectionBackend 
     );
   }
 
-  Future<XFile?> _capture() async {
+  Future<XFile?> _selectGallery() {
+    final platform = _targetPlatform ?? defaultTargetPlatform;
+    final web = _isWeb ?? kIsWeb;
+    if (!web && platform == TargetPlatform.iOS) {
+      return _selectImage(platform_picker.ImageSource.gallery);
+    }
+    return _selectFile(imageOnly: true);
+  }
+
+  Future<XFile?> _selectFile({required bool imageOnly}) {
+    final injected = _openFile;
+    if (injected != null) {
+      return injected(imageOnly: imageOnly);
+    }
+    return imageOnly
+        ? openFile(acceptedTypeGroups: const <XTypeGroup>[_imageTypes])
+        : openFile();
+  }
+
+  Future<XFile?> _selectImage(platform_picker.ImageSource source) async {
     try {
-      return await camera.ImagePicker().pickImage(
-        source: camera.ImageSource.camera,
-      );
+      final injected = _pickImage;
+      return injected != null
+          ? await injected(source)
+          : await platform_picker.ImagePicker().pickImage(source: source);
     } on PlatformException catch (error) {
+      if (source == platform_picker.ImageSource.gallery) {
+        throw ImageAttachmentPickerException(
+          error.code == 'photo_access_denied' ||
+                  error.code == 'photo_access_restricted'
+              ? ImageAttachmentPickerError.galleryPermissionDenied
+              : ImageAttachmentPickerError.galleryUnavailable,
+        );
+      }
       throw ImageAttachmentPickerException(
         error.code == 'camera_access_denied'
             ? ImageAttachmentPickerError.cameraPermissionDenied
             : ImageAttachmentPickerError.cameraUnavailable,
       );
     } on MissingPluginException {
-      throw const ImageAttachmentPickerException(
-        ImageAttachmentPickerError.cameraUnavailable,
+      throw ImageAttachmentPickerException(
+        source == platform_picker.ImageSource.gallery
+            ? ImageAttachmentPickerError.galleryUnavailable
+            : ImageAttachmentPickerError.cameraUnavailable,
       );
     }
   }
