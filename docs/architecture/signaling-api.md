@@ -133,10 +133,18 @@ a po pěti sekundách nečinnosti pošle stop. Root a thread sdílejí jednu roo
 session, ale každý composer má vlastní source identitu; neaktivní root proto
 nesmí zastavit člověka píšícího ve vedlejším threadu.
 
+Commit `030ffac` odděluje chatový typing od mediální renegotiace po process
+recovery. Přes připravený externí HPB smí výjimkou projít pouze payload-free
+`startedTyping` nebo `stoppedTyping` s prázdným `roomType` a bez `sid`, senderu
+a payloadu. SDP, ICE i podvržený typing zůstávají zablokované a jejich odmítnutí
+nesmaže už čekající typing jiné session. Lifecycle refresh pouze přehodnotí
+zákaz psaní; neprázdný starý koncept bez nové změny textu nový start nevytvoří.
+
 Návrh odpovídá upstream klientům `talk-android@5428960` a
 `talk-ios@2d31eda`. Live web → iOS round trip na referenční instanci ověřil
-start i stop bez odeslání zprávy. Screenshot iOS 18.6 měl pixelový kontrast
-4,72:1 ve světlém a 11,15:1 v tmavém režimu.
+start i stop bez odeslání zprávy. Na `030ffac` prošel také opačný iOS → web
+start a stop po nečinnosti. Screenshot iOS 18.6 měl pixelový kontrast 4,72:1
+ve světlém a 11,15:1 v tmavém režimu.
 
 ## Executable důkaz
 

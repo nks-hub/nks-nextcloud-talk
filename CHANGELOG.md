@@ -27,7 +27,9 @@ proto jen to, co je doložitelné z App Store Connect.
   místnost bez hledání a pozvání prvního účastníka.
 - V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
   do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
-  respektuje nastavení soukromí Nextcloud Talk.
+  respektuje nastavení soukromí Nextcloud Talk. Vlastní indikátor se správně
+  odešle i po obnovení signalingu; starý neprázdný koncept jej sám znovu
+  nespustí.
 - GIF přijatý ze serveru bez aktivní Giphy integrace už nenabízí nefunkční
   opakování. Místo něj ukáže, že GIFy na serveru nejsou dostupné; samotný odkaz
   přitom nezobrazí.
