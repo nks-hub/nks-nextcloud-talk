@@ -35,6 +35,7 @@ void main() {
           ).copyWith(
             settings: ExternalSignalingSettings(
               userId: 'secret-user',
+              sipDialinInfo: 'secret-dial-in-info',
               stunServers: const <IceServerConfiguration>[],
               turnServers: const <IceServerConfiguration>[],
               federation: null,
@@ -78,6 +79,7 @@ void main() {
         .copyWith(
           settings: ExternalSignalingSettings(
             userId: 'secret-user',
+            sipDialinInfo: 'secret-dial-in-info',
             stunServers: const <IceServerConfiguration>[],
             turnServers: const <IceServerConfiguration>[],
             federation: null,
@@ -116,6 +118,7 @@ void main() {
     );
     expect(encodedValues, isNot(contains('secret-ticket')));
     expect(encodedValues, isNot(contains('secret-token')));
+    expect(encodedValues, isNot(contains('secret-dial-in-info')));
     expect(encodedValues, isNot(contains('secret-peer')));
   });
 

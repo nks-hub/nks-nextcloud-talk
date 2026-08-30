@@ -257,7 +257,7 @@ SignalingSettings _parseSettings(
     path: r'$.ocs.data.hideWarning',
     code: TalkProtocolErrorCode.invalidSignalingSettings,
   );
-  requireString(
+  final sipDialinInfo = requireString(
     data['sipDialinInfo'],
     path: r'$.ocs.data.sipDialinInfo',
     code: TalkProtocolErrorCode.invalidSignalingSettings,
@@ -286,6 +286,7 @@ SignalingSettings _parseSettings(
     );
     return InternalSignalingSettings(
       userId: userId,
+      sipDialinInfo: sipDialinInfo,
       stunServers: stun,
       turnServers: turn,
       federation: federation,
@@ -357,6 +358,7 @@ SignalingSettings _parseSettings(
   }
   return ExternalSignalingSettings(
     userId: userId,
+    sipDialinInfo: sipDialinInfo,
     stunServers: stun,
     turnServers: turn,
     federation: federation,

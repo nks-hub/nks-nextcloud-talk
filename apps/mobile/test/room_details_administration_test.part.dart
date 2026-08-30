@@ -524,9 +524,15 @@ void _registerAdministrationTests() {
       overrides: {'canEnableSIP': true},
     );
     Map<String, String>? sent;
+    var settingsRequests = 0;
     final client = MockClient((request) async {
       if (request.url.path.endsWith('/participants')) {
         return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'GET' &&
+          request.url.path.endsWith('/signaling/settings')) {
+        settingsRequests++;
+        return _signalingSettingsSuccess('Enabled SIP instructions');
       }
       if (request.method == 'PUT' &&
           request.url.path.endsWith('/webinar/sip')) {
@@ -534,7 +540,8 @@ void _registerAdministrationTests() {
         return _ocsSuccess(
           Map<String, Object?>.from(_conversationRoomJson())
             ..['canEnableSIP'] = true
-            ..['sipEnabled'] = 1,
+            ..['sipEnabled'] = 1
+            ..['attendeePin'] = '1234567',
         );
       }
       return http.Response('', 404);
@@ -556,14 +563,19 @@ void _registerAdministrationTests() {
           _textByKey(tester, 'room-details-sip-subtitle') ==
           'Enabled with a personal PIN',
     );
+    await _pumpUntil(
+      tester,
+      () => find.text('Enabled SIP instructions').evaluate().isNotEmpty,
+    );
 
     expect(sent, {'state': '1'});
+    expect(settingsRequests, 1);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('SIP no-PIN mode sends state 2 and patches an empty response', (
+  testWidgets('SIP no-PIN mode sends state 2 and uses the server room', (
     tester,
   ) async {
     final capable = await withCapabilities({
@@ -583,7 +595,11 @@ void _registerAdministrationTests() {
       if (request.method == 'PUT' &&
           request.url.path.endsWith('/webinar/sip')) {
         sent = request.bodyFields;
-        return _ocsSuccess(const <Object?>[]);
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['canEnableSIP'] = true
+            ..['sipEnabled'] = 2,
+        );
       }
       return http.Response('', 404);
     });
@@ -612,7 +628,7 @@ void _registerAdministrationTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('disabling SIP sends state 0 and patches an empty response', (
+  testWidgets('disabling SIP sends state 0 and uses the server room', (
     tester,
   ) async {
     final capable = await withCapabilities({'sip-support'});
@@ -629,7 +645,11 @@ void _registerAdministrationTests() {
       if (request.method == 'PUT' &&
           request.url.path.endsWith('/webinar/sip')) {
         sent = request.bodyFields;
-        return _ocsSuccess(const <Object?>[]);
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['canEnableSIP'] = true
+            ..['sipEnabled'] = 0,
+        );
       }
       return http.Response('', 404);
     });
@@ -649,6 +669,49 @@ void _registerAdministrationTests() {
     );
 
     expect(sent, {'state': '0'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('SIP refuses a success response without the authoritative room', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'sip-support'});
+    final permitted = await _insertConversation(
+      database,
+      account,
+      overrides: {'canEnableSIP': true},
+    );
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' &&
+          request.url.path.endsWith('/webinar/sip')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: permitted,
+      client: client,
+    );
+
+    await tester.tap(find.byKey(const Key('room-details-sip')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('room-details-sip-enabledWithPin')));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text('The change could not be saved. Please try again.')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(_textByKey(tester, 'room-details-sip-subtitle'), 'Disabled');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));

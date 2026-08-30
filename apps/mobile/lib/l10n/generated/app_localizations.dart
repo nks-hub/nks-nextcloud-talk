@@ -3248,6 +3248,42 @@ abstract class AppLocalizations {
   /// **'SIP dial-in is not configured on this server.'**
   String get roomDetailsSipNotConfigured;
 
+  /// No description provided for @roomDetailsSipDialInHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Dial-in information'**
+  String get roomDetailsSipDialInHeader;
+
+  /// No description provided for @roomDetailsSipInstructionsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Dial-in instructions could not be loaded.'**
+  String get roomDetailsSipInstructionsLoadError;
+
+  /// No description provided for @roomDetailsSipInstructionsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not provide dial-in instructions.'**
+  String get roomDetailsSipInstructionsUnavailable;
+
+  /// No description provided for @roomDetailsSipMeetingId.
+  ///
+  /// In en, this message translates to:
+  /// **'Meeting ID'**
+  String get roomDetailsSipMeetingId;
+
+  /// No description provided for @roomDetailsSipPersonalPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Your PIN'**
+  String get roomDetailsSipPersonalPin;
+
+  /// No description provided for @roomDetailsSipPinUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has not provided your PIN yet.'**
+  String get roomDetailsSipPinUnavailable;
+
   /// Label of the read-only switch.
   ///
   /// In en, this message translates to:

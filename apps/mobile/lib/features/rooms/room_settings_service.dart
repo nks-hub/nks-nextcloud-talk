@@ -18,6 +18,7 @@ part 'room_settings_call_notifications.part.dart';
 part 'room_settings_clear_history.part.dart';
 part 'room_settings_importance_sensitivity.part.dart';
 part 'room_settings_message_expiration.part.dart';
+part 'room_settings_sip.part.dart';
 
 enum RoomSettingsError {
   accountMissing,
@@ -641,12 +642,12 @@ final class RoomSettingsService {
 
   /// Changes the room's SIP dial-in mode. The caller gates this on the
   /// server's `sip-support` capability and authoritative `canEnableSIP` flag.
-  Future<ConversationRoom?> setSip({
+  Future<ConversationRoom> setSip({
     required String accountId,
     required String roomToken,
     required RoomSipState state,
-  }) {
-    return _administer(
+  }) async {
+    final room = await _administer(
       accountId: accountId,
       roomToken: roomToken,
       build: (ids) => SetRoomSipRequest(
@@ -656,6 +657,10 @@ final class RoomSettingsService {
         state: state,
       ),
     );
+    if (room == null) {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+    return room;
   }
 
   /// Puts a group or public conversation into read-only mode or back. Needs

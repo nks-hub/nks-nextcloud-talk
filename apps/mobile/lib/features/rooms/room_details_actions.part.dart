@@ -91,15 +91,6 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       _isGroupOrPublic &&
       _talkFeatures.contains(_lobbyCapability);
 
-  /// `canEnableSIP` is calculated by Talk from the server configuration and
-  /// the signed-in user's allowed groups. The capability proves the endpoint
-  /// exists; both are required and classified rooms stay fail-closed.
-  bool get _canSetSip =>
-      _isModerator &&
-      ((_room?.attributes ?? 0) & _classifiedRoomAttribute) == 0 &&
-      (_room?.canEnableSip ?? false) &&
-      _talkFeatures.contains(_sipCapability);
-
   /// Talk only accepts a name and a description on group and public rooms.
   /// A one-to-one room, its former shell, note-to-self and the changelog take
   /// their title from the other party or from the system, so offering the
@@ -127,12 +118,6 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
 
   int get _lobbyState => _room?.lobbyState ?? 0;
 
-  RoomSipState get _sipState => switch (_room?.sipEnabled ?? 0) {
-    1 => RoomSipState.enabledWithPin,
-    2 => RoomSipState.enabledWithoutPin,
-    _ => RoomSipState.disabled,
-  };
-
   int get _readOnly => _room?.readOnly ?? widget.conversation.readOnly;
 
   String _lobbyLabel(AppLocalizations strings) {
@@ -143,14 +128,6 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     return timer > 0
         ? strings.roomDetailsLobbyOnUntil(_formatLobbyTimer(timer))
         : strings.roomDetailsLobbyOn;
-  }
-
-  String _sipLabel(AppLocalizations strings) {
-    return switch (_sipState) {
-      RoomSipState.disabled => strings.roomDetailsSipDisabled,
-      RoomSipState.enabledWithPin => strings.roomDetailsSipWithPin,
-      RoomSipState.enabledWithoutPin => strings.roomDetailsSipWithoutPin,
-    };
   }
 
   /// The guest link is a client-side URL, not an API call. Talk's
@@ -572,63 +549,6 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
             timerSecondsSinceEpoch: timer,
           ),
       fallback: () => {'lobbyState': value ? 1 : 0, 'lobbyTimer': timer ?? 0},
-    );
-  }
-
-  Future<void> _changeSip() async {
-    final strings = AppLocalizations.of(context);
-    final states = <RoomSipState>[
-      RoomSipState.disabled,
-      RoomSipState.enabledWithPin,
-      if (_talkFeatures.contains(_sipNoPinCapability))
-        RoomSipState.enabledWithoutPin,
-    ];
-    final selected = await showDialog<RoomSipState>(
-      context: context,
-      builder: (dialogContext) => SimpleDialog(
-        key: const Key('room-details-sip-dialog'),
-        title: Text(strings.roomDetailsSipDialogTitle),
-        children: [
-          for (final state in states)
-            SimpleDialogOption(
-              key: Key('room-details-sip-${state.name}'),
-              onPressed: () => Navigator.of(dialogContext).pop(state),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    child: state == _sipState
-                        ? const Icon(Icons.check, size: 20)
-                        : null,
-                  ),
-                  Expanded(
-                    child: Text(switch (state) {
-                      RoomSipState.disabled => strings.roomDetailsSipDisabled,
-                      RoomSipState.enabledWithPin =>
-                        strings.roomDetailsSipWithPin,
-                      RoomSipState.enabledWithoutPin =>
-                        strings.roomDetailsSipWithoutPin,
-                    }),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-    if (selected == null || selected == _sipState || !mounted) {
-      return;
-    }
-    await _administer(
-      () => ref
-          .read(roomSettingsServiceProvider)
-          .setSip(
-            accountId: widget.account.id,
-            roomToken: widget.conversation.token,
-            state: selected,
-          ),
-      fallback: () => {'sipEnabled': selected.wireValue},
-      errorMessage: _sipErrorMessage,
     );
   }
 

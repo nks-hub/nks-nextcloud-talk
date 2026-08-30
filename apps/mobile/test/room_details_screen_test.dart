@@ -27,6 +27,7 @@ part 'room_details_conversation_tags_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
+part 'room_details_sip_info_test.part.dart';
 part 'room_details_test_support.part.dart';
 
 late AppDatabase database;
@@ -85,6 +86,7 @@ void main() {
   _registerConversationTagsTests();
   _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
+  _registerSipInfoTests();
 }
 
 Widget app({

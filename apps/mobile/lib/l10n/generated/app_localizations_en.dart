@@ -1759,6 +1759,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'SIP dial-in is not configured on this server.';
 
   @override
+  String get roomDetailsSipDialInHeader => 'Dial-in information';
+
+  @override
+  String get roomDetailsSipInstructionsLoadError =>
+      'Dial-in instructions could not be loaded.';
+
+  @override
+  String get roomDetailsSipInstructionsUnavailable =>
+      'The server did not provide dial-in instructions.';
+
+  @override
+  String get roomDetailsSipMeetingId => 'Meeting ID';
+
+  @override
+  String get roomDetailsSipPersonalPin => 'Your PIN';
+
+  @override
+  String get roomDetailsSipPinUnavailable =>
+      'The server has not provided your PIN yet.';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Read-only';
 
   @override

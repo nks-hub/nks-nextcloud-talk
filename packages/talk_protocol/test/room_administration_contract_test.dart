@@ -40,7 +40,6 @@ Uint8List _ocsBody({
 Map<String, Object?> _syntheticRoom({
   int type = 2,
   int readOnly = 0,
-  int sipEnabled = 0,
   bool hasPassword = false,
   bool isCustomAvatar = false,
 }) {
@@ -90,7 +89,7 @@ Map<String, Object?> _syntheticRoom({
     'readOnly': readOnly,
     'recordingConsent': 0,
     'sessionId': 'fixture-session',
-    'sipEnabled': sipEnabled,
+    'sipEnabled': 0,
     'token': 'rooma123',
     'type': type,
     'unreadMention': false,
@@ -284,26 +283,6 @@ void main() {
         ),
         _protocolFailure(TalkProtocolErrorCode.invalidRoomSettingsRequest),
       );
-    });
-  });
-
-  group('SetRoomSipRequest', () {
-    test('PUTs every SIP state to the v4 webinar SIP endpoint', () {
-      for (final state in RoomSipState.values) {
-        final request = SetRoomSipRequest(
-          accountId: _accountId(),
-          server: _server(),
-          roomToken: _token(),
-          state: state,
-        );
-
-        expect(request.httpMethod, 'PUT');
-        expect(
-          request.uri.toString(),
-          '$_v4Base/rooma123/webinar/sip?format=json',
-        );
-        expect(request.formBody, {'state': state.wireValue.toString()});
-      }
     });
   });
 
@@ -548,33 +527,6 @@ void main() {
       expect((response as RoomAdministrationSuccess).room?.readOnly, 1);
     });
 
-    test('preserves and bounds the refreshed SIP state', () {
-      final sipRequest = SetRoomSipRequest(
-        accountId: _accountId(),
-        server: _server(),
-        roomToken: _token(),
-        state: RoomSipState.enabledWithoutPin,
-      );
-      final response = decodeRoomAdministrationResponse(
-        request: sipRequest,
-        statusCode: 200,
-        body: _ocsBody(data: _syntheticRoom(sipEnabled: 2)),
-      );
-
-      expect(
-        (response as RoomAdministrationSuccess).room?.sipEnabled,
-        RoomSipState.enabledWithoutPin.wireValue,
-      );
-      expect(
-        () => decodeRoomAdministrationResponse(
-          request: sipRequest,
-          statusCode: 200,
-          body: _ocsBody(data: _syntheticRoom(sipEnabled: 3)),
-        ),
-        _protocolFailure(TalkProtocolErrorCode.invalidConversationResponse),
-      );
-    });
-
     test('accepts a 200 that carries no room payload', () {
       final response = decodeRoomAdministrationResponse(
         request: request(),
@@ -664,25 +616,6 @@ void main() {
         expect(response, isA<RoomAdministrationHttpFailure>());
         expect((response as RoomAdministrationHttpFailure).kind, kind);
       }
-    });
-
-    test('classifies an unconfigured SIP bridge as a precondition failure', () {
-      final response = decodeRoomAdministrationResponse(
-        request: SetRoomSipRequest(
-          accountId: _accountId(),
-          server: _server(),
-          roomToken: _token(),
-          state: RoomSipState.enabledWithPin,
-        ),
-        statusCode: 412,
-        body: _ocsBody(
-          status: 'failure',
-          statusCode: 412,
-          data: {'error': 'config'},
-        ),
-      );
-
-      expect(response, isA<RoomAdministrationPreconditionFailed>());
     });
 
     test('refuses an undocumented status code', () {

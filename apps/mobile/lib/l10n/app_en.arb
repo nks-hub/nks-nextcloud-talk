@@ -705,6 +705,12 @@
   "@roomDetailsSipDialogTitle": {"description": "Title of the SIP dial-in mode picker."},
   "roomDetailsSipNotConfigured": "SIP dial-in is not configured on this server.",
   "@roomDetailsSipNotConfigured": {"description": "Error shown when a server advertises SIP but has no configured bridge."},
+  "roomDetailsSipDialInHeader": "Dial-in information",
+  "roomDetailsSipInstructionsLoadError": "Dial-in instructions could not be loaded.",
+  "roomDetailsSipInstructionsUnavailable": "The server did not provide dial-in instructions.",
+  "roomDetailsSipMeetingId": "Meeting ID",
+  "roomDetailsSipPersonalPin": "Your PIN",
+  "roomDetailsSipPinUnavailable": "The server has not provided your PIN yet.",
   "roomDetailsReadOnlyToggleLabel": "Read-only",
   "@roomDetailsReadOnlyToggleLabel": {
     "description": "Label of the read-only switch."

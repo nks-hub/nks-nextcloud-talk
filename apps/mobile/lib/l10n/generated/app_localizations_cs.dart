@@ -1758,6 +1758,26 @@ class AppLocalizationsCs extends AppLocalizations {
       'SIP připojení není na tomto serveru nakonfigurované.';
 
   @override
+  String get roomDetailsSipDialInHeader => 'Údaje pro telefonické připojení';
+
+  @override
+  String get roomDetailsSipInstructionsLoadError =>
+      'Pokyny pro telefonické připojení se nepodařilo načíst.';
+
+  @override
+  String get roomDetailsSipInstructionsUnavailable =>
+      'Server neposkytl pokyny pro telefonické připojení.';
+
+  @override
+  String get roomDetailsSipMeetingId => 'ID schůzky';
+
+  @override
+  String get roomDetailsSipPersonalPin => 'Váš PIN';
+
+  @override
+  String get roomDetailsSipPinUnavailable => 'Server zatím váš PIN neposkytl.';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Jen ke čtení';
 
   @override

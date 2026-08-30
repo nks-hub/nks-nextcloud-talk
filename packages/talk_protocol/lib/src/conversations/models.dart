@@ -110,6 +110,7 @@ final class ConversationRoom {
     required this.mentionPermissions,
     required this.participantType,
     required this.participantFlags,
+    required this.attendeePin,
     required this.remoteServer,
     required this.readOnly,
     required this.lobbyState,
@@ -180,6 +181,11 @@ final class ConversationRoom {
   final int mentionPermissions;
   final int participantType;
   final int participantFlags;
+
+  /// The signed-in attendee's personal SIP dial-in PIN, when the room has
+  /// PIN-protected SIP enabled. It is not rendered by diagnostics.
+  final String? attendeePin;
+
   final String? remoteServer;
   final int readOnly;
 
@@ -265,7 +271,12 @@ ConversationRoom parseConversationRoom(
   final actorType = _requireString(room, 'actorType', path);
   _requireInt(room, 'attendeeId', path);
   final attendeePermissions = _requireInt(room, 'attendeePermissions', path);
-  _requireNullableString(room, 'attendeePin', path, required: true);
+  final attendeePin = _requireNullableString(
+    room,
+    'attendeePin',
+    path,
+    required: true,
+  );
   final avatarVersion = _requireString(room, 'avatarVersion', path);
   _requireInt(room, 'breakoutRoomMode', path);
   _requireInt(room, 'breakoutRoomStatus', path);
@@ -410,6 +421,7 @@ ConversationRoom parseConversationRoom(
     mentionPermissions: mentionPermissions,
     participantType: participantType,
     participantFlags: participantFlags,
+    attendeePin: attendeePin,
     remoteServer: remoteServer,
     readOnly: readOnly,
     lobbyState: lobbyState,

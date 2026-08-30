@@ -187,12 +187,14 @@ final class FederationSignalingSettings {
 sealed class SignalingSettings {
   SignalingSettings({
     required this.userId,
+    required this.sipDialinInfo,
     required Iterable<IceServerConfiguration> stunServers,
     required Iterable<IceServerConfiguration> turnServers,
     required this.federation,
   }) : stunServers = List<IceServerConfiguration>.unmodifiable(stunServers),
        turnServers = List<IceServerConfiguration>.unmodifiable(turnServers) {
     if (userId.length > 4096 ||
+        sipDialinInfo.length > 16384 ||
         this.stunServers.length > 32 ||
         this.turnServers.length > 32) {
       _settingsFailure(r'$.ocs.data');
@@ -200,6 +202,11 @@ sealed class SignalingSettings {
   }
 
   final String userId;
+
+  /// Server-provided, room-specific phone/SIP instructions. Diagnostic
+  /// rendering stays redacted because it can contain private phone numbers.
+  final String sipDialinInfo;
+
   final List<IceServerConfiguration> stunServers;
   final List<IceServerConfiguration> turnServers;
   final FederationSignalingSettings? federation;
@@ -212,6 +219,7 @@ sealed class SignalingSettings {
 final class InternalSignalingSettings extends SignalingSettings {
   InternalSignalingSettings({
     required super.userId,
+    required super.sipDialinInfo,
     required super.stunServers,
     required super.turnServers,
     required super.federation,
@@ -230,6 +238,7 @@ final class InternalSignalingSettings extends SignalingSettings {
 final class ExternalSignalingSettings extends SignalingSettings {
   ExternalSignalingSettings({
     required super.userId,
+    required super.sipDialinInfo,
     required super.stunServers,
     required super.turnServers,
     required super.federation,

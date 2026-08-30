@@ -23,6 +23,7 @@ part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
+part 'room_details_sip.part.dart';
 part 'room_details_support.part.dart';
 part 'room_details_widgets.part.dart';
 
@@ -114,7 +115,10 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 }
 
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
-    with _RoomDetailsStateLogic, _RoomImportanceSensitivityStateLogic {
+    with
+        _RoomDetailsStateLogic,
+        _RoomSipStateLogic,
+        _RoomImportanceSensitivityStateLogic {
   void _setBusy(bool value) {
     setState(() => _busy = value);
   }
@@ -359,6 +363,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               onTap: _busy ? null : _changeSip,
             ),
+          if (_showsSipDialIn) _buildSipDialInPanel(context),
           if (_canSetReadOnly)
             SwitchListTile(
               key: const Key('room-details-read-only-toggle'),

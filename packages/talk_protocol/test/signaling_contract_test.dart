@@ -78,7 +78,10 @@ void main() {
           statusCode: 200,
           body: signalingOcsBody(
             statusCode: 200,
-            data: signalingSettingsData(mode: mode),
+            data: {
+              ...signalingSettingsData(mode: mode),
+              'sipDialinInfo': 'Call the synthetic test number',
+            },
           ),
         );
 
@@ -91,6 +94,14 @@ void main() {
           mode == 'internal'
               ? SignalingTransportKind.internal
               : SignalingTransportKind.externalHpb,
+        );
+        expect(
+          response.settings?.sipDialinInfo,
+          'Call the synthetic test number',
+        );
+        expect(
+          response.settings.toString(),
+          isNot(contains('synthetic test number')),
         );
       }
     });
