@@ -14,6 +14,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (18) — 30. 8. 2026
 
+Play: prochází kontrolou, 177 zemí. TestFlight: čeká, build-mac je mimo relay.
+
 - Stav si můžete nechat vymazat sám. K poli se zprávou přibyla volba
   „Vymazat stav": za 30 minut, za hodinu, za 4 hodiny, dnes nebo tento
   týden. Doteď šel stav nastavit, ale ne zrušit časem, takže „Jsem na
@@ -23,7 +25,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (17) — 30. 8. 2026
 
-Play: odesláno ke kontrole. TestFlight: čeká, build-mac je mimo relay.
+Play: odesláno ke kontrole, ještě před schválením nahrazeno buildem 18.
+TestFlight: čeká, build-mac je mimo relay.
 
 - Na zprávu ve skupině jde odpovědět soukromě. V nabídce u cizí zprávy
   přibylo „Odpovědět soukromě": napsaná odpověď se odešle do vaší
