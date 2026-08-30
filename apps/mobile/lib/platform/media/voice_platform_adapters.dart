@@ -35,6 +35,8 @@ enum VoicePlatformError {
   foreignRecordingPath,
   invalidRecording,
   foreignSource,
+  startTimedOut,
+  startCancelled,
 }
 
 final class VoicePlatformException implements Exception {
@@ -67,6 +69,8 @@ abstract interface class VoiceCaptureBackend {
     required int bitRate,
   });
 
+  Future<void> retirePendingStart({required Future<void> pendingStart});
+
   Future<void> pause();
 
   Future<void> resume();
@@ -89,10 +93,16 @@ abstract interface class VoiceCaptureBackend {
 /// commands documented by record 7.1.1. [supportsEncoding] is checked on
 /// every recording start so a missing runtime dependency fails closed.
 final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
-  RecordPluginVoiceCaptureBackend({AudioRecorder? recorder})
-    : _recorder = recorder ?? AudioRecorder();
+  RecordPluginVoiceCaptureBackend({
+    AudioRecorder? recorder,
+    AudioRecorder Function()? recorderFactory,
+  }) : _recorderFactory = recorderFactory ?? AudioRecorder.new,
+       _recorder = recorder ?? (recorderFactory ?? AudioRecorder.new)();
 
-  final AudioRecorder _recorder;
+  final AudioRecorder Function() _recorderFactory;
+  AudioRecorder _recorder;
+  Future<void>? _pendingStart;
+  AudioRecorder? _pendingStartRecorder;
 
   @override
   Future<bool> requestPermission() => _recorder.hasPermission();
@@ -107,18 +117,59 @@ final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
     required int sampleRate,
     required int channels,
     required int bitRate,
-  }) => _recorder.start(
-    RecordConfig(
-      encoder: _voiceEncoder,
-      bitRate: bitRate,
-      sampleRate: sampleRate,
-      numChannels: channels,
-      autoGain: true,
-      echoCancel: true,
-      noiseSuppress: true,
-    ),
-    path: path,
-  );
+  }) {
+    final recorder = _recorder;
+    final pendingStart = recorder.start(
+      RecordConfig(
+        encoder: _voiceEncoder,
+        bitRate: bitRate,
+        sampleRate: sampleRate,
+        numChannels: channels,
+        autoGain: true,
+        echoCancel: true,
+        noiseSuppress: true,
+      ),
+      path: path,
+    );
+    _pendingStart = pendingStart;
+    _pendingStartRecorder = recorder;
+    return pendingStart;
+  }
+
+  @override
+  Future<void> retirePendingStart({required Future<void> pendingStart}) {
+    if (!identical(_pendingStart, pendingStart)) {
+      return Future<void>.value();
+    }
+    final retired = _pendingStartRecorder!;
+    _pendingStart = null;
+    _pendingStartRecorder = null;
+    if (identical(_recorder, retired)) {
+      _recorder = _recorderFactory();
+    }
+    final initialCancel = _ignoreFailure(retired.cancel);
+    return _cleanUpRetiredRecorder(retired, pendingStart, initialCancel);
+  }
+
+  Future<void> _cleanUpRetiredRecorder(
+    AudioRecorder recorder,
+    Future<void> pendingStart,
+    Future<void> initialCancel,
+  ) async {
+    await _ignoreFailure(() => pendingStart);
+    await initialCancel;
+    await _ignoreFailure(recorder.cancel);
+    await _ignoreFailure(recorder.dispose);
+  }
+
+  Future<void> _ignoreFailure(Future<void> Function() operation) async {
+    try {
+      await operation();
+    } on Object {
+      // A timed-out recorder is retired permanently; cleanup cannot be
+      // retried through its serial platform channel.
+    }
+  }
 
   @override
   Future<void> pause() => _recorder.pause();
@@ -132,13 +183,26 @@ final class RecordPluginVoiceCaptureBackend implements VoiceCaptureBackend {
       .map((sample) => normalizedVoiceAmplitude(sample.current));
 
   @override
-  Future<String?> stop() => _recorder.stop();
+  Future<String?> stop() async {
+    final path = await _recorder.stop();
+    _pendingStart = null;
+    _pendingStartRecorder = null;
+    return path;
+  }
 
   @override
-  Future<void> cancel() => _recorder.cancel();
+  Future<void> cancel() async {
+    await _recorder.cancel();
+    _pendingStart = null;
+    _pendingStartRecorder = null;
+  }
 
   @override
-  Future<void> dispose() => _recorder.dispose();
+  Future<void> dispose() async {
+    await _recorder.dispose();
+    _pendingStart = null;
+    _pendingStartRecorder = null;
+  }
 }
 
 /// Maps a dBFS reading onto the 0..1 range the waveform draws. Values are
@@ -192,6 +256,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     int bitRate = _voiceBitRate,
     String displayName = 'voice-message.m4a',
     VoiceRecordingClock clock = const SystemVoiceRecordingClock(),
+    Duration startTimeout = const Duration(seconds: 10),
   }) : this._(
          backend: backend,
          store: store,
@@ -200,6 +265,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
          bitRate: bitRate,
          displayName: displayName,
          clock: clock,
+         startTimeout: startTimeout,
        );
 
   RecordVoiceRecorder._({
@@ -210,6 +276,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     required this.bitRate,
     required this.displayName,
     required VoiceRecordingClock clock,
+    required this.startTimeout,
     // ignore: prefer_initializing_formals
   }) : _clock = clock {
     if (sampleRate < 8000 || sampleRate > 192000) {
@@ -221,6 +288,9 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     if (bitRate < 8000 || bitRate > 320000) {
       throw ArgumentError.value(bitRate, 'bitRate');
     }
+    if (startTimeout <= Duration.zero) {
+      throw ArgumentError.value(startTimeout, 'startTimeout');
+    }
   }
 
   final VoiceCaptureBackend backend;
@@ -229,6 +299,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   final int channels;
   final int bitRate;
   final String displayName;
+  final Duration startTimeout;
   final VoiceRecordingClock _clock;
 
   _RecorderPhase _phase = _RecorderPhase.idle;
@@ -236,6 +307,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   DateTime? _startedAt;
   Duration _captured = Duration.zero;
   Future<void>? _closeFuture;
+  _VoiceStartAttempt? _startAttempt;
 
   @override
   Stream<double> get amplitude => backend.amplitude;
@@ -249,9 +321,13 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       throw const VoicePlatformException(VoicePlatformError.alreadyRecording);
     }
     _phase = _RecorderPhase.starting;
+    final attempt = _VoiceStartAttempt();
+    _startAttempt = attempt;
     DurableAttachmentWriteSession? session;
     try {
-      if (!await backend.supportsEncoding()) {
+      final supported = await backend.supportsEncoding();
+      _requireCurrentStart(attempt);
+      if (!supported) {
         throw const VoicePlatformException(
           VoicePlatformError.encodingUnsupported,
         );
@@ -259,24 +335,95 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       session = await store.beginExternalWrite(
         fileExtension: voiceRecordingFileExtension,
       );
+      attempt.session = session;
+      _requireCurrentStart(attempt);
       _session = session;
-      await backend.start(
+      final pendingStart = backend.start(
         path: session.filePath,
         sampleRate: sampleRate,
         channels: channels,
         bitRate: bitRate,
       );
+      attempt.pendingStart = pendingStart;
+      try {
+        await pendingStart.timeout(startTimeout);
+      } on TimeoutException {
+        _requireCurrentStart(attempt);
+        _retireStart(attempt);
+        throw const VoicePlatformException(VoicePlatformError.startTimedOut);
+      }
+      _requireCurrentStart(attempt);
+      _startAttempt = null;
       _startedAt = _clock.now();
       _captured = Duration.zero;
       _phase = _RecorderPhase.recording;
     } catch (_) {
-      _session = null;
-      _startedAt = null;
-      _captured = Duration.zero;
-      await session?.abort();
-      _phase = _RecorderPhase.idle;
+      if (identical(_startAttempt, attempt)) {
+        _startAttempt = null;
+        _session = null;
+        _startedAt = null;
+        _captured = Duration.zero;
+        if (_phase != _RecorderPhase.closed) {
+          _phase = _RecorderPhase.idle;
+        }
+      }
+      if (!attempt.retired && session != null && !session.isCompleted) {
+        await session.abort();
+      }
       rethrow;
     }
+  }
+
+  void _requireCurrentStart(_VoiceStartAttempt attempt) {
+    if (!identical(_startAttempt, attempt)) {
+      final code = _phase == _RecorderPhase.closed
+          ? VoicePlatformError.closed
+          : VoicePlatformError.startCancelled;
+      throw VoicePlatformException(code);
+    }
+  }
+
+  void _retireStart(_VoiceStartAttempt attempt) {
+    final pendingStart = attempt.pendingStart;
+    final session = attempt.session;
+    if (attempt.retired || pendingStart == null || session == null) {
+      return;
+    }
+    attempt.retired = true;
+    final retirement = backend.retirePendingStart(pendingStart: pendingStart);
+    unawaited(_settleNativeRetirement(retirement));
+    unawaited(_removeRetiredWrite(session));
+    unawaited(_removeRetiredWriteAfterStart(pendingStart, session));
+  }
+
+  Future<void> _settleNativeRetirement(Future<void> retirement) async {
+    try {
+      await retirement;
+    } on Object {
+      // Retirement is best effort after the replacement recorder is active.
+    }
+  }
+
+  Future<void> _removeRetiredWrite(
+    DurableAttachmentWriteSession session,
+  ) async {
+    try {
+      await session.removeLateWrite();
+    } on Object {
+      // A retired native start cannot be allowed to fail a later recording.
+    }
+  }
+
+  Future<void> _removeRetiredWriteAfterStart(
+    Future<void> pendingStart,
+    DurableAttachmentWriteSession session,
+  ) async {
+    try {
+      await pendingStart;
+    } on Object {
+      // A failed start can still leave a partial file behind.
+    }
+    await _removeRetiredWrite(session);
   }
 
   @override
@@ -344,9 +491,7 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       await store.resolveVerifiedPath(source);
       final duration = captured;
       if (duration <= Duration.zero) {
-        throw const VoicePlatformException(
-          VoicePlatformError.invalidRecording,
-        );
+        throw const VoicePlatformException(VoicePlatformError.invalidRecording);
       }
       _phase = _RecorderPhase.idle;
       return VoiceRecording(source: source, duration: duration);
@@ -367,23 +512,31 @@ final class RecordVoiceRecorder implements VoiceRecorder {
     if (_phase == _RecorderPhase.closed || _phase == _RecorderPhase.idle) {
       return;
     }
-    final session = _session;
+    final attempt = _startAttempt;
+    final session = attempt?.session ?? _session;
+    _startAttempt = null;
     _session = null;
     _startedAt = null;
     _captured = Duration.zero;
     Object? firstFailure;
     StackTrace? firstStack;
-    try {
-      await backend.cancel();
-    } on Object catch (error, stackTrace) {
-      firstFailure = error;
-      firstStack = stackTrace;
+    if (attempt?.pendingStart != null) {
+      _retireStart(attempt!);
+    } else {
+      try {
+        await backend.cancel();
+      } on Object catch (error, stackTrace) {
+        firstFailure = error;
+        firstStack = stackTrace;
+      }
     }
-    try {
-      await session?.abort();
-    } on Object catch (error, stackTrace) {
-      firstFailure ??= error;
-      firstStack ??= stackTrace;
+    if (attempt?.retired != true) {
+      try {
+        await session?.abort();
+      } on Object catch (error, stackTrace) {
+        firstFailure ??= error;
+        firstStack ??= stackTrace;
+      }
     }
     _phase = _RecorderPhase.idle;
     if (firstFailure != null) {
@@ -424,6 +577,12 @@ final class RecordVoiceRecorder implements VoiceRecorder {
       Error.throwWithStackTrace(firstFailure, firstStack!);
     }
   }
+}
+
+final class _VoiceStartAttempt {
+  DurableAttachmentWriteSession? session;
+  Future<void>? pendingStart;
+  bool retired = false;
 }
 
 abstract interface class VoicePlaybackBackend {

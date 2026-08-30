@@ -60,6 +60,8 @@ final class DurableAttachmentWriteSession {
   );
 
   Future<void> abort() => _store._abortExternalWrite(this);
+
+  Future<void> removeLateWrite() => _store._removeLateExternalWrite(this);
 }
 
 /// Private, restart-resolvable storage for attachment bytes.
@@ -419,6 +421,33 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
       await file.delete();
     }
     session._completed = true;
+  }
+
+  Future<void> _removeLateExternalWrite(
+    DurableAttachmentWriteSession session,
+  ) async {
+    _requireSession(session, allowCompleted: true);
+    final path = p.normalize(p.absolute(session.filePath));
+    if (!p.isWithin(_stagingPath, path)) {
+      throw const DurableAttachmentSourceException(
+        DurableAttachmentSourceError.invalidWriteSession,
+      );
+    }
+    for (var attempt = 0; attempt < 20; attempt++) {
+      try {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+        session._completed = true;
+        return;
+      } on FileSystemException {
+        if (attempt == 19) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
   }
 
   Future<_ResolvedFile> _resolveStagingFile(

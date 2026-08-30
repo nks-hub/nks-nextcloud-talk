@@ -990,7 +990,7 @@ packages:
     source: hosted
     version: "2.1.1"
   record_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: record_platform_interface
       sha256: d94b37cadb8fe203e64b0e9893271c0b71b34f2550ee7fb0c6105d650e00c1f5

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/composer/voice_message.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
+import 'package:record_platform_interface/record_platform_interface.dart';
 
 void main() {
   late Directory root;
@@ -39,6 +40,50 @@ void main() {
         );
         expect(grantedBackend.permissionRequests, 1);
         expect(deniedBackend.permissionRequests, 1);
+      },
+    );
+  });
+
+  group('RecordPluginVoiceCaptureBackend', () {
+    test(
+      'a retired start swaps recorder before its native call returns',
+      () async {
+        final originalPlatform = RecordPlatform.instance;
+        final firstStartGate = Completer<void>();
+        final platform = _ControlledRecordPlatform(
+          firstStartGate,
+          failFirstCancel: true,
+        );
+        RecordPlatform.instance = platform;
+        addTearDown(() => RecordPlatform.instance = originalPlatform);
+        final backend = RecordPluginVoiceCaptureBackend();
+        addTearDown(backend.dispose);
+
+        final firstStart = backend.start(
+          path: 'first.m4a',
+          sampleRate: 48000,
+          channels: 1,
+          bitRate: 64000,
+        );
+        await _waitUntil(() => platform.startedRecorderIds.length == 1);
+        final retirement = backend.retirePendingStart(pendingStart: firstStart);
+
+        await backend.start(
+          path: 'second.m4a',
+          sampleRate: 48000,
+          channels: 1,
+          bitRate: 64000,
+        );
+        final retiredId = platform.startedRecorderIds.first;
+        final currentId = platform.startedRecorderIds.last;
+        expect(currentId, isNot(retiredId));
+
+        firstStartGate.complete();
+        await retirement;
+
+        expect(platform.cancelledRecorderIds, <String>[retiredId, retiredId]);
+        expect(platform.disposedRecorderIds, <String>[retiredId]);
+        expect(platform.disposedRecorderIds, isNot(contains(currentId)));
       },
     );
   });
@@ -133,46 +178,43 @@ void main() {
       expect(normalizedVoiceAmplitude(double.nan), 0);
     });
 
-    test(
-      'commits a compressed recording as an app-owned source with elapsed '
-      'duration and the configured bit rate',
-      () async {
-        final backend = _FakeVoiceCaptureBackend(
-          recordingBytes: _fakeRecordingBytes(),
-        );
-        final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
-        final recorder = RecordVoiceRecorder(
-          backend: backend,
-          store: store,
-          clock: clock,
-        );
-        addTearDown(recorder.close);
+    test('commits a compressed recording as an app-owned source with elapsed '
+        'duration and the configured bit rate', () async {
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+      );
+      addTearDown(recorder.close);
 
-        await recorder.start();
-        clock.advance(const Duration(seconds: 4, milliseconds: 250));
-        final recording = await recorder.stop();
+      await recorder.start();
+      clock.advance(const Duration(seconds: 4, milliseconds: 250));
+      final recording = await recorder.stop();
 
-        expect(recording.duration, const Duration(seconds: 4, milliseconds: 250));
-        expect(recording.source.mimeType, voiceRecordingMimeType);
-        expect(recording.source.displayName, 'voice-message.m4a');
-        expect(backend.lastBitRate, 64000);
-        expect(backend.lastSampleRate, 48000);
-        expect(backend.lastChannels, 1);
-        expect(
-          (await store.observe(
-            recording.source.handle,
-          )).matches(recording.source),
-          isTrue,
-        );
-        expect(await _stagingFiles(root), isEmpty);
+      expect(recording.duration, const Duration(seconds: 4, milliseconds: 250));
+      expect(recording.source.mimeType, voiceRecordingMimeType);
+      expect(recording.source.displayName, 'voice-message.m4a');
+      expect(backend.lastBitRate, 64000);
+      expect(backend.lastSampleRate, 48000);
+      expect(backend.lastChannels, 1);
+      expect(
+        (await store.observe(
+          recording.source.handle,
+        )).matches(recording.source),
+        isTrue,
+      );
+      expect(await _stagingFiles(root), isEmpty);
 
-        await recorder.discard(recording.source);
-        await expectLater(
-          store.observe(recording.source.handle),
-          throwsA(isA<DurableAttachmentSourceException>()),
-        );
-      },
-    );
+      await recorder.discard(recording.source);
+      await expectLater(
+        store.observe(recording.source.handle),
+        throwsA(isA<DurableAttachmentSourceException>()),
+      );
+    });
 
     test(
       'rejects a recording whose stop time did not advance past its start',
@@ -276,37 +318,198 @@ void main() {
       expect(backend.starts, 0);
       expect(await _stagingFiles(root), isEmpty);
     });
+
+    test('a late native start is retired without breaking a retry', () async {
+      final startGate = Completer<void>();
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+        startCompleters: <Completer<void>>[startGate],
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+        startTimeout: const Duration(seconds: 2),
+      );
+      addTearDown(recorder.close);
+
+      final start = recorder.start();
+      await expectLater(
+        start,
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.startTimedOut,
+          ),
+        ),
+      );
+      await recorder.start();
+      clock.advance(const Duration(seconds: 1));
+      startGate.complete();
+      await backend.retiredCleanup;
+      await _waitUntilAsync(
+        () async => (await _stagingFiles(root)).length == 1,
+      );
+      final recording = await recorder.stop();
+
+      expect(backend.retiredStarts, 1);
+      expect(backend.retiredCancels, 2);
+      expect(backend.retiredDisposes, 1);
+      expect(recording.duration, const Duration(seconds: 1));
+      expect(await _stagingFiles(root), isEmpty);
+      await recorder.discard(recording.source);
+    });
+
+    test('cancel during native start leaves a retry isolated', () async {
+      final startGate = Completer<void>();
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+        startCompleters: <Completer<void>>[startGate],
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+        startTimeout: const Duration(seconds: 1),
+      );
+      addTearDown(recorder.close);
+
+      final firstStart = recorder.start();
+      await _waitUntil(() => backend.starts == 1);
+      await recorder.cancel();
+      await recorder.start();
+      clock.advance(const Duration(seconds: 1));
+
+      startGate.complete();
+      await expectLater(
+        firstStart,
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.startCancelled,
+          ),
+        ),
+      );
+      await backend.retiredCleanup;
+      await _waitUntilAsync(
+        () async => (await _stagingFiles(root)).length == 1,
+      );
+      final recording = await recorder.stop();
+
+      expect(recording.duration, const Duration(seconds: 1));
+      expect(await _stagingFiles(root), isEmpty);
+      await recorder.discard(recording.source);
+    });
+
+    test('close during native start cannot reopen the recorder', () async {
+      final startGate = Completer<void>();
+      final backend = _FakeVoiceCaptureBackend(
+        startCompleters: <Completer<void>>[startGate],
+      );
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        startTimeout: const Duration(seconds: 1),
+      );
+
+      final start = recorder.start();
+      await _waitUntil(() => backend.starts == 1);
+      await recorder.close();
+      startGate.complete();
+
+      await expectLater(
+        start,
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.closed,
+          ),
+        ),
+      );
+      await expectLater(
+        recorder.start(),
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.closed,
+          ),
+        ),
+      );
+    });
+
+    test('late staging cleanup does not wait for native retirement', () async {
+      final startGate = Completer<void>();
+      final retirementGate = Completer<void>();
+      final backend = _FakeVoiceCaptureBackend(
+        recordingBytes: _fakeRecordingBytes(),
+        startCompleters: <Completer<void>>[startGate],
+        retirementGate: retirementGate,
+      );
+      final clock = _FakeVoiceRecordingClock(DateTime(2026, 1, 1));
+      final recorder = RecordVoiceRecorder(
+        backend: backend,
+        store: store,
+        clock: clock,
+        startTimeout: const Duration(seconds: 2),
+      );
+      addTearDown(recorder.close);
+
+      await expectLater(
+        recorder.start(),
+        throwsA(
+          isA<VoicePlatformException>().having(
+            (error) => error.code,
+            'code',
+            VoicePlatformError.startTimedOut,
+          ),
+        ),
+      );
+      await recorder.start();
+      clock.advance(const Duration(seconds: 1));
+      startGate.complete();
+      await _waitUntilAsync(
+        () async => (await _stagingFiles(root)).length == 1,
+      );
+
+      final recording = await recorder.stop();
+      await recorder.discard(recording.source);
+      retirementGate.complete();
+      await backend.retiredCleanup;
+    });
   });
 
   group('AudioplayersVoicePreviewPlayer', () {
-    test(
-      'resolves a verified handle, forwards the real MIME type, and '
-      'completes on native playback completion',
-      () async {
-        final source = await store.copyFromStream(
-          stream: Stream<List<int>>.value(_fakeRecordingBytes()),
-          mimeType: 'audio/mp4',
-          displayName: 'preview.m4a',
-        );
-        final backend = _FakeVoicePlaybackBackend();
-        final player = AudioplayersVoicePreviewPlayer(
-          backend: backend,
-          store: store,
-        );
-        addTearDown(player.close);
+    test('resolves a verified handle, forwards the real MIME type, and '
+        'completes on native playback completion', () async {
+      final source = await store.copyFromStream(
+        stream: Stream<List<int>>.value(_fakeRecordingBytes()),
+        mimeType: 'audio/mp4',
+        displayName: 'preview.m4a',
+      );
+      final backend = _FakeVoicePlaybackBackend();
+      final player = AudioplayersVoicePreviewPlayer(
+        backend: backend,
+        store: store,
+      );
+      addTearDown(player.close);
 
-        var completed = false;
-        final playback = player.play(source).then((_) => completed = true);
-        await backend.started.future;
-        expect(completed, isFalse);
-        expect(backend.lastPath, isNot(contains(source.handle.value)));
-        expect(backend.lastMimeType, 'audio/mp4');
+      var completed = false;
+      final playback = player.play(source).then((_) => completed = true);
+      await backend.started.future;
+      expect(completed, isFalse);
+      expect(backend.lastPath, isNot(contains(source.handle.value)));
+      expect(backend.lastMimeType, 'audio/mp4');
 
-        backend.complete();
-        await playback;
-        expect(completed, isTrue);
-      },
-    );
+      backend.complete();
+      await playback;
+      expect(completed, isTrue);
+    });
 
     test('stop unblocks active playback and close disposes once', () async {
       final source = await store.copyFromStream(
@@ -365,6 +568,8 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
     bool supportsEncoding = true,
     this.recordingBytes,
     this.stopPathOverride,
+    this.startCompleters = const <Completer<void>>[],
+    this.retirementGate,
     // ignore: prefer_initializing_formals
   }) : _supportsEncoding = supportsEncoding;
 
@@ -372,6 +577,8 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   final bool _supportsEncoding;
   final List<int>? recordingBytes;
   final String? stopPathOverride;
+  final List<Completer<void>> startCompleters;
+  final Completer<void>? retirementGate;
   final StreamController<double> _amplitude =
       StreamController<double>.broadcast();
   String? _path;
@@ -381,6 +588,10 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   int resumes = 0;
   int cancels = 0;
   int disposes = 0;
+  int retiredStarts = 0;
+  int retiredCancels = 0;
+  int retiredDisposes = 0;
+  Future<void> retiredCleanup = Future<void>.value();
 
   @override
   Future<void> pause() async => pauses++;
@@ -409,16 +620,41 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
     required int sampleRate,
     required int channels,
     required int bitRate,
-  }) async {
+  }) {
     starts++;
     _path = path;
     lastBitRate = bitRate;
     lastSampleRate = sampleRate;
     lastChannels = channels;
+    final pendingStart = _completeStart(path, starts - 1);
+    return pendingStart;
+  }
+
+  Future<void> _completeStart(String path, int gateIndex) async {
     final bytes = recordingBytes;
     if (bytes != null) {
       await File(path).writeAsBytes(bytes, flush: true);
     }
+    if (gateIndex < startCompleters.length) {
+      await startCompleters[gateIndex].future;
+    }
+  }
+
+  @override
+  Future<void> retirePendingStart({required Future<void> pendingStart}) {
+    retiredStarts++;
+    retiredCleanup = () async {
+      retiredCancels++;
+      try {
+        await pendingStart;
+      } on Object {
+        // This fake mirrors retirement after either late success or failure.
+      }
+      retiredCancels++;
+      await retirementGate?.future;
+      retiredDisposes++;
+    }();
+    return retiredCleanup;
   }
 
   @override
@@ -530,4 +766,73 @@ Future<List<File>> _stagingFiles(Directory root) async {
       .where((entity) => entity is File)
       .cast<File>()
       .toList();
+}
+
+final class _ControlledRecordPlatform extends RecordPlatform {
+  _ControlledRecordPlatform(
+    this.firstStartGate, {
+    this.failFirstCancel = false,
+  });
+
+  final Completer<void> firstStartGate;
+  final bool failFirstCancel;
+  final List<String> startedRecorderIds = <String>[];
+  final List<String> cancelledRecorderIds = <String>[];
+  final List<String> disposedRecorderIds = <String>[];
+
+  @override
+  Future<void> create(String recorderId) async {}
+
+  @override
+  Stream<RecordState> onStateChanged(String recorderId) =>
+      const Stream<RecordState>.empty();
+
+  @override
+  Future<void> start(
+    String recorderId,
+    RecordConfig config, {
+    required String path,
+  }) async {
+    startedRecorderIds.add(recorderId);
+    if (startedRecorderIds.length == 1) {
+      await firstStartGate.future;
+    }
+  }
+
+  @override
+  Future<void> cancel(String recorderId) async {
+    cancelledRecorderIds.add(recorderId);
+    if (failFirstCancel && cancelledRecorderIds.length == 1) {
+      throw StateError('Synthetic first cancel failure.');
+    }
+  }
+
+  @override
+  Future<void> dispose(String recorderId) async {
+    disposedRecorderIds.add(recorderId);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+}
+
+Future<void> _waitUntil(bool Function() condition) async {
+  for (var attempt = 0; attempt < 50; attempt++) {
+    if (condition()) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('Condition did not become true.');
+}
+
+Future<void> _waitUntilAsync(Future<bool> Function() condition) async {
+  for (var attempt = 0; attempt < 50; attempt++) {
+    if (await condition()) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('Async condition did not become true.');
 }

@@ -321,6 +321,12 @@ final class _CaptureBackend implements VoiceCaptureBackend {
   }
 
   @override
+  Future<void> retirePendingStart({required Future<void> pendingStart}) async {
+    await pendingStart;
+    await cancel();
+  }
+
+  @override
   Future<String?> stop() async => _path;
 
   @override
