@@ -38,6 +38,7 @@ final class _CallSignalingLane {
   final StreamController<CallSignalingUpdate> _updates =
       StreamController<CallSignalingUpdate>.broadcast(sync: true);
   final Map<String, Completer<void>> _httpAborts = {};
+  final List<SignalingPeerMessage> _peerMessageQueue = [];
 
   late final CallSignalingSession handle;
   late CallSignalingUpdate _current;
@@ -73,40 +74,87 @@ final class _CallSignalingLane {
   }
 
   Future<bool> sendPeerMessage(SignalingPeerMessage message) {
+    return sendPeerMessages(<SignalingPeerMessage>[message]);
+  }
+
+  Future<bool> sendPeerMessages(Iterable<SignalingPeerMessage> messages) {
+    final queued = messages.toList(growable: false);
     return _enqueue(() async {
-      if (_disposed || _failed) {
+      if (_disposed ||
+          _failed ||
+          !_state.signalingReady ||
+          queued.isEmpty ||
+          queued.any((message) => message.recipient == null) ||
+          _peerMessageQueue.length + queued.length >
+              maximumSignalingParticipants) {
         return false;
       }
-      final result = switch (_state.transport) {
-        SignalingTransportKind.internal => planInternalSignalingBatch(
+      _peerMessageQueue.addAll(queued);
+      return _flushPeerMessages();
+    });
+  }
+
+  Future<bool> _flushPeerMessages() async {
+    if (_disposed ||
+        _failed ||
+        _peerMessageQueue.isEmpty ||
+        !_state.signalingReady ||
+        _state.renegotiationRequired) {
+      if (_disposed || _failed || _state.renegotiationRequired) {
+        _peerMessageQueue.clear();
+      }
+      return !_disposed && !_failed && !_state.renegotiationRequired;
+    }
+
+    final SignalingRuntimeResult result;
+    final int messageCount;
+    switch (_state.transport) {
+      case SignalingTransportKind.internal:
+        if (_state.pendingInternalBatch != null) {
+          return true;
+        }
+        // The protocol request constructor enforces the same 64-message cap.
+        messageCount = _peerMessageQueue.length > 64
+            ? 64
+            : _peerMessageQueue.length;
+        result = planInternalSignalingBatch(
           _snapshot,
           accountId: authority.accountId,
           authority: authority,
           requestId: _requestId(),
-          messages: <SignalingPeerMessage>[message],
-        ),
-        SignalingTransportKind.externalHpb => planHpbPeerFrame(
+          messages: _peerMessageQueue.take(messageCount),
+        );
+      case SignalingTransportKind.externalHpb:
+        if (_state.pendingHpbFrame != null ||
+            _state.awaitingHpbResponse != null) {
+          return true;
+        }
+        messageCount = 1;
+        result = planHpbPeerFrame(
           _snapshot,
           accountId: authority.accountId,
           authority: authority,
           requestId: _requestId(),
           effectId: _effectId(),
-          message: message,
-        ),
-        null => null,
-      };
-      if (result == null || !result.canCommit) {
-        return false;
-      }
-      if (!await _commit(result)) {
-        return false;
-      }
-      final request = result.request;
-      if (request is InternalSignalingBatchRequest) {
-        _dispatchInternalBatch(request);
-      }
-      return true;
-    });
+          message: _peerMessageQueue.first,
+        );
+      case null:
+        return true;
+    }
+    if (!result.canCommit) {
+      _peerMessageQueue.clear();
+      return false;
+    }
+    if (!await _commit(result)) {
+      _peerMessageQueue.clear();
+      return false;
+    }
+    _peerMessageQueue.removeRange(0, messageCount);
+    final request = result.request;
+    if (request is InternalSignalingBatchRequest) {
+      _dispatchInternalBatch(request);
+    }
+    return true;
   }
 
   Future<bool> sendControl(HpbControlMessage control) {
@@ -426,6 +474,7 @@ final class _CallSignalingLane {
     for (final effect in result.effects) {
       _executeEffect(effect);
     }
+    await _flushPeerMessages();
     return true;
   }
 
@@ -547,6 +596,7 @@ final class _CallSignalingLane {
       }
     }
     _httpAborts.clear();
+    _peerMessageQueue.clear();
     await _socketSubscription?.cancel();
     _socketSubscription = null;
     final socket = _socket;

@@ -675,5 +675,10 @@
   "scheduledMessagesEmpty": "V této konverzaci není nic naplánováno.",
   "scheduledMessageDelete": "Smazat naplánovanou zprávu",
   "scheduledMessageDeleted": "Naplánovaná zpráva smazána",
-  "scheduleTimeInPast": "Vyberte čas v budoucnosti."
+  "scheduleTimeInPast": "Vyberte čas v budoucnosti.",
+  "typingOne": "{name} píše…",
+  "typingTwo": "{first} a {second} píší…",
+  "typingThree": "{first}, {second} a {third} píší…",
+  "typingOneOther": "{first}, {second}, {third} a další píší…",
+  "typingOthers": "{first}, {second}, {third} a {count} dalších píší…"
 }

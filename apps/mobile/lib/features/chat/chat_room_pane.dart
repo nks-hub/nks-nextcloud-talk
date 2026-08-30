@@ -32,6 +32,7 @@ import 'chat_message_content.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
+import 'chat_typing_indicator.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
 import 'composer/attachment_submission.dart';
@@ -49,6 +50,7 @@ part 'chat_room_pane_timeline_states.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
+part 'chat_room_pane_typing.dart';
 
 enum ChatThreadKind { ordinary, named }
 
@@ -334,6 +336,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// keep them pinned there.
   int? _anchorMessageId;
   bool _silentSend = false;
+  final Object _typingSource = Object();
+  ChatTypingRoomKey? _activeTypingKey;
+  bool _typingCanPost = false;
   ChatRoomProviderKey? _lastAutoReadKey;
   int? _lastAutoReadMessageId;
 
@@ -371,7 +376,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _pendingJumpMessageId = widget.jumpToMessageId;
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
-    _composer.addListener(_scheduleDraftSave);
+    _composer.addListener(_handleComposerChanged);
+    _composerFocusNode.addListener(_handleComposerFocusChanged);
     _connectivityWakeSubscription = ref
         .read(connectivityWakeEventsProvider)
         .listen(
@@ -437,6 +443,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (oldWidget.account.id == widget.account.id &&
         oldWidget.conversation.token == widget.conversation.token &&
         oldWidget.threadId == widget.threadId) {
+      _scheduleTypingActivitySync();
       return;
     }
     unawaited(
@@ -477,7 +484,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   @override
   void deactivate() {
     _emojiPickerPending = false;
+    _syncTypingActivity(forceInactive: true);
     super.deactivate();
+  }
+
+  @override
+  void activate() {
+    super.activate();
+    _scheduleTypingActivitySync();
   }
 
   @override
@@ -500,9 +514,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ..removeListener(_handleScroll)
       ..dispose();
     _composer
-      ..removeListener(_scheduleDraftSave)
+      ..removeListener(_handleComposerChanged)
       ..dispose();
-    _composerFocusNode.dispose();
+    _composerFocusNode
+      ..removeListener(_handleComposerFocusChanged)
+      ..dispose();
     super.dispose();
   }
 
@@ -510,11 +526,13 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_restartLiveSync());
+      _scheduleTypingActivitySync();
       return;
     }
     // The process can be killed from here on, so the draft cannot wait for
     // its debounce.
     unawaited(_flushDraft(_key, _composer.text));
+    _syncTypingActivity(forceInactive: true);
     unawaited(_stopLiveSync());
   }
 
@@ -552,6 +570,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       liveConversation,
     );
     final readOnly = !postingAccess.canPost;
+    final typingKey = chatTypingRoomKeyFor(
+      account: widget.account,
+      conversation: liveConversation,
+    );
+    _setTypingScope(
+      typingKey,
+      canPost: !readOnly && TickerMode.valuesOf(context).enabled,
+    );
     final attachmentDependencies = !readOnly
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
@@ -603,8 +629,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         // A moderator deletes anyone's message; everybody else only
         // their own. Measured, not assumed: the server accepts it.
         canDelete:
-            !readOnly &&
-            (outgoing ? profileCanDelete : profileCanDeleteAny),
+            !readOnly && (outgoing ? profileCanDelete : profileCanDeleteAny),
         canReact: profileCanReact,
         canPin: profileCanPin && message.systemMessage.isEmpty,
         isPinned: pinned.messageId == message.messageId,
@@ -657,6 +682,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         !_initialAttemptFinished && messages.isEmpty && pending.isEmpty;
     final error = _localError ?? _storedError(scope?.lastSyncError);
     final strings = AppLocalizations.of(context);
+    final typingState = typingKey == null
+        ? null
+        : ref.watch(chatTypingStateProvider(typingKey)).valueOrNull;
+    final typingNames = _typingDisplayNames(
+      typingState,
+      messages: messages,
+      conversation: liveConversation,
+      guestLabel: strings.participantAvatarGuest,
+    );
     final giphy = _giphyRequested && !readOnly
         ? ref.watch(giphyRepositoryProvider(widget.account.id))
         : null;
@@ -842,6 +876,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             onClose: _closeEmojiPicker,
             onSelected: _insertEmoji,
           ),
+        ChatTypingBanner(names: typingNames),
         _ChatComposer(
           replyTo: _replyTo,
           onCancelReply: () => setState(() => _replyTo = null),

@@ -1981,4 +1981,29 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get scheduleTimeInPast => 'Vyberte čas v budoucnosti.';
+
+  @override
+  String typingOne(String name) {
+    return '$name píše…';
+  }
+
+  @override
+  String typingTwo(String first, String second) {
+    return '$first a $second píší…';
+  }
+
+  @override
+  String typingThree(String first, String second, String third) {
+    return '$first, $second a $third píší…';
+  }
+
+  @override
+  String typingOneOther(String first, String second, String third) {
+    return '$first, $second, $third a další píší…';
+  }
+
+  @override
+  String typingOthers(String first, String second, String third, int count) {
+    return '$first, $second, $third a $count dalších píší…';
+  }
 }

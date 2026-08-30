@@ -1981,4 +1981,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scheduleTimeInPast => 'Pick a time in the future.';
+
+  @override
+  String typingOne(String name) {
+    return '$name is typing…';
+  }
+
+  @override
+  String typingTwo(String first, String second) {
+    return '$first and $second are typing…';
+  }
+
+  @override
+  String typingThree(String first, String second, String third) {
+    return '$first, $second and $third are typing…';
+  }
+
+  @override
+  String typingOneOther(String first, String second, String third) {
+    return '$first, $second, $third and 1 other are typing…';
+  }
+
+  @override
+  String typingOthers(String first, String second, String third, int count) {
+    return '$first, $second, $third and $count others are typing…';
+  }
 }

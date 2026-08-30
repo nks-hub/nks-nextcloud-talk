@@ -130,6 +130,13 @@ final class CallSignalingSession {
     return _lane.sendPeerMessage(message);
   }
 
+  /// Queues one transient peer message per recipient. Internal signaling sends
+  /// bounded batches; HPB sends frames serially so no recipient is dropped
+  /// while another frame is awaiting persistence or socket completion.
+  Future<bool> sendPeerMessages(Iterable<SignalingPeerMessage> messages) {
+    return _lane.sendPeerMessages(messages);
+  }
+
   Future<bool> sendControl(HpbControlMessage control) {
     return _lane.sendControl(control);
   }

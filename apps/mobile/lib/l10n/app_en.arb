@@ -933,5 +933,46 @@
   "scheduledMessagesEmpty": "Nothing is scheduled in this conversation.",
   "scheduledMessageDelete": "Delete scheduled message",
   "scheduledMessageDeleted": "Scheduled message deleted",
-  "scheduleTimeInPast": "Pick a time in the future."
+  "scheduleTimeInPast": "Pick a time in the future.",
+  "typingOne": "{name} is typing…",
+  "@typingOne": {
+    "description": "Typing indicator for one participant.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "typingTwo": "{first} and {second} are typing…",
+  "@typingTwo": {
+    "description": "Typing indicator for two participants.",
+    "placeholders": {
+      "first": {"type": "String"},
+      "second": {"type": "String"}
+    }
+  },
+  "typingThree": "{first}, {second} and {third} are typing…",
+  "@typingThree": {
+    "description": "Typing indicator for three participants.",
+    "placeholders": {
+      "first": {"type": "String"},
+      "second": {"type": "String"},
+      "third": {"type": "String"}
+    }
+  },
+  "typingOneOther": "{first}, {second}, {third} and 1 other are typing…",
+  "@typingOneOther": {
+    "description": "Typing indicator for four participants.",
+    "placeholders": {
+      "first": {"type": "String"},
+      "second": {"type": "String"},
+      "third": {"type": "String"}
+    }
+  },
+  "typingOthers": "{first}, {second}, {third} and {count} others are typing…",
+  "@typingOthers": {
+    "description": "Typing indicator for five or more participants.",
+    "placeholders": {
+      "first": {"type": "String"},
+      "second": {"type": "String"},
+      "third": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  }
 }

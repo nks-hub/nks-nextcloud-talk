@@ -189,17 +189,75 @@ void main() {
       );
     });
   });
+
+  group('typing privacy validation', () {
+    test('parses public and private authenticated policies', () {
+      expect(
+        _snapshot(
+          context: CapabilityContext.authenticated,
+          features: const <String>['signaling-v3', 'typing-privacy'],
+          typingPrivacy: 0,
+        ).chatTypingPrivacy,
+        ChatTypingPrivacy.public,
+      );
+      expect(
+        _snapshot(
+          context: CapabilityContext.authenticated,
+          features: const <String>['signaling-v3', 'typing-privacy'],
+          typingPrivacy: 1,
+        ).chatTypingPrivacy,
+        ChatTypingPrivacy.private,
+      );
+    });
+
+    test('keeps a missing policy unknown instead of assuming public', () {
+      expect(
+        _snapshot(
+          context: CapabilityContext.authenticated,
+          features: const <String>['signaling-v3', 'typing-privacy'],
+        ).chatTypingPrivacy,
+        isNull,
+      );
+    });
+
+    for (final invalid in <Object?>[-1, 2, true, '0', 0.0]) {
+      test('rejects typing privacy ${invalid.runtimeType}:$invalid', () {
+        expect(
+          () => _snapshot(
+            context: CapabilityContext.authenticated,
+            features: const <String>['typing-privacy'],
+            typingPrivacy: invalid,
+          ),
+          throwsA(
+            isA<TalkProtocolException>()
+                .having(
+                  (error) => error.code,
+                  'code',
+                  TalkProtocolErrorCode.invalidCapabilities,
+                )
+                .having(
+                  (error) => error.path,
+                  'path',
+                  r'$.ocs.data.capabilities.spreed.config.chat.typing-privacy',
+                ),
+          ),
+        );
+      });
+    }
+  });
 }
 
 CapabilitySnapshot _snapshot({
   required CapabilityContext context,
   required List<String> features,
   Object? readPrivacy = _missing,
+  Object? typingPrivacy = _missing,
   Object? chatConfig = _missing,
 }) {
   final resolvedChatConfig = switch (chatConfig) {
     _Missing() => <String, Object?>{
       if (readPrivacy is! _Missing) 'read-privacy': readPrivacy,
+      if (typingPrivacy is! _Missing) 'typing-privacy': typingPrivacy,
     },
     _ => chatConfig,
   };

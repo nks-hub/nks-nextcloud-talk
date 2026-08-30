@@ -3643,6 +3643,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a time in the future.'**
   String get scheduleTimeInPast;
+
+  /// Typing indicator for one participant.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is typing…'**
+  String typingOne(String name);
+
+  /// Typing indicator for two participants.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} and {second} are typing…'**
+  String typingTwo(String first, String second);
+
+  /// Typing indicator for three participants.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}, {second} and {third} are typing…'**
+  String typingThree(String first, String second, String third);
+
+  /// Typing indicator for four participants.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}, {second}, {third} and 1 other are typing…'**
+  String typingOneOther(String first, String second, String third);
+
+  /// Typing indicator for five or more participants.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}, {second}, {third} and {count} others are typing…'**
+  String typingOthers(String first, String second, String third, int count);
 }
 
 class _AppLocalizationsDelegate

@@ -9,6 +9,9 @@ enum CapabilityContext { anonymous, authenticated }
 /// User privacy policy for exposing chat read status.
 enum ChatReadPrivacy { public, private }
 
+/// User privacy policy for broadcasting transient typing status.
+enum ChatTypingPrivacy { public, private }
+
 /// Version fields from the OCS capability response.
 final class NextcloudVersion {
   const NextcloudVersion({
@@ -82,6 +85,7 @@ final class CapabilitySnapshot {
     required Map<String, Object?> capabilities,
     required Set<String> talkFeatures,
     required this.chatReadPrivacy,
+    required this.chatTypingPrivacy,
     required Set<String> notificationPushFeatures,
   }) : capabilities = UnmodifiableMapView(capabilities),
        namespaces = Set<String>.unmodifiable(capabilities.keys),
@@ -130,6 +134,7 @@ final class CapabilitySnapshot {
 
     var talkFeatures = const <String>{};
     ChatReadPrivacy? chatReadPrivacy;
+    ChatTypingPrivacy? chatTypingPrivacy;
     final rawSpreed = capabilities['spreed'];
     if (rawSpreed != null) {
       final spreed = requireObject(
@@ -173,6 +178,19 @@ final class CapabilitySnapshot {
               _ => protocolFailure(code, path),
             };
           }
+          if (chat.containsKey('typing-privacy')) {
+            final path =
+                r'$.ocs.data.capabilities.spreed.config.chat.typing-privacy';
+            chatTypingPrivacy = switch (requireInt(
+              chat['typing-privacy'],
+              path: path,
+              code: code,
+            )) {
+              0 => ChatTypingPrivacy.public,
+              1 => ChatTypingPrivacy.private,
+              _ => protocolFailure(code, path),
+            };
+          }
         }
       }
     }
@@ -201,6 +219,7 @@ final class CapabilitySnapshot {
       capabilities: capabilities,
       talkFeatures: talkFeatures,
       chatReadPrivacy: chatReadPrivacy,
+      chatTypingPrivacy: chatTypingPrivacy,
       notificationPushFeatures: notificationPushFeatures,
     );
   }
@@ -211,6 +230,7 @@ final class CapabilitySnapshot {
   final Set<String> namespaces;
   final Set<String> talkFeatures;
   final ChatReadPrivacy? chatReadPrivacy;
+  final ChatTypingPrivacy? chatTypingPrivacy;
   final Set<String> notificationPushFeatures;
 
   bool get hasTalk => namespaces.contains('spreed');

@@ -195,6 +195,83 @@ void main() {
     },
   );
 
+  test('HPB peer batch serializes every recipient frame', () async {
+    await _insertAccount(accounts, credentials, accountId: 'account-a');
+    final api = HttpNextcloudApi(client: _ExternalSettingsClient());
+    final sockets = _FakeSocketConnector();
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: sessions,
+      credentials: credentials,
+      api: api,
+      socketConnector: sockets,
+      refreshConversationSession: (_, _) async =>
+          ConversationSessionId.parse('refreshed-session'),
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      api.close();
+    });
+
+    final session = await coordinator.start(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      nextcloudSessionId: 'session-a',
+    );
+    await _waitFor(
+      session,
+      (update) => update.phase == SignalingAccountPhase.hpbAwaitingWelcome,
+    );
+    final socket = await sockets.waitForSocket(0);
+    final helloCommitted = _waitFor(
+      session,
+      (update) => update.phase == SignalingAccountPhase.hpbHelloPending,
+    );
+    socket.addFrame(_welcomeFrame());
+    final hello =
+        jsonDecode(await socket.waitForSent(0)) as Map<String, Object?>;
+    await helloCommitted;
+    final roomCommitted = _waitFor(
+      session,
+      (update) => update.phase == SignalingAccountPhase.hpbRoomPending,
+    );
+    socket.addFrame(
+      _helloFrame(requestId: hello['id']! as String, withResumeId: true),
+    );
+    final room =
+        jsonDecode(await socket.waitForSent(1)) as Map<String, Object?>;
+    await roomCommitted;
+    socket.addFrame(_roomFrame(requestId: room['id']! as String));
+    await _waitFor(
+      session,
+      (update) => update.phase == SignalingAccountPhase.signalingReady,
+    );
+
+    expect(
+      await session.sendPeerMessages([
+        _typingPeerMessage('peer-a'),
+        _typingPeerMessage('peer-b'),
+      ]),
+      isTrue,
+    );
+    final first =
+        jsonDecode(await socket.waitForSent(2)) as Map<String, Object?>;
+    final second =
+        jsonDecode(await socket.waitForSent(3)) as Map<String, Object?>;
+    expect(_peerRecipient(first), 'peer-a');
+    expect(_peerRecipient(second), 'peer-b');
+    expect(
+      (first['message']! as Map<String, Object?>)['data'],
+      <String, Object?>{'type': 'startedTyping'},
+    );
+    expect(
+      (second['message']! as Map<String, Object?>)['data'],
+      <String, Object?>{'type': 'startedTyping'},
+    );
+
+    await session.release();
+  });
+
   test('persistence failure blocks an internal signaling batch', () async {
     await _insertAccount(accounts, credentials, accountId: 'account-a');
     final client = _InternalSignalingClient(failBatch: false);
@@ -325,6 +402,20 @@ SignalingPeerMessage _peerMessage() => SignalingPeerMessage(
     'sdp': 'synthetic-sdp',
   }),
 );
+
+SignalingPeerMessage _typingPeerMessage(String peerId) => SignalingPeerMessage(
+  type: 'startedTyping',
+  roomType: '',
+  sid: null,
+  recipient: SignalingPeerId.parse(peerId),
+  sender: null,
+  payload: null,
+);
+
+String _peerRecipient(Map<String, Object?> frame) =>
+    ((frame['message']! as Map<String, Object?>)['recipient']!
+            as Map<String, Object?>)['sessionid']!
+        as String;
 
 SignalingAccountState _initialState({
   required String accountId,
@@ -537,7 +628,12 @@ final class _FakeSocket implements HpbSocketConnection {
     if (sent.length <= index) {
       final event = Completer<void>();
       _sendEvents.add(event);
-      await event.future.timeout(const Duration(seconds: 5));
+      await event.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw StateError(
+          'Timed out waiting for frame $index; sent ${sent.length}',
+        ),
+      );
     }
     return sent[index];
   }
