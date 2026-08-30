@@ -633,3 +633,27 @@ v `TODO-notifications-calls.md`.
 
 Proxy obsah notifikace nedešifruje. Otevře ho až klientský RSA klíč, takže
 účet určuje ten klíč, který payload rozšifroval, ne hostitel ani aktivní účet.
+
+### D-039: Typing stav je transientní room session se zdroji per composer
+
+Stav: Přijato 30. srpna 2026, commit `9499288`.
+
+Indikátor se zapne pouze při autentizovaném `signaling-v3`, feature
+`typing-privacy`, veřejné `config.chat.typing-privacy=0` a external HPB
+transportu. Chybějící nebo privátní policy je fail-closed: klient nepřijímá ani
+neodesílá typing stav. Rozhodnutí odpovídá `talk-android@5428960` a
+`talk-ios@2d31eda`.
+
+Příchozí stav je account/room/peer-scoped a po 15 sekundách bez obnovy zmizí.
+Odchozí start se obnovuje po 10 sekundách souvislého psaní a po pěti sekundách
+nečinnosti se odešle stop. Nejde o durable data a nepatří do Drift databáze.
+Provider drží pouze non-secret signaling authority potřebnou k obnovení lane.
+
+Root a thread stejné místnosti sdílejí jednu signaling session, ale ne jediný
+boolean aktivity. Každý composer má identity source a controller agreguje
+jejich množinu; stop se odešle až po deaktivaci posledního zdroje. Tím vedlejší
+nefocusovaný root nezastaví aktivní thread v desktop split view.
+
+Live web → iOS round trip na referenční instanci prokázal start i stop bez
+odeslání zprávy. Pixelově změřený banner měl 4,72:1 ve světlém a 11,15:1 v
+tmavém režimu.

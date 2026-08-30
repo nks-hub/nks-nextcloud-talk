@@ -112,6 +112,27 @@ zůstanou a runtime vyžádá renegotiation. Feature `mcu` vybírá external MCU
 topologii; bez ní zůstává external peer-to-peer. Neznámé top-level server frame
 je bounded `unsupported`, ale malformed známé frame je chyba.
 
+## Flutter typing projekce
+
+Commit `9499288` zapojuje signaling do otevřeného root i thread chatu.
+Room-scoped provider vznikne jen pro autentizovaný účet s `signaling-v3`,
+feature `typing-privacy` a veřejnou `config.chat.typing-privacy=0`. Chybějící,
+privátní nebo nevalidní policy a internal transport končí bez banneru i bez
+outbound frame.
+
+Příchozí stav se drží podle HPB peer ID v přesném account/room scope. Opakovaný
+`startedTyping` obnoví 15sekundový timeout, `stoppedTyping`, odchod peeru,
+ztráta ready transportu nebo zavření roomu stav odstraní. Lokální composer
+pošle start konkrétním příjemcům, při souvislém psaní ho obnoví po 10 sekundách
+a po pěti sekundách nečinnosti pošle stop. Root a thread sdílejí jednu room
+session, ale každý composer má vlastní source identitu; neaktivní root proto
+nesmí zastavit člověka píšícího ve vedlejším threadu.
+
+Návrh odpovídá upstream klientům `talk-android@5428960` a
+`talk-ios@2d31eda`. Live web → iOS round trip na referenční instanci ověřil
+start i stop bez odeslání zprávy. Screenshot iOS 18.6 měl pixelový kontrast
+4,72:1 ve světlém a 11,15:1 v tmavém režimu.
+
 ## Executable důkaz
 
 Aktuální contract sada obsahuje:
@@ -144,7 +165,8 @@ rtk proxy python -m unittest discover -s contracts\signaling -p "test_*.py" -v
 
 ## Co tento řez nedokazuje
 
-- Neexistuje Flutter HTTP/WebSocket adapter ani Drift persistence.
+- Flutter HTTP/WebSocket adapter a Drift signaling persistence existují;
+  tento řez stále nedokazuje call media engine ani celý call lifecycle.
 - Neexistuje spustitelné APK, call UI ani WebRTC media engine.
 - Nebyl provedený write test proti cizí nebo produkční room.
 - Lokální HPB server nedokazuje TURN, MCU media ani reálný internetový reconnect.

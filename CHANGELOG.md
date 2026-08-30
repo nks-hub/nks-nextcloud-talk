@@ -25,6 +25,9 @@ proto jen to, co je doložitelné z App Store Connect.
   akcemi. Dříve přetékala mimo obrazovku.
 - Z obrazovky nové konverzace lze vytvořit prázdnou skupinovou nebo veřejnou
   místnost bez hledání a pozvání prvního účastníka.
+- V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
+  do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
+  respektuje nastavení soukromí Nextcloud Talk.
 
 ## 0.1.0 (23) — 30. 8. 2026
 
