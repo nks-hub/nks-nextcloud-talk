@@ -37,11 +37,17 @@ final class ChatPendingGiphyReference extends ConsumerWidget {
               foregroundColor: foregroundColor,
               onRetry: () => _retryGiphyReference(ref, account.id, resourceUrl),
             ),
-      error: (_, _) => _GiphyReferenceFailure(
-        index: 0,
-        foregroundColor: foregroundColor,
-        onRetry: () => _retryGiphyReference(ref, account.id, resourceUrl),
-      ),
+      error: (error, _) {
+        final unavailable = _isUnavailableGiphyError(error);
+        return _GiphyReferenceFailure(
+          index: 0,
+          foregroundColor: foregroundColor,
+          integrationUnavailable: unavailable,
+          onRetry: unavailable
+              ? null
+              : () => _retryGiphyReference(ref, account.id, resourceUrl),
+        );
+      },
       loading: () => const _GiphyReferenceLoading(index: 0),
     );
   }
@@ -107,15 +113,24 @@ final class _GiphyRichDocument extends ConsumerWidget {
                       ),
                     ),
                   ),
-            error: (_, _) => Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: _GiphyReferenceFailure(
-                index: index,
-                foregroundColor: foregroundColor,
-                onRetry: () =>
-                    _retryGiphyReference(ref, accountId, references[index]),
-              ),
-            ),
+            error: (error, _) {
+              final unavailable = _isUnavailableGiphyError(error);
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _GiphyReferenceFailure(
+                  index: index,
+                  foregroundColor: foregroundColor,
+                  integrationUnavailable: unavailable,
+                  onRetry: unavailable
+                      ? null
+                      : () => _retryGiphyReference(
+                          ref,
+                          accountId,
+                          references[index],
+                        ),
+                ),
+              );
+            },
             loading: () => Padding(
               padding: const EdgeInsets.only(top: 8),
               child: _GiphyReferenceLoading(index: index),
@@ -142,6 +157,9 @@ void _retryGiphyReference(WidgetRef ref, String accountId, Uri resourceUrl) {
     ),
   );
 }
+
+bool _isUnavailableGiphyError(Object error) =>
+    error is GiphyException && error.error == GiphyError.integrationUnavailable;
 
 final class _GiphyReferenceLoading extends StatelessWidget {
   const _GiphyReferenceLoading({required this.index});
@@ -229,11 +247,13 @@ final class _GiphyReferenceFailure extends StatelessWidget {
   const _GiphyReferenceFailure({
     required this.index,
     required this.foregroundColor,
+    this.integrationUnavailable = false,
     this.onRetry,
   });
 
   final int index;
   final Color foregroundColor;
+  final bool integrationUnavailable;
   final VoidCallback? onRetry;
 
   @override
@@ -243,11 +263,19 @@ final class _GiphyReferenceFailure extends StatelessWidget {
       key: Key('chat-giphy-reference-error-$index'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.broken_image_outlined, size: 18, color: foregroundColor),
+        Icon(
+          integrationUnavailable
+              ? Icons.gif_box_outlined
+              : Icons.broken_image_outlined,
+          size: 18,
+          color: foregroundColor,
+        ),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
-            strings.imageLoadFailed,
+            integrationUnavailable
+                ? strings.giphyUnavailable
+                : strings.imageLoadFailed,
             style: TextStyle(color: foregroundColor),
           ),
         ),

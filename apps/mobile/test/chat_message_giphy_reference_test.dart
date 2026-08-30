@@ -161,6 +161,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('inactive recipient integration is final and hides the URL', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _messageApp(
+        _message('[$_resourceUrl]($_resourceUrl)', messageId: 125),
+        overrides: [
+          giphyReferenceMediaProvider.overrideWith((ref, request) async {
+            throw const GiphyException(GiphyError.integrationUnavailable);
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text(_resourceUrl), findsNothing);
+    expect(find.text('GIFs are not available on this server.'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-giphy-reference-error-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('chat-giphy-reference-retry-0')), findsNothing);
+    expect(find.byIcon(Icons.gif_box_outlined), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('resolves at most four Giphy references per message', (
     tester,
   ) async {
