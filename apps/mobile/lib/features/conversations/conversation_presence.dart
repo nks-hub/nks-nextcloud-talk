@@ -334,6 +334,17 @@ final class PresenceChatRoomPane extends StatelessWidget {
                 ),
               ),
               IconButton(
+                key: const Key('open-room-search'),
+                tooltip: strings.searchInConversation,
+                icon: const Icon(Icons.search_rounded),
+                onPressed: () => openMessageSearch(
+                  context,
+                  account.id,
+                  roomToken: conversation.token,
+                  roomName: conversation.displayName,
+                ),
+              ),
+              IconButton(
                 key: const Key('open-thread-management'),
                 tooltip: strings.threadManagementOpenTooltip,
                 icon: const Icon(Icons.forum_outlined),
