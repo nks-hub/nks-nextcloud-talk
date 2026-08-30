@@ -31,6 +31,7 @@ final class _FakeMessageSearchService implements MessageSearchService {
 
   final FutureOr<List<MessageSearchResult>> Function(String term) _handler;
   final List<String> searchedTerms = [];
+  final List<String?> searchedScopes = [];
 
   @override
   Future<List<MessageSearchResult>> search({
@@ -40,6 +41,7 @@ final class _FakeMessageSearchService implements MessageSearchService {
     int limit = messageSearchDefaultLimit,
   }) async {
     searchedTerms.add(term);
+    searchedScopes.add(roomToken);
     return _handler(term);
   }
 }
@@ -49,6 +51,8 @@ void main() {
     WidgetTester tester,
     MessageSearchService service, {
     ValueChanged<MessageSearchResult>? onResultSelected,
+    String? roomToken,
+    String? roomName,
   }) async {
     await tester.pumpWidget(
       localizedTestApp(
@@ -56,10 +60,50 @@ void main() {
           accountId: 'account-a',
           service: service,
           onResultSelected: onResultSelected ?? (_) {},
+          roomToken: roomToken,
+          roomName: roomName,
         ),
       ),
     );
   }
+
+  testWidgets('a global search sends no room scope', (tester) async {
+    final service = _FakeMessageSearchService((_) async => const []);
+    await pumpScreen(tester, service);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'popisek',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(service.searchedScopes, [null]);
+  });
+
+  testWidgets('a conversation search carries its room token', (tester) async {
+    // The two scopes are different providers on the server and answer the
+    // opposite way when mixed, so the token has to reach the service exactly
+    // when the caller asked for one conversation and never otherwise.
+    final service = _FakeMessageSearchService((_) async => const []);
+    await pumpScreen(
+      tester,
+      service,
+      roomToken: 'abcd1234',
+      roomName: 'Tym NKS',
+    );
+
+    expect(find.text('Search in Tym NKS'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('message-search-field')),
+      'popisek',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(service.searchedScopes, ['abcd1234']);
+  });
 
   testWidgets('shows the empty-query prompt before any typing', (tester) async {
     final service = _FakeMessageSearchService((_) async => const []);

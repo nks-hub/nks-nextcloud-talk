@@ -1284,6 +1284,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchMessagesTitle => 'Search messages';
 
   @override
+  String searchMessagesInConversation(String conversation) {
+    return 'Search in $conversation';
+  }
+
+  @override
+  String get searchInConversation => 'Search in conversation';
+
+  @override
   String get searchMessagesHint => 'Search messages';
 
   @override

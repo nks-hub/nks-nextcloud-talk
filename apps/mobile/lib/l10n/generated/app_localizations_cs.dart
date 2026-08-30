@@ -1280,6 +1280,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get searchMessagesTitle => 'Hledat ve zprávách';
 
   @override
+  String searchMessagesInConversation(String conversation) {
+    return 'Hledat v $conversation';
+  }
+
+  @override
+  String get searchInConversation => 'Hledat v konverzaci';
+
+  @override
   String get searchMessagesHint => 'Hledat ve zprávách';
 
   @override

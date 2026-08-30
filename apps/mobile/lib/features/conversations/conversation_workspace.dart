@@ -71,9 +71,9 @@ final class ConversationWorkspace extends StatelessWidget {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
-            _openMessageSearch(context, account.id),
+            openMessageSearch(context, account.id),
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
-            _openMessageSearch(context, account.id),
+            openMessageSearch(context, account.id),
       },
       child: _buildLayout(context),
     );
@@ -232,7 +232,7 @@ final class _CompactShell extends StatelessWidget {
           if (talkFeaturesOf(account).contains('unified-search'))
             IconButton(
               key: const Key('open-message-search'),
-              onPressed: () => _openMessageSearch(context, account.id),
+              onPressed: () => openMessageSearch(context, account.id),
               tooltip: strings.searchMessagesTooltip,
               icon: const Icon(Icons.search),
             ),
@@ -375,7 +375,7 @@ final class _ExpandedShell extends StatelessWidget {
                             IconButton(
                               key: const Key('open-message-search'),
                               onPressed: () =>
-                                  _openMessageSearch(context, account.id),
+                                  openMessageSearch(context, account.id),
                               tooltip: strings.searchMessagesTooltip,
                               icon: const Icon(Icons.search),
                             ),

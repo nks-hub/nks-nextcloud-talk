@@ -18,11 +18,23 @@ final class MessageSearchScreen extends StatefulWidget {
     required this.accountId,
     required this.service,
     required this.onResultSelected,
+    this.roomToken,
+    this.roomName,
   });
 
   final String accountId;
   final MessageSearchService service;
   final ValueChanged<MessageSearchResult> onResultSelected;
+
+  /// Restricts the search to one conversation. Null searches all of them.
+  ///
+  /// The two scopes are different providers on the server and must not be
+  /// mixed — see `MessageSearchRequest._fromRoute`. Passing the token here is
+  /// the only thing the caller has to do; the service picks the provider.
+  final String? roomToken;
+
+  /// Shown in the title so it is obvious the search is not global.
+  final String? roomName;
 
   @override
   State<MessageSearchScreen> createState() => _MessageSearchScreenState();
@@ -67,6 +79,7 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
       final results = await widget.service.search(
         accountId: widget.accountId,
         term: term,
+        roomToken: widget.roomToken,
       );
       if (!mounted || generation != _generation) {
         return;
@@ -90,7 +103,13 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(strings.searchMessagesTitle)),
+      appBar: AppBar(
+        title: Text(
+          widget.roomName == null
+              ? strings.searchMessagesTitle
+              : strings.searchMessagesInConversation(widget.roomName!),
+        ),
+      ),
       body: Column(
         children: [
           Padding(

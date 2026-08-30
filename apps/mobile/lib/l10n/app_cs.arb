@@ -413,6 +413,15 @@
   "messageActionMessageMissing": "Tato zpráva už není dostupná.",
   "searchMessagesTooltip": "Hledat ve zprávách",
   "searchMessagesTitle": "Hledat ve zprávách",
+  "searchMessagesInConversation": "Hledat v {conversation}",
+  "@searchMessagesInConversation": {
+    "placeholders": {
+      "conversation": {
+        "type": "String"
+      }
+    }
+  },
+  "searchInConversation": "Hledat v konverzaci",
   "searchMessagesHint": "Hledat ve zprávách",
   "searchMessagesPrompt": "Zadejte hledaný text",
   "searchMessagesNoResults": "Nic nenalezeno",

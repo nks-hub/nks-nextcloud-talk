@@ -9,6 +9,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_banner.dart';
 import '../chat/chat_room_pane.dart';
 import '../rooms/room_details_screen.dart';
+import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
 
@@ -207,6 +208,17 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          IconButton(
+            key: const Key('open-room-search'),
+            tooltip: AppLocalizations.of(context).searchInConversation,
+            icon: const Icon(Icons.search_rounded),
+            onPressed: () => openMessageSearch(
+              context,
+              account.id,
+              roomToken: current.token,
+              roomName: current.displayName,
+            ),
+          ),
           IconButton(
             key: const Key('open-thread-management'),
             tooltip: AppLocalizations.of(context).threadManagementOpenTooltip,

@@ -516,19 +516,36 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 }
 
-void _openMessageSearch(BuildContext context, String accountId) {
+void openMessageSearch(
+  BuildContext context,
+  String accountId, {
+  String? roomToken,
+  String? roomName,
+}) {
   Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/search/messages'),
-      builder: (context) => _MessageSearchRoute(accountId: accountId),
+      builder: (context) => _MessageSearchRoute(
+        accountId: accountId,
+        roomToken: roomToken,
+        roomName: roomName,
+      ),
     ),
   );
 }
 
 final class _MessageSearchRoute extends ConsumerStatefulWidget {
-  const _MessageSearchRoute({required this.accountId});
+  const _MessageSearchRoute({
+    required this.accountId,
+    this.roomToken,
+    this.roomName,
+  });
 
   final String accountId;
+
+  /// Non-null when search was opened from inside one conversation.
+  final String? roomToken;
+  final String? roomName;
 
   @override
   ConsumerState<_MessageSearchRoute> createState() =>
@@ -554,6 +571,8 @@ final class _MessageSearchRouteState
           accountId: widget.accountId,
           service: ref.watch(messageSearchServiceProvider),
           onResultSelected: _openResult,
+          roomToken: widget.roomToken,
+          roomName: widget.roomName,
         ),
         IgnorePointer(
           key: const Key('message-search-result-guard'),

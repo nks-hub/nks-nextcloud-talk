@@ -12,6 +12,12 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (19) — 30. 8. 2026
+
+- Hledat jde i uvnitř jedné konverzace. V její liště přibyla lupa, která
+  prohledá jen ji; hledání ze seznamu konverzací zůstává přes všechny.
+  Aplikace to uměla odjakživa, ale nikde se na to nedalo kliknout.
+
 ## 0.1.0 (18) — 30. 8. 2026
 
 Play: prochází kontrolou, 177 zemí. TestFlight: čeká, build-mac je mimo relay.

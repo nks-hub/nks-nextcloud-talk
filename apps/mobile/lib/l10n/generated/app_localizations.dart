@@ -2420,6 +2420,18 @@ abstract class AppLocalizations {
   /// **'Search messages'**
   String get searchMessagesTitle;
 
+  /// No description provided for @searchMessagesInConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in {conversation}'**
+  String searchMessagesInConversation(String conversation);
+
+  /// No description provided for @searchInConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Search in conversation'**
+  String get searchInConversation;
+
   /// No description provided for @searchMessagesHint.
   ///
   /// In en, this message translates to:

@@ -420,6 +420,15 @@
   "messageActionMessageMissing": "This message is no longer available.",
   "searchMessagesTooltip": "Search messages",
   "searchMessagesTitle": "Search messages",
+  "searchMessagesInConversation": "Search in {conversation}",
+  "@searchMessagesInConversation": {
+    "placeholders": {
+      "conversation": {
+        "type": "String"
+      }
+    }
+  },
+  "searchInConversation": "Search in conversation",
   "searchMessagesHint": "Search messages",
   "searchMessagesPrompt": "Type to search messages",
   "searchMessagesNoResults": "No messages found",
