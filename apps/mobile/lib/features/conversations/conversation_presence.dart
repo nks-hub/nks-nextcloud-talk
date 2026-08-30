@@ -13,6 +13,7 @@ import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
 import 'conversation_absence.dart';
+import 'conversation_upcoming_event.dart';
 
 const int _oneToOneConversationType = 1;
 
@@ -258,6 +259,10 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
         top: false,
         child: Column(
           children: [
+            ConversationUpcomingEventBanner(
+              account: account,
+              conversation: current,
+            ),
             ConversationAbsenceBanner(account: account, conversation: current),
             OngoingCallBanner(account: account, conversation: current),
             Expanded(
@@ -384,6 +389,10 @@ final class PresenceChatRoomPane extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        ConversationUpcomingEventBanner(
+          account: account,
+          conversation: conversation,
         ),
         ConversationAbsenceBanner(account: account, conversation: conversation),
         OngoingCallBanner(account: account, conversation: conversation),

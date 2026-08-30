@@ -1,6 +1,51 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
+  Future<UpcomingTalkEvent?> getUpcomingConversationEvent({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String roomToken,
+    Future<void>? abortTrigger,
+  }) async {
+    _boundedString(roomToken, 512);
+    final location = server.uri.replace(
+      pathSegments: <String>[...server.uri.pathSegments, 'call', roomToken],
+    );
+    final uri = server.uri.replace(
+      pathSegments: <String>[
+        ...server.uri.pathSegments,
+        'ocs',
+        'v2.php',
+        'apps',
+        'dav',
+        'api',
+        'v1',
+        'events',
+        'upcoming',
+      ],
+      queryParameters: <String, String>{
+        'location': location.toString(),
+        'format': 'json',
+      },
+    );
+    final payload = await _sendJson(
+      _authenticatedOcsRequest(
+        'GET',
+        uri,
+        loginName: loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      ),
+      allowedStatusCodes: const <int>{200},
+      maximumBytes: 64 * 1024,
+    );
+    return UpcomingTalkEvent.fromOcsJson(
+      payload.json,
+      expectedLocation: location.toString(),
+    );
+  }
+
   Future<CurrentOutOfOffice?> getCurrentOutOfOffice({
     required ServerBase server,
     required String loginName,

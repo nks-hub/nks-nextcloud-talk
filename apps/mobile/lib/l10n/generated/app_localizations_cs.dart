@@ -525,6 +525,12 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get upcomingEventDefaultTitle => 'Nadcházející událost';
+
+  @override
+  String get dismissUpcomingEvent => 'Skrýt nadcházející událost';
+
+  @override
   String get imageAttachment => 'Obrázková příloha';
 
   @override

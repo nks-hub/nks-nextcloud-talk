@@ -56,17 +56,11 @@ final class CurrentOutOfOffice {
     Object? json, {
     required String expectedUserId,
   }) {
-    final root = _object(json);
-    final ocs = _object(root['ocs']);
-    final meta = _object(ocs['meta']);
-    final data = _object(ocs['data']);
+    final data = _ocsDataObject(json);
     final userId = _boundedString(data['userId'], 4096);
     final startSeconds = _nonNegativeInt(data['startDate']);
     final endSeconds = _nonNegativeInt(data['endDate']);
-    if (meta['status'] != 'ok' ||
-        meta['statuscode'] != 200 ||
-        userId != expectedUserId ||
-        startSeconds > endSeconds) {
+    if (userId != expectedUserId || startSeconds > endSeconds) {
       throw const NextcloudApiException(NextcloudApiError.invalidJson);
     }
     try {
@@ -110,42 +104,130 @@ final class CurrentOutOfOffice {
   final String? replacementUserId;
   final String? replacementUserDisplayName;
 
-  static Map<String, Object?> _object(Object? value) {
-    if (value is! Map<String, Object?>) {
-      throw const NextcloudApiException(NextcloudApiError.invalidJson);
-    }
-    return value;
-  }
-
-  static String _boundedString(
-    Object? value,
-    int maximum, {
-    bool allowEmpty = false,
-  }) {
-    if (value is! String ||
-        (!allowEmpty && value.isEmpty) ||
-        value.runes.length > maximum) {
-      throw const NextcloudApiException(NextcloudApiError.invalidJson);
-    }
-    return value;
-  }
-
-  static String? _optionalBoundedString(Object? value, int maximum) {
-    if (value == null) {
-      return null;
-    }
-    return _boundedString(value, maximum);
-  }
-
-  static int _nonNegativeInt(Object? value) {
-    if (value is! int || value < 0) {
-      throw const NextcloudApiException(NextcloudApiError.invalidJson);
-    }
-    return value;
-  }
-
   @override
   String toString() => 'CurrentOutOfOffice(<redacted>)';
+}
+
+final class UpcomingTalkEvent {
+  const UpcomingTalkEvent._({
+    required this.uri,
+    required this.calendarUri,
+    required this.start,
+    required this.summary,
+    required this.location,
+  });
+
+  static UpcomingTalkEvent? fromOcsJson(
+    Object? json, {
+    required String expectedLocation,
+  }) {
+    final data = _ocsDataObject(json);
+    final events = data['events'];
+    if (events is! List<Object?> || events.length > 100) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    for (final rawEvent in events) {
+      final event = _object(rawEvent);
+      final location = _optionalBoundedString(
+        event['location'],
+        4096,
+        allowEmpty: true,
+      );
+      if (location == null || location != expectedLocation) {
+        throw const NextcloudApiException(NextcloudApiError.invalidJson);
+      }
+      final startSeconds = _optionalNonNegativeInt(event['start']);
+      final summary = _optionalBoundedString(
+        event['summary'],
+        4096,
+        allowEmpty: true,
+      );
+      if (startSeconds == null && (summary == null || summary.trim().isEmpty)) {
+        continue;
+      }
+      try {
+        return UpcomingTalkEvent._(
+          uri: _boundedString(event['uri'], 4096),
+          calendarUri: _boundedString(event['calendarUri'], 4096),
+          start: startSeconds == null
+              ? null
+              : DateTime.fromMillisecondsSinceEpoch(
+                  startSeconds * Duration.millisecondsPerSecond,
+                  isUtc: true,
+                ),
+          summary: summary?.trim(),
+          location: location,
+        );
+      } on RangeError {
+        throw const NextcloudApiException(NextcloudApiError.invalidJson);
+      }
+    }
+    return null;
+  }
+
+  final String uri;
+  final String calendarUri;
+  final DateTime? start;
+  final String? summary;
+  final String location;
+
+  String get identity =>
+      '$calendarUri\u0000$uri\u0000${start?.millisecondsSinceEpoch ?? -1}'
+      '\u0000${summary ?? ''}';
+
+  @override
+  String toString() => 'UpcomingTalkEvent(<redacted>)';
+}
+
+Map<String, Object?> _ocsDataObject(Object? json) {
+  final root = _object(json);
+  final ocs = _object(root['ocs']);
+  final meta = _object(ocs['meta']);
+  if (meta['status'] != 'ok' || meta['statuscode'] != 200) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  return _object(ocs['data']);
+}
+
+Map<String, Object?> _object(Object? value) {
+  if (value is! Map<String, Object?>) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  return value;
+}
+
+String _boundedString(Object? value, int maximum, {bool allowEmpty = false}) {
+  if (value is! String ||
+      (!allowEmpty && value.isEmpty) ||
+      value.runes.length > maximum) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  return value;
+}
+
+String? _optionalBoundedString(
+  Object? value,
+  int maximum, {
+  bool allowEmpty = false,
+}) {
+  if (value == null) {
+    return null;
+  }
+  return _boundedString(value, maximum, allowEmpty: allowEmpty);
+}
+
+int _nonNegativeInt(Object? value) {
+  if (value is! int || value < 0) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  return value;
+}
+
+int? _optionalNonNegativeInt(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return _nonNegativeInt(value);
 }
 
 /// Identifies whether an authenticated capability read reached the server.

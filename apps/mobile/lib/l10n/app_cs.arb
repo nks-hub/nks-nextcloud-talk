@@ -182,6 +182,8 @@
       }
     }
   },
+  "upcomingEventDefaultTitle": "Nadcházející událost",
+  "dismissUpcomingEvent": "Skrýt nadcházející událost",
   "imageAttachment": "Obrázková příloha",
   "openImage": "Otevřít obrázek",
   "loadingImage": "Načítám obrázek…",

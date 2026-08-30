@@ -1004,6 +1004,18 @@ abstract class AppLocalizations {
   /// **'Replacement: {name}'**
   String absenceReplacement(String name);
 
+  /// No description provided for @upcomingEventDefaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming event'**
+  String get upcomingEventDefaultTitle;
+
+  /// No description provided for @dismissUpcomingEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss upcoming event'**
+  String get dismissUpcomingEvent;
+
   /// No description provided for @imageAttachment.
   ///
   /// In en, this message translates to:

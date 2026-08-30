@@ -523,6 +523,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get upcomingEventDefaultTitle => 'Upcoming event';
+
+  @override
+  String get dismissUpcomingEvent => 'Dismiss upcoming event';
+
+  @override
   String get imageAttachment => 'Image attachment';
 
   @override

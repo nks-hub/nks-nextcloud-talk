@@ -182,6 +182,8 @@
       }
     }
   },
+  "upcomingEventDefaultTitle": "Upcoming event",
+  "dismissUpcomingEvent": "Dismiss upcoming event",
   "imageAttachment": "Image attachment",
   "openImage": "Open image",
   "loadingImage": "Loading image…",
