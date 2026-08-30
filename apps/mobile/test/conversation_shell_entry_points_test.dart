@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' hide isNotNull, isNull;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -429,6 +431,57 @@ void main() {
     });
   }
 
+  testWidgets('disposing the shell cancels an in-flight room open', (
+    tester,
+  ) async {
+    final accountSelect = _AccountSelectBarrier();
+    final database = AppDatabase.forTesting(
+      NativeDatabase.memory().interceptWith(accountSelect),
+    );
+    addTearDown(database.close);
+    late StoredAccount account;
+    await tester.runAsync(() async {
+      account = await seedAccount(database);
+    });
+
+    await tester.pumpWidget(
+      wrapShell(
+        database,
+        account,
+        overrides: [
+          themePreferenceStoreProvider.overrideWithValue(
+            _MemoryThemePreferenceStore(),
+          ),
+        ],
+      ),
+    );
+    final workspace = find.byType(ConversationWorkspace);
+    for (
+      var attempt = 0;
+      attempt < 20 && workspace.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(workspace, findsOneWidget);
+
+    accountSelect.arm();
+    tester.widget<ConversationWorkspace>(workspace).onOpenCreatedConversation!(
+      'room-lifecycle',
+    );
+    await tester.runAsync(accountSelect.waitUntilBlocked);
+    await tester.pumpWidget(const SizedBox.shrink());
+    accountSelect.release();
+    await tester.runAsync(() async {
+      await accountSelect.waitUntilCompleted();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+
+    expect(accountSelect.accountUpdateCount, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'the app applies the stored theme mode instead of the system one',
     (tester) async {
@@ -511,4 +564,59 @@ final class _MemoryThemePreferenceStore implements ThemePreferenceStore {
 
   @override
   Future<void> write(ThemeMode mode) async => stored = mode;
+}
+
+final class _AccountSelectBarrier extends QueryInterceptor {
+  Completer<void>? _blocked;
+  Completer<void>? _completed;
+  Completer<void>? _release;
+  var accountUpdateCount = 0;
+
+  void arm() {
+    _blocked = Completer<void>();
+    _completed = Completer<void>();
+    _release = Completer<void>();
+  }
+
+  Future<void> waitUntilBlocked() =>
+      _blocked!.future.timeout(const Duration(seconds: 2));
+
+  Future<void> waitUntilCompleted() =>
+      _completed!.future.timeout(const Duration(seconds: 2));
+
+  void release() => _release!.complete();
+
+  @override
+  Future<int> runUpdate(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (_blocked != null && statement.contains('accounts')) {
+      accountUpdateCount++;
+    }
+    return super.runUpdate(executor, statement, args);
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) async {
+    final blocked = _blocked;
+    var intercepted = false;
+    if (blocked != null &&
+        !blocked.isCompleted &&
+        statement.contains('accounts')) {
+      intercepted = true;
+      blocked.complete();
+      await _release!.future;
+    }
+    final result = await super.runSelect(executor, statement, args);
+    if (intercepted) {
+      _completed!.complete();
+    }
+    return result;
+  }
 }

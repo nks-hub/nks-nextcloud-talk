@@ -90,7 +90,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _drainPushNavigation() async {
-    if (_handlingPushOpen) {
+    if (!mounted || _handlingPushOpen) {
       return;
     }
     final coordinator = ref.read(androidPushCoordinatorProvider);
@@ -131,7 +131,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _drainApplePushNavigation() async {
-    if (_handlingApplePushOpen) {
+    if (!mounted || _handlingApplePushOpen) {
       return;
     }
     final coordinator = ref.read(applePushCoordinatorProvider);
@@ -169,7 +169,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _drainWindowsPushNavigation() async {
-    if (_handlingWindowsPushOpen) {
+    if (!mounted || _handlingWindowsPushOpen) {
       return;
     }
     final channel = ref.read(windowsNotificationServiceProvider)?.channel;
@@ -206,7 +206,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   }
 
   Future<void> _drainDeepLinks() async {
-    if (_handlingDeepLink) {
+    if (!mounted || _handlingDeepLink) {
       return;
     }
     final coordinator = ref.read(deepLinkCoordinatorProvider);
@@ -235,16 +235,21 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   /// A missing account or a room that never lands in the cache leaves the
   /// app exactly where it was; this never navigates to a guess.
   Future<void> _openAccountConversation(String accountId, String token) async {
+    if (!mounted) {
+      return;
+    }
     final accounts = ref.read(accountRepositoryProvider);
+    final sync = ref.read(conversationSyncServiceProvider);
     final account = await accounts.getAccount(accountId);
-    if (account == null) {
+    if (!mounted || account == null) {
       return;
     }
     await accounts.selectAccount(account.id);
+    if (!mounted) {
+      return;
+    }
     try {
-      await ref
-          .read(conversationSyncServiceProvider)
-          .sync(account.id, forceFull: true);
+      await sync.sync(account.id, forceFull: true);
     } on ConversationSyncException {
       // A cached room can still be opened while the account retries its sync.
     }
