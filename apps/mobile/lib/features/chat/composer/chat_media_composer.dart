@@ -614,6 +614,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     final voiceController = _voiceController;
     final voiceOwnsToolbar =
         voiceController != null && !_showsIdleToolbar(voiceController.state);
+    final voiceErrorUsesRemainingWidth =
+        voiceController?.state.error != null &&
+        voiceController?.state.draft == null;
     final showVoiceUnavailable =
         voiceController == null ||
         (!_voiceAdmissionSupported && !voiceOwnsToolbar);
@@ -653,12 +656,19 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                         icon: const Icon(Icons.mic_off_outlined),
                       ),
                     )
+                  else if (voiceErrorUsesRemainingWidth)
+                    Expanded(
+                      child: VoiceMessageControls(
+                        controller: voiceController,
+                        labels: _voiceLabels(strings),
+                      ),
+                    )
                   else
                     VoiceMessageControls(
                       controller: voiceController,
                       labels: _voiceLabels(strings),
                     ),
-                  const Spacer(),
+                  if (!voiceErrorUsesRemainingWidth) const Spacer(),
                   ...widget.idleActions,
                 ],
         ),
