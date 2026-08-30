@@ -23,6 +23,8 @@ proto jen to, co je doložitelné z App Store Connect.
   nativní nahrávání.
 - Česká chybová hláška hlasové zprávy se vejde do spodní lišty i se všemi
   akcemi. Dříve přetékala mimo obrazovku.
+- Z obrazovky nové konverzace lze vytvořit prázdnou skupinovou nebo veřejnou
+  místnost bez hledání a pozvání prvního účastníka.
 
 ## 0.1.0 (23) — 30. 8. 2026
 
