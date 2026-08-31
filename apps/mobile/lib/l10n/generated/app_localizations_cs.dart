@@ -531,6 +531,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get dismissUpcomingEvent => 'Skrýt nadcházející událost';
 
   @override
+  String get contactAttachment => 'Kontakt';
+
+  @override
+  String openContact(String name) {
+    return 'Otevřít kontakt: $name';
+  }
+
+  @override
   String get imageAttachment => 'Obrázková příloha';
 
   @override

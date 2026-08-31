@@ -111,6 +111,80 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a vCard attachment is a scalable contact action', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _app(const TextScaler.linear(2), message: _contactMessage),
+    );
+
+    final contact = find.byKey(const Key('chat-open-contact-47-0'));
+    expect(contact, findsOneWidget);
+    expect(find.byIcon(Icons.contact_page_outlined), findsOneWidget);
+    expect(find.text('Contact'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Open contact: Alice Example.vcf'),
+      findsOneWidget,
+    );
+    final semanticContact = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Open contact: Alice Example.vcf',
+    );
+    expect(
+      tester.getSemantics(semanticContact),
+      matchesSemantics(
+        label: 'Open contact: Alice Example.vcf',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
+    final size = tester.getSize(contact);
+    expect(size.width, greaterThanOrEqualTo(48));
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('a .vcf with a generic MIME type still renders as a contact', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _genericMimeContactMessage),
+    );
+
+    expect(find.byIcon(Icons.contact_page_outlined), findsOneWidget);
+    expect(find.byKey(const Key('chat-open-contact-48-0')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a display name cannot forge a generic vCard attachment', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _forgedNameContactMessage),
+    );
+
+    expect(find.byIcon(Icons.contact_page_outlined), findsNothing);
+    expect(find.byIcon(Icons.insert_drive_file_rounded), findsOneWidget);
+    expect(find.byKey(const Key('chat-open-contact-49-0')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a .vcf path with an unrelated MIME remains a file', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _wrongMimeContactMessage),
+    );
+
+    expect(find.byIcon(Icons.contact_page_outlined), findsNothing);
+    expect(find.byIcon(Icons.insert_drive_file_rounded), findsOneWidget);
+    expect(find.byKey(const Key('chat-open-contact-50-0')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a fully shaped deleted parent uses the deleted preview', (
     tester,
   ) async {
@@ -405,6 +479,67 @@ final _invalidLocationMessage = ChatMessage.fromJson(<String, Object?>{
       'name': 'Invalid place',
       'latitude': '91',
       'longitude': '2.29448',
+    },
+  },
+});
+
+final _contactMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._message.wire,
+  'id': 47,
+  'referenceId': 'reference-47',
+  'message': '{file}',
+  'messageParameters': <String, Object?>{
+    'file': <String, Object?>{
+      'type': 'file',
+      'id': '47',
+      'name': 'Alice Example.vcf',
+      'path': 'Talk/contact-data.bin',
+      'mimetype': 'text/vcard',
+    },
+  },
+});
+
+final _genericMimeContactMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._contactMessage.wire,
+  'id': 48,
+  'referenceId': 'reference-48',
+  'messageParameters': <String, Object?>{
+    'file': <String, Object?>{
+      'id': '48',
+      'type': 'file',
+      'name': 'Alice Example',
+      'path': 'Talk/Alice Example.vcf',
+      'mimetype': 'application/octet-stream',
+    },
+  },
+});
+
+final _forgedNameContactMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._contactMessage.wire,
+  'id': 49,
+  'referenceId': 'reference-49',
+  'messageParameters': <String, Object?>{
+    'file': <String, Object?>{
+      'id': '49',
+      'type': 'file',
+      'name': 'Forged.vcf',
+      'path': 'Talk/payload.bin',
+      'mimetype': 'application/octet-stream',
+    },
+  },
+});
+
+final _wrongMimeContactMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._contactMessage.wire,
+  'id': 50,
+  'referenceId': 'reference-50',
+  'messageParameters': <String, Object?>{
+    'file': <String, Object?>{
+      'id': '50',
+      'type': 'file',
+      'name': 'Document.pdf',
+      'path': 'Talk/Document.vcf',
+      'mimetype': 'application/pdf',
     },
   },
 });

@@ -184,6 +184,15 @@
   },
   "upcomingEventDefaultTitle": "Upcoming event",
   "dismissUpcomingEvent": "Dismiss upcoming event",
+  "contactAttachment": "Contact",
+  "openContact": "Open contact: {name}",
+  "@openContact": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Image attachment",
   "openImage": "Open image",
   "loadingImage": "Loading image…",

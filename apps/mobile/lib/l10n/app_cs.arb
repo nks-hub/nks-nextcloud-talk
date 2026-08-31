@@ -184,6 +184,15 @@
   },
   "upcomingEventDefaultTitle": "Nadcházející událost",
   "dismissUpcomingEvent": "Skrýt nadcházející událost",
+  "contactAttachment": "Kontakt",
+  "openContact": "Otevřít kontakt: {name}",
+  "@openContact": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "imageAttachment": "Obrázková příloha",
   "openImage": "Otevřít obrázek",
   "loadingImage": "Načítám obrázek…",

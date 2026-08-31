@@ -529,6 +529,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dismissUpcomingEvent => 'Dismiss upcoming event';
 
   @override
+  String get contactAttachment => 'Contact';
+
+  @override
+  String openContact(String name) {
+    return 'Open contact: $name';
+  }
+
+  @override
   String get imageAttachment => 'Image attachment';
 
   @override

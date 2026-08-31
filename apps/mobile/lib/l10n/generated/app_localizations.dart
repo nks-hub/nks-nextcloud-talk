@@ -1016,6 +1016,18 @@ abstract class AppLocalizations {
   /// **'Dismiss upcoming event'**
   String get dismissUpcomingEvent;
 
+  /// No description provided for @contactAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get contactAttachment;
+
+  /// No description provided for @openContact.
+  ///
+  /// In en, this message translates to:
+  /// **'Open contact: {name}'**
+  String openContact(String name);
+
   /// No description provided for @imageAttachment.
   ///
   /// In en, this message translates to:

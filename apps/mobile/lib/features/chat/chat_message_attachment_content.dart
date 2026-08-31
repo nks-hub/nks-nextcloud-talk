@@ -266,7 +266,12 @@ final class _ChatAttachment extends ConsumerWidget {
         ? strings.attachment
         : parameter.name!.trim();
     final mimeType = _mimeType(parameter);
-    final originalUri = _davDownloadUri(account, parameter);
+    final attachment = _davAttachment(account, parameter);
+    final contact = _isContactAttachment(
+      attachment?.vCardPath ?? false,
+      mimeType,
+    );
+    final originalUri = attachment?.uri;
     final voiceUri = mimeType?.startsWith('audio/') == true
         ? originalUri
         : null;
@@ -416,13 +421,20 @@ final class _ChatAttachment extends ConsumerWidget {
           // so this fallback stays compact instead of repeating the name.
           Semantics(
             button: true,
-            label: '${strings.openAttachment}: $name',
+            label: contact
+                ? strings.openContact(name)
+                : '${strings.openAttachment}: $name',
+            onTap: openAttachment,
             child: ExcludeSemantics(
               child: Material(
                 color: scheme.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
-                  key: Key('chat-open-attachment-$messageId-$index'),
+                  key: Key(
+                    contact
+                        ? 'chat-open-contact-$messageId-$index'
+                        : 'chat-open-attachment-$messageId-$index',
+                  ),
                   onTap: openAttachment,
                   borderRadius: BorderRadius.circular(10),
                   child: ConstrainedBox(
@@ -439,11 +451,24 @@ final class _ChatAttachment extends ConsumerWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            mimeType?.startsWith('image/') == true
+                            contact
+                                ? Icons.contact_page_outlined
+                                : mimeType?.startsWith('image/') == true
                                 ? Icons.image_rounded
                                 : Icons.insert_drive_file_rounded,
                             color: scheme.primary,
                           ),
+                          if (contact) ...[
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                strings.contactAttachment,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: scheme.primary),
+                              ),
+                            ),
+                          ],
                           if (opensFile) ...[
                             const SizedBox(width: 6),
                             Icon(
@@ -466,7 +491,17 @@ final class _ChatAttachment extends ConsumerWidget {
 }
 
 /// Files web page and would answer with HTML, so it must not be downloaded.
-Uri? _davDownloadUri(StoredAccount account, ChatRichObjectParameter parameter) {
+final class _DavAttachment {
+  const _DavAttachment({required this.uri, required this.vCardPath});
+
+  final Uri uri;
+  final bool vCardPath;
+}
+
+_DavAttachment? _davAttachment(
+  StoredAccount account,
+  ChatRichObjectParameter parameter,
+) {
   final raw = parameter.wire['path'];
   if (raw is! String) {
     return null;
@@ -480,21 +515,41 @@ Uri? _davDownloadUri(StoredAccount account, ChatRichObjectParameter parameter) {
     return null;
   }
   final server = ServerBase.parse(account.serverUrl);
-  return server.uri.replace(
-    pathSegments: [
-      ...server.uri.pathSegments.where((segment) => segment.isNotEmpty),
-      'remote.php',
-      'dav',
-      'files',
-      user.value,
-      ...path.segments,
-    ],
+  return _DavAttachment(
+    uri: server.uri.replace(
+      pathSegments: [
+        ...server.uri.pathSegments.where((segment) => segment.isNotEmpty),
+        'remote.php',
+        'dav',
+        'files',
+        user.value,
+        ...path.segments,
+      ],
+    ),
+    vCardPath: path.segments.last.toLowerCase().endsWith('.vcf'),
   );
 }
 
 String? _mimeType(ChatRichObjectParameter parameter) {
   final value = parameter.wire['mimetype'] ?? parameter.wire['mimeType'];
   return value is String ? value.trim().toLowerCase() : null;
+}
+
+bool _isContactAttachment(bool vCardPath, String? mimeType) {
+  if (const <String>{
+    'text/vcard',
+    'text/x-vcard',
+    'text/directory',
+  }.contains(mimeType)) {
+    return true;
+  }
+  if (!vCardPath) {
+    return false;
+  }
+  return const <String>{
+    'application/octet-stream',
+    'binary/octet-stream',
+  }.contains(mimeType);
 }
 
 Uri? _previewUri(
