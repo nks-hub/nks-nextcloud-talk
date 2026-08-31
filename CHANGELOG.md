@@ -20,7 +20,8 @@ proto jen to, co je doložitelné z App Store Connect.
 
 Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
 track po commitu vrací build 25 ve stavu `completed`.
-TestFlight: build `VALID`, bez non-exempt encryption, minimum iOS 15.0.
+TestFlight: build `VALID`, bez non-exempt encryption, minimum iOS 15.0,
+v interní i externí skupině s českými poznámkami.
 
 - Když na iOS nezačne nahrávání hlasové zprávy, čekání po 10 sekundách skončí
   chybou a aplikace zůstane použitelná. Další pokus už neblokuje předchozí
