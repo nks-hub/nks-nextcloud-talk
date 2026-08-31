@@ -16,7 +16,12 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Připraveno pro další build
+## 0.1.0 (26) — 31. 8. 2026
+
+Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
+track po commitu vrací build 26 ve stavu `completed`.
+TestFlight: build `VALID`, bez non-exempt encryption, minimum iOS 15.0,
+v interní i externí skupině s českými poznámkami.
 
 - Lokální diagnostika ukazuje skutečnou uloženou i očekávanou verzi databáze,
   stav migrace a počet porušení cizích klíčů. Dříve zobrazovala jen číslo

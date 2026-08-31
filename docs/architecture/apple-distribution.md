@@ -56,6 +56,16 @@ Celé to musí běžet jako přihlášený uživatel, ne jako root:
    jako root, ale privátní klíč certifikátu je v login keychainu uživatele.
 4. **`Permission denied` při čtení `~/.pub-cache`.** Root tam předtím zapsal
    soubory; vrátit vlastnictví uživateli.
+5. **Xcode ukazuje iOS SDK, ale `Any iOS Device` je ineligible.** Na Xcode
+   26.3 s macOS 15.7.4 po odebrání runtime 26.2 zůstal
+   `iphoneos26.2.sdk`, přesto archive hlásil `iOS 26.2 is not installed`.
+   `xcodebuild -downloadPlatform iOS` stáhl nejnovější 26.3.1, který tuto
+   přesnou závislost nenahradil, a historickou verzi už standardní katalog
+   nenabízel. Ověřená obnova používá `xcodes runtimes` a jednoznačný runtime
+   build: `xcodes runtimes install 23C54 --architecture arm64`. Po registraci
+   `xcodebuild -showdestinations` znovu nabídl `Any iOS Device`. Dočasný
+   `xcodes` i chybný runtime 26.3.1 se po buildu odstranily; 26.2 zůstává jako
+   nutná součást toolchainu.
 
 ## Past, která stojí za samostatnou zmínku
 
@@ -87,6 +97,26 @@ App Store Connect API následně potvrdilo `processingState=VALID`,
 `usesNonExemptEncryption=false` a minimum iOS 15.0. Build má české poznámky,
 beta review je schválené a interní i externí skupina hlásí
 `IN_BETA_TESTING`.
+
+## Ověření buildu 26
+
+Build 26 vznikl 2026-08-31 z přesného commitu `3dd373e`. Android Publishing
+API přijalo `versionCode=26`, commitnulo uzavřený `alpha` track a nový edit
+vrací `(26) 0.1.0` ve stavu `completed`. AAB má SHA-256
+`034D499C55CA61BAAABCB1A46484094DBC3736843675781B90C5242AE7FEED49`.
+
+iOS archive i export prošly po obnovení runtime 26.2. IPA má SHA-256
+`40716A6719562217DE9F3798306C695E4F173BCDD28EB7EA53AEE6E87479801D`.
+App Store Connect API potvrdilo `processingState=VALID`, minimum iOS 15.0,
+`usesNonExemptEncryption=false`, české poznámky a
+`internalBuildState=externalBuildState=IN_BETA_TESTING`. Stejný bundle se
+spustil na zachovaném iPhone 16 Pro Max / iOS 18.6 simulátoru jako build 26;
+účet zůstal přihlášený a po serverovém refreshi zmizely všechny dočasné room
+fixture.
+
+Po ověření se z build-mac odstranil 1,7GB build strom, dočasný nástroj `xcodes`,
+chybný runtime 26.3.1 a nepoužívané tvOS, watchOS a visionOS runtime. Zůstaly
+jen nutné iOS 18.6 a iOS 26.2 a 41 GiB volného místa.
 
 ## Export compliance
 
