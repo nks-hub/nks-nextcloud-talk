@@ -439,14 +439,14 @@ String _valueOf(WidgetTester tester, String key) {
 void main() {
   test('classifies the stored schema relative to this build', () {
     const cases = <(int, MigrationDiagnosticsState)>[
-      (16, MigrationDiagnosticsState.upToDate),
-      (15, MigrationDiagnosticsState.upgradeRequired),
-      (17, MigrationDiagnosticsState.newerThanApp),
+      (17, MigrationDiagnosticsState.upToDate),
+      (16, MigrationDiagnosticsState.upgradeRequired),
+      (18, MigrationDiagnosticsState.newerThanApp),
     ];
 
     for (final (storedVersion, expectedState) in cases) {
       final diagnostics = DatabaseDiagnostics(
-        expectedSchemaVersion: 16,
+        expectedSchemaVersion: 17,
         storedSchemaVersion: storedVersion,
         foreignKeyViolationCount: 0,
       );
@@ -472,7 +472,7 @@ void main() {
       accounts: AccountRepository(database),
     ).load('account-a');
 
-    expect(diagnostics.database.expectedSchemaVersion, 16);
+    expect(diagnostics.database.expectedSchemaVersion, 17);
     expect(diagnostics.database.storedSchemaVersion, 15);
     expect(
       diagnostics.database.migrationState,

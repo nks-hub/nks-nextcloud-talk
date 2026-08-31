@@ -43,6 +43,17 @@ class Accounts extends Table {
   ];
 }
 
+@DataClassName('StoredAccountTheme')
+class AccountThemes extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get seedColor => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId};
+}
+
 @DataClassName('CachedConversation')
 class CachedConversations extends Table {
   TextColumn get accountId =>
@@ -591,6 +602,7 @@ Future<Directory> _resolveDatabaseDirectory() async {
 @DriftDatabase(
   tables: [
     Accounts,
+    AccountThemes,
     CachedConversations,
     ConversationAvatars,
     ChatCapabilities,
@@ -621,7 +633,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -868,6 +880,9 @@ final class AppDatabase extends _$AppDatabase {
           textSendOperations,
           textSendOperations.silent,
         );
+      }
+      if (from < 17) {
+        await migrator.createTable(accountThemes);
       }
     },
     beforeOpen: (_) async {

@@ -481,7 +481,11 @@ final class ChatService {
       }
       final sortedTalkFeatures = capabilities.talkFeatures.toList()..sort();
       final fingerprint = jsonEncode(sortedTalkFeatures);
-      await _accounts.updateTalkFeatures(account.id, capabilities.talkFeatures);
+      await _accounts.updateCapabilities(
+        account.id,
+        capabilities.talkFeatures,
+        serverThemeColor: capabilities.serverThemeColor,
+      );
       final storedCapability = await _chat.recordCapabilities(
         accountId: account.id,
         talkFeatures: capabilities.talkFeatures,

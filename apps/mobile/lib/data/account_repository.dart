@@ -22,11 +22,10 @@ final class AccountRepository {
   Future<List<StoredAccount>> listAccounts() => _accountsQuery().get();
 
   MultiSelectable<StoredAccount> _accountsQuery() {
-    return _database.select(_database.accounts)
-      ..orderBy([
-        (account) => OrderingTerm.desc(account.selected),
-        (account) => OrderingTerm.asc(account.createdAtMillis),
-      ]);
+    return _database.select(_database.accounts)..orderBy([
+      (account) => OrderingTerm.desc(account.selected),
+      (account) => OrderingTerm.asc(account.createdAtMillis),
+    ]);
   }
 
   Stream<StoredAccount?> watchSelectedAccount() {
@@ -34,6 +33,23 @@ final class AccountRepository {
       ..where((account) => account.selected.equals(true))
       ..limit(1);
     return query.watchSingleOrNull();
+  }
+
+  Stream<String?> watchSelectedThemeColor() {
+    final query =
+        _database.select(_database.accountThemes).join([
+            innerJoin(
+              _database.accounts,
+              _database.accounts.id.equalsExp(
+                _database.accountThemes.accountId,
+              ),
+            ),
+          ])
+          ..where(_database.accounts.selected.equals(true))
+          ..limit(1);
+    return query.watchSingleOrNull().map(
+      (row) => row?.readTable(_database.accountThemes).seedColor,
+    );
   }
 
   Stream<List<CachedConversation>> watchConversations(String accountId) {
@@ -101,6 +117,7 @@ final class AccountRepository {
     required String serverProductName,
     required DateTime createdAt,
     Set<String> talkFeatures = const {},
+    String? serverThemeColor,
   }) async {
     final sortedTalkFeatures = talkFeatures.toList()..sort();
     return _database.transaction(() async {
@@ -121,6 +138,7 @@ final class AccountRepository {
               lastSyncError: const Value(null),
             ),
           );
+      await _replaceThemeColor(accountId, serverThemeColor);
       final account = await getAccount(accountId);
       if (account == null) {
         throw StateError('Upserted account is missing');
@@ -134,6 +152,36 @@ final class AccountRepository {
     return (_database.update(_database.accounts)
           ..where((account) => account.id.equals(accountId)))
         .write(AccountsCompanion(talkFeaturesJson: Value(jsonEncode(sorted))));
+  }
+
+  Future<void> updateCapabilities(
+    String accountId,
+    Set<String> talkFeatures, {
+    required String? serverThemeColor,
+  }) {
+    final sorted = talkFeatures.toList()..sort();
+    return _database.transaction(() async {
+      await (_database.update(
+        _database.accounts,
+      )..where((account) => account.id.equals(accountId))).write(
+        AccountsCompanion(talkFeaturesJson: Value(jsonEncode(sorted))),
+      );
+      await _replaceThemeColor(accountId, serverThemeColor);
+    });
+  }
+
+  Future<void> _replaceThemeColor(String accountId, String? color) async {
+    if (color == null) {
+      await (_database.delete(
+        _database.accountThemes,
+      )..where((theme) => theme.accountId.equals(accountId))).go();
+      return;
+    }
+    await _database
+        .into(_database.accountThemes)
+        .insertOnConflictUpdate(
+          AccountThemesCompanion.insert(accountId: accountId, seedColor: color),
+        );
   }
 
   Future<void> selectAccount(String accountId) async {
@@ -177,6 +225,9 @@ final class AccountRepository {
 
       final wasSelected = (await getAccount(accountId))?.selected ?? false;
 
+      await (_database.delete(
+        _database.accountThemes,
+      )..where((theme) => theme.accountId.equals(accountId))).go();
       await (_database.delete(
         _database.callLifecycleSessions,
       )..where((session) => session.accountId.equals(accountId))).go();

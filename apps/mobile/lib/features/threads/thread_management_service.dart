@@ -343,7 +343,11 @@ final class ThreadManagementService {
         ThreadManagementError.talkUnavailable,
       );
     }
-    await _accounts.updateTalkFeatures(accountId, capabilities.talkFeatures);
+    await _accounts.updateCapabilities(
+      accountId,
+      capabilities.talkFeatures,
+      serverThemeColor: capabilities.serverThemeColor,
+    );
     await _chat.recordCapabilities(
       accountId: accountId,
       talkFeatures: capabilities.talkFeatures,

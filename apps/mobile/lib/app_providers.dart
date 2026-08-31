@@ -575,6 +575,10 @@ final selectedAccountProvider = StreamProvider<StoredAccount?>((ref) {
   return ref.watch(accountRepositoryProvider).watchSelectedAccount();
 });
 
+final selectedAccountThemeColorProvider = StreamProvider<String?>((ref) {
+  return ref.watch(accountRepositoryProvider).watchSelectedThemeColor();
+});
+
 final conversationsProvider =
     StreamProvider.family<List<CachedConversation>, String>((ref, accountId) {
       return ref.watch(accountRepositoryProvider).watchConversations(accountId);

@@ -262,6 +262,7 @@ final class OnboardingCoordinator {
         loginName: loginCredentials.loginName,
         serverProductName: pending.serverStatus.productName,
         talkFeatures: capabilities.talkFeatures,
+        serverThemeColor: capabilities.serverThemeColor,
         createdAt: existing == null
             ? DateTime.now().toUtc()
             : DateTime.fromMillisecondsSinceEpoch(

@@ -189,7 +189,11 @@ final class ConversationSyncService {
           ConversationSyncError.conversationProfileUnsupported,
         );
       }
-      await _accounts.updateTalkFeatures(accountId, capabilities.talkFeatures);
+      await _accounts.updateCapabilities(
+        accountId,
+        capabilities.talkFeatures,
+        serverThemeColor: capabilities.serverThemeColor,
+      );
 
       var currentAccount = account;
       for (var attempt = 0; attempt < 2; attempt++) {

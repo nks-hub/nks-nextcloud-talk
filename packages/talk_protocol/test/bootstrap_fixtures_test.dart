@@ -79,6 +79,42 @@ void main() {
       expect(snapshot.talkFeatures, isEmpty);
     });
 
+    test('authenticated capabilities expose an opaque server theme color', () {
+      final fixture = fixtures.singleWhere(
+        (item) => item['id'] == 'capabilities-authenticated',
+      );
+
+      final snapshot = CapabilitySnapshot.fromJson(
+        _readFixture(fixture),
+        context: CapabilityContext.authenticated,
+      );
+
+      expect(snapshot.serverThemeColor, '#00679e');
+    });
+
+    test(
+      'invalid optional server theme color falls back without failing Talk',
+      () {
+        final fixture = fixtures.singleWhere(
+          (item) => item['id'] == 'capabilities-authenticated',
+        );
+        final json = _readFixture(fixture) as Map<String, Object?>;
+        final ocs = json['ocs']! as Map<String, Object?>;
+        final data = ocs['data']! as Map<String, Object?>;
+        final capabilities = data['capabilities']! as Map<String, Object?>;
+        final theming = capabilities['theming']! as Map<String, Object?>;
+        theming['color'] = 'rgba(0, 0, 0, 0)';
+
+        final snapshot = CapabilitySnapshot.fromJson(
+          json,
+          context: CapabilityContext.authenticated,
+        );
+
+        expect(snapshot.hasTalk, isTrue);
+        expect(snapshot.serverThemeColor, isNull);
+      },
+    );
+
     test('capability parser rejects an excessively deep namespace', () {
       final fixture = fixtures.singleWhere(
         (item) => item['id'] == 'capabilities-anonymous',

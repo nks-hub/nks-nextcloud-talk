@@ -19,11 +19,21 @@ abstract final class AppTheme {
     TargetPlatform.fuchsia => false,
   };
 
-  static ThemeData light() => _create(Brightness.light);
+  static ThemeData light({Color? seedColor}) =>
+      _create(Brightness.light, seedColor: seedColor);
 
-  static ThemeData dark() => _create(Brightness.dark);
+  static ThemeData dark({Color? seedColor}) =>
+      _create(Brightness.dark, seedColor: seedColor);
 
-  static ThemeData _create(Brightness brightness) {
+  static Color? seedFromServerHex(String? value) {
+    if (value == null || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) {
+      return null;
+    }
+    final rgb = int.tryParse(value.substring(1), radix: 16);
+    return rgb == null ? null : Color(0xFF000000 | rgb);
+  }
+
+  static ThemeData _create(Brightness brightness, {Color? seedColor}) {
     final isDark = brightness == Brightness.dark;
     final pointer = _pointerFirst;
     // Flutter already gives desktop VisualDensity.compact, which takes 8 off
@@ -45,7 +55,7 @@ abstract final class AppTheme {
         ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
         : const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
     final generated = ColorScheme.fromSeed(
-      seedColor: _seed,
+      seedColor: seedColor ?? _seed,
       brightness: brightness,
     );
     final scheme = generated.copyWith(

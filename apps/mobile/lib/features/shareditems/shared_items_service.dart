@@ -172,7 +172,11 @@ final class HttpSharedItemsService implements SharedItemsService {
         ),
       );
       final capabilities = capabilityRead.snapshot;
-      await _accounts.updateTalkFeatures(accountId, capabilities.talkFeatures);
+      await _accounts.updateCapabilities(
+        accountId,
+        capabilities.talkFeatures,
+        serverThemeColor: capabilities.serverThemeColor,
+      );
       if (!capabilities.supportsTalk('rich-object-list-media')) {
         throw const SharedItemsException(SharedItemsError.unsupported);
       }

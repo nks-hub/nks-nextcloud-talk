@@ -87,6 +87,7 @@ final class CapabilitySnapshot {
     required this.chatReadPrivacy,
     required this.chatTypingPrivacy,
     required this.chatTranslationAvailable,
+    required this.serverThemeColor,
     required Set<String> notificationPushFeatures,
   }) : capabilities = UnmodifiableMapView(capabilities),
        namespaces = Set<String>.unmodifiable(capabilities.keys),
@@ -223,6 +224,15 @@ final class CapabilitySnapshot {
       }
     }
 
+    String? serverThemeColor;
+    final rawTheming = capabilities['theming'];
+    if (rawTheming is Map<String, Object?>) {
+      final rawColor = rawTheming['color'];
+      if (rawColor is String && _serverThemeColorPattern.hasMatch(rawColor)) {
+        serverThemeColor = rawColor.toLowerCase();
+      }
+    }
+
     return CapabilitySnapshot._(
       context: context,
       version: version,
@@ -231,6 +241,7 @@ final class CapabilitySnapshot {
       chatReadPrivacy: chatReadPrivacy,
       chatTypingPrivacy: chatTypingPrivacy,
       chatTranslationAvailable: chatTranslationAvailable,
+      serverThemeColor: serverThemeColor,
       notificationPushFeatures: notificationPushFeatures,
     );
   }
@@ -243,6 +254,7 @@ final class CapabilitySnapshot {
   final ChatReadPrivacy? chatReadPrivacy;
   final ChatTypingPrivacy? chatTypingPrivacy;
   final bool chatTranslationAvailable;
+  final String? serverThemeColor;
   final Set<String> notificationPushFeatures;
 
   bool get hasTalk => namespaces.contains('spreed');
@@ -257,3 +269,5 @@ final class CapabilitySnapshot {
       'CapabilitySnapshot(context: ${context.name}, '
       'namespaces: ${namespaces.length}, talkFeatures: ${talkFeatures.length})';
 }
+
+final RegExp _serverThemeColorPattern = RegExp(r'^#[0-9A-Fa-f]{6}$');

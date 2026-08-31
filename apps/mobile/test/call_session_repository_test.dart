@@ -235,7 +235,7 @@ void main() {
           .customSelect('PRAGMA table_info(call_sessions)')
           .get();
 
-      expect(migrated.schemaVersion, 16);
+      expect(migrated.schemaVersion, 17);
       expect(
         columns.map((row) => row.read<String>('name')),
         contains('room_token'),

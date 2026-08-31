@@ -33,8 +33,9 @@ final class NextcloudTalkApp extends ConsumerStatefulWidget {
 /// says yes.
 final class _PlatformRouteSink with WidgetsBindingObserver {
   @override
-  Future<bool> didPushRouteInformation(RouteInformation routeInformation) async =>
-      true;
+  Future<bool> didPushRouteInformation(
+    RouteInformation routeInformation,
+  ) async => true;
 }
 
 final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
@@ -54,12 +55,15 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
 
   @override
   Widget build(BuildContext context) {
+    final serverSeed = AppTheme.seedFromServerHex(
+      ref.watch(selectedAccountThemeColorProvider).valueOrNull,
+    );
     return MaterialApp(
       onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       restorationScopeId: 'nks_nextcloud_talk',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.light(seedColor: serverSeed),
+      darkTheme: AppTheme.dark(seedColor: serverSeed),
       themeMode: ref.watch(themeModeProvider),
       localizationsDelegates: const [
         AppLocalizations.delegate,

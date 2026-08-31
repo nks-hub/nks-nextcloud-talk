@@ -225,9 +225,10 @@ final class ChatAttachmentContextResolver {
       talkFeatures: capabilities.talkFeatures,
       observedAt: _clock().toUtc(),
     );
-    await _accounts.updateTalkFeatures(
+    await _accounts.updateCapabilities(
       accountId.value,
       capabilities.talkFeatures,
+      serverThemeColor: capabilities.serverThemeColor,
     );
 
     final AttachmentCapabilityProfile profile;

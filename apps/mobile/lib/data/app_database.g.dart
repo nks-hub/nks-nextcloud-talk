@@ -854,6 +854,228 @@ class AccountsCompanion extends UpdateCompanion<StoredAccount> {
   }
 }
 
+class $AccountThemesTable extends AccountThemes
+    with TableInfo<$AccountThemesTable, StoredAccountTheme> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AccountThemesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _seedColorMeta = const VerificationMeta(
+    'seedColor',
+  );
+  @override
+  late final GeneratedColumn<String> seedColor = GeneratedColumn<String>(
+    'seed_color',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [accountId, seedColor];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'account_themes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredAccountTheme> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('seed_color')) {
+      context.handle(
+        _seedColorMeta,
+        seedColor.isAcceptableOrUnknown(data['seed_color']!, _seedColorMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_seedColorMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId};
+  @override
+  StoredAccountTheme map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredAccountTheme(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      seedColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}seed_color'],
+      )!,
+    );
+  }
+
+  @override
+  $AccountThemesTable createAlias(String alias) {
+    return $AccountThemesTable(attachedDatabase, alias);
+  }
+}
+
+class StoredAccountTheme extends DataClass
+    implements Insertable<StoredAccountTheme> {
+  final String accountId;
+  final String seedColor;
+  const StoredAccountTheme({required this.accountId, required this.seedColor});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['seed_color'] = Variable<String>(seedColor);
+    return map;
+  }
+
+  AccountThemesCompanion toCompanion(bool nullToAbsent) {
+    return AccountThemesCompanion(
+      accountId: Value(accountId),
+      seedColor: Value(seedColor),
+    );
+  }
+
+  factory StoredAccountTheme.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredAccountTheme(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      seedColor: serializer.fromJson<String>(json['seedColor']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'seedColor': serializer.toJson<String>(seedColor),
+    };
+  }
+
+  StoredAccountTheme copyWith({String? accountId, String? seedColor}) =>
+      StoredAccountTheme(
+        accountId: accountId ?? this.accountId,
+        seedColor: seedColor ?? this.seedColor,
+      );
+  StoredAccountTheme copyWithCompanion(AccountThemesCompanion data) {
+    return StoredAccountTheme(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      seedColor: data.seedColor.present ? data.seedColor.value : this.seedColor,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredAccountTheme(')
+          ..write('accountId: $accountId, ')
+          ..write('seedColor: $seedColor')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(accountId, seedColor);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredAccountTheme &&
+          other.accountId == this.accountId &&
+          other.seedColor == this.seedColor);
+}
+
+class AccountThemesCompanion extends UpdateCompanion<StoredAccountTheme> {
+  final Value<String> accountId;
+  final Value<String> seedColor;
+  final Value<int> rowid;
+  const AccountThemesCompanion({
+    this.accountId = const Value.absent(),
+    this.seedColor = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AccountThemesCompanion.insert({
+    required String accountId,
+    required String seedColor,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       seedColor = Value(seedColor);
+  static Insertable<StoredAccountTheme> custom({
+    Expression<String>? accountId,
+    Expression<String>? seedColor,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (seedColor != null) 'seed_color': seedColor,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AccountThemesCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? seedColor,
+    Value<int>? rowid,
+  }) {
+    return AccountThemesCompanion(
+      accountId: accountId ?? this.accountId,
+      seedColor: seedColor ?? this.seedColor,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (seedColor.present) {
+      map['seed_color'] = Variable<String>(seedColor.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountThemesCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('seedColor: $seedColor, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CachedConversationsTable extends CachedConversations
     with TableInfo<$CachedConversationsTable, CachedConversation> {
   @override
@@ -12264,6 +12486,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $AccountsTable accounts = $AccountsTable(this);
+  late final $AccountThemesTable accountThemes = $AccountThemesTable(this);
   late final $CachedConversationsTable cachedConversations =
       $CachedConversationsTable(this);
   late final $ConversationAvatarsTable conversationAvatars =
@@ -12294,6 +12517,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     accounts,
+    accountThemes,
     cachedConversations,
     conversationAvatars,
     chatCapabilities,
@@ -12310,6 +12534,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('account_themes', kind: UpdateKind.delete)],
+    ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'accounts',
@@ -12421,6 +12652,24 @@ typedef $$AccountsTableUpdateCompanionBuilder =
 final class $$AccountsTableReferences
     extends BaseReferences<_$AppDatabase, $AccountsTable, StoredAccount> {
   $$AccountsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$AccountThemesTable, List<StoredAccountTheme>>
+  _accountThemesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.accountThemes,
+    aliasName: 'accounts__id__account_themes__account_id',
+  );
+
+  $$AccountThemesTableProcessedTableManager get accountThemesRefs {
+    final manager = $$AccountThemesTableTableManager(
+      $_db,
+      $_db.accountThemes,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_accountThemesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<
     $CachedConversationsTable,
@@ -12732,6 +12981,31 @@ class $$AccountsTableFilterComposer
     column: $table.lastSyncError,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> accountThemesRefs(
+    Expression<bool> Function($$AccountThemesTableFilterComposer f) f,
+  ) {
+    final $$AccountThemesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.accountThemes,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountThemesTableFilterComposer(
+            $db: $db,
+            $table: $db.accountThemes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> cachedConversationsRefs(
     Expression<bool> Function($$CachedConversationsTableFilterComposer f) f,
@@ -13155,6 +13429,31 @@ class $$AccountsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  Expression<T> accountThemesRefs<T extends Object>(
+    Expression<T> Function($$AccountThemesTableAnnotationComposer a) f,
+  ) {
+    final $$AccountThemesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.accountThemes,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountThemesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accountThemes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> cachedConversationsRefs<T extends Object>(
     Expression<T> Function($$CachedConversationsTableAnnotationComposer a) f,
   ) {
@@ -13452,6 +13751,7 @@ class $$AccountsTableTableManager
           (StoredAccount, $$AccountsTableReferences),
           StoredAccount,
           PrefetchHooks Function({
+            bool accountThemesRefs,
             bool cachedConversationsRefs,
             bool conversationAvatarsRefs,
             bool chatCapabilitiesRefs,
@@ -13556,6 +13856,7 @@ class $$AccountsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                accountThemesRefs = false,
                 cachedConversationsRefs = false,
                 conversationAvatarsRefs = false,
                 chatCapabilitiesRefs = false,
@@ -13571,6 +13872,7 @@ class $$AccountsTableTableManager
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (accountThemesRefs) db.accountThemes,
                     if (cachedConversationsRefs) db.cachedConversations,
                     if (conversationAvatarsRefs) db.conversationAvatars,
                     if (chatCapabilitiesRefs) db.chatCapabilities,
@@ -13587,6 +13889,27 @@ class $$AccountsTableTableManager
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (accountThemesRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          StoredAccountTheme
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._accountThemesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).accountThemesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (cachedConversationsRefs)
                         await $_getPrefetchedData<
                           StoredAccount,
@@ -13839,6 +14162,7 @@ typedef $$AccountsTableProcessedTableManager =
       (StoredAccount, $$AccountsTableReferences),
       StoredAccount,
       PrefetchHooks Function({
+        bool accountThemesRefs,
         bool cachedConversationsRefs,
         bool conversationAvatarsRefs,
         bool chatCapabilitiesRefs,
@@ -13851,6 +14175,271 @@ typedef $$AccountsTableProcessedTableManager =
         bool callSessionsRefs,
         bool callLifecycleSessionsRefs,
       })
+    >;
+typedef $$AccountThemesTableCreateCompanionBuilder =
+    AccountThemesCompanion Function({
+      required String accountId,
+      required String seedColor,
+      Value<int> rowid,
+    });
+typedef $$AccountThemesTableUpdateCompanionBuilder =
+    AccountThemesCompanion Function({
+      Value<String> accountId,
+      Value<String> seedColor,
+      Value<int> rowid,
+    });
+
+final class $$AccountThemesTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $AccountThemesTable, StoredAccountTheme> {
+  $$AccountThemesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('account_themes__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$AccountThemesTableFilterComposer
+    extends Composer<_$AppDatabase, $AccountThemesTable> {
+  $$AccountThemesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get seedColor => $composableBuilder(
+    column: $table.seedColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AccountThemesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AccountThemesTable> {
+  $$AccountThemesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get seedColor => $composableBuilder(
+    column: $table.seedColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AccountThemesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AccountThemesTable> {
+  $$AccountThemesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get seedColor =>
+      $composableBuilder(column: $table.seedColor, builder: (column) => column);
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AccountThemesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AccountThemesTable,
+          StoredAccountTheme,
+          $$AccountThemesTableFilterComposer,
+          $$AccountThemesTableOrderingComposer,
+          $$AccountThemesTableAnnotationComposer,
+          $$AccountThemesTableCreateCompanionBuilder,
+          $$AccountThemesTableUpdateCompanionBuilder,
+          (StoredAccountTheme, $$AccountThemesTableReferences),
+          StoredAccountTheme,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$AccountThemesTableTableManager(_$AppDatabase db, $AccountThemesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AccountThemesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AccountThemesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AccountThemesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> seedColor = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AccountThemesCompanion(
+                accountId: accountId,
+                seedColor: seedColor,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String seedColor,
+                Value<int> rowid = const Value.absent(),
+              }) => AccountThemesCompanion.insert(
+                accountId: accountId,
+                seedColor: seedColor,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$AccountThemesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable: $$AccountThemesTableReferences
+                                    ._accountIdTable(db),
+                                referencedColumn: $$AccountThemesTableReferences
+                                    ._accountIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$AccountThemesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AccountThemesTable,
+      StoredAccountTheme,
+      $$AccountThemesTableFilterComposer,
+      $$AccountThemesTableOrderingComposer,
+      $$AccountThemesTableAnnotationComposer,
+      $$AccountThemesTableCreateCompanionBuilder,
+      $$AccountThemesTableUpdateCompanionBuilder,
+      (StoredAccountTheme, $$AccountThemesTableReferences),
+      StoredAccountTheme,
+      PrefetchHooks Function({bool accountId})
     >;
 typedef $$CachedConversationsTableCreateCompanionBuilder =
     CachedConversationsCompanion Function({
@@ -20318,6 +20907,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$AccountsTableTableManager get accounts =>
       $$AccountsTableTableManager(_db, _db.accounts);
+  $$AccountThemesTableTableManager get accountThemes =>
+      $$AccountThemesTableTableManager(_db, _db.accountThemes);
   $$CachedConversationsTableTableManager get cachedConversations =>
       $$CachedConversationsTableTableManager(_db, _db.cachedConversations);
   $$ConversationAvatarsTableTableManager get conversationAvatars =>

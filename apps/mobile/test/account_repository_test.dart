@@ -129,6 +129,47 @@ void main() {
 
     expect(account.lastSyncError, null);
   });
+
+  test('selected account exposes only its own server theme color', () async {
+    await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      serverThemeColor: '#123456',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    await repository.upsertAccount(
+      accountId: 'account-b',
+      serverUrl: 'https://b.example.invalid',
+      loginName: 'blair',
+      serverProductName: 'Nextcloud B',
+      serverThemeColor: '#abcdef',
+      createdAt: DateTime.utc(2026, 1, 2),
+    );
+
+    expect(await repository.watchSelectedThemeColor().first, '#abcdef');
+
+    await repository.selectAccount('account-a');
+    expect(await repository.watchSelectedThemeColor().first, '#123456');
+  });
+
+  test('capability refresh removes a stale server theme color', () async {
+    await repository.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://a.example.invalid',
+      loginName: 'alex',
+      serverProductName: 'Nextcloud A',
+      serverThemeColor: '#123456',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+
+    await repository.updateCapabilities('account-a', const {
+      'conversation-v4',
+    }, serverThemeColor: null);
+
+    expect(await repository.watchSelectedThemeColor().first, null);
+  });
 }
 
 final class _RejectOutsideTransactionAccountSelects extends QueryInterceptor {
