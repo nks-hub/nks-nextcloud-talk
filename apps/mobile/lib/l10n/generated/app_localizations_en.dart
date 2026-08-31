@@ -2241,6 +2241,72 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server returned an invalid translation response.';
 
   @override
+  String get pollCreateTitle => 'Create poll';
+
+  @override
+  String get pollCreated => 'Poll created';
+
+  @override
+  String get pollCreateAction => 'Create';
+
+  @override
+  String get pollVoteAction => 'Vote';
+
+  @override
+  String get pollQuestion => 'Question';
+
+  @override
+  String get pollQuestionRequired => 'Enter a question.';
+
+  @override
+  String pollOption(int number) {
+    return 'Option $number';
+  }
+
+  @override
+  String get pollOptionRequired => 'Enter an option.';
+
+  @override
+  String get pollAddOption => 'Add option';
+
+  @override
+  String get pollRemoveOption => 'Remove option';
+
+  @override
+  String get pollMultipleAnswers => 'Allow multiple answers';
+
+  @override
+  String get pollHiddenResults => 'Hide results until the poll ends';
+
+  @override
+  String get pollSelectOption => 'Select at least one option.';
+
+  @override
+  String get pollUnsupported => 'Polls are not available in this conversation.';
+
+  @override
+  String get pollPermissionDenied => 'You cannot create or vote in this poll.';
+
+  @override
+  String get pollRateLimited => 'Too many poll requests. Try again later.';
+
+  @override
+  String get pollAmbiguous =>
+      'The server may have accepted this action. Refresh the conversation before trying again.';
+
+  @override
+  String get pollFailed => 'The poll action failed.';
+
+  @override
+  String get pollSignInAgain => 'Sign in to this account again.';
+
+  @override
+  String get pollMenuAction => 'Poll';
+
+  @override
+  String get pollChecking => 'Checking poll support';
+
+  @override
   String typingOne(String name) {
     return '$name is typing…';
   }

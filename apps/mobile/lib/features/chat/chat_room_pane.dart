@@ -32,6 +32,7 @@ import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'message_translation_dialog.dart';
 import 'location_share_service.dart';
+import 'poll_dialog.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
@@ -585,6 +586,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final attachmentDependencies = !readOnly
         ? ref.watch(chatAttachmentDependenciesProvider(_key))
         : null;
+    final pollRoomKey = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+      threadId: widget.threadId,
+    );
+    final pollAvailable = !readOnly
+        ? ref.watch(pollAvailabilityProvider(pollRoomKey))
+        : null;
     final mentionSource = !readOnly
         ? ref.watch(
             mentionSuggestionSourceProvider((
@@ -799,6 +808,23 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                       _currentThreadContext?.isNamed != true)
               ? null
               : () => unawaited(_shareCurrentLocation()),
+        ),
+      if (pollAvailable?.isLoading ?? false)
+        AttachmentMenuAction(
+          key: const Key('create-poll-checking'),
+          icon: const SizedBox.square(
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          label: strings.pollChecking,
+          onSelected: null,
+        ),
+      if (pollAvailable?.valueOrNull ?? false)
+        AttachmentMenuAction(
+          key: const Key('create-poll'),
+          icon: const Icon(Icons.poll_outlined),
+          label: strings.pollMenuAction,
+          onSelected: _sending ? null : () => unawaited(_openPollComposer()),
         ),
     ];
     final idleComposerActions = <Widget>[

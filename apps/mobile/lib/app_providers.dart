@@ -32,6 +32,7 @@ import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/message_translation_service.dart';
 import 'features/chat/location_share_service.dart';
+import 'features/chat/poll_service.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
@@ -387,6 +388,20 @@ final locationShareServiceProvider = Provider<LocationShareSender>((ref) {
     api: ref.watch(nextcloudApiProvider),
   );
 });
+
+final pollServiceProvider = Provider<PollSender>((ref) {
+  return PollService(
+    accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+final pollAvailabilityProvider = FutureProvider.autoDispose
+    .family<bool, PollRoomKey>((ref, key) {
+      return ref.watch(pollServiceProvider).isAvailable(key);
+    });
 
 final chatMessageActionsProfileProvider = FutureProvider.autoDispose
     .family<RichChatCapabilityProfile, ChatRoomProviderKey>((ref, key) async {

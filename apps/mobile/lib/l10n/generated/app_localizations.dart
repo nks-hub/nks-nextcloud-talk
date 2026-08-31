@@ -4100,6 +4100,132 @@ abstract class AppLocalizations {
   /// **'The server returned an invalid translation response.'**
   String get translationInvalidResponse;
 
+  /// No description provided for @pollCreateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create poll'**
+  String get pollCreateTitle;
+
+  /// No description provided for @pollCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll created'**
+  String get pollCreated;
+
+  /// No description provided for @pollCreateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get pollCreateAction;
+
+  /// No description provided for @pollVoteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Vote'**
+  String get pollVoteAction;
+
+  /// No description provided for @pollQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Question'**
+  String get pollQuestion;
+
+  /// No description provided for @pollQuestionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a question.'**
+  String get pollQuestionRequired;
+
+  /// No description provided for @pollOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Option {number}'**
+  String pollOption(int number);
+
+  /// No description provided for @pollOptionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an option.'**
+  String get pollOptionRequired;
+
+  /// No description provided for @pollAddOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Add option'**
+  String get pollAddOption;
+
+  /// No description provided for @pollRemoveOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove option'**
+  String get pollRemoveOption;
+
+  /// No description provided for @pollMultipleAnswers.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow multiple answers'**
+  String get pollMultipleAnswers;
+
+  /// No description provided for @pollHiddenResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide results until the poll ends'**
+  String get pollHiddenResults;
+
+  /// No description provided for @pollSelectOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one option.'**
+  String get pollSelectOption;
+
+  /// No description provided for @pollUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Polls are not available in this conversation.'**
+  String get pollUnsupported;
+
+  /// No description provided for @pollPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot create or vote in this poll.'**
+  String get pollPermissionDenied;
+
+  /// No description provided for @pollRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many poll requests. Try again later.'**
+  String get pollRateLimited;
+
+  /// No description provided for @pollAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'The server may have accepted this action. Refresh the conversation before trying again.'**
+  String get pollAmbiguous;
+
+  /// No description provided for @pollFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The poll action failed.'**
+  String get pollFailed;
+
+  /// No description provided for @pollSignInAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to this account again.'**
+  String get pollSignInAgain;
+
+  /// No description provided for @pollMenuAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll'**
+  String get pollMenuAction;
+
+  /// No description provided for @pollChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking poll support'**
+  String get pollChecking;
+
   /// Typing indicator for one participant.
   ///
   /// In en, this message translates to:

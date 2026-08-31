@@ -1,6 +1,27 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneComposer on _ChatRoomPaneState {
+  Future<void> _openPollComposer() async {
+    if (_sending || _isReadOnlyNow()) {
+      return;
+    }
+    final created = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PollComposerDialog(
+        sender: ref.read(pollServiceProvider),
+        roomKey: (
+          accountId: widget.account.id,
+          roomToken: widget.conversation.token,
+          threadId: widget.threadId,
+        ),
+      ),
+    );
+    if (created == true && mounted) {
+      await _sync();
+    }
+  }
+
   Future<void> _shareCurrentLocation() async {
     if (_sending || _isReadOnlyNow()) {
       return;

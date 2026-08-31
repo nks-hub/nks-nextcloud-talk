@@ -13,6 +13,7 @@ part 'nextcloud_api_account.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_profile.dart';
+part 'nextcloud_api_polls.dart';
 part 'nextcloud_api_push.dart';
 part 'nextcloud_api_rooms.dart';
 part 'nextcloud_api_translation.dart';
@@ -336,6 +337,7 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiChat,
         _NextcloudApiCall,
         _NextcloudApiProfile,
+        _NextcloudApiPolls,
         _NextcloudApiPush,
         _NextcloudApiTranslation {
   HttpNextcloudApi({

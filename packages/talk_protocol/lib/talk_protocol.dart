@@ -45,6 +45,7 @@ export 'src/conversations/response.dart';
 export 'src/participants/models.dart';
 export 'src/participants/request.dart';
 export 'src/participants/response.dart';
+export 'src/polls/polls.dart';
 export 'src/protocol_exception.dart';
 export 'src/push/crypto_material.dart';
 export 'src/push/effects.dart';

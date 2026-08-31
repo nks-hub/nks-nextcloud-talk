@@ -2238,6 +2238,74 @@ class AppLocalizationsCs extends AppLocalizations {
       'Server poslal neplatnou odpověď překladu.';
 
   @override
+  String get pollCreateTitle => 'Vytvořit anketu';
+
+  @override
+  String get pollCreated => 'Anketa vytvořena';
+
+  @override
+  String get pollCreateAction => 'Vytvořit';
+
+  @override
+  String get pollVoteAction => 'Hlasovat';
+
+  @override
+  String get pollQuestion => 'Otázka';
+
+  @override
+  String get pollQuestionRequired => 'Zadejte otázku.';
+
+  @override
+  String pollOption(int number) {
+    return 'Možnost $number';
+  }
+
+  @override
+  String get pollOptionRequired => 'Zadejte možnost.';
+
+  @override
+  String get pollAddOption => 'Přidat možnost';
+
+  @override
+  String get pollRemoveOption => 'Odebrat možnost';
+
+  @override
+  String get pollMultipleAnswers => 'Povolit více odpovědí';
+
+  @override
+  String get pollHiddenResults => 'Skrýt výsledky do ukončení ankety';
+
+  @override
+  String get pollSelectOption => 'Vyberte alespoň jednu možnost.';
+
+  @override
+  String get pollUnsupported => 'Ankety nejsou v této konverzaci dostupné.';
+
+  @override
+  String get pollPermissionDenied =>
+      'V této anketě nemůžete vytvářet ani hlasovat.';
+
+  @override
+  String get pollRateLimited =>
+      'Příliš mnoho požadavků na anketu. Zkuste to později.';
+
+  @override
+  String get pollAmbiguous =>
+      'Server mohl akci přijmout. Před dalším pokusem obnovte konverzaci.';
+
+  @override
+  String get pollFailed => 'Akce s anketou se nezdařila.';
+
+  @override
+  String get pollSignInAgain => 'Přihlaste tento účet znovu.';
+
+  @override
+  String get pollMenuAction => 'Anketa';
+
+  @override
+  String get pollChecking => 'Ověřuji podporu anket';
+
+  @override
   String typingOne(String name) {
     return '$name píše…';
   }
