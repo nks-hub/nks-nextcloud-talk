@@ -28,7 +28,7 @@ final class HttpGiphyRepository implements GiphyRepository {
   final int maximumReferenceBytes;
   final int maximumAttributionBytes;
   final http.Client _client;
-  ({int cursor, int limit, GiphyPage page})? _prefetchedTrending;
+  ({int cursor, int limit, GiphyPage page})? _cachedTrending;
   final LinkedHashMap<Uri, GiphyThumbnail> _thumbnailCache =
       LinkedHashMap<Uri, GiphyThumbnail>();
   final Map<Uri, Future<GiphyThumbnail>> _thumbnailLoads = {};
@@ -40,25 +40,24 @@ final class HttpGiphyRepository implements GiphyRepository {
     required int cursor,
     required int limit,
     Future<void>? abortTrigger,
-  }) {
+  }) async {
     if (_closed || cursor < 0 || limit < 1 || limit > 50) {
-      return Future<GiphyPage>.error(
-        const GiphyException(GiphyError.invalidResponse),
-      );
+      throw const GiphyException(GiphyError.invalidResponse);
     }
-    final prefetched = _prefetchedTrending;
-    if (prefetched != null &&
-        prefetched.cursor == cursor &&
-        prefetched.limit == limit) {
-      _prefetchedTrending = null;
-      return Future<GiphyPage>.value(prefetched.page);
+    final cached = _cachedTrending;
+    if (cached != null && cached.cursor == cursor && cached.limit == limit) {
+      return cached.page;
     }
-    return _fetch(
+    final page = await _fetch(
       endpoint: 'gifs/trending',
       cursor: cursor,
       limit: limit,
       abortTrigger: abortTrigger,
     );
+    if (!_closed && cursor == 0) {
+      _cachedTrending = (cursor: cursor, limit: limit, page: page);
+    }
+    return page;
   }
 
   Future<void> probeAvailability({int cursor = 0, int limit = 20}) async {
@@ -67,7 +66,7 @@ final class HttpGiphyRepository implements GiphyRepository {
       cursor: cursor,
       limit: limit,
     );
-    _prefetchedTrending = (cursor: cursor, limit: limit, page: page);
+    _cachedTrending = (cursor: cursor, limit: limit, page: page);
   }
 
   @override
@@ -629,7 +628,7 @@ final class HttpGiphyRepository implements GiphyRepository {
       return;
     }
     _closed = true;
-    _prefetchedTrending = null;
+    _cachedTrending = null;
     _thumbnailCache.clear();
     _thumbnailLoads.clear();
     _thumbnailCacheBytes = 0;

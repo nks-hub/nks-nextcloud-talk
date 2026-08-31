@@ -28,9 +28,11 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_composer_location_test.part.dart';
+part 'chat_composer_giphy_reopen_test.part.dart';
 
 void main() {
   _registerLocationComposerTests();
+  _registerGiphyReopenTests();
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
@@ -262,6 +264,7 @@ void main() {
 
       await tester.pump();
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
+      expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
       probeClient.complete(_giphyResponse());
       await _pumpUntil(
         tester,

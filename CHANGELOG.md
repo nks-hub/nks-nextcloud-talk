@@ -18,6 +18,9 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Po prvním načtení se Giphy picker znovu otevře z teplé account-scoped cache
+  bez dalšího trending requestu a celoplošného kolečka. Sponka pro přílohy
+  zůstává v toolbaru i během prvotní kontroly Giphy.
 - Ve sponce přibyla Poloha. Aplikace si vyžádá foreground oprávnění, zjistí
   aktuální souřadnice, ukáže je před odesláním a sdílí je jen na serveru, který
   tuto funkci podporuje. Background sledování polohy nepoužívá. Pokud se po

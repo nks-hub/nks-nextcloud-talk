@@ -40,6 +40,29 @@ void _registerGiphyRepositoryTests(
       },
     );
 
+    test('keeps the first trending page warm for picker reopen', () async {
+      var requests = 0;
+      final repository = HttpGiphyRepository(
+        server: server,
+        authorization: authorization,
+        client: MockClient((request) async {
+          requests++;
+          return http.Response(_validResponse(), 200);
+        }),
+      );
+      addTearDown(repository.close);
+
+      final first = await repository.trending(cursor: 0, limit: 20);
+      final reopened = await repository.trending(cursor: 0, limit: 20);
+
+      expect(first.entries, isNotEmpty);
+      expect(
+        reopened.entries.single.resourceUrl,
+        first.entries.single.resourceUrl,
+      );
+      expect(requests, 1);
+    });
+
     test('sends search term only to the server integration', () async {
       late http.Request observed;
       final repository = HttpGiphyRepository(

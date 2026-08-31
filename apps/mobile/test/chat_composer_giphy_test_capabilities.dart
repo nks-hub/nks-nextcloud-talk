@@ -34,7 +34,7 @@ void _registerGiphyCapabilityTests() {
 
   group('giphyRepositoryProvider', () {
     test(
-      'probes a missing capability and reuses the valid first page once',
+      'probes a missing capability and keeps the valid first page warm',
       () async {
         var endpointRequests = 0;
         final harness = await _GiphyProviderHarness.create(
@@ -55,7 +55,7 @@ void _registerGiphyCapabilityTests() {
         expect(page.entries, hasLength(1));
         expect(endpointRequests, 1);
         await repository.trending(cursor: 0, limit: 20);
-        expect(endpointRequests, 2);
+        expect(endpointRequests, 1);
       },
     );
 
