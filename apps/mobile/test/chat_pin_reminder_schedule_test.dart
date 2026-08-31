@@ -441,6 +441,9 @@ void main() {
       );
       await settle(tester);
 
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await settle(tester);
+
       expect(find.byKey(const Key('schedule-message')), findsNothing);
 
       await teardownTree(tester);
@@ -464,6 +467,9 @@ void main() {
           ),
         ),
       );
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
       await settle(tester);
 
       expect(find.byKey(const Key('schedule-message')), findsNothing);
@@ -502,6 +508,9 @@ void main() {
         find.byKey(const Key('chat-composer')),
         'Send this later',
       );
+      await settle(tester);
+
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
       await settle(tester);
 
       final button = find.byKey(const Key('schedule-message'));
@@ -572,6 +581,8 @@ void main() {
         find.byKey(const Key('chat-composer')),
         'Send this later',
       );
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('pick-image-attachment')));
       await settle(tester);
       await tester.tap(find.byKey(const Key('schedule-message')));
       await settle(tester);

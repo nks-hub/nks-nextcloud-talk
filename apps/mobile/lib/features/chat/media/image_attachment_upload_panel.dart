@@ -13,32 +13,99 @@ typedef PrepareAttachmentFromSource =
       AttachmentPickerSource source,
     );
 
+final class AttachmentMenuAction {
+  const AttachmentMenuAction({
+    required this.key,
+    required this.icon,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final Key key;
+  final Widget icon;
+  final String label;
+  final VoidCallback? onSelected;
+}
+
+final class ComposerActionMenuButton extends StatelessWidget {
+  const ComposerActionMenuButton({super.key, required this.actions});
+
+  final List<AttachmentMenuAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = actions.any((action) => action.onSelected != null);
+    return IconButton(
+      key: const Key('pick-image-attachment'),
+      tooltip: AppLocalizations.of(context).addAttachment,
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      onPressed: enabled ? () => unawaited(_open(context)) : null,
+      icon: const Icon(Icons.attach_file_rounded),
+    );
+  }
+
+  Future<void> _open(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          key: const Key('attachment-source-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final action in actions)
+              ListTile(
+                key: action.key,
+                leading: action.icon,
+                title: Text(action.label),
+                enabled: action.onSelected != null,
+                onTap: action.onSelected == null
+                    ? null
+                    : () {
+                        Navigator.of(sheetContext).pop();
+                        action.onSelected!.call();
+                      },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 final class ImageAttachmentPickerButton extends StatelessWidget {
   const ImageAttachmentPickerButton({
     super.key,
     required this.controller,
     required this.prepare,
     this.enabled = true,
+    this.menuActions = const <AttachmentMenuAction>[],
   });
 
   final ImageAttachmentUploadController controller;
   final PrepareAttachmentFromSource prepare;
   final bool enabled;
+  final List<AttachmentMenuAction> menuActions;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => IconButton(
-        key: const Key('pick-image-attachment'),
-        tooltip: strings.addAttachment,
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        onPressed: !enabled || controller.state.isActive
-            ? null
-            : () => unawaited(_chooseSource(context)),
-        icon: const Icon(Icons.attach_file_rounded),
-      ),
+      builder: (context, _) {
+        final hasEnabledAction = menuActions.any(
+          (action) => action.onSelected != null,
+        );
+        return IconButton(
+          key: const Key('pick-image-attachment'),
+          tooltip: strings.addAttachment,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          onPressed:
+              controller.state.isActive || (!enabled && !hasEnabledAction)
+              ? null
+              : () => unawaited(_chooseSource(context)),
+          icon: const Icon(Icons.attach_file_rounded),
+        );
+      },
     );
   }
 
@@ -49,13 +116,29 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
         child: Column(
           key: const Key('attachment-source-sheet'),
           mainAxisSize: MainAxisSize.min,
-          children: [
+          children: <Widget>[
             for (final option in _options(AppLocalizations.of(sheetContext)))
               ListTile(
                 key: Key('attach-source-${option.source.name}'),
                 leading: Icon(option.icon),
                 title: Text(option.label),
-                onTap: () => Navigator.of(sheetContext).pop(option.source),
+                enabled: enabled,
+                onTap: enabled
+                    ? () => Navigator.of(sheetContext).pop(option.source)
+                    : null,
+              ),
+            for (final action in menuActions)
+              ListTile(
+                key: action.key,
+                leading: action.icon,
+                title: Text(action.label),
+                enabled: action.onSelected != null,
+                onTap: action.onSelected == null
+                    ? null
+                    : () {
+                        Navigator.of(sheetContext).pop();
+                        action.onSelected!.call();
+                      },
               ),
           ],
         ),

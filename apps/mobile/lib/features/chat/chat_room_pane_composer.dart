@@ -517,6 +517,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               service: value.service,
             ),
             idleActions: idleActions,
+            showAttachmentButton: false,
             silent: _silentSend,
             captionSource: () => _composer.text,
             onCaptionConsumed: _clearConsumedCaption,

@@ -24,6 +24,7 @@ import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../platform/media/image_attachment_picker.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
@@ -36,6 +37,7 @@ import 'chat_service.dart';
 import 'chat_typing_indicator.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
+import 'media/image_attachment_upload_panel.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
@@ -749,7 +751,66 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     }
     final canSendSilently =
         attachmentDependencies?.valueOrNull?.profile.silent ?? false;
+    final attachmentMenuActions = <AttachmentMenuAction>[
+      AttachmentMenuAction(
+        key: const Key('attach-source-gallery'),
+        icon: const Icon(Icons.image_outlined),
+        label: strings.attachFromGallery,
+        onSelected: !giphyAttachmentSupported || _sending
+            ? null
+            : () => unawaited(
+                _mediaComposerController.pickAttachment(
+                  AttachmentPickerSource.gallery,
+                ),
+              ),
+      ),
+      AttachmentMenuAction(
+        key: const Key('attach-source-camera'),
+        icon: const Icon(Icons.photo_camera_outlined),
+        label: strings.attachFromCamera,
+        onSelected: !giphyAttachmentSupported || _sending
+            ? null
+            : () => unawaited(
+                _mediaComposerController.pickAttachment(
+                  AttachmentPickerSource.camera,
+                ),
+              ),
+      ),
+      AttachmentMenuAction(
+        key: const Key('attach-source-file'),
+        icon: const Icon(Icons.insert_drive_file_outlined),
+        label: strings.attachFromFile,
+        onSelected: !giphyAttachmentSupported || _sending
+            ? null
+            : () => unawaited(
+                _mediaComposerController.pickAttachment(
+                  AttachmentPickerSource.file,
+                ),
+              ),
+      ),
+      AttachmentMenuAction(
+        key: const Key('open-giphy-picker'),
+        icon:
+            (attachmentDependencies?.isLoading ?? false) ||
+                (giphy?.isLoading ?? false)
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.gif_box_outlined),
+        label: giphyTooltip,
+        onSelected: _sending ? null : giphyAction,
+      ),
+      if (profileCanSchedule)
+        AttachmentMenuAction(
+          key: const Key('schedule-message'),
+          icon: const Icon(Icons.schedule_send_outlined),
+          label: strings.scheduleMessage,
+          onSelected: _sending ? null : () => unawaited(_scheduleMessage()),
+        ),
+    ];
     final idleComposerActions = <Widget>[
+      ComposerActionMenuButton(actions: attachmentMenuActions),
       if (canSendSilently)
         IconButton(
           key: const Key('toggle-silent-send'),
@@ -769,26 +830,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         icon: const Icon(Icons.emoji_emotions_outlined),
         selectedIcon: const Icon(Icons.emoji_emotions),
       ),
-      IconButton(
-        key: const Key('open-giphy-picker'),
-        onPressed: _sending ? null : giphyAction,
-        tooltip: giphyTooltip,
-        icon:
-            (attachmentDependencies?.isLoading ?? false) ||
-                (giphy?.isLoading ?? false)
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.gif_box_outlined),
-      ),
-      if (profileCanSchedule)
-        IconButton(
-          key: const Key('schedule-message'),
-          onPressed: _sending ? null : () => unawaited(_scheduleMessage()),
-          tooltip: strings.scheduleMessage,
-          icon: const Icon(Icons.schedule_send_outlined),
-        ),
       IconButton.filled(
         key: const Key('send-message'),
         onPressed: _sending ? null : _send,

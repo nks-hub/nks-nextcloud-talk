@@ -98,18 +98,26 @@ final class ChatMediaThreadBinding {
 final class ChatMediaComposerController {
   Object? _owner;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
+  Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
 
   Future<bool> submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
     final submit = _submitGiphy;
     return submit == null ? false : submit(loader);
   }
 
+  Future<bool> pickAttachment(AttachmentPickerSource source) async {
+    final pick = _pickAttachment;
+    return pick == null ? false : pick(source);
+  }
+
   void _attach(
     Object owner,
     Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
+    Future<bool> Function(AttachmentPickerSource source) pickAttachment,
   ) {
     _owner = owner;
     _submitGiphy = submitGiphy;
+    _pickAttachment = pickAttachment;
   }
 
   void _detach(Object owner) {
@@ -118,6 +126,7 @@ final class ChatMediaComposerController {
     }
     _owner = null;
     _submitGiphy = null;
+    _pickAttachment = null;
   }
 }
 
@@ -139,6 +148,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.onCaptionConsumed,
     this.controller,
     this.idleActions = const <Widget>[],
+    this.showAttachmentButton = true,
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
     this.createVoiceCaptureBackend,
     this.createVoicePlaybackBackend,
@@ -173,6 +183,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final VoidCallback? onCaptionConsumed;
   final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
+  final bool showAttachmentButton;
   final ImageSelectionBackend imageSelectionBackend;
   final CreateVoiceCaptureBackend? createVoiceCaptureBackend;
   final CreateVoicePlaybackBackend? createVoicePlaybackBackend;
@@ -295,7 +306,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       () => widget.submissionBridge,
     );
     _initializeControllers();
-    widget.controller?._attach(this, _submitGiphyAttachment);
+    widget.controller?._attach(this, _submitGiphyAttachment, _pickAttachment);
   }
 
   @override
@@ -303,7 +314,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.controller, widget.controller)) {
       oldWidget.controller?._detach(this);
-      widget.controller?._attach(this, _submitGiphyAttachment);
+      widget.controller?._attach(this, _submitGiphyAttachment, _pickAttachment);
     }
     if (oldWidget.accountId == widget.accountId &&
         oldWidget.server == widget.server &&
@@ -467,6 +478,14 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       return false;
     }
     await _imageController.pickAndStart(() => _prepareGiphyAttachment(loader));
+    return true;
+  }
+
+  Future<bool> _pickAttachment(AttachmentPickerSource source) async {
+    if (_disposed || !_imageSupported || _imageController.state.isActive) {
+      return false;
+    }
+    await _imageController.pickAndStart(() => _prepareImage(source));
     return true;
   }
 
@@ -641,11 +660,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                   ),
                 ]
               : <Widget>[
-                  ImageAttachmentPickerButton(
-                    controller: _imageController,
-                    prepare: _prepareImage,
-                    enabled: _imageSupported,
-                  ),
+                  if (widget.showAttachmentButton)
+                    ImageAttachmentPickerButton(
+                      controller: _imageController,
+                      prepare: _prepareImage,
+                      enabled: _imageSupported,
+                    ),
                   if (showVoiceUnavailable)
                     SizedBox.square(
                       dimension: 48,

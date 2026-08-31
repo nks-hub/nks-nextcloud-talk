@@ -232,6 +232,41 @@ void main() {
     );
   });
 
+  testWidgets('host paperclip can start gallery selection through controller', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final controller = ChatMediaComposerController();
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        controller: controller,
+        showAttachmentButton: false,
+      ),
+    );
+
+    expect(find.byKey(const Key('pick-image-attachment')), findsNothing);
+    final started = await tester.runAsync(
+      () => controller.pickAttachment(AttachmentPickerSource.gallery),
+    );
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(started, isTrue);
+    expect(bridge.sources, hasLength(1));
+    expect(
+      bridge.sources.single.ownership,
+      AttachmentSourceOwnership.appOwnedCopy,
+    );
+    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+  });
+
   testWidgets('ordinary thread image retry keeps replyTo scope', (
     tester,
   ) async {

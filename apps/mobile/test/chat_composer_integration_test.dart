@@ -125,7 +125,7 @@ void main() {
     await _pumpTransition(tester);
     expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('open-giphy-picker')));
+    await _tapGiphyAction(tester);
     final gif = find.byKey(
       const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
     );
@@ -192,20 +192,18 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
-      await _pumpUntil(tester, () {
-        final button = tester.widget<IconButton>(
-          find.byKey(const Key('open-giphy-picker')),
-        );
-        return button.onPressed == null &&
-            button.tooltip == 'GIFs are not available on this server.';
-      });
+      await _tapGiphyAction(tester);
+      await tester.pumpAndSettle();
+      await _openAttachmentMenu(tester);
 
-      final button = tester.widget<IconButton>(
+      final button = tester.widget<ListTile>(
         find.byKey(const Key('open-giphy-picker')),
       );
-      expect(button.onPressed, isNull);
-      expect(button.tooltip, 'GIFs are not available on this server.');
+      expect(button.enabled, isFalse);
+      expect(
+        find.text('GIFs are not available on this server.'),
+        findsOneWidget,
+      );
       expect(find.byType(GiphyPicker), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -243,9 +241,7 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
-
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _tapGiphyAction(tester);
       await tester.runAsync(() async {
         for (var attempt = 0; attempt < 600; attempt++) {
           if (probeClient.requestStarted.isCompleted) {
@@ -300,8 +296,7 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
-      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
-      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _tapGiphyAction(tester);
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
 
       final accountB = harness.account.copyWith(
@@ -433,10 +428,21 @@ bool _sendButtonEnabled(WidgetTester tester) {
       null;
 }
 
-bool _giphyButtonEnabled(WidgetTester tester) {
-  final button = find.byKey(const Key('open-giphy-picker'));
-  return button.evaluate().isNotEmpty &&
-      tester.widget<IconButton>(button).onPressed != null;
+Future<void> _openAttachmentMenu(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('pick-image-attachment')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  expect(find.byKey(const Key('attachment-source-sheet')), findsOneWidget);
+}
+
+Future<void> _tapGiphyAction(WidgetTester tester) async {
+  await _pumpUntil(tester, () {
+    final button = find.byKey(const Key('pick-image-attachment'));
+    return button.evaluate().isNotEmpty &&
+        tester.widget<IconButton>(button).onPressed != null;
+  });
+  await _openAttachmentMenu(tester);
+  await tester.tap(find.byKey(const Key('open-giphy-picker')));
 }
 
 /// Pumps until [condition] holds.

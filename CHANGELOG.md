@@ -18,6 +18,9 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Sponka v psacím řádku nově sdružuje galerii, fotoaparát, soubor, GIF a tam,
+  kde jej server podporuje, také odložené odeslání. GIF a plánování už
+  nezabírají dvě samostatné ikony vedle pole.
 - Běžný řetězec odpovědí otevřený ze seznamu vláken už nekončí hláškou, že
   vlákno na serveru není dostupné. Taková položka vzniká z místní historie a
   nyní se otevře rovnou v chatu; serverový detail zůstává jen pro skutečně
