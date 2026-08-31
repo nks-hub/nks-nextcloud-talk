@@ -18,6 +18,11 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Do hlavního psacího řádku se vrátilo rychlé obrázkové tlačítko s `+` pro
+  přímý výběr z galerie. Sponka pro další zdroje a samostatný GIF zůstávají.
+- Android 13+ používá systémovou predictive-back větev místo zastaralého
+  callbacku. Když je přístup k poloze trvale zakázaný, chybová hláška nabídne
+  přímé otevření nastavení aplikace.
 - Po prvním načtení se Giphy picker znovu otevře z teplé account-scoped cache
   bez dalšího trending requestu a celoplošného kolečka. Sponka pro přílohy
   zůstává v toolbaru i během prvotní kontroly Giphy.
