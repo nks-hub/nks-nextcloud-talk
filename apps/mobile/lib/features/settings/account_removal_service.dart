@@ -15,6 +15,7 @@ import '../chat/media/chat_attachment_opener.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
 typedef AccountPushRevocation = Future<bool> Function(String accountId);
+typedef AccountBackgroundCleanup = Future<void> Function(String accountId);
 
 /// What a finished removal managed to do on the server.
 ///
@@ -61,6 +62,7 @@ final class AccountRemovalService {
     required ChatMediaCache mediaCache,
     required ChatMediaDiskCache mediaDiskCache,
     required EmojiUsageStore emojiUsage,
+    required AccountBackgroundCleanup clearChatBackgrounds,
     required Future<Directory> Function() voiceDirectory,
     required Future<Directory> Function() chatAttachmentDirectory,
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
@@ -72,6 +74,7 @@ final class AccountRemovalService {
        _mediaCache = mediaCache,
        _mediaDiskCache = mediaDiskCache,
        _emojiUsage = emojiUsage,
+       _clearChatBackgrounds = clearChatBackgrounds,
        _voiceDirectory = voiceDirectory,
        _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
@@ -84,6 +87,7 @@ final class AccountRemovalService {
   final ChatMediaCache _mediaCache;
   final ChatMediaDiskCache _mediaDiskCache;
   final EmojiUsageStore _emojiUsage;
+  final AccountBackgroundCleanup _clearChatBackgrounds;
   final Future<Directory> Function() _voiceDirectory;
   final Future<Directory> Function() _chatAttachmentDirectory;
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
@@ -132,6 +136,7 @@ final class AccountRemovalService {
 
     // From here on nothing may be skipped, whatever the server did.
     await _emojiUsage.delete(AccountId.parse(accountId));
+    await _clearChatBackgrounds(accountId);
     final sourceHandles = await _accounts.purgeAccount(accountId);
     await _credentials.deleteAppPassword(accountId);
     _mediaCache.evictAccount(accountId);

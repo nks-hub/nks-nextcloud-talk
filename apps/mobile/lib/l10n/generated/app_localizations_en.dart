@@ -1960,6 +1960,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsAvatarColorDefault => 'Follow bright or dark mode';
 
   @override
+  String get roomDetailsChatBackgroundAction => 'Chat background';
+
+  @override
   String roomDetailsAvatarColorSemantics(String color) {
     return 'Colour $color';
   }

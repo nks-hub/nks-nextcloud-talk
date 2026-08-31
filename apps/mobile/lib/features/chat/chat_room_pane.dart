@@ -28,6 +28,7 @@ import '../../platform/media/image_attachment_picker.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
+import 'chat_background_surface.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'message_translation_dialog.dart';
@@ -103,12 +104,16 @@ final class ChatThreadScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         top: false,
-        child: ChatRoomPane(
-          account: account,
-          conversation: conversation,
-          threadId: threadId,
-          threadContext: liveThreadContext,
-          jumpToMessageId: jumpToMessageId,
+        child: ChatBackgroundSurface(
+          accountId: account.id,
+          roomToken: conversation.token,
+          child: ChatRoomPane(
+            account: account,
+            conversation: conversation,
+            threadId: threadId,
+            threadContext: liveThreadContext,
+            jumpToMessageId: jumpToMessageId,
+          ),
         ),
       ),
     );

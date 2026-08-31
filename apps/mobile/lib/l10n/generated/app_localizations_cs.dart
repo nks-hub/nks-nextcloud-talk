@@ -1958,6 +1958,9 @@ class AppLocalizationsCs extends AppLocalizations {
       'Podle světlého nebo tmavého režimu';
 
   @override
+  String get roomDetailsChatBackgroundAction => 'Pozadí zpráv';
+
+  @override
   String roomDetailsAvatarColorSemantics(String color) {
     return 'Barva $color';
   }

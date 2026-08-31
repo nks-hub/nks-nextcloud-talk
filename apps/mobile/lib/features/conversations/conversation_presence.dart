@@ -8,6 +8,7 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_banner.dart';
 import '../chat/chat_room_pane.dart';
+import '../chat/chat_background_surface.dart';
 import '../rooms/room_details_screen.dart';
 import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
@@ -266,10 +267,14 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
             ConversationAbsenceBanner(account: account, conversation: current),
             OngoingCallBanner(account: account, conversation: current),
             Expanded(
-              child: ChatRoomPane(
-                account: account,
-                conversation: current,
-                jumpToMessageId: jumpToMessageId,
+              child: ChatBackgroundSurface(
+                accountId: account.id,
+                roomToken: current.token,
+                child: ChatRoomPane(
+                  account: account,
+                  conversation: current,
+                  jumpToMessageId: jumpToMessageId,
+                ),
               ),
             ),
           ],
@@ -397,7 +402,11 @@ final class PresenceChatRoomPane extends StatelessWidget {
         ConversationAbsenceBanner(account: account, conversation: conversation),
         OngoingCallBanner(account: account, conversation: conversation),
         Expanded(
-          child: ChatRoomPane(account: account, conversation: conversation),
+          child: ChatBackgroundSurface(
+            accountId: account.id,
+            roomToken: conversation.token,
+            child: ChatRoomPane(account: account, conversation: conversation),
+          ),
         ),
       ],
     );

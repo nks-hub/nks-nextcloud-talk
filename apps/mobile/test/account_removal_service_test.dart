@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_store.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -30,6 +31,7 @@ void main() {
   late ChatMediaDiskCache mediaDiskCache;
   late DurableAttachmentSourceStore sources;
   late FileEmojiUsageStore emojiUsage;
+  late ChatBackgroundStore chatBackgrounds;
   late Directory root;
   late Directory previewRoot;
   late Directory voiceRoot;
@@ -55,9 +57,13 @@ void main() {
     mediaDiskCache = ChatMediaDiskCache(rootDirectory: () async => previewRoot);
     sources = DurableAttachmentSourceStore(root: sourceRoot);
     emojiUsage = FileEmojiUsageStore(directory: emojiRoot);
+    chatBackgrounds = ChatBackgroundStore.forTesting(
+      Directory('${root.path}${Platform.pathSeparator}backgrounds'),
+    );
   });
 
   tearDown(() async {
+    await chatBackgrounds.close();
     await database.close();
     if (await root.exists()) {
       await root.delete(recursive: true);
@@ -76,6 +82,7 @@ void main() {
       mediaCache: mediaCache,
       mediaDiskCache: mediaDiskCache,
       emojiUsage: emojiUsage,
+      clearChatBackgrounds: chatBackgrounds.removeAccount,
       voiceDirectory: () async => voiceRoot,
       chatAttachmentDirectory: () async => chatAttachmentRoot,
       attachmentSources: () async => sources,
@@ -205,6 +212,14 @@ void main() {
     await emojiUsage.toggleFavorite(AccountId.parse('account-a'), '❤️');
     await emojiUsage.recordSelection(AccountId.parse('account-b'), '👋');
     await emojiUsage.toggleFavorite(AccountId.parse('account-b'), '✅');
+    await chatBackgrounds.write((
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    ), '#123456');
+    await chatBackgrounds.write((
+      accountId: 'account-b',
+      roomToken: 'rooma123',
+    ), '#654321');
 
     final before = await _accountScopedRowCounts(database, 'account-a');
     // Guards the guard: if this ever finds nothing, the assertion below would
@@ -264,6 +279,20 @@ void main() {
     final survivorEmoji = await emojiUsage.read(AccountId.parse('account-b'));
     expect(survivorEmoji.recent, <String>['👋']);
     expect(survivorEmoji.favorites, <String>['✅']);
+    expect(
+      await chatBackgrounds.read((
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      )),
+      isNull,
+    );
+    expect(
+      await chatBackgrounds.read((
+        accountId: 'account-b',
+        roomToken: 'rooma123',
+      )),
+      '#654321',
+    );
 
     await expectLater(sources.open(sourceA), throwsA(isA<Object>()));
     await (await sources.open(sourceB)).close();

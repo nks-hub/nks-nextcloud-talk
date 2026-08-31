@@ -18,6 +18,23 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Secure Storage má vlastní verzované migrace oddělené od schématu databáze.
+  Přerušený přesun credentialů se bezpečně obnoví, konfliktní kopie a neznámá
+  novější verze selžou bez smazání app passwordu.
+- Desktopové nastavení nabízí automatické spuštění po přihlášení. Windows
+  používá uživatelský `HKCU Run`, macOS 13+ `SMAppService` a Linux XDG
+  Autostart; klient po změně znovu ověří skutečný systémový stav.
+- Odebrání účtu nejdřív zastaví jeho root i thread long polly, upload requesty
+  a retry timery. Pozdní odpověď po logoutu už nemůže zapsat stav ani znovu
+  spustit upload a ostatní účty zůstávají aktivní.
+- Nové vzdálené zprávy v právě otevřené konverzaci se předávají odečítači
+  obrazovky. Historie, vlastní outbox, systémové a reaction zprávy se
+  neoznamují a více rychlých příchodů se sloučí do jednoho krátkého oznámení.
+- V detailu konverzace lze nastavit vlastní barvu pozadí zpráv nebo se vrátit
+  k motivu aplikace. Volba je oddělená podle účtu a místnosti, platí i ve
+  vláknech a kontrastní brána ji podle světlého, tmavého i serverového motivu
+  zeslabí tak, aby texty a oddělovače zůstaly čitelné.
+
 ## 0.1.0 (30) — 31. 8. 2026
 
 Play: AAB se zapnutým Sentry i Rybbit byl přes Publishing API nahrán a

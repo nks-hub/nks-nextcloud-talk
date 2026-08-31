@@ -757,6 +757,7 @@
   "roomDetailsAvatarSetAction": "Use this emoji",
   "roomDetailsAvatarColorLabel": "Background colour",
   "roomDetailsAvatarColorDefault": "Follow bright or dark mode",
+  "roomDetailsChatBackgroundAction": "Chat background",
   "roomDetailsAvatarColorSemantics": "Colour {color}",
   "@roomDetailsAvatarColorSemantics": {
     "placeholders": {

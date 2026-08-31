@@ -164,6 +164,7 @@ _removalService(
       emojiUsage: FileEmojiUsageStore(
         directory: Directory('${root.path}${Platform.pathSeparator}emoji'),
       ),
+      clearChatBackgrounds: (_) async {},
       voiceDirectory: () async =>
           Directory('${root.path}${Platform.pathSeparator}voice'),
       chatAttachmentDirectory: () async => root,

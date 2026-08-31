@@ -3596,6 +3596,12 @@ abstract class AppLocalizations {
   /// **'Follow bright or dark mode'**
   String get roomDetailsAvatarColorDefault;
 
+  /// No description provided for @roomDetailsChatBackgroundAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat background'**
+  String get roomDetailsChatBackgroundAction;
+
   /// No description provided for @roomDetailsAvatarColorSemantics.
   ///
   /// In en, this message translates to:

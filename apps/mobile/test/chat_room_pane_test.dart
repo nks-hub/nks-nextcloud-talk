@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
@@ -110,6 +111,9 @@ Widget app({
     overrides: [
       appDatabaseProvider.overrideWithValue(database),
       credentialVaultProvider.overrideWithValue(vault),
+      chatBackgroundProvider.overrideWith(
+        (ref, key) => Stream<String?>.value(null),
+      ),
       connectivityWakeEventsProvider.overrideWithValue(
         const Stream<void>.empty(),
       ),

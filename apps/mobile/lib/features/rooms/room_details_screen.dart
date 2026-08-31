@@ -12,6 +12,8 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
 import '../chat/chat_participant_avatar.dart';
+import '../chat/chat_background_surface.dart';
+import '../chat/chat_background_theme.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../shareditems/shared_items_screen.dart';
 import 'conversation_tags_service.dart';
@@ -20,6 +22,7 @@ import 'participants_service.dart';
 import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
+part 'room_details_background.part.dart';
 part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
@@ -185,6 +188,13 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
 
   Widget _body(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final backgroundKey = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
+    final background = ref
+        .watch(chatBackgroundProvider(backgroundKey))
+        .valueOrNull;
     return ContentColumn(
       child: ListView(
         children: [
@@ -293,6 +303,24 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
             title: Text(strings.roomDetailsFavoriteLabel),
             value: _isFavorite,
             onChanged: _busy ? null : _toggleFavorite,
+          ),
+          ListTile(
+            key: const Key('room-details-chat-background'),
+            leading: const Icon(Icons.wallpaper_outlined),
+            title: Text(strings.roomDetailsChatBackgroundAction),
+            subtitle: Text(
+              background ?? strings.roomDetailsAvatarColorDefault,
+              key: const Key('room-details-chat-background-subtitle'),
+            ),
+            trailing: background == null
+                ? null
+                : IconButton(
+                    key: const Key('room-details-chat-background-reset'),
+                    tooltip: strings.roomDetailsAvatarColorDefault,
+                    icon: const Icon(Icons.brightness_auto_rounded),
+                    onPressed: _busy ? null : _resetChatBackground,
+                  ),
+            onTap: _busy ? null : _changeChatBackground,
           ),
           if (_canSetAvatar)
             ListTile(

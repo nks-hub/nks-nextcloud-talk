@@ -679,6 +679,7 @@
   "roomDetailsAvatarSetAction": "Použít toto emoji",
   "roomDetailsAvatarColorLabel": "Barva pozadí",
   "roomDetailsAvatarColorDefault": "Podle světlého nebo tmavého režimu",
+  "roomDetailsChatBackgroundAction": "Pozadí zpráv",
   "roomDetailsAvatarColorSemantics": "Barva {color}",
   "@roomDetailsAvatarColorSemantics": {
     "placeholders": {

@@ -11,6 +11,8 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_store.dart';
+import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/rooms/guest_link_sharer.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_screen.dart';
@@ -23,6 +25,7 @@ import 'test_support.dart';
 
 part 'room_details_administration_test.part.dart';
 part 'room_details_avatar_bans_test.part.dart';
+part 'room_details_background_test.part.dart';
 part 'room_details_call_notifications_test.part.dart';
 part 'room_details_clear_history_test.part.dart';
 part 'room_details_conversation_tags_test.part.dart';
@@ -84,6 +87,7 @@ void main() {
   _registerOverviewAndModerationTests();
   _registerAdministrationTests();
   _registerAvatarAndBanTests();
+  _registerBackgroundTests();
   _registerCallNotificationTests();
   _registerClearHistoryTests();
   _registerConversationTagsTests();
@@ -104,6 +108,9 @@ Widget app({
       appDatabaseProvider.overrideWithValue(database),
       credentialVaultProvider.overrideWithValue(vault),
       nextcloudApiProvider.overrideWithValue(api),
+      chatBackgroundProvider.overrideWith(
+        (ref, key) => Stream<String?>.value(null),
+      ),
       chatAttachmentDependenciesProvider.overrideWith(
         (ref, key) => Future<ChatAttachmentDependencies>.error(
           StateError('attachment dependencies are not wired in this suite'),

@@ -100,6 +100,7 @@ void _registerChatRoomPaneThreadContextTests() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('chat-thread-screen-71')), findsOneWidget);
+      expect(find.byKey(const Key('chat-background-surface')), findsOneWidget);
       expect(find.text('Fixture thread'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
