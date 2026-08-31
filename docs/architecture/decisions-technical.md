@@ -746,4 +746,7 @@ Thread poll navíc vyžaduje canonical nesmazaný root.
 Create ani vote nemají idempotency key, proto se nezařazují do durable outboxu
 a po nejednoznačném výsledku se automaticky neopakují. Přijatý `talk-poll`
 rich object nese pouze validovaný poll ID; aktuální stav a hlasování se vždy
-načtou account/room-bound GETem ze serveru.
+načtou account/room-bound GETem ze serveru. Canonical serverová zpráva je běžný
+`comment` s prázdným `systemMessage`, textem `{object}` a přesně odpovídajícím
+`messageParameters.object`. Viewer proto váže parametr na placeholder, ne na
+historicky předpokládané `object_shared`; odpojené metadata zůstane inertní.
