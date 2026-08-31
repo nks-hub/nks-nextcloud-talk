@@ -804,14 +804,6 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final idleComposerActions = <Widget>[
       ComposerActionMenuButton(actions: attachmentMenuActions),
       IconButton(
-        key: const Key('open-emoji-picker'),
-        onPressed: _sending ? null : _toggleEmojiPicker,
-        tooltip: strings.openEmojiPicker,
-        isSelected: _emojiPickerOpen,
-        icon: const Icon(Icons.emoji_emotions_outlined),
-        selectedIcon: const Icon(Icons.emoji_emotions),
-      ),
-      IconButton(
         key: const Key('open-giphy-picker'),
         onPressed: _sending ? null : giphyAction,
         tooltip: giphyTooltip,
@@ -824,6 +816,16 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               )
             : const Icon(Icons.gif_box_outlined),
       ),
+      IconButton(
+        key: const Key('open-emoji-picker'),
+        onPressed: _sending ? null : _toggleEmojiPicker,
+        tooltip: strings.openEmojiPicker,
+        isSelected: _emojiPickerOpen,
+        icon: const Icon(Icons.emoji_emotions_outlined),
+        selectedIcon: const Icon(Icons.emoji_emotions),
+      ),
+    ];
+    final trailingComposerActions = <Widget>[
       SizedBox.square(
         dimension: 48,
         child: Stack(
@@ -961,6 +963,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               : _buildMediaComposer(
                   attachmentDependencies,
                   idleActions: idleComposerActions,
+                  trailingActions: trailingComposerActions,
                 ),
         ),
       ],

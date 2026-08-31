@@ -149,6 +149,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.openAppSettings,
     this.controller,
     this.idleActions = const <Widget>[],
+    this.trailingActions = const <Widget>[],
     this.showAttachmentButton = true,
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
     this.createVoiceCaptureBackend,
@@ -185,6 +186,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
+  final List<Widget> trailingActions;
   final bool showAttachmentButton;
   final ImageSelectionBackend imageSelectionBackend;
   final CreateVoiceCaptureBackend? createVoiceCaptureBackend;
@@ -694,23 +696,13 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     final showVoiceUnavailable =
         voiceController == null ||
         (!_voiceAdmissionSupported && !voiceOwnsToolbar);
-    final attachmentAction = widget.showAttachmentButton
+    final Widget? attachmentAction = widget.showAttachmentButton
         ? ImageAttachmentPickerButton(
             controller: _imageController,
             prepare: _prepareImage,
             enabled: _imageSupported,
           )
-        : IconButton(
-            key: const Key('pick-image-from-gallery'),
-            onPressed: !_imageSupported || _imageController.state.isActive
-                ? null
-                : () => unawaited(
-                    _pickAttachment(AttachmentPickerSource.gallery),
-                  ),
-            tooltip: strings.attachFromGallery,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            icon: const Icon(Icons.add_photo_alternate_outlined),
-          );
+        : null;
     final idleVoiceAction = showVoiceUnavailable
         ? SizedBox.square(
             dimension: 48,
@@ -771,7 +763,11 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
               Wrap(
                 alignment: WrapAlignment.end,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[attachmentAction, ...widget.idleActions],
+                children: <Widget>[
+                  ?attachmentAction,
+                  ...widget.idleActions,
+                  ...widget.trailingActions,
+                ],
               ),
             ],
           )
@@ -781,9 +777,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
             alignment: WrapAlignment.end,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              attachmentAction,
-              idleVoiceAction,
+              ?attachmentAction,
               ...widget.idleActions,
+              idleVoiceAction,
+              ...widget.trailingActions,
             ],
           ),
       ],
@@ -821,6 +818,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
   const ChatMediaComposerStatus.loading({
     super.key,
     this.idleActions = const <Widget>[],
+    this.trailingActions = const <Widget>[],
   }) : unavailable = false,
        onRetry = null;
 
@@ -828,11 +826,13 @@ final class ChatMediaComposerStatus extends StatelessWidget {
     super.key,
     required this.onRetry,
     this.idleActions = const <Widget>[],
+    this.trailingActions = const <Widget>[],
   }) : unavailable = true;
 
   final bool unavailable;
   final VoidCallback? onRetry;
   final List<Widget> idleActions;
+  final List<Widget> trailingActions;
 
   @override
   Widget build(BuildContext context) {
@@ -872,15 +872,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
           alignment: WrapAlignment.end,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            SizedBox.square(
-              dimension: 48,
-              child: IconButton(
-                key: const Key('pick-image-attachment-unavailable'),
-                onPressed: null,
-                tooltip: strings.mediaCapabilityUnavailable,
-                icon: const Icon(Icons.add_photo_alternate_outlined),
-              ),
-            ),
+            ...idleActions,
             SizedBox.square(
               dimension: 48,
               child: IconButton(
@@ -890,7 +882,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
                 icon: const Icon(Icons.mic_none_rounded),
               ),
             ),
-            ...idleActions,
+            ...trailingActions,
           ],
         ),
       ],

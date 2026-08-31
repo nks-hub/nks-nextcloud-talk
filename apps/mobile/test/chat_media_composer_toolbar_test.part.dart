@@ -183,23 +183,23 @@ void _registerChatMediaComposerToolbarTests(
         home: Scaffold(
           body: ChatMediaComposerStatus.loading(
             idleActions: _aggregatedIdleActions(),
+            trailingActions: _aggregatedTrailingActions(),
           ),
         ),
       ),
     );
 
     const actionKeys = <String>[
-      'pick-image-attachment-unavailable',
-      'voice-record-unavailable',
       'pick-image-attachment',
-      'open-emoji-picker',
       'open-giphy-picker',
+      'open-emoji-picker',
+      'voice-record-unavailable',
       'send-message',
     ];
     final centerYs = actionKeys
         .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
         .toSet();
-    expect(centerYs, hasLength(2));
+    expect(centerYs, hasLength(1));
     for (final key in actionKeys) {
       final size = tester.getSize(find.byKey(Key(key)));
       expect(size.width, greaterThanOrEqualTo(48));
@@ -208,7 +208,7 @@ void _registerChatMediaComposerToolbarTests(
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('aggregated toolbar keeps a quick gallery action', (
+  testWidgets('aggregated toolbar orders actions without duplicate gallery', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -219,7 +219,6 @@ void _registerChatMediaComposerToolbarTests(
     addTearDown(bridge.close);
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
-    final imageBackend = _RecordingImageBackend();
 
     await tester.pumpWidget(
       _composerApp(
@@ -228,49 +227,34 @@ void _registerChatMediaComposerToolbarTests(
         threadId: null,
         voiceBackends: voiceBackends,
         showAttachmentButton: false,
-        imageSelectionBackend: imageBackend,
         idleActions: _aggregatedIdleActions(),
+        trailingActions: _aggregatedTrailingActions(),
       ),
     );
 
     const actionKeys = <String>[
-      'pick-image-from-gallery',
-      'voice-record',
       'pick-image-attachment',
-      'open-emoji-picker',
       'open-giphy-picker',
+      'open-emoji-picker',
+      'voice-record',
       'send-message',
     ];
     final centerYs = actionKeys
         .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
         .toSet();
-    expect(centerYs, hasLength(2));
+    expect(centerYs, hasLength(1));
     for (final key in actionKeys) {
       final size = tester.getSize(find.byKey(Key(key)));
       expect(size.width, greaterThanOrEqualTo(48));
       expect(size.height, greaterThanOrEqualTo(48));
     }
-    expect(
-      tester
-          .widget<IconButton>(find.byKey(const Key('pick-image-from-gallery')))
-          .onPressed,
-      isNotNull,
-    );
-
-    await tester.tap(find.byKey(const Key('pick-image-from-gallery')));
-    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
-
-    expect(imageBackend.sources, <AttachmentPickerSource>[
-      AttachmentPickerSource.gallery,
-    ]);
-    expect(bridge.sources, hasLength(1));
-    expect(
-      bridge.sources.single.ownership,
-      AttachmentSourceOwnership.appOwnedCopy,
-    );
-    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+    expect(find.byKey(const Key('pick-image-from-gallery')), findsNothing);
     expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
     expect(find.byKey(const Key('open-giphy-picker')), findsOneWidget);
+    final centers = actionKeys
+        .map((key) => tester.getCenter(find.byKey(Key(key))).dx)
+        .toList(growable: false);
+    expect(centers, orderedEquals(centers.toList()..sort()));
     expect(tester.takeException(), isNull);
 
     final invalidBridge = _RecordingBridge();
@@ -287,14 +271,7 @@ void _registerChatMediaComposerToolbarTests(
       ),
     );
 
-    final disabledButton = tester.widget<IconButton>(
-      find.byKey(const Key('pick-image-from-gallery')),
-    );
-    expect(disabledButton.onPressed, isNull);
-    expect(
-      tester.getSize(find.byKey(const Key('pick-image-from-gallery'))),
-      const Size(48, 48),
-    );
+    expect(find.byKey(const Key('pick-image-from-gallery')), findsNothing);
   });
 
   testWidgets('iOS-style inactive picker result waits for resumed admission', (
@@ -346,26 +323,11 @@ void _registerChatMediaComposerToolbarTests(
   });
 }
 
-final class _RecordingImageBackend implements ImageSelectionBackend {
-  final List<AttachmentPickerSource> sources = <AttachmentPickerSource>[];
-
-  @override
-  Future<ImageSelection?> selectImage(AttachmentPickerSource source) {
-    sources.add(source);
-    return const _ImageBackend().selectImage(source);
-  }
-}
-
 List<Widget> _aggregatedIdleActions() => <Widget>[
   IconButton(
     key: const Key('pick-image-attachment'),
     onPressed: () {},
     icon: const Icon(Icons.attach_file_rounded),
-  ),
-  IconButton(
-    key: const Key('open-emoji-picker'),
-    onPressed: () {},
-    icon: const Icon(Icons.emoji_emotions_outlined),
   ),
   IconButton(
     key: const Key('open-giphy-picker'),
@@ -375,6 +337,14 @@ List<Widget> _aggregatedIdleActions() => <Widget>[
       child: CircularProgressIndicator(strokeWidth: 2),
     ),
   ),
+  IconButton(
+    key: const Key('open-emoji-picker'),
+    onPressed: () {},
+    icon: const Icon(Icons.emoji_emotions_outlined),
+  ),
+];
+
+List<Widget> _aggregatedTrailingActions() => <Widget>[
   IconButton.filled(
     key: const Key('send-message'),
     onPressed: () {},
