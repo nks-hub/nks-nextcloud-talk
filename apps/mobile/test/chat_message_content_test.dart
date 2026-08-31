@@ -46,6 +46,17 @@ void main() {
     expect(find.text('Lunch?'), findsOneWidget);
   });
 
+  testWidgets('poll metadata detached from its placeholder stays inert', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _detachedPollMessage),
+    );
+
+    expect(find.byKey(const Key('open-poll-7')), findsNothing);
+    expect(find.text('Lunch?'), findsOneWidget);
+  });
+
   testWidgets(
     'inline link has one semantic node, 48dp target, and 200% wrapping',
     (tester) async {
@@ -810,7 +821,7 @@ final _pollMessage = ChatMessage.fromJson(<String, Object?>{
   ..._message.wire,
   'id': 50,
   'referenceId': 'reference-50',
-  'systemMessage': 'object_shared',
+  'systemMessage': '',
   'message': '{object}',
   'messageParameters': <String, Object?>{
     'object': <String, Object?>{
@@ -819,6 +830,13 @@ final _pollMessage = ChatMessage.fromJson(<String, Object?>{
       'name': 'Lunch?',
     },
   },
+});
+
+final _detachedPollMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._pollMessage.wire,
+  'id': 52,
+  'referenceId': 'reference-52',
+  'message': 'Lunch?',
 });
 
 final _invalidPollMessage = ChatMessage.fromJson(<String, Object?>{

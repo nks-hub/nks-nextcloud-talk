@@ -151,11 +151,18 @@ final class _PollViewerScope extends InheritedWidget {
   static _PollViewerScope? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_PollViewerScope>();
 
-  int? validatedPollId(ChatRichObjectParameter parameter) {
+  int? validatedPollId(
+    ChatRichObjectParameter parameter,
+    String? parameterKey,
+  ) {
     if (message.deleted ||
-        message.systemMessage != 'object_shared' ||
+        message.messageType != 'comment' ||
+        (message.systemMessage.isNotEmpty &&
+            message.systemMessage != 'object_shared') ||
+        parameterKey == null ||
+        message.message.trim() != '{$parameterKey}' ||
         parameter.type != 'talk-poll' ||
-        !message.messageParameters.values.contains(parameter)) {
+        !identical(message.messageParameters[parameterKey], parameter)) {
       return null;
     }
     final rawId = parameter.id;

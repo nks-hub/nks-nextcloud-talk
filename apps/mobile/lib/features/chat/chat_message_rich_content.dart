@@ -412,7 +412,7 @@ final class _RichObjectPill extends StatelessWidget {
       return _ChatLocationPreview(location: location);
     }
     final pollScope = _PollViewerScope.maybeOf(context);
-    final pollId = pollScope?.validatedPollId(parameter);
+    final pollId = pollScope?.validatedPollId(parameter, node.parameterKey);
     final icon = switch (node.objectKind) {
       RichChatObjectKind.user ||
       RichChatObjectKind.guest ||
