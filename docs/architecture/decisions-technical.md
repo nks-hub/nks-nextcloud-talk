@@ -750,3 +750,23 @@ načtou account/room-bound GETem ze serveru. Canonical serverová zpráva je bě
 `comment` s prázdným `systemMessage`, textem `{object}` a přesně odpovídajícím
 `messageParameters.object`. Viewer proto váže parametr na placeholder, ne na
 historicky předpokládané `object_shared`; odpojené metadata zůstane inertní.
+
+### D-046: Secure store má vlastní account-scoped migrace
+
+Stav: Přijato 31. srpna 2026.
+
+Verze credential vaultu není odvozená z Drift `schemaVersion` a žádný secure
+store zápis neběží v `onUpgrade`. Každý účet má durable marker přímo ve
+stejném platformním secure store jako jeho app password. Tím lze databázi
+otevřít, opravit nebo bezpečně odmítnout nezávisle na dostupnosti Keychainu či
+Keystore.
+
+Migrace v1 na v2 je copy-verify-commit-cleanup. Neversionovaný klíč se nejdřív
+zkopíruje do versionovaného account-scoped klíče, kopie se zpětně ověří a až
+potom se zapíše marker `2`. Legacy klíč se smaže teprve po ověření markeru.
+Přerušení proto nechá nejméně jednu úplnou kopii a další přístup stejný krok
+idempotentně dokončí.
+
+Dvě různé hodnoty, nečitelný marker nebo verze novější než klient zastaví
+přístup bez přepsání či smazání secretu. Souběžné první requesty stejného účtu
+sdílejí jeden migrační future; jiné účty zůstávají nezávislé.
