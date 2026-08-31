@@ -1931,8 +1931,44 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticsSchemaVersion.
   ///
   /// In en, this message translates to:
-  /// **'Schema version'**
+  /// **'Stored schema version'**
   String get diagnosticsSchemaVersion;
+
+  /// No description provided for @diagnosticsExpectedSchemaVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected schema version'**
+  String get diagnosticsExpectedSchemaVersion;
+
+  /// No description provided for @diagnosticsMigrationState.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration state'**
+  String get diagnosticsMigrationState;
+
+  /// No description provided for @diagnosticsMigrationUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get diagnosticsMigrationUpToDate;
+
+  /// No description provided for @diagnosticsMigrationUpgradeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Upgrade required'**
+  String get diagnosticsMigrationUpgradeRequired;
+
+  /// No description provided for @diagnosticsMigrationNewerThanApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Newer than this app'**
+  String get diagnosticsMigrationNewerThanApp;
+
+  /// No description provided for @diagnosticsForeignKeyViolations.
+  ///
+  /// In en, this message translates to:
+  /// **'Foreign-key violations'**
+  String get diagnosticsForeignKeyViolations;
 
   /// No description provided for @diagnosticsConversationRows.
   ///

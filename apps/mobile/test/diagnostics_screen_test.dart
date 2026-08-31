@@ -437,9 +437,51 @@ String _valueOf(WidgetTester tester, String key) {
 }
 
 void main() {
-  testWidgets('the bundled third-party licences are reachable', (
-    tester,
-  ) async {
+  test('classifies the stored schema relative to this build', () {
+    const cases = <(int, MigrationDiagnosticsState)>[
+      (16, MigrationDiagnosticsState.upToDate),
+      (15, MigrationDiagnosticsState.upgradeRequired),
+      (17, MigrationDiagnosticsState.newerThanApp),
+    ];
+
+    for (final (storedVersion, expectedState) in cases) {
+      final diagnostics = DatabaseDiagnostics(
+        expectedSchemaVersion: 16,
+        storedSchemaVersion: storedVersion,
+        foreignKeyViolationCount: 0,
+      );
+      expect(diagnostics.migrationState, expectedState);
+    }
+  });
+
+  test('reads user_version and counts foreign-key violations', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+    await database.customStatement('PRAGMA user_version = 15');
+    await database.customStatement('PRAGMA foreign_keys = OFF');
+    await database.customStatement('''
+      INSERT INTO chat_drafts (
+        account_id, room_token, scope_key, draft_text, updated_at_millis
+      ) VALUES ('missing-account', 'room', 'root', '', 1)
+    ''');
+    await database.customStatement('PRAGMA foreign_keys = ON');
+
+    final diagnostics = await LocalDiagnosticsLoader(
+      database: database,
+      accounts: AccountRepository(database),
+    ).load('account-a');
+
+    expect(diagnostics.database.expectedSchemaVersion, 16);
+    expect(diagnostics.database.storedSchemaVersion, 15);
+    expect(
+      diagnostics.database.migrationState,
+      MigrationDiagnosticsState.upgradeRequired,
+    );
+    expect(diagnostics.database.foreignKeyViolationCount, 1);
+  });
+
+  testWidgets('the bundled third-party licences are reachable', (tester) async {
     // The app is GPL-3.0 and ships 171 third-party packages, most of them BSD
     // or MIT, whose terms require their notices to travel with the binary.
     // Flutter collects them; until this entry existed there was no way in.
@@ -448,9 +490,7 @@ void main() {
     addTearDown(database.close);
     await tester.runAsync(() => _seedFixture(database));
 
-    await tester.pumpWidget(
-      _wrapDiagnostics(database: database, push: null),
-    );
+    await tester.pumpWidget(_wrapDiagnostics(database: database, push: null));
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
@@ -500,6 +540,12 @@ void main() {
       _valueOf(tester, 'diagnostics-schema-version'),
       '${database.schemaVersion}',
     );
+    expect(
+      _valueOf(tester, 'diagnostics-expected-schema-version'),
+      '${database.schemaVersion}',
+    );
+    expect(_valueOf(tester, 'diagnostics-migration-state'), 'Up to date');
+    expect(_valueOf(tester, 'diagnostics-foreign-key-violations'), '0');
 
     // Account B holds one conversation, one message and one failed entry in
     // each outbox; none of them may show up here.

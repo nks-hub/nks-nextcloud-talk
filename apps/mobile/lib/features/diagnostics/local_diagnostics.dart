@@ -53,6 +53,31 @@ const _failedAttachmentPhases = <AttachmentJobPhase>{
 /// Why a push registration state could not be reported.
 enum PushDiagnosticsGap { platformUnsupported, readFailed }
 
+enum MigrationDiagnosticsState { upToDate, upgradeRequired, newerThanApp }
+
+@immutable
+final class DatabaseDiagnostics {
+  const DatabaseDiagnostics({
+    required this.expectedSchemaVersion,
+    required this.storedSchemaVersion,
+    required this.foreignKeyViolationCount,
+  });
+
+  final int expectedSchemaVersion;
+  final int storedSchemaVersion;
+  final int foreignKeyViolationCount;
+
+  MigrationDiagnosticsState get migrationState {
+    if (storedSchemaVersion < expectedSchemaVersion) {
+      return MigrationDiagnosticsState.upgradeRequired;
+    }
+    if (storedSchemaVersion > expectedSchemaVersion) {
+      return MigrationDiagnosticsState.newerThanApp;
+    }
+    return MigrationDiagnosticsState.upToDate;
+  }
+}
+
 /// Counters of one durable outbox, without any of the payload it carries.
 @immutable
 final class OutboxDiagnostics {
@@ -112,7 +137,7 @@ final class PushDiagnostics {
 final class LocalDiagnostics {
   const LocalDiagnostics({
     required this.operatingSystem,
-    required this.schemaVersion,
+    required this.database,
     required this.conversationCount,
     required this.messageCount,
     required this.threadCount,
@@ -126,7 +151,7 @@ final class LocalDiagnostics {
   });
 
   final String operatingSystem;
-  final int schemaVersion;
+  final DatabaseDiagnostics database;
   final int conversationCount;
   final int messageCount;
   final int threadCount;
@@ -159,10 +184,12 @@ final class LocalDiagnosticsLoader {
       throw StateError('Account $accountId is not stored locally');
     }
     final talkFeatures = _talkFeatures(account.talkFeaturesJson);
+    final databaseDiagnostics = await _databaseDiagnostics();
     return LocalDiagnostics(
-      operatingSystem: '${Platform.operatingSystem} '
+      operatingSystem:
+          '${Platform.operatingSystem} '
           '${Platform.operatingSystemVersion}',
-      schemaVersion: database.schemaVersion,
+      database: databaseDiagnostics,
       conversationCount: await _countRows(
         database.cachedConversations,
         database.cachedConversations.accountId.equals(accountId),
@@ -202,9 +229,8 @@ final class LocalDiagnosticsLoader {
     String? lastErrorClass;
     DateTime? lastErrorAt;
     for (final row in rows) {
-      final state = TextSendOutboxState.values.asNameMap()[row.read(
-        table.outboxState,
-      )];
+      final state = TextSendOutboxState.values
+          .asNameMap()[row.read(table.outboxState)];
       if (state == null) {
         continue;
       }
@@ -250,9 +276,8 @@ final class LocalDiagnosticsLoader {
     String? lastErrorClass;
     DateTime? lastErrorAt;
     for (final row in rows) {
-      final phase = AttachmentJobPhase.values.asNameMap()[row.read(
-        table.phase,
-      )];
+      final phase = AttachmentJobPhase.values
+          .asNameMap()[row.read(table.phase)];
       if (phase == null) {
         continue;
       }
@@ -317,6 +342,25 @@ final class LocalDiagnosticsLoader {
       ..addColumns([total])
       ..where(predicate);
     return (await query.getSingle()).read(total) ?? 0;
+  }
+
+  Future<DatabaseDiagnostics> _databaseDiagnostics() async {
+    final version = await database
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final foreignKeyViolations = await database
+        .customSelect(
+          'SELECT COUNT(*) AS violation_count '
+          'FROM pragma_foreign_key_check',
+        )
+        .getSingle();
+    return DatabaseDiagnostics(
+      expectedSchemaVersion: database.schemaVersion,
+      storedSchemaVersion: version.read<int>('user_version'),
+      foreignKeyViolationCount: foreignKeyViolations.read<int>(
+        'violation_count',
+      ),
+    );
   }
 }
 

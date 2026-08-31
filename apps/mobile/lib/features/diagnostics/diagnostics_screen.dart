@@ -98,7 +98,22 @@ final class _DiagnosticsList extends StatelessWidget {
         _Entry(
           entryKey: const Key('diagnostics-schema-version'),
           label: strings.diagnosticsSchemaVersion,
-          value: '${data.schemaVersion}',
+          value: '${data.database.storedSchemaVersion}',
+        ),
+        _Entry(
+          entryKey: const Key('diagnostics-expected-schema-version'),
+          label: strings.diagnosticsExpectedSchemaVersion,
+          value: '${data.database.expectedSchemaVersion}',
+        ),
+        _Entry(
+          entryKey: const Key('diagnostics-migration-state'),
+          label: strings.diagnosticsMigrationState,
+          value: _migrationState(strings, data.database.migrationState),
+        ),
+        _Entry(
+          entryKey: const Key('diagnostics-foreign-key-violations'),
+          label: strings.diagnosticsForeignKeyViolations,
+          value: '${data.database.foreignKeyViolationCount}',
         ),
         _Entry(
           entryKey: const Key('diagnostics-conversation-rows'),
@@ -170,6 +185,19 @@ final class _DiagnosticsList extends StatelessWidget {
       ],
     );
   }
+}
+
+String _migrationState(
+  AppLocalizations strings,
+  MigrationDiagnosticsState state,
+) {
+  return switch (state) {
+    MigrationDiagnosticsState.upToDate => strings.diagnosticsMigrationUpToDate,
+    MigrationDiagnosticsState.upgradeRequired =>
+      strings.diagnosticsMigrationUpgradeRequired,
+    MigrationDiagnosticsState.newerThanApp =>
+      strings.diagnosticsMigrationNewerThanApp,
+  };
 }
 
 List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {

@@ -1025,7 +1025,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsDatabaseSection => 'Database';
 
   @override
-  String get diagnosticsSchemaVersion => 'Schema version';
+  String get diagnosticsSchemaVersion => 'Stored schema version';
+
+  @override
+  String get diagnosticsExpectedSchemaVersion => 'Expected schema version';
+
+  @override
+  String get diagnosticsMigrationState => 'Migration state';
+
+  @override
+  String get diagnosticsMigrationUpToDate => 'Up to date';
+
+  @override
+  String get diagnosticsMigrationUpgradeRequired => 'Upgrade required';
+
+  @override
+  String get diagnosticsMigrationNewerThanApp => 'Newer than this app';
+
+  @override
+  String get diagnosticsForeignKeyViolations => 'Foreign-key violations';
 
   @override
   String get diagnosticsConversationRows => 'Cached conversations';

@@ -1023,7 +1023,25 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsDatabaseSection => 'Databáze';
 
   @override
-  String get diagnosticsSchemaVersion => 'Verze schématu';
+  String get diagnosticsSchemaVersion => 'Uložená verze schématu';
+
+  @override
+  String get diagnosticsExpectedSchemaVersion => 'Očekávaná verze schématu';
+
+  @override
+  String get diagnosticsMigrationState => 'Stav migrace';
+
+  @override
+  String get diagnosticsMigrationUpToDate => 'Aktuální';
+
+  @override
+  String get diagnosticsMigrationUpgradeRequired => 'Vyžaduje migraci';
+
+  @override
+  String get diagnosticsMigrationNewerThanApp => 'Novější než aplikace';
+
+  @override
+  String get diagnosticsForeignKeyViolations => 'Porušení cizích klíčů';
 
   @override
   String get diagnosticsConversationRows => 'Konverzace v cache';

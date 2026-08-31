@@ -428,6 +428,12 @@ Každá DB verze obsahuje:
 - export diagnostiky bez message contentu;
 - rollback aplikace nesmí otevřít novější schema a tiše poškodit data.
 
+Lokální diagnostika neodvozuje stav migrace z compile-time konstanty.
+Read-only načte `PRAGMA user_version`, porovná je s očekávanou verzí buildu a
+zobrazí, zda je schéma aktuální, starší nebo novější. `foreign_key_check` se
+redukuje na počet porušení; názvy tabulek, řádky ani uživatelský obsah se do
+diagnostiky nedostanou.
+
 Secret-store migrace je oddělená od DB migrace. Starý secret se odstraní až po
 ověřeném zápisu nového a aktualizaci credential reference.
 
