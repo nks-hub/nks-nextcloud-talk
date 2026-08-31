@@ -20,8 +20,10 @@ z nich se tvářila jako něco jiného, než čím byla.
 
 ```sh
 flutter config --no-enable-swift-package-manager
-rm -rf ios/Flutter/ephemeral
-flutter build ios --release --no-codesign
+flutter clean
+flutter pub get
+flutter build ios --release --no-codesign --build-number <build> \
+  --dart-define-from-file=telemetry.env
 
 xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
   -configuration Release -destination 'generic/platform=iOS' \
@@ -76,18 +78,26 @@ zamítnutý upload.
 Hlásit „je to v TestFlightu" se smí až podle stavu záznamu, ne podle
 výstupu uploadu.
 
+## Ověření buildu 25
+
+Build 25 vznikl 2026-08-31 z přesného commitu `175b721`. Archive i export
+prošly, IPA má SHA-256
+`9D8D42A57FF74F076FC82D2F64656683CBC6DFBCB9A1047CF7A5E091F1CDE485`.
+App Store Connect API následně potvrdilo `processingState=VALID`,
+`usesNonExemptEncryption=false` a minimum iOS 15.0. Build má české poznámky,
+beta review je schválené a interní i externí skupina hlásí
+`IN_BETA_TESTING`.
+
 ## Export compliance
 
 Build s `usesNonExemptEncryption = null` visí v TestFlightu jako **Missing
-Compliance** a nejde předat testerovi. iOS build mluví jen přes HTTPS
-a používá systémovou klíčenku — obojí je z hlediska vývozních pravidel
-osvobozené, žádná vlastní kryptografie v něm není (Web Push dešifrování
-přes tink je jen v Androidu, Apple push vrstva v repozitáři vůbec není).
-Odpověď je tedy `false` a od commitu níže je natrvalo v `Info.plist` jako
-`ITSAppUsesNonExemptEncryption`, takže se otázka u dalších buildů
-neobjeví. Existující build se dá dorovnat i přes API:
+Compliance** a nejde předat testerovi. iOS build používá systémové HTTPS,
+Keychain a platformní push API, ne vlastní neosvobozenou kryptografii.
+Odpověď je tedy `false` a je natrvalo v `Info.plist` jako
+`ITSAppUsesNonExemptEncryption`, takže se otázka u dalších buildů neobjeví.
+Existující build se dá dorovnat i přes API:
 
-```
+```http
 PATCH /v1/builds/<id>  {"data":{"type":"builds","id":"<id>",
   "attributes":{"usesNonExemptEncryption":false}}}
 ```
@@ -97,10 +107,10 @@ tvrzení přestane platit a musí se přehodnotit.
 
 ## Zbývá
 
-- `MinimumOSVersion` je 13.0; od jara 2027 Apple vyžaduje 15.0.
 - macOS distribuce: buď Mac App Store, nebo Developer ID Application
   s notarizací přes `notarytool` a staplingem.
 - `macos/Runner/Release.entitlements` má jen
   `files.user-selected.read-only`; ukládání příloh bude potřebovat
   read-write.
-- Apple push vrstva v repozitáři vůbec není.
+- PushKit, CallKit a ReplayKit pro plnou paritu hovorů zůstávají samostatný
+  otevřený řez.
