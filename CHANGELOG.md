@@ -18,6 +18,10 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Když systém zamítne přístup ke kameře nebo fotogalerii, chybová karta nabídne
+  přímé otevření nastavení aplikace. Síťové, kvótové a serverové chyby tuto
+  akci nenabízejí.
+
 ## 0.1.0 (28) — 31. 8. 2026
 
 Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
