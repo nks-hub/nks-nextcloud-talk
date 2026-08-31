@@ -32,6 +32,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  desktop_autostart_ = std::make_unique<DesktopAutostart>(
+      flutter_controller_->engine()->messenger());
   tray_icon_ = std::make_unique<TrayIcon>(GetHandle(),
                                           [this]() { this->Restore(); });
   taskbar_badge_ = std::make_unique<TaskbarBadge>(
@@ -60,6 +62,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   // Before the engine goes away: both hold a channel on its messenger.
+  desktop_autostart_ = nullptr;
   taskbar_badge_ = nullptr;
   shell_notification_ = nullptr;
   // Removes the icon while the window handle is still worth something.

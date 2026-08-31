@@ -1007,6 +1007,28 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsThemeDark => 'Tmavý';
 
   @override
+  String get settingsDesktopSection => 'Počítač';
+
+  @override
+  String get settingsDesktopAutostart => 'Otevřít NKS Talk po přihlášení';
+
+  @override
+  String get settingsDesktopAutostartChecking =>
+      'Kontroluji systémové automatické spuštění…';
+
+  @override
+  String get settingsDesktopAutostartOnSubtitle =>
+      'NKS Talk se po přihlášení otevře automaticky.';
+
+  @override
+  String get settingsDesktopAutostartOffSubtitle =>
+      'NKS Talk zůstane zavřený, dokud ho neotevřete.';
+
+  @override
+  String get settingsDesktopAutostartFailed =>
+      'Systémové automatické spuštění se nepodařilo změnit.';
+
+  @override
   String get settingsPushSection => 'Push notifikace';
 
   @override

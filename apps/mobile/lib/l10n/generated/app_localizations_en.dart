@@ -1009,6 +1009,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsThemeDark => 'Dark';
 
   @override
+  String get settingsDesktopSection => 'Desktop';
+
+  @override
+  String get settingsDesktopAutostart => 'Open NKS Talk when I sign in';
+
+  @override
+  String get settingsDesktopAutostartChecking =>
+      'Checking the system startup setting…';
+
+  @override
+  String get settingsDesktopAutostartOnSubtitle =>
+      'NKS Talk opens automatically after you sign in.';
+
+  @override
+  String get settingsDesktopAutostartOffSubtitle =>
+      'NKS Talk stays closed until you open it.';
+
+  @override
+  String get settingsDesktopAutostartFailed =>
+      'The system startup setting could not be changed.';
+
+  @override
   String get settingsPushSection => 'Push notifications';
 
   @override

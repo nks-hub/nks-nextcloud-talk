@@ -330,6 +330,13 @@ Desktop-specific klávesnice, hover/focus, system tray, auto-start, file drop a
 background delivery vzniknou pouze jako ověřené platformní řezy; nesmí se
 předstírat existencí generated runneru.
 
+Auto-start je lokální preference aplikace, nikoli účtu. Windows ji vlastní v
+per-user `HKCU Run`, macOS 13+ přes `SMAppService.mainApp` a Linux přes XDG
+Autostart soubor v uživatelském config adresáři. Flutter po zápisu vždy znovu
+čte skutečný stav OS; neúplný zápis ani login item čekající na schválení se
+nesmí zobrazit jako zapnutý. macOS 11–12 zůstává explicitně unsupported místo
+legacy helperu nebo zápisu mimo sandbox.
+
 Windows důkaz ze source `0be4c88` prošel release buildem, 29/29 bundle
 manifestem a responsivním runtime na samostatné Windows 11 VM. Inspector capture
 prokazuje Flutter render, ne skutečné pixely release DirectComposition okna;

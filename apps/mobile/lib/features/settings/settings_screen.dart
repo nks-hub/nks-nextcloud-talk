@@ -6,6 +6,7 @@ import '../../data/app_database.dart';
 import '../../features/push/android_push_transport.dart';
 import '../../features/push/android_web_push_bridge.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../platform/desktop_autostart.dart';
 import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
@@ -25,6 +26,9 @@ final class SettingsScreen extends ConsumerWidget {
     final notificationPermission = ref.watch(
       androidNotificationPermissionProvider(androidPushPlatform != null),
     );
+    final desktopAutostart = ref.watch(desktopAutostartHostProvider)
+        ? ref.watch(desktopAutostartStateProvider)
+        : null;
 
     // Removing the last account leaves this screen with nothing to manage,
     // while the shell underneath has already switched to onboarding. Close
@@ -177,6 +181,18 @@ final class SettingsScreen extends ConsumerWidget {
                 },
               ),
             ],
+            if (desktopAutostart != null &&
+                desktopAutostart.supported != false) ...[
+              const Divider(height: 1),
+              _SectionHeader(strings.settingsDesktopSection),
+              _DesktopAutostartTile(
+                state: desktopAutostart,
+                onChanged: (enabled) =>
+                    _setDesktopAutostart(context, ref, enabled),
+                onRetry: () =>
+                    ref.read(desktopAutostartStateProvider.notifier).refresh(),
+              ),
+            ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),
             RadioGroup<ThemeMode>(
@@ -301,6 +317,25 @@ final class SettingsScreen extends ConsumerWidget {
       return;
     }
     ref.read(themeModeProvider.notifier).setThemeMode(mode);
+  }
+
+  Future<void> _setDesktopAutostart(
+    BuildContext context,
+    WidgetRef ref,
+    bool enabled,
+  ) async {
+    final applied = await ref
+        .read(desktopAutostartStateProvider.notifier)
+        .setEnabled(enabled);
+    if (!applied && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).settingsDesktopAutostartFailed,
+          ),
+        ),
+      );
+    }
   }
 
   void _openProfile(BuildContext context, String accountId) {
@@ -502,6 +537,51 @@ final class _PushTransportTile extends StatelessWidget {
       subtitle: Text(subtitle),
       value: transport,
       enabled: enabled,
+    );
+  }
+}
+
+final class _DesktopAutostartTile extends StatelessWidget {
+  const _DesktopAutostartTile({
+    required this.state,
+    required this.onChanged,
+    required this.onRetry,
+  });
+
+  final DesktopAutostartState state;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final enabled = state.enabled ?? false;
+    final subtitle = state.failed
+        ? strings.settingsDesktopAutostartFailed
+        : state.busy
+        ? strings.settingsDesktopAutostartChecking
+        : enabled
+        ? strings.settingsDesktopAutostartOnSubtitle
+        : strings.settingsDesktopAutostartOffSubtitle;
+    return ListTile(
+      key: const Key('settings-desktop-autostart'),
+      leading: const Icon(Icons.power_settings_new_rounded),
+      title: Text(strings.settingsDesktopAutostart),
+      subtitle: Text(subtitle),
+      trailing: state.supported == null && state.failed
+          ? IconButton(
+              key: const Key('settings-desktop-autostart-retry'),
+              tooltip: strings.retry,
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+            )
+          : Switch(
+              key: const Key('settings-desktop-autostart-switch'),
+              value: enabled,
+              onChanged: state.supported == true && !state.busy
+                  ? onChanged
+                  : null,
+            ),
     );
   }
 }

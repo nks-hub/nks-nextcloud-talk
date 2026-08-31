@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "deep_link_delivery.h"
+#include "desktop_autostart.h"
 #include "shell_notification.h"
 #include "taskbar_badge.h"
 #include "tray_icon.h"
@@ -54,6 +55,8 @@ class FlutterWindow : public Win32Window {
   // Shows Talk messages while the app runs, and routes a click into
   // |deep_links_|.
   std::unique_ptr<ShellNotification> shell_notification_;
+
+  std::unique_ptr<DesktopAutostart> desktop_autostart_;
 
   DeepLinkDelivery* deep_links_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

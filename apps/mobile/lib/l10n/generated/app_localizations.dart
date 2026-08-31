@@ -1892,6 +1892,42 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get settingsThemeDark;
 
+  /// No description provided for @settingsDesktopSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop'**
+  String get settingsDesktopSection;
+
+  /// No description provided for @settingsDesktopAutostart.
+  ///
+  /// In en, this message translates to:
+  /// **'Open NKS Talk when I sign in'**
+  String get settingsDesktopAutostart;
+
+  /// No description provided for @settingsDesktopAutostartChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the system startup setting…'**
+  String get settingsDesktopAutostartChecking;
+
+  /// No description provided for @settingsDesktopAutostartOnSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NKS Talk opens automatically after you sign in.'**
+  String get settingsDesktopAutostartOnSubtitle;
+
+  /// No description provided for @settingsDesktopAutostartOffSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NKS Talk stays closed until you open it.'**
+  String get settingsDesktopAutostartOffSubtitle;
+
+  /// No description provided for @settingsDesktopAutostartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The system startup setting could not be changed.'**
+  String get settingsDesktopAutostartFailed;
+
   /// No description provided for @settingsPushSection.
   ///
   /// In en, this message translates to:

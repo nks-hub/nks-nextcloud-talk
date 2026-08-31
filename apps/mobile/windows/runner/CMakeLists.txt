@@ -11,6 +11,7 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "deep_link_delivery.cpp"
   "deep_link_url.cpp"
+  "desktop_autostart.cpp"
   "shell_notification.cpp"
   "taskbar_badge.cpp"
   "tray_icon.cpp"

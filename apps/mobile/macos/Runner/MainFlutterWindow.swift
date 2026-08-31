@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import ServiceManagement
 
 /// Smallest window the adaptive layout is designed for, in points.
 /// Keep in sync with the Windows and Linux runners.
@@ -11,6 +12,7 @@ private let windowFrameAutosaveName = "NKSTalkMainWindow"
 
 class MainFlutterWindow: NSWindow {
   private var deepLinkChannel: FlutterMethodChannel?
+  private var desktopAutostartChannel: FlutterMethodChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -30,6 +32,70 @@ class MainFlutterWindow: NSWindow {
     self.setFrameAutosaveName(windowFrameAutosaveName)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    let desktopAutostartChannel = FlutterMethodChannel(
+      name: "com.nkshub.nextcloudtalk/desktop_autostart",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    desktopAutostartChannel.setMethodCallHandler { call, result in
+      if call.method == "isSupported" {
+        if #available(macOS 13.0, *) {
+          result(true)
+        } else {
+          result(false)
+        }
+        return
+      }
+      guard #available(macOS 13.0, *) else {
+        result(
+          FlutterError(
+            code: "autostart-unsupported",
+            message: "Automatic startup needs macOS 13 or newer.",
+            details: nil
+          )
+        )
+        return
+      }
+      let service = SMAppService.mainApp
+      if call.method == "isEnabled" {
+        result(service.status == .enabled)
+        return
+      }
+      guard call.method == "setEnabled" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let enabled = arguments["enabled"] as? Bool
+      else {
+        result(
+          FlutterError(
+            code: "autostart-invalid-arguments",
+            message: "The startup preference is invalid.",
+            details: nil
+          )
+        )
+        return
+      }
+      do {
+        if enabled && service.status != .enabled {
+          try service.register()
+        } else if !enabled && service.status != .notRegistered {
+          try service.unregister()
+        }
+        result(service.status == .enabled)
+      } catch {
+        result(
+          FlutterError(
+            code: "autostart-write-failed",
+            message: "The desktop startup setting could not be changed.",
+            details: nil
+          )
+        )
+      }
+    }
+    self.desktopAutostartChannel = desktopAutostartChannel
 
     let deepLinkChannel = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/deep_link",
