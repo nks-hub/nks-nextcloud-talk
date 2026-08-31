@@ -22,9 +22,9 @@ proto jen to, co je doložitelné z App Store Connect.
   se aplikace po zavření pickeru skutečně nevrátí do popředí. Příloha tak
   nezůstane viset na „Čeká na nahrání“; pokud se návrat nedokončí, čekání je
   omezené a nabídne opakování.
-- Sponka v psacím řádku nově sdružuje galerii, fotoaparát, soubor, GIF a tam,
-  kde jej server podporuje, také odložené odeslání. GIF a plánování už
-  nezabírají dvě samostatné ikony vedle pole.
+- Sponka v psacím řádku sdružuje galerii, fotoaparát a soubor. GIF zůstává jako
+  rychlá ikona vedle pole. Dlouhý stisk tlačítka Odeslat nově nabízí tiché a,
+  kde jej server podporuje, také odložené odeslání.
 - Běžný řetězec odpovědí otevřený ze seznamu vláken už nekončí hláškou, že
   vlákno na serveru není dostupné. Taková položka vzniká z místní historie a
   nyní se otevře rovnou v chatu; serverový detail zůstává jen pro skutečně

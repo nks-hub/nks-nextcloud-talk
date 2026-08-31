@@ -425,6 +425,43 @@ void main() {
   });
 
   group('scheduled send', () {
+    testWidgets('long press send owns silent and scheduled options', (
+      tester,
+    ) async {
+      final conversation = await insertRoom();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            talkFeatures: const <String>[..._fullFeatures, 'silent-send'],
+            localFeatures: const <String>['scheduled-messages'],
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await flush(tester);
+
+      expect(find.byKey(const Key('toggle-silent-send')), findsNothing);
+      expect(find.byKey(const Key('schedule-message')), findsNothing);
+      expect(find.byKey(const Key('open-giphy-picker')), findsOneWidget);
+
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
+      await settle(tester);
+      expect(find.byKey(const Key('send-options-sheet')), findsOneWidget);
+      expect(find.byKey(const Key('toggle-silent-send')), findsOneWidget);
+      expect(find.byKey(const Key('schedule-message')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('toggle-silent-send')));
+      await settle(tester);
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
+      await settle(tester);
+      expect(find.text('Sending without notification'), findsOneWidget);
+
+      await teardownTree(tester);
+    });
+
     // `scheduled-messages` is announced only under `features-local`.
     testWidgets('the button stays hidden without the local capability', (
       tester,
@@ -441,7 +478,7 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
       await settle(tester);
 
       expect(find.byKey(const Key('schedule-message')), findsNothing);
@@ -469,7 +506,7 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
       await settle(tester);
 
       expect(find.byKey(const Key('schedule-message')), findsNothing);
@@ -510,7 +547,7 @@ void main() {
       );
       await settle(tester);
 
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
       await settle(tester);
 
       final button = find.byKey(const Key('schedule-message'));
@@ -582,7 +619,7 @@ void main() {
         'Send this later',
       );
       await settle(tester);
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
+      await tester.longPress(find.byKey(const Key('send-message-gesture')));
       await settle(tester);
       await tester.tap(find.byKey(const Key('schedule-message')));
       await settle(tester);

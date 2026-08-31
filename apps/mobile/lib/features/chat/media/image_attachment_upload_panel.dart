@@ -78,34 +78,26 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
     required this.controller,
     required this.prepare,
     this.enabled = true,
-    this.menuActions = const <AttachmentMenuAction>[],
   });
 
   final ImageAttachmentUploadController controller;
   final PrepareAttachmentFromSource prepare;
   final bool enabled;
-  final List<AttachmentMenuAction> menuActions;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) {
-        final hasEnabledAction = menuActions.any(
-          (action) => action.onSelected != null,
-        );
-        return IconButton(
-          key: const Key('pick-image-attachment'),
-          tooltip: strings.addAttachment,
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          onPressed:
-              controller.state.isActive || (!enabled && !hasEnabledAction)
-              ? null
-              : () => unawaited(_chooseSource(context)),
-          icon: const Icon(Icons.attach_file_rounded),
-        );
-      },
+      builder: (context, _) => IconButton(
+        key: const Key('pick-image-attachment'),
+        tooltip: strings.addAttachment,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        onPressed: !enabled || controller.state.isActive
+            ? null
+            : () => unawaited(_chooseSource(context)),
+        icon: const Icon(Icons.attach_file_rounded),
+      ),
     );
   }
 
@@ -126,19 +118,6 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
                 onTap: enabled
                     ? () => Navigator.of(sheetContext).pop(option.source)
                     : null,
-              ),
-            for (final action in menuActions)
-              ListTile(
-                key: action.key,
-                leading: action.icon,
-                title: Text(action.label),
-                enabled: action.onSelected != null,
-                onTap: action.onSelected == null
-                    ? null
-                    : () {
-                        Navigator.of(sheetContext).pop();
-                        action.onSelected!.call();
-                      },
               ),
           ],
         ),

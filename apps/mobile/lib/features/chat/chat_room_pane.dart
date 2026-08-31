@@ -749,8 +749,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       giphyTooltip = strings.openGiphyPicker;
       giphyAction = () => unawaited(_requestGiphy());
     }
-    final canSendSilently =
-        attachmentDependencies?.valueOrNull?.profile.silent ?? false;
+    final canSendSilently = !readOnly && (actionsProfile?.silentSend ?? false);
     final attachmentMenuActions = <AttachmentMenuAction>[
       AttachmentMenuAction(
         key: const Key('attach-source-gallery'),
@@ -788,40 +787,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                 ),
               ),
       ),
-      AttachmentMenuAction(
-        key: const Key('open-giphy-picker'),
-        icon:
-            (attachmentDependencies?.isLoading ?? false) ||
-                (giphy?.isLoading ?? false)
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.gif_box_outlined),
-        label: giphyTooltip,
-        onSelected: _sending ? null : giphyAction,
-      ),
-      if (profileCanSchedule)
-        AttachmentMenuAction(
-          key: const Key('schedule-message'),
-          icon: const Icon(Icons.schedule_send_outlined),
-          label: strings.scheduleMessage,
-          onSelected: _sending ? null : () => unawaited(_scheduleMessage()),
-        ),
     ];
     final idleComposerActions = <Widget>[
       ComposerActionMenuButton(actions: attachmentMenuActions),
-      if (canSendSilently)
-        IconButton(
-          key: const Key('toggle-silent-send'),
-          onPressed: _sending
-              ? null
-              : () => setState(() => _silentSend = !_silentSend),
-          tooltip: _silentSend ? strings.silentSendOn : strings.silentSendOff,
-          isSelected: _silentSend,
-          icon: const Icon(Icons.notifications_outlined),
-          selectedIcon: const Icon(Icons.notifications_off),
-        ),
       IconButton(
         key: const Key('open-emoji-picker'),
         onPressed: _sending ? null : _toggleEmojiPicker,
@@ -830,16 +798,51 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         icon: const Icon(Icons.emoji_emotions_outlined),
         selectedIcon: const Icon(Icons.emoji_emotions),
       ),
-      IconButton.filled(
-        key: const Key('send-message'),
-        onPressed: _sending ? null : _send,
-        tooltip: strings.sendMessage,
-        icon: _sending
+      IconButton(
+        key: const Key('open-giphy-picker'),
+        onPressed: _sending ? null : giphyAction,
+        tooltip: giphyTooltip,
+        icon:
+            (attachmentDependencies?.isLoading ?? false) ||
+                (giphy?.isLoading ?? false)
             ? const SizedBox.square(
                 dimension: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.send_rounded),
+            : const Icon(Icons.gif_box_outlined),
+      ),
+      SizedBox.square(
+        dimension: 48,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            IconButton.filled(
+              key: const Key('send-message'),
+              onPressed: _sending ? null : _send,
+              tooltip: strings.sendMessage,
+              icon: _sending
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
+            ),
+            GestureDetector(
+              key: const Key('send-message-gesture'),
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTap: _sending ? null : _send,
+              onLongPress: _sending
+                  ? null
+                  : () => unawaited(
+                      _openSendOptions(
+                        canSendSilently: canSendSilently,
+                        canSchedule: profileCanSchedule,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     ];
 

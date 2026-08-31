@@ -22,6 +22,7 @@ final class RichChatCapabilityProfile {
     required this.reminders,
     required this.scheduled,
     required this.translation,
+    required this.silentSend,
   });
 
   factory RichChatCapabilityProfile.fromTalkFeatures({
@@ -74,6 +75,7 @@ final class RichChatCapabilityProfile {
       reminders: base && global.contains('remind-me-later'),
       scheduled: base && local.contains('scheduled-messages') && !federated,
       translation: translationAvailable,
+      silentSend: base && global.contains('silent-send'),
     );
   }
 
@@ -98,6 +100,7 @@ final class RichChatCapabilityProfile {
   final bool reminders;
   final bool scheduled;
   final bool translation;
+  final bool silentSend;
 
   @override
   String toString() =>

@@ -1,6 +1,55 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneComposer on _ChatRoomPaneState {
+  Future<void> _openSendOptions({
+    required bool canSendSilently,
+    required bool canSchedule,
+  }) {
+    if (!canSendSilently && !canSchedule) {
+      return Future<void>.value();
+    }
+    final strings = AppLocalizations.of(context);
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          key: const Key('send-options-sheet'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (canSendSilently)
+              ListTile(
+                key: const Key('toggle-silent-send'),
+                leading: Icon(
+                  _silentSend
+                      ? Icons.notifications_off
+                      : Icons.notifications_outlined,
+                ),
+                title: Text(
+                  _silentSend ? strings.silentSendOn : strings.silentSendOff,
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  if (mounted) {
+                    _update(() => _silentSend = !_silentSend);
+                  }
+                },
+              ),
+            if (canSchedule)
+              ListTile(
+                key: const Key('schedule-message'),
+                leading: const Icon(Icons.schedule_send_outlined),
+                title: Text(strings.scheduleMessage),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_scheduleMessage());
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _startReply(CachedChatMessage message) {
     if (_isReadOnlyNow() ||
         message.systemMessage.isNotEmpty ||

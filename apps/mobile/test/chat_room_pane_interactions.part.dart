@@ -18,7 +18,7 @@ void _registerChatRoomPaneInteractionTests() {
 
     await tester.enterText(composer, 'First line');
     await tester.pump();
-    await tester.tap(find.byKey(const Key('send-message')));
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
 
     // Still in flight: the field is already the user's again.
     expect(controller.text, isEmpty);

@@ -46,53 +46,6 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets(
-    'paperclip includes enabled composer actions after file sources',
-    (tester) async {
-      final controller = ImageAttachmentUploadController(
-        startUpload: (_) async => throw StateError('Upload must not start.'),
-      );
-      addTearDown(controller.dispose);
-      var selected = 0;
-
-      await tester.pumpWidget(
-        _app(
-          controller,
-          menuActions: <AttachmentMenuAction>[
-            AttachmentMenuAction(
-              key: const Key('menu-giphy'),
-              icon: const Icon(Icons.gif_box_outlined),
-              label: 'GIF',
-              onSelected: () => selected++,
-            ),
-            const AttachmentMenuAction(
-              key: Key('menu-disabled'),
-              icon: Icon(Icons.location_on_outlined),
-              label: 'Unavailable',
-              onSelected: null,
-            ),
-          ],
-        ),
-      );
-
-      await tester.tap(find.byKey(const Key('pick-image-attachment')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('attach-source-gallery')), findsOneWidget);
-      expect(find.byKey(const Key('attach-source-camera')), findsOneWidget);
-      expect(find.byKey(const Key('attach-source-file')), findsOneWidget);
-      expect(find.byKey(const Key('menu-giphy')), findsOneWidget);
-      final disabled = tester.widget<ListTile>(
-        find.byKey(const Key('menu-disabled')),
-      );
-      expect(disabled.enabled, isFalse);
-
-      await tester.tap(find.byKey(const Key('menu-giphy')));
-      await tester.pumpAndSettle();
-      expect(selected, 1);
-    },
-  );
-
   testWidgets('hides the upload card as soon as chat confirmation completes', (
     tester,
   ) async {
@@ -309,7 +262,6 @@ void main() {
 Widget _app(
   ImageAttachmentUploadController controller, {
   PrepareAttachmentFromSource? prepare,
-  List<AttachmentMenuAction> menuActions = const <AttachmentMenuAction>[],
 }) {
   return localizedTestApp(
     home: MediaQuery(
@@ -328,7 +280,6 @@ Widget _app(
                   child: ImageAttachmentPickerButton(
                     controller: controller,
                     prepare: prepare ?? (_) async => _request,
-                    menuActions: menuActions,
                   ),
                 ),
                 ImageAttachmentUploadPanel(controller: controller),

@@ -125,7 +125,7 @@ void main() {
     await _pumpTransition(tester);
     expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
 
-    await _tapGiphyAction(tester);
+    await tester.tap(find.byKey(const Key('open-giphy-picker')));
     final gif = find.byKey(
       const ValueKey<String>('giphy-thumbnail-https://giphy.com/gifs/wave'),
     );
@@ -157,7 +157,7 @@ void main() {
     expect(_composer(tester).text, '👋');
 
     await _pumpUntil(tester, () => _sendButtonEnabled(tester));
-    await tester.tap(find.byKey(const Key('send-message')));
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
     await _pumpUntil(
       tester,
       () => harness.sentMessages.length == 2 && _composer(tester).text.isEmpty,
@@ -192,18 +192,20 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
-      await _tapGiphyAction(tester);
-      await tester.pumpAndSettle();
-      await _openAttachmentMenu(tester);
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
+      await _pumpUntil(tester, () {
+        final button = tester.widget<IconButton>(
+          find.byKey(const Key('open-giphy-picker')),
+        );
+        return button.onPressed == null &&
+            button.tooltip == 'GIFs are not available on this server.';
+      });
 
-      final button = tester.widget<ListTile>(
+      final button = tester.widget<IconButton>(
         find.byKey(const Key('open-giphy-picker')),
       );
-      expect(button.enabled, isFalse);
-      expect(
-        find.text('GIFs are not available on this server.'),
-        findsOneWidget,
-      );
+      expect(button.onPressed, isNull);
+      expect(button.tooltip, 'GIFs are not available on this server.');
       expect(find.byType(GiphyPicker), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -241,7 +243,9 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
-      await _tapGiphyAction(tester);
+      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await tester.runAsync(() async {
         for (var attempt = 0; attempt < 600; attempt++) {
           if (probeClient.requestStarted.isCompleted) {
@@ -296,7 +300,8 @@ void main() {
         tester,
         () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
       );
-      await _tapGiphyAction(tester);
+      await _pumpUntil(tester, () => _giphyButtonEnabled(tester));
+      await tester.tap(find.byKey(const Key('open-giphy-picker')));
       await _pumpUntil(tester, () => probeClient.requestStarted.isCompleted);
 
       final accountB = harness.account.copyWith(
@@ -332,55 +337,54 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
-  testWidgets(
-    'a bare Enter sends and Shift+Enter does not, in the real pane',
-    (tester) async {
-      // The rule itself is asserted in `composer_enter_key_test.dart`. What
-      // only the real pane can show is that the `Focus` around the field sees
-      // Enter at all, rather than the multiline field swallowing it first.
-      // Reset inside the body, not in a tearDown: the invariant that catches
-      // a leaked debug variable runs before tearDowns do.
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      final harness = (await tester.runAsync(_ComposerHarness.create))!;
-      addTearDown(harness.close);
+  testWidgets('a bare Enter sends and Shift+Enter does not, in the real pane', (
+    tester,
+  ) async {
+    // The rule itself is asserted in `composer_enter_key_test.dart`. What
+    // only the real pane can show is that the `Focus` around the field sees
+    // Enter at all, rather than the multiline field swallowing it first.
+    // Reset inside the body, not in a tearDown: the invariant that catches
+    // a leaked debug variable runs before tearDowns do.
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
 
-      await tester.pumpWidget(harness.app());
-      await _pumpUntil(
-        tester,
-        () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
-      );
+    await tester.pumpWidget(harness.app());
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('chat-composer')).evaluate().isNotEmpty,
+    );
 
-      await tester.tap(find.byKey(const Key('chat-composer')));
-      await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-composer')));
+    await tester.pump();
 
-      await tester.enterText(
-        find.byKey(const Key('chat-composer')),
-        'ctrl-free send',
-      );
-      await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('chat-composer')),
+      'ctrl-free send',
+    );
+    await tester.pump();
 
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(
-        harness.sentMessages,
-        isEmpty,
-        reason: 'Shift+Enter belongs to the field, not to sending',
-      );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      harness.sentMessages,
+      isEmpty,
+      reason: 'Shift+Enter belongs to the field, not to sending',
+    );
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
 
-      // Only the send matters here; clearing the composer afterwards is
-      // already covered by the emoji test above.
-      expect(harness.sentMessages, <String>['ctrl-free send']);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
-      debugDefaultTargetPlatformOverride = null;
-    },
-  );
+    // Only the send matters here; clearing the composer afterwards is
+    // already covered by the emoji test above.
+    expect(harness.sentMessages, <String>['ctrl-free send']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
+  });
   testWidgets('Escape backs out of a reply', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
@@ -390,7 +394,10 @@ void main() {
     await _pumpUntil(
       tester,
       () =>
-          find.byKey(const Key('chat-message-target-109')).evaluate().isNotEmpty &&
+          find
+              .byKey(const Key('chat-message-target-109'))
+              .evaluate()
+              .isNotEmpty &&
           find.byType(ChatMediaComposer).evaluate().isNotEmpty,
     );
     await tester.longPress(find.byKey(const Key('chat-message-target-109')));
@@ -428,21 +435,10 @@ bool _sendButtonEnabled(WidgetTester tester) {
       null;
 }
 
-Future<void> _openAttachmentMenu(WidgetTester tester) async {
-  await tester.tap(find.byKey(const Key('pick-image-attachment')));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 400));
-  expect(find.byKey(const Key('attachment-source-sheet')), findsOneWidget);
-}
-
-Future<void> _tapGiphyAction(WidgetTester tester) async {
-  await _pumpUntil(tester, () {
-    final button = find.byKey(const Key('pick-image-attachment'));
-    return button.evaluate().isNotEmpty &&
-        tester.widget<IconButton>(button).onPressed != null;
-  });
-  await _openAttachmentMenu(tester);
-  await tester.tap(find.byKey(const Key('open-giphy-picker')));
+bool _giphyButtonEnabled(WidgetTester tester) {
+  final button = find.byKey(const Key('open-giphy-picker'));
+  return button.evaluate().isNotEmpty &&
+      tester.widget<IconButton>(button).onPressed != null;
 }
 
 /// Pumps until [condition] holds.
