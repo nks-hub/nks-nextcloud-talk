@@ -159,10 +159,12 @@ final class ImageAttachmentUploadPanel extends StatelessWidget {
     super.key,
     required this.controller,
     this.previewBytes,
+    this.onOpenSettings,
   });
 
   final ImageAttachmentUploadController controller;
   final Uint8List? previewBytes;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -181,6 +183,7 @@ final class ImageAttachmentUploadPanel extends StatelessWidget {
           onCancel: controller.cancel,
           onRetry: controller.retry,
           onDismiss: controller.dismiss,
+          onOpenSettings: onOpenSettings,
         );
       },
     );
@@ -194,6 +197,7 @@ final class _UploadCard extends StatelessWidget {
     required this.onCancel,
     required this.onRetry,
     required this.onDismiss,
+    required this.onOpenSettings,
   });
 
   final ImageAttachmentUploadState state;
@@ -201,6 +205,7 @@ final class _UploadCard extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onRetry;
   final VoidCallback onDismiss;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +295,18 @@ final class _UploadCard extends StatelessWidget {
   List<Widget> _actions(BuildContext context) {
     final strings = AppLocalizations.of(context);
     if (state.phase == ImageAttachmentUploadPhase.failed) {
+      final permissionDenied =
+          state.failureCode == 'gallery-permission-denied' ||
+          state.failureCode == 'camera-permission-denied';
       return [
+        if (permissionDenied && onOpenSettings != null)
+          TextButton.icon(
+            key: const Key('open-attachment-app-settings'),
+            onPressed: onOpenSettings,
+            icon: const Icon(Icons.settings_outlined),
+            label: Text(strings.openAppSettings),
+            style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+          ),
         if (state.retryAllowed)
           FilledButton.icon(
             key: const Key('retry-image-attachment-upload'),

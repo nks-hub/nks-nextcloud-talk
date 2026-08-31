@@ -16,6 +16,7 @@ Widget _composerApp({
   bool silent = false,
   String Function()? captionSource,
   VoidCallback? onCaptionConsumed,
+  Future<bool> Function()? openAppSettings,
   Locale locale = const Locale('en'),
 }) {
   return localizedTestApp(
@@ -35,6 +36,7 @@ Widget _composerApp({
         silent: silent,
         captionSource: captionSource,
         onCaptionConsumed: onCaptionConsumed,
+        openAppSettings: openAppSettings,
         controller: controller,
         showAttachmentButton: showAttachmentButton,
         idleActions: idleActions,

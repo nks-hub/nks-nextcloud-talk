@@ -109,7 +109,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
     final failureMessage = AppLocalizations.of(context).openAppSettingsFailed;
     try {
-      final opened = await ref.read(locationAppSettingsOpenerProvider).open();
+      final opened = await ref.read(appSettingsOpenerProvider).open();
       if (!opened && _isCurrentSendScope(targetKey, generation)) {
         _showLocationSnackBar(failureMessage);
       }
@@ -698,6 +698,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             silent: _silentSend,
             captionSource: () => _composer.text,
             onCaptionConsumed: _clearConsumedCaption,
+            openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
           );
         } on TalkProtocolException {
           return ChatMediaComposerStatus.unavailable(

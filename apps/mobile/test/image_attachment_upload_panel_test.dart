@@ -218,6 +218,10 @@ void main() {
         find.byKey(const Key('dismiss-image-attachment-upload')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('open-attachment-app-settings')),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -242,7 +246,10 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(_app(controller));
+    var settingsOpenCalls = 0;
+    await tester.pumpWidget(
+      _app(controller, onOpenSettings: () => settingsOpenCalls++),
+    );
 
     expect(
       find.text(
@@ -255,6 +262,13 @@ void main() {
       find.byKey(const Key('retry-image-attachment-upload')),
       findsNothing,
     );
+    final settingsAction = find.byKey(
+      const Key('open-attachment-app-settings'),
+    );
+    expect(settingsAction, findsOneWidget);
+    expect(tester.getSize(settingsAction).height, greaterThanOrEqualTo(48));
+    await tester.tap(settingsAction);
+    expect(settingsOpenCalls, 1);
     expect(tester.takeException(), isNull);
   });
 }
@@ -262,6 +276,7 @@ void main() {
 Widget _app(
   ImageAttachmentUploadController controller, {
   PrepareAttachmentFromSource? prepare,
+  VoidCallback? onOpenSettings,
 }) {
   return localizedTestApp(
     home: MediaQuery(
@@ -282,7 +297,10 @@ Widget _app(
                     prepare: prepare ?? (_) async => _request,
                   ),
                 ),
-                ImageAttachmentUploadPanel(controller: controller),
+                ImageAttachmentUploadPanel(
+                  controller: controller,
+                  onOpenSettings: onOpenSettings,
+                ),
               ],
             ),
           ),

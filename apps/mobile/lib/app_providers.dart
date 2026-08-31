@@ -63,6 +63,7 @@ import 'features/push/push_registration_coordinator.dart';
 import 'features/push/windows_notification.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
+import 'platform/app_settings.dart';
 import 'platform/media/durable_attachment_source_store.dart';
 
 part 'app_providers_push.dart';
@@ -361,10 +362,8 @@ final currentLocationSourceProvider = Provider<CurrentLocationSource>((ref) {
   return GeolocatorCurrentLocationSource();
 });
 
-final locationAppSettingsOpenerProvider = Provider<LocationAppSettingsOpener>((
-  ref,
-) {
-  return const GeolocatorLocationAppSettingsOpener();
+final appSettingsOpenerProvider = Provider<AppSettingsOpener>((ref) {
+  return const GeolocatorAppSettingsOpener();
 });
 
 final locationShareServiceProvider = Provider<LocationShareSender>((ref) {

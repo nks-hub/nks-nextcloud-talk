@@ -67,7 +67,7 @@ void _registerLocationComposerTests() {
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
-    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    final opener = _FakeAppSettingsOpener(() async => true);
     await _showLocationError(
       tester,
       harness,
@@ -93,7 +93,7 @@ void _registerLocationComposerTests() {
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
-    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    final opener = _FakeAppSettingsOpener(() async => true);
     await _showLocationError(
       tester,
       harness,
@@ -113,7 +113,7 @@ void _registerLocationComposerTests() {
   testWidgets('failed app settings launch is reported', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
-    final opener = _FakeLocationAppSettingsOpener(() async => false);
+    final opener = _FakeAppSettingsOpener(() async => false);
     await _showLocationError(
       tester,
       harness,
@@ -141,7 +141,7 @@ void _registerLocationComposerTests() {
   testWidgets('app settings launch exception is reported', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
-    final opener = _FakeLocationAppSettingsOpener(
+    final opener = _FakeAppSettingsOpener(
       () async => throw StateError('fixture failure'),
     );
     await _showLocationError(
@@ -171,7 +171,7 @@ void _registerLocationComposerTests() {
   testWidgets('room change prevents a stale settings action', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
-    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    final opener = _FakeAppSettingsOpener(() async => true);
     final overrides = _locationErrorOverrides(
       error: CurrentLocationError.permissionDeniedForever,
       opener: opener,
@@ -203,7 +203,7 @@ void _registerLocationComposerTests() {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
     addTearDown(harness.close);
     final completion = Completer<bool>();
-    final opener = _FakeLocationAppSettingsOpener(() => completion.future);
+    final opener = _FakeAppSettingsOpener(() => completion.future);
     final overrides = _locationErrorOverrides(
       error: CurrentLocationError.permissionDeniedForever,
       opener: opener,
@@ -321,10 +321,10 @@ Future<void> _showLocationError(
 
 List<Override> _locationErrorOverrides({
   required CurrentLocationError error,
-  required _FakeLocationAppSettingsOpener opener,
+  required _FakeAppSettingsOpener opener,
 }) => <Override>[
   currentLocationSourceProvider.overrideWithValue(_LocationErrorSource(error)),
-  locationAppSettingsOpenerProvider.overrideWithValue(opener),
+  appSettingsOpenerProvider.overrideWithValue(opener),
 ];
 
 Future<void> _openLocationAction(WidgetTester tester) async {
@@ -369,9 +369,8 @@ final class _LocationErrorSource implements CurrentLocationSource {
   }
 }
 
-final class _FakeLocationAppSettingsOpener
-    implements LocationAppSettingsOpener {
-  _FakeLocationAppSettingsOpener(this._open);
+final class _FakeAppSettingsOpener implements AppSettingsOpener {
+  _FakeAppSettingsOpener(this._open);
 
   final Future<bool> Function() _open;
   int calls = 0;

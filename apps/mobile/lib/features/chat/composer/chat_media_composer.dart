@@ -146,6 +146,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.silent = false,
     this.captionSource,
     this.onCaptionConsumed,
+    this.openAppSettings,
     this.controller,
     this.idleActions = const <Widget>[],
     this.showAttachmentButton = true,
@@ -181,6 +182,7 @@ final class ChatMediaComposer extends StatefulWidget {
   /// Fires once a caption has actually gone out with an attachment, so the
   /// host can clear the field it came from.
   final VoidCallback? onCaptionConsumed;
+  final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
   final List<Widget> idleActions;
   final bool showAttachmentButton;
@@ -520,6 +522,28 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     return true;
   }
 
+  Future<void> _openAttachmentAppSettings() async {
+    final open = widget.openAppSettings;
+    if (open == null) {
+      return;
+    }
+    final failedMessage = AppLocalizations.of(context).openAppSettingsFailed;
+    try {
+      final opened = await open();
+      if (!opened && mounted && !_disposed) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(failedMessage)));
+      }
+    } on Object {
+      if (mounted && !_disposed) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(failedMessage)));
+      }
+    }
+  }
+
   Future<ImageAttachmentUploadRequest?> _prepareGiphyAttachment(
     LoadGiphyAttachmentPayload loader,
   ) async {
@@ -705,7 +729,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ImageAttachmentUploadPanel(controller: _imageController),
+        ImageAttachmentUploadPanel(
+          controller: _imageController,
+          onOpenSettings: widget.openAppSettings == null
+              ? null
+              : () => unawaited(_openAttachmentAppSettings()),
+        ),
         if (voiceOwnsToolbar)
           Row(
             key: const Key('chat-media-composer-actions'),

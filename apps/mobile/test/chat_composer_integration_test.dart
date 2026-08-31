@@ -23,6 +23,7 @@ import 'package:nextcloudtalk/features/chat/location_share_service.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
+import 'package:nextcloudtalk/platform/app_settings.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';

@@ -800,6 +800,7 @@ void main() {
     addTearDown(bridge.close);
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    var settingsOpenCalls = 0;
 
     await tester.pumpWidget(
       _composerApp(
@@ -808,6 +809,10 @@ void main() {
         threadId: null,
         voiceBackends: voiceBackends,
         imageSelectionBackend: const _RefusingCameraBackend(),
+        openAppSettings: () async {
+          settingsOpenCalls++;
+          return false;
+        },
       ),
     );
     await _pickAttachmentSource(tester, source: AttachmentPickerSource.camera);
@@ -829,6 +834,13 @@ void main() {
     expect(
       find.byKey(const Key('retry-image-attachment-upload')),
       findsNothing,
+    );
+    await tester.tap(find.byKey(const Key('open-attachment-app-settings')));
+    await tester.pump();
+    expect(settingsOpenCalls, 1);
+    expect(
+      find.text('The system settings could not be opened.'),
+      findsOneWidget,
     );
     expect(bridge.sessions, isEmpty);
   });
