@@ -75,7 +75,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a valid location is a scalable 48dp map link', (tester) async {
+  testWidgets('a valid location renders a bounded trusted live map preview', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       _app(const TextScaler.linear(2), message: _locationMessage),
@@ -88,14 +90,79 @@ void main() {
           widget.properties.label == 'Open location: Eiffel Tower',
     );
     expect(location, findsOneWidget);
-    expect(find.byIcon(Icons.location_on_outlined), findsOneWidget);
+    expect(find.byKey(const Key('chat-location-map-preview')), findsOneWidget);
+    expect(find.byKey(const Key('chat-location-map-marker')), findsOneWidget);
     expect(
       find.bySemanticsLabel('Open location: Eiffel Tower'),
       findsOneWidget,
     );
     final size = tester.getSize(location);
     expect(size.width, greaterThanOrEqualTo(48));
-    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, lessThanOrEqualTo(240));
+    expect(size.height, greaterThanOrEqualTo(128));
+
+    final tileImages = tester.widgetList<Image>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value.startsWith(
+              'chat-location-tile-',
+            ),
+      ),
+    );
+    expect(tileImages, isNotEmpty);
+    expect(tileImages.length, lessThanOrEqualTo(4));
+    for (final image in tileImages) {
+      final resized = image.image as ResizeImage;
+      expect(resized.width, 256);
+      expect(resized.height, 256);
+      final tile = resized.imageProvider as NetworkImage;
+      final uri = Uri.parse(tile.url);
+      expect(uri.scheme, 'https');
+      expect(uri.host, 'tile.openstreetmap.org');
+      expect(uri.path, matches(RegExp(r'^/16/\d+/\d+\.png$')));
+      expect(uri.query, isEmpty);
+      expect(tile.headers?['User-Agent'], contains('com.nkshub.nextcloudtalk'));
+    }
+
+    final attribution = find.bySemanticsLabel('© OpenStreetMap contributors');
+    expect(attribution, findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('chat-location-map-attribution')))
+          .height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('location tile failure keeps an accessible labelled fallback', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _locationMessage),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.map_outlined), findsOneWidget);
+    expect(find.text('Eiffel Tower'), findsOneWidget);
+    expect(
+      tester.getSemantics(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Open location: Eiffel Tower',
+        ),
+      ),
+      matchesSemantics(
+        label: 'Open location: Eiffel Tower',
+        isLink: true,
+        hasTapAction: true,
+      ),
+    );
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
@@ -464,6 +531,7 @@ final _locationMessage = ChatMessage.fromJson(<String, Object?>{
       'name': 'Eiffel Tower',
       'latitude': '48.85837',
       'longitude': '2.29448',
+      'link': 'https://attacker.example.invalid/forged-map.png',
     },
   },
 });
