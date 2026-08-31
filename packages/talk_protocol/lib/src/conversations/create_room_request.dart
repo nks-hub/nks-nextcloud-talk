@@ -71,6 +71,14 @@ final class CreateConversationRequest {
         );
       }
     } else {
+      if (roomType == CreateConversationRoomType.group &&
+          invite != null &&
+          source != 'groups') {
+        protocolFailure(
+          TalkProtocolErrorCode.invalidCreateConversationRequest,
+          r'$.body.source',
+        );
+      }
       if (name == null ||
           name.trim().isEmpty ||
           name.length > 200 ||
@@ -106,7 +114,7 @@ final class CreateConversationRequest {
   /// Empty group and public rooms omit it together with [inviteSource].
   final String? inviteId;
 
-  /// Either `users` or `groups`, matching a recipient's share type.
+  /// `users` for a one-to-one room, or `groups` for a group room.
   final String? inviteSource;
   final String? roomName;
   final String userAgent;

@@ -304,6 +304,27 @@ void main() {
       );
     });
 
+    test('rejects a user invite on a group room', () {
+      expect(
+        () => CreateConversationRequest(
+          accountId: AccountId.parse('fixture-account'),
+          requestId: ConversationRequestId.parse('create-group-user'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomType: CreateConversationRoomType.group,
+          inviteId: 'alice',
+          inviteSource: 'users',
+          roomName: 'Project room',
+        ),
+        throwsA(
+          isA<TalkProtocolException>().having(
+            (error) => error.path,
+            'path',
+            r'$.body.source',
+          ),
+        ),
+      );
+    });
+
     test('rejects a one-to-one invite carrying a room name', () {
       expect(
         () => CreateConversationRequest(

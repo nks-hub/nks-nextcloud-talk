@@ -21,6 +21,9 @@ proto jen to, co je doložitelné z App Store Connect.
 - Lokální diagnostika ukazuje skutečnou uloženou i očekávanou verzi databáze,
   stav migrace a počet porušení cizích klíčů. Dříve zobrazovala jen číslo
   zabudované v aplikaci, takže starou nebo novější databázi nerozpoznala.
+- Kontrakt založení konverzace odmítne skupinovou místnost s pozváním
+  konkrétního uživatele. Talk tuto kombinaci nepodporuje; uživatelé se do
+  skupiny přidávají až participant endpointem.
 
 ## 0.1.0 (25) — 31. 8. 2026
 
