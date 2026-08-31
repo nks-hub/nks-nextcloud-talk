@@ -86,6 +86,7 @@ void main() {
       'Root of an unnamed thread',
       reason: 'the root message stands in for the name the server lacks',
     );
+    expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
   });
 
   test('a derived title collapses whitespace and stays one short line', () async {

@@ -18,6 +18,10 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Běžný řetězec odpovědí otevřený ze seznamu vláken už nekončí hláškou, že
+  vlákno na serveru není dostupné. Taková položka vzniká z místní historie a
+  nyní se otevře rovnou v chatu; serverový detail zůstává jen pro skutečně
+  pojmenovaná vlákna.
 - Zprávu lze přeložit do některého z jazyků, které nabízí připojený Nextcloud.
   Aplikace umí nechat zdrojový jazyk rozpoznat, zachová zmínky a dovolí výsledek
   zkopírovat. Volba se zobrazí jen na serveru s aktivním překladovým

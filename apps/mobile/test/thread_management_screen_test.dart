@@ -319,6 +319,58 @@ void main() {
     await disposeHarness(tester);
   });
 
+  testWidgets('a locally derived reply chain opens without thread metadata', (
+    tester,
+  ) async {
+    await _setLargeSurface(tester);
+    await _insertDerivedThread(database, threadId: 500);
+    await threads.replaceRecent(
+      accountId: _accountId,
+      roomToken: _roomToken,
+      server: ServerBase.parse(_server),
+      values: const <RichChatThread>[],
+    );
+    var metadataRequests = 0;
+
+    await tester.pumpWidget(
+      buildApp(
+        home: ThreadManagementScreen(
+          account: account,
+          conversation: conversation,
+        ),
+        handler: (request) {
+          if (request.url.path.endsWith('/threads/recent')) {
+            return _ocsResponse(statusCode: 200, data: const []);
+          }
+          if (request.url.path.endsWith('/threads/500')) {
+            metadataRequests++;
+          }
+          return _ocsResponse(statusCode: 404, data: const {});
+        },
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.text('Ordinary reply root').evaluate().isNotEmpty,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('thread-management-item-rooma123-500')),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byType(ChatThreadScreen).evaluate().isNotEmpty,
+    );
+
+    final route = tester.widget<ChatThreadScreen>(
+      find.byType(ChatThreadScreen),
+    );
+    expect(route.threadContext.kind, ChatThreadKind.ordinary);
+    expect(route.threadContext.rootMessageId, 500);
+    expect(metadataRequests, 0);
+    await disposeHarness(tester);
+  });
+
   testWidgets('subscribed tab loads account-wide threads on demand', (
     tester,
   ) async {
@@ -720,6 +772,54 @@ Map<String, Object?> _roomJson() {
     ..['lobbyState'] = 0
     ..remove('remoteServer');
   return room;
+}
+
+Future<void> _insertDerivedThread(
+  AppDatabase database, {
+  required int threadId,
+}) async {
+  for (final message in <({int id, String text})>[
+    (id: threadId, text: 'Ordinary reply root'),
+    (id: threadId + 1, text: 'Ordinary reply'),
+  ]) {
+    final raw = <String, Object?>{
+      'id': message.id,
+      'token': _roomToken,
+      'actorType': 'users',
+      'actorId': 'user-b',
+      'actorDisplayName': 'User B',
+      'timestamp': 1787443000 + message.id,
+      'systemMessage': '',
+      'messageType': 'comment',
+      'isReplyable': true,
+      'referenceId': 'derived-${message.id}',
+      'message': message.text,
+      'messageParameters': <String, Object?>{},
+      'markdown': false,
+      'reactions': <String, Object?>{},
+      'threadId': threadId,
+    };
+    await database
+        .into(database.cachedChatMessages)
+        .insert(
+          CachedChatMessagesCompanion.insert(
+            accountId: _accountId,
+            roomToken: _roomToken,
+            messageId: message.id,
+            actorType: 'users',
+            actorId: 'user-b',
+            actorDisplayName: 'User B',
+            timestamp: raw['timestamp']! as int,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: raw['referenceId']! as String,
+            displayText: message.text,
+            deleted: false,
+            threadId: Value(threadId),
+            rawJson: jsonEncode(raw),
+          ),
+        );
+  }
 }
 
 RichChatThread _thread({

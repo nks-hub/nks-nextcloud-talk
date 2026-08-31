@@ -11,6 +11,20 @@ final class ThreadRepository {
 
   final AppDatabase _database;
 
+  /// Whether [thread] was projected from an ordinary cached reply chain.
+  ///
+  /// Talk's thread metadata API only knows explicitly created named threads.
+  /// An empty wire object is the repository-owned marker used when the recent
+  /// list supplements that server response with a locally known reply chain.
+  static bool isLocallyDerived(CachedThread thread) {
+    try {
+      final wire = jsonDecode(thread.rawJson);
+      return wire is Map<String, Object?> && wire.isEmpty;
+    } on FormatException {
+      return false;
+    }
+  }
+
   Stream<List<CachedThread>> watchRecent({
     required String accountId,
     required String roomToken,

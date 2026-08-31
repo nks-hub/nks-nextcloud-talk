@@ -7,6 +7,7 @@ import '../../app_providers.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../data/app_database.dart';
+import '../../data/thread_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_room_pane.dart';
 import '../chat/chat_service.dart';
@@ -39,6 +40,7 @@ final class _ThreadManagementScreenState
   var _recentSettled = false;
   var _subscribedLoading = false;
   var _subscribedStarted = false;
+  var _openingThread = false;
   Object? _recentError;
   Object? _subscribedError;
 
@@ -177,7 +179,7 @@ final class _ThreadManagementScreenState
               roomNames: roomNames,
               onRefresh: _refreshRecent,
               onOpen: (thread) =>
-                  _openDetail(thread, roomRows[thread.roomToken]),
+                  unawaited(_openDetail(thread, roomRows[thread.roomToken])),
             ),
             _ThreadListTab(
               tabKey: const Key('thread-management-subscribed-list'),
@@ -189,7 +191,7 @@ final class _ThreadManagementScreenState
               roomNames: roomNames,
               onRefresh: _refreshSubscribed,
               onOpen: (thread) =>
-                  _openDetail(thread, roomRows[thread.roomToken]),
+                  unawaited(_openDetail(thread, roomRows[thread.roomToken])),
             ),
           ],
         ),
@@ -197,7 +199,10 @@ final class _ThreadManagementScreenState
     );
   }
 
-  void _openDetail(CachedThread thread, CachedConversation? conversation) {
+  Future<void> _openDetail(
+    CachedThread thread,
+    CachedConversation? conversation,
+  ) async {
     if (conversation == null) {
       final messenger = ScaffoldMessenger.of(context);
       messenger
@@ -212,8 +217,8 @@ final class _ThreadManagementScreenState
         );
       return;
     }
-    unawaited(
-      Navigator.of(context).push<void>(
+    if (!ThreadRepository.isLocallyDerived(thread)) {
+      await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           settings: const RouteSettings(name: '/threads/detail'),
           builder: (context) => ThreadDetailScreen(
@@ -222,8 +227,62 @@ final class _ThreadManagementScreenState
             thread: thread,
           ),
         ),
-      ),
-    );
+      );
+      return;
+    }
+    if (_openingThread) {
+      return;
+    }
+    _openingThread = true;
+    try {
+      final root = await ref
+          .read(chatRepositoryProvider)
+          .getMessage(
+            accountId: widget.account.id,
+            roomToken: thread.roomToken,
+            messageId: thread.threadId,
+          );
+      final threadContext = root == null
+          ? null
+          : ChatThreadContext.fromCachedRoot(
+              accountId: widget.account.id,
+              roomToken: thread.roomToken,
+              root: root,
+            );
+      if (threadContext == null || threadContext.isNamed || !mounted) {
+        _showOpenUnavailable();
+        return;
+      }
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/chat/thread'),
+          builder: (context) => ChatThreadScreen(
+            account: widget.account,
+            conversation: conversation,
+            threadContext: threadContext,
+          ),
+        ),
+      );
+    } finally {
+      _openingThread = false;
+    }
+  }
+
+  void _showOpenUnavailable() {
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const Key('thread-management-open-unavailable'),
+          content: Text(
+            AppLocalizations.of(context).threadManagementOpenUnavailable,
+          ),
+        ),
+      );
   }
 }
 
