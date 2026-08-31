@@ -62,6 +62,178 @@ void _registerLocationComposerTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('permanent location denial opens app settings once', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    await _showLocationError(
+      tester,
+      harness,
+      overrides: _locationErrorOverrides(
+        error: CurrentLocationError.permissionDeniedForever,
+        opener: opener,
+      ),
+    );
+
+    expect(find.byType(SnackBarAction), findsOneWidget);
+    expect(find.text('Open settings'), findsOneWidget);
+    await tester.tap(find.text('Open settings'));
+    await _pumpUntil(tester, () => opener.calls == 1);
+
+    expect(opener.calls, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('ordinary location denial has no settings action', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    await _showLocationError(
+      tester,
+      harness,
+      overrides: _locationErrorOverrides(
+        error: CurrentLocationError.permissionDenied,
+        opener: opener,
+      ),
+    );
+
+    expect(find.byType(SnackBarAction), findsNothing);
+    expect(find.text('Open settings'), findsNothing);
+    expect(opener.calls, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('failed app settings launch is reported', (tester) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final opener = _FakeLocationAppSettingsOpener(() async => false);
+    await _showLocationError(
+      tester,
+      harness,
+      overrides: _locationErrorOverrides(
+        error: CurrentLocationError.permissionDeniedForever,
+        opener: opener,
+      ),
+    );
+
+    await tester.tap(find.text('Open settings'));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text('The system settings could not be opened.')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(opener.calls, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('app settings launch exception is reported', (tester) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final opener = _FakeLocationAppSettingsOpener(
+      () async => throw StateError('fixture failure'),
+    );
+    await _showLocationError(
+      tester,
+      harness,
+      overrides: _locationErrorOverrides(
+        error: CurrentLocationError.permissionDeniedForever,
+        opener: opener,
+      ),
+    );
+
+    await tester.tap(find.text('Open settings'));
+    await _pumpUntil(
+      tester,
+      () => find
+          .text('The system settings could not be opened.')
+          .evaluate()
+          .isNotEmpty,
+    );
+
+    expect(opener.calls, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('room change prevents a stale settings action', (tester) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final opener = _FakeLocationAppSettingsOpener(() async => true);
+    final overrides = _locationErrorOverrides(
+      error: CurrentLocationError.permissionDeniedForever,
+      opener: opener,
+    );
+    await _showLocationError(tester, harness, overrides: overrides);
+    final action = tester.widget<SnackBarAction>(find.byType(SnackBarAction));
+
+    await tester.pumpWidget(
+      harness.app(
+        conversation: harness.conversation.copyWith(token: 'roomb456'),
+        wrapInScaffold: true,
+        overrides: overrides,
+      ),
+    );
+    await tester.pump();
+    action.onPressed();
+    await tester.pump();
+
+    expect(opener.calls, 0);
+    expect(find.text('The system settings could not be opened.'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('room change suppresses a stale settings failure', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    addTearDown(harness.close);
+    final completion = Completer<bool>();
+    final opener = _FakeLocationAppSettingsOpener(() => completion.future);
+    final overrides = _locationErrorOverrides(
+      error: CurrentLocationError.permissionDeniedForever,
+      opener: opener,
+    );
+    await _showLocationError(tester, harness, overrides: overrides);
+    await tester.tap(find.text('Open settings'));
+    await _pumpUntil(tester, () => opener.calls == 1);
+
+    await tester.pumpWidget(
+      harness.app(
+        conversation: harness.conversation.copyWith(token: 'roomb456'),
+        wrapInScaffold: true,
+        overrides: overrides,
+      ),
+    );
+    await tester.pump();
+    completion.complete(false);
+    await tester.runAsync(() async {
+      await completion.future;
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+
+    expect(opener.calls, 1);
+    expect(find.text('The system settings could not be opened.'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('ambiguous location write warns against blind retry', (
     tester,
   ) async {
@@ -134,6 +306,27 @@ Future<void> _openLocationConfirmation(WidgetTester tester) async {
   );
 }
 
+Future<void> _showLocationError(
+  WidgetTester tester,
+  _ComposerHarness harness, {
+  required List<Override> overrides,
+}) async {
+  await tester.pumpWidget(
+    harness.app(wrapInScaffold: true, overrides: overrides),
+  );
+  await _openLocationAction(tester);
+  await _pumpUntil(tester, () => find.byType(SnackBar).evaluate().isNotEmpty);
+  await _pumpTransition(tester);
+}
+
+List<Override> _locationErrorOverrides({
+  required CurrentLocationError error,
+  required _FakeLocationAppSettingsOpener opener,
+}) => <Override>[
+  currentLocationSourceProvider.overrideWithValue(_LocationErrorSource(error)),
+  locationAppSettingsOpenerProvider.overrideWithValue(opener),
+];
+
 Future<void> _openLocationAction(WidgetTester tester) async {
   await _pumpUntil(
     tester,
@@ -162,6 +355,31 @@ final class _FailingLocationSource implements CurrentLocationSource {
   @override
   Future<SharedPosition> current() async {
     throw StateError('fixture failure');
+  }
+}
+
+final class _LocationErrorSource implements CurrentLocationSource {
+  const _LocationErrorSource(this.error);
+
+  final CurrentLocationError error;
+
+  @override
+  Future<SharedPosition> current() async {
+    throw CurrentLocationException(error);
+  }
+}
+
+final class _FakeLocationAppSettingsOpener
+    implements LocationAppSettingsOpener {
+  _FakeLocationAppSettingsOpener(this._open);
+
+  final Future<bool> Function() _open;
+  int calls = 0;
+
+  @override
+  Future<bool> open() {
+    calls++;
+    return _open();
   }
 }
 

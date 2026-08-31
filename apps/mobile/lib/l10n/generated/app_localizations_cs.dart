@@ -531,6 +531,13 @@ class AppLocalizationsCs extends AppLocalizations {
       'Přístup k poloze je vypnutý v nastavení systému.';
 
   @override
+  String get openAppSettings => 'Otevřít nastavení';
+
+  @override
+  String get openAppSettingsFailed =>
+      'Nastavení systému se nepodařilo otevřít.';
+
+  @override
   String get locationServicesDisabled =>
       'Zapněte služby určování polohy a zkuste to znovu.';
 

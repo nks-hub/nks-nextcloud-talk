@@ -529,6 +529,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Location access is disabled in system settings.';
 
   @override
+  String get openAppSettings => 'Open settings';
+
+  @override
+  String get openAppSettingsFailed =>
+      'The system settings could not be opened.';
+
+  @override
   String get locationServicesDisabled =>
       'Turn on location services and try again.';
 

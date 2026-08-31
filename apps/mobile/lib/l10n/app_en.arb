@@ -162,6 +162,8 @@
   "@locationCoordinates": {"placeholders": {"latitude": {"type": "String"}, "longitude": {"type": "String"}}},
   "locationPermissionDenied": "Location access was denied.",
   "locationPermissionDeniedForever": "Location access is disabled in system settings.",
+  "openAppSettings": "Open settings",
+  "openAppSettingsFailed": "The system settings could not be opened.",
   "locationServicesDisabled": "Turn on location services and try again.",
   "locationUnavailable": "The current location could not be determined.",
   "locationShareFailed": "The location could not be shared.",

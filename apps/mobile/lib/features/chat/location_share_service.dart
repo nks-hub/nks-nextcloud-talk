@@ -93,6 +93,18 @@ abstract interface class CurrentLocationSource {
   Future<SharedPosition> current();
 }
 
+abstract interface class LocationAppSettingsOpener {
+  Future<bool> open();
+}
+
+final class GeolocatorLocationAppSettingsOpener
+    implements LocationAppSettingsOpener {
+  const GeolocatorLocationAppSettingsOpener();
+
+  @override
+  Future<bool> open() => Geolocator.openAppSettings();
+}
+
 final class GeolocatorCurrentLocationSource implements CurrentLocationSource {
   factory GeolocatorCurrentLocationSource({
     LocationPlatform platform = const GeolocatorLocationPlatform(),

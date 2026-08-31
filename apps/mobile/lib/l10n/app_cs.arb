@@ -162,6 +162,8 @@
   "@locationCoordinates": {"placeholders": {"latitude": {"type": "String"}, "longitude": {"type": "String"}}},
   "locationPermissionDenied": "Přístup k poloze byl zamítnut.",
   "locationPermissionDeniedForever": "Přístup k poloze je vypnutý v nastavení systému.",
+  "openAppSettings": "Otevřít nastavení",
+  "openAppSettingsFailed": "Nastavení systému se nepodařilo otevřít.",
   "locationServicesDisabled": "Zapněte služby určování polohy a zkuste to znovu.",
   "locationUnavailable": "Aktuální polohu se nepodařilo zjistit.",
   "locationShareFailed": "Polohu se nepodařilo sdílet.",

@@ -1022,6 +1022,18 @@ abstract class AppLocalizations {
   /// **'Location access is disabled in system settings.'**
   String get locationPermissionDeniedForever;
 
+  /// No description provided for @openAppSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get openAppSettings;
+
+  /// No description provided for @openAppSettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The system settings could not be opened.'**
+  String get openAppSettingsFailed;
+
   /// No description provided for @locationServicesDisabled.
   ///
   /// In en, this message translates to:

@@ -69,7 +69,17 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
             strings.locationPermissionDeniedForever,
           CurrentLocationError.unavailable => strings.locationUnavailable,
         };
-        _showLocationSnackBar(message);
+        _showLocationSnackBar(
+          message,
+          action: error.code == CurrentLocationError.permissionDeniedForever
+              ? SnackBarAction(
+                  label: strings.openAppSettings,
+                  onPressed: () => unawaited(
+                    _openLocationAppSettings(targetKey, generation),
+                  ),
+                )
+              : null,
+        );
       }
     } on LocationShareException catch (error) {
       if (_isCurrentSendScope(targetKey, generation)) {
@@ -90,13 +100,33 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
   }
 
-  void _showLocationSnackBar(String message) {
+  Future<void> _openLocationAppSettings(
+    ChatRoomProviderKey targetKey,
+    int generation,
+  ) async {
+    if (!_isCurrentSendScope(targetKey, generation)) {
+      return;
+    }
+    final failureMessage = AppLocalizations.of(context).openAppSettingsFailed;
+    try {
+      final opened = await ref.read(locationAppSettingsOpenerProvider).open();
+      if (!opened && _isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(failureMessage);
+      }
+    } on Object {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(failureMessage);
+      }
+    }
+  }
+
+  void _showLocationSnackBar(String message, {SnackBarAction? action}) {
     if (Scaffold.maybeOf(context) == null) {
       return;
     }
     ScaffoldMessenger.maybeOf(
       context,
-    )?.showSnackBar(SnackBar(content: Text(message)));
+    )?.showSnackBar(SnackBar(content: Text(message), action: action));
   }
 
   Future<void> _openSendOptions({

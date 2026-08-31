@@ -361,6 +361,12 @@ final currentLocationSourceProvider = Provider<CurrentLocationSource>((ref) {
   return GeolocatorCurrentLocationSource();
 });
 
+final locationAppSettingsOpenerProvider = Provider<LocationAppSettingsOpener>((
+  ref,
+) {
+  return const GeolocatorLocationAppSettingsOpener();
+});
+
 final locationShareServiceProvider = Provider<LocationShareSender>((ref) {
   return LocationShareService(
     accounts: ref.watch(accountRepositoryProvider),
