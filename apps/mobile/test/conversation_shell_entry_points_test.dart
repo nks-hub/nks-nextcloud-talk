@@ -185,10 +185,7 @@ void main() {
         // place of the list instead of pushing a route, so a selected
         // conversation survives a resize in either direction.
         expect(find.byType(PresenceChatRoomScreen), findsNothing);
-        expect(
-          find.byType(PresenceChatRoomPane),
-          findsOneWidget,
-        );
+        expect(find.byType(PresenceChatRoomPane), findsOneWidget);
         expect(
           find.byKey(const Key('conversation-presence-text-roomlive')),
           findsOneWidget,
@@ -496,6 +493,9 @@ void main() {
               (ref) => Stream.value(const <StoredAccount>[]),
             ),
             selectedAccountProvider.overrideWith((ref) => Stream.value(null)),
+            selectedAccountThemeColorProvider.overrideWith(
+              (ref) => Stream.value(null),
+            ),
           ],
           child: const NextcloudTalkApp(),
         ),

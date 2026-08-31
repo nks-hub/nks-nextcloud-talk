@@ -453,6 +453,7 @@ Future<void> _seedAccount(
     serverUrl: serverUrl,
     loginName: 'user-$accountId',
     serverProductName: 'Nextcloud',
+    serverThemeColor: '#00679e',
     createdAt: DateTime.utc(2026, 1, accountId == 'account-a' ? 1 : 2),
   );
   vault.values[accountId] = 'fixture-app-password-never-use';
