@@ -69,7 +69,7 @@ class CompleteContractTest(unittest.TestCase):
                 "operations": 21,
                 "responses": 23,
                 "requests": 28,
-                "capabilities": 8,
+                "capabilities": 12,
                 "render": 9,
                 "state": 7,
                 "stateSteps": 8,
@@ -145,6 +145,54 @@ class CapabilityPolicyTest(unittest.TestCase):
         self.assertFalse(global_only["scheduled"])
         self.assertFalse(federated["scheduled"])
         self.assertTrue(local["scheduled"])
+
+    def test_moderation_and_private_reply_match_runtime_profile(self) -> None:
+        features = [
+            "chat-v2",
+            "chat-reference-id",
+            "chat-replies",
+            "private-reply",
+            "delete-messages",
+        ]
+        moderator = rich_contract.resolve_capabilities(
+            features,
+            [],
+            False,
+            True,
+            256,
+        )
+        participant = rich_contract.resolve_capabilities(
+            features,
+            [],
+            False,
+            False,
+            256,
+        )
+        federated = rich_contract.resolve_capabilities(
+            features,
+            [],
+            True,
+            True,
+            256,
+        )
+
+        self.assertTrue(moderator["deleteAny"])
+        self.assertTrue(moderator["privateReply"])
+        self.assertFalse(participant["deleteAny"])
+        self.assertTrue(participant["privateReply"])
+        self.assertTrue(federated["deleteAny"])
+        self.assertFalse(federated["privateReply"])
+
+        for prerequisite in ("chat-reference-id", "chat-replies"):
+            with self.subTest(missing=prerequisite):
+                missing_prerequisite = rich_contract.resolve_capabilities(
+                    [feature for feature in features if feature != prerequisite],
+                    [],
+                    False,
+                    True,
+                    256,
+                )
+                self.assertFalse(missing_prerequisite["privateReply"])
 
 
 class RequestPrivacyTest(unittest.TestCase):

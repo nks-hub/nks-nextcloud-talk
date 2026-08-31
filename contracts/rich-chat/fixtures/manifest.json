@@ -8,7 +8,7 @@
   "expectedCounts": {
     "responses": 23,
     "requests": 28,
-    "capabilities": 8,
+    "capabilities": 12,
     "render": 9,
     "state": 7
   }

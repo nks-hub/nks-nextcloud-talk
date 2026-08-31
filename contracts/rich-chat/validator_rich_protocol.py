@@ -539,6 +539,11 @@ def resolve_capabilities(
         minimum=0,
     )
     base = "chat-v2" in global_features
+    reply = (
+        base
+        and "chat-reference-id" in global_features
+        and "chat-replies" in global_features
+    )
     threads = base and "threads" in global_features
     reactions = base and "reactions" in global_features
     reaction_permission = (
@@ -553,11 +558,17 @@ def resolve_capabilities(
         "canReact": reactions and reaction_permission,
         "edit": base and "edit-messages" in global_features,
         "delete": base and "delete-messages" in global_features,
+        "deleteAny": (
+            base and "delete-messages" in global_features and is_moderator
+        ),
         "pin": pinned and is_moderator,
         "hidePinned": pinned,
         "reminders": base and "remind-me-later" in global_features,
         "scheduled": (
             base and "scheduled-messages" in local_features and not is_federated
+        ),
+        "privateReply": (
+            reply and "private-reply" in global_features and not is_federated
         ),
     }
 
