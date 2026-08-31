@@ -84,5 +84,6 @@ scope.
   chip 7,25:1 a outline 3,28:1; dark primary 15,39:1, secondary 11,74:1,
   chip 7,25:1 a outline 3,54:1.
 
-Zbývá živá stránka delší než 28 položek, lobby 412, federovaná místnost a
-fyzické Android/iOS zařízení. Lokální release APK nebyl vydán testerům.
+Zbývá živá stránka delší než 28 položek, lobby 412, federovaná místnost, iOS
+simulátor na aktuálním SHA a fyzické Android/iOS zařízení. Lokální release APK
+nebyl vydán testerům.
