@@ -629,93 +629,49 @@
   "settingsRemoveAccountDone": "The account was removed.",
   "settingsRemoveAccountDoneNotRevoked": "The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.",
   "roomDetailsGuestsLabel": "Guests",
-  "@roomDetailsGuestsLabel": {
-    "description": "Switch that turns a group conversation into a public one anyone with the link can join."
-  },
+  "@roomDetailsGuestsLabel": {"description": "Switch that turns a group conversation into a public one anyone with the link can join."},
   "roomDetailsGuestsAllowed": "Anyone with the link can join",
-  "@roomDetailsGuestsAllowed": {
-    "description": "Subtitle of the guest switch while the conversation is public."
-  },
+  "@roomDetailsGuestsAllowed": {"description": "Subtitle of the guest switch while the conversation is public."},
   "roomDetailsGuestsBlocked": "Invited people only",
-  "@roomDetailsGuestsBlocked": {
-    "description": "Subtitle of the guest switch while the conversation is private."
-  },
+  "@roomDetailsGuestsBlocked": {"description": "Subtitle of the guest switch while the conversation is private."},
   "roomDetailsGuestsCloseDialogTitle": "Stop allowing guests?",
-  "@roomDetailsGuestsCloseDialogTitle": {
-    "description": "Title of the dialog confirming that a public conversation becomes private."
-  },
+  "@roomDetailsGuestsCloseDialogTitle": {"description": "Title of the dialog confirming that a public conversation becomes private."},
   "roomDetailsGuestsCloseDialogMessage": "The link stops working and any guest who joined through it loses access. Invited participants are not affected.",
-  "@roomDetailsGuestsCloseDialogMessage": {
-    "description": "Body of the dialog confirming that a public conversation becomes private."
-  },
+  "@roomDetailsGuestsCloseDialogMessage": {"description": "Body of the dialog confirming that a public conversation becomes private."},
   "roomDetailsGuestsCloseDialogConfirm": "Make private",
-  "@roomDetailsGuestsCloseDialogConfirm": {
-    "description": "Confirm button that turns a public conversation private."
-  },
+  "@roomDetailsGuestsCloseDialogConfirm": {"description": "Confirm button that turns a public conversation private."},
   "roomDetailsInviteLinkAction": "Share the guest link",
-  "@roomDetailsInviteLinkAction": {
-    "description": "Action that opens the system share sheet with the conversation's guest link."
-  },
+  "@roomDetailsInviteLinkAction": {"description": "Action that opens the system share sheet with the conversation's guest link."},
   "roomDetailsInviteLinkSubtitle": "Anyone with this link can join as a guest",
-  "@roomDetailsInviteLinkSubtitle": {
-    "description": "Subtitle explaining what the shared guest link grants."
-  },
+  "@roomDetailsInviteLinkSubtitle": {"description": "Subtitle explaining what the shared guest link grants."},
   "roomDetailsInviteLinkShareSubject": "Join the conversation",
-  "@roomDetailsInviteLinkShareSubject": {
-    "description": "Subject line offered to the system share sheet for a guest link."
-  },
+  "@roomDetailsInviteLinkShareSubject": {"description": "Subject line offered to the system share sheet for a guest link."},
   "roomDetailsPasswordLabel": "Password",
-  "@roomDetailsPasswordLabel": {
-    "description": "Label of the conversation password action."
-  },
+  "@roomDetailsPasswordLabel": {"description": "Label of the conversation password action."},
   "roomDetailsPasswordSet": "Guests need a password",
-  "@roomDetailsPasswordSet": {
-    "description": "Subtitle shown while the public conversation is password protected."
-  },
+  "@roomDetailsPasswordSet": {"description": "Subtitle shown while the public conversation is password protected."},
   "roomDetailsPasswordUnset": "No password",
-  "@roomDetailsPasswordUnset": {
-    "description": "Subtitle shown while the public conversation has no password."
-  },
+  "@roomDetailsPasswordUnset": {"description": "Subtitle shown while the public conversation has no password."},
   "roomDetailsPasswordDialogTitle": "Password for guests",
-  "@roomDetailsPasswordDialogTitle": {
-    "description": "Title of the dialog that sets the conversation password."
-  },
+  "@roomDetailsPasswordDialogTitle": {"description": "Title of the dialog that sets the conversation password."},
   "roomDetailsPasswordFieldLabel": "New password",
-  "@roomDetailsPasswordFieldLabel": {
-    "description": "Label of the password text field."
-  },
+  "@roomDetailsPasswordFieldLabel": {"description": "Label of the password text field."},
   "roomDetailsPasswordRemoveAction": "Remove the password",
-  "@roomDetailsPasswordRemoveAction": {
-    "description": "Action that clears the conversation password."
-  },
+  "@roomDetailsPasswordRemoveAction": {"description": "Action that clears the conversation password."},
   "roomDetailsPasswordRemoveDialogTitle": "Remove the password?",
-  "@roomDetailsPasswordRemoveDialogTitle": {
-    "description": "Title of the dialog confirming that the conversation password is removed."
-  },
+  "@roomDetailsPasswordRemoveDialogTitle": {"description": "Title of the dialog confirming that the conversation password is removed."},
   "roomDetailsPasswordRemoveDialogMessage": "Anyone with the link will be able to join without a password.",
-  "@roomDetailsPasswordRemoveDialogMessage": {
-    "description": "Body of the dialog confirming that the conversation password is removed."
-  },
+  "@roomDetailsPasswordRemoveDialogMessage": {"description": "Body of the dialog confirming that the conversation password is removed."},
   "roomDetailsPasswordRemoveDialogConfirm": "Remove",
-  "@roomDetailsPasswordRemoveDialogConfirm": {
-    "description": "Confirm button that clears the conversation password."
-  },
+  "@roomDetailsPasswordRemoveDialogConfirm": {"description": "Confirm button that clears the conversation password."},
   "roomDetailsPasswordRejected": "The server refused this password.",
-  "@roomDetailsPasswordRejected": {
-    "description": "Message shown when the server rejects a password and sends no explanation."
-  },
+  "@roomDetailsPasswordRejected": {"description": "Message shown when the server rejects a password and sends no explanation."},
   "roomDetailsLobbyLabel": "Lobby",
-  "@roomDetailsLobbyLabel": {
-    "description": "Label of the lobby switch."
-  },
+  "@roomDetailsLobbyLabel": {"description": "Label of the lobby switch."},
   "roomDetailsLobbyOff": "Everyone can take part",
-  "@roomDetailsLobbyOff": {
-    "description": "Subtitle shown while the lobby is off."
-  },
+  "@roomDetailsLobbyOff": {"description": "Subtitle shown while the lobby is off."},
   "roomDetailsLobbyOn": "Only moderators can take part",
-  "@roomDetailsLobbyOn": {
-    "description": "Subtitle shown while the lobby is on without an end time."
-  },
+  "@roomDetailsLobbyOn": {"description": "Subtitle shown while the lobby is on without an end time."},
   "roomDetailsLobbyOnUntil": "Only moderators until {time}",
   "@roomDetailsLobbyOnUntil": {
     "description": "Subtitle shown while the lobby is on and lifts itself at a set time.",
@@ -726,25 +682,15 @@
     }
   },
   "roomDetailsLobbyDialogTitle": "Open the lobby",
-  "@roomDetailsLobbyDialogTitle": {
-    "description": "Title of the dialog that turns the lobby on."
-  },
+  "@roomDetailsLobbyDialogTitle": {"description": "Title of the dialog that turns the lobby on."},
   "roomDetailsLobbyDialogMessage": "While the lobby is on, only moderators can read, write and call. Pick when it should open, or leave it for a moderator to open by hand.",
-  "@roomDetailsLobbyDialogMessage": {
-    "description": "Body of the dialog that turns the lobby on."
-  },
+  "@roomDetailsLobbyDialogMessage": {"description": "Body of the dialog that turns the lobby on."},
   "roomDetailsLobbyTimerNone": "No end time",
-  "@roomDetailsLobbyTimerNone": {
-    "description": "Option that keeps the lobby on until a moderator turns it off."
-  },
+  "@roomDetailsLobbyTimerNone": {"description": "Option that keeps the lobby on until a moderator turns it off."},
   "roomDetailsLobbyTimerPick": "Pick a date and time",
-  "@roomDetailsLobbyTimerPick": {
-    "description": "Option that opens the pickers for the lobby end time."
-  },
+  "@roomDetailsLobbyTimerPick": {"description": "Option that opens the pickers for the lobby end time."},
   "roomDetailsLobbyDialogConfirm": "Turn the lobby on",
-  "@roomDetailsLobbyDialogConfirm": {
-    "description": "Confirm button that turns the lobby on."
-  },
+  "@roomDetailsLobbyDialogConfirm": {"description": "Confirm button that turns the lobby on."},
   "roomDetailsSipLabel": "Phone and SIP dial-in",
   "@roomDetailsSipLabel": {"description": "Label of the SIP dial-in room setting."},
   "roomDetailsSipDisabled": "Disabled",
@@ -764,41 +710,23 @@
   "roomDetailsSipPersonalPin": "Your PIN",
   "roomDetailsSipPinUnavailable": "The server has not provided your PIN yet.",
   "roomDetailsReadOnlyToggleLabel": "Read-only",
-  "@roomDetailsReadOnlyToggleLabel": {
-    "description": "Label of the read-only switch."
-  },
+  "@roomDetailsReadOnlyToggleLabel": {"description": "Label of the read-only switch."},
   "roomDetailsReadOnlyToggleOn": "Nobody can write or call",
-  "@roomDetailsReadOnlyToggleOn": {
-    "description": "Subtitle shown while the conversation is read-only."
-  },
+  "@roomDetailsReadOnlyToggleOn": {"description": "Subtitle shown while the conversation is read-only."},
   "roomDetailsReadOnlyToggleOff": "Everyone can write",
-  "@roomDetailsReadOnlyToggleOff": {
-    "description": "Subtitle shown while the conversation is read-write."
-  },
+  "@roomDetailsReadOnlyToggleOff": {"description": "Subtitle shown while the conversation is read-write."},
   "roomDetailsReadOnlyDialogTitle": "Lock the conversation?",
-  "@roomDetailsReadOnlyDialogTitle": {
-    "description": "Title of the dialog that turns read-only mode on."
-  },
+  "@roomDetailsReadOnlyDialogTitle": {"description": "Title of the dialog that turns read-only mode on."},
   "roomDetailsReadOnlyDialogMessage": "Nobody will be able to send messages or start a call until a moderator unlocks it again.",
-  "@roomDetailsReadOnlyDialogMessage": {
-    "description": "Body of the dialog that turns read-only mode on."
-  },
+  "@roomDetailsReadOnlyDialogMessage": {"description": "Body of the dialog that turns read-only mode on."},
   "roomDetailsReadOnlyDialogConfirm": "Lock",
-  "@roomDetailsReadOnlyDialogConfirm": {
-    "description": "Confirm button that turns read-only mode on."
-  },
+  "@roomDetailsReadOnlyDialogConfirm": {"description": "Confirm button that turns read-only mode on."},
   "roomDetailsAvatarAction": "Conversation picture",
-  "@roomDetailsAvatarAction": {
-    "description": "Action that opens the conversation avatar options."
-  },
+  "@roomDetailsAvatarAction": {"description": "Action that opens the conversation avatar options."},
   "roomDetailsAvatarDialogTitle": "Conversation picture",
-  "@roomDetailsAvatarDialogTitle": {
-    "description": "Title of the dialog that picks an emoji as the conversation picture."
-  },
+  "@roomDetailsAvatarDialogTitle": {"description": "Title of the dialog that picks an emoji as the conversation picture."},
   "roomDetailsAvatarDialogMessage": "Pick an emoji to use as the conversation picture.",
-  "@roomDetailsAvatarDialogMessage": {
-    "description": "Body of the dialog that picks an emoji as the conversation picture."
-  },
+  "@roomDetailsAvatarDialogMessage": {"description": "Body of the dialog that picks an emoji as the conversation picture."},
   "roomDetailsAvatarSetAction": "Use this emoji",
   "roomDetailsAvatarColorLabel": "Background colour",
   "roomDetailsAvatarColorDefault": "Follow bright or dark mode",
@@ -810,13 +738,9 @@
       }
     }
   },
-  "@roomDetailsAvatarSetAction": {
-    "description": "Confirm button that sets the picked emoji as the conversation picture."
-  },
+  "@roomDetailsAvatarSetAction": {"description": "Confirm button that sets the picked emoji as the conversation picture."},
   "roomDetailsAvatarRemoveAction": "Remove the picture",
-  "@roomDetailsAvatarRemoveAction": {
-    "description": "Action that removes a custom conversation picture."
-  },
+  "@roomDetailsAvatarRemoveAction": {"description": "Action that removes a custom conversation picture."},
   "roomDetailsAvatarEmojiSemantics": "Emoji {emoji}",
   "@roomDetailsAvatarEmojiSemantics": {
     "description": "Accessibility label of one selectable emoji.",
@@ -827,13 +751,9 @@
     }
   },
   "roomDetailsBanParticipant": "Ban from the conversation",
-  "@roomDetailsBanParticipant": {
-    "description": "Moderation action that bans one attendee."
-  },
+  "@roomDetailsBanParticipant": {"description": "Moderation action that bans one attendee."},
   "roomDetailsBanDialogTitle": "Ban this participant?",
-  "@roomDetailsBanDialogTitle": {
-    "description": "Title of the dialog confirming a ban."
-  },
+  "@roomDetailsBanDialogTitle": {"description": "Title of the dialog confirming a ban."},
   "roomDetailsBanDialogMessage": "{name} is removed from the conversation and cannot rejoin until the ban is lifted.",
   "@roomDetailsBanDialogMessage": {
     "description": "Body of the dialog confirming a ban.",
@@ -844,69 +764,37 @@
     }
   },
   "roomDetailsBanNoteLabel": "Reason (only moderators see it)",
-  "@roomDetailsBanNoteLabel": {
-    "description": "Label of the optional internal ban note field."
-  },
+  "@roomDetailsBanNoteLabel": {"description": "Label of the optional internal ban note field."},
   "roomDetailsBanDialogConfirm": "Ban",
-  "@roomDetailsBanDialogConfirm": {
-    "description": "Confirm button that bans an attendee."
-  },
+  "@roomDetailsBanDialogConfirm": {"description": "Confirm button that bans an attendee."},
   "roomDetailsBansAction": "Banned participants",
-  "@roomDetailsBansAction": {
-    "description": "Action that opens the list of bans on the conversation."
-  },
+  "@roomDetailsBansAction": {"description": "Action that opens the list of bans on the conversation."},
   "roomDetailsBansDialogTitle": "Banned participants",
-  "@roomDetailsBansDialogTitle": {
-    "description": "Title of the dialog listing the bans on the conversation."
-  },
+  "@roomDetailsBansDialogTitle": {"description": "Title of the dialog listing the bans on the conversation."},
   "roomDetailsBansEmpty": "Nobody is banned.",
-  "@roomDetailsBansEmpty": {
-    "description": "Message shown when the conversation has no bans."
-  },
+  "@roomDetailsBansEmpty": {"description": "Message shown when the conversation has no bans."},
   "roomDetailsBansLoadError": "Bans could not be loaded.",
-  "@roomDetailsBansLoadError": {
-    "description": "Message shown when the ban list fails to load."
-  },
+  "@roomDetailsBansLoadError": {"description": "Message shown when the ban list fails to load."},
   "roomDetailsUnbanAction": "Lift the ban",
-  "@roomDetailsUnbanAction": {
-    "description": "Action that lifts one ban."
-  },
+  "@roomDetailsUnbanAction": {"description": "Action that lifts one ban."},
   "roomDetailsBanRejected": "The server refused this ban.",
-  "@roomDetailsBanRejected": {
-    "description": "Message shown when the server refuses a ban."
-  },
+  "@roomDetailsBanRejected": {"description": "Message shown when the server refuses a ban."},
   "roomDetailsClearHistoryAction": "Clear conversation history",
-  "@roomDetailsClearHistoryAction": {
-    "description": "Destructive moderator action that clears the conversation history for everyone."
-  },
+  "@roomDetailsClearHistoryAction": {"description": "Destructive moderator action that clears the conversation history for everyone."},
   "roomDetailsClearHistoryDialogTitle": "Clear conversation history?",
-  "@roomDetailsClearHistoryDialogTitle": {
-    "description": "Title of the dialog confirming conversation history clearing."
-  },
+  "@roomDetailsClearHistoryDialogTitle": {"description": "Title of the dialog confirming conversation history clearing."},
   "roomDetailsClearHistoryDialogMessage": "This permanently deletes messages and threads for everyone in this conversation. This cannot be undone.",
-  "@roomDetailsClearHistoryDialogMessage": {
-    "description": "Warning shown before conversation history is cleared."
-  },
+  "@roomDetailsClearHistoryDialogMessage": {"description": "Warning shown before conversation history is cleared."},
   "roomDetailsClearHistoryConfirm": "Clear history",
-  "@roomDetailsClearHistoryConfirm": {
-    "description": "Button that confirms conversation history clearing."
-  },
+  "@roomDetailsClearHistoryConfirm": {"description": "Button that confirms conversation history clearing."},
   "roomDetailsClearHistorySucceeded": "Conversation history was cleared.",
-  "@roomDetailsClearHistorySucceeded": {
-    "description": "Confirmation shown after conversation history was cleared and refreshed."
-  },
+  "@roomDetailsClearHistorySucceeded": {"description": "Confirmation shown after conversation history was cleared and refreshed."},
   "roomDetailsClearHistoryExternalCopiesWarning": "Conversation history was cleared here. External services may still retain copies.",
-  "@roomDetailsClearHistoryExternalCopiesWarning": {
-    "description": "Warning shown after a 202 clear-history success."
-  },
+  "@roomDetailsClearHistoryExternalCopiesWarning": {"description": "Warning shown after a 202 clear-history success."},
   "roomDetailsClearHistoryRefreshFailed": "Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.",
-  "@roomDetailsClearHistoryRefreshFailed": {
-    "description": "Success message shown when the destructive request succeeded but its follow-up refresh failed."
-  },
+  "@roomDetailsClearHistoryRefreshFailed": {"description": "Success message shown when the destructive request succeeded but its follow-up refresh failed."},
   "roomDetailsConversationTagsAction": "Conversation tags",
-  "@roomDetailsConversationTagsAction": {
-    "description": "Action that manages this participant's tags for a conversation."
-  },
+  "@roomDetailsConversationTagsAction": {"description": "Action that manages this participant's tags for a conversation."},
   "roomDetailsConversationTagsSelectedCount": "Selected: {count}",
   "@roomDetailsConversationTagsSelectedCount": {
     "description": "Number of tags currently assigned to the conversation.",
@@ -917,45 +805,25 @@
     }
   },
   "roomDetailsConversationTagsDialogTitle": "Conversation tags",
-  "@roomDetailsConversationTagsDialogTitle": {
-    "description": "Title of the conversation tag assignment dialog."
-  },
+  "@roomDetailsConversationTagsDialogTitle": {"description": "Title of the conversation tag assignment dialog."},
   "roomDetailsConversationTagsDialogHint": "Choose the tags used to organize this conversation for your account.",
-  "@roomDetailsConversationTagsDialogHint": {
-    "description": "Explanation of the per-account tag assignment."
-  },
+  "@roomDetailsConversationTagsDialogHint": {"description": "Explanation of the per-account tag assignment."},
   "roomDetailsConversationTagsEmpty": "Create a custom tag in Nextcloud Talk before assigning it here.",
-  "@roomDetailsConversationTagsEmpty": {
-    "description": "Empty state when the user owns no custom conversation tags."
-  },
+  "@roomDetailsConversationTagsEmpty": {"description": "Empty state when the user owns no custom conversation tags."},
   "roomDetailsConversationTagsSave": "Save tags",
-  "@roomDetailsConversationTagsSave": {
-    "description": "Button that replaces the conversation's complete tag assignment."
-  },
+  "@roomDetailsConversationTagsSave": {"description": "Button that replaces the conversation's complete tag assignment."},
   "roomDetailsConversationTagsSaved": "Conversation tags updated.",
-  "@roomDetailsConversationTagsSaved": {
-    "description": "Confirmation after the server returned the updated conversation."
-  },
+  "@roomDetailsConversationTagsSaved": {"description": "Confirmation after the server returned the updated conversation."},
   "roomDetailsConversationTagsUnsupported": "This server no longer supports conversation tags.",
-  "@roomDetailsConversationTagsUnsupported": {
-    "description": "Message shown when a fresh capability read no longer admits tags."
-  },
+  "@roomDetailsConversationTagsUnsupported": {"description": "Message shown when a fresh capability read no longer admits tags."},
   "roomDetailsAvatarPickImage": "Choose a picture",
-  "@roomDetailsAvatarPickImage": {
-    "description": "Button that opens the gallery to pick a conversation picture."
-  },
+  "@roomDetailsAvatarPickImage": {"description": "Button that opens the gallery to pick a conversation picture."},
   "roomDetailsAvatarTypeRejected": "Only a square PNG or JPEG works as a conversation picture.",
-  "@roomDetailsAvatarTypeRejected": {
-    "description": "Message shown when the picked file is not a type the server accepts."
-  },
+  "@roomDetailsAvatarTypeRejected": {"description": "Message shown when the picked file is not a type the server accepts."},
   "roomDetailsAvatarTooLarge": "That picture is too large.",
-  "@roomDetailsAvatarTooLarge": {
-    "description": "Message shown when the picked picture exceeds the upload limit."
-  },
+  "@roomDetailsAvatarTooLarge": {"description": "Message shown when the picked picture exceeds the upload limit."},
   "roomDetailsAvatarRejected": "The server would not take this picture.",
-  "@roomDetailsAvatarRejected": {
-    "description": "Message shown when the server refuses an avatar upload without an explanation."
-  },
+  "@roomDetailsAvatarRejected": {"description": "Message shown when the server refuses an avatar upload without an explanation."},
   "messageActionPin": "Pin message",
   "messageActionUnpin": "Unpin message",
   "messagePinned": "Message pinned",
@@ -1004,6 +872,23 @@
   "scheduledMessageDelete": "Delete scheduled message",
   "scheduledMessageDeleted": "Scheduled message deleted",
   "scheduleTimeInPast": "Pick a time in the future.",
+  "roomDetailsSharedItemsAction": "Shared items",
+  "sharedItemsTitle": "Shared items",
+  "sharedItemsEmpty": "Nothing has been shared in this category yet.",
+  "sharedItemsLoadMore": "Load more",
+  "sharedItemsCategoryAudio": "Audio",
+  "sharedItemsCategoryDeckCards": "Deck cards",
+  "sharedItemsCategoryFiles": "Files",
+  "sharedItemsCategoryLocations": "Locations",
+  "sharedItemsCategoryMedia": "Media",
+  "sharedItemsCategoryOther": "Other",
+  "sharedItemsCategoryPinned": "Pinned",
+  "sharedItemsCategoryPolls": "Polls",
+  "sharedItemsCategoryRecordings": "Recordings",
+  "sharedItemsCategoryVoice": "Voice messages",
+  "sharedItemsUnsupported": "Shared items are not available for this conversation.",
+  "sharedItemsLobbyRestricted": "Shared items are hidden while you are waiting in the lobby.",
+  "sharedItemsInvalidResponse": "The server returned an invalid shared-items response.",
   "typingOne": "{name} is typing…",
   "@typingOne": {
     "description": "Typing indicator for one participant.",

@@ -23,6 +23,7 @@ export 'src/chat/private_reply.dart';
 export 'src/chat/profile.dart';
 export 'src/chat/request.dart';
 export 'src/chat/response.dart';
+export 'src/chat/shared_items.dart';
 export 'src/chat/state.dart';
 export 'src/client_push/models.dart';
 export 'src/conversation_tags/models.dart';

@@ -14,6 +14,26 @@ enum ChatFetchDirection { history, future }
 
 enum ChatHttpMethod { get, post, delete }
 
+enum SharedItemType {
+  audio('audio'),
+  deckCard('deckcard'),
+  file('file'),
+  location('location'),
+  media('media'),
+  other('other'),
+  pinned('pinned'),
+  poll('poll'),
+  recording('recording'),
+  voice('voice');
+
+  const SharedItemType(this.wireName);
+
+  final String wireName;
+
+  static SharedItemType? fromWireName(String value) =>
+      values.where((candidate) => candidate.wireName == value).firstOrNull;
+}
+
 sealed class ChatRequest {
   ChatRequest({
     required this.accountId,
@@ -141,6 +161,94 @@ final class ChatFetchRequest extends ChatRequest {
       'ChatFetchRequest(direction: ${direction.name}, limit: $limit, '
       'timeoutSeconds: $timeoutSeconds, interactive: $interactive, '
       'threadScoped: ${threadId != null})';
+}
+
+final class SharedItemsOverviewRequest extends ChatRequest {
+  SharedItemsOverviewRequest({
+    required super.accountId,
+    required super.requestId,
+    required super.server,
+    required super.roomToken,
+    required bool sharedItemsAvailable,
+    required this.limit,
+    super.userAgent,
+  }) {
+    if (!sharedItemsAvailable) {
+      _sharedItemsRequestFailure(r'$.capabilities.rich-object-list-media');
+    }
+    if (limit < 1 || limit > 20) {
+      _sharedItemsRequestFailure(r'$.query.limit');
+    }
+  }
+
+  final int limit;
+
+  @override
+  Object? get formBody => null;
+
+  @override
+  ChatHttpMethod get method => ChatHttpMethod.get;
+
+  @override
+  Map<String, String> get queryParameters =>
+      UnmodifiableMapView({'format': 'json', 'limit': limit.toString()});
+
+  @override
+  String get requestPath => '$chatV1Path/${roomToken.value}/share/overview';
+
+  @override
+  String toString() => 'SharedItemsOverviewRequest(limit: $limit)';
+}
+
+final class SharedItemsPageRequest extends ChatRequest {
+  SharedItemsPageRequest({
+    required super.accountId,
+    required super.requestId,
+    required super.server,
+    required super.roomToken,
+    required bool sharedItemsAvailable,
+    required this.type,
+    required this.lastKnownMessageId,
+    required this.limit,
+    super.userAgent,
+  }) {
+    if (!sharedItemsAvailable) {
+      _sharedItemsRequestFailure(r'$.capabilities.rich-object-list-media');
+    }
+    if (!RegExp(
+      r'^(0|[1-9][0-9]{0,19})$',
+    ).hasMatch(lastKnownMessageId.toString())) {
+      _sharedItemsRequestFailure(r'$.query.lastKnownMessageId');
+    }
+    if (limit < 1 || limit > 200) {
+      _sharedItemsRequestFailure(r'$.query.limit');
+    }
+  }
+
+  final SharedItemType type;
+  final int lastKnownMessageId;
+  final int limit;
+
+  @override
+  Object? get formBody => null;
+
+  @override
+  ChatHttpMethod get method => ChatHttpMethod.get;
+
+  @override
+  Map<String, String> get queryParameters => UnmodifiableMapView({
+    'format': 'json',
+    'objectType': type.wireName,
+    'lastKnownMessageId': lastKnownMessageId.toString(),
+    'limit': limit.toString(),
+  });
+
+  @override
+  String get requestPath => '$chatV1Path/${roomToken.value}/share';
+
+  @override
+  String toString() =>
+      'SharedItemsPageRequest(type: ${type.name}, limit: $limit)';
 }
 
 final class ChatMarkUnreadRequest extends ChatRequest {
@@ -377,3 +485,6 @@ final class ChatSetReadMarkerRequest extends ChatRequest {
 
 Never _requestFailure(String path) =>
     protocolFailure(TalkProtocolErrorCode.invalidChatRequest, path);
+
+Never _sharedItemsRequestFailure(String path) =>
+    protocolFailure(TalkProtocolErrorCode.invalidSharedItemsRequest, path);

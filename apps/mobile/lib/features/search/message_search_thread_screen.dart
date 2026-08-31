@@ -26,19 +26,46 @@ final class MessageSearchThreadException implements Exception {
   String toString() => 'MessageSearchThreadException(${code.name})';
 }
 
-/// Resolves the canonical root needed to open a search hit inside a thread.
+final class MessageDestinationTarget {
+  const MessageDestinationTarget({
+    required this.roomToken,
+    required this.messageId,
+    required this.threadId,
+  });
+
+  factory MessageDestinationTarget.fromSearchResult(
+    MessageSearchResult result,
+  ) => MessageDestinationTarget(
+    roomToken: result.roomToken,
+    messageId: result.messageId,
+    threadId: result.threadId,
+  );
+
+  factory MessageDestinationTarget.fromChatMessage(ChatMessage message) =>
+      MessageDestinationTarget(
+        roomToken: message.roomToken,
+        messageId: message.messageId,
+        threadId: message.threadId,
+      );
+
+  final ConversationToken roomToken;
+  final int messageId;
+  final int? threadId;
+}
+
+/// Resolves the canonical root needed to open a message inside a thread.
 ///
-/// Unified Search supplies the root ID but not the root message shape needed
-/// to distinguish an ordinary reply chain from a named thread. The existing
-/// chat synchronization layer owns materializing that root when it is absent.
-Future<ChatThreadContext> resolveMessageSearchThread({
+/// Search and shared-items responses supply the root ID but not the root
+/// message shape needed to distinguish an ordinary reply chain from a named
+/// thread. Chat synchronization owns materializing an absent root.
+Future<ChatThreadContext> resolveMessageThread({
   required ChatRepository repository,
   required String accountId,
-  required MessageSearchResult result,
+  required MessageDestinationTarget target,
   required Future<void> Function() synchronizeThread,
 }) async {
-  final threadId = result.threadId;
-  if (threadId == null || threadId == result.messageId) {
+  final threadId = target.threadId;
+  if (threadId == null || threadId == target.messageId) {
     throw const MessageSearchThreadException(
       MessageSearchThreadError.unavailable,
     );
@@ -46,7 +73,7 @@ Future<ChatThreadContext> resolveMessageSearchThread({
 
   var root = await repository.getMessage(
     accountId: accountId,
-    roomToken: result.roomToken.value,
+    roomToken: target.roomToken.value,
     messageId: threadId,
   );
   if (root == null) {
@@ -57,7 +84,7 @@ Future<ChatThreadContext> resolveMessageSearchThread({
     }
     root = await repository.getMessage(
       accountId: accountId,
-      roomToken: result.roomToken.value,
+      roomToken: target.roomToken.value,
       messageId: threadId,
     );
   }
@@ -69,7 +96,7 @@ Future<ChatThreadContext> resolveMessageSearchThread({
   }
   final context = ChatThreadContext.fromCachedRoot(
     accountId: accountId,
-    roomToken: result.roomToken.value,
+    roomToken: target.roomToken.value,
     root: root,
   );
   if (context == null) {
@@ -80,10 +107,10 @@ Future<ChatThreadContext> resolveMessageSearchThread({
 
   final cachedTarget = await repository.getMessage(
     accountId: accountId,
-    roomToken: result.roomToken.value,
-    messageId: result.messageId,
+    roomToken: target.roomToken.value,
+    messageId: target.messageId,
   );
-  if (cachedTarget != null && !_matchesThread(cachedTarget, result)) {
+  if (cachedTarget != null && !_matchesThread(cachedTarget, target)) {
     throw const MessageSearchThreadException(
       MessageSearchThreadError.unavailable,
     );
@@ -109,15 +136,15 @@ MessageSearchThreadError _threadError(ChatServiceError error) =>
       ChatServiceError.invalidResponse => MessageSearchThreadError.unavailable,
     };
 
-bool _matchesThread(CachedChatMessage cached, MessageSearchResult result) {
-  if (cached.deleted || cached.threadId != result.threadId) {
+bool _matchesThread(CachedChatMessage cached, MessageDestinationTarget target) {
+  if (cached.deleted || cached.threadId != target.threadId) {
     return false;
   }
   try {
     final message = ChatMessage.fromJson(jsonDecode(cached.rawJson));
-    return message.messageId == result.messageId &&
-        message.roomToken == result.roomToken &&
-        message.threadId == result.threadId &&
+    return message.messageId == target.messageId &&
+        message.roomToken == target.roomToken &&
+        message.threadId == target.threadId &&
         !message.deleted;
   } on FormatException {
     return false;
@@ -126,18 +153,18 @@ bool _matchesThread(CachedChatMessage cached, MessageSearchResult result) {
   }
 }
 
-Widget buildMessageSearchDestination({
+Widget buildMessageDestination({
   required StoredAccount account,
   required CachedConversation conversation,
-  required MessageSearchResult result,
+  required MessageDestinationTarget target,
   required ChatThreadContext? threadContext,
 }) {
-  final threadId = result.threadId;
-  if (threadId == null || threadId == result.messageId) {
+  final threadId = target.threadId;
+  if (threadId == null || threadId == target.messageId) {
     return PresenceChatRoomScreen(
       account: account,
       conversation: conversation,
-      jumpToMessageId: result.messageId,
+      jumpToMessageId: target.messageId,
     );
   }
   if (threadContext == null ||
@@ -154,7 +181,7 @@ Widget buildMessageSearchDestination({
     account: account,
     conversation: conversation,
     threadContext: threadContext,
-    jumpToMessageId: result.messageId,
+    jumpToMessageId: target.messageId,
   );
 }
 

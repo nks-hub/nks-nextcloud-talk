@@ -625,13 +625,14 @@ final class _MessageSearchRouteState
       }
 
       final threadId = result.threadId;
+      final target = MessageDestinationTarget.fromSearchResult(result);
       ChatThreadContext? threadContext;
       if (threadId != null && threadId != result.messageId) {
         try {
-          threadContext = await resolveMessageSearchThread(
+          threadContext = await resolveMessageThread(
             repository: ref.read(chatRepositoryProvider),
             accountId: widget.accountId,
-            result: result,
+            target: target,
             synchronizeThread: () => ref
                 .read(chatServiceProvider)
                 .syncRoom(
@@ -657,10 +658,10 @@ final class _MessageSearchRouteState
       Navigator.of(context).pushReplacement<void, void>(
         MaterialPageRoute<void>(
           settings: const RouteSettings(name: '/search/messages'),
-          builder: (context) => buildMessageSearchDestination(
+          builder: (context) => buildMessageDestination(
             account: account,
             conversation: conversation,
-            result: result,
+            target: target,
             threadContext: threadContext,
           ),
         ),

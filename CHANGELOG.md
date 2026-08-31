@@ -16,6 +16,15 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- V detailu podporované konverzace jsou dostupné sdílené soubory, obrázky,
+  nahrávky, polohy, ankety a další serverové kategorie. Seznam se stránkuje,
+  lze v něm opakovat neúspěšné načtení a klepnutí otevře původní zprávu i ve
+  vlákně.
+- Při přepnutí konverzace v širokém třípanelovém rozvržení už detail nepřenese
+  ovládací prvky a oprávnění předchozí místnosti.
+
 ## 0.1.0 (26) — 31. 8. 2026
 
 Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;

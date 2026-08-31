@@ -46,10 +46,12 @@ void main() {
       await _insertRoot(database, account.id, named: false);
       var synchronized = false;
 
-      final context = await resolveMessageSearchThread(
+      final context = await resolveMessageThread(
         repository: repository,
         accountId: account.id,
-        result: _result(messageId: 73, threadId: 72),
+        target: MessageDestinationTarget.fromSearchResult(
+          _result(messageId: 73, threadId: 72),
+        ),
         synchronizeThread: () async => synchronized = true,
       );
 
@@ -60,10 +62,12 @@ void main() {
       expect(synchronized, isFalse);
 
       final destination =
-          buildMessageSearchDestination(
+          buildMessageDestination(
                 account: account,
                 conversation: conversation,
-                result: _result(messageId: 73, threadId: 72),
+                target: MessageDestinationTarget.fromSearchResult(
+                  _result(messageId: 73, threadId: 72),
+                ),
                 threadContext: context,
               )
               as MessageSearchThreadScreen;
@@ -77,10 +81,12 @@ void main() {
     () async {
       var synchronized = false;
 
-      final context = await resolveMessageSearchThread(
+      final context = await resolveMessageThread(
         repository: repository,
         accountId: account.id,
-        result: _result(messageId: 83, threadId: 80),
+        target: MessageDestinationTarget.fromSearchResult(
+          _result(messageId: 83, threadId: 80),
+        ),
         synchronizeThread: () async {
           synchronized = true;
           await _insertRoot(database, account.id, id: 80, named: true);
@@ -93,10 +99,12 @@ void main() {
       expect(context.title, 'Named fixture thread');
 
       final destination =
-          buildMessageSearchDestination(
+          buildMessageDestination(
                 account: account,
                 conversation: conversation,
-                result: _result(messageId: 83, threadId: 80),
+                target: MessageDestinationTarget.fromSearchResult(
+                  _result(messageId: 83, threadId: 80),
+                ),
                 threadContext: context,
               )
               as MessageSearchThreadScreen;
@@ -107,10 +115,12 @@ void main() {
 
   test('routes a root search hit to the root pane with its jump target', () {
     final destination =
-        buildMessageSearchDestination(
+        buildMessageDestination(
               account: account,
               conversation: conversation,
-              result: _result(messageId: 42),
+              target: MessageDestinationTarget.fromSearchResult(
+                _result(messageId: 42),
+              ),
               threadContext: null,
             )
             as PresenceChatRoomScreen;
@@ -119,15 +129,36 @@ void main() {
   });
 
   test(
+    'routes a shared chat message through the same destination contract',
+    () {
+      final message = ChatMessage.fromJson(
+        _messageWire(id: 44, threadId: 44, named: false),
+      );
+      final destination =
+          buildMessageDestination(
+                account: account,
+                conversation: conversation,
+                target: MessageDestinationTarget.fromChatMessage(message),
+                threadContext: null,
+              )
+              as PresenceChatRoomScreen;
+
+      expect(destination.jumpToMessageId, 44);
+    },
+  );
+
+  test(
     'fails closed when the cached root belongs to another account',
     () async {
       await _insertRoot(database, account.id, id: 90, named: true);
 
       expect(
-        () => resolveMessageSearchThread(
+        () => resolveMessageThread(
           repository: repository,
           accountId: 'account-b',
-          result: _result(messageId: 93, threadId: 90),
+          target: MessageDestinationTarget.fromSearchResult(
+            _result(messageId: 93, threadId: 90),
+          ),
           synchronizeThread: () async {},
         ),
         throwsA(
@@ -143,10 +174,12 @@ void main() {
 
   test('keeps a root-sync network failure distinct from an absent root', () {
     expect(
-      () => resolveMessageSearchThread(
+      () => resolveMessageThread(
         repository: repository,
         accountId: account.id,
-        result: _result(messageId: 93, threadId: 90),
+        target: MessageDestinationTarget.fromSearchResult(
+          _result(messageId: 93, threadId: 90),
+        ),
         synchronizeThread: () async =>
             throw const ChatServiceException(ChatServiceError.network),
       ),
@@ -167,10 +200,12 @@ void main() {
       await _insertMessage(database, account.id, id: 103, threadId: 99);
 
       expect(
-        () => resolveMessageSearchThread(
+        () => resolveMessageThread(
           repository: repository,
           accountId: account.id,
-          result: _result(messageId: 103, threadId: 100),
+          target: MessageDestinationTarget.fromSearchResult(
+            _result(messageId: 103, threadId: 100),
+          ),
           synchronizeThread: () async {},
         ),
         throwsA(

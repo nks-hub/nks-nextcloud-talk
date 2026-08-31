@@ -13,6 +13,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
 import '../chat/chat_participant_avatar.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import '../shareditems/shared_items_screen.dart';
 import 'conversation_tags_service.dart';
 import 'guest_link_sharer.dart';
 import 'participants_service.dart';
@@ -23,6 +24,7 @@ part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
+part 'room_details_shared_items.part.dart';
 part 'room_details_sip.part.dart';
 part 'room_details_support.part.dart';
 part 'room_details_widgets.part.dart';
@@ -55,6 +57,8 @@ const String _clearHistoryCapability = 'clear-history';
 const String _conversationTagsCapability = 'conversation-tags';
 const String _importantCapability = 'important-conversations';
 const String _sensitiveCapability = 'sensitive-conversations';
+const String _sharedItemsCapability = 'rich-object-list-media';
+const String _federatedSharedItemsCapability = 'federated-shared-items';
 const int _classifiedRoomAttribute = 4;
 
 /// The emoji the avatar picker offers. Talk accepts any single emoji; this is
@@ -261,6 +265,14 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                 key: const Key('room-details-message-expiration-subtitle'),
               ),
               onTap: _busy ? null : _changeMessageExpiration,
+            ),
+          if (_canOpenSharedItems)
+            ListTile(
+              key: const Key('room-details-shared-items'),
+              leading: const Icon(Icons.collections_outlined),
+              title: Text(strings.roomDetailsSharedItemsAction),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openSharedItems,
             ),
           if (_canManageConversationTags)
             ListTile(

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
+import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 
 import 'test_support.dart';
 
@@ -37,12 +38,36 @@ const _conversation = CachedConversation(
   rawJson: '{}',
 );
 
+const _secondConversation = CachedConversation(
+  accountId: 'breakpoint-account',
+  token: 'secondbreakpoint',
+  displayName: 'Second breakpoint room',
+  description: 'Second conversation',
+  lastActivity: 1724300100,
+  unreadMessages: 0,
+  favorite: false,
+  isArchived: false,
+  readOnly: 0,
+  roomType: 2,
+  roomName: 'second-breakpoint-room',
+  objectType: '',
+  avatarVersion: '',
+  isCustomAvatar: false,
+  lastMessageText: 'Second preview',
+  lastMessageTimestamp: 1724300100,
+  rawJson: '{}',
+);
+
 /// Stands in for the shell: it owns the selected token, which is the single
 /// record of what is open in both layouts.
 final class _Harness extends StatefulWidget {
-  const _Harness({this.initialToken});
+  const _Harness({
+    this.initialToken,
+    this.conversations = const [_conversation],
+  });
 
   final String? initialToken;
+  final List<CachedConversation> conversations;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -58,12 +83,16 @@ final class _HarnessState extends State<_Harness> {
     _token = widget.initialToken;
   }
 
+  void selectWhileDetailsStayOpen(String token) {
+    setState(() => _token = token);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ConversationWorkspace(
       account: _account,
       accounts: const [_account],
-      conversations: const [_conversation],
+      conversations: widget.conversations,
       selectedConversationToken: _token,
       loading: false,
       syncing: false,
@@ -95,13 +124,19 @@ void main() {
   setUp(() => database = openTestDatabase());
   tearDown(() => database.close());
 
-  Future<void> pump(WidgetTester tester, {String? token}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    String? token,
+    List<CachedConversation> conversations = const [_conversation],
+  }) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
-        child: localizedTestApp(home: _Harness(initialToken: token)),
+        child: localizedTestApp(
+          home: _Harness(initialToken: token, conversations: conversations),
+        ),
       ),
     );
     await tester.pump();
@@ -259,6 +294,34 @@ void main() {
     await tester.tap(find.byKey(const Key('close-room-details')));
     await tester.pump();
     expect(find.byKey(const Key('room-details-panel')), findsNothing);
+
+    await settle(tester);
+  });
+
+  testWidgets('the details panel replaces state when its room changes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    await pump(
+      tester,
+      token: _conversation.token,
+      conversations: const [_conversation, _secondConversation],
+    );
+    await tester.tap(find.byKey(const Key('open-room-details')));
+    await tester.pump();
+
+    final firstState = tester.state(find.byType(RoomDetailsScreen));
+    tester
+        .state<_HarnessState>(find.byType(_Harness))
+        .selectWhileDetailsStayOpen(_secondConversation.token);
+    await tester.pump();
+
+    expect(find.byKey(const Key('room-details-panel')), findsOneWidget);
+    expect(
+      tester.state(find.byType(RoomDetailsScreen)),
+      isNot(same(firstState)),
+    );
+    expect(find.text(_secondConversation.displayName), findsWidgets);
 
     await settle(tester);
   });

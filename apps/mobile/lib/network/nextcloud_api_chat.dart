@@ -1,6 +1,55 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiChat on _HttpNextcloudApiBase {
+  Future<SharedItemsOverviewResponse> getSharedItemsOverview({
+    required SharedItemsOverviewRequest overviewRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', overviewRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...overviewRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _sharedItemsAllowedStatusCodes,
+      maximumBytes: sharedItemsMaximumResponseBytes,
+    );
+    return decodeSharedItemsOverviewResponse(
+      request: overviewRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  Future<SharedItemsPageResponse> getSharedItemsPage({
+    required SharedItemsPageRequest pageRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', pageRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...pageRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _sharedItemsAllowedStatusCodes,
+      maximumBytes: sharedItemsMaximumResponseBytes,
+    );
+    return decodeSharedItemsPageResponse(
+      request: pageRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+      headers: ChatResponseHeaders.fromMap(payload.headers),
+    );
+  }
+
   Future<PrivateReplyParentContextResponse> getPrivateReplyParentContext({
     required PrivateReplyParentContextRequest contextRequest,
     required String loginName,

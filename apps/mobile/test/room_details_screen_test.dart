@@ -13,6 +13,8 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/features/rooms/guest_link_sharer.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
+import 'package:nextcloudtalk/features/shareditems/shared_items_screen.dart';
+import 'package:nextcloudtalk/features/shareditems/shared_items_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -28,6 +30,7 @@ part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
 part 'room_details_sip_info_test.part.dart';
+part 'room_details_shared_items_test.part.dart';
 part 'room_details_test_support.part.dart';
 
 late AppDatabase database;
@@ -87,6 +90,7 @@ void main() {
   _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
   _registerSipInfoTests();
+  _registerSharedItemsTests();
 }
 
 Widget app({
@@ -142,17 +146,24 @@ Future<void> openDetails(
   required CachedConversation forConversation,
   required http.Client client,
   GuestLinkSharer? sharer,
+  List<Override> overrides = const [],
   double height = 2600,
 }) async {
   _growViewport(tester, height: height);
   await tester.pumpWidget(
     app(
       home: RoomDetailsScreen(
+        key: ValueKey((
+          forAccount.id,
+          forConversation.token,
+          forAccount.talkFeaturesJson,
+        )),
         account: forAccount,
         conversation: forConversation,
         linkSharer: sharer ?? _RecordingLinkSharer(),
       ),
       client: client,
+      overrides: overrides,
     ),
   );
   await _pumpUntil(

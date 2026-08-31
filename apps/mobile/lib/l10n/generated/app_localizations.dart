@@ -3800,6 +3800,108 @@ abstract class AppLocalizations {
   /// **'Pick a time in the future.'**
   String get scheduleTimeInPast;
 
+  /// No description provided for @roomDetailsSharedItemsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared items'**
+  String get roomDetailsSharedItemsAction;
+
+  /// No description provided for @sharedItemsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared items'**
+  String get sharedItemsTitle;
+
+  /// No description provided for @sharedItemsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has been shared in this category yet.'**
+  String get sharedItemsEmpty;
+
+  /// No description provided for @sharedItemsLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get sharedItemsLoadMore;
+
+  /// No description provided for @sharedItemsCategoryAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio'**
+  String get sharedItemsCategoryAudio;
+
+  /// No description provided for @sharedItemsCategoryDeckCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Deck cards'**
+  String get sharedItemsCategoryDeckCards;
+
+  /// No description provided for @sharedItemsCategoryFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get sharedItemsCategoryFiles;
+
+  /// No description provided for @sharedItemsCategoryLocations.
+  ///
+  /// In en, this message translates to:
+  /// **'Locations'**
+  String get sharedItemsCategoryLocations;
+
+  /// No description provided for @sharedItemsCategoryMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Media'**
+  String get sharedItemsCategoryMedia;
+
+  /// No description provided for @sharedItemsCategoryOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get sharedItemsCategoryOther;
+
+  /// No description provided for @sharedItemsCategoryPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get sharedItemsCategoryPinned;
+
+  /// No description provided for @sharedItemsCategoryPolls.
+  ///
+  /// In en, this message translates to:
+  /// **'Polls'**
+  String get sharedItemsCategoryPolls;
+
+  /// No description provided for @sharedItemsCategoryRecordings.
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings'**
+  String get sharedItemsCategoryRecordings;
+
+  /// No description provided for @sharedItemsCategoryVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice messages'**
+  String get sharedItemsCategoryVoice;
+
+  /// No description provided for @sharedItemsUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared items are not available for this conversation.'**
+  String get sharedItemsUnsupported;
+
+  /// No description provided for @sharedItemsLobbyRestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared items are hidden while you are waiting in the lobby.'**
+  String get sharedItemsLobbyRestricted;
+
+  /// No description provided for @sharedItemsInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The server returned an invalid shared-items response.'**
+  String get sharedItemsInvalidResponse;
+
   /// Typing indicator for one participant.
   ///
   /// In en, this message translates to:

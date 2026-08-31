@@ -2074,6 +2074,60 @@ class AppLocalizationsCs extends AppLocalizations {
   String get scheduleTimeInPast => 'Vyberte čas v budoucnosti.';
 
   @override
+  String get roomDetailsSharedItemsAction => 'Sdílené položky';
+
+  @override
+  String get sharedItemsTitle => 'Sdílené položky';
+
+  @override
+  String get sharedItemsEmpty => 'V této kategorii zatím není nic sdíleného.';
+
+  @override
+  String get sharedItemsLoadMore => 'Načíst další';
+
+  @override
+  String get sharedItemsCategoryAudio => 'Zvuk';
+
+  @override
+  String get sharedItemsCategoryDeckCards => 'Karty Deck';
+
+  @override
+  String get sharedItemsCategoryFiles => 'Soubory';
+
+  @override
+  String get sharedItemsCategoryLocations => 'Polohy';
+
+  @override
+  String get sharedItemsCategoryMedia => 'Média';
+
+  @override
+  String get sharedItemsCategoryOther => 'Ostatní';
+
+  @override
+  String get sharedItemsCategoryPinned => 'Připnuté';
+
+  @override
+  String get sharedItemsCategoryPolls => 'Ankety';
+
+  @override
+  String get sharedItemsCategoryRecordings => 'Nahrávky';
+
+  @override
+  String get sharedItemsCategoryVoice => 'Hlasové zprávy';
+
+  @override
+  String get sharedItemsUnsupported =>
+      'Sdílené položky nejsou pro tuto konverzaci dostupné.';
+
+  @override
+  String get sharedItemsLobbyRestricted =>
+      'Sdílené položky jsou skryté, dokud čekáte v předsálí.';
+
+  @override
+  String get sharedItemsInvalidResponse =>
+      'Server poslal neplatnou odpověď sdílených položek.';
+
+  @override
   String typingOne(String name) {
     return '$name píše…';
   }

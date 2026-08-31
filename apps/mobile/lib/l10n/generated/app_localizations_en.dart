@@ -2075,6 +2075,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scheduleTimeInPast => 'Pick a time in the future.';
 
   @override
+  String get roomDetailsSharedItemsAction => 'Shared items';
+
+  @override
+  String get sharedItemsTitle => 'Shared items';
+
+  @override
+  String get sharedItemsEmpty =>
+      'Nothing has been shared in this category yet.';
+
+  @override
+  String get sharedItemsLoadMore => 'Load more';
+
+  @override
+  String get sharedItemsCategoryAudio => 'Audio';
+
+  @override
+  String get sharedItemsCategoryDeckCards => 'Deck cards';
+
+  @override
+  String get sharedItemsCategoryFiles => 'Files';
+
+  @override
+  String get sharedItemsCategoryLocations => 'Locations';
+
+  @override
+  String get sharedItemsCategoryMedia => 'Media';
+
+  @override
+  String get sharedItemsCategoryOther => 'Other';
+
+  @override
+  String get sharedItemsCategoryPinned => 'Pinned';
+
+  @override
+  String get sharedItemsCategoryPolls => 'Polls';
+
+  @override
+  String get sharedItemsCategoryRecordings => 'Recordings';
+
+  @override
+  String get sharedItemsCategoryVoice => 'Voice messages';
+
+  @override
+  String get sharedItemsUnsupported =>
+      'Shared items are not available for this conversation.';
+
+  @override
+  String get sharedItemsLobbyRestricted =>
+      'Shared items are hidden while you are waiting in the lobby.';
+
+  @override
+  String get sharedItemsInvalidResponse =>
+      'The server returned an invalid shared-items response.';
+
+  @override
   String typingOne(String name) {
     return '$name is typing…';
   }

@@ -439,6 +439,11 @@ final class _ExpandedShell extends StatelessWidget {
                     ).width.clamp(300 / 0.27, 500 / 0.27) *
                     0.27,
                 child: RoomDetailsScreen(
+                  key: ValueKey((
+                    account.id,
+                    selectedConversation!.token,
+                    account.talkFeaturesJson,
+                  )),
                   account: account,
                   conversation: selectedConversation!,
                   onClose: onCloseDetails,
