@@ -64,7 +64,7 @@ void _registerChatMediaComposerToolbarTests(
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(440, 956);
+    tester.view.physicalSize = const Size(259, 956);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     final bridge = _RecordingBridge();
@@ -135,11 +135,49 @@ void _registerChatMediaComposerToolbarTests(
     expect(find.byKey(const Key('voice-record')), findsNothing);
   });
 
+  testWidgets('loading toolbar wraps at compact detail pane width', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(259, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Scaffold(
+          body: ChatMediaComposerStatus.loading(
+            idleActions: _aggregatedIdleActions(),
+          ),
+        ),
+      ),
+    );
+
+    const actionKeys = <String>[
+      'pick-image-attachment-unavailable',
+      'voice-record-unavailable',
+      'pick-image-attachment',
+      'open-emoji-picker',
+      'open-giphy-picker',
+      'send-message',
+    ];
+    final centerYs = actionKeys
+        .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
+        .toSet();
+    expect(centerYs, hasLength(2));
+    for (final key in actionKeys) {
+      final size = tester.getSize(find.byKey(Key(key)));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('aggregated toolbar keeps a quick gallery action', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(320, 800);
+    tester.view.physicalSize = const Size(259, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     final bridge = _RecordingBridge();
@@ -156,31 +194,7 @@ void _registerChatMediaComposerToolbarTests(
         voiceBackends: voiceBackends,
         showAttachmentButton: false,
         imageSelectionBackend: imageBackend,
-        idleActions: <Widget>[
-          IconButton(
-            key: const Key('pick-image-attachment'),
-            onPressed: () {},
-            icon: const Icon(Icons.attach_file_rounded),
-          ),
-          IconButton(
-            key: const Key('open-emoji-picker'),
-            onPressed: () {},
-            icon: const Icon(Icons.emoji_emotions_outlined),
-          ),
-          IconButton(
-            key: const Key('open-giphy-picker'),
-            onPressed: null,
-            icon: const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-          IconButton.filled(
-            key: const Key('send-message'),
-            onPressed: () {},
-            icon: const Icon(Icons.send_rounded),
-          ),
-        ],
+        idleActions: _aggregatedIdleActions(),
       ),
     );
 
@@ -195,7 +209,7 @@ void _registerChatMediaComposerToolbarTests(
     final centerYs = actionKeys
         .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
         .toSet();
-    expect(centerYs, hasLength(1));
+    expect(centerYs, hasLength(2));
     for (final key in actionKeys) {
       final size = tester.getSize(find.byKey(Key(key)));
       expect(size.width, greaterThanOrEqualTo(48));
@@ -306,3 +320,29 @@ final class _RecordingImageBackend implements ImageSelectionBackend {
     return const _ImageBackend().selectImage(source);
   }
 }
+
+List<Widget> _aggregatedIdleActions() => <Widget>[
+  IconButton(
+    key: const Key('pick-image-attachment'),
+    onPressed: () {},
+    icon: const Icon(Icons.attach_file_rounded),
+  ),
+  IconButton(
+    key: const Key('open-emoji-picker'),
+    onPressed: () {},
+    icon: const Icon(Icons.emoji_emotions_outlined),
+  ),
+  IconButton(
+    key: const Key('open-giphy-picker'),
+    onPressed: null,
+    icon: const SizedBox.square(
+      dimension: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+  ),
+  IconButton.filled(
+    key: const Key('send-message'),
+    onPressed: () {},
+    icon: const Icon(Icons.send_rounded),
+  ),
+];

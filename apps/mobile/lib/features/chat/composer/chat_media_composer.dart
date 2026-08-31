@@ -670,75 +670,84 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     final showVoiceUnavailable =
         voiceController == null ||
         (!_voiceAdmissionSupported && !voiceOwnsToolbar);
+    final attachmentAction = widget.showAttachmentButton
+        ? ImageAttachmentPickerButton(
+            controller: _imageController,
+            prepare: _prepareImage,
+            enabled: _imageSupported,
+          )
+        : IconButton(
+            key: const Key('pick-image-from-gallery'),
+            onPressed: !_imageSupported || _imageController.state.isActive
+                ? null
+                : () => unawaited(
+                    _pickAttachment(AttachmentPickerSource.gallery),
+                  ),
+            tooltip: strings.attachFromGallery,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+          );
+    final idleVoiceAction = showVoiceUnavailable
+        ? SizedBox.square(
+            dimension: 48,
+            child: IconButton(
+              key: const Key('voice-record-unavailable'),
+              onPressed: null,
+              tooltip: strings.voiceUnsupported,
+              icon: const Icon(Icons.mic_off_outlined),
+            ),
+          )
+        : VoiceMessageControls(
+            controller: voiceController,
+            labels: _voiceLabels(strings),
+          );
     return Column(
       key: const Key('chat-media-composer'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ImageAttachmentUploadPanel(controller: _imageController),
-        Row(
-          key: const Key('chat-media-composer-actions'),
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: voiceOwnsToolbar
-              ? <Widget>[
-                  Expanded(
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: VoiceMessageControls(
-                        controller: voiceController,
-                        labels: _voiceLabels(strings),
-                      ),
-                    ),
+        if (voiceOwnsToolbar)
+          Row(
+            key: const Key('chat-media-composer-actions'),
+            children: <Widget>[
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: VoiceMessageControls(
+                    controller: voiceController,
+                    labels: _voiceLabels(strings),
                   ),
-                ]
-              : <Widget>[
-                  if (widget.showAttachmentButton)
-                    ImageAttachmentPickerButton(
-                      controller: _imageController,
-                      prepare: _prepareImage,
-                      enabled: _imageSupported,
-                    ),
-                  if (!widget.showAttachmentButton)
-                    IconButton(
-                      key: const Key('pick-image-from-gallery'),
-                      onPressed:
-                          !_imageSupported || _imageController.state.isActive
-                          ? null
-                          : () => unawaited(
-                              _pickAttachment(AttachmentPickerSource.gallery),
-                            ),
-                      tooltip: strings.attachFromGallery,
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                    ),
-                  if (showVoiceUnavailable)
-                    SizedBox.square(
-                      dimension: 48,
-                      child: IconButton(
-                        key: const Key('voice-record-unavailable'),
-                        onPressed: null,
-                        tooltip: strings.voiceUnsupported,
-                        icon: const Icon(Icons.mic_off_outlined),
-                      ),
-                    )
-                  else if (voiceErrorUsesRemainingWidth)
-                    Expanded(
-                      child: VoiceMessageControls(
-                        controller: voiceController,
-                        labels: _voiceLabels(strings),
-                      ),
-                    )
-                  else
-                    VoiceMessageControls(
-                      controller: voiceController,
-                      labels: _voiceLabels(strings),
-                    ),
-                  if (!voiceErrorUsesRemainingWidth) const Spacer(),
-                  ...widget.idleActions,
-                ],
-        ),
+                ),
+              ),
+            ],
+          )
+        else if (voiceErrorUsesRemainingWidth)
+          Column(
+            key: const Key('chat-media-composer-actions'),
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              VoiceMessageControls(
+                controller: voiceController!,
+                labels: _voiceLabels(strings),
+              ),
+              Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[attachmentAction, ...widget.idleActions],
+              ),
+            ],
+          )
+        else
+          Wrap(
+            key: const Key('chat-media-composer-actions'),
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              attachmentAction,
+              idleVoiceAction,
+              ...widget.idleActions,
+            ],
+          ),
       ],
     );
   }
@@ -820,9 +829,10 @@ final class ChatMediaComposerStatus extends StatelessWidget {
               ),
           ],
         ),
-        Row(
+        Wrap(
           key: const Key('chat-media-composer-actions'),
-          crossAxisAlignment: CrossAxisAlignment.center,
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             SizedBox.square(
               dimension: 48,
@@ -842,7 +852,6 @@ final class ChatMediaComposerStatus extends StatelessWidget {
                 icon: const Icon(Icons.mic_none_rounded),
               ),
             ),
-            const Spacer(),
             ...idleActions,
           ],
         ),
