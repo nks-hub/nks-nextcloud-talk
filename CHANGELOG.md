@@ -16,7 +16,11 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Připraveno pro další build
+## 0.1.0 (25) — 31. 8. 2026
+
+Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
+track po commitu vrací build 25 ve stavu `completed`.
+TestFlight: build `VALID`, bez non-exempt encryption, minimum iOS 15.0.
 
 - Když na iOS nezačne nahrávání hlasové zprávy, čekání po 10 sekundách skončí
   chybou a aplikace zůstane použitelná. Další pokus už neblokuje předchozí
