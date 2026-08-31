@@ -30,6 +30,7 @@ typedef CatchUpAttachmentConfirmation =
       required int? threadId,
     });
 typedef BeforeAttachmentRoomIdle = Future<void> Function();
+typedef BeforeAttachmentTransportFailureCommit = Future<void> Function();
 
 const String attachmentConfirmationReconciliationRequired =
     'confirmation-reconciliation-required';
@@ -165,6 +166,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     PersistAttachmentTransition? persistTransition,
     CatchUpAttachmentConfirmation? catchUpConfirmation,
     BeforeAttachmentRoomIdle? beforeRoomIdle,
+    BeforeAttachmentTransportFailureCommit? beforeTransportFailureCommit,
     List<Duration> confirmationRetryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -197,6 +199,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       persistTransition: persistTransition ?? repository.persistTransition,
       catchUpConfirmation: catchUpConfirmation,
       beforeRoomIdle: beforeRoomIdle,
+      beforeTransportFailureCommit: beforeTransportFailureCommit,
       confirmationRetryDelays: List<Duration>.unmodifiable(
         confirmationRetryDelays,
       ),
@@ -217,6 +220,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     required this._persistTransition,
     required this._catchUpConfirmation,
     required this._beforeRoomIdle,
+    required this._beforeTransportFailureCommit,
     required this._confirmationRetryDelays,
     required this._retryDelays,
   });
@@ -241,6 +245,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
   final CatchUpAttachmentConfirmation? _catchUpConfirmation;
   @override
   final BeforeAttachmentRoomIdle? _beforeRoomIdle;
+  @override
+  final BeforeAttachmentTransportFailureCommit? _beforeTransportFailureCommit;
   @override
   final List<Duration> _confirmationRetryDelays;
   @override
@@ -578,10 +584,12 @@ final class AttachmentService with _AttachmentServiceRuntime {
   }) async {
     await _ready;
     _ensureOpen();
+    _ensureAccountActive(accountId);
     final key = _jobKey(accountId, jobId);
     _AttachmentRoomKey? roomKey;
     var retryConfirmation = false;
     await _stateMutex.protect(() async {
+      _ensureAccountActive(accountId);
       final job = _snapshot.accounts[accountId]?.jobs[jobId];
       if (job == null) {
         throw StateError('Attachment job does not exist');
@@ -621,6 +629,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       _metadata[key] = updated;
       roomKey = _AttachmentRoomKey(accountId, job.draft.roomToken);
     });
+    _ensureAccountActive(accountId);
     if (retryConfirmation) {
       _clearConfirmationCatchUp(key);
       final active = _confirmationCatchUps[key];

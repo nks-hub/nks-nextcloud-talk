@@ -11,6 +11,7 @@ mixin _AttachmentServiceRuntime {
   PersistAttachmentTransition get _persistTransition;
   CatchUpAttachmentConfirmation? get _catchUpConfirmation;
   BeforeAttachmentRoomIdle? get _beforeRoomIdle;
+  BeforeAttachmentTransportFailureCommit? get _beforeTransportFailureCommit;
   List<Duration> get _confirmationRetryDelays;
   List<Duration> get _retryDelays;
   _AsyncMutex get _stateMutex;
@@ -548,7 +549,12 @@ mixin _AttachmentServiceRuntime {
       if (failedRequest == null) {
         rethrow;
       }
+      await _beforeTransportFailureCommit?.call();
       await _stateMutex.protect(() async {
+        if (cancellation.isCancelled ||
+            _suspendedAccounts.contains(job!.accountId)) {
+          return;
+        }
         final result = recordAttachmentTransportFailure(
           _snapshot,
           accountId: job!.accountId,
@@ -566,6 +572,11 @@ mixin _AttachmentServiceRuntime {
       if (identical(_cancellations[key], cancellation)) {
         _cancellations.remove(key);
       }
+    }
+
+    if (cancellation.isCancelled ||
+        _suspendedAccounts.contains(job!.accountId)) {
+      return false;
     }
 
     final current = _jobForKey(key);

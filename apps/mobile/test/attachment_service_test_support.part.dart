@@ -89,6 +89,7 @@ final class _Fixture {
     ReleaseDurableAttachmentSource? releaseSource,
     CatchUpAttachmentConfirmation? catchUpConfirmation,
     BeforeAttachmentRoomIdle? beforeRoomIdle,
+    BeforeAttachmentTransportFailureCommit? beforeTransportFailureCommit,
     List<Duration> confirmationRetryDelays = const <Duration>[],
     AttachmentIdentifierFactory? identifierFactory,
   }) {
@@ -117,6 +118,7 @@ final class _Fixture {
       persistTransition: persistTransition,
       catchUpConfirmation: catchUpConfirmation,
       beforeRoomIdle: beforeRoomIdle,
+      beforeTransportFailureCommit: beforeTransportFailureCommit,
       confirmationRetryDelays: confirmationRetryDelays,
     );
   }

@@ -7,6 +7,67 @@ void _registerAttachmentServiceAccountSuspendTests() {
       () => _verifyAccountSuspendDuringUpload(emitFirstChunk: emitFirstChunk),
     );
   }
+
+  test(
+    'transport failure cannot commit after suspension wins the gate',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final failureCommitReached = Completer<void>();
+      final releaseFailureCommit = Completer<void>();
+      var putRequests = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            return http.Response.bytes(_probeSuccess(), 200);
+          }
+          if (request.method == 'PUT') {
+            putRequests++;
+            throw http.ClientException('Synthetic upload transport failure');
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        beforeTransportFailureCommit: () async {
+          failureCommitReached.complete();
+          await releaseFailureCommit.future;
+        },
+      );
+      addTearDown(service.close);
+
+      final session = await service.enqueue(fixture.request(normalMaximum: 32));
+      await failureCommitReached.future.timeout(const Duration(seconds: 2));
+      final suspension = service.suspendAccount(AccountId.parse('account-a'));
+      await _waitForSuspendedLane(fixture.repository);
+      releaseFailureCommit.complete();
+      await suspension;
+
+      final stored = await fixture.repository.getStoredJob(
+        accountId: 'account-a',
+        jobId: session.jobId.value,
+      );
+      expect(putRequests, 1);
+      expect(stored?.phase, AttachmentJobPhase.uploading.name);
+      expect(stored?.inFlightStep, AttachmentRequestStep.normalPut.name);
+      expect(stored?.automaticRetryCount, 0);
+      expect(stored?.nextAttemptAtMillis, isNull);
+    },
+  );
+}
+
+Future<void> _waitForSuspendedLane(AttachmentRepository repository) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (true) {
+    final runtime = await repository.loadRuntime();
+    if (runtime.snapshot.accounts[AccountId.parse('account-a')]?.lane ==
+        AttachmentAccountLane.suspended) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for the durable suspended lane');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }
 
 Future<void> _verifyAccountSuspendDuringUpload({
@@ -29,6 +90,19 @@ Future<void> _verifyAccountSuspendDuringUpload({
   }
 
   await service.suspendAccount(AccountId.parse('account-a'));
+
+  final beforeRetry = await fixture.repository.getStoredJob(
+    accountId: 'account-a',
+    jobId: session.jobId.value,
+  );
+  await expectLater(session.retry(), throwsStateError);
+  final afterRetry = await fixture.repository.getStoredJob(
+    accountId: 'account-a',
+    jobId: session.jobId.value,
+  );
+  expect(afterRetry?.phase, beforeRetry?.phase);
+  expect(afterRetry?.automaticRetryCount, beforeRetry?.automaticRetryCount);
+  expect(afterRetry?.nextAttemptAtMillis, beforeRetry?.nextAttemptAtMillis);
 
   final stored = await fixture.repository.getStoredJob(
     accountId: 'account-a',
@@ -59,9 +133,33 @@ Future<void> _verifyAccountSuspendDuringUpload({
     recoveredRuntime.snapshot.accounts[AccountId.parse('account-a')]?.lane,
     AttachmentAccountLane.suspended,
   );
+  final beforeRestartRetry = await fixture.repository.getStoredJob(
+    accountId: 'account-a',
+    jobId: session.jobId.value,
+  );
   await expectLater(
     restarted.enqueue(fixture.request(normalMaximum: 32)),
     throwsStateError,
+  );
+  await expectLater(
+    restarted.retry(
+      accountId: AccountId.parse('account-a'),
+      jobId: session.jobId,
+    ),
+    throwsStateError,
+  );
+  final afterRestartRetry = await fixture.repository.getStoredJob(
+    accountId: 'account-a',
+    jobId: session.jobId.value,
+  );
+  expect(afterRestartRetry?.phase, beforeRestartRetry?.phase);
+  expect(
+    afterRestartRetry?.automaticRetryCount,
+    beforeRestartRetry?.automaticRetryCount,
+  );
+  expect(
+    afterRestartRetry?.nextAttemptAtMillis,
+    beforeRestartRetry?.nextAttemptAtMillis,
   );
 }
 
