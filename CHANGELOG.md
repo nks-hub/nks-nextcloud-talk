@@ -54,6 +54,8 @@ v interní i externí skupině s českými poznámkami.
 - GIF přijatý ze serveru bez aktivní Giphy integrace už nenabízí nefunkční
   opakování. Místo něj ukáže, že GIFy na serveru nejsou dostupné; samotný odkaz
   přitom nezobrazí.
+- Výběr GIFů si v rámci účtu pamatuje už stažené náhledy. Při opětovném
+  otevření stejné mřížky je znovu nestahuje.
 - Moderátor může v detailu podporované konverzace zapnout telefonické a SIP
   připojení s osobním PINem, bez PINu nebo jej vypnout. Volby se zobrazí jen
   tehdy, když je server i účet skutečně podporují. Po zapnutí uvidí každý
