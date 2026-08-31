@@ -277,7 +277,12 @@ delivery cesta.
 
 ### Odhlášení
 
-1. Zastaví se account long poll/websocket a nové outbox claims.
+1. Account se nejdřív suspenduje v account runtime gate. Všechny jeho root a thread
+   chat bindingy ukončí sdílené long polly; attachment lane se před abortem
+   requestů trvale uloží jako `suspended`. Bounded drain nečeká neomezeně na
+   vadný transport, ale account gate i potom odmítá pozdní commit, retry a nový
+   enqueue. In-flight upload zůstane restart-safe: recovery jej klasifikuje
+   konzervativně podle uloženého requestu, suspended lane jej však neodešle.
 2. Klient zkontroluje queued, ambiguous, failed outbox a upload jobs. Bez
    explicitní volby uživatele je nesmaže.
 3. Online odstraní konkrétní Web Push nebo APNs registraci z Nextcloudu.

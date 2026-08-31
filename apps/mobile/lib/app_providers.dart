@@ -796,7 +796,15 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     chatAttachmentDirectory: getApplicationCacheDirectory,
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
     onRemovalStarted: (accountId) async {
-      await ref.read(androidPushCoordinatorProvider)?.suspendAccount(accountId);
+      final attachment = ref.read(attachmentServiceProvider.future);
+      await Future.wait<void>(<Future<void>>[
+        ref.read(chatServiceProvider).suspendAccount(accountId),
+        attachment.then(
+          (service) => service.suspendAccount(AccountId.parse(accountId)),
+        ),
+        if (ref.read(androidPushCoordinatorProvider) case final coordinator?)
+          coordinator.suspendAccount(accountId),
+      ]);
     },
     revokePush: (accountId) async {
       final coordinator = ref.read(androidPushRegistrationCoordinatorProvider);

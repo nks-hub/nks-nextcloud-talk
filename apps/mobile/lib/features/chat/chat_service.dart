@@ -62,6 +62,7 @@ final class ChatService {
   /// answers the moment the room changes, so this only stops a background
   /// reconciler from waiting out an idle 30 s poll.
   static const Duration _livePollJoinTimeout = Duration(seconds: 3);
+  static const Duration _accountSuspendDrainTimeout = Duration(seconds: 5);
 
   final AccountRepository _accounts;
   final ChatRepository _chat;
@@ -71,6 +72,8 @@ final class ChatService {
   final Map<String, Future<void>> _roomTails = {};
   final Map<String, Future<void>> _syncInFlight = {};
   final Map<String, _SharedLivePoll> _liveNetworkPolls = {};
+  final Set<ChatLiveRoomBinding> _liveBindings = {};
+  final Set<String> _suspendedAccounts = {};
 
   Stream<List<OutgoingMessageStatus>> watchOutgoingMessageStatuses({
     required String accountId,
@@ -95,12 +98,58 @@ final class ChatService {
     required String roomToken,
     int? threadId,
   }) {
-    return ChatLiveRoomBinding._(
+    final binding = ChatLiveRoomBinding._(
       service: this,
       accountId: accountId,
       roomToken: roomToken,
       threadId: threadId,
     );
+    _liveBindings.add(binding);
+    if (_suspendedAccounts.contains(accountId)) {
+      binding.close();
+    }
+    return binding;
+  }
+
+  /// Stops every root and thread poll for [accountId] before its credentials
+  /// can be revoked. Once suspended, this service never admits more work for
+  /// that account; a new login creates a new service lifetime.
+  Future<void> suspendAccount(String accountId) async {
+    _suspendedAccounts.add(accountId);
+    final bindings = _liveBindings
+        .where((binding) => binding.accountId == accountId)
+        .toList(growable: false);
+    final active = bindings
+        .map((binding) => binding._inFlight)
+        .whereType<Future<void>>()
+        .toList(growable: true);
+    final prefix = '$accountId\u0000';
+    active.addAll(
+      _liveNetworkPolls.entries
+          .where((entry) => entry.key.startsWith(prefix))
+          .map((entry) => entry.value.operation),
+    );
+    for (final binding in bindings) {
+      binding.close();
+    }
+    active.addAll(
+      _roomTails.entries
+          .where((entry) => entry.key.startsWith(prefix))
+          .map((entry) => entry.value),
+    );
+    if (active.isEmpty) {
+      return;
+    }
+    final settled = active.map((operation) async {
+      try {
+        await operation;
+      } on Object {
+        // The operation owns any protocol-specific failure persistence.
+      }
+    });
+    await Future.wait<void>(
+      settled,
+    ).timeout(_accountSuspendDrainTimeout, onTimeout: () => const <void>[]);
   }
 
   Future<void> syncRoom({
@@ -366,6 +415,7 @@ final class ChatService {
     bool allowPersistedCapabilitiesForSend = false,
     bool forceCapabilityNetworkRead = false,
   }) async {
+    _ensureAccountActive(accountId);
     if (threadId != null && threadId < 1) {
       throw const ChatServiceException(ChatServiceError.invalidResponse);
     }
@@ -393,6 +443,7 @@ final class ChatService {
       allowPersistedCapabilitiesForSend: allowPersistedCapabilitiesForSend,
       forceNetworkRead: forceCapabilityNetworkRead,
     );
+    _ensureAccountActive(accountId);
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     final profile = ChatCapabilityProfile.fromTalkFeatures(
       preparedCapabilities.talkFeatures.toList(growable: false),
@@ -459,6 +510,12 @@ final class ChatService {
     );
   }
 
+  void _ensureAccountActive(String accountId) {
+    if (_suspendedAccounts.contains(accountId)) {
+      throw const _ChatSynchronizationCancelled();
+    }
+  }
+
   Future<_PreparedCapabilities> _prepareCapabilities({
     required StoredAccount account,
     required ServerBase server,
@@ -475,6 +532,7 @@ final class ChatService {
         abortTrigger: abortTrigger,
         forceRefresh: allowPersistedCapabilitiesForSend || forceNetworkRead,
       );
+      _ensureAccountActive(account.id);
       final capabilities = capabilityRead.snapshot;
       if (!capabilities.hasTalk) {
         throw const ChatServiceException(ChatServiceError.talkUnavailable);
@@ -502,6 +560,7 @@ final class ChatService {
             capabilities.chatReadPrivacy == ChatReadPrivacy.public,
       );
     } on NextcloudApiException catch (error) {
+      _ensureAccountActive(account.id);
       if (error.statusCode == 401) {
         await _chat.markReauthenticationRequired(account.id);
       }
@@ -779,6 +838,7 @@ final class ChatService {
 
   Future<void> _processPending(_PreparedChat prepared) async {
     while (true) {
+      _ensureAccountActive(prepared.account.id);
       final claim = await _chat.claimNextTextSend(
         accountId: prepared.account.id,
         roomToken: prepared.room.token,
@@ -789,6 +849,7 @@ final class ChatService {
       if (claim == null) {
         return;
       }
+      _ensureAccountActive(prepared.account.id);
       await _transmitClaim(prepared, claim);
     }
   }
@@ -805,6 +866,7 @@ final class ChatService {
         appPassword: prepared.appPassword,
       );
     } on NextcloudApiException {
+      _ensureAccountActive(prepared.account.id);
       await _chat.recordTextSendFailure(
         accountId: prepared.account.id,
         operationId: claim.operation.operationId,
@@ -812,6 +874,7 @@ final class ChatService {
       );
       return;
     } on TalkProtocolException {
+      _ensureAccountActive(prepared.account.id);
       await _chat.recordTextSendFailure(
         accountId: prepared.account.id,
         operationId: claim.operation.operationId,
@@ -819,6 +882,7 @@ final class ChatService {
       );
       return;
     }
+    _ensureAccountActive(prepared.account.id);
     final outcome = await _chat.applyTextSendResponse(
       accountId: prepared.account.id,
       operationId: claim.operation.operationId,
@@ -843,6 +907,7 @@ final class ChatService {
   }) async {
     try {
       final result = await action();
+      _ensureAccountActive(accountId);
       await _chat.clearRoomError(
         accountId: accountId,
         roomToken: roomToken,
@@ -850,6 +915,7 @@ final class ChatService {
       );
       return result;
     } on ChatServiceException catch (error) {
+      _ensureAccountActive(accountId);
       await _chat.recordRoomError(
         accountId: accountId,
         roomToken: roomToken,
@@ -858,6 +924,7 @@ final class ChatService {
       );
       rethrow;
     } on NextcloudApiException catch (error) {
+      _ensureAccountActive(accountId);
       final mapped = ChatServiceException(_mapApiError(error));
       await _chat.recordRoomError(
         accountId: accountId,
@@ -867,6 +934,7 @@ final class ChatService {
       );
       throw mapped;
     } on TalkProtocolException {
+      _ensureAccountActive(accountId);
       await _chat.recordRoomError(
         accountId: accountId,
         roomToken: roomToken,

@@ -270,6 +270,9 @@ extension _ChatServiceLiveRuntime on ChatService {
   }
 
   Future<bool> _preparedContextIsCurrent(_PreparedChat prepared) async {
+    if (_suspendedAccounts.contains(prepared.account.id)) {
+      return false;
+    }
     final account = await _accounts.getAccount(prepared.account.id);
     final conversation = await _chat.getConversation(
       accountId: prepared.account.id,
@@ -432,6 +435,7 @@ final class ChatLiveRoomBinding {
     _closed = true;
     _generation++;
     _activeCancellationCycle?.cancel();
+    _service._liveBindings.remove(this);
   }
 }
 

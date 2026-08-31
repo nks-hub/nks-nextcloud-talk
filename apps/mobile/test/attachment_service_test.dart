@@ -17,8 +17,10 @@ import 'test_support.dart';
 part 'attachment_service_lifecycle_test.part.dart';
 part 'attachment_service_recovery_test.part.dart';
 part 'attachment_service_test_support.part.dart';
+part 'attachment_service_account_suspend_test.part.dart';
 
 void main() {
   _registerAttachmentServiceLifecycleTests();
   _registerAttachmentServiceRecoveryTests();
+  _registerAttachmentServiceAccountSuspendTests();
 }

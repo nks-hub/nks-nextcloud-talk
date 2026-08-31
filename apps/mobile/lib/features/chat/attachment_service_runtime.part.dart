@@ -24,6 +24,7 @@ mixin _AttachmentServiceRuntime {
   Map<AttachmentPersistenceKey, AttachmentCancellationController>
   get _cancellations;
   Map<AttachmentPersistenceKey, Completer<void>> get _terminalSourceReleases;
+  Set<AccountId> get _suspendedAccounts;
   Future<void> get _ready;
   set _startupMaintenance(Future<void> value);
   set _confirmationSubscription(
@@ -44,6 +45,9 @@ mixin _AttachmentServiceRuntime {
     _snapshot = loaded.snapshot;
     _metadata = Map.of(loaded.metadata);
     for (final account in _snapshot.accounts.values.toList(growable: false)) {
+      if (account.lane == AttachmentAccountLane.suspended) {
+        _suspendedAccounts.add(account.accountId);
+      }
       for (final job in account.jobs.values.toList(growable: false)) {
         if (job.inFlightRequest == null) {
           continue;
@@ -135,6 +139,9 @@ mixin _AttachmentServiceRuntime {
     AttachmentConfirmationSnapshot snapshot,
   ) async {
     for (final batch in snapshot.batches) {
+      if (_suspendedAccounts.contains(batch.accountId)) {
+        continue;
+      }
       AttachmentPersistenceKey? completedKey;
       _AttachmentRoomKey? completedRoom;
       await _stateMutex.protect(() async {
@@ -179,7 +186,9 @@ mixin _AttachmentServiceRuntime {
   }
 
   void _queueConfirmationCatchUp(AttachmentPersistenceKey key) {
-    if (_closed || _catchUpConfirmation == null) {
+    if (_closed ||
+        _catchUpConfirmation == null ||
+        _suspendedAccounts.contains(AccountId.parse(key.accountId))) {
       return;
     }
     _confirmationRetryTimers.remove(key)?.cancel();
@@ -241,7 +250,8 @@ mixin _AttachmentServiceRuntime {
 
   Future<void> _scheduleConfirmationRetry(AttachmentPersistenceKey key) async {
     if (_catchUpConfirmation == null ||
-        _confirmationRetryTimers.containsKey(key)) {
+        _confirmationRetryTimers.containsKey(key) ||
+        _suspendedAccounts.contains(AccountId.parse(key.accountId))) {
       return;
     }
     final retryCount = _confirmationRetryCounts[key] ?? 0;
@@ -317,7 +327,7 @@ mixin _AttachmentServiceRuntime {
 
   Future<void> _scheduleRoom(_AttachmentRoomKey roomKey) async {
     await _ready;
-    if (_closed) {
+    if (_closed || _suspendedAccounts.contains(roomKey.accountId)) {
       return;
     }
     _roomRerunRequests.add(roomKey);
@@ -413,7 +423,7 @@ mixin _AttachmentServiceRuntime {
   Future<bool> _executeOneStep(_SelectedAttachmentJob selection) async {
     final key = selection.key;
     AttachmentJob? job = _jobForKey(key);
-    if (job == null) {
+    if (job == null || _suspendedAccounts.contains(job.accountId)) {
       return false;
     }
     final storedAccount = await _repository.getAccount(key.accountId);
@@ -516,6 +526,9 @@ mixin _AttachmentServiceRuntime {
         cancellation.signal,
       );
       await _stateMutex.protect(() async {
+        if (_suspendedAccounts.contains(job!.accountId)) {
+          return;
+        }
         final result = applyAttachmentResponse(
           _snapshot,
           accountId: job!.accountId,

@@ -151,6 +151,8 @@ final class DurableAttachmentSession {
 }
 
 final class AttachmentService with _AttachmentServiceRuntime {
+  static const Duration _accountSuspendDrainTimeout = Duration(seconds: 5);
+
   factory AttachmentService({
     required AttachmentRepository repository,
     required CredentialVault credentials,
@@ -266,6 +268,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   final Map<AttachmentPersistenceKey, Completer<void>> _terminalSourceReleases =
       {};
+  @override
+  final Set<AccountId> _suspendedAccounts = {};
+  final Map<AccountId, Future<void>> _accountSuspensions = {};
 
   @override
   late final Future<void> _ready;
@@ -286,11 +291,81 @@ final class AttachmentService with _AttachmentServiceRuntime {
 
   Future<void> get ready => _ready;
 
+  /// Persists an account-wide stop before its credential is revoked, aborts
+  /// active requests, and waits a bounded time for their cleanup paths.
+  Future<void> suspendAccount(AccountId accountId) {
+    final existing = _accountSuspensions[accountId];
+    if (existing != null) {
+      return existing;
+    }
+    _suspendedAccounts.add(accountId);
+    final operation = _suspendAccount(accountId);
+    _accountSuspensions[accountId] = operation;
+    return operation;
+  }
+
+  Future<void> _suspendAccount(AccountId accountId) async {
+    await _ready;
+    await _stateMutex.protect(() async {
+      final account = _snapshot.accounts[accountId];
+      if (account == null) {
+        return;
+      }
+      final suspended = account.copyWith(lane: AttachmentAccountLane.suspended);
+      await _repository.persistAccountState(
+        account: suspended,
+        updatedAt: _clock().toUtc(),
+      );
+      _snapshot = _snapshot.replaceAccount(suspended);
+    });
+    for (final entry in _retryTimers.entries.toList(growable: false)) {
+      if (entry.key.accountId == accountId) {
+        entry.value.cancel();
+        _retryTimers.remove(entry.key);
+      }
+    }
+    for (final entry in _confirmationRetryTimers.entries.toList(
+      growable: false,
+    )) {
+      if (entry.key.accountId == accountId.value) {
+        entry.value.cancel();
+        _confirmationRetryTimers.remove(entry.key);
+      }
+    }
+    for (final entry in _cancellations.entries.toList(growable: false)) {
+      if (entry.key.accountId == accountId.value) {
+        entry.value.cancel();
+      }
+    }
+    _roomRerunRequests.removeWhere((room) => room.accountId == accountId);
+    final active = <Future<void>>[
+      ..._roomRuns.entries
+          .where((entry) => entry.key.accountId == accountId)
+          .map((entry) => entry.value),
+      ..._confirmationCatchUps.entries
+          .where((entry) => entry.key.accountId == accountId.value)
+          .map((entry) => entry.value),
+    ];
+    if (active.isNotEmpty) {
+      final settled = active.map((operation) async {
+        try {
+          await operation;
+        } on Object {
+          // The durable request remains the restart recovery input.
+        }
+      });
+      await Future.wait<void>(
+        settled,
+      ).timeout(_accountSuspendDrainTimeout, onTimeout: () => const <void>[]);
+    }
+  }
+
   Future<DurableAttachmentSession> enqueue(
     AttachmentEnqueueRequest request,
   ) async {
     await _ready;
     _ensureOpen();
+    _ensureAccountActive(request.accountId);
     if (!request.roomCanWrite ||
         !request.profile.supports(request.metadata) ||
         !request.metadata.supportsSource(request.source)) {
@@ -322,6 +397,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     try {
       await _stateMutex.protect(() async {
         _ensureOpen();
+        _ensureAccountActive(request.accountId);
         var current = _snapshot;
         var account = current.accounts[request.accountId];
         if (account == null) {
@@ -340,9 +416,11 @@ final class AttachmentService with _AttachmentServiceRuntime {
               request.capabilityGeneration < account.capabilityGeneration) {
             throw StateError('Attachment account generation is stale');
           }
+          if (account.lane != AttachmentAccountLane.ready) {
+            throw StateError('Attachment account is not active');
+          }
           if (request.credentialGeneration != account.credentialGeneration ||
-              request.capabilityGeneration != account.capabilityGeneration ||
-              account.lane != AttachmentAccountLane.ready) {
+              request.capabilityGeneration != account.capabilityGeneration) {
             account = account.copyWith(
               lane: AttachmentAccountLane.ready,
               credentialGeneration: request.credentialGeneration,
@@ -564,6 +642,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
   }) async {
     await _ready;
     _ensureOpen();
+    _ensureAccountActive(accountId);
     final password = await _credentials.readAppPassword(accountId.value);
     if (password == null || password.isEmpty) {
       throw StateError('Attachment account credential is unavailable');
@@ -598,12 +677,19 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
   }
 
+  void _ensureAccountActive(AccountId accountId) {
+    if (_suspendedAccounts.contains(accountId)) {
+      throw StateError('Attachment account is suspended');
+    }
+  }
+
   Future<void> reconcileConfirmations({
     required AccountId accountId,
     required Iterable<AttachmentMessageConfirmation> confirmations,
   }) async {
     await _ready;
     _ensureOpen();
+    _ensureAccountActive(accountId);
     final values = confirmations.toList(growable: false);
     final rooms = <_AttachmentRoomKey>{};
     final completed = <AttachmentPersistenceKey>[];

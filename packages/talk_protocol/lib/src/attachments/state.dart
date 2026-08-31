@@ -10,7 +10,7 @@ import 'request.dart';
 const String attachmentReplayContractRevision =
     'talk-attachment-f2958bb-core-a0bf541-a599620-r1';
 
-enum AttachmentAccountLane { ready, reauthenticationRequired }
+enum AttachmentAccountLane { ready, reauthenticationRequired, suspended }
 
 enum AttachmentJobPhase {
   localPrepared,
