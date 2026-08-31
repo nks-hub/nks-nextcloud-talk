@@ -45,6 +45,7 @@
     <uses-permission android:name="com.huawei.android.launcher.permission.WRITE_SETTINGS"/>
     <application
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:label="NKS Talk"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
