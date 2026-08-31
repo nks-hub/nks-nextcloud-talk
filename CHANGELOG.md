@@ -24,6 +24,9 @@ proto jen to, co je doložitelné z App Store Connect.
 - Kontrakt založení konverzace odmítne skupinovou místnost s pozváním
   konkrétního uživatele. Talk tuto kombinaci nepodporuje; uživatelé se do
   skupiny přidávají až participant endpointem.
+- Souhrn v detailu konverzace se po změně veřejného přístupu, režimu jen ke
+  čtení nebo obrázku hned srovná s ovládacími prvky. Dříve po změně ukazoval
+  původní typ, stav a avatar.
 
 ## 0.1.0 (25) — 31. 8. 2026
 

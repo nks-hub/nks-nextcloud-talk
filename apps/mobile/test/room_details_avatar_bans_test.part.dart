@@ -7,6 +7,7 @@ void _registerAvatarAndBanTests() {
     final capable = await withCapabilities({'avatar'});
     Uri? posted;
     Map<String, String>? sent;
+    final avatarGets = <Uri>[];
     final client = MockClient((request) async {
       if (request.url.path.endsWith('/participants')) {
         return _ocsSuccess(const <Object?>[]);
@@ -17,8 +18,13 @@ void _registerAvatarAndBanTests() {
         sent = request.bodyFields;
         return _ocsSuccess(
           Map<String, Object?>.from(_conversationRoomJson())
-            ..['isCustomAvatar'] = true,
+            ..['isCustomAvatar'] = true
+            ..['avatarVersion'] = '2',
         );
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/avatar')) {
+        avatarGets.add(request.url);
+        return http.Response('', 404);
       }
       return http.Response('', 404);
     });
@@ -52,6 +58,11 @@ void _registerAvatarAndBanTests() {
       '/ocs/v2.php/apps/spreed/api/v1/room/rooma123/avatar/emoji',
     );
     expect(sent, {'emoji': '\u{1F680}'});
+    await _pumpUntil(
+      tester,
+      () =>
+          avatarGets.any((uri) => uri.queryParameters['avatarVersion'] == '2'),
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -91,9 +102,7 @@ void _registerAvatarAndBanTests() {
       find.byKey(const Key('room-details-avatar-emoji-\u{1F680}')),
     );
     await tester.pump();
-    await tester.tap(
-      find.byKey(const Key('room-details-avatar-color-0082C9')),
-    );
+    await tester.tap(find.byKey(const Key('room-details-avatar-color-0082C9')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('room-details-avatar-save')));
     await _pumpUntil(

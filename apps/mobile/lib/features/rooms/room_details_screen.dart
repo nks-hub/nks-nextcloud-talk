@@ -186,9 +186,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
         children: [
           _RoomSummary(
             account: widget.account,
-            conversation: widget.conversation,
-            displayName: _room?.displayName ?? widget.conversation.displayName,
-            description: _room?.description ?? widget.conversation.description,
+            conversation: _summaryConversation,
           ),
           const Divider(height: 1),
           Padding(

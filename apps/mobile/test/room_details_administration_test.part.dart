@@ -31,6 +31,10 @@ void _registerAdministrationTests() {
 
     expect(find.byKey(const Key('room-details-invite-link')), findsNothing);
     expect(
+      _textByKey(tester, 'room-details-summary-type'),
+      'Group conversation',
+    );
+    expect(
       _textByKey(tester, 'room-details-guests-subtitle'),
       'Invited people only',
     );
@@ -44,6 +48,7 @@ void _registerAdministrationTests() {
     );
 
     expect(posts, 1);
+    expect(_textByKey(tester, 'room-details-summary-type'), 'Public channel');
     // The guest link only makes sense once anyone can use it.
     expect(find.byKey(const Key('room-details-invite-link')), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -66,9 +71,7 @@ void _registerAdministrationTests() {
       }
       if (request.method == 'DELETE' && request.url.path.endsWith('/public')) {
         deletes++;
-        return _ocsSuccess(
-          Map<String, Object?>.from(_conversationRoomJson())..['type'] = 2,
-        );
+        return _ocsSuccess(const <Object?>[]);
       }
       return http.Response('', 404);
     });
@@ -79,6 +82,7 @@ void _registerAdministrationTests() {
       forConversation: publicConversation,
       client: client,
     );
+    expect(_textByKey(tester, 'room-details-summary-type'), 'Public channel');
 
     await tester.tap(find.byKey(const Key('room-details-guests-toggle')));
     await tester.pump();
@@ -103,6 +107,10 @@ void _registerAdministrationTests() {
     );
 
     expect(deletes, 1);
+    expect(
+      _textByKey(tester, 'room-details-summary-type'),
+      'Group conversation',
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -806,8 +814,13 @@ void _registerAdministrationTests() {
       }
       if (request.method == 'PUT' && request.url.path.endsWith('/read-only')) {
         sent.add(request.bodyFields);
+        final state = int.parse(request.bodyFields['state']!);
+        if (state == 0) {
+          return _ocsSuccess(const <Object?>[]);
+        }
         return _ocsSuccess(
-          Map<String, Object?>.from(_conversationRoomJson())..['readOnly'] = 1,
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['readOnly'] = state,
         );
       }
       return http.Response('', 404);
@@ -819,6 +832,7 @@ void _registerAdministrationTests() {
       forConversation: conversation,
       client: client,
     );
+    expect(_textByKey(tester, 'room-details-summary-read-only'), 'No');
 
     await tester.tap(find.byKey(const Key('room-details-read-only-toggle')));
     await tester.pump();
@@ -842,6 +856,21 @@ void _registerAdministrationTests() {
 
     expect(sent, [
       {'state': '1'},
+    ]);
+    expect(_textByKey(tester, 'room-details-summary-read-only'), 'Yes');
+
+    await tester.tap(find.byKey(const Key('room-details-read-only-toggle')));
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-read-only-subtitle') ==
+              'Everyone can write' &&
+          _textByKey(tester, 'room-details-summary-read-only') == 'No',
+    );
+
+    expect(sent, [
+      {'state': '1'},
+      {'state': '0'},
     ]);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());

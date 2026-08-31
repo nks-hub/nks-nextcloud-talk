@@ -1,21 +1,10 @@
 part of 'room_details_screen.dart';
 
 final class _RoomSummary extends StatelessWidget {
-  const _RoomSummary({
-    required this.account,
-    required this.conversation,
-    required this.displayName,
-    required this.description,
-  });
+  const _RoomSummary({required this.account, required this.conversation});
 
   final StoredAccount account;
   final CachedConversation conversation;
-
-  /// The live name and description, which may already reflect a rename or
-  /// description edit made in this screen; [conversation] itself never
-  /// changes for the lifetime of the widget.
-  final String displayName;
-  final String description;
 
   @override
   Widget build(BuildContext context) {
@@ -37,24 +26,25 @@ final class _RoomSummary extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  displayName,
+                  conversation.displayName,
                   key: const Key('room-details-name'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
             ],
           ),
-          if (description.trim().isNotEmpty) ...[
+          if (conversation.description.trim().isNotEmpty) ...[
             const SizedBox(height: 16),
             _InfoRow(
               label: strings.roomDetailsDescriptionLabel,
-              value: description,
+              value: conversation.description,
             ),
           ],
           const SizedBox(height: 12),
           _InfoRow(
             label: strings.roomDetailsTypeLabel,
             value: _roomTypeLabel(strings, conversation.roomType),
+            valueKey: const Key('room-details-summary-type'),
           ),
           const SizedBox(height: 12),
           _InfoRow(
@@ -62,6 +52,7 @@ final class _RoomSummary extends StatelessWidget {
             value: conversation.readOnly != 0
                 ? strings.roomDetailsReadOnlyYes
                 : strings.roomDetailsReadOnlyNo,
+            valueKey: const Key('room-details-summary-read-only'),
           ),
         ],
       ),
@@ -70,10 +61,11 @@ final class _RoomSummary extends StatelessWidget {
 }
 
 final class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+  const _InfoRow({required this.label, required this.value, this.valueKey});
 
   final String label;
   final String value;
+  final Key? valueKey;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +79,11 @@ final class _InfoRow extends StatelessWidget {
             context,
           ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
         ),
-        Text(value, style: Theme.of(context).textTheme.bodyMedium),
+        Text(
+          value,
+          key: valueKey,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
       ],
     );
   }

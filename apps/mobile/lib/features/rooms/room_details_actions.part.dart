@@ -120,6 +120,23 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
 
   int get _readOnly => _room?.readOnly ?? widget.conversation.readOnly;
 
+  CachedConversation get _summaryConversation {
+    final room = _room;
+    if (room == null) {
+      return widget.conversation;
+    }
+    return widget.conversation.copyWith(
+      displayName: room.displayName,
+      description: room.description,
+      readOnly: room.readOnly,
+      roomType: room.type,
+      roomName: room.name,
+      objectType: room.objectType,
+      avatarVersion: room.avatarVersion,
+      isCustomAvatar: room.isCustomAvatar,
+    );
+  }
+
   String _lobbyLabel(AppLocalizations strings) {
     if (_lobbyState == 0) {
       return strings.roomDetailsLobbyOff;
