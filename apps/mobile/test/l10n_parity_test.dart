@@ -12,6 +12,7 @@ const Set<String> _sharedWithEnglish = {
   'appTitle',
   'emojiPickerTitle',
   'giphyPoweredBy',
+  'locationCoordinates',
   'participantAvatarBot',
   'presenceOnline',
   'profileServerLabel',
@@ -50,11 +51,12 @@ void main() {
   });
 
   test('no Czech message is left in English', () {
-    final untranslated = czech.keys
-        .where((key) => !_sharedWithEnglish.contains(key))
-        .where((key) => czech[key] == english[key])
-        .toList()
-      ..sort();
+    final untranslated =
+        czech.keys
+            .where((key) => !_sharedWithEnglish.contains(key))
+            .where((key) => czech[key] == english[key])
+            .toList()
+          ..sort();
 
     expect(
       untranslated,
