@@ -36,7 +36,9 @@ import 'poll_dialog.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
+import 'chat_thread_context.dart';
 import 'chat_typing_indicator.dart';
+import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
 import 'media/image_attachment_upload_panel.dart';
@@ -48,6 +50,8 @@ import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
 import 'composer/mention_suggestions.dart';
 
+export 'chat_thread_context.dart';
+
 part 'chat_room_pane_actions.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_composer_widgets.dart';
@@ -56,123 +60,6 @@ part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
 part 'chat_room_pane_typing.dart';
-
-enum ChatThreadKind { ordinary, named }
-
-final class ChatThreadContext {
-  ChatThreadContext._({
-    required this.accountId,
-    required this.roomToken,
-    required this.rootMessageId,
-    required this.kind,
-    required this.title,
-  });
-
-  static ChatThreadContext? fromCachedRoot({
-    required String accountId,
-    required String roomToken,
-    required CachedChatMessage root,
-  }) {
-    if (root.deleted ||
-        root.accountId != accountId ||
-        root.roomToken != roomToken ||
-        root.messageId < 1 ||
-        (root.threadId != null &&
-            root.threadId != 0 &&
-            root.threadId != root.messageId)) {
-      return null;
-    }
-    try {
-      final message = ChatMessage.fromJson(jsonDecode(root.rawJson));
-      if (message.messageId != root.messageId ||
-          message.roomToken.value != roomToken ||
-          (message.threadId != null &&
-              message.threadId != 0 &&
-              message.threadId != message.messageId)) {
-        return null;
-      }
-      if (message.isThread == true) {
-        final title = message.threadTitle?.trim();
-        if (message.threadId != message.messageId ||
-            title == null ||
-            title.isEmpty) {
-          return null;
-        }
-        return ChatThreadContext._(
-          accountId: accountId,
-          roomToken: roomToken,
-          rootMessageId: message.messageId,
-          kind: ChatThreadKind.named,
-          title: title,
-        );
-      }
-      return ChatThreadContext._(
-        accountId: accountId,
-        roomToken: roomToken,
-        rootMessageId: message.messageId,
-        kind: ChatThreadKind.ordinary,
-        title: null,
-      );
-    } on FormatException {
-      return null;
-    } on TalkProtocolException {
-      return null;
-    }
-  }
-
-  final String accountId;
-  final String roomToken;
-  final int rootMessageId;
-  final ChatThreadKind kind;
-  final String? title;
-
-  bool get isNamed => kind == ChatThreadKind.named;
-  int? get replyTo => isNamed ? null : rootMessageId;
-  int? get networkThreadId => isNamed ? rootMessageId : null;
-
-  ChatMediaThreadBinding mediaBinding({
-    required AccountId accountId,
-    required ConversationToken roomToken,
-  }) {
-    if (accountId.value != this.accountId ||
-        roomToken.value != this.roomToken) {
-      throw StateError('Chat thread media binding scope changed');
-    }
-    return isNamed
-        ? ChatMediaThreadBinding.named(
-            accountId: accountId,
-            roomToken: roomToken,
-            rootMessageId: rootMessageId,
-          )
-        : ChatMediaThreadBinding.ordinary(
-            accountId: accountId,
-            roomToken: roomToken,
-            rootMessageId: rootMessageId,
-          );
-  }
-
-  bool matches({
-    required String accountId,
-    required String roomToken,
-    required int? rootMessageId,
-  }) =>
-      this.accountId == accountId &&
-      this.roomToken == roomToken &&
-      this.rootMessageId == rootMessageId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is ChatThreadContext &&
-      other.accountId == accountId &&
-      other.roomToken == roomToken &&
-      other.rootMessageId == rootMessageId &&
-      other.kind == kind &&
-      other.title == title;
-
-  @override
-  int get hashCode =>
-      Object.hash(accountId, roomToken, rootMessageId, kind, title);
-}
 
 final class ChatThreadScreen extends ConsumerWidget {
   const ChatThreadScreen({
@@ -246,6 +133,7 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
     this.threadId,
     this.threadContext,
     this.jumpToMessageId,
+    this.incomingMessageAnnouncementController,
   }) : assert(threadId == null || threadId > 0),
        assert(threadContext == null || threadId != null),
        assert(jumpToMessageId == null || jumpToMessageId > 0);
@@ -255,6 +143,10 @@ final class ChatRoomPane extends ConsumerStatefulWidget {
   final bool showHeader;
   final int? threadId;
   final ChatThreadContext? threadContext;
+
+  @visibleForTesting
+  final IncomingMessageAnnouncementController?
+  incomingMessageAnnouncementController;
 
   /// A message to reveal once the first synchronization settles, instead of
   /// opening at the newest message. Used by message search and by tapping a
@@ -353,6 +245,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _lastAutoReadUnrecoverable = false;
   ChatRoomProviderKey? _autoReadInFlightKey;
   int? _autoReadInFlightMessageId;
+  late final IncomingMessageAnnouncementController _incomingAnnouncements;
 
   ChatRoomProviderKey get _key => (
     accountId: widget.account.id,
@@ -378,6 +271,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   @override
   void initState() {
     super.initState();
+    _incomingAnnouncements =
+        widget.incomingMessageAnnouncementController ??
+        IncomingMessageAnnouncementController();
     _pendingJumpMessageId = widget.jumpToMessageId;
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_handleScroll);
@@ -474,6 +370,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _giphyRequested = false;
     _emojiPickerOpen = false;
     _emojiPickerPending = false;
+    _incomingAnnouncements.reset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_restoreDraft(_key));
       unawaited(_restartLiveSync());
@@ -515,6 +412,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _syncLoop = null;
     _draftTimer?.cancel();
     _highlightTimer?.cancel();
+    _incomingAnnouncements.dispose();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -538,7 +436,19 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     // its debounce.
     unawaited(_flushDraft(_key, _composer.text));
     _syncTypingActivity(forceInactive: true);
+    _incomingAnnouncements.reset();
     unawaited(_stopLiveSync());
+  }
+
+  @override
+  void didChangeAccessibilityFeatures() {
+    if (!WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .accessibleNavigation) {
+      _incomingAnnouncements.cancelPending();
+    }
   }
 
   @override

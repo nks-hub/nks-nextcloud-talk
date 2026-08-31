@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/incoming_message_announcement.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -24,7 +25,18 @@ void main() {
   testWidgets('root pane keeps background long poll silent and converges', (
     tester,
   ) async {
-    await _verifyLiveBridge(tester, threadId: null);
+    final announcements = <String>[];
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(accessibleNavigation: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await _verifyLiveBridge(
+      tester,
+      threadId: null,
+      incomingMessageAnnounce: (message, _) async {
+        announcements.add(message);
+      },
+    );
+    expect(announcements, ['New activity. User A: External root live message']);
   });
 
   testWidgets('thread pane keeps background long poll silent and converges', (
@@ -496,6 +508,7 @@ Future<void> _verifySuppressedRootRead(
 Future<void> _verifyLiveBridge(
   WidgetTester tester, {
   required int? threadId,
+  IncomingMessageAnnouncement? incomingMessageAnnounce,
 }) async {
   final database = openTestDatabase();
   addTearDown(database.close);
@@ -647,6 +660,12 @@ Future<void> _verifyLiveBridge(
           account: account,
           conversation: conversation!,
           threadId: threadId,
+          incomingMessageAnnouncementController: incomingMessageAnnounce == null
+              ? null
+              : IncomingMessageAnnouncementController(
+                  announce: incomingMessageAnnounce,
+                  debounce: Duration.zero,
+                ),
         ),
       ),
     ),

@@ -21,6 +21,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ) async {
     try {
       await binding.wakeAfterConnectivity();
+      await _observeAuthoritativeIncomingMessages(generation);
       if (_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
         _setSyncSuccess(generation);
       }
@@ -102,6 +103,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ) async {
     try {
       await binding.synchronize(abortTrigger: cancellation);
+      await _observeAuthoritativeIncomingMessages(generation);
     } on ChatServiceException catch (error) {
       if (_isTerminalLiveError(error.code)) {
         _setSyncError(generation, error);
@@ -111,6 +113,65 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       rethrow;
     }
   }
+
+  Future<void> _observeAuthoritativeIncomingMessages(int generation) async {
+    final key = _key;
+    if (!mounted || !_canAnnounceIncomingMessage(generation, key)) {
+      return;
+    }
+    final repository = ref.read(chatRepositoryProvider);
+    final messages = await repository
+        .watchMessages(
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+          threadId: key.threadId,
+        )
+        .first;
+    final threadContext = _currentThreadContext;
+    final networkThreadId = threadContext == null
+        ? key.threadId
+        : threadContext.networkThreadId;
+    final scope = await repository.getNetworkScope(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      threadId: networkThreadId,
+    );
+    if (!mounted || !_canAnnounceIncomingMessage(generation, key)) {
+      return;
+    }
+    final strings = AppLocalizations.of(context);
+    _incomingAnnouncements.observeAuthoritativeMerge(
+      messages: messages.map(
+        (message) => (
+          messageId: message.messageId,
+          actorId: message.actorId,
+          actorDisplayName: message.actorDisplayName,
+          systemMessage: message.systemMessage,
+          messageType: message.messageType,
+          displayText: message.displayText,
+          deleted: message.deleted,
+        ),
+      ),
+      authoritativeMessageId: int.tryParse(scope?.futureCursor ?? ''),
+      localLoginName: widget.account.loginName,
+      activityLabel: strings.lastMessageUnavailable,
+      textDirection: Directionality.of(context),
+      canAnnounce: () =>
+          _canAnnounceIncomingMessage(generation, key) &&
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .accessibilityFeatures
+              .accessibleNavigation,
+    );
+  }
+
+  bool _canAnnounceIncomingMessage(int generation, ChatRoomProviderKey key) =>
+      mounted &&
+      generation == _syncGeneration &&
+      key == _key &&
+      TickerMode.valuesOf(context).enabled &&
+      _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
 
   void _setSyncing(int generation, bool value) {
     if (!mounted || generation != _syncGeneration || _syncing == value) {
