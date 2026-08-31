@@ -18,6 +18,16 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+## 0.1.0 (30) — 31. 8. 2026
+
+Play: AAB se zapnutým Sentry i Rybbit byl přes Publishing API nahrán a
+commitnut do uzavřeného alpha tracku; track vrací build 30 ve stavu
+`completed`.
+TestFlight: build je `VALID`, bez non-exempt encryption, od iOS 15.0 a v
+interní i externí skupině `IN_BETA_TESTING`; beta review je `APPROVED`.
+Předchozí iOS build 29 byl po nalezení poll rendereru expirován a odebrán z
+obou skupin, na Play nahrán nebyl.
+
 - Barevný accent aplikace se řídí motivem právě vybraného Nextcloud účtu.
   Barva je ověřená z autentizovaných capabilities, ukládá se odděleně pro
   každý účet a při přepnutí účtu se změní bez sdílení stavu mezi servery.
@@ -36,6 +46,10 @@ proto jen to, co je doložitelné z App Store Connect.
 - Nastavení Push notifikací ukazuje skutečný systémový stav oprávnění. Lze zde
   provést první žádost nebo po zamítnutí otevřít nastavení aplikace; po návratu
   se stav automaticky obnoví.
+- iOS galerie byla ověřena až do konce na skutečném assetu v iOS 18.6
+  Simulatoru. Výběr vytvořil durable app-owned copy, WebDAV/finalize skončily
+  za 2,16 s stavem `completed`, zdroj se uvolnil a zpráva se zobrazila jako
+  odeslaná. Starší TestFlight 26 tuto lifecycle opravu ještě neobsahoval.
 
 ## 0.1.0 (28) — 31. 8. 2026
 
