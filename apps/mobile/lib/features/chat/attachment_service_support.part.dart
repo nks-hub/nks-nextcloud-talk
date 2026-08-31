@@ -1,5 +1,32 @@
 part of 'attachment_service.dart';
 
+Set<AttachmentJobId> _manualFinalizationBlockExemptions(
+  _AttachmentServiceRuntime service,
+  AttachmentJob current,
+) {
+  final account = service._snapshot.accounts[current.accountId];
+  if (account == null) {
+    return const <AttachmentJobId>{};
+  }
+  final result = <AttachmentJobId>{};
+  for (final other in account.jobs.values) {
+    if (other.jobId == current.jobId ||
+        other.draft.roomToken != current.draft.roomToken ||
+        other.draft.enqueueSequence >= current.draft.enqueueSequence ||
+        (other.phase != AttachmentJobPhase.retryable &&
+            other.phase != AttachmentJobPhase.cleanupFailed)) {
+      continue;
+    }
+    final metadata = service._metadata[_jobKey(other.accountId, other.jobId)];
+    if (metadata != null &&
+        metadata.nextAttemptAt == null &&
+        metadata.automaticRetryCount > 0) {
+      result.add(other.jobId);
+    }
+  }
+  return result;
+}
+
 const List<Duration> _localPersistenceRetryDelays = <Duration>[
   Duration(milliseconds: 25),
   Duration(milliseconds: 250),

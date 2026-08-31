@@ -409,7 +409,7 @@ mixin _AttachmentServiceRuntime {
         final metadata = _metadata[key]!;
         final next = metadata.nextAttemptAt;
         if (next == null && metadata.automaticRetryCount > 0) {
-          return null;
+          continue;
         }
         if (next != null && next.isAfter(_clock().toUtc())) {
           _armRetry(roomKey, next);
@@ -498,6 +498,10 @@ mixin _AttachmentServiceRuntime {
           authority: authority,
           requestId: _identifierFactory.newRequestId(),
           sourceObservation: observation,
+          finalizationBlockExemptions: _manualFinalizationBlockExemptions(
+            this,
+            currentJob,
+          ),
         );
         if (!result.canCommit) {
           planningRejected = true;

@@ -128,6 +128,7 @@ final class _Fixture {
     AttachmentMessageKind kind = AttachmentMessageKind.file,
     String mimeType = 'image/png',
     String displayName = 'source.png',
+    PreparedAttachmentSource? source,
     int? replyTo,
     int? threadId,
   }) => AttachmentEnqueueRequest(
@@ -138,16 +139,18 @@ final class _Fixture {
       path: r'$.roomToken',
       code: TalkProtocolErrorCode.invalidAttachmentModel,
     ),
-    source: PreparedAttachmentSource(
-      handle: AttachmentSourceHandle.parse(sourceFile.uri.toString()),
-      ownership: AttachmentSourceOwnership.appOwnedCopy,
-      byteLength: bytes.length,
-      sha256: AttachmentSha256.parse(
-        'ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f',
-      ),
-      mimeType: mimeType,
-      displayName: displayName,
-    ),
+    source:
+        source ??
+        PreparedAttachmentSource(
+          handle: AttachmentSourceHandle.parse(sourceFile.uri.toString()),
+          ownership: AttachmentSourceOwnership.appOwnedCopy,
+          byteLength: bytes.length,
+          sha256: AttachmentSha256.parse(
+            'ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f',
+          ),
+          mimeType: mimeType,
+          displayName: displayName,
+        ),
     metadata: AttachmentMetadata(
       kind: kind,
       caption: null,
@@ -169,7 +172,8 @@ final class _Fixture {
 
   Future<AttachmentJobId> seedInFlight(AttachmentRequestStep step) async {
     if (step != AttachmentRequestStep.normalPut &&
-        step != AttachmentRequestStep.finalize) {
+        step != AttachmentRequestStep.finalize &&
+        step != AttachmentRequestStep.cleanupDraftFile) {
       throw ArgumentError.value(step, 'step');
     }
     final enqueue = request(normalMaximum: 32);
@@ -215,15 +219,21 @@ final class _Fixture {
     );
     snapshot = admission.plan!.commit(snapshot);
     if (step == AttachmentRequestStep.normalPut ||
-        step == AttachmentRequestStep.finalize) {
+        step == AttachmentRequestStep.finalize ||
+        step == AttachmentRequestStep.cleanupDraftFile) {
       final admitted = snapshot.accounts[enqueue.accountId]!.jobs[jobId]!;
       final folder = DavRelativePath.parse('Talk/Synthetic/Draft');
       final prepared = admitted.copyWith(
-        phase: step == AttachmentRequestStep.normalPut
-            ? AttachmentJobPhase.draftResolved
-            : AttachmentJobPhase.uploaded,
+        phase: switch (step) {
+          AttachmentRequestStep.normalPut => AttachmentJobPhase.draftResolved,
+          AttachmentRequestStep.finalize => AttachmentJobPhase.uploaded,
+          AttachmentRequestStep.cleanupDraftFile =>
+            AttachmentJobPhase.cancelling,
+          _ => throw StateError('Unsupported seeded attachment step'),
+        },
         remoteDraftFolder: folder,
         remoteTemporaryPath: folder.append(admitted.draft.stableTemporaryName),
+        cleanupDraftFile: step == AttachmentRequestStep.cleanupDraftFile,
       );
       snapshot = snapshot.replaceAccount(
         snapshot.accounts[enqueue.accountId]!.copyWith(
@@ -380,6 +390,7 @@ final class _Fixture {
 
   Future<void> cacheConfirmation({
     required int messageId,
+    String referenceId = '11111111-1111-4111-8111-111111111111',
     bool hasFileRichObject = true,
     int? deletedParentMessageId,
     int? threadId,
@@ -394,7 +405,7 @@ final class _Fixture {
       'systemMessage': '',
       'messageType': 'comment',
       'isReplyable': true,
-      'referenceId': '11111111-1111-4111-8111-111111111111',
+      'referenceId': referenceId,
       'message': hasFileRichObject ? '{file}' : 'Pending attachment',
       'messageParameters': hasFileRichObject
           ? <String, Object?>{
@@ -433,7 +444,7 @@ final class _Fixture {
             timestamp: 1770000000 + messageId,
             systemMessage: '',
             messageType: 'comment',
-            referenceId: '11111111-1111-4111-8111-111111111111',
+            referenceId: referenceId,
             displayText: 'Synthetic attachment',
             deleted: false,
             rawJson: jsonEncode(wire),

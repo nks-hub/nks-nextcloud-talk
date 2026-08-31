@@ -34,6 +34,10 @@ proto jen to, co je doložitelné z App Store Connect.
   k motivu aplikace. Volba je oddělená podle účtu a místnosti, platí i ve
   vláknech a kontrastní brána ji podle světlého, tmavého i serverového motivu
   zeslabí tak, aby texty a oddělovače zůstaly čitelné.
+- Starý upload, který po vyčerpání automatických pokusů čeká na ruční řešení,
+  už neblokuje nově vybranou fotografii ve stejné konverzaci. Novější příloha
+  může projít uploadem i finalize; původní job a jeho soubor zůstanou zachované
+  pro ruční opakování nebo úklid.
 
 ## 0.1.0 (30) — 31. 8. 2026
 
@@ -63,10 +67,11 @@ obou skupin, na Play nahrán nebyl.
 - Nastavení Push notifikací ukazuje skutečný systémový stav oprávnění. Lze zde
   provést první žádost nebo po zamítnutí otevřít nastavení aplikace; po návratu
   se stav automaticky obnoví.
-- iOS galerie byla ověřena až do konce na skutečném assetu v iOS 18.6
-  Simulatoru. Výběr vytvořil durable app-owned copy, WebDAV/finalize skončily
-  za 2,16 s stavem `completed`, zdroj se uvolnil a zpráva se zobrazila jako
-  odeslaná. Starší TestFlight 26 tuto lifecycle opravu ještě neobsahoval.
+- iOS galerie prošla na čistém iOS 18.6 Simulatoru se skutečným assetem:
+  durable kopie, WebDAV/finalize i serverová zpráva skončily za 2,16 s.
+  Tento důkaz ale neobsahoval starší vyčerpaný upload zachovaný při TestFlight
+  aktualizaci. Následné hlášení z fyzického buildu 29 proto odhalilo další
+  blokaci fronty, kterou build 30 ještě neopravuje.
 
 ## 0.1.0 (28) — 31. 8. 2026
 

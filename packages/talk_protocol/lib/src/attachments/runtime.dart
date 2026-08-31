@@ -241,6 +241,7 @@ AttachmentRuntimeResult planNextAttachmentStep(
   required AttachmentAuthority authority,
   required AttachmentRequestId requestId,
   AttachmentSourceObservation? sourceObservation,
+  Set<AttachmentJobId> finalizationBlockExemptions = const <AttachmentJobId>{},
 }) {
   final binding = _job(snapshot, accountId, jobId);
   if (binding == null ||
@@ -287,7 +288,11 @@ AttachmentRuntimeResult planNextAttachmentStep(
       }
       return _planUpload(snapshot, binding.account, job, requestId);
     case AttachmentJobPhase.uploaded:
-      if (_finalizationBlocked(binding.account, job)) {
+      if (_finalizationBlocked(
+        binding.account,
+        job,
+        finalizationBlockExemptions,
+      )) {
         return _result(AttachmentRuntimeOutcome.rejected, jobId: jobId);
       }
       final request = AttachmentFinalizeRequest(

@@ -580,7 +580,11 @@ bool _requestIdInUse(
   (job) => job.inFlightRequest?.requestId == requestId,
 );
 
-bool _finalizationBlocked(AttachmentAccountState account, AttachmentJob job) {
+bool _finalizationBlocked(
+  AttachmentAccountState account,
+  AttachmentJob job,
+  Set<AttachmentJobId> exemptions,
+) {
   for (final other in account.jobs.values) {
     if (other.jobId == job.jobId ||
         other.draft.roomToken != job.draft.roomToken) {
@@ -588,6 +592,9 @@ bool _finalizationBlocked(AttachmentAccountState account, AttachmentJob job) {
     }
     if (other.phase == AttachmentJobPhase.finalizing) {
       return true;
+    }
+    if (exemptions.contains(other.jobId)) {
+      continue;
     }
     if (other.draft.enqueueSequence < job.draft.enqueueSequence &&
         !<AttachmentJobPhase>{
