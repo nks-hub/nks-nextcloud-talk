@@ -18,9 +18,9 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
-- Když systém zamítne přístup ke kameře, fotogalerii nebo mikrofonu, chybový
-  stav nabídne přímé otevření nastavení aplikace. Síťové, kvótové a serverové
-  chyby tuto akci nenabízejí.
+- Když systém zamítne přístup ke kameře, fotogalerii, ukládání obrázku nebo
+  mikrofonu, chybový stav nabídne přímé otevření nastavení aplikace. Síťové,
+  kvótové a serverové chyby tuto akci nenabízejí.
 
 ## 0.1.0 (28) — 31. 8. 2026
 
