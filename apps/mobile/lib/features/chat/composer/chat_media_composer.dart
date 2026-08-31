@@ -697,6 +697,22 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                       prepare: _prepareImage,
                       enabled: _imageSupported,
                     ),
+                  if (!widget.showAttachmentButton)
+                    IconButton(
+                      key: const Key('pick-image-from-gallery'),
+                      onPressed:
+                          !_imageSupported || _imageController.state.isActive
+                          ? null
+                          : () => unawaited(
+                              _pickAttachment(AttachmentPickerSource.gallery),
+                            ),
+                      tooltip: strings.attachFromGallery,
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                    ),
                   if (showVoiceUnavailable)
                     SizedBox.square(
                       dimension: 48,
