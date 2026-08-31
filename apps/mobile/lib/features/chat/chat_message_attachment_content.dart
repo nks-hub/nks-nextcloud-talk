@@ -298,6 +298,7 @@ final class _ChatAttachment extends ConsumerWidget {
               originalContentType: mimeType,
               imageName: name,
               repository: ref.read(chatMediaRepositoryProvider),
+              openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
             ),
           );
     final VoidCallback? openFile =

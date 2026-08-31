@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../data/app_database.dart';
@@ -18,6 +20,7 @@ Future<void> showAuthenticatedImageViewer(
   required String imageName,
   required ChatMediaRepository repository,
   ChatImageExporter exporter = const PlatformChatImageExporter(),
+  Future<bool> Function()? openAppSettings,
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -31,6 +34,7 @@ Future<void> showAuthenticatedImageViewer(
         imageName: imageName,
         repository: repository,
         exporter: exporter,
+        openAppSettings: openAppSettings,
       ),
     ),
   );
@@ -46,6 +50,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     required this.imageName,
     required this.repository,
     this.exporter = const PlatformChatImageExporter(),
+    this.openAppSettings,
   });
 
   final StoredAccount account;
@@ -55,6 +60,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
   final String imageName;
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
+  final Future<bool> Function()? openAppSettings;
 
   @override
   State<AuthenticatedImageViewer> createState() =>
@@ -131,15 +137,18 @@ final class _AuthenticatedImageViewerState
         fileName: chatImageBaseName(widget.imageName),
         contentType: image.contentType,
       );
-      return switch (result) {
-        ChatImageSaveResult.saved => strings.imageSavedToGallery,
-        // A refusal must be spoken out, never swallowed: the picture simply
-        // not appearing in the gallery reads as a broken app.
-        ChatImageSaveResult.permissionDenied =>
-          strings.imageSavePermissionDenied,
-        ChatImageSaveResult.outOfSpace => strings.imageSaveOutOfSpace,
-        ChatImageSaveResult.failed => strings.imageSaveFailed,
-      };
+      return (
+        message: switch (result) {
+          ChatImageSaveResult.saved => strings.imageSavedToGallery,
+          // A refusal must be spoken out, never swallowed: the picture simply
+          // not appearing in the gallery reads as a broken app.
+          ChatImageSaveResult.permissionDenied =>
+            strings.imageSavePermissionDenied,
+          ChatImageSaveResult.outOfSpace => strings.imageSaveOutOfSpace,
+          ChatImageSaveResult.failed => strings.imageSaveFailed,
+        },
+        offerSettings: result == ChatImageSaveResult.permissionDenied,
+      );
     }, failureMessage: (strings) => strings.imageSaveFailed);
   }
 
@@ -150,12 +159,18 @@ final class _AuthenticatedImageViewerState
         fileName: chatImageBaseName(widget.imageName),
         contentType: image.contentType,
       );
-      return offered ? null : strings.imageShareFailed;
+      return (
+        message: offered ? null : strings.imageShareFailed,
+        offerSettings: false,
+      );
     }, failureMessage: (strings) => strings.imageShareFailed);
   }
 
   Future<void> _export(
-    Future<String?> Function(ChatMediaFile image, AppLocalizations strings)
+    Future<({String? message, bool offerSettings})> Function(
+      ChatMediaFile image,
+      AppLocalizations strings,
+    )
     run, {
     required String Function(AppLocalizations strings) failureMessage,
   }) async {
@@ -167,16 +182,16 @@ final class _AuthenticatedImageViewerState
     setState(() {
       _exporting = true;
     });
-    String? message;
+    ({String? message, bool offerSettings}) result;
     try {
       final image = _original ??= await widget.repository.loadOriginalFile(
         account: widget.account,
         uri: widget.originalUri,
         expectedContentType: widget.originalContentType,
       );
-      message = await run(image, strings);
+      result = await run(image, strings);
     } on Object {
-      message = failureMessage(strings);
+      result = (message: failureMessage(strings), offerSettings: false);
     } finally {
       if (mounted) {
         setState(() {
@@ -184,10 +199,41 @@ final class _AuthenticatedImageViewerState
         });
       }
     }
-    if (message != null) {
+    if (result.message != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(result.message!),
+          behavior: SnackBarBehavior.floating,
+          action: result.offerSettings && widget.openAppSettings != null
+              ? SnackBarAction(
+                  label: strings.openAppSettings,
+                  onPressed: () => unawaited(_openAppSettings()),
+                )
+              : null,
+        ),
       );
+    }
+  }
+
+  Future<void> _openAppSettings() async {
+    final open = widget.openAppSettings;
+    if (open == null) {
+      return;
+    }
+    final failedMessage = AppLocalizations.of(context).openAppSettingsFailed;
+    try {
+      final opened = await open();
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(failedMessage)));
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(failedMessage)));
+      }
     }
   }
 

@@ -170,10 +170,15 @@ void main() {
     final exporter = _RecordingExporter(
       saveResult: ChatImageSaveResult.permissionDenied,
     );
+    var settingsOpenCalls = 0;
     await tester.pumpWidget(
       _app(
         repository: _repository((_) async => _imageResponse()),
         exporter: exporter,
+        openAppSettings: () async {
+          settingsOpenCalls++;
+          return false;
+        },
       ),
     );
     await tester.tap(find.byKey(const Key('open-synthetic-image')));
@@ -186,6 +191,16 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
     expect(
       find.textContaining('Grant it in the system settings'),
+      findsOneWidget,
+    );
+    final settings = find.byType(SnackBarAction);
+    expect(settings, findsOneWidget);
+    await tester.tap(settings);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(settingsOpenCalls, 1);
+    expect(
+      find.text('The system settings could not be opened.'),
       findsOneWidget,
     );
   });
@@ -347,6 +362,7 @@ Widget _app({
   required ChatMediaRepository repository,
   TextScaler textScaler = TextScaler.noScaling,
   ChatImageExporter? exporter,
+  Future<bool> Function()? openAppSettings,
   String imageName = 'Synthetic image',
 }) {
   return localizedTestApp(
@@ -356,6 +372,7 @@ Widget _app({
         repository: repository,
         exporter: exporter ?? _RecordingExporter(),
         imageName: imageName,
+        openAppSettings: openAppSettings,
       ),
     ),
   );
@@ -366,11 +383,13 @@ final class _ViewerLauncher extends StatelessWidget {
     required this.repository,
     required this.exporter,
     required this.imageName,
+    this.openAppSettings,
   });
 
   final ChatMediaRepository repository;
   final ChatImageExporter exporter;
   final String imageName;
+  final Future<bool> Function()? openAppSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -387,6 +406,7 @@ final class _ViewerLauncher extends StatelessWidget {
             imageName: imageName,
             repository: repository,
             exporter: exporter,
+            openAppSettings: openAppSettings,
           ),
           child: const SizedBox.square(
             dimension: 96,
