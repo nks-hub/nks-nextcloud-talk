@@ -194,6 +194,7 @@ final class ChatMediaComposer extends StatefulWidget {
 
 final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   static const _submittedConfirmationDuration = Duration(milliseconds: 900);
+  static const _admissionResumeTimeout = Duration(seconds: 15);
 
   late final VoiceAttachmentSubmitter _voiceSubmitter;
   late DurableImageAttachmentPicker _imagePicker;
@@ -388,6 +389,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   Future<ImageAttachmentUploadSession> _startImageUpload(
     ImageAttachmentUploadRequest request,
   ) async {
+    await _waitForResumedLifecycle();
+    if (_disposed) {
+      throw StateError('Media composer was disposed before upload admission');
+    }
     final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
     final admissionSourceStore = widget.sourceStore;
     final acceptedReplyTo = request.metadata.replyTo;
@@ -419,6 +424,32 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         }
         unawaited(admissionSourceStore.discard(request.source.handle));
       }
+    }
+  }
+
+  Future<void> _waitForResumedLifecycle() async {
+    final binding = WidgetsBinding.instance;
+    final state = binding.lifecycleState;
+    if (state == null || state == AppLifecycleState.resumed) {
+      return;
+    }
+    final resumed = Completer<void>();
+    late final AppLifecycleListener listener;
+    listener = AppLifecycleListener(
+      onResume: () {
+        if (!resumed.isCompleted) {
+          resumed.complete();
+        }
+      },
+    );
+    if (binding.lifecycleState == AppLifecycleState.resumed &&
+        !resumed.isCompleted) {
+      resumed.complete();
+    }
+    try {
+      await resumed.future.timeout(_admissionResumeTimeout);
+    } finally {
+      listener.dispose();
     }
   }
 

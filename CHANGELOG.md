@@ -18,6 +18,10 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Fotografie vybraná z iOS Fotek už nespouští síťovou část nahrávání, dokud
+  se aplikace po zavření pickeru skutečně nevrátí do popředí. Příloha tak
+  nezůstane viset na „Čeká na nahrání“; pokud se návrat nedokončí, čekání je
+  omezené a nabídne opakování.
 - Sponka v psacím řádku nově sdružuje galerii, fotoaparát, soubor, GIF a tam,
   kde jej server podporuje, také odložené odeslání. GIF a plánování už
   nezabírají dvě samostatné ikony vedle pole.

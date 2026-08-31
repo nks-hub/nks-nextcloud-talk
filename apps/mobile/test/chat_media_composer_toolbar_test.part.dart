@@ -134,4 +134,87 @@ void _registerChatMediaComposerToolbarTests(
     expect(button.onPressed, isNull);
     expect(find.byKey(const Key('voice-record')), findsNothing);
   });
+
+  testWidgets('host paperclip can start gallery selection through controller', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final controller = ChatMediaComposerController();
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        controller: controller,
+        showAttachmentButton: false,
+      ),
+    );
+
+    expect(find.byKey(const Key('pick-image-attachment')), findsNothing);
+    final started = await tester.runAsync(
+      () => controller.pickAttachment(AttachmentPickerSource.gallery),
+    );
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+
+    expect(started, isTrue);
+    expect(bridge.sources, hasLength(1));
+    expect(
+      bridge.sources.single.ownership,
+      AttachmentSourceOwnership.appOwnedCopy,
+    );
+    expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
+  });
+
+  testWidgets('iOS-style inactive picker result waits for resumed admission', (
+    tester,
+  ) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+    final controller = ChatMediaComposerController();
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        controller: controller,
+        showAttachmentButton: false,
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+
+    late Future<bool> started;
+    await tester.runAsync(() async {
+      started = controller.pickAttachment(AttachmentPickerSource.gallery);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const Key('image-attachment-upload-panel'))
+          .evaluate()
+          .isNotEmpty,
+    );
+    expect(bridge.sessions, isEmpty);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(await tester.runAsync(() => started), isTrue);
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+    expect(bridge.sources, hasLength(1));
+  });
 }
