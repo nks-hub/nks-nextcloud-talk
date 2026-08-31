@@ -16,7 +16,13 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (27) — 31. 8. 2026
+
+Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
+track po commitu vrací build 27 ve stavu `completed`.
+TestFlight: nevydáno. V této relaci není dostupný RemoteCmd nástroj a poslední
+ověřený stav build-mac relay odmítá uložené tokeny 401; Apple build se proto
+nepředstírá jako hotový.
 
 - Fotografie vybraná z iOS Fotek už nespouští síťovou část nahrávání, dokud
   se aplikace po zavření pickeru skutečně nevrátí do popředí. Příloha tak
