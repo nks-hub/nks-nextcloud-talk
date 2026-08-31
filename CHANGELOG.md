@@ -21,6 +21,9 @@ proto jen to, co je doložitelné z App Store Connect.
 - Když systém zamítne přístup ke kameře, fotogalerii, ukládání obrázku nebo
   mikrofonu, chybový stav nabídne přímé otevření nastavení aplikace. Síťové,
   kvótové a serverové chyby tuto akci nenabízejí.
+- Nastavení Push notifikací ukazuje skutečný systémový stav oprávnění. Lze zde
+  provést první žádost nebo po zamítnutí otevřít nastavení aplikace; po návratu
+  se stav automaticky obnoví.
 
 ## 0.1.0 (28) — 31. 8. 2026
 
