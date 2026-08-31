@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
@@ -75,12 +77,17 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a valid location renders a bounded trusted live map preview', (
+  testWidgets('location preview stays local until explicit online opt-in', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
+    final client = _RecordingTileClient.success();
     await tester.pumpWidget(
-      _app(const TextScaler.linear(2), message: _locationMessage),
+      _app(
+        const TextScaler.linear(2),
+        message: _locationMessage,
+        tileClientFactory: (_) => client,
+      ),
     );
 
     final location = find.byWidgetPredicate(
@@ -99,7 +106,64 @@ void main() {
     final size = tester.getSize(location);
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.width, lessThanOrEqualTo(240));
-    expect(size.height, greaterThanOrEqualTo(128));
+    expect(size.height, greaterThanOrEqualTo(120));
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(
+      find.byKey(const Key('chat-location-online-opt-in')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Load online OpenStreetMap (shares coordinates)'),
+      findsOneWidget,
+    );
+    expect(client.requests, isEmpty);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
+  testWidgets('online location opt-in is trusted and bounded to four tiles', (
+    tester,
+  ) async {
+    final client = _RecordingTileClient.success();
+    await tester.pumpWidget(
+      _app(
+        TextScaler.noScaling,
+        message: _locationMessage,
+        tileClientFactory: (_) => client,
+        mediaSize: const Size(400, 600),
+        contentWidth: 320,
+      ),
+    );
+    await tester.tap(find.byKey(const Key('chat-location-online-opt-in')));
+    await tester.pump();
+    await tester.runAsync(() async {
+      for (var attempt = 0; attempt < 100 && !client.closed; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+    });
+    await tester.pump();
+
+    expect(client.requests, isNotEmpty);
+    expect(client.requests.length, lessThanOrEqualTo(4));
+    expect(client.maximumActiveRequests, lessThanOrEqualTo(2));
+    expect(
+      client.closed,
+      isTrue,
+      reason:
+          'requests=${client.requests.length}, active=${client.activeRequests}',
+    );
+    for (final request in client.requests) {
+      expect(request.url.scheme, 'https');
+      expect(request.url.host, 'tile.openstreetmap.org');
+      expect(request.url.query, isEmpty);
+      expect(request.followRedirects, isFalse);
+      expect(request.maxRedirects, 0);
+      expect(
+        request.headers['User-Agent'],
+        contains('com.nkshub.nextcloudtalk'),
+      );
+    }
 
     final tileImages = tester.widgetList<Image>(
       find.byWidgetPredicate(
@@ -117,13 +181,7 @@ void main() {
       final resized = image.image as ResizeImage;
       expect(resized.width, 256);
       expect(resized.height, 256);
-      final tile = resized.imageProvider as NetworkImage;
-      final uri = Uri.parse(tile.url);
-      expect(uri.scheme, 'https');
-      expect(uri.host, 'tile.openstreetmap.org');
-      expect(uri.path, matches(RegExp(r'^/16/\d+/\d+\.png$')));
-      expect(uri.query, isEmpty);
-      expect(tile.headers?['User-Agent'], contains('com.nkshub.nextcloudtalk'));
+      expect(resized.imageProvider, isA<MemoryImage>());
     }
 
     final attribution = find.bySemanticsLabel('© OpenStreetMap contributors');
@@ -135,37 +193,107 @@ void main() {
       greaterThanOrEqualTo(48),
     );
     expect(tester.takeException(), isNull);
-    semantics.dispose();
   });
 
-  testWidgets('location tile failure keeps an accessible labelled fallback', (
+  testWidgets('account switch closes loader and discards late tile results', (
     tester,
   ) async {
-    final semantics = tester.ensureSemantics();
+    final oldClient = _RecordingTileClient.delayed();
+    final newClient = _RecordingTileClient.success();
+    final clients = <String, _RecordingTileClient>{
+      _account.id: oldClient,
+      _otherAccount.id: newClient,
+    };
     await tester.pumpWidget(
-      _app(TextScaler.noScaling, message: _locationMessage),
+      _app(
+        TextScaler.noScaling,
+        message: _locationMessage,
+        tileClientFactory: (accountId) => clients[accountId]!,
+      ),
     );
+    await tester.tap(find.byKey(const Key('chat-location-online-opt-in')));
+    await tester.pump();
+    expect(oldClient.requests, isNotEmpty);
+    expect(oldClient.requests.length, lessThanOrEqualTo(2));
+
+    await tester.pumpWidget(
+      _app(
+        TextScaler.noScaling,
+        account: _otherAccount,
+        message: _locationMessage,
+        tileClientFactory: (accountId) => clients[accountId]!,
+      ),
+    );
+    expect(oldClient.closed, isTrue);
+    oldClient.completePendingSuccessfully();
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.map_outlined), findsOneWidget);
-    expect(find.text('Eiffel Tower'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
     expect(
-      tester.getSemantics(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Semantics &&
-              widget.properties.label == 'Open location: Eiffel Tower',
-        ),
-      ),
-      matchesSemantics(
-        label: 'Open location: Eiffel Tower',
-        isLink: true,
-        hasTapAction: true,
+      find.byKey(const Key('chat-location-online-opt-in')),
+      findsOneWidget,
+    );
+    expect(newClient.requests, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('disposing location preview closes and invalidates its loader', (
+    tester,
+  ) async {
+    final client = _RecordingTileClient.delayed();
+    await tester.pumpWidget(
+      _app(
+        TextScaler.noScaling,
+        message: _locationMessage,
+        tileClientFactory: (_) => client,
       ),
     );
+    await tester.tap(find.byKey(const Key('chat-location-online-opt-in')));
+    await tester.pump();
+    expect(client.requests, isNotEmpty);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(client.closed, isTrue);
+    client.completePendingSuccessfully();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+
     expect(tester.takeException(), isNull);
-    semantics.dispose();
   });
+
+  for (final failure in <_TileFailure>[
+    _TileFailure.oversized,
+    _TileFailure.redirect,
+    _TileFailure.serverError,
+  ]) {
+    testWidgets('location ${failure.name} response keeps local fallback', (
+      tester,
+    ) async {
+      final client = _RecordingTileClient.failure(failure);
+      await tester.pumpWidget(
+        _app(
+          TextScaler.noScaling,
+          message: _locationMessage,
+          tileClientFactory: (_) => client,
+        ),
+      );
+      await tester.tap(find.byKey(const Key('chat-location-online-opt-in')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Image), findsNothing);
+      expect(find.byKey(const Key('chat-location-map-marker')), findsOneWidget);
+      expect(find.text('The image could not be loaded.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('chat-location-online-opt-in')),
+        findsOneWidget,
+      );
+      expect(client.requests.length, lessThanOrEqualTo(4));
+      expect(client.closed, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('an invalid location remains inert', (tester) async {
     await tester.pumpWidget(
@@ -400,29 +528,127 @@ final class _FakePlaybackBackend implements VoicePlaybackBackend {
   }
 }
 
+enum _TileFailure { oversized, redirect, serverError }
+
+final class _RecordingTileClient extends http.BaseClient {
+  _RecordingTileClient._(this._responseFactory, {required this.delayed});
+
+  factory _RecordingTileClient.success() =>
+      _RecordingTileClient._((_) => _tileResponse(), delayed: false);
+
+  factory _RecordingTileClient.delayed() =>
+      _RecordingTileClient._((_) => _tileResponse(), delayed: true);
+
+  factory _RecordingTileClient.failure(_TileFailure failure) =>
+      _RecordingTileClient._(
+        (_) => switch (failure) {
+          _TileFailure.oversized => _tileResponse(
+            contentLength: 256 * 1024 + 1,
+          ),
+          _TileFailure.redirect => _tileResponse(
+            statusCode: 302,
+            headers: const <String, String>{
+              'content-type': 'image/png',
+              'location': 'https://attacker.example.invalid/tile.png',
+            },
+          ),
+          _TileFailure.serverError => _tileResponse(statusCode: 503),
+        },
+        delayed: false,
+      );
+
+  final http.StreamedResponse Function(http.Request request) _responseFactory;
+  final bool delayed;
+  final List<http.Request> requests = <http.Request>[];
+  final List<Completer<http.StreamedResponse>> _pending =
+      <Completer<http.StreamedResponse>>[];
+  var activeRequests = 0;
+  var maximumActiveRequests = 0;
+  var closed = false;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (closed) {
+      throw StateError('Client is closed');
+    }
+    final recorded = request as http.Request;
+    requests.add(recorded);
+    activeRequests++;
+    if (activeRequests > maximumActiveRequests) {
+      maximumActiveRequests = activeRequests;
+    }
+    try {
+      if (!delayed) {
+        await Future<void>.value();
+        return _responseFactory(recorded);
+      }
+      final completion = Completer<http.StreamedResponse>();
+      _pending.add(completion);
+      return await completion.future;
+    } finally {
+      activeRequests--;
+    }
+  }
+
+  void completePendingSuccessfully() {
+    for (final completion in List.of(_pending)) {
+      if (!completion.isCompleted) {
+        completion.complete(_tileResponse());
+      }
+    }
+    _pending.clear();
+  }
+
+  @override
+  void close() {
+    closed = true;
+  }
+}
+
+http.StreamedResponse _tileResponse({
+  int statusCode = 200,
+  int? contentLength,
+  Map<String, String> headers = const <String, String>{
+    'content-type': 'image/png',
+  },
+}) {
+  final bytes = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+'
+    'A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  );
+  return http.StreamedResponse(
+    Stream<List<int>>.value(bytes),
+    statusCode,
+    headers: headers,
+    contentLength: contentLength ?? bytes.length,
+  );
+}
+
 Widget _app(
   TextScaler textScaler, {
+  StoredAccount account = _account,
   ChatMessage? message,
   bool showReplyPreview = true,
+  LocationTileClientFactory tileClientFactory = _defaultTileClientFactory,
+  Size mediaSize = const Size(200, 400),
+  double contentWidth = 160,
 }) {
   return localizedTestApp(
     home: Scaffold(
       body: Align(
         alignment: Alignment.topLeft,
         child: MediaQuery(
-          data: MediaQueryData(
-            size: const Size(200, 400),
-            textScaler: textScaler,
-          ),
+          data: MediaQueryData(size: mediaSize, textScaler: textScaler),
           child: SizedBox(
-            width: 160,
+            width: contentWidth,
             child: ChatMessageContent(
               key: const Key('message-content'),
-              account: _account,
+              account: account,
               message: message ?? _message,
               fallbackText: '',
               foregroundColor: Colors.black,
               showReplyPreview: showReplyPreview,
+              locationTileClientFactory: tileClientFactory,
             ),
           ),
         ),
@@ -430,6 +656,9 @@ Widget _app(
     ),
   );
 }
+
+http.Client _defaultTileClientFactory(String accountId) =>
+    _RecordingTileClient.failure(_TileFailure.serverError);
 
 const _account = StoredAccount(
   id: 'account-a',
@@ -439,6 +668,16 @@ const _account = StoredAccount(
   talkFeaturesJson: '[]',
   selected: true,
   createdAtMillis: 1767225600000,
+);
+
+const _otherAccount = StoredAccount(
+  id: 'account-b',
+  serverUrl: 'https://other.example.invalid',
+  loginName: 'other-user',
+  serverProductName: 'Nextcloud',
+  talkFeaturesJson: '[]',
+  selected: false,
+  createdAtMillis: 1767225601000,
 );
 
 final _message = ChatMessage.fromJson(<String, Object?>{
