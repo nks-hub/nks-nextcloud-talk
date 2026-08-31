@@ -18,6 +18,13 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+## 0.1.0 (28) — 31. 8. 2026
+
+Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;
+track po commitu vrací build 28 ve stavu `completed`.
+TestFlight: nevydáno. V této relaci není dostupný RemoteCmd/build-mac nástroj,
+takže Apple build se nepředstírá jako hotový.
+
 - Do hlavního psacího řádku se vrátilo rychlé obrázkové tlačítko s `+` pro
   přímý výběr z galerie. Sponka pro další zdroje a samostatný GIF zůstávají.
 - Android 13+ používá systémovou predictive-back větev místo zastaralého
