@@ -1012,6 +1012,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsPushSection => 'Push notifications';
 
   @override
+  String get settingsNotificationPermission => 'System notification permission';
+
+  @override
+  String get settingsNotificationPermissionGranted => 'Granted';
+
+  @override
+  String get settingsNotificationPermissionDenied => 'Denied';
+
+  @override
+  String get settingsNotificationPermissionNotDetermined => 'Not requested yet';
+
+  @override
+  String get settingsNotificationPermissionChecking => 'Checking…';
+
+  @override
+  String get settingsNotificationPermissionRequest => 'Allow';
+
+  @override
+  String get settingsNotificationPermissionFailed =>
+      'Notification permission could not be requested.';
+
+  @override
   String get settingsPushTransportProxy => 'Our own proxy';
 
   @override

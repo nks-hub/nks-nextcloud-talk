@@ -12,6 +12,7 @@ import 'package:nextcloudtalk/features/push/android_push_transport.dart';
 import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:nextcloudtalk/platform/app_settings.dart';
 
 import 'test_support.dart';
 
@@ -20,6 +21,23 @@ import 'test_support.dart';
 /// Push coordinator idle. Its `revokeAllRegistrations` still runs on a switch
 /// away — against an empty account list, so it asks the platform nothing.
 final class _PresentPushPlatform implements AndroidWebPushPlatform {
+  _PresentPushPlatform({
+    this.permission = AndroidNotificationPermission.granted,
+  });
+
+  AndroidNotificationPermission permission;
+  var permissionRequests = 0;
+
+  @override
+  Future<AndroidNotificationPermission> getNotificationPermission() async =>
+      permission;
+
+  @override
+  Future<AndroidNotificationPermission> requestNotificationPermission() async {
+    permissionRequests++;
+    return permission = AndroidNotificationPermission.granted;
+  }
+
   @override
   Future<AndroidWebPushAvailability> getAvailability() async =>
       const AndroidWebPushAvailability(
@@ -30,6 +48,16 @@ final class _PresentPushPlatform implements AndroidWebPushPlatform {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('Not used by the settings screen');
+}
+
+final class _SettingsOpener implements AppSettingsOpener {
+  var calls = 0;
+
+  @override
+  Future<bool> open() async {
+    calls++;
+    return true;
+  }
 }
 
 final class _ReconcilePushPlatform implements AndroidWebPushPlatform {
@@ -113,7 +141,13 @@ final class _DelayedReadTransportStore implements AndroidPushTransportStore {
   }
 }
 
-Widget _wrap(AppDatabase database, AndroidPushTransportStore store) {
+Widget _wrap(
+  AppDatabase database,
+  AndroidPushTransportStore store, {
+  _PresentPushPlatform? platform,
+  AppSettingsOpener? settingsOpener,
+}) {
+  final pushPlatform = platform ?? _PresentPushPlatform();
   return ProviderScope(
     overrides: [
       appDatabaseProvider.overrideWithValue(database),
@@ -121,7 +155,9 @@ Widget _wrap(AppDatabase database, AndroidPushTransportStore store) {
       accountsProvider.overrideWith(
         (ref) => Stream<List<StoredAccount>>.value(const <StoredAccount>[]),
       ),
-      androidWebPushPlatformProvider.overrideWithValue(_PresentPushPlatform()),
+      androidWebPushPlatformProvider.overrideWithValue(pushPlatform),
+      if (settingsOpener != null)
+        appSettingsOpenerProvider.overrideWithValue(settingsOpener),
       androidPushTransportStoreProvider.overrideWithValue(store),
       // The Web Push coordinator is built for real here, so that switching
       // away from it actually runs its revocation. Its credential vault is
@@ -149,6 +185,63 @@ void main() {
 
   setUp(() => database = openTestDatabase());
   tearDown(() => database.close());
+
+  testWidgets('denied notifications link to system app settings', (
+    tester,
+  ) async {
+    final platform = _PresentPushPlatform(
+      permission: AndroidNotificationPermission.denied,
+    );
+    final opener = _SettingsOpener();
+    await tester.pumpWidget(
+      _wrap(
+        database,
+        _MemoryTransportStore(AndroidPushTransport.proxy),
+        platform: platform,
+        settingsOpener: opener,
+      ),
+    );
+    await _settleRealAsync(tester);
+
+    expect(find.text('Denied'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('open-notification-settings')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-notification-settings')));
+    await tester.pump();
+    expect(opener.calls, 1);
+  });
+
+  testWidgets('unrequested notifications can be granted in place', (
+    tester,
+  ) async {
+    final platform = _PresentPushPlatform(
+      permission: AndroidNotificationPermission.notDetermined,
+    );
+    await tester.pumpWidget(
+      _wrap(
+        database,
+        _MemoryTransportStore(AndroidPushTransport.proxy),
+        platform: platform,
+      ),
+    );
+    await _settleRealAsync(tester);
+
+    expect(find.text('Not requested yet'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const Key('request-notification-permission')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('request-notification-permission')));
+    await _settleRealAsync(tester);
+    expect(platform.permissionRequests, 1);
+    expect(find.text('Granted'), findsOneWidget);
+    expect(
+      find.byKey(const Key('request-notification-permission')),
+      findsNothing,
+    );
+  });
 
   testWidgets('an untouched device shows the proxy transport selected', (
     tester,

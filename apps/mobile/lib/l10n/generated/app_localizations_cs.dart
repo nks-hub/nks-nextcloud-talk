@@ -1010,6 +1010,28 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsPushSection => 'Push notifikace';
 
   @override
+  String get settingsNotificationPermission => 'Systémové oprávnění notifikací';
+
+  @override
+  String get settingsNotificationPermissionGranted => 'Uděleno';
+
+  @override
+  String get settingsNotificationPermissionDenied => 'Zamítnuto';
+
+  @override
+  String get settingsNotificationPermissionNotDetermined => 'Zatím nevyžádáno';
+
+  @override
+  String get settingsNotificationPermissionChecking => 'Kontrola…';
+
+  @override
+  String get settingsNotificationPermissionRequest => 'Povolit';
+
+  @override
+  String get settingsNotificationPermissionFailed =>
+      'O oprávnění notifikací se nepodařilo požádat.';
+
+  @override
   String get settingsPushTransportProxy => 'Vlastní proxy';
 
   @override

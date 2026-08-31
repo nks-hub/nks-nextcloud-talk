@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../features/push/android_push_transport.dart';
+import '../../features/push/android_web_push_bridge.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -20,6 +21,10 @@ final class SettingsScreen extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final accounts = ref.watch(accountsProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final androidPushPlatform = ref.watch(androidWebPushPlatformProvider);
+    final notificationPermission = ref.watch(
+      androidNotificationPermissionProvider(androidPushPlatform != null),
+    );
 
     // Removing the last account leaves this screen with nothing to manage,
     // while the shell underneath has already switched to onboarding. Close
@@ -103,7 +108,7 @@ final class SettingsScreen extends ConsumerWidget {
             ),
             // Android is the only platform with two push paths to choose
             // between; the bridge is null everywhere else.
-            if (ref.watch(androidWebPushPlatformProvider) != null) ...[
+            if (androidPushPlatform != null) ...[
               const Divider(height: 1),
               _SectionHeader(strings.settingsPushSection),
               RadioGroup<AndroidPushTransport>(
@@ -137,6 +142,40 @@ final class SettingsScreen extends ConsumerWidget {
                 const LinearProgressIndicator(
                   key: Key('push-transport-switch-progress'),
                 ),
+              ListTile(
+                key: const Key('settings-notification-permission'),
+                leading: const Icon(Icons.notifications_outlined),
+                title: Text(strings.settingsNotificationPermission),
+                subtitle: Text(
+                  _notificationPermissionLabel(
+                    strings,
+                    notificationPermission.valueOrNull,
+                  ),
+                ),
+                trailing: switch (notificationPermission.valueOrNull) {
+                  AndroidNotificationPermission.notDetermined => TextButton(
+                    key: const Key('request-notification-permission'),
+                    onPressed: () => _requestNotificationPermission(
+                      context,
+                      ref,
+                      androidPushPlatform,
+                    ),
+                    child: Text(strings.settingsNotificationPermissionRequest),
+                  ),
+                  AndroidNotificationPermission.denied => TextButton(
+                    key: const Key('open-notification-settings'),
+                    onPressed: () => _openNotificationSettings(context, ref),
+                    child: Text(strings.openAppSettings),
+                  ),
+                  AndroidNotificationPermission.granted => const Icon(
+                    Icons.check_circle_outline_rounded,
+                  ),
+                  null => const SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                },
+              ),
             ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),
@@ -212,6 +251,51 @@ final class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _requestNotificationPermission(
+    BuildContext context,
+    WidgetRef ref,
+    AndroidWebPushPlatform platform,
+  ) async {
+    try {
+      await platform.requestNotificationPermission();
+      ref.invalidate(androidNotificationPermissionProvider);
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).settingsNotificationPermissionFailed,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openNotificationSettings(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final opened = await ref.read(appSettingsOpenerProvider).open();
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).openAppSettingsFailed),
+          ),
+        );
+      }
+    } on Object {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).openAppSettingsFailed),
+          ),
+        );
+      }
+    }
+  }
+
   void _setTheme(WidgetRef ref, ThemeMode? mode) {
     if (mode == null) {
       return;
@@ -237,6 +321,19 @@ final class SettingsScreen extends ConsumerWidget {
     );
   }
 }
+
+String _notificationPermissionLabel(
+  AppLocalizations strings,
+  AndroidNotificationPermission? permission,
+) => switch (permission) {
+  AndroidNotificationPermission.granted =>
+    strings.settingsNotificationPermissionGranted,
+  AndroidNotificationPermission.denied =>
+    strings.settingsNotificationPermissionDenied,
+  AndroidNotificationPermission.notDetermined =>
+    strings.settingsNotificationPermissionNotDetermined,
+  null => strings.settingsNotificationPermissionChecking,
+};
 
 StoredAccount? _selectedAccount(List<StoredAccount> accounts) {
   for (final account in accounts) {

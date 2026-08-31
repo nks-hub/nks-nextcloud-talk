@@ -196,6 +196,19 @@ final androidWebPushPlatformProvider = Provider<AndroidWebPushPlatform?>((ref) {
   return bridge;
 });
 
+final androidNotificationPermissionProvider = StreamProvider.autoDispose
+    .family<AndroidNotificationPermission?, bool>((ref, enabled) async* {
+      final platform = ref.watch(androidWebPushPlatformProvider);
+      if (!enabled || platform == null) {
+        yield null;
+        return;
+      }
+      yield await platform.getNotificationPermission();
+      await for (final _ in ref.watch(appLifecycleResumeEventsProvider)) {
+        yield await platform.getNotificationPermission();
+      }
+    });
+
 /// Nextcloud's own live channel, running for every signed-in account.
 ///
 /// `notify_push` reaches every platform the app builds for, which is what

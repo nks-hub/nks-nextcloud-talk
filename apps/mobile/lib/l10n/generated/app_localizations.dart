@@ -1898,6 +1898,48 @@ abstract class AppLocalizations {
   /// **'Push notifications'**
   String get settingsPushSection;
 
+  /// No description provided for @settingsNotificationPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'System notification permission'**
+  String get settingsNotificationPermission;
+
+  /// No description provided for @settingsNotificationPermissionGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Granted'**
+  String get settingsNotificationPermissionGranted;
+
+  /// No description provided for @settingsNotificationPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Denied'**
+  String get settingsNotificationPermissionDenied;
+
+  /// No description provided for @settingsNotificationPermissionNotDetermined.
+  ///
+  /// In en, this message translates to:
+  /// **'Not requested yet'**
+  String get settingsNotificationPermissionNotDetermined;
+
+  /// No description provided for @settingsNotificationPermissionChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get settingsNotificationPermissionChecking;
+
+  /// No description provided for @settingsNotificationPermissionRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get settingsNotificationPermissionRequest;
+
+  /// No description provided for @settingsNotificationPermissionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification permission could not be requested.'**
+  String get settingsNotificationPermissionFailed;
+
   /// No description provided for @settingsPushTransportProxy.
   ///
   /// In en, this message translates to:
