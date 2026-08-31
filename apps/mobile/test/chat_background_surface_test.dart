@@ -32,18 +32,18 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      final box = tester.widget<ColoredBox>(
+      final surface = tester.widget<Material>(
         find.byKey(const Key('chat-background-surface')),
       );
       final renderedScheme = Theme.of(
         tester.element(find.byKey(const Key('chat-background-surface'))),
       ).colorScheme;
       expect(
-        box.color,
+        surface.color,
         safeChatBackground(const Color(0xFFFF00FF), renderedScheme),
       );
       expect(
-        chatBackgroundContrast(box.color, renderedScheme.onSurface),
+        chatBackgroundContrast(surface.color!, renderedScheme.onSurface),
         greaterThanOrEqualTo(4.5),
       );
     }

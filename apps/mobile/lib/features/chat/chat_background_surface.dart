@@ -41,7 +41,7 @@ final class ChatBackgroundSurface extends ConsumerWidget {
     final background = requested == null
         ? scheme.surface
         : safeChatBackground(requested, scheme);
-    return ColoredBox(
+    return Material(
       key: const Key('chat-background-surface'),
       color: background,
       child: child,
