@@ -65,7 +65,7 @@ void main() {
           channels: 1,
           bitRate: 64000,
         );
-        await _waitUntil(() => platform.startedRecorderIds.length == 1);
+        await platform.firstStartEntered.future;
         final retirement = backend.retirePendingStart(pendingStart: firstStart);
 
         await backend.start(
@@ -378,7 +378,7 @@ void main() {
       addTearDown(recorder.close);
 
       final firstStart = recorder.start();
-      await _waitUntil(() => backend.starts == 1);
+      await backend.firstStartEntered.future;
       await recorder.cancel();
       await recorder.start();
       clock.advance(const Duration(seconds: 1));
@@ -417,7 +417,7 @@ void main() {
       );
 
       final start = recorder.start();
-      await _waitUntil(() => backend.starts == 1);
+      await backend.firstStartEntered.future;
       await recorder.close();
       startGate.complete();
 
@@ -579,6 +579,7 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
   final String? stopPathOverride;
   final List<Completer<void>> startCompleters;
   final Completer<void>? retirementGate;
+  final Completer<void> firstStartEntered = Completer<void>();
   final StreamController<double> _amplitude =
       StreamController<double>.broadcast();
   String? _path;
@@ -622,6 +623,9 @@ final class _FakeVoiceCaptureBackend implements VoiceCaptureBackend {
     required int bitRate,
   }) {
     starts++;
+    if (!firstStartEntered.isCompleted) {
+      firstStartEntered.complete();
+    }
     _path = path;
     lastBitRate = bitRate;
     lastSampleRate = sampleRate;
@@ -779,6 +783,7 @@ final class _ControlledRecordPlatform extends RecordPlatform {
   final List<String> startedRecorderIds = <String>[];
   final List<String> cancelledRecorderIds = <String>[];
   final List<String> disposedRecorderIds = <String>[];
+  final Completer<void> firstStartEntered = Completer<void>();
 
   @override
   Future<void> create(String recorderId) async {}
@@ -795,6 +800,7 @@ final class _ControlledRecordPlatform extends RecordPlatform {
   }) async {
     startedRecorderIds.add(recorderId);
     if (startedRecorderIds.length == 1) {
+      firstStartEntered.complete();
       await firstStartGate.future;
     }
   }
@@ -817,22 +823,13 @@ final class _ControlledRecordPlatform extends RecordPlatform {
       throw UnimplementedError(invocation.memberName.toString());
 }
 
-Future<void> _waitUntil(bool Function() condition) async {
-  for (var attempt = 0; attempt < 50; attempt++) {
-    if (condition()) {
-      return;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 2));
-  }
-  fail('Condition did not become true.');
-}
-
 Future<void> _waitUntilAsync(Future<bool> Function() condition) async {
-  for (var attempt = 0; attempt < 50; attempt++) {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  do {
     if (await condition()) {
       return;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 2));
-  }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  } while (DateTime.now().isBefore(deadline));
   fail('Async condition did not become true.');
 }
