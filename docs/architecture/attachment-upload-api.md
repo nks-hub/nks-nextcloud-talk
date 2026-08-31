@@ -215,6 +215,30 @@ nedodává bokem. JSON, XML, mapy a seznamy jsou bounded a immutable.
 room token, filename, Draft cestu, source handle, reference ID, checksum,
 caption, message text ani XML obsah.
 
+### Přijatý kontakt jako vCard příloha
+
+Talk Android `5428960` exportuje vybraný systémový kontakt do `.vcf` souboru a
+odesílá jej stejným uploadem jako jinou file attachment. Nejde o samostatný
+rich object wire typ. `9d6b0fe` proto rozšiřuje pouze příjem obecné přílohy,
+nikoli transport nebo oprávnění adresáře.
+
+Contact karta se použije pro strong MIME `text/vcard`, `text/x-vcard` a
+`text/directory`. Fallback pro `application/octet-stream` nebo
+`binary/octet-stream` vyžaduje `.vcf` na posledním segmentu už validovaného
+`DavRelativePath`; zobrazované jméno nesmí typ zfalšovat. Nepovolený MIME
+zůstává obecným souborem i s `.vcf` cestou. Bez validní account-bound DAV cesty
+se žádná open akce nevykreslí.
+
+Otevření používá beze změny existující autentizované stažení, kontrolu content
+type, app-owned dočasný soubor a platformní opener. Karta má samostatný button
+semantics uzel s tap akcí, 48dp minimum a bounded text při 200 %.
+
+Živý test na iOS 18.6 provedl WebDAV PUT generického vCardu, Files share
+`shareType=10`, příjem v druhém účtu, render, autentizované stažení a nativní
+contact preview. Light/dark/accessibility-large layout nepřetekl; kontrast je
+6,4986:1 a 11,6343:1. Zpráva i soubor byly smazané a následná kontrola vrátila
+0 zpráv a 0 souborů.
+
 ## Spustitelné ověření
 
 ```powershell

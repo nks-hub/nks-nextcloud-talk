@@ -692,3 +692,19 @@ ještě před dokončením nové odpovědi.
 Location v odpovědi se musí přesně rovnat request filtru. Tím ani validní OCS
 payload nemůže přeskočit mezi dvěma rooms stejného účtu nebo mezi účty se
 shodným tokenem.
+
+### D-042: Sdílený kontakt je vCard file attachment
+
+Stav: Přijato 31. srpna 2026, commit `9d6b0fe`.
+
+Upstream Android exportuje kontakt do `.vcf` a pošle jej standardním attachment
+tokem. Klient proto nepřidává nový rich object druh ani zvláštní download
+transport. Příjem zůstává v account-authenticated DAV file pipeline.
+
+Strong vCard MIME je autoritativní. Generic binární MIME smí použít contact UI
+jen tehdy, když poslední segment validovaného `DavRelativePath` končí `.vcf`.
+Display name není trust boundary a příponu nesmí dodat ani přepsat.
+
+Odeslání kontaktu z platformního adresáře je samostatná funkce s vlastními
+permission a privacy hranicemi. Příjem vCardu ji nepředstírá ani nevyžaduje
+přístup ke kontaktům zařízení.

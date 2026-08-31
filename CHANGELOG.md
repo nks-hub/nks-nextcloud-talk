@@ -33,6 +33,8 @@ proto jen to, co je doložitelné z App Store Connect.
   přes celý chat ani při zvětšeném systémovém písmu.
 - Nad chatem se připomene nejbližší událost kalendáře, která odkazuje na danou
   konverzaci. Banner ukazuje název a čas a lze jej zavřít.
+- Sdílený kontakt ve formátu vCard se zobrazí jako kontakt místo obecného
+  souboru. Klepnutí jej bezpečně stáhne a otevře v systémovém náhledu kontaktu.
 - V otevřené konverzaci se ukáže, kdo právě píše. Více píšících lidí se sloučí
   do jednoho řádku; indikátor zmizí po ukončení psaní nebo po výpadku spojení a
   respektuje nastavení soukromí Nextcloud Talk. Vlastní indikátor se správně
