@@ -564,6 +564,7 @@ final class VoiceMessageLabels {
     required this.cancel,
     required this.send,
     required this.sent,
+    required this.openSettings,
     required this.errorLabel,
   });
 
@@ -576,6 +577,7 @@ final class VoiceMessageLabels {
   final String cancel;
   final String send;
   final String sent;
+  final String openSettings;
   final String Function(VoiceMessageError error) errorLabel;
 }
 
@@ -583,11 +585,13 @@ final class VoiceMessageControls extends StatelessWidget {
   const VoiceMessageControls({
     required this.controller,
     required this.labels,
+    this.onOpenSettings,
     super.key,
   });
 
   final VoiceMessageController controller;
   final VoiceMessageLabels labels;
+  final VoidCallback? onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -621,6 +625,18 @@ final class VoiceMessageControls extends StatelessWidget {
         icon: Icons.mic_rounded,
         action: controller.start,
       ),
+      if ((state.error == VoiceMessageError.permissionDenied ||
+              state.error == VoiceMessageError.permissionPermanentlyDenied) &&
+          onOpenSettings != null)
+        SizedBox.square(
+          dimension: 48,
+          child: IconButton(
+            key: const Key('voice-open-app-settings'),
+            tooltip: labels.openSettings,
+            onPressed: onOpenSettings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ),
     ],
     VoiceMessagePhase.recording || VoiceMessagePhase.paused => <Widget>[
       _button(

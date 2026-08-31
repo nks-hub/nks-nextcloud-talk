@@ -266,14 +266,18 @@ final class _PendingImageBackend implements ImageSelectionBackend {
 }
 
 final class _VoiceBackendFactory {
-  _VoiceBackendFactory({this.failStart = false});
+  _VoiceBackendFactory({this.failStart = false, this.permissionGranted = true});
 
   final bool failStart;
+  final bool permissionGranted;
   final List<_CaptureBackend> captureBackends = <_CaptureBackend>[];
   final List<_PlaybackBackend> playbackBackends = <_PlaybackBackend>[];
 
   VoiceCaptureBackend createCapture() {
-    final backend = _CaptureBackend(failStart: failStart);
+    final backend = _CaptureBackend(
+      failStart: failStart,
+      permissionGranted: permissionGranted,
+    );
     captureBackends.add(backend);
     return backend;
   }
@@ -292,9 +296,10 @@ final class _VoiceBackendFactory {
 }
 
 final class _CaptureBackend implements VoiceCaptureBackend {
-  _CaptureBackend({this.failStart = false});
+  _CaptureBackend({this.failStart = false, this.permissionGranted = true});
 
   final bool failStart;
+  final bool permissionGranted;
   final StreamController<double> _amplitude =
       StreamController<double>.broadcast();
   String? _path;
@@ -315,7 +320,7 @@ final class _CaptureBackend implements VoiceCaptureBackend {
   void emitAmplitude(double value) => _amplitude.add(value);
 
   @override
-  Future<bool> requestPermission() async => true;
+  Future<bool> requestPermission() async => permissionGranted;
 
   @override
   Future<bool> supportsEncoding() async => true;

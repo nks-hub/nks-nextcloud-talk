@@ -135,6 +135,41 @@ void _registerChatMediaComposerToolbarTests(
     expect(find.byKey(const Key('voice-record')), findsNothing);
   });
 
+  testWidgets('denied microphone offers app settings recovery', (tester) async {
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory(permissionGranted: false);
+    addTearDown(voiceBackends.close);
+    var settingsOpenCalls = 0;
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        openAppSettings: () async {
+          settingsOpenCalls++;
+          return false;
+        },
+      ),
+    );
+    await tester.tap(find.byKey(const Key('voice-record')));
+    await tester.pump();
+
+    expect(find.text('Microphone access was denied.'), findsOneWidget);
+    final settings = find.byKey(const Key('voice-open-app-settings'));
+    expect(settings, findsOneWidget);
+    expect(tester.getSize(settings), const Size(48, 48));
+    await tester.tap(settings);
+    await tester.pump();
+    expect(settingsOpenCalls, 1);
+    expect(
+      find.text('The system settings could not be opened.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('loading toolbar wraps at compact detail pane width', (
     tester,
   ) async {

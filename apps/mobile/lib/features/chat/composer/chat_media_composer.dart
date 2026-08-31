@@ -522,7 +522,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     return true;
   }
 
-  Future<void> _openAttachmentAppSettings() async {
+  Future<void> _openAppSettings() async {
     final open = widget.openAppSettings;
     if (open == null) {
       return;
@@ -724,6 +724,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         : VoiceMessageControls(
             controller: voiceController,
             labels: _voiceLabels(strings),
+            onOpenSettings: widget.openAppSettings == null
+                ? null
+                : () => unawaited(_openAppSettings()),
           );
     return Column(
       key: const Key('chat-media-composer'),
@@ -733,7 +736,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           controller: _imageController,
           onOpenSettings: widget.openAppSettings == null
               ? null
-              : () => unawaited(_openAttachmentAppSettings()),
+              : () => unawaited(_openAppSettings()),
         ),
         if (voiceOwnsToolbar)
           Row(
@@ -745,6 +748,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                   child: VoiceMessageControls(
                     controller: voiceController,
                     labels: _voiceLabels(strings),
+                    onOpenSettings: widget.openAppSettings == null
+                        ? null
+                        : () => unawaited(_openAppSettings()),
                   ),
                 ),
               ),
@@ -758,6 +764,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
               VoiceMessageControls(
                 controller: voiceController!,
                 labels: _voiceLabels(strings),
+                onOpenSettings: widget.openAppSettings == null
+                    ? null
+                    : () => unawaited(_openAppSettings()),
               ),
               Wrap(
                 alignment: WrapAlignment.end,
@@ -903,6 +912,7 @@ VoiceMessageLabels _voiceLabels(AppLocalizations strings) => VoiceMessageLabels(
   cancel: strings.cancelVoiceMessage,
   send: strings.sendVoiceMessage,
   sent: strings.voiceMessageQueued,
+  openSettings: strings.openAppSettings,
   errorLabel: (error) => switch (error) {
     VoiceMessageError.unsupported => strings.voiceUnsupported,
     VoiceMessageError.permissionDenied => strings.voicePermissionDenied,
