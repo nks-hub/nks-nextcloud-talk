@@ -18,6 +18,18 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Barevný accent aplikace se řídí motivem právě vybraného Nextcloud účtu.
+  Barva je ověřená z autentizovaných capabilities, ukládá se odděleně pro
+  každý účet a při přepnutí účtu se změní bez sdílení stavu mezi servery.
+- Psací řádek má sponku jako první akci, vedle ní Giphy a emoji. Mikrofon je
+  přímo před Odeslat a duplicitní rychlé obrázkové tlačítko s `+` bylo
+  odstraněno; galerie zůstává ve sponce.
+- Na podporovaném serveru lze ze sponky vytvořit anketu, zvolit jednu nebo více
+  odpovědí a hned hlasovat. Klient váže mutace na aktuální účet, místnost a
+  vlákno a při nejasné odpovědi je slepě neopakuje.
+- Sdílená poloha ukazuje přímo ve zprávě lokální náhled se značkou. Živé
+  dlaždice OpenStreetMap načte až po výslovném klepnutí; používá pouze ověřené
+  souřadnice a ignoruje serverem dodaný odkaz.
 - Když systém zamítne přístup ke kameře, fotogalerii, ukládání obrázku nebo
   mikrofonu, chybový stav nabídne přímé otevření nastavení aplikace. Síťové,
   kvótové a serverové chyby tuto akci nenabízejí.

@@ -708,3 +708,42 @@ Display name není trust boundary a příponu nesmí dodat ani přepsat.
 Odeslání kontaktu z platformního adresáře je samostatná funkce s vlastními
 permission a privacy hranicemi. Příjem vCardu ji nepředstírá ani nevyžaduje
 přístup ke kontaktům zařízení.
+
+### D-043: Serverový accent je account-scoped capability state
+
+Stav: Přijato 31. srpna 2026, commit `75127b9`.
+
+Autentizovaný capability snapshot přijímá pouze opaque `#RRGGBB`. Barva se
+ukládá v samostatné tabulce vázané cizím klíčem na `accountId`; nesdílí se s
+Talk feature fingerprintem ani jiným serverem. Chybějící nebo neplatná hodnota
+starý accent odstraní a použije výchozí seed.
+
+Theme se přegeneruje při změně vybraného účtu. Material color scheme zůstává
+odpovědný za light/dark kontrast, který hlídá výpočet minimálně 4,5:1.
+
+### D-044: Živá mapa polohy vyžaduje výslovný souhlas
+
+Stav: Přijato 31. srpna 2026, commity `4b0e659` a `b3c751e`.
+
+Zobrazení zprávy nesmí samo poslat souřadnice třetí straně. Výchozí náhled je
+lokální schéma s markerem. OSM dlaždice se načtou až po samostatném přístupném
+klepnutí; serverem dodaný link není důvěryhodný síťový cíl.
+
+Loader má pevný HTTPS origin, zakázané redirecty, limit čtyř requestů po
+256 KiB, souběh dva a timeout. Bajty zůstávají jen ve widget-local
+`Image.memory`; account switch nebo dispose zavře klienta a generation guard
+zahodí pozdní výsledek. Nevzniká globální cross-account image cache.
+
+### D-045: Ankety jsou online-only serverové mutace
+
+Stav: Přijato 31. srpna 2026, commity `d714f70` a `5f48ca7`.
+
+Poll create, show a vote používají exact upstream Talk v1 kontrakt a feature
+`talk-polls`. Create vyžaduje write oprávnění; show a vote zůstávají dostupné
+platnému účastníkovi read-only konverzace podle controller atributů upstreamu.
+Thread poll navíc vyžaduje canonical nesmazaný root.
+
+Create ani vote nemají idempotency key, proto se nezařazují do durable outboxu
+a po nejednoznačném výsledku se automaticky neopakují. Přijatý `talk-poll`
+rich object nese pouze validovaný poll ID; aktuální stav a hlasování se vždy
+načtou account/room-bound GETem ze serveru.
