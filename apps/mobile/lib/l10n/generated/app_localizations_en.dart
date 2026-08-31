@@ -2307,6 +2307,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollChecking => 'Checking poll support';
 
   @override
+  String get pollLoading => 'Loading poll';
+
+  @override
+  String get pollReloadAction => 'Try again';
+
+  @override
+  String pollOpenAction(String name) {
+    return 'Open poll $name';
+  }
+
+  @override
   String typingOne(String name) {
     return '$name is typing…';
   }

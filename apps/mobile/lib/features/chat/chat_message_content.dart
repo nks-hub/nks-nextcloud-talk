@@ -14,6 +14,7 @@ import '../../data/app_database.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'emoji_only_message.dart';
+import 'poll_dialog.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
 import 'media/chat_attachment_opener.dart';
@@ -72,65 +73,103 @@ final class ChatMessageContent extends StatelessWidget {
         .where((entry) => entry.value.type == 'file')
         .toList(growable: false);
     final giphySelection = _giphyReferences(document);
-    return _LocationTileScope(
-      accountId: account.id,
-      clientFactory: locationTileClientFactory,
-      child: Column(
-        key: Key('chat-rich-content-${parsed.messageId}'),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showReplyPreview && parsed.parent != null) ...[
-            _ReplyPreview(
-              account: account,
-              message: parsed,
-              onOpenParent: onOpenParent,
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (giphySelection.references.isEmpty)
-            if (attachments.isEmpty &&
-                parsed.messageParameters.isEmpty &&
-                isEmojiOnlyMessage(parsed.message))
-              Text(
-                parsed.message.trim(),
-                key: Key('chat-enlarged-emoji-${parsed.messageId}'),
-                style: TextStyle(
-                  color: foregroundColor,
-                  fontSize: enlargedEmojiFontSize,
-                  height: 1.15,
-                ),
-              )
+    return _PollViewerScope(
+      account: account,
+      message: parsed,
+      child: _LocationTileScope(
+        accountId: account.id,
+        clientFactory: locationTileClientFactory,
+        child: Column(
+          key: Key('chat-rich-content-${parsed.messageId}'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showReplyPreview && parsed.parent != null) ...[
+              _ReplyPreview(
+                account: account,
+                message: parsed,
+                onOpenParent: onOpenParent,
+              ),
+              const SizedBox(height: 8),
+            ],
+            if (giphySelection.references.isEmpty)
+              if (attachments.isEmpty &&
+                  parsed.messageParameters.isEmpty &&
+                  isEmojiOnlyMessage(parsed.message))
+                Text(
+                  parsed.message.trim(),
+                  key: Key('chat-enlarged-emoji-${parsed.messageId}'),
+                  style: TextStyle(
+                    color: foregroundColor,
+                    fontSize: enlargedEmojiFontSize,
+                    height: 1.15,
+                  ),
+                )
+              else
+                RichChatDocumentContent(
+                  document: document,
+                  foregroundColor: foregroundColor,
+                )
             else
-              RichChatDocumentContent(
+              _GiphyRichDocument(
+                accountId: account.id,
                 document: document,
                 foregroundColor: foregroundColor,
-              )
-          else
-            _GiphyRichDocument(
-              accountId: account.id,
-              document: document,
-              foregroundColor: foregroundColor,
-              references: giphySelection.references,
-              hasOverflow: giphySelection.hasOverflow,
-            ),
-          for (var index = 0; index < attachments.length; index++) ...[
-            const SizedBox(height: 8),
-            _ChatAttachment(
-              key: Key('chat-attachment-${parsed.messageId}-$index'),
-              account: account,
-              parameter: attachments[index].value,
-              messageId: parsed.messageId,
-              index: index,
-            ),
+                references: giphySelection.references,
+                hasOverflow: giphySelection.hasOverflow,
+              ),
+            for (var index = 0; index < attachments.length; index++) ...[
+              const SizedBox(height: 8),
+              _ChatAttachment(
+                key: Key('chat-attachment-${parsed.messageId}-$index'),
+                account: account,
+                parameter: attachments[index].value,
+                messageId: parsed.messageId,
+                index: index,
+              ),
+            ],
+            if (parsed.reactions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _ReactionSummary(message: parsed, onTap: onReactionTap),
+            ],
           ],
-          if (parsed.reactions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _ReactionSummary(message: parsed, onTap: onReactionTap),
-          ],
-        ],
+        ),
       ),
     );
   }
+}
+
+final class _PollViewerScope extends InheritedWidget {
+  const _PollViewerScope({
+    required this.account,
+    required this.message,
+    required super.child,
+  });
+
+  final StoredAccount account;
+  final ChatMessage message;
+
+  static _PollViewerScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PollViewerScope>();
+
+  int? validatedPollId(ChatRichObjectParameter parameter) {
+    if (message.deleted ||
+        message.systemMessage != 'object_shared' ||
+        parameter.type != 'talk-poll' ||
+        !message.messageParameters.values.contains(parameter)) {
+      return null;
+    }
+    final rawId = parameter.id;
+    if (rawId == null || !RegExp(r'^[1-9]\d{0,18}$').hasMatch(rawId)) {
+      return null;
+    }
+    return int.tryParse(rawId);
+  }
+
+  @override
+  bool updateShouldNotify(_PollViewerScope oldWidget) =>
+      oldWidget.account.id != account.id ||
+      oldWidget.message.messageId != message.messageId ||
+      oldWidget.message.deleted != message.deleted;
 }
 
 Widget _showAfterFirstImageFrame({

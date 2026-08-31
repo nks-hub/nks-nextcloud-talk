@@ -43,6 +43,8 @@ abstract interface class PollSender {
     required int maxVotes,
   });
 
+  Future<TalkPoll> load({required PollRoomKey key, required int pollId});
+
   Future<TalkPoll> vote({
     required PollRoomKey key,
     required TalkPoll poll,
@@ -76,7 +78,7 @@ final class PollService implements PollSender {
   @override
   Future<bool> isAvailable(PollRoomKey key) async {
     try {
-      await _prepare(key);
+      await _prepare(key, access: _PollAccess.create);
       return true;
     } on PollServiceException {
       return false;
@@ -95,7 +97,7 @@ final class PollService implements PollSender {
   }) async {
     var dispatched = false;
     try {
-      final context = await _prepare(key);
+      final context = await _prepare(key, access: _PollAccess.create);
       final request = PollCreateRequest(
         accountId: AccountId.parse(key.accountId),
         requestId: ChatRequestId.parse(_uuid.v4()),
@@ -138,6 +140,39 @@ final class PollService implements PollSender {
   }
 
   @override
+  Future<TalkPoll> load({required PollRoomKey key, required int pollId}) async {
+    try {
+      final context = await _prepare(key, access: _PollAccess.readVote);
+      final response = await _api.getPoll(
+        pollRequest: PollShowRequest(
+          accountId: AccountId.parse(key.accountId),
+          requestId: ChatRequestId.parse(_uuid.v4()),
+          server: context.server,
+          roomToken: context.room.token,
+          pollsAvailable: true,
+          pollId: pollId,
+        ),
+        loginName: context.loginName,
+        appPassword: context.appPassword,
+      );
+      return await _confirmed(response, key.accountId, dispatched: false);
+    } on PollServiceException {
+      rethrow;
+    } on NextcloudApiException catch (error) {
+      if (error.statusCode == 401) {
+        await _chat.markReauthenticationRequired(key.accountId);
+      }
+      throw PollServiceException(
+        error.statusCode == 401
+            ? PollServiceError.reauthenticationRequired
+            : PollServiceError.unavailable,
+      );
+    } on TalkProtocolException {
+      throw const PollServiceException(PollServiceError.invalidResponse);
+    }
+  }
+
+  @override
   Future<TalkPoll> vote({
     required PollRoomKey key,
     required TalkPoll poll,
@@ -151,7 +186,7 @@ final class PollService implements PollSender {
     }
     var dispatched = false;
     try {
-      final context = await _prepare(key);
+      final context = await _prepare(key, access: _PollAccess.readVote);
       final request = PollVoteRequest(
         accountId: AccountId.parse(key.accountId),
         requestId: ChatRequestId.parse(_uuid.v4()),
@@ -190,7 +225,10 @@ final class PollService implements PollSender {
     }
   }
 
-  Future<_PreparedPoll> _prepare(PollRoomKey key) async {
+  Future<_PreparedPoll> _prepare(
+    PollRoomKey key, {
+    required _PollAccess access,
+  }) async {
     final account = await _accounts.getAccount(key.accountId);
     final conversation = await _chat.getConversation(
       accountId: key.accountId,
@@ -204,40 +242,7 @@ final class PollService implements PollSender {
       throw const PollServiceException(PollServiceError.credentialMissing);
     }
     try {
-      final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
-      if (conversation.accountId != key.accountId ||
-          room.token.value != key.roomToken ||
-          room.readOnly != 0 ||
-          (room.type != _roomTypeGroup && room.type != _roomTypePublic) ||
-          room.permissions & _chatPermission != _chatPermission ||
-          (room.lobbyState != 0 &&
-              room.permissions & _ignoreLobbyPermission !=
-                  _ignoreLobbyPermission)) {
-        throw const PollServiceException(PollServiceError.contextMissing);
-      }
-      // The v1 federation proxy does not forward PollController's threadId.
-      // Sending it would create a real poll in the room root while the UI
-      // claims it belongs to this thread, so fail before dispatch instead.
-      if (key.threadId != null && room.isFederated) {
-        throw const PollServiceException(PollServiceError.unsupported);
-      }
-      if (key.threadId != null) {
-        final rootRow = await _chat.getMessage(
-          accountId: key.accountId,
-          roomToken: key.roomToken,
-          messageId: key.threadId!,
-        );
-        if (rootRow == null) {
-          throw const PollServiceException(PollServiceError.contextMissing);
-        }
-        final root = ChatMessage.fromJson(jsonDecode(rootRow.rawJson));
-        if (root.messageId != key.threadId ||
-            root.roomToken != room.token ||
-            root.isThread != true ||
-            root.threadId != key.threadId) {
-          throw const PollServiceException(PollServiceError.contextMissing);
-        }
-      }
+      var room = await _validateCachedContext(key, access: access);
       final server = ServerBase.parse(account.serverUrl);
       final capabilities = await _api.getAuthenticatedCapabilities(
         server: server,
@@ -245,10 +250,15 @@ final class PollService implements PollSender {
         appPassword: password,
       );
       if (!capabilities.talkFeatures.contains('talk-polls') ||
-          (key.threadId != null &&
+          (access == _PollAccess.create &&
+              key.threadId != null &&
               !capabilities.talkFeatures.contains('threads'))) {
         throw const PollServiceException(PollServiceError.unsupported);
       }
+      // Capabilities are a network boundary. The room or thread can change
+      // while it is in flight, so validate the current cache again before the
+      // mutation is allowed to leave the process.
+      room = await _validateCachedContext(key, access: access);
       return _PreparedPoll(
         server: server,
         room: room,
@@ -270,6 +280,62 @@ final class PollService implements PollSender {
     } on TalkProtocolException {
       throw const PollServiceException(PollServiceError.invalidResponse);
     }
+  }
+
+  Future<ConversationRoom> _validateCachedContext(
+    PollRoomKey key, {
+    required _PollAccess access,
+  }) async {
+    final conversation = await _chat.getConversation(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+    );
+    if (conversation == null || conversation.accountId != key.accountId) {
+      throw const PollServiceException(PollServiceError.contextMissing);
+    }
+    final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+    if (room.token.value != key.roomToken ||
+        (room.lobbyState != 0 &&
+            room.permissions & _ignoreLobbyPermission !=
+                _ignoreLobbyPermission)) {
+      throw const PollServiceException(PollServiceError.contextMissing);
+    }
+    if (access == _PollAccess.create &&
+        (room.readOnly != 0 ||
+            (room.type != _roomTypeGroup && room.type != _roomTypePublic) ||
+            room.permissions & _chatPermission != _chatPermission)) {
+      throw const PollServiceException(PollServiceError.contextMissing);
+    }
+    if (access == _PollAccess.readVote || key.threadId == null) {
+      return room;
+    }
+    if (room.isFederated) {
+      throw const PollServiceException(PollServiceError.unsupported);
+    }
+    final rootRow = await _chat.getMessage(
+      accountId: key.accountId,
+      roomToken: key.roomToken,
+      messageId: key.threadId!,
+    );
+    if (rootRow == null ||
+        rootRow.deleted ||
+        rootRow.accountId != key.accountId ||
+        rootRow.roomToken != key.roomToken ||
+        rootRow.messageId != key.threadId) {
+      throw const PollServiceException(PollServiceError.contextMissing);
+    }
+    final root = ChatMessage.fromJson(jsonDecode(rootRow.rawJson));
+    final title = root.threadTitle?.trim();
+    if (root.messageId != key.threadId ||
+        root.roomToken != room.token ||
+        root.isThread != true ||
+        root.threadId != key.threadId ||
+        title == null ||
+        title.isEmpty ||
+        title.runes.length > 200) {
+      throw const PollServiceException(PollServiceError.contextMissing);
+    }
+    return room;
   }
 
   Future<TalkPoll> _confirmed(
@@ -300,6 +366,8 @@ final class PollService implements PollSender {
     });
   }
 }
+
+enum _PollAccess { create, readVote }
 
 final class _PreparedPoll {
   const _PreparedPoll({

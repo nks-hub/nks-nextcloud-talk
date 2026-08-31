@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/poll_dialog.dart';
@@ -76,6 +78,44 @@ void main() {
     expect(find.byKey(const Key('poll-error')), findsOneWidget);
     expect(sender.createCalls, 1);
   });
+
+  testWidgets('viewer loads later and disables radio while voting', (
+    tester,
+  ) async {
+    final sender = _FakePollSender()..voteCompleter = Completer<TalkPoll>();
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: PollViewerDialog(
+          sender: sender,
+          roomKey: const (
+            accountId: 'participant-b',
+            roomToken: 'roomtoken',
+            threadId: null,
+          ),
+          pollId: 7,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(sender.loadCalls, 1);
+
+    await tester.tap(find.byKey(const Key('poll-viewer-option-1')));
+    await tester.tap(find.byKey(const Key('poll-viewer-vote')));
+    await tester.pump();
+
+    final radio = tester.widget<RadioListTile<int>>(
+      find.byKey(const Key('poll-viewer-option-1')),
+    );
+    expect(radio.enabled, isFalse);
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('poll-viewer-vote')))
+          .onPressed,
+      isNull,
+    );
+    sender.voteCompleter!.complete(_pollFixture(votedSelf: const [1]));
+    await tester.pumpAndSettle();
+  });
 }
 
 final class _FakePollSender implements PollSender {
@@ -84,9 +124,17 @@ final class _FakePollSender implements PollSender {
   int createCalls = 0;
   String? createdQuestion;
   List<int>? votedOptions;
+  int loadCalls = 0;
+  Completer<TalkPoll>? voteCompleter;
 
   @override
   Future<bool> isAvailable(PollRoomKey key) async => true;
+
+  @override
+  Future<TalkPoll> load({required PollRoomKey key, required int pollId}) async {
+    loadCalls++;
+    return _poll(votedSelf: const []);
+  }
 
   @override
   Future<TalkPoll> create({
@@ -111,21 +159,27 @@ final class _FakePollSender implements PollSender {
     required List<int> optionIds,
   }) async {
     votedOptions = optionIds;
+    if (voteCompleter != null) {
+      return voteCompleter!.future;
+    }
     return _poll(votedSelf: optionIds);
   }
 
-  TalkPoll _poll({required List<int> votedSelf}) => TalkPoll.fromJson({
-    'id': 7,
-    'question': 'Lunch?',
-    'options': ['Pizza', 'Salad'],
-    'actorType': 'users',
-    'actorId': 'fixture-user',
-    'actorDisplayName': 'Fixture User',
-    'status': 0,
-    'resultMode': 0,
-    'maxVotes': 1,
-    'votedSelf': votedSelf,
-    'votes': {'option-1': votedSelf.isEmpty ? 0 : 1},
-    'numVoters': votedSelf.isEmpty ? 0 : 1,
-  });
+  TalkPoll _poll({required List<int> votedSelf}) =>
+      _pollFixture(votedSelf: votedSelf);
 }
+
+TalkPoll _pollFixture({required List<int> votedSelf}) => TalkPoll.fromJson({
+  'id': 7,
+  'question': 'Lunch?',
+  'options': ['Pizza', 'Salad'],
+  'actorType': 'users',
+  'actorId': 'fixture-user',
+  'actorDisplayName': 'Fixture User',
+  'status': 0,
+  'resultMode': 0,
+  'maxVotes': 1,
+  'votedSelf': votedSelf,
+  'votes': votedSelf.isEmpty ? <Object?>[] : {'option-1': 1},
+  'numVoters': votedSelf.isEmpty ? 0 : 1,
+});

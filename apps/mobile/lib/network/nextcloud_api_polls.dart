@@ -1,6 +1,19 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiPolls on _HttpNextcloudApiBase {
+  Future<PollResponse> getPoll({
+    required PollShowRequest pollRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) => _sendPoll(
+    pollRequest,
+    loginName: loginName,
+    appPassword: appPassword,
+    confirmedStatusCode: 200,
+    abortTrigger: abortTrigger,
+  );
+
   Future<PollResponse> createPoll({
     required PollCreateRequest pollRequest,
     required String loginName,
@@ -39,8 +52,12 @@ mixin _NextcloudApiPolls on _HttpNextcloudApiBase {
         ...pollRequest.headers,
         'Accept': 'application/json',
         'Authorization': _basicAuthorization(loginName, appPassword),
-      })
-      ..body = jsonEncode(pollRequest.jsonBody);
+      });
+    final jsonBody = pollRequest.jsonBody;
+    if (jsonBody != null) {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode(jsonBody);
+    }
     final payload = await _sendBody(
       request,
       allowedStatusCodes: {

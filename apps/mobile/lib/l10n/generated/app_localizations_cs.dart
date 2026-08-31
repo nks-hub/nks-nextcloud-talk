@@ -2306,6 +2306,17 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pollChecking => 'Ověřuji podporu anket';
 
   @override
+  String get pollLoading => 'Načítám anketu';
+
+  @override
+  String get pollReloadAction => 'Zkusit znovu';
+
+  @override
+  String pollOpenAction(String name) {
+    return 'Otevřít anketu $name';
+  }
+
+  @override
   String typingOne(String name) {
     return '$name píše…';
   }

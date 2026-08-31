@@ -124,6 +124,49 @@ void main() {
       PollResponseClassification.serviceUnavailable,
     );
   });
+
+  test('accepts upstream hidden votes [] and rejects a non-empty list', () {
+    final hidden = Map<String, Object?>.from(_pollEnvelope(statusCode: 200));
+    final hiddenPoll =
+        ((hidden['ocs'] as Map<String, Object?>)['data']
+            as Map<String, Object?>);
+    hiddenPoll['votes'] = <Object?>[];
+    expect(TalkPoll.fromJson(hiddenPoll).votes, isEmpty);
+
+    hiddenPoll['votes'] = <Object?>[1];
+    expect(
+      () => TalkPoll.fromJson(hiddenPoll),
+      throwsA(
+        isA<TalkProtocolException>().having(
+          (error) => error.path,
+          'path',
+          r'$.ocs.data.votes',
+        ),
+      ),
+    );
+  });
+
+  test('show request is GET and binds the returned poll id', () {
+    final request = PollShowRequest(
+      accountId: accountId,
+      requestId: ChatRequestId.parse('poll-show'),
+      server: server,
+      roomToken: room,
+      pollsAvailable: true,
+      pollId: 7,
+    );
+    expect(request.method, 'GET');
+    expect(request.jsonBody, isNull);
+    expect(
+      decodePollResponse(
+        request: request,
+        statusCode: 200,
+        confirmedStatusCode: 200,
+        body: _body(_pollEnvelope(statusCode: 200)),
+      ).poll?.id,
+      7,
+    );
+  });
 }
 
 Uint8List _body(Object value) =>
@@ -143,7 +186,7 @@ Map<String, Object?> _pollEnvelope({required int statusCode}) => {
       'resultMode': 0,
       'maxVotes': 1,
       'votedSelf': <int>[],
-      'votes': <String, int>{},
+      'votes': <Object?>[],
       'numVoters': 0,
     },
   },

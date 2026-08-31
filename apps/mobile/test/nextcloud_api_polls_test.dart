@@ -77,6 +77,34 @@ void main() {
       'optionIds': [1],
     });
   });
+
+  test('show poll is a bodyless bounded GET', () async {
+    late http.Request sent;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        sent = request;
+        return http.Response(jsonEncode(_envelope(statusCode: 200)), 200);
+      }),
+    );
+    addTearDown(api.close);
+    final response = await api.getPoll(
+      pollRequest: PollShowRequest(
+        accountId: accountId,
+        requestId: ChatRequestId.parse('show-poll'),
+        server: server,
+        roomToken: room,
+        pollsAvailable: true,
+        pollId: 7,
+      ),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+
+    expect(sent.method, 'GET');
+    expect(sent.body, isEmpty);
+    expect(sent.headers['content-type'], isNull);
+    expect(response.poll?.id, 7);
+  });
 }
 
 Map<String, Object?> _envelope({required int statusCode}) => {
@@ -93,7 +121,7 @@ Map<String, Object?> _envelope({required int statusCode}) => {
       'resultMode': 0,
       'maxVotes': 1,
       'votedSelf': [1],
-      'votes': {'option-1': 1},
+      'votes': statusCode == 201 ? <Object?>[] : {'option-1': 1},
       'numVoters': 1,
     },
   },

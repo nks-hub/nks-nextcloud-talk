@@ -97,7 +97,14 @@ final class TalkPoll {
     );
     final votes = <int, int>{};
     final rawVotes = data['votes'];
-    if (rawVotes != null) {
+    if (rawVotes is List<Object?>) {
+      // PollController::renderPoll() intentionally emits [] while an open
+      // poll's results are hidden from this participant. No non-empty list is
+      // part of the wire contract; visible results use option-* map keys.
+      if (rawVotes.isNotEmpty) {
+        _responseFailure(r'$.ocs.data.votes');
+      }
+    } else if (rawVotes != null) {
       final map = requireObject(
         rawVotes,
         path: r'$.ocs.data.votes',
@@ -178,11 +185,8 @@ sealed class PollRequest {
   final String userAgent;
   Uri get uri;
   String get method;
-  Map<String, String> get headers => UnmodifiableMapView({
-    'OCS-APIRequest': 'true',
-    'User-Agent': userAgent,
-    'Content-Type': 'application/json',
-  });
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
   Map<String, Object?>? get jsonBody;
 }
 
@@ -268,6 +272,37 @@ final class PollVoteRequest extends PollRequest {
       UnmodifiableMapView({'optionIds': optionIds});
 }
 
+final class PollShowRequest extends PollRequest {
+  PollShowRequest({
+    required super.accountId,
+    required super.requestId,
+    required super.server,
+    required super.roomToken,
+    required super.pollsAvailable,
+    required this.pollId,
+  }) {
+    if (pollId < 1) {
+      _requestFailure(r'$.pollId');
+    }
+  }
+
+  final int pollId;
+
+  @override
+  String get method => 'GET';
+
+  @override
+  Uri get uri => server.uri.replace(
+    path:
+        '${server.basePath}/ocs/v2.php/apps/spreed/api/v1/poll/'
+        '${roomToken.value}/$pollId',
+    queryParameters: const {'format': 'json'},
+  );
+
+  @override
+  Map<String, Object?>? get jsonBody => null;
+}
+
 final class PollResponse {
   const PollResponse({required this.classification, required this.poll});
   final PollResponseClassification classification;
@@ -324,7 +359,11 @@ PollResponse decodePollResponse({
     _responseFailure(r'$.ocs.meta');
   }
   final poll = TalkPoll.fromJson(ocs['data']);
-  if (request is PollVoteRequest && poll.id != request.pollId) {
+  final expectedPollId = switch (request) {
+    PollVoteRequest(:final pollId) || PollShowRequest(:final pollId) => pollId,
+    PollCreateRequest() => null,
+  };
+  if (expectedPollId != null && poll.id != expectedPollId) {
     _responseFailure(r'$.ocs.data.id');
   }
   return PollResponse(

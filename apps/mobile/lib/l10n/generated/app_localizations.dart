@@ -4226,6 +4226,24 @@ abstract class AppLocalizations {
   /// **'Checking poll support'**
   String get pollChecking;
 
+  /// No description provided for @pollLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading poll'**
+  String get pollLoading;
+
+  /// No description provided for @pollReloadAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get pollReloadAction;
+
+  /// No description provided for @pollOpenAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open poll {name}'**
+  String pollOpenAction(String name);
+
   /// Typing indicator for one participant.
   ///
   /// In en, this message translates to:

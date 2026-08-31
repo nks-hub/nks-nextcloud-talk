@@ -411,6 +411,8 @@ final class _RichObjectPill extends StatelessWidget {
     if (location != null) {
       return _ChatLocationPreview(location: location);
     }
+    final pollScope = _PollViewerScope.maybeOf(context);
+    final pollId = pollScope?.validatedPollId(parameter);
     final icon = switch (node.objectKind) {
       RichChatObjectKind.user ||
       RichChatObjectKind.guest ||
@@ -447,7 +449,51 @@ final class _RichObjectPill extends StatelessWidget {
         ],
       ),
     );
-    return pill;
+    if (pollId == null || pollScope == null) {
+      return pill;
+    }
+    final strings = AppLocalizations.of(context);
+    void openPoll() {
+      final message = pollScope.message;
+      unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (_) => PollViewerDialog(
+            sender: ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(pollServiceProvider),
+            roomKey: (
+              accountId: pollScope.account.id,
+              roomToken: message.roomToken.value,
+              threadId: message.threadId == message.messageId
+                  ? null
+                  : message.threadId,
+            ),
+            pollId: pollId,
+          ),
+        ),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label: strings.pollOpenAction(label),
+      onTap: openPoll,
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: Key('open-poll-$pollId'),
+          onTap: openPoll,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            child: Center(widthFactor: 1, heightFactor: 1, child: pill),
+          ),
+        ),
+      ),
+    );
   }
 }
 

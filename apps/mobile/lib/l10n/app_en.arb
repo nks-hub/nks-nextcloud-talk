@@ -945,6 +945,10 @@
   "pollSignInAgain": "Sign in to this account again.",
   "pollMenuAction": "Poll",
   "pollChecking": "Checking poll support",
+  "pollLoading": "Loading poll",
+  "pollReloadAction": "Try again",
+  "pollOpenAction": "Open poll {name}",
+  "@pollOpenAction": {"placeholders": {"name": {"type": "String"}}},
   "typingOne": "{name} is typing…",
   "@typingOne": {
     "description": "Typing indicator for one participant.",

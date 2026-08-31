@@ -10,11 +10,42 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
+import 'package:nextcloudtalk/features/chat/poll_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
 void main() {
+  testWidgets('validated incoming poll opens the server-backed viewer', (
+    tester,
+  ) async {
+    final sender = _ContentPollSender();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [pollServiceProvider.overrideWithValue(sender)],
+        child: _app(TextScaler.noScaling, message: _pollMessage),
+      ),
+    );
+
+    final action = find.byKey(const Key('open-poll-7'));
+    expect(action, findsOneWidget);
+    expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poll-viewer-dialog')), findsOneWidget);
+    expect(sender.loadedPollIds, [7]);
+  });
+
+  testWidgets('noncanonical poll rich object stays inert', (tester) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _invalidPollMessage),
+    );
+
+    expect(find.byKey(const Key('open-poll-7')), findsNothing);
+    expect(find.text('Lunch?'), findsOneWidget);
+  });
+
   testWidgets(
     'inline link has one semantic node, 48dp target, and 200% wrapping',
     (tester) async {
@@ -774,6 +805,76 @@ final _locationMessage = ChatMessage.fromJson(<String, Object?>{
     },
   },
 });
+
+final _pollMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._message.wire,
+  'id': 50,
+  'referenceId': 'reference-50',
+  'systemMessage': 'object_shared',
+  'message': '{object}',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'talk-poll',
+      'id': '7',
+      'name': 'Lunch?',
+    },
+  },
+});
+
+final _invalidPollMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._pollMessage.wire,
+  'id': 51,
+  'referenceId': 'reference-51',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'talk-poll',
+      'id': '07',
+      'name': 'Lunch?',
+    },
+  },
+});
+
+final class _ContentPollSender implements PollSender {
+  final List<int> loadedPollIds = [];
+
+  @override
+  Future<bool> isAvailable(PollRoomKey key) async => true;
+
+  @override
+  Future<TalkPoll> create({
+    required PollRoomKey key,
+    required String question,
+    required List<String> options,
+    required PollResultMode resultMode,
+    required int maxVotes,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<TalkPoll> load({required PollRoomKey key, required int pollId}) async {
+    loadedPollIds.add(pollId);
+    return TalkPoll.fromJson({
+      'id': pollId,
+      'question': 'Lunch?',
+      'options': ['Pizza', 'Salad'],
+      'actorType': 'users',
+      'actorId': 'user-a',
+      'actorDisplayName': 'User A',
+      'status': 0,
+      'resultMode': 0,
+      'maxVotes': 1,
+      'votedSelf': <int>[],
+      'votes': <Object?>[],
+      'numVoters': 0,
+    });
+  }
+
+  @override
+  Future<TalkPoll> vote({
+    required PollRoomKey key,
+    required TalkPoll poll,
+    required List<int> optionIds,
+  }) => throw UnimplementedError();
+}
 
 final _invalidLocationMessage = ChatMessage.fromJson(<String, Object?>{
   ..._locationMessage.wire,
