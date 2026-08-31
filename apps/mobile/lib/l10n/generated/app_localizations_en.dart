@@ -508,6 +508,45 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get shareLocation => 'Location';
+
+  @override
+  String get sharedLocationDefaultName => 'Shared location';
+
+  @override
+  String get locationConfirmTitle => 'Share current location?';
+
+  @override
+  String locationCoordinates(String latitude, String longitude) {
+    return '$latitude, $longitude';
+  }
+
+  @override
+  String get locationPermissionDenied => 'Location access was denied.';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Location access is disabled in system settings.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Turn on location services and try again.';
+
+  @override
+  String get locationUnavailable =>
+      'The current location could not be determined.';
+
+  @override
+  String get locationShareFailed => 'The location could not be shared.';
+
+  @override
+  String get locationShareAmbiguous =>
+      'The server may have received the location. Check the chat before trying again.';
+
+  @override
+  String get locationShared => 'Location shared.';
+
+  @override
   String outOfOffice(String user) {
     return '$user is out of office and might not respond.';
   }

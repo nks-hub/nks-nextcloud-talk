@@ -53,6 +53,8 @@
 	<string>NKS Talk needs photo library access to attach a picture you pick to a message.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>NKS Talk saves pictures from your conversations to your photo library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>NKS Talk uses your current location only when you choose to share it in a conversation.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

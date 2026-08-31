@@ -31,6 +31,7 @@ import 'chat_message_actions_service.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
 import 'message_translation_dialog.dart';
+import 'location_share_service.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
@@ -787,6 +788,18 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                 ),
               ),
       ),
+      if (actionsProfile?.geoLocation ?? false)
+        AttachmentMenuAction(
+          key: const Key('share-current-location'),
+          icon: const Icon(Icons.location_on_outlined),
+          label: strings.shareLocation,
+          onSelected:
+              _sending ||
+                  (widget.threadId != null &&
+                      _currentThreadContext?.isNamed != true)
+              ? null
+              : () => unawaited(_shareCurrentLocation()),
+        ),
     ];
     final idleComposerActions = <Widget>[
       ComposerActionMenuButton(actions: attachmentMenuActions),

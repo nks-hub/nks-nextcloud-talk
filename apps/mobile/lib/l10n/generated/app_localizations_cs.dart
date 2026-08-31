@@ -510,6 +510,44 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get shareLocation => 'Poloha';
+
+  @override
+  String get sharedLocationDefaultName => 'Sdílená poloha';
+
+  @override
+  String get locationConfirmTitle => 'Sdílet aktuální polohu?';
+
+  @override
+  String locationCoordinates(String latitude, String longitude) {
+    return '$latitude, $longitude';
+  }
+
+  @override
+  String get locationPermissionDenied => 'Přístup k poloze byl zamítnut.';
+
+  @override
+  String get locationPermissionDeniedForever =>
+      'Přístup k poloze je vypnutý v nastavení systému.';
+
+  @override
+  String get locationServicesDisabled =>
+      'Zapněte služby určování polohy a zkuste to znovu.';
+
+  @override
+  String get locationUnavailable => 'Aktuální polohu se nepodařilo zjistit.';
+
+  @override
+  String get locationShareFailed => 'Polohu se nepodařilo sdílet.';
+
+  @override
+  String get locationShareAmbiguous =>
+      'Server mohl polohu přijmout. Než pokus zopakujete, zkontrolujte chat.';
+
+  @override
+  String get locationShared => 'Poloha byla sdílena.';
+
+  @override
   String outOfOffice(String user) {
     return '$user je mimo kancelář a nemusí odpovědět.';
   }

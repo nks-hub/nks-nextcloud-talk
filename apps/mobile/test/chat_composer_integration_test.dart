@@ -19,6 +19,7 @@ import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
+import 'package:nextcloudtalk/features/chat/location_share_service.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
@@ -26,7 +27,10 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'chat_composer_location_test.part.dart';
+
 void main() {
+  _registerLocationComposerTests();
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
@@ -658,6 +662,7 @@ final class _ComposerHarness {
   Widget app({
     StoredAccount? account,
     CachedConversation? conversation,
+    bool wrapInScaffold = false,
     List<Override> overrides = const <Override>[],
   }) {
     return ProviderScope(
@@ -672,10 +677,17 @@ final class _ComposerHarness {
         ...overrides,
       ],
       child: localizedTestApp(
-        home: ChatRoomPane(
-          account: account ?? this.account,
-          conversation: conversation ?? this.conversation,
-        ),
+        home: wrapInScaffold
+            ? Scaffold(
+                body: ChatRoomPane(
+                  account: account ?? this.account,
+                  conversation: conversation ?? this.conversation,
+                ),
+              )
+            : ChatRoomPane(
+                account: account ?? this.account,
+                conversation: conversation ?? this.conversation,
+              ),
       ),
     );
   }
@@ -771,6 +783,7 @@ Map<String, Object?> _attachmentCapabilities() {
       'chat-v2',
       'chat-reference-id',
       'chat-replies',
+      'geo-location-sharing',
     ],
   );
   final ocs = result['ocs']! as Map<String, Object?>;

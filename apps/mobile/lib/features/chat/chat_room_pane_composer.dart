@@ -1,6 +1,104 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneComposer on _ChatRoomPaneState {
+  Future<void> _shareCurrentLocation() async {
+    if (_sending || _isReadOnlyNow()) {
+      return;
+    }
+    final targetKey = _key;
+    final threadId = _currentThreadContext?.networkThreadId;
+    if (targetKey.threadId != null && threadId == null) {
+      return;
+    }
+    final generation = ++_sendGeneration;
+    final strings = AppLocalizations.of(context);
+    _update(() => _sending = true);
+    try {
+      final position = await ref.read(currentLocationSourceProvider).current();
+      if (!mounted || !_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      final latitude = position.latitude.toStringAsFixed(6);
+      final longitude = position.longitude.toStringAsFixed(6);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          key: const Key('location-share-confirmation'),
+          title: Text(strings.locationConfirmTitle),
+          content: Text(strings.locationCoordinates(latitude, longitude)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              key: const Key('location-share-submit'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(strings.shareLocation),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      await ref
+          .read(locationShareServiceProvider)
+          .share(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            position: position,
+            name: strings.sharedLocationDefaultName,
+            threadId: threadId,
+          );
+      if (!_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      await _sync();
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(strings.locationShared);
+      }
+    } on CurrentLocationException catch (error) {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        final message = switch (error.code) {
+          CurrentLocationError.servicesDisabled =>
+            strings.locationServicesDisabled,
+          CurrentLocationError.permissionDenied =>
+            strings.locationPermissionDenied,
+          CurrentLocationError.permissionDeniedForever =>
+            strings.locationPermissionDeniedForever,
+          CurrentLocationError.unavailable => strings.locationUnavailable,
+        };
+        _showLocationSnackBar(message);
+      }
+    } on LocationShareException catch (error) {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(
+          error.code == LocationShareError.ambiguous
+              ? strings.locationShareAmbiguous
+              : strings.locationShareFailed,
+        );
+      }
+    } on Object {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(strings.locationShareFailed);
+      }
+    } finally {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _update(() => _sending = false);
+      }
+    }
+  }
+
+  void _showLocationSnackBar(String message) {
+    if (Scaffold.maybeOf(context) == null) {
+      return;
+    }
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _openSendOptions({
     required bool canSendSilently,
     required bool canSchedule,

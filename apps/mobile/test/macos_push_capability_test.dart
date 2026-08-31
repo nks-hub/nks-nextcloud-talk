@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -61,6 +62,33 @@ void main() {
     );
     expect(project, contains('[CP] Embed Pods Frameworks'));
     expect(project, contains('Pods_Runner.framework in Frameworks'));
+  });
+
+  test('macOS location access is foreground and sandbox scoped', () {
+    final info = read('$runner${separator}Info.plist');
+    expect(info, contains('<key>NSLocationUsageDescription</key>'));
+    for (final name in const [
+      'DebugProfile.entitlements',
+      'Release.entitlements',
+    ]) {
+      final contents = read('$runner$separator$name');
+      expect(
+        contents,
+        contains('<key>com.apple.security.personal-information.location</key>'),
+        reason: '$name is missing the location sandbox entitlement',
+      );
+    }
+    final podfile = File('$macos${separator}Podfile');
+    final lock = read('$macos${separator}Podfile.lock');
+    expect(lock, contains('geolocator_apple (1.2.0)'));
+    expect(
+      lock,
+      contains('geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e'),
+    );
+    expect(
+      lock,
+      contains('PODFILE CHECKSUM: ${sha1.convert(podfile.readAsBytesSync())}'),
+    );
   });
 
   test(

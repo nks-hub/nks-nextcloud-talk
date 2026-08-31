@@ -155,6 +155,18 @@
       }
     }
   },
+  "shareLocation": "Location",
+  "sharedLocationDefaultName": "Shared location",
+  "locationConfirmTitle": "Share current location?",
+  "locationCoordinates": "{latitude}, {longitude}",
+  "@locationCoordinates": {"placeholders": {"latitude": {"type": "String"}, "longitude": {"type": "String"}}},
+  "locationPermissionDenied": "Location access was denied.",
+  "locationPermissionDeniedForever": "Location access is disabled in system settings.",
+  "locationServicesDisabled": "Turn on location services and try again.",
+  "locationUnavailable": "The current location could not be determined.",
+  "locationShareFailed": "The location could not be shared.",
+  "locationShareAmbiguous": "The server may have received the location. Check the chat before trying again.",
+  "locationShared": "Location shared.",
   "outOfOffice": "{user} is out of office and might not respond.",
   "@outOfOffice": {
     "placeholders": {

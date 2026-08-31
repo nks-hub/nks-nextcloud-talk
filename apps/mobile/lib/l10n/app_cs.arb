@@ -155,6 +155,18 @@
       }
     }
   },
+  "shareLocation": "Poloha",
+  "sharedLocationDefaultName": "Sdílená poloha",
+  "locationConfirmTitle": "Sdílet aktuální polohu?",
+  "locationCoordinates": "{latitude}, {longitude}",
+  "@locationCoordinates": {"placeholders": {"latitude": {"type": "String"}, "longitude": {"type": "String"}}},
+  "locationPermissionDenied": "Přístup k poloze byl zamítnut.",
+  "locationPermissionDeniedForever": "Přístup k poloze je vypnutý v nastavení systému.",
+  "locationServicesDisabled": "Zapněte služby určování polohy a zkuste to znovu.",
+  "locationUnavailable": "Aktuální polohu se nepodařilo zjistit.",
+  "locationShareFailed": "Polohu se nepodařilo sdílet.",
+  "locationShareAmbiguous": "Server mohl polohu přijmout. Než pokus zopakujete, zkontrolujte chat.",
+  "locationShared": "Poloha byla sdílena.",
   "outOfOffice": "{user} je mimo kancelář a nemusí odpovědět.",
   "@outOfOffice": {
     "placeholders": {

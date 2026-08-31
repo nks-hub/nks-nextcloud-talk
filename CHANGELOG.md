@@ -16,6 +16,14 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Ve sponce přibyla Poloha. Aplikace si vyžádá foreground oprávnění, zjistí
+  aktuální souřadnice, ukáže je před odesláním a sdílí je jen na serveru, který
+  tuto funkci podporuje. Background sledování polohy nepoužívá. Pokud se po
+  odeslání ztratí odpověď serveru, aplikace upozorní na možný úspěch místo
+  slepého opakování a rizika duplicitní zprávy.
+
 ## 0.1.0 (27) — 31. 8. 2026
 
 Play: přes Publishing API nahráno a commitnuto do uzavřeného alpha tracku;

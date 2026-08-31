@@ -23,6 +23,7 @@ final class RichChatCapabilityProfile {
     required this.scheduled,
     required this.translation,
     required this.silentSend,
+    required this.geoLocation,
   });
 
   factory RichChatCapabilityProfile.fromTalkFeatures({
@@ -76,6 +77,7 @@ final class RichChatCapabilityProfile {
       scheduled: base && local.contains('scheduled-messages') && !federated,
       translation: translationAvailable,
       silentSend: base && global.contains('silent-send'),
+      geoLocation: base && global.contains('geo-location-sharing'),
     );
   }
 
@@ -101,6 +103,7 @@ final class RichChatCapabilityProfile {
   final bool scheduled;
   final bool translation;
   final bool silentSend;
+  final bool geoLocation;
 
   @override
   String toString() =>

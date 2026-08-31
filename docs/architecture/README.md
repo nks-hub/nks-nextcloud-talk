@@ -53,6 +53,7 @@ nevytváří jako prázdný stub.
 - [OpenAPI, renderer a stavový kontrakt rich chatu](rich-chat-api.md)
 - [Serverově autoritativní shared-items kontrakt](shared-items-api.md)
 - [Capability-bound překlad zpráv](message-translation-api.md)
+- [Capability-bound sdílení aktuální polohy](location-sharing-api.md)
 - [Talk OCS, WebDAV a stavový kontrakt příloh](attachment-upload-api.md)
 - [Internal/HPB signaling kontrakt a runtime](signaling-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)

@@ -41,6 +41,8 @@
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NKS Talk needs microphone access to record voice messages.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>NKS Talk uses your current location only when you choose to share it in a conversation.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>

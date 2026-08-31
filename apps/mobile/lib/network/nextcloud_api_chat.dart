@@ -1,6 +1,46 @@
 part of 'nextcloud_api.dart';
 
 mixin _NextcloudApiChat on _HttpNextcloudApiBase {
+  Future<LocationShareResponse> shareLocation({
+    required LocationShareRequest locationRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', locationRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...locationRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyFields = locationRequest.formBody.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {
+        201,
+        400,
+        401,
+        403,
+        404,
+        413,
+        429,
+        500,
+        502,
+        503,
+        504,
+      },
+      maximumBytes: locationShareMaximumResponseBytes,
+      readBodyForStatusCodes: const {201},
+    );
+    return decodeLocationShareResponse(
+      request: locationRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   Future<SharedItemsOverviewResponse> getSharedItemsOverview({
     required SharedItemsOverviewRequest overviewRequest,
     required String loginName,

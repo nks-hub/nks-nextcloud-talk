@@ -31,6 +31,7 @@ import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/message_translation_service.dart';
+import 'features/chat/location_share_service.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
@@ -351,6 +352,19 @@ final messageTranslationServiceProvider = Provider<MessageTranslationService>((
 ) {
   return HttpMessageTranslationService(
     accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
+  );
+});
+
+final currentLocationSourceProvider = Provider<CurrentLocationSource>((ref) {
+  return GeolocatorCurrentLocationSource();
+});
+
+final locationShareServiceProvider = Provider<LocationShareSender>((ref) {
+  return LocationShareService(
+    accounts: ref.watch(accountRepositoryProvider),
+    chat: ref.watch(chatRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
   );

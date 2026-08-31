@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// App Store Connect rejects an iOS upload whose `Info.plist` has no
@@ -22,6 +23,8 @@ void main() {
       'NSPhotoLibraryUsageDescription',
       // gal, saving an attachment to the library
       'NSPhotoLibraryAddUsageDescription',
+      // geolocator, only while the app is visible
+      'NSLocationWhenInUseUsageDescription',
     ];
     for (final key in required) {
       final at = contents.indexOf('<key>$key</key>');
@@ -47,6 +50,23 @@ void main() {
       contents.substring(at, at + 120).contains('<false/>'),
       isTrue,
       reason: 'the iOS build carries no non-exempt encryption',
+    );
+  });
+
+  test('iOS CocoaPods lock contains the location plugin', () {
+    final ios = '${Directory.current.path}${Platform.pathSeparator}ios';
+    final podfile = File('$ios${Platform.pathSeparator}Podfile');
+    final lock = File(
+      '$ios${Platform.pathSeparator}Podfile.lock',
+    ).readAsStringSync();
+    expect(lock, contains('geolocator_apple (1.2.0)'));
+    expect(
+      lock,
+      contains('geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e'),
+    );
+    expect(
+      lock,
+      contains('PODFILE CHECKSUM: ${sha1.convert(podfile.readAsBytesSync())}'),
     );
   });
 
@@ -97,10 +117,9 @@ void main() {
       reason: 'the named asset catalog entry has to exist',
     );
     expect(
-      iconSet
-          .listSync()
-          .whereType<File>()
-          .any((file) => file.path.endsWith('1024x1024@1x.png')),
+      iconSet.listSync().whereType<File>().any(
+        (file) => file.path.endsWith('1024x1024@1x.png'),
+      ),
       isTrue,
       reason: 'App Store submission needs the 1024 marketing icon',
     );

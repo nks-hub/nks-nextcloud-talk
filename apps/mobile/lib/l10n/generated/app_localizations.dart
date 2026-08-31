@@ -986,6 +986,72 @@ abstract class AppLocalizations {
   /// **'Open location: {name}'**
   String openLocation(String name);
 
+  /// No description provided for @shareLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get shareLocation;
+
+  /// No description provided for @sharedLocationDefaultName.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared location'**
+  String get sharedLocationDefaultName;
+
+  /// No description provided for @locationConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share current location?'**
+  String get locationConfirmTitle;
+
+  /// No description provided for @locationCoordinates.
+  ///
+  /// In en, this message translates to:
+  /// **'{latitude}, {longitude}'**
+  String locationCoordinates(String latitude, String longitude);
+
+  /// No description provided for @locationPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Location access was denied.'**
+  String get locationPermissionDenied;
+
+  /// No description provided for @locationPermissionDeniedForever.
+  ///
+  /// In en, this message translates to:
+  /// **'Location access is disabled in system settings.'**
+  String get locationPermissionDeniedForever;
+
+  /// No description provided for @locationServicesDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on location services and try again.'**
+  String get locationServicesDisabled;
+
+  /// No description provided for @locationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The current location could not be determined.'**
+  String get locationUnavailable;
+
+  /// No description provided for @locationShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The location could not be shared.'**
+  String get locationShareFailed;
+
+  /// No description provided for @locationShareAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'The server may have received the location. Check the chat before trying again.'**
+  String get locationShareAmbiguous;
+
+  /// No description provided for @locationShared.
+  ///
+  /// In en, this message translates to:
+  /// **'Location shared.'**
+  String get locationShared;
+
   /// No description provided for @outOfOffice.
   ///
   /// In en, this message translates to:

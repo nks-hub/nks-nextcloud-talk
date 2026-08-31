@@ -40,6 +40,8 @@ enum TalkProtocolErrorCode {
   invalidSharedItemsResponse,
   invalidTranslationRequest,
   invalidTranslationResponse,
+  invalidLocationShareRequest,
+  invalidLocationShareResponse,
   invalidRichChatProfile,
   invalidRichChatRequest,
   invalidRichChatResponse,

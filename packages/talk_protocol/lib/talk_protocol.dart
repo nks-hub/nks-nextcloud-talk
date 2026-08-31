@@ -16,6 +16,7 @@ export 'src/calls/request.dart';
 export 'src/calls/response.dart';
 export 'src/calls/state.dart';
 export 'src/chat/identifiers.dart';
+export 'src/chat/location_share.dart';
 export 'src/chat/merge.dart';
 export 'src/chat/models.dart';
 export 'src/chat/outbox.dart';
