@@ -29,6 +29,7 @@ import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
+import 'message_translation_dialog.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
@@ -610,6 +611,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     final profileCanRemind = actionsProfile?.reminders ?? false;
     final profileCanSchedule =
         !readOnly && inRootRoom && (actionsProfile?.scheduled ?? false);
+    final profileCanTranslate = actionsProfile?.translation ?? false;
     // A private reply only makes sense from a room that is not already the
     // one-to-one with the author, and only for a message a real user wrote:
     // the target room is derived from the author's user id, and the server
@@ -641,6 +643,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
             message.actorType == 'users' &&
             message.actorId.isNotEmpty &&
             message.systemMessage.isEmpty,
+        canTranslate:
+            profileCanTranslate &&
+            !message.deleted &&
+            parsed != null &&
+            parsed.systemMessage.isEmpty &&
+            parsed.message.trim().isNotEmpty,
       );
     }
 

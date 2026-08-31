@@ -7,8 +7,8 @@ runtime. Klient je licencovaný pod `GPL-3.0-or-later` a používá identitu
 také na Windows a Linux. Platformní runnery uzavírá commit `cf13cce`; jejich
 existence sama neprokazuje podepsaný build ani live lifecycle všech platforem.
 
-Čerstvá automatizovaná brána má `flutter analyze` bez nálezu, 1478 úspěšných
-Flutter testů se čtyřmi credential-gated skipy a 933/933 testů
+Čerstvá automatizovaná brána má `flutter analyze` bez nálezu, 1493 úspěšných
+Flutter testů se čtyřmi credential-gated skipy a 946/946 testů
 `talk_protocol`. Android push v `3c74165` navíc prošel 16/16 Kotlin unit a
 15/15 connected testy na `chatujmePixel`. Přesné rozlišení kódu, automatizace,
 live důkazů a otevřených částí vede
@@ -52,6 +52,7 @@ nevytváří jako prázdný stub.
 - [OpenAPI, merge a outbox kontrakt chat zpráv](chat-messages-api.md)
 - [OpenAPI, renderer a stavový kontrakt rich chatu](rich-chat-api.md)
 - [Serverově autoritativní shared-items kontrakt](shared-items-api.md)
+- [Capability-bound překlad zpráv](message-translation-api.md)
 - [Talk OCS, WebDAV a stavový kontrakt příloh](attachment-upload-api.md)
 - [Internal/HPB signaling kontrakt a runtime](signaling-api.md)
 - [Implementační řezy a testovací brány](delivery-plan.md)

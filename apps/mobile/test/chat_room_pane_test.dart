@@ -19,6 +19,7 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/message_translation_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -303,6 +304,7 @@ RichChatCapabilityProfile _capabilityProfile({
   bool delete = false,
   bool react = false,
   bool privateReply = false,
+  bool translation = false,
 }) {
   return RichChatCapabilityProfile.fromTalkFeatures(
     talkFeatures: <String>[
@@ -317,5 +319,6 @@ RichChatCapabilityProfile _capabilityProfile({
     federated: false,
     moderator: false,
     participantPermissions: 0,
+    translationAvailable: translation,
   );
 }

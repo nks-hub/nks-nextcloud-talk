@@ -1,7 +1,8 @@
 part of 'chat_message_content.dart';
 
-final class _RichDocument extends StatelessWidget {
-  const _RichDocument({
+final class RichChatDocumentContent extends StatelessWidget {
+  const RichChatDocumentContent({
+    super.key,
     required this.document,
     required this.foregroundColor,
     this.hiddenLinks = const <Uri>{},

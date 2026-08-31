@@ -88,7 +88,10 @@ final class ChatMessageContent extends StatelessWidget {
               ),
             )
           else
-            _RichDocument(document: document, foregroundColor: foregroundColor)
+            RichChatDocumentContent(
+              document: document,
+              foregroundColor: foregroundColor,
+            )
         else
           _GiphyRichDocument(
             accountId: account.id,

@@ -3902,6 +3902,84 @@ abstract class AppLocalizations {
   /// **'The server returned an invalid shared-items response.'**
   String get sharedItemsInvalidResponse;
 
+  /// No description provided for @messageActionTranslate.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate'**
+  String get messageActionTranslate;
+
+  /// No description provided for @translationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate message'**
+  String get translationTitle;
+
+  /// No description provided for @translationFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate from'**
+  String get translationFrom;
+
+  /// No description provided for @translationTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate to'**
+  String get translationTo;
+
+  /// No description provided for @translationDetectLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Detect language'**
+  String get translationDetectLanguage;
+
+  /// No description provided for @translationAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Translate'**
+  String get translationAction;
+
+  /// No description provided for @translationAiNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This translation is AI generated and may contain mistakes.'**
+  String get translationAiNotice;
+
+  /// No description provided for @translationCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy translated text'**
+  String get translationCopy;
+
+  /// No description provided for @translationCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation copied to clipboard'**
+  String get translationCopied;
+
+  /// No description provided for @translationCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Translation could not be copied.'**
+  String get translationCopyFailed;
+
+  /// No description provided for @translationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Message translation is not available on this server.'**
+  String get translationUnavailable;
+
+  /// No description provided for @translationInvalidInput.
+  ///
+  /// In en, this message translates to:
+  /// **'This message or language selection cannot be translated.'**
+  String get translationInvalidInput;
+
+  /// No description provided for @translationInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'The server returned an invalid translation response.'**
+  String get translationInvalidResponse;
+
   /// Typing indicator for one participant.
   ///
   /// In en, this message translates to:

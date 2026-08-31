@@ -18,6 +18,10 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Zprávu lze přeložit do některého z jazyků, které nabízí připojený Nextcloud.
+  Aplikace umí nechat zdrojový jazyk rozpoznat, zachová zmínky a dovolí výsledek
+  zkopírovat. Volba se zobrazí jen na serveru s aktivním překladovým
+  poskytovatelem.
 - V detailu podporované konverzace jsou dostupné sdílené soubory, obrázky,
   nahrávky, polohy, ankety a další serverové kategorie. Seznam se stránkuje,
   lze v něm opakovat neúspěšné načtení a klepnutí otevře původní zprávu i ve

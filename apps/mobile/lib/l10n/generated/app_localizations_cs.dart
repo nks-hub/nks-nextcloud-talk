@@ -2128,6 +2128,49 @@ class AppLocalizationsCs extends AppLocalizations {
       'Server poslal neplatnou odpověď sdílených položek.';
 
   @override
+  String get messageActionTranslate => 'Přeložit';
+
+  @override
+  String get translationTitle => 'Přeložit zprávu';
+
+  @override
+  String get translationFrom => 'Přeložit z';
+
+  @override
+  String get translationTo => 'Přeložit do';
+
+  @override
+  String get translationDetectLanguage => 'Rozpoznat jazyk';
+
+  @override
+  String get translationAction => 'Přeložit';
+
+  @override
+  String get translationAiNotice =>
+      'Překlad vytvořila AI a může obsahovat chyby.';
+
+  @override
+  String get translationCopy => 'Zkopírovat přeložený text';
+
+  @override
+  String get translationCopied => 'Překlad zkopírován do schránky';
+
+  @override
+  String get translationCopyFailed => 'Překlad se nepodařilo zkopírovat.';
+
+  @override
+  String get translationUnavailable =>
+      'Překlad zpráv není na tomto serveru dostupný.';
+
+  @override
+  String get translationInvalidInput =>
+      'Tuto zprávu nebo zvolenou kombinaci jazyků nelze přeložit.';
+
+  @override
+  String get translationInvalidResponse =>
+      'Server poslal neplatnou odpověď překladu.';
+
+  @override
   String typingOne(String name) {
     return '$name píše…';
   }

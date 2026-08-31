@@ -85,7 +85,7 @@ final class _GiphyRichDocument extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _RichDocument(
+        RichChatDocumentContent(
           document: document,
           foregroundColor: foregroundColor,
           hiddenLinks: hiddenLinks,

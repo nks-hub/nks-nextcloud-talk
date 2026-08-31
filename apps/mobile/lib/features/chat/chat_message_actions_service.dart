@@ -66,10 +66,7 @@ final class ChatMessageActionsService {
     required String accountId,
     required String roomToken,
   }) async {
-    final context = await _resolve(
-      accountId: accountId,
-      roomToken: roomToken,
-    );
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
     return context.profile;
   }
 
@@ -79,10 +76,7 @@ final class ChatMessageActionsService {
     required int messageId,
     required String message,
   }) async {
-    final context = await _resolve(
-      accountId: accountId,
-      roomToken: roomToken,
-    );
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
     _requireWritable(context);
     final request = _buildRequest(
       () => RichChatRequest.editMessage(
@@ -112,10 +106,7 @@ final class ChatMessageActionsService {
     required String roomToken,
     required int messageId,
   }) async {
-    final context = await _resolve(
-      accountId: accountId,
-      roomToken: roomToken,
-    );
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
     _requireWritable(context);
     final request = _buildRequest(
       () => RichChatRequest.deleteMessage(
@@ -442,10 +433,7 @@ final class ChatMessageActionsService {
     )
     build,
   }) async {
-    final context = await _resolve(
-      accountId: accountId,
-      roomToken: roomToken,
-    );
+    final context = await _resolve(accountId: accountId, roomToken: roomToken);
     // Nextcloud Talk actor identities for a logged-in account are always
     // `users`/loginName, matching the convention already used to detect the
     // account's own messages elsewhere in the chat pane.
@@ -668,6 +656,7 @@ final class ChatMessageActionsService {
         // set, which is the normal case and would gate away every
         // permission-guarded action, reactions included.
         participantPermissions: room.permissions,
+        translationAvailable: capabilities.chatTranslationAvailable,
       );
     } on TalkProtocolException {
       throw const ChatMessageActionException(

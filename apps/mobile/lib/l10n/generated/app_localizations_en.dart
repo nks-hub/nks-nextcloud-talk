@@ -2130,6 +2130,49 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server returned an invalid shared-items response.';
 
   @override
+  String get messageActionTranslate => 'Translate';
+
+  @override
+  String get translationTitle => 'Translate message';
+
+  @override
+  String get translationFrom => 'Translate from';
+
+  @override
+  String get translationTo => 'Translate to';
+
+  @override
+  String get translationDetectLanguage => 'Detect language';
+
+  @override
+  String get translationAction => 'Translate';
+
+  @override
+  String get translationAiNotice =>
+      'This translation is AI generated and may contain mistakes.';
+
+  @override
+  String get translationCopy => 'Copy translated text';
+
+  @override
+  String get translationCopied => 'Translation copied to clipboard';
+
+  @override
+  String get translationCopyFailed => 'Translation could not be copied.';
+
+  @override
+  String get translationUnavailable =>
+      'Message translation is not available on this server.';
+
+  @override
+  String get translationInvalidInput =>
+      'This message or language selection cannot be translated.';
+
+  @override
+  String get translationInvalidResponse =>
+      'The server returned an invalid translation response.';
+
+  @override
   String typingOne(String name) {
     return '$name is typing…';
   }

@@ -86,6 +86,7 @@ final class CapabilitySnapshot {
     required Set<String> talkFeatures,
     required this.chatReadPrivacy,
     required this.chatTypingPrivacy,
+    required this.chatTranslationAvailable,
     required Set<String> notificationPushFeatures,
   }) : capabilities = UnmodifiableMapView(capabilities),
        namespaces = Set<String>.unmodifiable(capabilities.keys),
@@ -135,6 +136,7 @@ final class CapabilitySnapshot {
     var talkFeatures = const <String>{};
     ChatReadPrivacy? chatReadPrivacy;
     ChatTypingPrivacy? chatTypingPrivacy;
+    var chatTranslationAvailable = false;
     final rawSpreed = capabilities['spreed'];
     if (rawSpreed != null) {
       final spreed = requireObject(
@@ -191,6 +193,14 @@ final class CapabilitySnapshot {
               _ => protocolFailure(code, path),
             };
           }
+          if (chat.containsKey('has-translation-providers')) {
+            chatTranslationAvailable = requireBool(
+              chat['has-translation-providers'],
+              path:
+                  r'$.ocs.data.capabilities.spreed.config.chat.has-translation-providers',
+              code: code,
+            );
+          }
         }
       }
     }
@@ -220,6 +230,7 @@ final class CapabilitySnapshot {
       talkFeatures: talkFeatures,
       chatReadPrivacy: chatReadPrivacy,
       chatTypingPrivacy: chatTypingPrivacy,
+      chatTranslationAvailable: chatTranslationAvailable,
       notificationPushFeatures: notificationPushFeatures,
     );
   }
@@ -231,6 +242,7 @@ final class CapabilitySnapshot {
   final Set<String> talkFeatures;
   final ChatReadPrivacy? chatReadPrivacy;
   final ChatTypingPrivacy? chatTypingPrivacy;
+  final bool chatTranslationAvailable;
   final Set<String> notificationPushFeatures;
 
   bool get hasTalk => namespaces.contains('spreed');

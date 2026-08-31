@@ -21,6 +21,7 @@ final class RichChatCapabilityProfile {
     required this.hidePinned,
     required this.reminders,
     required this.scheduled,
+    required this.translation,
   });
 
   factory RichChatCapabilityProfile.fromTalkFeatures({
@@ -29,6 +30,7 @@ final class RichChatCapabilityProfile {
     required bool federated,
     required bool moderator,
     required int participantPermissions,
+    bool translationAvailable = false,
   }) {
     if (participantPermissions < 0) {
       _profileFailure(r'$.participantPermissions');
@@ -71,6 +73,7 @@ final class RichChatCapabilityProfile {
       hidePinned: pinned,
       reminders: base && global.contains('remind-me-later'),
       scheduled: base && local.contains('scheduled-messages') && !federated,
+      translation: translationAvailable,
     );
   }
 
@@ -94,12 +97,14 @@ final class RichChatCapabilityProfile {
   final bool hidePinned;
   final bool reminders;
   final bool scheduled;
+  final bool translation;
 
   @override
   String toString() =>
       'RichChatCapabilityProfile(federated: $federated, '
       'reply: $reply, mentions: $mentions, threads: $threadMetadata, '
-      'reactions: $reactions, scheduled: $scheduled)';
+      'reactions: $reactions, scheduled: $scheduled, '
+      'translation: $translation)';
 }
 
 Set<String> _features(Object? raw, String path) {

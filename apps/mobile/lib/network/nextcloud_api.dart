@@ -15,6 +15,7 @@ part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_profile.dart';
 part 'nextcloud_api_push.dart';
 part 'nextcloud_api_rooms.dart';
+part 'nextcloud_api_translation.dart';
 part 'nextcloud_api_transport.dart';
 
 final RegExp _uuidV4Pattern = RegExp(
@@ -335,7 +336,8 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiChat,
         _NextcloudApiCall,
         _NextcloudApiProfile,
-        _NextcloudApiPush {
+        _NextcloudApiPush,
+        _NextcloudApiTranslation {
   HttpNextcloudApi({
     super.client,
     super.originPolicy = ServerOriginPolicy.production,

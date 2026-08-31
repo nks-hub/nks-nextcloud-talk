@@ -814,6 +814,7 @@ void _registerChatRoomPaneRenderingTests() {
       expect(find.byKey(const Key('message-action-edit')), findsNothing);
       expect(find.byKey(const Key('message-action-delete')), findsNothing);
       expect(find.byKey(const Key('message-action-react')), findsNothing);
+      expect(find.byKey(const Key('message-action-translate')), findsNothing);
 
       await tester.tap(find.byKey(const Key('message-action-reply')));
       await tester.pumpAndSettle();
@@ -831,6 +832,81 @@ void _registerChatRoomPaneRenderingTests() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+
+  testWidgets('translation capability exposes the message dialog', (
+    tester,
+  ) async {
+    await (database.update(database.cachedChatMessages)..where(
+          (row) => row.accountId.equals(account.id) & row.messageId.equals(10),
+        ))
+        .write(
+          CachedChatMessagesCompanion(
+            rawJson: Value(
+              jsonEncode(
+                _messageJson(
+                  id: 10,
+                  actorId: 'someone-else',
+                  actorDisplayName: 'Other person',
+                  timestamp: 1724300000,
+                  message: 'Cached hello',
+                ),
+              ),
+            ),
+          ),
+        );
+    await tester.pumpWidget(
+      app(
+        home: roomScreen(),
+        overrides: [
+          chatMessageActionsProfileProvider.overrideWith(
+            (ref, key) async => _capabilityProfile(translation: true),
+          ),
+          messageTranslationServiceProvider.overrideWithValue(
+            const _PendingTranslationService(),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(_capabilityProfile(translation: true).translation, isTrue);
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-translate')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('message-action-translate')));
+    await tester.pump();
+    expect(find.byKey(const Key('message-translation-dialog')), findsOneWidget);
+    expect(
+      find.byKey(const Key('translation-languages-loading')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+}
+
+final class _PendingTranslationService implements MessageTranslationService {
+  const _PendingTranslationService();
+
+  @override
+  Future<TranslationLanguagesResponse> languages({
+    required String accountId,
+    required String roomToken,
+    Future<void>? abortTrigger,
+  }) => Completer<TranslationLanguagesResponse>().future;
+
+  @override
+  Future<TranslateTextResponse> translate({
+    required String accountId,
+    required String roomToken,
+    required String text,
+    required String? fromLanguage,
+    required String toLanguage,
+    Future<void>? abortTrigger,
+  }) => throw StateError('translation is not expected while loading');
 }
 
 final class _RecordingAttachmentOpenAction implements ChatAttachmentOpenAction {

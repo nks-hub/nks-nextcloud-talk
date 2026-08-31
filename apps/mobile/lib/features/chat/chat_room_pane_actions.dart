@@ -12,6 +12,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     required bool isPinned,
     required bool canRemind,
     required bool canPrivateReply,
+    required bool canTranslate,
   }) {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
@@ -71,6 +72,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                     unawaited(_startEditMessage(message, parsed));
                   },
                 ),
+              if (canTranslate && parsed != null)
+                ListTile(
+                  key: const Key('message-action-translate'),
+                  leading: const Icon(Icons.translate_outlined),
+                  title: Text(strings.messageActionTranslate),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_openTranslation(parsed));
+                  },
+                ),
               if (canDelete)
                 ListTile(
                   key: const Key('message-action-delete'),
@@ -124,6 +135,18 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _openTranslation(ChatMessage message) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => MessageTranslationDialog(
+        account: widget.account,
+        roomToken: _key.roomToken,
+        message: message,
+        service: ref.read(messageTranslationServiceProvider),
       ),
     );
   }
