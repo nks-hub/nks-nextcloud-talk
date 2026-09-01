@@ -16,7 +16,24 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (31) — 1. 9. 2026
+
+Play: AAB se zapnutým Sentry i Rybbit má 82 281 069 B a SHA-256
+`011F43C5C9A8C187510E87A8B03DD3F801F23EEF8BE1F9F5EF3196BD34E9882A`.
+Publishing API jej nahrálo a commitnulo do uzavřeného `alpha` tracku; nový
+edit vrací `(31) 0.1.0` ve stavu `completed`.
+TestFlight: IPA má 29 724 195 B a SHA-256
+`<fingerprint>`.
+App Store Connect vrací `VALID`, minimum iOS 15.0, encryption `false`, české
+poznámky a interní i externí skupinu `IN_BETA_TESTING`; beta review je
+`APPROVED`.
+
+Na zachovaném iPhone 16 Pro Max / iOS 18.6 prošla aktualizační instalace ze
+stejného commitu. Reálná fotografie z PHPickeru skončila `completed` i se
+starším vyčerpaným `retryable` jobem bez časovače ve stejné místnosti. Starý
+job zůstal zachovaný, nový zdroj se uvolnil a server přes autentizovaný
+context request potvrdil přesný message ID i název souboru. Testovací zprávy,
+fixture i lokální záloha byly po důkazu odstraněné.
 
 - Secure Storage má vlastní verzované migrace oddělené od schématu databáze.
   Přerušený přesun credentialů se bezpečně obnoví, konfliktní kopie a neznámá

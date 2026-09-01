@@ -118,6 +118,22 @@ Po ověření se z build-mac odstranil 1,7GB build strom, dočasný nástroj `xc
 chybný runtime 26.3.1 a nepoužívané tvOS, watchOS a visionOS runtime. Zůstaly
 jen nutné iOS 18.6 a iOS 26.2 a 41 GiB volného místa.
 
+## Ověření buildu 31
+
+Build 31 vznikl 2026-09-01 z přesného commitu `5c52469` s telemetrickými
+define pro Sentry i Rybbit. Archive, export a `altool` upload prošly; IPA má
+29 724 195 B a SHA-256
+`<fingerprint>`.
+App Store Connect API potvrdilo `processingState=VALID`, minimum iOS 15.0,
+`usesNonExemptEncryption=false`, české poznámky a interní i externí skupinu
+`IN_BETA_TESTING`; beta review je `APPROVED`.
+
+Stejný commit prošel na zachovaném iOS 18.6 simulátoru s reálným PHPicker
+assetem i starším vyčerpaným `retryable` jobem bez timeru. Novější upload
+skončil `completed`, starší job zůstal pro ruční řešení a serverový context
+request potvrdil vytvořenou zprávu. Testovací zprávy a lokální fixture byly po
+důkazu odstraněné.
+
 ## Export compliance
 
 Build s `usesNonExemptEncryption = null` visí v TestFlightu jako **Missing
