@@ -5,10 +5,20 @@ enum GiphyLoadPhase { idle, loading, ready, error }
 const _coldTrendingRetryDelays = <Duration>[Duration(milliseconds: 500)];
 
 final class GiphyController extends ChangeNotifier {
-  GiphyController({required this.repository, this.pageSize = 20});
+  GiphyController({
+    required this.repository,
+    this.pageSize = 20,
+    this.searchDebounce = const Duration(milliseconds: 350),
+  });
 
   final GiphyRepository repository;
   final int pageSize;
+
+  /// How long typing has to pause before the term is searched. Long enough
+  /// that a whole word is one request, short enough to feel immediate.
+  final Duration searchDebounce;
+
+  Timer? _debounce;
 
   List<GiphyEntry> _entries = const <GiphyEntry>[];
   GiphyLoadPhase _phase = GiphyLoadPhase.idle;
@@ -43,6 +53,27 @@ final class GiphyController extends ChangeNotifier {
             append: false,
             retryDelays: const <Duration>[],
           );
+  }
+
+  /// Searches while the user types. Keystrokes are coalesced into one request
+  /// and a term that is already showing is not fetched again; clearing the
+  /// field falls back to trending like an explicit empty search does.
+  void searchAsTyped(String term) {
+    _debounce?.cancel();
+    if (_disposed) {
+      return;
+    }
+    final normalized = term.trim();
+    if (normalized == (_term ?? '') && _phase != GiphyLoadPhase.error) {
+      return;
+    }
+    _debounce = Timer(searchDebounce, () {
+      _debounce = null;
+      if (_disposed) {
+        return;
+      }
+      unawaited(search(normalized));
+    });
   }
 
   Future<bool> loadMore() =>
@@ -144,6 +175,8 @@ final class GiphyController extends ChangeNotifier {
       return;
     }
     _disposed = true;
+    _debounce?.cancel();
+    _debounce = null;
     _generation++;
     _abort?.complete();
     super.dispose();
@@ -202,6 +235,7 @@ final class GiphyPicker extends StatelessWidget {
                 prefixIcon: const Icon(Icons.search_rounded),
                 border: const OutlineInputBorder(),
               ),
+              onChanged: controller.searchAsTyped,
               onSubmitted: controller.search,
             ),
           ),
