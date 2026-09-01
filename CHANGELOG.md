@@ -31,9 +31,16 @@ uvnitř:
   shebang a pod POSIX shellem se rozpadl. Dva testy nativních Windows notifikací
   se mimo Windows přeskakují, protože tam ten kanál neexistuje.
 
-Nalezené a zatím NEOPRAVENÉ: při 200 % textu přeteče pruh chyby synchronizace
-v češtině o 59 px a potvrzovací dialog v angličtině. Popsané v
-`docs/TODO-quality-operations.md` i s postupem, jak to změřit znovu.
+- Pruh „Tento účet je potřeba znovu přihlásit" se při zvětšeném systémovém
+  písmu vejde na obrazovku. Dřív se tlačítko a text tlačily do jedné řady a
+  v češtině při 200 % textu přetekly o 228 px doprava; nad zhruba 1,3× měřítka
+  se teď akce skládá pod zprávu. Hlídá to sonda, která pumpuje skutečnou
+  obrazovku ve světlém i tmavém tématu, česky i anglicky, a která je ověřená
+  proti sobě schválně přeteklým rozložením.
+
+Zbývá prověřit: při zkoušce na ručně sestaveném potvrzovacím dialogu přeteklo
+i to v angličtině, ale měřeno na kopii v testu, ne na skutečné obrazovce —
+popsané v `docs/TODO-quality-operations.md`.
 
 ## 0.1.0 (41) — 1. 9. 2026
 

@@ -563,33 +563,56 @@ final class _SyncNotice extends StatelessWidget {
         onReauthenticate != null &&
         (error == ConversationSyncError.credentialMissing ||
             error == ConversationSyncError.reauthenticationRequired);
+    final icon = Icon(Icons.cloud_off_rounded, color: scheme.onErrorContainer);
+    final text = Text(
+      message,
+      style: TextStyle(color: scheme.onErrorContainer),
+    );
+    final action = canReauthenticate
+        ? TextButton(
+            key: const Key('reauthenticate-account'),
+            style: TextButton.styleFrom(
+              foregroundColor: scheme.onErrorContainer,
+            ),
+            onPressed: onReauthenticate,
+            child: Text(strings.reauthenticateAccountAction),
+          )
+        : null;
+    // The action keeps its own intrinsic width, so `Expanded` on the message
+    // cannot squeeze it: on a narrow screen at large text the row overflowed
+    // instead of wrapping. Above roughly 1.3x the two go under each other.
+    final stacked = MediaQuery.textScalerOf(context).scale(16) > 21;
     return Semantics(
       liveRegion: true,
       child: Container(
         width: double.infinity,
         color: scheme.errorContainer,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.cloud_off_rounded, color: scheme.onErrorContainer),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(color: scheme.onErrorContainer),
+        child: stacked
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      icon,
+                      const SizedBox(width: 10),
+                      Expanded(child: text),
+                    ],
+                  ),
+                  if (action != null)
+                    Align(alignment: Alignment.centerLeft, child: action),
+                ],
+              )
+            : Row(
+                children: [
+                  icon,
+                  const SizedBox(width: 10),
+                  Expanded(child: text),
+                  ?action,
+                ],
               ),
-            ),
-            if (canReauthenticate)
-              TextButton(
-                key: const Key('reauthenticate-account'),
-                style: TextButton.styleFrom(
-                  foregroundColor: scheme.onErrorContainer,
-                ),
-                onPressed: onReauthenticate,
-                child: Text(strings.reauthenticateAccountAction),
-              ),
-          ],
-        ),
       ),
     );
   }
