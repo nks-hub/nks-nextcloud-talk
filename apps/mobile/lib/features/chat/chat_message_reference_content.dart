@@ -28,11 +28,13 @@ List<Uri> _messageReferences(ChatMessage message, RichChatDocument document) {
 
 final class _ChatMessageReferenceContent extends StatelessWidget {
   const _ChatMessageReferenceContent({
+    required this.account,
     required this.target,
     required this.index,
     required this.foregroundColor,
   });
 
+  final StoredAccount account;
   final ReferenceResolutionTarget target;
   final int index;
   final Color foregroundColor;
@@ -45,6 +47,7 @@ final class _ChatMessageReferenceContent extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return _ReferenceCardConsumer(
+      account: account,
       target: target,
       index: index,
       foregroundColor: foregroundColor,
@@ -54,11 +57,13 @@ final class _ChatMessageReferenceContent extends StatelessWidget {
 
 final class _ReferenceCardConsumer extends ConsumerWidget {
   const _ReferenceCardConsumer({
+    required this.account,
     required this.target,
     required this.index,
     required this.foregroundColor,
   });
 
+  final StoredAccount account;
   final ReferenceResolutionTarget target;
   final int index;
   final Color foregroundColor;
@@ -76,6 +81,7 @@ final class _ReferenceCardConsumer extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 8),
               child: _ReferenceCard(
                 key: Key('chat-reference-card-$index'),
+                account: account,
                 card: card,
                 target: target,
                 index: index,
@@ -90,9 +96,10 @@ final class _ReferenceCardConsumer extends ConsumerWidget {
   }
 }
 
-final class _ReferenceCard extends StatelessWidget {
+final class _ReferenceCard extends ConsumerWidget {
   const _ReferenceCard({
     super.key,
+    required this.account,
     required this.card,
     required this.target,
     required this.index,
@@ -100,6 +107,7 @@ final class _ReferenceCard extends StatelessWidget {
     required this.launcher,
   });
 
+  final StoredAccount account;
   final ReferenceCardData card;
   final ReferenceResolutionTarget target;
   final int index;
@@ -107,7 +115,7 @@ final class _ReferenceCard extends StatelessWidget {
   final ReferenceUriLauncher launcher;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = card.title.isEmpty ? target.reference.host : card.title;
     final description = card.description;
 
@@ -143,14 +151,11 @@ final class _ReferenceCard extends StatelessWidget {
                 // Fixed leading tile. A link with a preview image and one
                 // without keep the same shape, so a thread of mixed links
                 // does not jump around.
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: foregroundColor.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.link, size: 20, color: foregroundColor),
+                _ReferenceLeading(
+                  account: account,
+                  thumbnail: card.thumbnail,
+                  index: index,
+                  foregroundColor: foregroundColor,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -206,6 +211,59 @@ final class _ReferenceCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Fixed 40x40 slot in front of the text. Shows the server-proxied preview
+/// when there is one and the link glyph otherwise, so both shapes are equal.
+final class _ReferenceLeading extends ConsumerWidget {
+  const _ReferenceLeading({
+    required this.account,
+    required this.thumbnail,
+    required this.index,
+    required this.foregroundColor,
+  });
+
+  final StoredAccount account;
+  final Uri? thumbnail;
+  final int index;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final decoration = BoxDecoration(
+      color: foregroundColor.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(6),
+    );
+    final uri = thumbnail;
+    final fallback = Container(
+      width: 40,
+      height: 40,
+      decoration: decoration,
+      child: Icon(Icons.link, size: 20, color: foregroundColor),
+    );
+    if (uri == null) {
+      return fallback;
+    }
+    final image = ref.watch(
+      referenceThumbnailProvider((account: account, uri: uri)),
+    );
+    final bytes = image.valueOrNull?.body;
+    if (bytes == null) {
+      return fallback;
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.memory(
+        bytes,
+        key: Key('chat-reference-thumbnail-$index'),
+        width: 40,
+        height: 40,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => fallback,
       ),
     );
   }

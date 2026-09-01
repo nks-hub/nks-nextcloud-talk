@@ -15,6 +15,7 @@ final class ResolvedReference {
     required this.title,
     required this.description,
     required this.richObjectType,
+    required this.thumbnail,
   });
 
   factory ResolvedReference.validated({
@@ -22,17 +23,25 @@ final class ResolvedReference {
     required String title,
     required String? description,
     required String richObjectType,
+    Uri? thumbnail,
   }) => ResolvedReference._(
     reference: reference,
     title: title,
     description: description,
     richObjectType: richObjectType,
+    thumbnail: thumbnail,
   );
 
   final Uri reference;
   final String title;
   final String? description;
   final String richObjectType;
+
+  /// `openGraphObject.thumb` as the server sent it, absolute and http(s) only.
+  ///
+  /// Whether it is safe to fetch is not decided here: the caller has to check
+  /// it against the account it is bound to before touching the network.
+  final Uri? thumbnail;
 
   @override
   String toString() =>

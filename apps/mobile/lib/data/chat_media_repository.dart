@@ -175,13 +175,38 @@ final class ChatMediaRepository {
   Future<ChatMediaImage?> loadPreview({
     required StoredAccount account,
     required Uri uri,
-  }) async {
+  }) {
     final server = ServerBase.parse(account.serverUrl);
     if (!_isAllowedPreviewUri(server, uri)) {
       throw const ChatMediaRepositoryException(
         ChatMediaRepositoryError.invalidUri,
       );
     }
+    return _loadImage(account: account, uri: uri);
+  }
+
+  /// Downloads the preview image Nextcloud generated for a link reference.
+  ///
+  /// The address is re-checked here even though the resolver already gated it,
+  /// so a caller cannot reach an arbitrary endpoint by handing over a URI of
+  /// its own choosing.
+  Future<ChatMediaImage?> loadReferenceThumbnail({
+    required StoredAccount account,
+    required Uri uri,
+  }) {
+    final server = ServerBase.parse(account.serverUrl);
+    if (!isSafeReferenceThumbnail(server: server, thumbnail: uri)) {
+      throw const ChatMediaRepositoryException(
+        ChatMediaRepositoryError.invalidUri,
+      );
+    }
+    return _loadImage(account: account, uri: uri);
+  }
+
+  Future<ChatMediaImage?> _loadImage({
+    required StoredAccount account,
+    required Uri uri,
+  }) async {
     final appPassword = await _credentials.readAppPassword(account.id);
     if (appPassword == null) {
       throw const ChatMediaRepositoryException(

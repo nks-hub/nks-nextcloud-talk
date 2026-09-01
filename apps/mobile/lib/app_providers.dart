@@ -781,6 +781,22 @@ final class ConversationAvatarProviderKey {
 
 typedef ChatMediaProviderKey = ({StoredAccount account, Uri uri});
 
+/// Preview image of a link reference, fetched from the account's own server.
+///
+/// The repository re-checks the address, so this provider cannot be pointed at
+/// a foreign host even if a caller passes one.
+final referenceThumbnailProvider = FutureProvider.autoDispose
+    .family<ChatMediaImage?, ChatMediaProviderKey>((ref, key) async {
+      try {
+        return await ref
+            .watch(chatMediaRepositoryProvider)
+            .loadReferenceThumbnail(account: key.account, uri: key.uri);
+      } on ChatMediaRepositoryException {
+        // A card without its picture is still a usable card.
+        return null;
+      }
+    });
+
 final conversationAvatarProvider = FutureProvider.autoDispose
     .family<ConversationAvatarImage?, ConversationAvatarProviderKey>((
       ref,

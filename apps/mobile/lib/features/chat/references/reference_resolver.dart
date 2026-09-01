@@ -75,12 +75,18 @@ final class ReferenceCardData {
     required this.title,
     required this.description,
     required this.richObjectType,
+    this.thumbnail,
   });
 
   final Uri reference;
   final String title;
   final String? description;
   final String richObjectType;
+
+  /// Preview image, present only when the server offered one on its own
+  /// origin. A third-party address never reaches this field, so rendering it
+  /// cannot tell a foreign host that the reader opened the conversation.
+  final Uri? thumbnail;
 
   @override
   String toString() =>
@@ -334,6 +340,13 @@ final class HttpReferenceResolver implements ReferenceResolver {
           ? null
           : resolved.description,
       richObjectType: resolved.richObjectType,
+      thumbnail:
+          isSafeReferenceThumbnail(
+            server: target.server,
+            thumbnail: resolved.thumbnail,
+          )
+          ? resolved.thumbnail
+          : null,
     );
   }
 

@@ -113,6 +113,67 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test('a thumbnail is kept only when the server proxies it itself', () {
+    const id = '0123456789abcdef0123456789abcdef';
+    final server = ServerBase.parse('https://cloud.example.invalid');
+    expect(
+      isSafeReferenceThumbnail(
+        server: server,
+        thumbnail: Uri.parse(
+          'https://cloud.example.invalid/index.php/core/references/preview/$id',
+        ),
+      ),
+      isTrue,
+    );
+    // The address of the linked site is never fetched, so opening a
+    // conversation cannot tell it that the reader is there.
+    expect(
+      isSafeReferenceThumbnail(
+        server: server,
+        thumbnail: Uri.parse('https://docs.example.invalid/og-image.png'),
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('a link without a preview still gets the same leading slot', (
+    tester,
+  ) async {
+    final resolver = _FakeReferenceResolver((target) async {
+      return ReferenceCardData(
+        reference: target.reference,
+        title: 'Reference title',
+        description: null,
+        richObjectType: 'integration_unknown',
+      );
+    });
+
+    await tester.pumpWidget(
+      _app(
+        _message('https://docs.example.invalid/original'),
+        overrides: [
+          referenceResolverProvider.overrideWithValue(resolver),
+          referenceUriLauncherProvider.overrideWithValue((uri) async => true),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-reference-thumbnail-0')), findsNothing);
+    expect(find.byIcon(Icons.link), findsOneWidget);
+    final slot = tester.getSize(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.link),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(slot.width, 40);
+    expect(slot.height, 40);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('resolver failure keeps the ordinary inline link as fallback', (
     tester,
   ) async {

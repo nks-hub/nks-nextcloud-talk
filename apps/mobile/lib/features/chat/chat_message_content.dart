@@ -123,6 +123,7 @@ final class ChatMessageContent extends StatelessWidget {
               ),
             for (var index = 0; index < references.length; index++)
               _ChatMessageReferenceContent(
+                account: account,
                 target: ReferenceResolutionTarget(
                   accountId: account.id,
                   server: ServerBase.parse(account.serverUrl),

@@ -82,7 +82,10 @@ final class ReferenceResolveResponse {
       openGraph['description'],
       maximum: 16384,
     );
-    _optionalString(openGraph['thumb'], maximum: referenceMaximumUriCharacters);
+    final rawThumb = _optionalString(
+      openGraph['thumb'],
+      maximum: referenceMaximumUriCharacters,
+    );
     _optionalString(openGraph['link'], maximum: referenceMaximumUriCharacters);
     if (!accessible) {
       return const ReferenceResolveResponse._(
@@ -97,6 +100,7 @@ final class ReferenceResolveResponse {
         title: title.trim(),
         description: description?.trim(),
         richObjectType: type,
+        thumbnail: _absoluteHttpUri(rawThumb),
       ),
     );
   }
@@ -136,6 +140,24 @@ String _string(Object? value, {required int maximum, bool allowEmpty = false}) {
 
 String? _optionalString(Object? value, {required int maximum}) =>
     value == null ? null : _string(value, maximum: maximum, allowEmpty: true);
+
+/// The thumbnail only survives as an absolute http(s) URL without credentials
+/// in it. Anything else is dropped rather than rejected: a server that sends a
+/// shape we will not fetch must not cost the reader the whole card.
+Uri? _absoluteHttpUri(String? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(value);
+  if (uri == null ||
+      !uri.isAbsolute ||
+      uri.userInfo.isNotEmpty ||
+      uri.host.isEmpty ||
+      (uri.scheme != 'https' && uri.scheme != 'http')) {
+    return null;
+  }
+  return uri;
+}
 
 Never _invalidResponse() => throw const ReferenceProtocolException(
   ReferenceProtocolError.invalidResponse,
