@@ -18,6 +18,10 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- V detailu konverzace mohou vlastníci a moderátoři na serveru s `bots-v1`
+  zobrazit dostupné boty a zapínat nebo vypínat je. Seznam se načte až po
+  otevření sekce, umí prázdný/chybový stav a znovu ověřuje aktuální oprávnění
+  před každou změnou.
 - Když Apple Keychain během uspání nebo dark wake dočasně odmítne přístup,
   aplikace už tuto situaci nehlásí jako pád ani jako chybějící heslo. Uložený
   účet zůstane nedotčený a synchronizace i push registrace se bezpečně zopakují;

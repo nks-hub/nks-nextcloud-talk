@@ -48,6 +48,7 @@ final class MethodChannelVoiceTranscriber implements VoiceTranscriber {
 
   static const channelName = 'com.nkshub.nextcloudtalk/voice_transcription';
   static const _defaultTimeout = Duration(seconds: 60);
+  static const _minimumTimeout = Duration(seconds: 1);
   static const _maximumTimeout = Duration(minutes: 5);
 
   final MethodChannel _channel;
@@ -71,7 +72,7 @@ final class MethodChannelVoiceTranscriber implements VoiceTranscriber {
         VoiceTranscriptionFailure.cancelled,
       );
     }
-    if (timeout <= Duration.zero || timeout > _maximumTimeout) {
+    if (timeout < _minimumTimeout || timeout > _maximumTimeout) {
       throw const VoiceTranscriptionException(
         VoiceTranscriptionFailure.failed,
         'Invalid transcription timeout.',

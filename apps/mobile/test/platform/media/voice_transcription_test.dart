@@ -171,6 +171,80 @@ void main() {
         ),
       ),
     );
+
+    final replacement = MethodChannelVoiceTranscriber(
+      channel: channel,
+      supported: true,
+    );
+    final replacementResult = replacement.transcribe(
+      filePath: '/app/audio/replacement.m4a',
+    );
+    await Future<void>.delayed(Duration.zero);
+    nativeResults[2].complete('replacement result');
+    expect(await replacementResult, 'replacement result');
+  });
+
+  test('timeout accepts exactly 1 through 300 seconds', () async {
+    const channel = MethodChannel(
+      'com.nkshub.nextcloudtalk/test_voice_transcription_timeout',
+    );
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return 'recognized';
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final transcriber = MethodChannelVoiceTranscriber(
+      channel: channel,
+      supported: true,
+    );
+
+    for (final timeout in const [
+      Duration(milliseconds: 999),
+      Duration(milliseconds: 300001),
+    ]) {
+      await expectLater(
+        transcriber.transcribe(
+          filePath: '/app/audio/message.m4a',
+          timeout: timeout,
+        ),
+        throwsA(
+          isA<VoiceTranscriptionException>().having(
+            (error) => error.failure,
+            'failure',
+            VoiceTranscriptionFailure.failed,
+          ),
+        ),
+      );
+    }
+    expect(
+      await transcriber.transcribe(
+        filePath: '/app/audio/message.m4a',
+        timeout: const Duration(seconds: 1),
+      ),
+      'recognized',
+    );
+    expect(
+      await transcriber.transcribe(
+        filePath: '/app/audio/message.m4a',
+        timeout: const Duration(seconds: 300),
+      ),
+      'recognized',
+    );
+    expect(calls.map((call) => call.arguments), [
+      <String, Object?>{
+        'filePath': '/app/audio/message.m4a',
+        'timeoutMillis': 1000,
+      },
+      <String, Object?>{
+        'filePath': '/app/audio/message.m4a',
+        'timeoutMillis': 300000,
+      },
+    ]);
   });
 
   test('unsupported hosts never invoke the iOS channel', () async {

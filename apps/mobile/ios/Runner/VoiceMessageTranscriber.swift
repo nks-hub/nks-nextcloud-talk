@@ -11,10 +11,11 @@ final class VoiceMessageTranscriber {
 
   typealias RecognitionCallback = (String?, Bool, Error?) -> Void
   typealias RecognitionStarter = (
-    URL,
+    SFSpeechURLRecognitionRequest,
     Locale,
     @escaping RecognitionCallback
   ) throws -> () -> Void
+  typealias RecognitionRequestFactory = (URL) -> SFSpeechURLRecognitionRequest
   typealias Scheduler = (
     TimeInterval,
     @escaping () -> Void
@@ -33,11 +34,11 @@ final class VoiceMessageTranscriber {
     @escaping (SFSpeechRecognizerAuthorizationStatus) -> Void
   ) -> Void
   private let startRecognition: RecognitionStarter
+  private let makeRequest: RecognitionRequestFactory
   private let schedule: Scheduler
   private var channel: FlutterMethodChannel?
   private var active: Attempt?
   private var generation = 0
-  private var disposed = false
 
   init(
     messenger: FlutterBinaryMessenger? = nil,
@@ -51,12 +52,14 @@ final class VoiceMessageTranscriber {
       SFSpeechRecognizer.requestAuthorization(completion)
     },
     startRecognition: RecognitionStarter? = nil,
+    requestFactory: @escaping RecognitionRequestFactory = VoiceMessageTranscriber.makeOnDeviceRequest,
     schedule: @escaping Scheduler = VoiceMessageTranscriber.scheduleOnMainQueue
   ) {
     self.allowedRootURL = allowedRootURL
     self.authorizationStatus = authorizationStatus
     self.requestAuthorization = requestAuthorization
     self.startRecognition = startRecognition ?? Self.startOnDeviceRecognition
+    self.makeRequest = requestFactory
     self.schedule = schedule
 
     if let messenger {
@@ -95,10 +98,8 @@ final class VoiceMessageTranscriber {
       cancelActive(message: "Transcription cancelled")
       result(nil)
     case "dispose":
-      disposed = true
       generation += 1
       cancelActive(message: "Transcriber disposed")
-      channel?.setMethodCallHandler(nil)
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
@@ -106,11 +107,6 @@ final class VoiceMessageTranscriber {
   }
 
   private func transcribe(_ arguments: Any?, result: @escaping FlutterResult) {
-    guard !disposed else {
-      result(Self.error("cancelled", "Transcriber was disposed"))
-      return
-    }
-
     generation += 1
     cancelActive(message: "Transcription superseded")
     let requestGeneration = generation
@@ -203,7 +199,8 @@ final class VoiceMessageTranscriber {
     locale: Locale
   ) {
     do {
-      let cancellation = try startRecognition(fileURL, locale) {
+      let request = makeRequest(fileURL)
+      let cancellation = try startRecognition(request, locale) {
         [weak self] text, isFinal, error in
         Self.performOnMain {
           self?.receiveRecognition(
@@ -367,8 +364,19 @@ final class VoiceMessageTranscriber {
     return TimeInterval(milliseconds) / 1_000
   }
 
+  static func makeOnDeviceRequest(
+    fileURL: URL
+  ) -> SFSpeechURLRecognitionRequest {
+    let request = SFSpeechURLRecognitionRequest(url: fileURL)
+    request.requiresOnDeviceRecognition = true
+    // Talk iOS 2d31eda requests partials. This channel returns only final text
+    // because the current UI exposes spinner/cancel, not streaming text.
+    request.shouldReportPartialResults = true
+    return request
+  }
+
   private static func startOnDeviceRecognition(
-    fileURL: URL,
+    request: SFSpeechURLRecognitionRequest,
     locale: Locale,
     callback: @escaping RecognitionCallback
   ) throws -> () -> Void {
@@ -378,9 +386,6 @@ final class VoiceMessageTranscriber {
     else {
       throw StartError.unavailable
     }
-    let request = SFSpeechURLRecognitionRequest(url: fileURL)
-    request.requiresOnDeviceRecognition = true
-    request.shouldReportPartialResults = false
     var task: SFSpeechRecognitionTask?
     task = recognizer.recognitionTask(with: request) { result, error in
       callback(

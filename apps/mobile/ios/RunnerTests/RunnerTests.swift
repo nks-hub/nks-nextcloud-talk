@@ -654,8 +654,8 @@ class RunnerTests: XCTestCase {
       allowedRootURL: fixture.root,
       authorizationStatus: { .authorized },
       requestAuthorization: { _ in XCTFail("Permission was already decided") },
-      startRecognition: { url, locale, result in
-        receivedURL = url
+      startRecognition: { request, locale, result in
+        receivedURL = request.url
         receivedLocale = locale
         callback = result
         return {}
@@ -681,6 +681,17 @@ class RunnerTests: XCTestCase {
     try XCTUnwrap(callback)("spoken words", true, nil)
     XCTAssertEqual(results.count, 1)
     XCTAssertEqual(results.first as? String, "spoken words")
+  }
+
+  func testVoiceTranscriptionRequestKeepsUpstreamOnDevicePartialFlags() throws {
+    let fixture = try voiceTranscriptionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+
+    let request = VoiceMessageTranscriber.makeOnDeviceRequest(fileURL: fixture.file)
+
+    XCTAssertEqual(request.url, fixture.file)
+    XCTAssertTrue(request.requiresOnDeviceRecognition)
+    XCTAssertTrue(request.shouldReportPartialResults)
   }
 
   func testVoiceTranscriberMapsDeniedRestrictedAndUnavailable() throws {
@@ -832,6 +843,17 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(disposed.count, 1)
     XCTAssertEqual((disposed.first as? FlutterError)?.code, "cancelled")
     XCTAssertEqual(cancellations, 3)
+
+    var afterDispose: [Any?] = []
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { afterDispose.append($0) }
+    )
+    callbacks[3]("new wrapper generation", true, nil)
+    XCTAssertEqual(afterDispose.first as? String, "new wrapper generation")
   }
 
   private func voiceTranscriptionFixture() throws -> (root: URL, file: URL) {
