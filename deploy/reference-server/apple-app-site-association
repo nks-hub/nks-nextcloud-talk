@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "TEAMID0000.com.nkshub.nextcloudtalk"
+        ],
+        "components": [
+          {
+            "/": "/call/*",
+            "comment": "Nextcloud Talk room links"
+          },
+          {
+            "/": "/index.php/call/*",
+            "comment": "Nextcloud Talk room links with the front controller"
+          }
+        ]
+      }
+    ]
+  }
+}
