@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../l10n/contact_attachment_strings.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import 'image_attachment_upload_controller.dart';
 import 'proportional_image.dart';
@@ -274,7 +275,13 @@ final class _UploadCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  _UploadPreview(bytes: previewBytes, failed: failed),
+                  _UploadPreview(
+                    bytes: previewBytes,
+                    failed: failed,
+                    presentation:
+                        state.request?.presentation ??
+                        AttachmentUploadPresentation.image,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -342,7 +349,8 @@ final class _UploadCard extends StatelessWidget {
     if (state.phase == ImageAttachmentUploadPhase.failed) {
       final permissionDenied =
           state.failureCode == 'gallery-permission-denied' ||
-          state.failureCode == 'camera-permission-denied';
+          state.failureCode == 'camera-permission-denied' ||
+          state.failureCode == 'contact-permission-denied';
       return [
         if (permissionDenied && onOpenSettings != null)
           TextButton.icon(
@@ -396,18 +404,26 @@ final class _UploadCard extends StatelessWidget {
 }
 
 final class _UploadPreview extends StatelessWidget {
-  const _UploadPreview({required this.bytes, required this.failed});
+  const _UploadPreview({
+    required this.bytes,
+    required this.failed,
+    required this.presentation,
+  });
 
   final Uint8List? bytes;
   final bool failed;
+  final AttachmentUploadPresentation presentation;
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      image: bytes != null,
-      label: strings.imageAttachment,
+      image:
+          presentation == AttachmentUploadPresentation.image && bytes != null,
+      label: presentation == AttachmentUploadPresentation.contact
+          ? strings.contactAttachment
+          : strings.imageAttachment,
       child: ExcludeSemantics(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(10),
@@ -419,7 +435,9 @@ final class _UploadPreview extends StatelessWidget {
                         ? scheme.errorContainer
                         : scheme.surfaceContainerHighest,
                     child: Icon(
-                      failed
+                      presentation == AttachmentUploadPresentation.contact
+                          ? Icons.contact_page_outlined
+                          : failed
                           ? Icons.broken_image_outlined
                           : Icons.image_outlined,
                       color: failed
@@ -447,29 +465,32 @@ final class _UploadPreview extends StatelessWidget {
   }
 }
 
-String _statusText(
-  AppLocalizations strings,
-  ImageAttachmentUploadState state,
-) => switch (state.phase) {
-  ImageAttachmentUploadPhase.idle => '',
-  ImageAttachmentUploadPhase.preparing => strings.preparingImage,
-  ImageAttachmentUploadPhase.queued => strings.imageUploadQueued,
-  ImageAttachmentUploadPhase.uploading => strings.uploadingImage(
-    ((state.progress ?? 0) * 100).round(),
-  ),
-  ImageAttachmentUploadPhase.awaitingConfirmation =>
-    strings.confirmingAttachment,
-  ImageAttachmentUploadPhase.cancelling => strings.cancellingUpload,
-  ImageAttachmentUploadPhase.completed => strings.imageSent,
-  ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
-    'dav-quota-exceeded' => strings.imageUploadFailedQuota,
-    'dav-permission-denied' => strings.imageUploadFailedPermission,
-    'gallery-permission-denied' => strings.attachmentGalleryDenied,
-    'gallery-unavailable' => strings.attachmentGalleryUnavailable,
-    'camera-permission-denied' => strings.attachmentCameraDenied,
-    'camera-unavailable' => strings.attachmentCameraUnavailable,
-    'unsupported-attachment-type' => strings.attachmentTypeUnsupported,
-    _ => strings.imageUploadFailed,
-  },
-  ImageAttachmentUploadPhase.cancelled => strings.uploadCancelled,
-};
+String _statusText(AppLocalizations strings, ImageAttachmentUploadState state) {
+  final contactStrings = ContactAttachmentStrings.from(strings);
+  return switch (state.phase) {
+    ImageAttachmentUploadPhase.idle => '',
+    ImageAttachmentUploadPhase.preparing => strings.preparingImage,
+    ImageAttachmentUploadPhase.queued => strings.imageUploadQueued,
+    ImageAttachmentUploadPhase.uploading => strings.uploadingImage(
+      ((state.progress ?? 0) * 100).round(),
+    ),
+    ImageAttachmentUploadPhase.awaitingConfirmation =>
+      strings.confirmingAttachment,
+    ImageAttachmentUploadPhase.cancelling => strings.cancellingUpload,
+    ImageAttachmentUploadPhase.completed => strings.imageSent,
+    ImageAttachmentUploadPhase.failed => switch (state.failureCode) {
+      'dav-quota-exceeded' => strings.imageUploadFailedQuota,
+      'dav-permission-denied' => strings.imageUploadFailedPermission,
+      'gallery-permission-denied' => strings.attachmentGalleryDenied,
+      'gallery-unavailable' => strings.attachmentGalleryUnavailable,
+      'camera-permission-denied' => strings.attachmentCameraDenied,
+      'camera-unavailable' => strings.attachmentCameraUnavailable,
+      'unsupported-attachment-type' => strings.attachmentTypeUnsupported,
+      'contact-permission-denied' => contactStrings.permissionDenied,
+      'contact-picker-unavailable' => contactStrings.pickerUnavailable,
+      'contact-invalid-selection' => contactStrings.invalidSelection,
+      _ => strings.imageUploadFailed,
+    },
+    ImageAttachmentUploadPhase.cancelled => strings.uploadCancelled,
+  };
+}

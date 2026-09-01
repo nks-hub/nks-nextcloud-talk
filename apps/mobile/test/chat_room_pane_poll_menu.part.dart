@@ -15,6 +15,8 @@ void _registerChatRoomPanePollMenuTests() {
       expect(find.byKey(const Key('create-poll-checking')), findsNothing);
       expect(find.byKey(const Key('create-poll')), findsOneWidget);
       expect(find.text('Anketa'), findsOneWidget);
+      expect(find.byKey(const Key('attach-source-contact')), findsOneWidget);
+      expect(find.text('Kontakt'), findsOneWidget);
       expect(
         tester.widget<ListTile>(find.byKey(const Key('create-poll'))).enabled,
         isTrue,

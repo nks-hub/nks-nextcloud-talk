@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -20,6 +21,7 @@ class AndroidWebPushActivity : FlutterActivity() {
     private var deviceKeyChannel: MethodChannel? = null
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var fcmChannel: MethodChannel? = null
+    private var contactPickerChannel: ContactPickerChannel? = null
     private val fcmTokenListener: (String) -> Unit = { token ->
         mainHandler.post {
             fcmChannel?.invokeMethod("tokenRefreshed", token)
@@ -92,6 +94,18 @@ class AndroidWebPushActivity : FlutterActivity() {
         fcm.setMethodCallHandler(AndroidFcmChannel(applicationContext))
         fcmChannel = fcm
         AndroidFcmChannel.attach(fcmTokenListener)
+
+        contactPickerChannel = ContactPickerChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (contactPickerChannel?.onActivityResult(requestCode, resultCode, data) == true) {
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -184,6 +198,8 @@ class AndroidWebPushActivity : FlutterActivity() {
         AndroidFcmChannel.detach(fcmTokenListener)
         fcmChannel?.setMethodCallHandler(null)
         fcmChannel = null
+        contactPickerChannel?.dispose()
+        contactPickerChannel = null
         super.onDestroy()
     }
 

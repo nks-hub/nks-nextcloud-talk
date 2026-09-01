@@ -113,6 +113,7 @@ final class AppleDeepLinkDelivery {
   let deviceKeys = PushDeviceKeyStore()
   private var deepLinkChannel: FlutterMethodChannel?
   private var pushChannel: FlutterMethodChannel?
+  private var contactPickerChannel: ContactPickerChannel?
 
   override func application(
     _ application: UIApplication,
@@ -232,6 +233,11 @@ final class AppleDeepLinkDelivery {
       }
     }
     deepLinkChannel = channel
+
+    contactPickerChannel = ContactPickerChannel(
+      messenger: engineBridge.applicationRegistrar.messenger(),
+      presentingViewController: ContactPickerChannel.activeViewController
+    )
 
     let pushMethods = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/apple_push",

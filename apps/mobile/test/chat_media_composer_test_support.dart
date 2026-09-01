@@ -8,6 +8,8 @@ Widget _composerApp({
   AttachmentCapabilityProfile? profile,
   _VoiceBackendFactory? voiceBackends,
   ImageSelectionBackend imageSelectionBackend = const _ImageBackend(),
+  ContactSelectionBackend contactSelectionBackend =
+      const PlatformContactSelectionBackend(),
   List<Widget> idleActions = const <Widget>[],
   List<Widget> trailingActions = const <Widget>[],
   ChatMediaComposerController? controller,
@@ -43,6 +45,7 @@ Widget _composerApp({
         idleActions: idleActions,
         trailingActions: trailingActions,
         imageSelectionBackend: imageSelectionBackend,
+        contactSelectionBackend: contactSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,
         createVoicePlaybackBackend: voiceBackends?.createPlayback,
       ),

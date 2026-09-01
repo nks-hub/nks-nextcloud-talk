@@ -5,6 +5,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../network/attachment_transport.dart';
+import '../../../platform/contacts/contact_attachment_picker.dart';
 import '../../../platform/media/durable_attachment_source_store.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import '../../../platform/media/voice_platform_adapters.dart';
@@ -13,6 +14,8 @@ import '../media/image_attachment_upload_panel.dart';
 import 'attachment_submission.dart';
 import 'giphy_attachment.dart';
 import 'voice_message.dart';
+
+part 'chat_media_composer_attachments.dart';
 
 typedef CreateVoiceCaptureBackend = VoiceCaptureBackend Function();
 typedef CreateVoicePlaybackBackend = VoicePlaybackBackend Function();
@@ -99,6 +102,7 @@ final class ChatMediaComposerController {
   Object? _owner;
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
   Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
+  Future<bool> Function()? _pickContact;
 
   Future<bool> submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
     final submit = _submitGiphy;
@@ -110,14 +114,21 @@ final class ChatMediaComposerController {
     return pick == null ? false : pick(source);
   }
 
+  Future<bool> pickContact() async {
+    final pick = _pickContact;
+    return pick == null ? false : pick();
+  }
+
   void _attach(
     Object owner,
     Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
     Future<bool> Function(AttachmentPickerSource source) pickAttachment,
+    Future<bool> Function() pickContact,
   ) {
     _owner = owner;
     _submitGiphy = submitGiphy;
     _pickAttachment = pickAttachment;
+    _pickContact = pickContact;
   }
 
   void _detach(Object owner) {
@@ -127,6 +138,7 @@ final class ChatMediaComposerController {
     _owner = null;
     _submitGiphy = null;
     _pickAttachment = null;
+    _pickContact = null;
   }
 }
 
@@ -152,6 +164,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.trailingActions = const <Widget>[],
     this.showAttachmentButton = true,
     this.imageSelectionBackend = const PlatformAttachmentSelectionBackend(),
+    this.contactSelectionBackend = const PlatformContactSelectionBackend(),
     this.createVoiceCaptureBackend,
     this.createVoicePlaybackBackend,
   });
@@ -189,6 +202,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final List<Widget> trailingActions;
   final bool showAttachmentButton;
   final ImageSelectionBackend imageSelectionBackend;
+  final ContactSelectionBackend contactSelectionBackend;
   final CreateVoiceCaptureBackend? createVoiceCaptureBackend;
   final CreateVoicePlaybackBackend? createVoicePlaybackBackend;
 
@@ -202,6 +216,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
 
   late final VoiceAttachmentSubmitter _voiceSubmitter;
   late DurableImageAttachmentPicker _imagePicker;
+  late DurableContactAttachmentPicker _contactPicker;
   late ImageAttachmentUploadController _imageController;
   AttachmentSubmissionBridge? _retainedImageSubmissionBridge;
   bool _imageAdmissionPending = false;
@@ -311,7 +326,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       () => widget.submissionBridge,
     );
     _initializeControllers();
-    widget.controller?._attach(this, _submitGiphyAttachment, _pickAttachment);
+    widget.controller?._attach(
+      this,
+      _submitGiphyAttachment,
+      _pickAttachment,
+      _pickContact,
+    );
   }
 
   @override
@@ -319,7 +339,12 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.controller, widget.controller)) {
       oldWidget.controller?._detach(this);
-      widget.controller?._attach(this, _submitGiphyAttachment, _pickAttachment);
+      widget.controller?._attach(
+        this,
+        _submitGiphyAttachment,
+        _pickAttachment,
+        _pickContact,
+      );
     }
     if (oldWidget.accountId == widget.accountId &&
         oldWidget.server == widget.server &&
@@ -327,6 +352,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         oldWidget.threadId == widget.threadId &&
         oldWidget.threadBinding == widget.threadBinding &&
         identical(oldWidget.sourceStore, widget.sourceStore) &&
+        identical(
+          oldWidget.contactSelectionBackend,
+          widget.contactSelectionBackend,
+        ) &&
         _sameProfile(oldWidget.capabilityProfile, widget.capabilityProfile)) {
       return;
     }
@@ -339,6 +368,10 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       backend: widget.imageSelectionBackend,
       store: widget.sourceStore,
       maximumImageBytes: widget.sourceStore.maximumSourceBytes,
+    );
+    _contactPicker = DurableContactAttachmentPicker(
+      backend: widget.contactSelectionBackend,
+      store: widget.sourceStore,
     );
     _imageController = ImageAttachmentUploadController(
       startUpload: _startImageUpload,
@@ -388,227 +421,6 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
     );
     controller.addListener(_handleVoiceState);
     return controller;
-  }
-
-  Future<ImageAttachmentUploadSession> _startImageUpload(
-    ImageAttachmentUploadRequest request,
-  ) async {
-    await _waitForResumedLifecycle();
-    if (_disposed) {
-      throw StateError('Media composer was disposed before upload admission');
-    }
-    final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
-    final admissionSourceStore = widget.sourceStore;
-    final acceptedReplyTo = request.metadata.replyTo;
-    final acceptanceCallback = widget.onReplyDurablyAccepted;
-    _retainedImageSubmissionBridge = bridge;
-    _imageAdmissionPending = true;
-    var durablyAccepted = false;
-    try {
-      final session = await bridge.startImageUpload(request);
-      durablyAccepted = true;
-      if (request.metadata.caption != null) {
-        widget.onCaptionConsumed?.call();
-      }
-      if (_sameSource(_preparedImageSource, request.source)) {
-        _preparedImageSource = null;
-      }
-      _notifyReplyDurablyAccepted(
-        acceptedReplyTo,
-        callback: acceptanceCallback,
-      );
-      return session;
-    } finally {
-      _imageAdmissionPending = false;
-      final discardAfterAdmission = _discardPreparedImageAfterAdmission;
-      _discardPreparedImageAfterAdmission = false;
-      if (!durablyAccepted && discardAfterAdmission) {
-        if (_sameSource(_preparedImageSource, request.source)) {
-          _preparedImageSource = null;
-        }
-        unawaited(admissionSourceStore.discard(request.source.handle));
-      }
-    }
-  }
-
-  Future<void> _waitForResumedLifecycle() async {
-    final binding = WidgetsBinding.instance;
-    final state = binding.lifecycleState;
-    if (state == null || state == AppLifecycleState.resumed) {
-      return;
-    }
-    final resumed = Completer<void>();
-    late final AppLifecycleListener listener;
-    listener = AppLifecycleListener(
-      onResume: () {
-        if (!resumed.isCompleted) {
-          resumed.complete();
-        }
-      },
-    );
-    if (binding.lifecycleState == AppLifecycleState.resumed &&
-        !resumed.isCompleted) {
-      resumed.complete();
-    }
-    try {
-      await resumed.future.timeout(_admissionResumeTimeout);
-    } finally {
-      listener.dispose();
-    }
-  }
-
-  Future<ImageAttachmentUploadRequest?> _prepareImage(
-    AttachmentPickerSource pickerSource,
-  ) async {
-    final admission = _captureAdmission(AttachmentMessageKind.file);
-    if (admission == null) {
-      throw const AttachmentSubmissionException(
-        AttachmentSubmissionFailure.unsupported,
-      );
-    }
-    final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
-    PreparedAttachmentSource? source;
-    try {
-      source = await _imagePicker.pick(
-        source: pickerSource,
-        cancellationSignal: cancellation.signal,
-      );
-      if (source == null) {
-        return null;
-      }
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
-        return null;
-      }
-      _preparedImageSource = source;
-      return ImageAttachmentUploadRequest(
-        accountId: admission.accountId,
-        server: admission.server,
-        roomToken: admission.roomToken,
-        source: source,
-        metadata: admission.metadata,
-      );
-    } on ImageAttachmentPickerException catch (error) {
-      throw ImageAttachmentPreparationFailure(switch (error.code) {
-        ImageAttachmentPickerError.galleryPermissionDenied =>
-          'gallery-permission-denied',
-        ImageAttachmentPickerError.galleryUnavailable => 'gallery-unavailable',
-        ImageAttachmentPickerError.cameraPermissionDenied =>
-          'camera-permission-denied',
-        ImageAttachmentPickerError.cameraUnavailable => 'camera-unavailable',
-        ImageAttachmentPickerError.unsupportedType ||
-        ImageAttachmentPickerError.invalidSelection =>
-          'unsupported-attachment-type',
-      });
-    } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
-      }
-    }
-  }
-
-  Future<bool> _submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
-    if (_disposed || !_imageSupported || _imageController.state.isActive) {
-      return false;
-    }
-    await _imageController.pickAndStart(() => _prepareGiphyAttachment(loader));
-    return true;
-  }
-
-  Future<bool> _pickAttachment(AttachmentPickerSource source) async {
-    if (_disposed || !_imageSupported || _imageController.state.isActive) {
-      return false;
-    }
-    await _imageController.pickAndStart(() => _prepareImage(source));
-    return true;
-  }
-
-  Future<void> _openAppSettings() async {
-    final open = widget.openAppSettings;
-    if (open == null) {
-      return;
-    }
-    final failedMessage = AppLocalizations.of(context).openAppSettingsFailed;
-    try {
-      final opened = await open();
-      if (!opened && mounted && !_disposed) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(SnackBar(content: Text(failedMessage)));
-      }
-    } on Object {
-      if (mounted && !_disposed) {
-        ScaffoldMessenger.maybeOf(
-          context,
-        )?.showSnackBar(SnackBar(content: Text(failedMessage)));
-      }
-    }
-  }
-
-  Future<ImageAttachmentUploadRequest?> _prepareGiphyAttachment(
-    LoadGiphyAttachmentPayload loader,
-  ) async {
-    final admission = _captureAdmission(AttachmentMessageKind.file);
-    if (admission == null) {
-      throw const AttachmentSubmissionException(
-        AttachmentSubmissionFailure.unsupported,
-      );
-    }
-    final cancellation = AttachmentCancellationController();
-    _imagePreparationCancellation = cancellation;
-    PreparedAttachmentSource? source;
-    try {
-      final payload = await loader(cancellation.signal);
-      if (payload.mimeType != 'image/gif' ||
-          !payload.displayName.toLowerCase().endsWith('.gif')) {
-        throw const AttachmentSubmissionException(
-          AttachmentSubmissionFailure.unsupported,
-        );
-      }
-      if (_disposed || cancellation.isCancelled) {
-        return null;
-      }
-      source = await widget.sourceStore.copyFromStream(
-        stream: Stream<List<int>>.value(payload.body),
-        mimeType: payload.mimeType,
-        displayName: payload.displayName,
-        expectedByteLength: payload.body.lengthInBytes,
-        cancellationSignal: cancellation.signal,
-      );
-      if (_disposed || cancellation.isCancelled) {
-        await widget.sourceStore.discard(source.handle);
-        return null;
-      }
-      _preparedImageSource = source;
-      return ImageAttachmentUploadRequest(
-        accountId: admission.accountId,
-        server: admission.server,
-        roomToken: admission.roomToken,
-        source: source,
-        metadata: admission.metadata,
-      );
-    } finally {
-      if (identical(_imagePreparationCancellation, cancellation)) {
-        _imagePreparationCancellation = null;
-      }
-    }
-  }
-
-  void _handleImageState() {
-    final state = _imageController.state;
-    if (!state.isActive &&
-        !(state.phase == ImageAttachmentUploadPhase.failed &&
-            state.retryAllowed)) {
-      _retainedImageSubmissionBridge = null;
-    }
-    if (state.phase == ImageAttachmentUploadPhase.cancelling) {
-      _imagePreparationCancellation?.cancel();
-    }
-    if (state.phase == ImageAttachmentUploadPhase.cancelled ||
-        state.phase == ImageAttachmentUploadPhase.idle) {
-      _discardPreparedImage();
-    }
   }
 
   void _handleVoiceState() {

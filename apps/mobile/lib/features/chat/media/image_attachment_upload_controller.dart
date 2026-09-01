@@ -15,6 +15,8 @@ enum ImageAttachmentUploadPhase {
   cancelled,
 }
 
+enum AttachmentUploadPresentation { image, file, contact }
+
 @immutable
 final class ImageAttachmentUploadRequest {
   const ImageAttachmentUploadRequest({
@@ -23,6 +25,7 @@ final class ImageAttachmentUploadRequest {
     required this.roomToken,
     required this.source,
     required this.metadata,
+    this.presentation = AttachmentUploadPresentation.image,
   });
 
   final AccountId accountId;
@@ -30,6 +33,7 @@ final class ImageAttachmentUploadRequest {
   final ConversationToken roomToken;
   final PreparedAttachmentSource source;
   final AttachmentMetadata metadata;
+  final AttachmentUploadPresentation presentation;
 
   @override
   String toString() => 'ImageAttachmentUploadRequest(<redacted>)';

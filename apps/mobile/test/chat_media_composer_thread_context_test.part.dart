@@ -161,6 +161,8 @@ Widget _threadComposerApp({
   int? threadId,
   _VoiceBackendFactory? voiceBackends,
   ChatMediaComposerController? controller,
+  ContactSelectionBackend contactSelectionBackend =
+      const PlatformContactSelectionBackend(),
 }) {
   return localizedTestApp(
     home: Scaffold(
@@ -178,6 +180,7 @@ Widget _threadComposerApp({
         submissionBridge: bridge,
         controller: controller,
         imageSelectionBackend: const _ImageBackend(),
+        contactSelectionBackend: contactSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,
         createVoicePlaybackBackend: voiceBackends?.createPlayback,
       ),

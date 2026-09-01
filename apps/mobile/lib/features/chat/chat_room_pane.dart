@@ -54,6 +54,7 @@ import 'composer/mention_suggestions.dart';
 export 'chat_thread_context.dart';
 
 part 'chat_room_pane_actions.dart';
+part 'chat_room_pane_attachment_menu.dart';
 part 'chat_room_pane_composer.dart';
 part 'chat_room_pane_composer_widgets.dart';
 part 'chat_room_pane_timeline_states.dart';
@@ -61,106 +62,7 @@ part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
 part 'chat_room_pane_typing.dart';
-
-final class ChatThreadScreen extends ConsumerWidget {
-  const ChatThreadScreen({
-    super.key,
-    required this.account,
-    required this.conversation,
-    required this.threadContext,
-    this.jumpToMessageId,
-  });
-
-  final StoredAccount account;
-  final CachedConversation conversation;
-  final ChatThreadContext threadContext;
-  final int? jumpToMessageId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final threadId = threadContext.rootMessageId;
-    final key = (
-      accountId: threadContext.accountId,
-      roomToken: threadContext.roomToken,
-      threadId: threadId,
-    );
-    final messages = ref.watch(chatMessagesProvider(key)).valueOrNull;
-    final root = messages == null ? null : _findRoot(messages, threadId);
-    final liveThreadContext = root == null
-        ? null
-        : ChatThreadContext.fromCachedRoot(
-            accountId: threadContext.accountId,
-            roomToken: threadContext.roomToken,
-            root: root,
-          );
-    return Scaffold(
-      key: Key('chat-thread-screen-$threadId'),
-      appBar: AppBar(
-        title: Text(
-          liveThreadContext?.isNamed == true
-              ? liveThreadContext!.title!
-              : AppLocalizations.of(context).thread,
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: ChatBackgroundSurface(
-          accountId: account.id,
-          roomToken: conversation.token,
-          child: ChatRoomPane(
-            account: account,
-            conversation: conversation,
-            threadId: threadId,
-            threadContext: liveThreadContext,
-            jumpToMessageId: jumpToMessageId,
-          ),
-        ),
-      ),
-    );
-  }
-
-  CachedChatMessage? _findRoot(List<CachedChatMessage> messages, int threadId) {
-    for (final message in messages) {
-      if (message.messageId == threadId) {
-        return message;
-      }
-    }
-    return null;
-  }
-}
-
-final class ChatRoomPane extends ConsumerStatefulWidget {
-  const ChatRoomPane({
-    super.key,
-    required this.account,
-    required this.conversation,
-    this.showHeader = false,
-    this.threadId,
-    this.threadContext,
-    this.jumpToMessageId,
-    this.incomingMessageAnnouncementController,
-  }) : assert(threadId == null || threadId > 0),
-       assert(threadContext == null || threadId != null),
-       assert(jumpToMessageId == null || jumpToMessageId > 0);
-
-  final StoredAccount account;
-  final CachedConversation conversation;
-  final bool showHeader;
-  final int? threadId;
-  final ChatThreadContext? threadContext;
-
-  @visibleForTesting
-  final IncomingMessageAnnouncementController?
-  incomingMessageAnnouncementController;
-
-  /// A message to reveal once the first synchronization settles, instead of
-  /// opening at the newest message. Used by message search and by tapping a
-  /// quoted original.
-  final int? jumpToMessageId;
-
-  @override
-  ConsumerState<ChatRoomPane> createState() => _ChatRoomPaneState();
-}
+part 'chat_room_pane_widgets.dart';
 
 /// Talk's `roomType` for a one-to-one conversation.
 const int _oneToOneRoomType = 1;
@@ -675,73 +577,12 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       giphyAction = () => unawaited(_requestGiphy());
     }
     final canSendSilently = !readOnly && (actionsProfile?.silentSend ?? false);
-    final attachmentMenuActions = <AttachmentMenuAction>[
-      AttachmentMenuAction(
-        key: const Key('attach-source-gallery'),
-        icon: const Icon(Icons.image_outlined),
-        label: strings.attachFromGallery,
-        onSelected: !giphyAttachmentSupported || _sending
-            ? null
-            : () => unawaited(
-                _mediaComposerController.pickAttachment(
-                  AttachmentPickerSource.gallery,
-                ),
-              ),
-      ),
-      AttachmentMenuAction(
-        key: const Key('attach-source-camera'),
-        icon: const Icon(Icons.photo_camera_outlined),
-        label: strings.attachFromCamera,
-        onSelected: !giphyAttachmentSupported || _sending
-            ? null
-            : () => unawaited(
-                _mediaComposerController.pickAttachment(
-                  AttachmentPickerSource.camera,
-                ),
-              ),
-      ),
-      AttachmentMenuAction(
-        key: const Key('attach-source-file'),
-        icon: const Icon(Icons.insert_drive_file_outlined),
-        label: strings.attachFromFile,
-        onSelected: !giphyAttachmentSupported || _sending
-            ? null
-            : () => unawaited(
-                _mediaComposerController.pickAttachment(
-                  AttachmentPickerSource.file,
-                ),
-              ),
-      ),
-      if (actionsProfile?.geoLocation ?? false)
-        AttachmentMenuAction(
-          key: const Key('share-current-location'),
-          icon: const Icon(Icons.location_on_outlined),
-          label: strings.shareLocation,
-          onSelected:
-              _sending ||
-                  (widget.threadId != null &&
-                      _currentThreadContext?.isNamed != true)
-              ? null
-              : () => unawaited(_shareCurrentLocation()),
-        ),
-      if (pollAvailable?.isLoading ?? false)
-        AttachmentMenuAction(
-          key: const Key('create-poll-checking'),
-          icon: const SizedBox.square(
-            dimension: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          label: strings.pollChecking,
-          onSelected: null,
-        ),
-      if (pollAvailable?.valueOrNull ?? false)
-        AttachmentMenuAction(
-          key: const Key('create-poll'),
-          icon: const Icon(Icons.poll_outlined),
-          label: strings.pollMenuAction,
-          onSelected: _sending ? null : () => unawaited(_openPollComposer()),
-        ),
-    ];
+    final attachmentMenuActions = _attachmentMenuActions(
+      strings: strings,
+      attachmentSupported: giphyAttachmentSupported,
+      actionsProfile: actionsProfile,
+      pollAvailable: pollAvailable,
+    );
     final idleComposerActions = <Widget>[
       ComposerActionMenuButton(actions: attachmentMenuActions),
       IconButton(

@@ -1,3 +1,5 @@
+import Contacts
+import ContactsUI
 import Flutter
 import UIKit
 import XCTest
@@ -95,6 +97,69 @@ class RunnerTests: XCTestCase {
       )
     )
     XCTAssertNil(delivery.takeLaunchLink())
+  }
+
+  func testContactPickerCancellationCompletesWithNil() {
+    let presenter = ContactPickerPresentingViewController()
+    let channel = ContactPickerChannel(presentingViewController: { presenter })
+    var results: [Any?] = []
+
+    channel.handle(
+      FlutterMethodCall(methodName: "pickContact", arguments: nil),
+      result: { results.append($0) }
+    )
+    XCTAssertTrue(presenter.lastPresented is CNContactPickerViewController)
+
+    channel.contactPickerDidCancel(CNContactPickerViewController())
+
+    XCTAssertEqual(results.count, 1)
+    XCTAssertNil(results[0])
+  }
+
+  func testContactPickerRemovesPhotoFromBoundedVCard() throws {
+    let presenter = ContactPickerPresentingViewController()
+    let channel = ContactPickerChannel(presentingViewController: { presenter })
+    var result: Any?
+    channel.handle(
+      FlutterMethodCall(methodName: "pickContact", arguments: nil),
+      result: { result = $0 }
+    )
+    let contact = CNMutableContact()
+    contact.givenName = "Alice"
+    contact.familyName = "Example"
+    contact.phoneNumbers = [
+      CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: "+420123456"))
+    ]
+    contact.imageData = Data(repeating: 0x2a, count: 1024)
+
+    channel.contactPicker(CNContactPickerViewController(), didSelect: contact)
+
+    let payload = try XCTUnwrap(result as? [String: Any])
+    let typedData = try XCTUnwrap(payload["vcard"] as? FlutterStandardTypedData)
+    let text = try XCTUnwrap(String(data: typedData.data, encoding: .utf8))
+    XCTAssertTrue(text.contains("BEGIN:VCARD"))
+    XCTAssertFalse(text.contains("PHOTO"))
+    XCTAssertLessThanOrEqual(typedData.data.count, ContactPickerChannel.maximumVCardBytes)
+  }
+
+  func testContactPickerRejectsOversizedVCard() throws {
+    let presenter = ContactPickerPresentingViewController()
+    let channel = ContactPickerChannel(presentingViewController: { presenter })
+    var result: Any?
+    channel.handle(
+      FlutterMethodCall(methodName: "pickContact", arguments: nil),
+      result: { result = $0 }
+    )
+    let contact = CNMutableContact()
+    contact.givenName = String(
+      repeating: "A",
+      count: ContactPickerChannel.maximumVCardBytes + 1
+    )
+
+    channel.contactPicker(CNContactPickerViewController(), didSelect: contact)
+
+    let error = try XCTUnwrap(result as? FlutterError)
+    XCTAssertEqual(error.code, "invalid_contact")
   }
 
   func testColdAndWarmUniversalLinksKeepArrivalOrder() throws {
@@ -542,4 +607,17 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(try XCTUnwrap(second.take(identifier: identifier)).accountId, "account-b")
   }
 
+}
+
+private final class ContactPickerPresentingViewController: UIViewController {
+  var lastPresented: UIViewController?
+
+  override func present(
+    _ viewControllerToPresent: UIViewController,
+    animated flag: Bool,
+    completion: (() -> Void)? = nil
+  ) {
+    lastPresented = viewControllerToPresent
+    completion?()
+  }
 }
