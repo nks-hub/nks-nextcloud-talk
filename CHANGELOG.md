@@ -18,6 +18,31 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+## 0.1.0 (36) — 1. 9. 2026
+
+Play: build 36 nebyl v této prioritní iOS opravě vydán.
+TestFlight: Apple ContentDelivery přijal právě jednu IPA o velikosti
+30 149 946 B, ověřil její MD5
+`AD2E839D201A6A640A17D50CDFDA9357` a dokončil upload bez chyby. Delivery UUID
+i App Store Connect build record jsou
+`<provisioning-profile-uuid>`. App Store Connect vrací `VALID`,
+minimum iOS 15.0, encryption `false`, české poznámky odpovídající tomuto
+changelogu, interní i externí skupinu `IN_BETA_TESTING` a beta review
+`APPROVED`.
+
+Původní lokální IPA byla po úspěšném uploadu omylem odstraněná automaticky
+opakovaným release jobem, proto její SHA-256 není poctivě doložitelný.
+Opakovaný export měl jinou velikost i MD5 a jeho SHA se za distribuovaný
+artefakt nevydává. Distribuční source je přesný commit `9edf7c6` se stejným
+tree jako `da84214`; git archive měl 13 086 720 B a SHA-256
+`5266F1494A636BCADD51321F36F288D0CCA482F93A7D3CDBAC8215B6938E93BB`.
+Flutter testy skončily 95/95 a protokolové attachment testy 30/30. Store build
+obsahuje čtyři běžné production telemetry hodnoty, ale syntetický release gate
+je vypnutý, takže testeři nevytvářejí ověřovací eventy při každém startu.
+Po vydání se odstranilo přibližně 1,68 GiB přesně vymezeného build, archive,
+export, DerivedData a dočasného obsahu; čistý source, simulátorová data,
+nainstalovaný simulátorový build 36 a signing zůstaly.
+
 - iOS upload už po úspěšném přijetí přílohy nezůstane navždy ve fázi
   `localPrepared`, když druhé čtení Apple Keychainu dočasně vrátí `-25320`
   nebo `-60008`. Scheduler chybu zachytí, zopakuje čtení po 2 s, 10 s a 60 s
