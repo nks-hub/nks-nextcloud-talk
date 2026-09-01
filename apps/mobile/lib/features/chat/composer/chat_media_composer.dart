@@ -1,16 +1,19 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../../network/attachment_transport.dart';
 import '../../../platform/contacts/contact_attachment_picker.dart';
+import '../../../platform/media/desktop_attachment_source.dart';
 import '../../../platform/media/durable_attachment_source_store.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import '../../../platform/media/voice_platform_adapters.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
+import '../../conversations/desktop_attachment_drop.dart';
 import 'attachment_submission.dart';
 import 'giphy_attachment.dart';
 import 'voice_message.dart';
@@ -218,6 +221,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
 
   late final VoiceAttachmentSubmitter _voiceSubmitter;
   late DurableImageAttachmentPicker _imagePicker;
+  late DesktopAttachmentSourcePreparer _desktopAttachmentPreparer;
   late DurableContactAttachmentPicker _contactPicker;
   late ImageAttachmentUploadController _imageController;
   AttachmentSubmissionBridge? _retainedImageSubmissionBridge;
@@ -228,6 +232,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   PreparedAttachmentSource? _preparedImageSource;
   Timer? _voiceResetTimer;
   bool _disposed = false;
+  DesktopAttachmentDropController? _desktopDropController;
 
   /// The caption this submission should carry, or null when it carries none.
   ///
@@ -337,6 +342,18 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = DesktopAttachmentDrop.maybeControllerOf(context);
+    if (identical(_desktopDropController, controller)) {
+      return;
+    }
+    _desktopDropController?.unbind(this);
+    _desktopDropController = controller;
+    controller?.bind(this, _submitDroppedAttachment);
+  }
+
+  @override
   void didUpdateWidget(covariant ChatMediaComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.controller, widget.controller)) {
@@ -370,6 +387,9 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       backend: widget.imageSelectionBackend,
       store: widget.sourceStore,
       maximumImageBytes: widget.sourceStore.maximumSourceBytes,
+    );
+    _desktopAttachmentPreparer = DesktopAttachmentSourcePreparer(
+      picker: _imagePicker,
     );
     _contactPicker = DurableContactAttachmentPicker(
       backend: widget.contactSelectionBackend,
@@ -493,6 +513,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   @override
   void dispose() {
     _disposed = true;
+    _desktopDropController?.unbind(this);
+    _desktopDropController = null;
     widget.controller?._detach(this);
     _releaseControllers();
     super.dispose();

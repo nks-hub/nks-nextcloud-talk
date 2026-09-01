@@ -216,10 +216,12 @@ final class _CompactShell extends StatelessWidget {
     return Scaffold(
       key: const Key('conversation-shell-compact-conversation'),
       body: SafeArea(
-        child: PresenceChatRoomPane(
-          account: account,
-          conversation: selected,
-          onClose: onCloseConversation,
+        child: DesktopAttachmentDrop(
+          child: PresenceChatRoomPane(
+            account: account,
+            conversation: selected,
+            onClose: onCloseConversation,
+          ),
         ),
       ),
     );
@@ -506,10 +508,12 @@ final class _ExpandedShell extends StatelessWidget {
               key: const Key('conversation-detail-pane'),
               child: selectedConversation == null
                   ? const _SelectConversationPlaceholder()
-                  : PresenceChatRoomPane(
-                      account: account,
-                      conversation: selectedConversation!,
-                      onOpenDetails: onOpenDetails,
+                  : DesktopAttachmentDrop(
+                      child: PresenceChatRoomPane(
+                        account: account,
+                        conversation: selectedConversation!,
+                        onOpenDetails: onOpenDetails,
+                      ),
                     ),
             ),
             if (detailsOpen && selectedConversation != null) ...[

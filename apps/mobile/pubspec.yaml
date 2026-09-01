@@ -32,6 +32,10 @@ dependencies:
   audioplayers: ^6.8.1
   connectivity_plus: ^7.3.1
   crypto: ^3.0.7
+  # Flutter has no native file-drop API; the desktop-only upstream fork
+  # bridges Finder, Explorer and Linux transfers without an Android plugin.
+  desktop_drop:
+    path: ../../packages/desktop_drop
   file_selector: ^1.1.0
   flutter:
     sdk: flutter

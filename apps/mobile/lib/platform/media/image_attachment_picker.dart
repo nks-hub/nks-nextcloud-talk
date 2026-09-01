@@ -217,6 +217,27 @@ final class DurableImageAttachmentPicker {
     if (selection == null) {
       return null;
     }
+    return _copySelection(
+      selection,
+      imageOnly: source != AttachmentPickerSource.file,
+      cancellationSignal: cancellationSignal,
+    );
+  }
+
+  Future<PreparedAttachmentSource> copyFileSelection(
+    ImageSelection selection, {
+    AttachmentCancellationSignal? cancellationSignal,
+  }) => _copySelection(
+    selection,
+    imageOnly: false,
+    cancellationSignal: cancellationSignal,
+  );
+
+  Future<PreparedAttachmentSource> _copySelection(
+    ImageSelection selection, {
+    required bool imageOnly,
+    AttachmentCancellationSignal? cancellationSignal,
+  }) async {
     if (selection.byteLength < 1) {
       throw const DurableAttachmentSourceException(
         DurableAttachmentSourceError.emptySource,
@@ -227,7 +248,6 @@ final class DurableImageAttachmentPicker {
         DurableAttachmentSourceError.sourceTooLarge,
       );
     }
-    final imageOnly = source != AttachmentPickerSource.file;
     final displayName = _safeDisplayName(
       selection.displayName,
       fallback: imageOnly ? 'image' : 'attachment',

@@ -23,6 +23,7 @@ import '../search/message_search_screen.dart';
 import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
 import 'conversation_list_actions.dart';
+import 'desktop_attachment_drop.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 import 'unread_badge.dart';

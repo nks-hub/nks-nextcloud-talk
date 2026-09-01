@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/composer/attachment_submission.dart';
 import 'package:nextcloudtalk/features/chat/composer/chat_media_composer.dart';
 import 'package:nextcloudtalk/features/chat/composer/giphy_attachment.dart';
+import 'package:nextcloudtalk/features/conversations/desktop_attachment_drop.dart';
 import 'package:nextcloudtalk/platform/contacts/contact_attachment_picker.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
@@ -19,6 +21,7 @@ import 'test_support.dart';
 part 'chat_media_composer_test_support.dart';
 part 'chat_media_composer_contact_test.part.dart';
 part 'chat_media_composer_file_test.part.dart';
+part 'chat_media_composer_desktop_drop_test.part.dart';
 part 'chat_media_composer_toolbar_test.part.dart';
 part 'chat_media_composer_thread_context_test.part.dart';
 
@@ -45,6 +48,7 @@ void main() {
   _registerChatMediaComposerToolbarTests(() => sourceStore);
   _registerChatMediaComposerContactTests(() => sourceStore);
   _registerChatMediaComposerFileTests(() => sourceStore);
+  _registerChatMediaComposerDesktopDropTests(() => sourceStore);
 
   testWidgets('a silent composer marks the attachment it submits silent', (
     tester,

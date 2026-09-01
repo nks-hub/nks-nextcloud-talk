@@ -106,17 +106,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
             : AttachmentUploadPresentation.image,
       );
     } on ImageAttachmentPickerException catch (error) {
-      throw ImageAttachmentPreparationFailure(switch (error.code) {
-        ImageAttachmentPickerError.galleryPermissionDenied =>
-          'gallery-permission-denied',
-        ImageAttachmentPickerError.galleryUnavailable => 'gallery-unavailable',
-        ImageAttachmentPickerError.cameraPermissionDenied =>
-          'camera-permission-denied',
-        ImageAttachmentPickerError.cameraUnavailable => 'camera-unavailable',
-        ImageAttachmentPickerError.unsupportedType ||
-        ImageAttachmentPickerError.invalidSelection =>
-          'unsupported-attachment-type',
-      });
+      throw _pickerPreparationFailure(error);
     } finally {
       if (identical(_imagePreparationCancellation, cancellation)) {
         _imagePreparationCancellation = null;
@@ -139,6 +129,67 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     await _imageController.pickAndStart(() => _prepareImage(source));
     return true;
   }
+
+  Future<ImageAttachmentUploadRequest?> _prepareDroppedAttachment(
+    DropItem item,
+  ) async {
+    final admission = _captureAdmission(AttachmentMessageKind.file);
+    if (admission == null) {
+      throw const AttachmentSubmissionException(
+        AttachmentSubmissionFailure.unsupported,
+      );
+    }
+    final cancellation = AttachmentCancellationController();
+    _imagePreparationCancellation = cancellation;
+    PreparedAttachmentSource? source;
+    try {
+      source = await _desktopAttachmentPreparer.prepare(
+        item,
+        cancellationSignal: cancellation.signal,
+      );
+      if (_disposed || cancellation.isCancelled) {
+        await widget.sourceStore.discard(source.handle);
+        return null;
+      }
+      _preparedImageSource = source;
+      return ImageAttachmentUploadRequest(
+        accountId: admission.accountId,
+        server: admission.server,
+        roomToken: admission.roomToken,
+        source: source,
+        metadata: admission.metadata,
+        presentation: AttachmentUploadPresentation.file,
+      );
+    } on ImageAttachmentPickerException catch (error) {
+      throw _pickerPreparationFailure(error);
+    } finally {
+      if (identical(_imagePreparationCancellation, cancellation)) {
+        _imagePreparationCancellation = null;
+      }
+    }
+  }
+
+  Future<bool> _submitDroppedAttachment(DropItem item) async {
+    if (_disposed || !_imageSupported || _imageController.state.isActive) {
+      return false;
+    }
+    await _imageController.pickAndStart(() => _prepareDroppedAttachment(item));
+    return true;
+  }
+
+  ImageAttachmentPreparationFailure _pickerPreparationFailure(
+    ImageAttachmentPickerException error,
+  ) => ImageAttachmentPreparationFailure(switch (error.code) {
+    ImageAttachmentPickerError.galleryPermissionDenied =>
+      'gallery-permission-denied',
+    ImageAttachmentPickerError.galleryUnavailable => 'gallery-unavailable',
+    ImageAttachmentPickerError.cameraPermissionDenied =>
+      'camera-permission-denied',
+    ImageAttachmentPickerError.cameraUnavailable => 'camera-unavailable',
+    ImageAttachmentPickerError.unsupportedType ||
+    ImageAttachmentPickerError.invalidSelection =>
+      'unsupported-attachment-type',
+  });
 
   Future<void> _openAppSettings() async {
     final open = widget.openAppSettings;

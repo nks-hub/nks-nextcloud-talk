@@ -1,0 +1,29 @@
+name: desktop_drop
+description: Desktop-only file drop plugin vendored for the NKS Talk client.
+version: 0.8.3+nks.1
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+  flutter: '>=3.0.0'
+
+dependencies:
+  cross_file: ^0.3.4+2
+  dbus: ^0.7.10
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      linux:
+        pluginClass: DesktopDropPlugin
+      macos:
+        pluginClass: DesktopDropPlugin
+      windows:
+        pluginClass: DesktopDropPlugin
