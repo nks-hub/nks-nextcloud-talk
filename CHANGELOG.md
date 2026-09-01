@@ -25,6 +25,10 @@ s version code 42. AAB má 84 293 448 B a SHA-256
 `7b98dbd729171b754e7171cb9c5c9f670bb713795dd0c1181fe60181e6136d08`. Poznámky
 v šesti jazycích se po nahrání shodují se zdrojem.
 
+TestFlight: IPA má 30 237 979 B a SHA-256
+`7ab21ef2f1648ae05cab61ee312172e133e3a4454a6eb636815c6e919cf2e97c`, delivery
+UUID `284a27cd-7cc1-496d-b3ab-02e61767963f`.
+
 Oba artefakty se poprvé staví z ČISTÉHO checkoutu `origin/main`, ne z pracovní
 kopie. Ta totiž nese rozdělanou práci jiné větve (iOS Share Extension,
 transkripce, lifecycle policy) a lokálně stavěné buildy ji mohly obsahovat —
