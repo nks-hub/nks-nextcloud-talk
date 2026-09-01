@@ -16,6 +16,24 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Přihlašovací pole začíná na `https://` a rozumí adrese vložené ze schránky.
+  Odkaz zkopírovaný z prohlížeče se zbaví parametrů i kotvy a zkrátí se na
+  adresu serveru, takže `.../index.php/apps/spreed/` už neskončí chybou.
+  Podadresář instalace zůstává zachovaný a vložené `http://` se tiše nemění
+  na zabezpečené.
+- Výběr GIFů hledá při psaní. Rychlé psaní pošle jeden dotaz místo jednoho na
+  každou klávesu, vymazání pole se vrátí k doporučeným.
+- Nastavení → Diagnostika ukazuje nedokončené přílohy: typ, fázi, stáří
+  a rozsah pokusů, nic víc. Zrušit jde jen to, co zrušit skutečně lze;
+  příloha už předaná serveru má místo tlačítka zámek, aby se nepředstíralo,
+  že se neodeslala.
+- Bublina odesílané zprávy je nižší a vypadá jako běžná odchozí zpráva místo
+  samostatné karty. Stav, opakování i zrušení zůstaly.
+- Náhledová karta odkazu má čitelnou hierarchii: nejdřív titulek, pod ním
+  zdroj, až potom popis. Odkaz s náhledem i bez něj drží stejný tvar.
+
 ## 0.1.0 (37) — 1. 9. 2026
 
 Vydáno ze zdroje `0a388e63263d8e9aa47cd75652611cd37235b324`.
