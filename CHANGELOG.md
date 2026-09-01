@@ -16,6 +16,13 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Když Apple Keychain během uspání nebo dark wake dočasně odmítne přístup,
+  aplikace už tuto situaci nehlásí jako pád ani jako chybějící heslo. Uložený
+  účet zůstane nedotčený a synchronizace i push registrace se bezpečně zopakují;
+  pozdní pokus po odebrání účtu jej nemůže znovu zaregistrovat.
+
 ## 0.1.0 (34) — 1. 9. 2026
 
 Play: AAB se zapnutým Sentry i Rybbit má 83 485 780 B a SHA-256
