@@ -16,7 +16,27 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (38) — 1. 9. 2026
+
+Vydáno ze zdroje `7c8e2fb8e5b2e0209d589669c79515cd7564e6ac`.
+
+Play (uzavřené testování, track alpha): vydání `(38) 0.1.0` je `completed`
+s version code 38 a je jediné na tracku. AAB má 83 989 490 B a SHA-256
+`ad435dce6e0db02f376d8ed3cd044da1d3b81a4023f37056928a7c99e446d6a8`, je
+podepsané upload klíčem `CN=NKS Talk` a `jarsigner` hlásí `jar verified`.
+Poznámky ve všech šesti jazycích se po nahrání znak po znaku shodují se
+zdrojovým souborem.
+
+TestFlight: IPA má 30 167 493 B a SHA-256
+`0729aeb954ed92d301d340bc665ee7ea5032999db01a16345ded03f2d18f60af`. Delivery
+UUID i App Store Connect build record jsou
+`ec28eef5-d5d4-4d34-9e71-b09185b685a6`. App Store Connect vrací `VALID`,
+minimum iOS 15.0, encryption `false` a české poznámky. Obě skupiny jsou
+`IN_BETA_TESTING`; beta review bylo odesláno a v době zápisu čeká.
+
+Sada `apps/mobile` skončila 1635 prošlo a 4 přeskočeno. Dvě selhání
+(`ios_app_icon_metadata`, `macos_push_capability`) jsou starší a padají i na
+čistém základu, protože v čerstvém worktree chybí `Podfile.lock`.
 
 - Přihlašovací pole začíná na `https://` a rozumí adrese vložené ze schránky.
   Odkaz zkopírovaný z prohlížeče se zbaví parametrů i kotvy a zkrátí se na
