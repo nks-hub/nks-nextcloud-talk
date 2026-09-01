@@ -197,6 +197,13 @@ se po úspěchu samo uklidí. Zprávový renderer načítá obrázky autentizova
 stejného account originu a tap otevře samostatný viewer, nikoli nový upload
 dialog.
 
+Commit `658bd5f` přidává desktopový drop jako další vstup stejné orchestraci.
+Scope otevřené compact nebo expanded konverzace přijme právě jeden běžný
+soubor. Adresář, více souborů a oversize skončí před durable admission; macOS
+security-scoped resource se uvolní v úspěšné i chybové větvi. Přijatý soubor se
+okamžitě zkopíruje do app-owned úložiště a dále používá beze změny stejný
+`ChatMediaComposer` a `AttachmentService` tok. Nový upload transport nevzniká.
+
 Voice větev používá `record` a `audioplayers`. Ověří capability a mikrofonní
 oprávnění, drží nahrávku jako durable app-owned zdroj, nabízí lokální preview a
 odesílá ji přes stejnou attachment orchestraci s `voice-message` metadaty.
