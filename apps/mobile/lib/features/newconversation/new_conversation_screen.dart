@@ -8,6 +8,7 @@ import '../../app_providers.dart';
 import '../../core/text_prompt_dialog.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'new_conversation_service.dart';
+import 'open_conversations_sheet.dart';
 
 const Duration _searchDebounce = Duration(milliseconds: 300);
 
@@ -146,6 +147,20 @@ final class _NewConversationScreenState
     );
   }
 
+  Future<void> _browseOpenConversations() async {
+    final token = await showModalBottomSheet<ConversationToken>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => OpenConversationsSheet(accountId: widget.accountId),
+    );
+    if (token == null || !mounted) {
+      return;
+    }
+    // Joining already put the account in the room, so the caller opens it the
+    // same way it opens a conversation it just created.
+    widget.onConversationCreated(token);
+  }
+
   Future<void> _runCreation(
     Future<ConversationToken> Function(NewConversationService service) create,
   ) async {
@@ -243,6 +258,12 @@ final class _NewConversationScreenState
                   icon: const Icon(Icons.public_outlined),
                   label: Text(strings.newConversationCreatePublicAction),
                 ),
+                OutlinedButton.icon(
+                  key: const Key('browse-open-conversations'),
+                  onPressed: _creating ? null : _browseOpenConversations,
+                  icon: const Icon(Icons.travel_explore_outlined),
+                  label: Text(strings.openConversations),
+                ),
               ],
             ),
           ),
@@ -297,6 +318,10 @@ final class _NewConversationScreenState
         strings.newConversationErrorRoomNameRequired,
       NewConversationError.reauthenticationRequired =>
         strings.newConversationErrorReauthenticationRequired,
+      NewConversationError.unavailable =>
+        strings.newConversationErrorUnavailable,
+      NewConversationError.passwordRequired =>
+        strings.newConversationErrorPasswordRequired,
       NewConversationError.ocsFailure => strings.newConversationErrorOcsFailure,
       NewConversationError.rateLimited =>
         strings.newConversationErrorRateLimited,

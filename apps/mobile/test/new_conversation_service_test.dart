@@ -7,6 +7,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/newconversation/new_conversation_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
@@ -73,6 +74,121 @@ void main() {
       });
     });
   }
+
+  group('open conversations', () {
+    test('lists what the server publishes and joins one of them', () async {
+      final requests = <http.Request>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/listed-room')) {
+            return http.Response(
+              jsonEncode({
+                'ocs': {
+                  'meta': {'statuscode': 200},
+                  'data': [
+                    {
+                      'token': 'open1234',
+                      'displayName': 'Open room',
+                      'hasPassword': true,
+                    },
+                  ],
+                },
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'ocs': {
+                'meta': {'statuscode': 200},
+                'data': <String, Object?>{},
+              },
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = HttpNewConversationService(
+        accounts: accounts,
+        credentials: credentials,
+        api: api,
+      );
+
+      final rooms = await service.listOpenConversations(accountId: 'account-a');
+      expect(rooms.single.displayName, 'Open room');
+      expect(rooms.single.hasPassword, isTrue);
+
+      final token = await service.joinOpenConversation(
+        accountId: 'account-a',
+        roomToken: rooms.single.token,
+        password: 'open sesame',
+      );
+
+      expect(token.value, 'open1234');
+      expect(
+        requests.last.url.path,
+        endsWith('/room/open1234/participants/active'),
+      );
+      expect(requests.last.body, 'password=open+sesame');
+      expect(
+        requests.every(
+          (request) => request.headers.containsKey('Authorization'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a wrong password is reported as such, not as a failure', () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async => http.Response('', 403)),
+      );
+      addTearDown(api.close);
+      final service = HttpNewConversationService(
+        accounts: accounts,
+        credentials: credentials,
+        api: api,
+      );
+
+      await expectLater(
+        service.joinOpenConversation(
+          accountId: 'account-a',
+          roomToken: ConversationToken.parse('open1234', path: r'$.token'),
+        ),
+        throwsA(
+          isA<NewConversationException>().having(
+            (error) => error.code,
+            'code',
+            NewConversationError.passwordRequired,
+          ),
+        ),
+      );
+    });
+
+    test('a server without open conversations is not an empty list', () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async => http.Response('', 404)),
+      );
+      addTearDown(api.close);
+      final service = HttpNewConversationService(
+        accounts: accounts,
+        credentials: credentials,
+        api: api,
+      );
+
+      await expectLater(
+        service.listOpenConversations(accountId: 'account-a'),
+        throwsA(
+          isA<NewConversationException>().having(
+            (error) => error.code,
+            'code',
+            NewConversationError.unavailable,
+          ),
+        ),
+      );
+    });
+  });
 }
 
 Map<String, Object?> _createdRoomResponse() {

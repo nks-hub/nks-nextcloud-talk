@@ -9,6 +9,13 @@ import '../../network/nextcloud_api.dart';
 
 enum NewConversationError {
   accountMissing,
+
+  /// The server does not publish open conversations, or the room is gone.
+  unavailable,
+
+  /// The conversation is password protected and the password was missing or
+  /// wrong.
+  passwordRequired,
   credentialMissing,
   invalidSearchTerm,
   roomNameRequired,
@@ -36,6 +43,20 @@ abstract interface class NewConversationService {
   Future<List<ConversationRecipient>> searchRecipients({
     required String accountId,
     required String searchTerm,
+  });
+
+  /// Conversations the server publishes as open to everyone on it.
+  Future<List<ListedRoom>> listOpenConversations({
+    required String accountId,
+    String searchTerm = '',
+  });
+
+  /// Joins one of them. Returns the token so the caller can open it right
+  /// away; anything else throws.
+  Future<ConversationToken> joinOpenConversation({
+    required String accountId,
+    required ConversationToken roomToken,
+    String password = '',
   });
 
   /// Creates a conversation for [recipient]. [roomName] is required when
@@ -276,6 +297,107 @@ final class HttpNewConversationService implements NewConversationService {
           CreateConversationHttpFailureKind.serviceUnavailable =>
             NewConversationError.serviceUnavailable,
         }),
+    };
+  }
+
+  @override
+  Future<List<ListedRoom>> listOpenConversations({
+    required String accountId,
+    String searchTerm = '',
+  }) async {
+    final credentials = await _resolveCredentials(accountId);
+    final ListedRoomsRequest request;
+    try {
+      request = ListedRoomsRequest(
+        accountId: AccountId.parse(accountId),
+        server: credentials.server,
+        searchTerm: searchTerm.trim(),
+      );
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.invalidSearchTerm,
+      );
+    }
+    final ListedRoomsResponse response;
+    try {
+      response = await _api.listOpenRooms(
+        roomsRequest: request,
+        loginName: credentials.loginName,
+        appPassword: credentials.appPassword,
+      );
+    } on NextcloudApiException {
+      throw const NewConversationException(NewConversationError.network);
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.invalidResponse,
+      );
+    }
+    return switch (response.outcome) {
+      ListedRoomsOutcome.listed => response.rooms,
+      ListedRoomsOutcome.reauthenticationRequired =>
+        throw const NewConversationException(
+          NewConversationError.reauthenticationRequired,
+        ),
+      ListedRoomsOutcome.unavailable => throw const NewConversationException(
+        NewConversationError.unavailable,
+      ),
+      ListedRoomsOutcome.transientError => throw const NewConversationException(
+        NewConversationError.serviceUnavailable,
+      ),
+    };
+  }
+
+  @override
+  Future<ConversationToken> joinOpenConversation({
+    required String accountId,
+    required ConversationToken roomToken,
+    String password = '',
+  }) async {
+    final credentials = await _resolveCredentials(accountId);
+    final JoinListedRoomRequest request;
+    try {
+      request = JoinListedRoomRequest(
+        accountId: AccountId.parse(accountId),
+        server: credentials.server,
+        roomToken: roomToken,
+        password: password,
+      );
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.invalidResponse,
+      );
+    }
+    final JoinListedRoomResponse response;
+    try {
+      response = await _api.joinListedRoom(
+        joinRequest: request,
+        loginName: credentials.loginName,
+        appPassword: credentials.appPassword,
+      );
+    } on NextcloudApiException {
+      throw const NewConversationException(NewConversationError.network);
+    } on TalkProtocolException {
+      throw const NewConversationException(
+        NewConversationError.invalidResponse,
+      );
+    }
+    return switch (response.outcome) {
+      JoinListedRoomOutcome.joined => roomToken,
+      JoinListedRoomOutcome.passwordRequired =>
+        throw const NewConversationException(
+          NewConversationError.passwordRequired,
+        ),
+      JoinListedRoomOutcome.unavailable => throw const NewConversationException(
+        NewConversationError.unavailable,
+      ),
+      JoinListedRoomOutcome.reauthenticationRequired =>
+        throw const NewConversationException(
+          NewConversationError.reauthenticationRequired,
+        ),
+      JoinListedRoomOutcome.transientError =>
+        throw const NewConversationException(
+          NewConversationError.serviceUnavailable,
+        ),
     };
   }
 

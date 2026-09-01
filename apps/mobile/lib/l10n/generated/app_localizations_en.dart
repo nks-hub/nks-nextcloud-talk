@@ -2596,4 +2596,32 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get remoteFilesShareForbidden =>
       'This account may not share that file here.';
+
+  @override
+  String get openConversations => 'Open conversations';
+
+  @override
+  String get openConversationsEmpty =>
+      'This server publishes no open conversations.';
+
+  @override
+  String get openConversationsJoin => 'Join';
+
+  @override
+  String get openConversationsPasswordTitle =>
+      'This conversation has a password';
+
+  @override
+  String get openConversationsPasswordLabel => 'Conversation password';
+
+  @override
+  String get openConversationsJoined => 'You joined the conversation.';
+
+  @override
+  String get newConversationErrorUnavailable =>
+      'This conversation is no longer open.';
+
+  @override
+  String get newConversationErrorPasswordRequired =>
+      'The conversation password is wrong.';
 }

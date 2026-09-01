@@ -2595,4 +2595,31 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get remoteFilesShareForbidden =>
       'Tento účet tady ten soubor sdílet nemůže.';
+
+  @override
+  String get openConversations => 'Otevřené konverzace';
+
+  @override
+  String get openConversationsEmpty =>
+      'Tento server žádné otevřené konverzace nenabízí.';
+
+  @override
+  String get openConversationsJoin => 'Připojit se';
+
+  @override
+  String get openConversationsPasswordTitle => 'Konverzace má heslo';
+
+  @override
+  String get openConversationsPasswordLabel => 'Heslo konverzace';
+
+  @override
+  String get openConversationsJoined => 'Připojili jste se ke konverzaci.';
+
+  @override
+  String get newConversationErrorUnavailable =>
+      'Tato konverzace už není otevřená.';
+
+  @override
+  String get newConversationErrorPasswordRequired =>
+      'Heslo konverzace nesouhlasí.';
 }

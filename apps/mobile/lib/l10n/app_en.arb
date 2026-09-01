@@ -1287,5 +1287,13 @@
   "remoteFilesShareAction": "Share",
   "remoteFilesShared": "The file was shared into the conversation.",
   "remoteFilesShareFailed": "The file could not be shared.",
-  "remoteFilesShareForbidden": "This account may not share that file here."
+  "remoteFilesShareForbidden": "This account may not share that file here.",
+  "openConversations": "Open conversations",
+  "openConversationsEmpty": "This server publishes no open conversations.",
+  "openConversationsJoin": "Join",
+  "openConversationsPasswordTitle": "This conversation has a password",
+  "openConversationsPasswordLabel": "Conversation password",
+  "openConversationsJoined": "You joined the conversation.",
+  "newConversationErrorUnavailable": "This conversation is no longer open.",
+  "newConversationErrorPasswordRequired": "The conversation password is wrong."
 }

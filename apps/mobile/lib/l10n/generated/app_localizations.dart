@@ -4723,6 +4723,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This account may not share that file here.'**
   String get remoteFilesShareForbidden;
+
+  /// No description provided for @openConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Open conversations'**
+  String get openConversations;
+
+  /// No description provided for @openConversationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This server publishes no open conversations.'**
+  String get openConversationsEmpty;
+
+  /// No description provided for @openConversationsJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get openConversationsJoin;
+
+  /// No description provided for @openConversationsPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation has a password'**
+  String get openConversationsPasswordTitle;
+
+  /// No description provided for @openConversationsPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation password'**
+  String get openConversationsPasswordLabel;
+
+  /// No description provided for @openConversationsJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'You joined the conversation.'**
+  String get openConversationsJoined;
+
+  /// No description provided for @newConversationErrorUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation is no longer open.'**
+  String get newConversationErrorUnavailable;
+
+  /// No description provided for @newConversationErrorPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation password is wrong.'**
+  String get newConversationErrorPasswordRequired;
 }
 
 class _AppLocalizationsDelegate

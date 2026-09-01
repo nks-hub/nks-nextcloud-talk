@@ -947,5 +947,13 @@
   "remoteFilesShareAction": "Sdílet",
   "remoteFilesShared": "Soubor byl sdílen do konverzace.",
   "remoteFilesShareFailed": "Soubor se nepodařilo sdílet.",
-  "remoteFilesShareForbidden": "Tento účet tady ten soubor sdílet nemůže."
+  "remoteFilesShareForbidden": "Tento účet tady ten soubor sdílet nemůže.",
+  "openConversations": "Otevřené konverzace",
+  "openConversationsEmpty": "Tento server žádné otevřené konverzace nenabízí.",
+  "openConversationsJoin": "Připojit se",
+  "openConversationsPasswordTitle": "Konverzace má heslo",
+  "openConversationsPasswordLabel": "Heslo konverzace",
+  "openConversationsJoined": "Připojili jste se ke konverzaci.",
+  "newConversationErrorUnavailable": "Tato konverzace už není otevřená.",
+  "newConversationErrorPasswordRequired": "Heslo konverzace nesouhlasí."
 }

@@ -215,6 +215,60 @@ void main() {
     expect(find.text('Name this group conversation'), findsOneWidget);
     expect(service.lastStandaloneType, isNull);
   });
+
+  testWidgets('joining an open conversation opens it like a new one', (
+    tester,
+  ) async {
+    service.openRooms = [
+      ListedRoom(
+        token: ConversationToken.parse('open1234', path: r'$.token'),
+        displayName: 'Open room',
+        description: '',
+        lastActivity: null,
+        hasPassword: true,
+      ),
+    ];
+    ConversationToken? opened;
+    await tester.pumpWidget(app(onCreated: (token) => opened = token));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('browse-open-conversations')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('open-conversations-list')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('open-conversation-open1234')));
+    await tester.pumpAndSettle();
+
+    // A password protected room asks first; nothing is joined before that.
+    expect(
+      find.byKey(const Key('open-conversation-password-dialog')),
+      findsOneWidget,
+    );
+    expect(service.lastJoinToken, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'open sesame');
+    await tester.tap(
+      find.byKey(const Key('open-conversation-password-submit')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(service.lastJoinPassword, 'open sesame');
+    expect(opened?.value, 'open1234');
+  });
+
+  testWidgets('a server without open conversations says so', (tester) async {
+    service.openRoomsError = const NewConversationException(
+      NewConversationError.unavailable,
+    );
+    await tester.pumpWidget(app(onCreated: (_) {}));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('browse-open-conversations')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('open-conversations-error')), findsOneWidget);
+    expect(find.byKey(const Key('open-conversations-list')), findsNothing);
+  });
 }
 
 ConversationRecipient _syntheticUser() => _decodeRecipient({
@@ -262,6 +316,40 @@ final class _FakeNewConversationService implements NewConversationService {
   ConversationRecipient? lastCreateRecipient;
   String? lastCreateRoomName;
   StandaloneConversationType? lastStandaloneType;
+
+  List<ListedRoom> openRooms = const [];
+  NewConversationException? openRoomsError;
+  ConversationToken? joinResult;
+  NewConversationException? joinError;
+  ConversationToken? lastJoinToken;
+  String? lastJoinPassword;
+
+  @override
+  Future<List<ListedRoom>> listOpenConversations({
+    required String accountId,
+    String searchTerm = '',
+  }) async {
+    final error = openRoomsError;
+    if (error != null) {
+      throw error;
+    }
+    return openRooms;
+  }
+
+  @override
+  Future<ConversationToken> joinOpenConversation({
+    required String accountId,
+    required ConversationToken roomToken,
+    String password = '',
+  }) async {
+    lastJoinToken = roomToken;
+    lastJoinPassword = password;
+    final error = joinError;
+    if (error != null) {
+      throw error;
+    }
+    return joinResult ?? roomToken;
+  }
 
   @override
   Future<List<ConversationRecipient>> searchRecipients({
