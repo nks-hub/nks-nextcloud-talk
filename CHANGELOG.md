@@ -16,6 +16,16 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Obrázky a GIFy v otevřené konverzaci už každých pár sekund neproblikávají.
+  Náhledy se držely na klíči, který nesl celý řádek účtu, a ten každá
+  synchronizace přepsala — obrázek se proto pokaždé stahoval znovu. Klíč teď
+  drží jen to, co skutečně určuje stažení.
+- Náhled odkazu ukazuje obrázek, když ho server nabídne. Načítá se výhradně
+  z vlastního Nextcloudu, který ho proxuje; adresa odkazovaného webu se
+  nestahuje, takže otevření konverzace o čtenáři nic neprozradí.
+
 ## 0.1.0 (38) — 1. 9. 2026
 
 Vydáno ze zdroje `7c8e2fb8e5b2e0209d589669c79515cd7564e6ac`.
