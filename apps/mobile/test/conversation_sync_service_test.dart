@@ -761,6 +761,54 @@ void main() {
     expect(requests, 1, reason: 'durable re-auth state must stop retry loops');
   });
 
+  test(
+    'a rejected credential asks once whether this device was wiped',
+    () async {
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async => http.Response('', 401)),
+      );
+      addTearDown(api.close);
+      final asked = <String>[];
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+        onAuthenticationLost: (accountId) async => asked.add(accountId),
+      );
+
+      await expectLater(
+        service.sync('account-a'),
+        throwsA(isA<ConversationSyncException>()),
+      );
+
+      expect(asked, <String>['account-a']);
+    },
+  );
+
+  test('a wipe check that throws never changes the sync failure', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async => http.Response('', 401)),
+    );
+    addTearDown(api.close);
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: vault,
+      api: api,
+      onAuthenticationLost: (_) async => throw StateError('synthetic'),
+    );
+
+    await expectLater(
+      service.sync('account-a'),
+      throwsA(
+        isA<ConversationSyncException>().having(
+          (error) => error.code,
+          'code',
+          ConversationSyncError.reauthenticationRequired,
+        ),
+      ),
+    );
+  });
+
   test('transport cancellation stops without persisting an error', () async {
     final started = Completer<void>();
     final cancellation = Completer<void>();
