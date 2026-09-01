@@ -25,6 +25,8 @@ void main() {
       'NSPhotoLibraryAddUsageDescription',
       // geolocator, only while the app is visible
       'NSLocationWhenInUseUsageDescription',
+      // local_auth, app-lock authentication
+      'NSFaceIDUsageDescription',
     ];
     for (final key in required) {
       final at = contents.indexOf('<key>$key</key>');
@@ -38,30 +40,43 @@ void main() {
     }
   });
 
-  test('iOS location purpose string follows the device language', () {
-    const key = 'NSLocationWhenInUseUsageDescription';
+  test('iOS purpose strings follow the device language', () {
     final runner = Directory(
       '${Directory.current.path}${Platform.pathSeparator}ios'
       '${Platform.pathSeparator}Runner',
     );
-    final czech = File(
-      '${runner.path}${Platform.pathSeparator}cs.lproj'
-      '${Platform.pathSeparator}InfoPlist.strings',
-    ).readAsStringSync();
-    final english = File(
-      '${runner.path}${Platform.pathSeparator}en.lproj'
-      '${Platform.pathSeparator}InfoPlist.strings',
-    ).readAsStringSync();
+    final czech = _localizedInfoPlist(
+      File(
+        '${runner.path}${Platform.pathSeparator}cs.lproj'
+        '${Platform.pathSeparator}InfoPlist.strings',
+      ),
+    );
+    final english = _localizedInfoPlist(
+      File(
+        '${runner.path}${Platform.pathSeparator}en.lproj'
+        '${Platform.pathSeparator}InfoPlist.strings',
+      ),
+    );
 
     expect(
-      czech.trim(),
-      '"$key" = "NKS Talk použije vaši aktuální polohu pouze tehdy, když ji '
-      'sami sdílíte v konverzaci.";',
+      czech['NSLocationWhenInUseUsageDescription'],
+      'NKS Talk použije vaši aktuální polohu pouze tehdy, když ji sami sdílíte '
+      'v konverzaci.',
     );
     expect(
-      english.trim(),
-      '"$key" = "NKS Talk uses your current location only when you choose to '
-      'share it in a conversation.";',
+      english['NSLocationWhenInUseUsageDescription'],
+      'NKS Talk uses your current location only when you choose to share it in '
+      'a conversation.',
+    );
+    expect(
+      czech['NSFaceIDUsageDescription'],
+      'NKS Talk používá Face ID k odemknutí vašich konverzací, když je zapnutý '
+      'zámek aplikace.',
+    );
+    expect(
+      english['NSFaceIDUsageDescription'],
+      'NKS Talk uses Face ID to unlock your conversations when app lock is '
+      'enabled.',
     );
 
     final project = File(
@@ -103,9 +118,7 @@ void main() {
     );
     expect(
       resources,
-      contains(
-        'A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */',
-      ),
+      contains('A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */'),
     );
   });
 
@@ -209,4 +222,14 @@ String _pbxObject(String project, String id, String comment) {
   ).firstMatch(project);
   expect(match, isNotNull, reason: '$comment is not wired into the project');
   return match!.group(0)!;
+}
+
+Map<String, String> _localizedInfoPlist(File file) {
+  return <String, String>{
+    for (final match in RegExp(
+      r'^"([^"]+)"\s*=\s*"([^"]*)";$',
+      multiLine: true,
+    ).allMatches(file.readAsStringSync()))
+      match.group(1)!: match.group(2)!,
+  };
 }
