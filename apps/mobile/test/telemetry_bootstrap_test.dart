@@ -32,7 +32,7 @@ void main() {
         exceptions: [
           SentryException(
             type: 'HttpException',
-            value: 'Authorization: Basic c2VjcmV0OnZhbHVl rejected',
+            value: 'Authorization: Basic fixture-value rejected',
           ),
           SentryException(
             type: 'StateError',
@@ -44,7 +44,7 @@ void main() {
       final values = scrubSentryEvent(
         event,
       ).exceptions!.map((e) => e.value).join(' ');
-      expect(values, isNot(contains('c2VjcmV0OnZhbHVl')));
+      expect(values, isNot(contains('fixture-value')));
       expect(values, isNot(contains('talk.example.com')));
       expect(values, isNot(contains('a1b2c3d4')));
     });
