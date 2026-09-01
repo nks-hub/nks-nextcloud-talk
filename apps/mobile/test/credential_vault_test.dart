@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 
@@ -131,6 +132,72 @@ void main() {
       expect(storage.valueFor(currentKey), 'future-password');
     },
   );
+
+  for (final status in const <int>[-25320, -60008]) {
+    test(
+      'keeps a credential retryable when Apple security returns $status',
+      () async {
+        const currentKey = 'credential.v2.account.account-a.appPassword';
+        final storage = _RecordingSecureStorage()
+          ..seed('credential.account.account-a.version', '2')
+          ..seed(currentKey, 'app-password')
+          ..failNextReadWithAppleStatus(status);
+        final vault = SecureCredentialVault(storage: storage);
+
+        await expectLater(
+          vault.readAppPassword('account-a'),
+          throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+        );
+
+        expect(storage.valueFor(currentKey), 'app-password');
+        expect(await vault.readAppPassword('account-a'), 'app-password');
+      },
+    );
+  }
+
+  test('preserves non-transient Apple security failures', () async {
+    final storage = _RecordingSecureStorage()
+      ..failNextReadWithAppleStatus(-25293);
+
+    await expectLater(
+      SecureCredentialVault(storage: storage).readAppPassword('account-a'),
+      throwsA(
+        isA<PlatformException>().having(
+          (error) => error.details,
+          'details',
+          -25293,
+        ),
+      ),
+    );
+  });
+
+  test(
+    'a shared transient migration stays retryable for every waiter',
+    () async {
+      const currentKey = 'credential.v2.account.account-a.appPassword';
+      final storage = _RecordingSecureStorage()
+        ..seed('credential.account.account-a.version', '2')
+        ..seed(currentKey, 'app-password')
+        ..failNextReadWithAppleStatus(-25320);
+      final vault = SecureCredentialVault(storage: storage);
+
+      final first = vault.readAppPassword('account-a');
+      final second = vault.readAppPassword('account-a');
+      await Future.wait<void>([
+        expectLater(
+          first,
+          throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+        ),
+        expectLater(
+          second,
+          throwsA(isA<CredentialVaultTemporarilyUnavailable>()),
+        ),
+      ]);
+
+      expect(storage.valueFor(currentKey), 'app-password');
+      expect(await vault.readAppPassword('account-a'), 'app-password');
+    },
+  );
 }
 
 enum _Operation { read, write, delete }
@@ -154,6 +221,7 @@ final class _StorageCall {
 final class _RecordingSecureStorage extends FlutterSecureStorage {
   final Map<String, String> _values = {};
   final Set<String> _failingWrites = {};
+  final List<int> _failingReadStatuses = [];
   final List<_StorageCall> calls = [];
 
   void seed(String key, String value) => _values[key] = value;
@@ -161,6 +229,10 @@ final class _RecordingSecureStorage extends FlutterSecureStorage {
   String? valueFor(String key) => _values[key];
 
   void failNextWrite(String key) => _failingWrites.add(key);
+
+  void failNextReadWithAppleStatus(int status) {
+    _failingReadStatuses.add(status);
+  }
 
   @override
   Future<void> write({
@@ -207,6 +279,14 @@ final class _RecordingSecureStorage extends FlutterSecureStorage {
       iOptions: iOptions,
       mOptions: mOptions,
     );
+    if (_failingReadStatuses.isNotEmpty) {
+      final status = _failingReadStatuses.removeAt(0);
+      throw PlatformException(
+        code: 'Unexpected security result code',
+        message: 'Synthetic Apple security failure',
+        details: status,
+      );
+    }
     return _values[key];
   }
 

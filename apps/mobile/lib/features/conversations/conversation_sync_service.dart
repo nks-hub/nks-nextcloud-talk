@@ -167,7 +167,12 @@ final class ConversationSyncService {
         ConversationSyncError.reauthenticationRequired,
       );
     }
-    final appPassword = await _credentials.readAppPassword(accountId);
+    final String? appPassword;
+    try {
+      appPassword = await _credentials.readAppPassword(accountId);
+    } on CredentialVaultTemporarilyUnavailable {
+      throw const ConversationSyncException(ConversationSyncError.network);
+    }
     if (appPassword == null) {
       await _fail(accountId, ConversationSyncError.credentialMissing);
     }

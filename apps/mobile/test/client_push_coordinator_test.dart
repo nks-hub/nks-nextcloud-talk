@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/push/client_push_coordinator.dart';
 import 'package:nextcloudtalk/features/push/client_push_session.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -139,6 +140,36 @@ void main() {
     await _settle();
     expect(resolves, 2);
     expect(uncaught, isEmpty);
+  });
+
+  test('a temporary credential lock stays inside the retry loop', () async {
+    final connector = _Connector();
+    final uncaught = <Object>[];
+    var resolves = 0;
+    final coordinator = ClientPushCoordinator(
+      resolve: (_) async {
+        resolves++;
+        if (resolves == 1) {
+          throw const CredentialVaultTemporarilyUnavailable();
+        }
+        return _endpoints();
+      },
+      fetchToken: (_, _) async => 'token',
+      connector: connector,
+      onWakeUp: (_) {},
+      delay: (_) async {},
+    );
+
+    runZonedGuarded(
+      () => coordinator.follow('account-a'),
+      (error, _) => uncaught.add(error),
+    );
+    await _settle();
+
+    expect(resolves, greaterThanOrEqualTo(2));
+    expect(connector.sockets, hasLength(1));
+    expect(uncaught, isEmpty);
+    await coordinator.dispose();
   });
 
   test('a dropped socket is reconnected', () async {

@@ -101,8 +101,8 @@ final class ClientPushCoordinator {
           }
         }
       } on Object {
-        // Every failure here is a transport or an expired token; both are
-        // answered by trying again later rather than by giving up.
+        // Transport, token and temporary local-credential failures all become
+        // recoverable when the device or network state changes.
       }
       channel.session = null;
       if (channel.stopped) {

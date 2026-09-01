@@ -100,9 +100,15 @@ final class PushRegistrationCoordinator {
 
   PushRuntimeSnapshot _snapshot = PushRuntimeSnapshot.empty();
   final Map<String, PushRegistrationAuthority> _authorities = {};
+  final Map<String, int> _accountLifecycleGeneration = {};
   final Set<AccountId> _retryInFlight = {};
   final Map<AccountId, Duration> _retryBackoff = {};
+  final Map<String, ({int retryGeneration, int lifecycleGeneration})>
+  _credentialRetries = {};
+  final Map<String, Duration> _credentialRetryBackoff = {};
   var _effectSeq = 0;
+  var _accountLifecycleSeq = 0;
+  var _credentialRetrySeq = 0;
   var _providerGeneration = 0;
   String? _rawToken;
   var _draining = false;
@@ -147,10 +153,25 @@ final class PushRegistrationCoordinator {
     if (_disposed) {
       return;
     }
-    final resolved = await _credentialsFor(accountId);
-    if (resolved == null) {
+    final lifecycleGeneration = ++_accountLifecycleSeq;
+    _accountLifecycleGeneration[accountId] = lifecycleGeneration;
+    final ({StoredAccount account, String appPassword})? resolved;
+    try {
+      resolved = await _credentialsFor(accountId);
+    } on CredentialVaultTemporarilyUnavailable {
+      if (_isCurrentFollow(accountId, lifecycleGeneration)) {
+        _scheduleCredentialRetry(accountId, lifecycleGeneration);
+      }
       return;
     }
+    if (!_isCurrentFollow(accountId, lifecycleGeneration)) {
+      return;
+    }
+    if (resolved == null) {
+      _clearCredentialRetry(accountId);
+      return;
+    }
+    _clearCredentialRetry(accountId);
     // The account stream re-emits on every write to the row, so this runs far
     // more often than the push identity changes. It stays cheap without a
     // guard here: `getAuthenticatedCapabilities` serves an in-memory snapshot
@@ -162,7 +183,7 @@ final class PushRegistrationCoordinator {
       loginName: resolved.account.loginName,
       appPassword: resolved.appPassword,
     );
-    if (_disposed) {
+    if (!_isCurrentFollow(accountId, lifecycleGeneration)) {
       return;
     }
     final authority = PushRegistrationAuthority(
@@ -200,6 +221,8 @@ final class PushRegistrationCoordinator {
   /// Nextcloud, gateway and key-destruction chain settled synchronously.
   /// Retryable state remains owned by this coordinator for its bounded retry.
   Future<bool> revokeAccount(String accountId) async {
+    _accountLifecycleGeneration[accountId] = ++_accountLifecycleSeq;
+    _clearCredentialRetry(accountId);
     final authority = _authorities[accountId];
     if (authority == null) {
       return true;
@@ -266,6 +289,8 @@ final class PushRegistrationCoordinator {
   /// reverse), the exact split state a clean unregister exists to avoid.
   Future<void> dispose() async {
     _disposed = true;
+    _credentialRetries.clear();
+    _credentialRetryBackoff.clear();
     await _activeDrain;
     _gatewayClient.close();
   }
@@ -377,7 +402,14 @@ final class PushRegistrationCoordinator {
   Future<PushNextcloudRegistrationCompletion> _executeRegisterNextcloud(
     RegisterPushWithNextcloudEffect effect,
   ) async {
-    final resolved = await _credentialsFor(effect.context.accountId.value);
+    final ({StoredAccount account, String appPassword})? resolved;
+    try {
+      resolved = await _credentialsFor(effect.context.accountId.value);
+    } on CredentialVaultTemporarilyUnavailable {
+      return PushNextcloudRegistrationCompletion.transientFailure(
+        effect: effect,
+      );
+    }
     if (resolved == null) {
       return PushNextcloudRegistrationCompletion.reauthenticationRequired(
         effect: effect,
@@ -399,7 +431,14 @@ final class PushRegistrationCoordinator {
   Future<PushNextcloudUnregistrationCompletion> _executeUnregisterNextcloud(
     UnregisterPushFromNextcloudEffect effect,
   ) async {
-    final resolved = await _credentialsFor(effect.context.accountId.value);
+    final ({StoredAccount account, String appPassword})? resolved;
+    try {
+      resolved = await _credentialsFor(effect.context.accountId.value);
+    } on CredentialVaultTemporarilyUnavailable {
+      return PushNextcloudUnregistrationCompletion.transientFailure(
+        effect: effect,
+      );
+    }
     if (resolved == null) {
       return PushNextcloudUnregistrationCompletion.reauthenticationRequired(
         effect: effect,
@@ -487,6 +526,52 @@ final class PushRegistrationCoordinator {
     _apply(retryPushAccount(_snapshot, authority));
     await _drain();
     _retireAuthorityIfRemoved(accountId);
+  }
+
+  void _scheduleCredentialRetry(String accountId, int lifecycleGeneration) {
+    if (_disposed) {
+      return;
+    }
+    final pending = _credentialRetries[accountId];
+    if (pending?.lifecycleGeneration == lifecycleGeneration) {
+      return;
+    }
+    final retry = (
+      retryGeneration: ++_credentialRetrySeq,
+      lifecycleGeneration: lifecycleGeneration,
+    );
+    _credentialRetries[accountId] = retry;
+    final backoff = _credentialRetryBackoff[accountId] ?? _firstRetry;
+    final doubled = backoff * 2;
+    _credentialRetryBackoff[accountId] = doubled > _maximumRetry
+        ? _maximumRetry
+        : doubled;
+    unawaited(_retryCredentialAfter(accountId, retry, backoff));
+  }
+
+  Future<void> _retryCredentialAfter(
+    String accountId,
+    ({int retryGeneration, int lifecycleGeneration}) retry,
+    Duration backoff,
+  ) async {
+    await _delay(backoff);
+    if (_credentialRetries[accountId] != retry ||
+        !_isCurrentFollow(accountId, retry.lifecycleGeneration)) {
+      return;
+    }
+    _credentialRetries.remove(accountId);
+    if (!_disposed) {
+      await follow(accountId);
+    }
+  }
+
+  void _clearCredentialRetry(String accountId) {
+    _credentialRetries.remove(accountId);
+    _credentialRetryBackoff.remove(accountId);
+  }
+
+  bool _isCurrentFollow(String accountId, int generation) {
+    return !_disposed && _accountLifecycleGeneration[accountId] == generation;
   }
 
   bool _retireAuthorityIfRemoved(AccountId accountId) {

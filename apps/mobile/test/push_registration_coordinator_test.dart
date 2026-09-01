@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/push/apple_push_device_key_store.dart';
 import 'package:nextcloudtalk/features/push/push_gateway_client.dart';
 import 'package:nextcloudtalk/features/push/push_registration_coordinator.dart';
@@ -243,6 +245,264 @@ void main() {
       wired.gatewayRequests.single.bodyFields.containsKey('pushEnvironment'),
       isFalse,
     );
+  });
+
+  test(
+    'temporary credential lock retries registration without escaping',
+    () async {
+      await seedAccount('account-a');
+      final wired = wire();
+      addTearDown(wired.api.close);
+      final transientCredentials = _TransientCredentialVault(
+        value: 'fixture-app-password-never-use',
+        failOnReads: {1},
+      );
+      final coordinator = PushRegistrationCoordinator(
+        accounts: accounts,
+        credentials: transientCredentials,
+        api: wired.api,
+        keyStore: _FakeDeviceKeyStore(),
+        gateway: gateway,
+        tokenHandlePrefix: 'fcm-token',
+        pushProvider: PushGatewayProvider.fcm,
+        gatewayClient: wired.gatewayClient,
+        firstRetry: const Duration(milliseconds: 1),
+        maximumRetry: const Duration(milliseconds: 2),
+        delay: (_) async {},
+      );
+      addTearDown(coordinator.dispose);
+      final uncaught = <Object>[];
+
+      coordinator.installToken(_fcmToken);
+      await runZonedGuarded(() async {
+        await coordinator.follow('account-a');
+        for (var attempt = 0; attempt < 20; attempt++) {
+          if (wired.gatewayRequests.isNotEmpty) {
+            break;
+          }
+          await Future<void>.delayed(Duration.zero);
+        }
+      }, (error, _) => uncaught.add(error));
+
+      expect(transientCredentials.reads, greaterThanOrEqualTo(2));
+      expect(wired.gatewayRequests, hasLength(1));
+      expect(uncaught, isEmpty);
+    },
+  );
+
+  test(
+    'temporary credential lock retries an active registration effect',
+    () async {
+      await seedAccount('account-a');
+      final wired = wire();
+      addTearDown(wired.api.close);
+      final transientCredentials = _TransientCredentialVault(
+        value: 'fixture-app-password-never-use',
+        failOnReads: {2},
+      );
+      final coordinator = PushRegistrationCoordinator(
+        accounts: accounts,
+        credentials: transientCredentials,
+        api: wired.api,
+        keyStore: _FakeDeviceKeyStore(),
+        gateway: gateway,
+        tokenHandlePrefix: 'fcm-token',
+        pushProvider: PushGatewayProvider.fcm,
+        gatewayClient: wired.gatewayClient,
+        firstRetry: const Duration(milliseconds: 1),
+        maximumRetry: const Duration(milliseconds: 2),
+        delay: (_) async {},
+      );
+      addTearDown(coordinator.dispose);
+
+      coordinator.installToken(_fcmToken);
+      await coordinator.follow('account-a');
+      for (var attempt = 0; attempt < 20; attempt++) {
+        if (wired.gatewayRequests.isNotEmpty) {
+          break;
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      expect(transientCredentials.reads, greaterThanOrEqualTo(3));
+      expect(wired.gatewayRequests, hasLength(1));
+    },
+  );
+
+  test('unfollow cancels a delayed credential retry', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    addTearDown(wired.api.close);
+    final releaseRetry = Completer<void>();
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: _TransientCredentialVault(
+        value: 'fixture-app-password-never-use',
+        failOnReads: {1},
+      ),
+      api: wired.api,
+      keyStore: _FakeDeviceKeyStore(),
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: wired.gatewayClient,
+      firstRetry: const Duration(milliseconds: 1),
+      maximumRetry: const Duration(milliseconds: 2),
+      delay: (_) => releaseRetry.future,
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await coordinator.unfollow('account-a');
+    releaseRetry.complete();
+    for (var attempt = 0; attempt < 10; attempt++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(wired.nextcloudRequests, isEmpty);
+    expect(wired.gatewayRequests, isEmpty);
+  });
+
+  test('a newer locked follow replaces the pending credential retry', () async {
+    await seedAccount('account-a');
+    final wired = wire();
+    addTearDown(wired.api.close);
+    final releaseRetries = Completer<void>();
+    final transientCredentials = _TransientCredentialVault(
+      value: 'fixture-app-password-never-use',
+      failOnReads: {1, 2},
+    );
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: transientCredentials,
+      api: wired.api,
+      keyStore: _FakeDeviceKeyStore(),
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: wired.gatewayClient,
+      firstRetry: const Duration(milliseconds: 1),
+      maximumRetry: const Duration(milliseconds: 2),
+      delay: (_) => releaseRetries.future,
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await coordinator.follow('account-a');
+    releaseRetries.complete();
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (wired.gatewayRequests.isNotEmpty) {
+        break;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(transientCredentials.reads, greaterThanOrEqualTo(3));
+    expect(wired.gatewayRequests, hasLength(1));
+  });
+
+  test('unfollow invalidates a follow waiting for credentials', () async {
+    await seedAccount('account-a');
+    final requests = <http.Request>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response('', 500);
+      }),
+    );
+    addTearDown(api.close);
+    final gatewayRequests = <http.Request>[];
+    final gatewayClient = PushGatewayClient(
+      client: MockClient((request) async {
+        gatewayRequests.add(request);
+        return http.Response('', 200);
+      }),
+    );
+    final blockingCredentials = _BlockingCredentialVault();
+    final keyStore = _FakeDeviceKeyStore();
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: blockingCredentials,
+      api: api,
+      keyStore: keyStore,
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: gatewayClient,
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    final follow = coordinator.follow('account-a');
+    await blockingCredentials.started.future;
+    await coordinator.unfollow('account-a');
+    blockingCredentials.release.complete('app-password');
+    await follow;
+
+    expect(requests, isEmpty);
+    expect(gatewayRequests, isEmpty);
+    expect(keyStore.ensured, isEmpty);
+  });
+
+  test('unfollow invalidates a follow waiting for capabilities', () async {
+    await seedAccount('account-a');
+    final capabilitiesStarted = Completer<void>();
+    final releaseCapabilities = Completer<void>();
+    final requests = <http.Request>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.contains('/capabilities')) {
+          capabilitiesStarted.complete();
+          await releaseCapabilities.future;
+          return http.Response(
+            jsonEncode(
+              capabilitiesJson(
+                notificationPushFeatures: const <String>['devices'],
+              ),
+            ),
+            200,
+          );
+        }
+        return nextcloudRegisterResponse();
+      }),
+    );
+    addTearDown(api.close);
+    final gatewayRequests = <http.Request>[];
+    final gatewayClient = PushGatewayClient(
+      client: MockClient((request) async {
+        gatewayRequests.add(request);
+        return http.Response('', 200);
+      }),
+    );
+    final keyStore = _FakeDeviceKeyStore();
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: api,
+      keyStore: keyStore,
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: gatewayClient,
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    final follow = coordinator.follow('account-a');
+    await capabilitiesStarted.future;
+    await coordinator.unfollow('account-a');
+    releaseCapabilities.complete();
+    await follow;
+
+    expect(
+      requests.where((request) => request.url.path.endsWith('/push')),
+      isEmpty,
+    );
+    expect(gatewayRequests, isEmpty);
+    expect(keyStore.ensured, isEmpty);
   });
 
   test(
@@ -538,4 +798,46 @@ void main() {
     );
     expect(wired.gatewayRequests, hasLength(1));
   });
+}
+
+final class _TransientCredentialVault implements CredentialVault {
+  _TransientCredentialVault({required this.value, required this.failOnReads});
+
+  final String value;
+  final Set<int> failOnReads;
+  var reads = 0;
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
+
+  @override
+  Future<String?> readAppPassword(String accountId) async {
+    reads++;
+    if (failOnReads.contains(reads)) {
+      throw const CredentialVaultTemporarilyUnavailable();
+    }
+    return value;
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
+}
+
+final class _BlockingCredentialVault implements CredentialVault {
+  final started = Completer<void>();
+  final release = Completer<String?>();
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
+
+  @override
+  Future<String?> readAppPassword(String accountId) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return release.future;
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
 }

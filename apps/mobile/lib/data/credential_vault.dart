@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart' show PlatformException;
 
 abstract interface class CredentialVault {
   Future<void> writeAppPassword(String accountId, String appPassword);
@@ -6,6 +7,16 @@ abstract interface class CredentialVault {
   Future<String?> readAppPassword(String accountId);
 
   Future<void> deleteAppPassword(String accountId);
+}
+
+/// The Apple credential store is intact but cannot be accessed in the current
+/// device state, for example during a dark wake or while authorization UI is
+/// unavailable. Callers may retry after the app returns to the foreground.
+final class CredentialVaultTemporarilyUnavailable implements Exception {
+  const CredentialVaultTemporarilyUnavailable();
+
+  @override
+  String toString() => 'CredentialVaultTemporarilyUnavailable()';
 }
 
 final class SecureCredentialVault implements CredentialVault {
@@ -104,31 +115,56 @@ final class SecureCredentialVault implements CredentialVault {
   }
 
   Future<void> _write(String key, String value) {
-    return _storage.write(
-      key: key,
-      value: value,
-      aOptions: _androidOptions,
-      iOptions: _iosOptions,
-      mOptions: _macOsOptions,
+    return _translateTemporaryAppleFailure(
+      () => _storage.write(
+        key: key,
+        value: value,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOsOptions,
+      ),
     );
   }
 
   Future<String?> _read(String key) {
-    return _storage.read(
-      key: key,
-      aOptions: _androidOptions,
-      iOptions: _iosOptions,
-      mOptions: _macOsOptions,
+    return _translateTemporaryAppleFailure(
+      () => _storage.read(
+        key: key,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOsOptions,
+      ),
     );
   }
 
   Future<void> _delete(String key) {
-    return _storage.delete(
-      key: key,
-      aOptions: _androidOptions,
-      iOptions: _iosOptions,
-      mOptions: _macOsOptions,
+    return _translateTemporaryAppleFailure(
+      () => _storage.delete(
+        key: key,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+        mOptions: _macOsOptions,
+      ),
     );
+  }
+
+  Future<T> _translateTemporaryAppleFailure<T>(
+    Future<T> Function() operation,
+  ) async {
+    try {
+      return await operation();
+    } on PlatformException catch (error) {
+      final status = switch (error.details) {
+        int value => value,
+        num value => value.toInt(),
+        String value => int.tryParse(value),
+        _ => null,
+      };
+      if (status == -25320 || status == -60008) {
+        throw const CredentialVaultTemporarilyUnavailable();
+      }
+      rethrow;
+    }
   }
 
   String _legacyKey(String accountId) => 'account.$accountId.appPassword';

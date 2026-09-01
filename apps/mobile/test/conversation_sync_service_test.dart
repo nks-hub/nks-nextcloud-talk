@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_sync_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -52,6 +53,38 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  test('temporary Apple credential lock is a transient sync failure', () async {
+    var requests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        return http.Response('', 500);
+      }),
+    );
+    addTearDown(api.close);
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: const _TemporarilyUnavailableCredentialVault(),
+      api: api,
+    );
+
+    await expectLater(
+      service.sync('account-a'),
+      throwsA(
+        isA<ConversationSyncException>()
+            .having((error) => error.isTransient, 'isTransient', isTrue)
+            .having(
+              (error) => error.code,
+              'code',
+              ConversationSyncError.network,
+            ),
+      ),
+    );
+
+    expect(requests, 0);
+    expect((await repository.getAccount('account-a'))?.lastSyncError, isNull);
+  });
 
   test(
     'single-flight sync merges a full conversation response atomically',
@@ -761,6 +794,21 @@ void main() {
 }
 
 const _giphyResourceUrl = 'https://giphy.com/gifs/waving-cat-fixture123';
+
+final class _TemporarilyUnavailableCredentialVault implements CredentialVault {
+  const _TemporarilyUnavailableCredentialVault();
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
+
+  @override
+  Future<String?> readAppPassword(String accountId) {
+    throw const CredentialVaultTemporarilyUnavailable();
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
+}
 
 final class _AbortAwareClient extends http.BaseClient {
   _AbortAwareClient(this.started);
