@@ -990,6 +990,28 @@ class AppLocalizationsCs extends AppLocalizations {
       'Nemůžete konverzaci opustit, dokud nepovýšíte jiného moderátora.';
 
   @override
+  String get roomDetailsBotsTitle => 'Boti';
+
+  @override
+  String get roomDetailsBotsEmpty =>
+      'Pro tuto konverzaci nejsou dostupní žádní boti.';
+
+  @override
+  String get roomDetailsBotEnabled => 'Zapnutý';
+
+  @override
+  String get roomDetailsBotDisabled => 'Vypnutý';
+
+  @override
+  String get roomDetailsBotEnable => 'Zapnout bota';
+
+  @override
+  String get roomDetailsBotDisable => 'Vypnout bota';
+
+  @override
+  String get roomDetailsBotsLoadFailed => 'Boty se nepodařilo načíst.';
+
+  @override
   String get settingsTitle => 'Nastavení';
 
   @override
@@ -1728,6 +1750,24 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get imageShareFailed => 'Obrázek se nepodařilo sdílet.';
+
+  @override
+  String get saveAttachment => 'Uložit přílohu';
+
+  @override
+  String get shareAttachment => 'Sdílet přílohu';
+
+  @override
+  String get attachmentSaved => 'Příloha byla uložena.';
+
+  @override
+  String get attachmentSaveFailed => 'Přílohu se nepodařilo uložit.';
+
+  @override
+  String get attachmentShareFailed => 'Přílohu se nepodařilo sdílet.';
+
+  @override
+  String get attachmentSaveCancelled => 'Ukládání bylo zrušeno.';
 
   @override
   String get jumpToOriginalMessage => 'Zobrazit původní zprávu';

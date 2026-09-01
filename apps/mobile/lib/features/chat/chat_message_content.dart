@@ -19,6 +19,7 @@ import 'poll_dialog.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
 import 'media/chat_attachment_opener.dart';
+import 'media/chat_attachment_exporter.dart';
 
 part 'chat_message_attachment_content.dart';
 part 'chat_message_giphy_content.dart';

@@ -992,6 +992,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'You can\'t leave until another moderator is promoted.';
 
   @override
+  String get roomDetailsBotsTitle => 'Bots';
+
+  @override
+  String get roomDetailsBotsEmpty =>
+      'No bots are available for this conversation.';
+
+  @override
+  String get roomDetailsBotEnabled => 'Enabled';
+
+  @override
+  String get roomDetailsBotDisabled => 'Disabled';
+
+  @override
+  String get roomDetailsBotEnable => 'Enable bot';
+
+  @override
+  String get roomDetailsBotDisable => 'Disable bot';
+
+  @override
+  String get roomDetailsBotsLoadFailed => 'Bots could not be loaded.';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -1730,6 +1752,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get imageShareFailed => 'The image could not be shared.';
+
+  @override
+  String get saveAttachment => 'Save attachment';
+
+  @override
+  String get shareAttachment => 'Share attachment';
+
+  @override
+  String get attachmentSaved => 'Attachment saved.';
+
+  @override
+  String get attachmentSaveFailed => 'The attachment could not be saved.';
+
+  @override
+  String get attachmentShareFailed => 'The attachment could not be shared.';
+
+  @override
+  String get attachmentSaveCancelled => 'Saving cancelled.';
 
   @override
   String get jumpToOriginalMessage => 'Show the original message';

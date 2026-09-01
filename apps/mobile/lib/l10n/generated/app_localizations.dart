@@ -1856,6 +1856,48 @@ abstract class AppLocalizations {
   /// **'You can\'t leave until another moderator is promoted.'**
   String get roomDetailsLeaveRejected;
 
+  /// No description provided for @roomDetailsBotsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bots'**
+  String get roomDetailsBotsTitle;
+
+  /// No description provided for @roomDetailsBotsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No bots are available for this conversation.'**
+  String get roomDetailsBotsEmpty;
+
+  /// No description provided for @roomDetailsBotEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get roomDetailsBotEnabled;
+
+  /// No description provided for @roomDetailsBotDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get roomDetailsBotDisabled;
+
+  /// No description provided for @roomDetailsBotEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable bot'**
+  String get roomDetailsBotEnable;
+
+  /// No description provided for @roomDetailsBotDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable bot'**
+  String get roomDetailsBotDisable;
+
+  /// No description provided for @roomDetailsBotsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Bots could not be loaded.'**
+  String get roomDetailsBotsLoadFailed;
+
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:
@@ -3187,6 +3229,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The image could not be shared.'**
   String get imageShareFailed;
+
+  /// No description provided for @saveAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Save attachment'**
+  String get saveAttachment;
+
+  /// No description provided for @shareAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Share attachment'**
+  String get shareAttachment;
+
+  /// No description provided for @attachmentSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachment saved.'**
+  String get attachmentSaved;
+
+  /// No description provided for @attachmentSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be saved.'**
+  String get attachmentSaveFailed;
+
+  /// No description provided for @attachmentShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be shared.'**
+  String get attachmentShareFailed;
+
+  /// No description provided for @attachmentSaveCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving cancelled.'**
+  String get attachmentSaveCancelled;
 
   /// No description provided for @jumpToOriginalMessage.
   ///
