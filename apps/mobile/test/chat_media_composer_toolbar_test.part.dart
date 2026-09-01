@@ -60,7 +60,7 @@ void _registerChatMediaComposerToolbarTests(
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('wide idle toolbar starts its ordered actions at the left edge', (
+  testWidgets('wide idle toolbar separates attachment from right actions', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -79,6 +79,7 @@ void _registerChatMediaComposerToolbarTests(
         threadId: null,
         voiceBackends: voiceBackends,
         showAttachmentButton: false,
+        leadingAction: _aggregatedLeadingAction(),
         idleActions: _aggregatedIdleActions(),
         trailingActions: _aggregatedTrailingActions(),
       ),
@@ -99,7 +100,9 @@ void _registerChatMediaComposerToolbarTests(
         .toList(growable: false);
 
     expect(actionRects.first.left, toolbarRect.left);
-    for (var index = 1; index < actionRects.length; index++) {
+    expect(actionRects.last.right, toolbarRect.right);
+    expect(actionRects[1].left, greaterThan(actionRects.first.right));
+    for (var index = 2; index < actionRects.length; index++) {
       expect(actionRects[index].left, actionRects[index - 1].right);
       expect(actionRects[index].top, actionRects.first.top);
     }
@@ -159,7 +162,7 @@ void _registerChatMediaComposerToolbarTests(
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('wide recording error toolbar starts at the left edge', (
+  testWidgets('wide recording error separates attachment from right actions', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -178,6 +181,7 @@ void _registerChatMediaComposerToolbarTests(
         threadId: null,
         voiceBackends: voiceBackends,
         showAttachmentButton: false,
+        leadingAction: _aggregatedLeadingAction(),
         idleActions: _aggregatedIdleActions(),
         trailingActions: _aggregatedTrailingActions(),
       ),
@@ -192,12 +196,26 @@ void _registerChatMediaComposerToolbarTests(
     final firstActionRect = tester.getRect(
       find.byKey(const Key('pick-image-attachment')),
     );
-    final errorControls = find.ancestor(
-      of: errorMessage,
-      matching: find.byType(Row),
+    final sendActionRect = tester.getRect(
+      find.byKey(const Key('send-message')),
     );
+    final emojiActionRect = tester.getRect(
+      find.byKey(const Key('open-emoji-picker')),
+    );
+    final voiceAction = find.byKey(const Key('voice-record'));
+    final voiceActionRect = tester.getRect(voiceAction);
     expect(firstActionRect.left, actionsRect.left);
-    expect(tester.getCenter(errorControls).dx, actionsRect.center.dx);
+    expect(sendActionRect.right, actionsRect.right);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-media-composer-actions')),
+        matching: voiceAction,
+      ),
+      findsOneWidget,
+    );
+    expect(voiceActionRect.left, emojiActionRect.right);
+    expect(sendActionRect.left, voiceActionRect.right);
+    expect(tester.getCenter(errorMessage).dx, actionsRect.center.dx);
     expect(tester.takeException(), isNull);
   });
 
@@ -262,7 +280,7 @@ void _registerChatMediaComposerToolbarTests(
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(259, 800);
+    tester.view.physicalSize = const Size(220, 800);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
@@ -270,6 +288,7 @@ void _registerChatMediaComposerToolbarTests(
       localizedTestApp(
         home: Scaffold(
           body: ChatMediaComposerStatus.loading(
+            leadingAction: _aggregatedLeadingAction(),
             idleActions: _aggregatedIdleActions(),
             trailingActions: _aggregatedTrailingActions(),
           ),
@@ -287,7 +306,13 @@ void _registerChatMediaComposerToolbarTests(
     final centerYs = actionKeys
         .map((key) => tester.getCenter(find.byKey(Key(key))).dy)
         .toSet();
-    expect(centerYs, hasLength(1));
+    expect(centerYs, hasLength(2));
+    expect(
+      tester.getCenter(find.byKey(const Key('send-message'))).dy,
+      greaterThan(
+        tester.getCenter(find.byKey(const Key('pick-image-attachment'))).dy,
+      ),
+    );
     for (final key in actionKeys) {
       final size = tester.getSize(find.byKey(Key(key)));
       expect(size.width, greaterThanOrEqualTo(48));
@@ -315,6 +340,7 @@ void _registerChatMediaComposerToolbarTests(
         threadId: null,
         voiceBackends: voiceBackends,
         showAttachmentButton: false,
+        leadingAction: _aggregatedLeadingAction(),
         idleActions: _aggregatedIdleActions(),
         trailingActions: _aggregatedTrailingActions(),
       ),
@@ -411,12 +437,13 @@ void _registerChatMediaComposerToolbarTests(
   });
 }
 
+Widget _aggregatedLeadingAction() => IconButton(
+  key: const Key('pick-image-attachment'),
+  onPressed: () {},
+  icon: const Icon(Icons.attach_file_rounded),
+);
+
 List<Widget> _aggregatedIdleActions() => <Widget>[
-  IconButton(
-    key: const Key('pick-image-attachment'),
-    onPressed: () {},
-    icon: const Icon(Icons.attach_file_rounded),
-  ),
   IconButton(
     key: const Key('open-giphy-picker'),
     onPressed: null,

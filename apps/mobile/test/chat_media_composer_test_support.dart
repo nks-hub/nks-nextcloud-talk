@@ -10,6 +10,7 @@ Widget _composerApp({
   ImageSelectionBackend imageSelectionBackend = const _ImageBackend(),
   ContactSelectionBackend contactSelectionBackend =
       const PlatformContactSelectionBackend(),
+  Widget? leadingAction,
   List<Widget> idleActions = const <Widget>[],
   List<Widget> trailingActions = const <Widget>[],
   ChatMediaComposerController? controller,
@@ -41,6 +42,7 @@ Widget _composerApp({
         onCaptionConsumed: onCaptionConsumed,
         openAppSettings: openAppSettings,
         controller: controller,
+        leadingAction: leadingAction,
         showAttachmentButton: showAttachmentButton,
         idleActions: idleActions,
         trailingActions: trailingActions,

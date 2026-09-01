@@ -583,8 +583,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       actionsProfile: actionsProfile,
       pollAvailable: pollAvailable,
     );
+    final leadingComposerAction = ComposerActionMenuButton(
+      actions: attachmentMenuActions,
+    );
     final idleComposerActions = <Widget>[
-      ComposerActionMenuButton(actions: attachmentMenuActions),
       IconButton(
         key: const Key('open-giphy-picker'),
         onPressed: _sending ? null : giphyAction,
@@ -744,6 +746,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               ? const SizedBox.shrink()
               : _buildMediaComposer(
                   attachmentDependencies,
+                  leadingAction: leadingComposerAction,
                   idleActions: idleComposerActions,
                   trailingActions: trailingComposerActions,
                 ),

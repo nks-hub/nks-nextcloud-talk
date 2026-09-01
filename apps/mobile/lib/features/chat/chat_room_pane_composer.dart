@@ -653,15 +653,18 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
 
   Widget _buildMediaComposer(
     AsyncValue<ChatAttachmentDependencies> dependencies, {
+    required Widget leadingAction,
     required List<Widget> idleActions,
     required List<Widget> trailingActions,
   }) {
     return dependencies.when(
       loading: () => ChatMediaComposerStatus.loading(
+        leadingAction: leadingAction,
         idleActions: idleActions,
         trailingActions: trailingActions,
       ),
       error: (_, _) => ChatMediaComposerStatus.unavailable(
+        leadingAction: leadingAction,
         idleActions: idleActions,
         trailingActions: trailingActions,
         onRetry: () {
@@ -719,6 +722,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               prepare: value.resolver.resolve,
               service: value.service,
             ),
+            leadingAction: leadingAction,
             idleActions: idleActions,
             trailingActions: trailingActions,
             showAttachmentButton: false,
@@ -729,6 +733,7 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
           );
         } on TalkProtocolException {
           return ChatMediaComposerStatus.unavailable(
+            leadingAction: leadingAction,
             idleActions: idleActions,
             trailingActions: trailingActions,
             onRetry: () {

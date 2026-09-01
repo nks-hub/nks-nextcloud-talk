@@ -586,12 +586,14 @@ final class VoiceMessageControls extends StatelessWidget {
     required this.controller,
     required this.labels,
     this.onOpenSettings,
+    this.showError = true,
     super.key,
   });
 
   final VoiceMessageController controller;
   final VoiceMessageLabels labels;
   final VoidCallback? onOpenSettings;
+  final bool showError;
 
   @override
   Widget build(BuildContext context) {
@@ -602,13 +604,14 @@ final class VoiceMessageControls extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (state.error case final error?)
-              Flexible(
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(labels.errorLabel(error)),
+            if (showError)
+              if (state.error case final error?)
+                Flexible(
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(labels.errorLabel(error)),
+                  ),
                 ),
-              ),
             ..._actions(state),
           ],
         );

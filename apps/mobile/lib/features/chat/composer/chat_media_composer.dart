@@ -160,6 +160,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.onCaptionConsumed,
     this.openAppSettings,
     this.controller,
+    this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
     this.showAttachmentButton = true,
@@ -167,7 +168,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.contactSelectionBackend = const PlatformContactSelectionBackend(),
     this.createVoiceCaptureBackend,
     this.createVoicePlaybackBackend,
-  });
+  }) : assert(leadingAction == null || !showAttachmentButton);
 
   final AccountId accountId;
   final ServerBase server;
@@ -198,6 +199,7 @@ final class ChatMediaComposer extends StatefulWidget {
   final VoidCallback? onCaptionConsumed;
   final Future<bool> Function()? openAppSettings;
   final ChatMediaComposerController? controller;
+  final Widget? leadingAction;
   final List<Widget> idleActions;
   final List<Widget> trailingActions;
   final bool showAttachmentButton;
@@ -499,6 +501,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    final voiceLabels = _voiceLabels(strings);
     final voiceController = _voiceController;
     final voiceOwnsToolbar =
         voiceController != null && !_showsIdleToolbar(voiceController.state);
@@ -514,7 +517,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
             prepare: _prepareImage,
             enabled: _imageSupported,
           )
-        : null;
+        : widget.leadingAction;
     final idleVoiceAction = showVoiceUnavailable
         ? SizedBox.square(
             dimension: 48,
@@ -527,7 +530,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           )
         : VoiceMessageControls(
             controller: voiceController,
-            labels: _voiceLabels(strings),
+            labels: voiceLabels,
+            showError: !voiceErrorUsesRemainingWidth,
             onOpenSettings: widget.openAppSettings == null
                 ? null
                 : () => unawaited(_openAppSettings()),
@@ -551,7 +555,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                   alignment: AlignmentDirectional.centerStart,
                   child: VoiceMessageControls(
                     controller: voiceController,
-                    labels: _voiceLabels(strings),
+                    labels: voiceLabels,
                     onOpenSettings: widget.openAppSettings == null
                         ? null
                         : () => unawaited(_openAppSettings()),
@@ -562,37 +566,29 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
           )
         else if (voiceErrorUsesRemainingWidth)
           Column(
-            key: const Key('chat-media-composer-actions'),
+            key: const Key('chat-media-composer-error'),
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              VoiceMessageControls(
-                controller: voiceController!,
-                labels: _voiceLabels(strings),
-                onOpenSettings: widget.openAppSettings == null
-                    ? null
-                    : () => unawaited(_openAppSettings()),
-              ),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Wrap(
-                  alignment: WrapAlignment.start,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: <Widget>[
-                    ?attachmentAction,
-                    ...widget.idleActions,
-                    ...widget.trailingActions,
-                  ],
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  voiceLabels.errorLabel(voiceController!.state.error!),
                 ),
+              ),
+              _ComposerActionToolbar(
+                leadingAction: attachmentAction,
+                actions: <Widget>[
+                  ...widget.idleActions,
+                  idleVoiceAction,
+                  ...widget.trailingActions,
+                ],
               ),
             ],
           )
         else
-          Wrap(
-            key: const Key('chat-media-composer-actions'),
-            alignment: WrapAlignment.start,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              ?attachmentAction,
+          _ComposerActionToolbar(
+            leadingAction: attachmentAction,
+            actions: <Widget>[
               ...widget.idleActions,
               idleVoiceAction,
               ...widget.trailingActions,
@@ -632,6 +628,7 @@ final class _CurrentVoiceAttachmentSubmitter
 final class ChatMediaComposerStatus extends StatelessWidget {
   const ChatMediaComposerStatus.loading({
     super.key,
+    this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
   }) : unavailable = false,
@@ -640,12 +637,14 @@ final class ChatMediaComposerStatus extends StatelessWidget {
   const ChatMediaComposerStatus.unavailable({
     super.key,
     required this.onRetry,
+    this.leadingAction,
     this.idleActions = const <Widget>[],
     this.trailingActions = const <Widget>[],
   }) : unavailable = true;
 
   final bool unavailable;
   final VoidCallback? onRetry;
+  final Widget? leadingAction;
   final List<Widget> idleActions;
   final List<Widget> trailingActions;
 
@@ -682,11 +681,9 @@ final class ChatMediaComposerStatus extends StatelessWidget {
               ),
           ],
         ),
-        Wrap(
-          key: const Key('chat-media-composer-actions'),
-          alignment: WrapAlignment.start,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
+        _ComposerActionToolbar(
+          leadingAction: leadingAction,
+          actions: <Widget>[
             ...idleActions,
             SizedBox.square(
               dimension: 48,
@@ -699,6 +696,37 @@ final class ChatMediaComposerStatus extends StatelessWidget {
             ),
             ...trailingActions,
           ],
+        ),
+      ],
+    );
+  }
+}
+
+final class _ComposerActionToolbar extends StatelessWidget {
+  const _ComposerActionToolbar({
+    required this.leadingAction,
+    required this.actions,
+  });
+
+  final Widget? leadingAction;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      key: const Key('chat-media-composer-actions'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ?leadingAction,
+        Expanded(
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: actions,
+            ),
+          ),
         ),
       ],
     );
