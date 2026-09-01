@@ -16,7 +16,24 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (37) — 1. 9. 2026
+
+Vydáno ze zdroje `0a388e63263d8e9aa47cd75652611cd37235b324`.
+
+Play (uzavřené testování, track alpha): vydání `(37) 0.1.0` je `completed`
+s version code 37. AAB má 83 952 784 B a SHA-256
+`8c969f7d4c8369ab1b4458a92ef2495b1ea7a1df6d889f1443aa954eb1b65566`, je
+podepsané upload klíčem `CN=NKS Talk` a `jarsigner` hlásí `jar verified`.
+Poznámky k vydání ve všech šesti jazycích se po nahrání znak po znaku shodují
+se zdrojovým souborem. V balíčku jsou nastavené hostitele Sentry i Rybbit.
+
+TestFlight: IPA má 30 166 266 B a SHA-256
+`f33f82aedc252f61ff055c4466f0b7a11872622d8511b4c96667c35340fd4cbc`. Delivery
+UUID i App Store Connect build record jsou
+`aebb5664-02d5-4c24-b0c0-5e6458d865e8`. App Store Connect vrací `VALID`,
+minimum iOS 15.0, encryption `false` a české poznámky. Skupina Testeři je
+`IN_BETA_TESTING`; Externí testeři byli odesláni do beta review, které v době
+zápisu čeká na vyřízení.
 
 - Příloha, kterou pořadí v místnosti drží zpátky, už nezastaví celou frontu.
   Dřív stačila jedna starší úloha čekající na potvrzení a každý další obrázek
@@ -37,11 +54,12 @@ proto jen to, co je doložitelné z App Store Connect.
   tyto tagy znovu přidá a test kontroluje skutečný výsledný Sentry event.
 - Audit historických Sentry skupin odlišil syntetické release brány od reálných
   pádů. `NKS-TALK-2` z buildu 1 se na původním ani současném layoutu nepodařilo
-  reprodukovat, proto nevznikla spekulativní oprava. Po vydání buildu 36 přišel
-  nový reálný `NKS-TALK-P`: fyzický iPhone 13 Pro Max zůstal po galerii ve
-  `localPrepared`, bez jediného pokusu nebo credential retry. Tento problém
-  zůstává otevřený pro samostatnou fyzickou iOS reprodukci; aktuální změny jej
-  neopravují a nebyly vydány v novém buildu.
+  reprodukovat, proto nevznikla spekulativní oprava. Reálný `NKS-TALK-P`
+  z buildu 36 — fyzický iPhone ve fázi `localPrepared` bez jediného pokusu
+  i bez credential retry — opravuje první bod tohoto vydání. Chyba nebyla
+  v Apple Keychainu: nulový počet credential retry a chybějící událost
+  o nedostupném přihlášení dokazují, že se běh k přihlašovacím údajům vůbec
+  nedostal. Zbývá průchod na fyzickém zařízení s tímto buildem.
 
 ## 0.1.0 (36) — 1. 9. 2026
 
