@@ -94,6 +94,7 @@ abstract class _HttpNextcloudApiBase {
   /// fingerprint of the Authorization header, so a rotated app password misses
   /// the cache instead of reusing the snapshot of the revoked session.
   final Map<String, _CachedCapabilities> _capabilityCache = {};
+  final _AccountCookieStore _accountCookies = _AccountCookieStore();
 
   /// Any authenticated request answered with 401 means the session behind those
   /// credentials no longer holds the authority the snapshot was read under, so
@@ -234,14 +235,29 @@ abstract class _HttpNextcloudApiBase {
     required int maximumBytes,
     Set<int>? readBodyForStatusCodes,
     Duration? timeout,
+    AccountId? sessionAccountId,
+    ServerBase? sessionServer,
   }) async {
+    if (sessionAccountId != null && sessionServer != null) {
+      _accountCookies.apply(request, sessionAccountId, sessionServer);
+    }
     request
       ..followRedirects = false
       ..maxRedirects = 0;
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
+      if (sessionAccountId != null && sessionServer != null) {
+        _accountCookies.capture(
+          response.headers,
+          sessionAccountId,
+          sessionServer,
+        );
+      }
       if (response.statusCode == 401) {
+        if (sessionAccountId != null) {
+          _accountCookies.clear(sessionAccountId);
+        }
         _invalidateCapabilitiesForRequest(
           request.headers['Authorization'],
           request.url,
@@ -292,7 +308,14 @@ abstract class _HttpNextcloudApiBase {
     }
   }
 
-  void close() => _client.close();
+  void clearAccountSession(String accountId) {
+    _accountCookies.clear(AccountId.parse(accountId));
+  }
+
+  void close() {
+    _accountCookies.clearAll();
+    _client.close();
+  }
 
   Duration _chatRequestTimeout(int serverTimeoutSeconds) {
     if (serverTimeoutSeconds == 0) {

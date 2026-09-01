@@ -135,6 +135,7 @@ final class AccountRemovalService {
     }
 
     // From here on nothing may be skipped, whatever the server did.
+    _api.clearAccountSession(accountId);
     await _emojiUsage.delete(AccountId.parse(accountId));
     await _clearChatBackgrounds(accountId);
     final sourceHandles = await _accounts.purgeAccount(accountId);

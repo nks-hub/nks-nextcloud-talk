@@ -8,8 +8,56 @@ final Set<int> _internalSignalingAllowedStatusCodes = <int>{
   409,
   for (var statusCode = 500; statusCode <= 599; statusCode++) statusCode,
 };
+const _activeRoomSessionMaximumBytes = 1024 * 1024;
 
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
+  Future<ActiveRoomSessionResponse> activateRoomSession({
+    required ActiveRoomSessionRequest activeRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', activeRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...activeRequest.headers,
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 400, 401, 403, 404, 409, 429, 503},
+      maximumBytes: _activeRoomSessionMaximumBytes,
+      sessionAccountId: activeRequest.accountId,
+      sessionServer: activeRequest.server,
+    );
+    return decodeActiveRoomSessionResponse(
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  Future<void> deactivateRoomSession({
+    required ActiveRoomSessionRequest activeRequest,
+    required String loginName,
+    required String appPassword,
+  }) async {
+    try {
+      final request = _request('DELETE', activeRequest.uri, null)
+        ..headers.addAll({
+          ...activeRequest.headers,
+          'Authorization': _basicAuthorization(loginName, appPassword),
+        });
+      await _sendBody(
+        request,
+        allowedStatusCodes: const {200, 401, 404},
+        maximumBytes: _activeRoomSessionMaximumBytes,
+        sessionAccountId: activeRequest.accountId,
+        sessionServer: activeRequest.server,
+      );
+    } finally {
+      _accountCookies.clear(activeRequest.accountId);
+    }
+  }
+
   /// Fetches the complete user-scoped tag definition list.
   Future<FetchConversationTagsResponse> getConversationTags({
     required FetchConversationTagsRequest tagsRequest,
@@ -80,6 +128,8 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       allowedStatusCodes: _signalingSettingsAllowedStatusCodes,
       maximumBytes: maximumSignalingWireBytes,
       timeout: const Duration(seconds: 20),
+      sessionAccountId: settingsRequest.context.accountId,
+      sessionServer: settingsRequest.context.server,
     );
     return decodeSignalingSettingsResponse(
       request: settingsRequest,
@@ -108,6 +158,8 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       allowedStatusCodes: _internalSignalingAllowedStatusCodes,
       maximumBytes: maximumSignalingWireBytes,
       timeout: const Duration(seconds: 45),
+      sessionAccountId: pullRequest.context.accountId,
+      sessionServer: pullRequest.context.server,
     );
     return decodeInternalSignalingPullResponse(
       request: pullRequest,
@@ -136,6 +188,8 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       allowedStatusCodes: _internalSignalingAllowedStatusCodes,
       maximumBytes: maximumSignalingWireBytes,
       timeout: const Duration(seconds: 20),
+      sessionAccountId: batchRequest.context.accountId,
+      sessionServer: batchRequest.context.server,
     );
     return decodeInternalSignalingBatchResponse(
       request: batchRequest,

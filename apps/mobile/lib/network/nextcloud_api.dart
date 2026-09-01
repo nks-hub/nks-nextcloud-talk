@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show Cookie, Platform;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -12,6 +12,7 @@ import '../core/app_version.dart';
 part 'nextcloud_api_account.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
+part 'nextcloud_api_cookies.dart';
 part 'nextcloud_api_profile.dart';
 part 'nextcloud_api_polls.dart';
 part 'nextcloud_api_push.dart';

@@ -147,6 +147,45 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         return ChatTypingController.disabled(key);
       }
 
+      final activeRequest = ActiveRoomSessionRequest(
+        accountId: AccountId.parse(key.accountId),
+        server: server,
+        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
+      );
+      final ActiveRoomSessionResponse active;
+      try {
+        active = await api.activateRoomSession(
+          activeRequest: activeRequest,
+          loginName: account.loginName,
+          appPassword: password,
+        );
+      } on Object {
+        api.clearAccountSession(key.accountId);
+        return ChatTypingController.disabled(key);
+      }
+      if (active is! ActiveRoomSessionSuccess ||
+          active.room.token.value != key.roomToken ||
+          active.room.sessionId.value == '0') {
+        api.clearAccountSession(key.accountId);
+        return ChatTypingController.disabled(key);
+      }
+      final activeKey = (
+        accountId: key.accountId,
+        roomToken: key.roomToken,
+        nextcloudSessionId: active.room.sessionId.value,
+      );
+      Future<void> deactivate() async {
+        try {
+          await api.deactivateRoomSession(
+            activeRequest: activeRequest,
+            loginName: account.loginName,
+            appPassword: password,
+          );
+        } on Object {
+          api.clearAccountSession(key.accountId);
+        }
+      }
+
       final participantsFuture = ref
           .watch(participantsServiceProvider)
           .fetchParticipants(accountId: key.accountId, roomToken: key.roomToken)
@@ -155,17 +194,20 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         final session = await ref
             .watch(callSignalingCoordinatorProvider)
             .start(
-              accountId: key.accountId,
-              roomToken: key.roomToken,
-              nextcloudSessionId: key.nextcloudSessionId,
+              accountId: activeKey.accountId,
+              roomToken: activeKey.roomToken,
+              nextcloudSessionId: activeKey.nextcloudSessionId,
             );
         final controller = ChatTypingController(
-          key: key,
+          key: activeKey,
           localLoginName: account.loginName,
           initial: session.current,
           updates: session.updates,
           sendMessages: session.sendPeerMessages,
-          release: session.release,
+          release: () async {
+            await session.release();
+            await deactivate();
+          },
         );
         owned = controller;
         if (disposed) {
@@ -182,6 +224,7 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         );
         return controller;
       } on Object {
+        unawaited(deactivate());
         return ChatTypingController.disabled(key);
       }
     });

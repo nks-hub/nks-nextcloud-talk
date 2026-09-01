@@ -81,6 +81,8 @@ mixin _NextcloudApiCall on _HttpNextcloudApiBase {
       request,
       allowedStatusCodes: _callRestAllowedStatusCodes,
       maximumBytes: _callRestMaximumBytes,
+      sessionAccountId: callRequest.accountId,
+      sessionServer: callRequest.authority.server,
     );
     return decodeCallRestResponse(
       request: callRequest,

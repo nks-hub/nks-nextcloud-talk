@@ -1,10 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/data/call_session_repository.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
+import 'package:nextcloudtalk/features/calls/hpb_socket_transport.dart';
 import 'package:nextcloudtalk/features/chat/chat_typing_indicator.dart';
+import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
@@ -313,6 +320,88 @@ void main() {
       isNull,
     );
   });
+
+  test('session zero activates the room before peer typing', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final credentials = MemoryCredentialVault();
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      createdAt: DateTime.utc(2026, 9, 1),
+    );
+    credentials.values['account-a'] = 'fixture-password';
+    final account = (await accounts.getAccount('account-a'))!;
+    final conversation = _sessionZeroConversation();
+    final key = chatTypingRoomKeyFor(
+      account: account,
+      conversation: conversation,
+    )!;
+    final client = _ActiveTypingClient();
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final sockets = _ActiveTypingSockets();
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: CallSessionRepository(database),
+      credentials: credentials,
+      api: api,
+      socketConnector: sockets,
+      refreshConversationSession: (_, _) async =>
+          ConversationSessionId.parse('active-session'),
+    );
+    addTearDown(coordinator.dispose);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(credentials),
+        nextcloudApiProvider.overrideWithValue(api),
+        callSignalingCoordinatorProvider.overrideWithValue(coordinator),
+      ],
+    );
+    addTearDown(container.dispose);
+    final states = <ChatTypingState>[];
+    final subscription = container.listen(chatTypingStateProvider(key), (
+      _,
+      next,
+    ) {
+      final state = next.valueOrNull;
+      if (state != null) states.add(state);
+    }, fireImmediately: true);
+    addTearDown(subscription.close);
+
+    final socket = await sockets.connected.future.timeout(
+      const Duration(seconds: 5),
+    );
+    socket.add(_activeWelcome());
+    final hello = jsonDecode(await socket.sent(0)) as Map<String, Object?>;
+    await _flushAsync();
+    socket.add(_activeHello(hello['id']! as String));
+    final room = jsonDecode(await socket.sent(1)) as Map<String, Object?>;
+    expect(
+      (room['room']! as Map<String, Object?>)['sessionid'],
+      'active-session',
+    );
+    await _flushAsync();
+    socket.add(_activeRoom(room['id']! as String));
+    await _flushAsync();
+    socket
+      ..add(_activePeerJoin())
+      ..add(_activeTyping());
+    final state = await _firstTypingState(states);
+
+    expect(state.participants.single.actorId, 'alice');
+    expect(
+      client.paths.indexWhere((path) => path.endsWith('/participants/active')),
+      lessThan(client.paths.indexWhere((path) => path.endsWith('/settings'))),
+    );
+    final stored = await database.select(database.callSessions).getSingle();
+    expect(stored.nextcloudSessionId, 'active-session');
+  });
 }
 
 const ChatTypingRoomKey _key = (
@@ -425,6 +514,252 @@ CapabilitySnapshot _capabilities({
     },
   },
 }, context: CapabilityContext.authenticated);
+
+CachedConversation _sessionZeroConversation() {
+  final fixture =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = fixture['ocs']! as Map<String, Object?>;
+  final room = Map<String, Object?>.from(
+    (ocs['data']! as List<Object?>).first! as Map<String, Object?>,
+  )..['sessionId'] = '0';
+  return CachedConversation(
+    accountId: 'account-a',
+    token: room['token']! as String,
+    displayName: room['displayName']! as String,
+    description: room['description']! as String,
+    lastActivity: room['lastActivity']! as int,
+    unreadMessages: room['unreadMessages']! as int,
+    favorite: room['isFavorite']! as bool,
+    isArchived: room['isArchived']! as bool,
+    readOnly: room['readOnly']! as int,
+    roomType: room['type']! as int,
+    roomName: room['name']! as String,
+    objectType: room['objectType']! as String,
+    avatarVersion: room['avatarVersion']! as String,
+    isCustomAvatar: room['isCustomAvatar']! as bool,
+    rawJson: jsonEncode(room),
+  );
+}
+
+Future<ChatTypingState> _firstTypingState(List<ChatTypingState> states) async {
+  for (var attempt = 0; attempt < 100; attempt++) {
+    for (final state in states) {
+      if (state.participants.isNotEmpty) return state;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  throw StateError('Typing state was not published');
+}
+
+String _activeWelcome() => jsonEncode(<String, Object?>{
+  'type': 'welcome',
+  'welcome': <String, Object?>{
+    'features': <Object?>['hello-v2', 'mcu'],
+  },
+});
+
+String _activeHello(String id) => jsonEncode(<String, Object?>{
+  'id': id,
+  'type': 'hello',
+  'hello': <String, Object?>{
+    'version': '2.0',
+    'sessionid': 'hpb-session',
+    'resumeid': 'hpb-resume',
+  },
+});
+
+String _activeRoom(String id) => jsonEncode(<String, Object?>{
+  'id': id,
+  'type': 'room',
+  'room': <String, Object?>{'roomid': 'rooma123'},
+});
+
+String _activePeerJoin() => jsonEncode(<String, Object?>{
+  'type': 'event',
+  'event': <String, Object?>{
+    'target': 'room',
+    'type': 'join',
+    'join': <Object?>[
+      <String, Object?>{
+        'sessionid': 'peer-alice',
+        'roomsessionid': 'alice-session',
+        'userid': 'alice',
+        'inCall': 0,
+        'participantPermissions': 0,
+        'actorType': 'users',
+        'actorId': 'alice',
+        'federated': false,
+      },
+    ],
+  },
+});
+
+String _activeTyping() => jsonEncode(<String, Object?>{
+  'type': 'message',
+  'message': <String, Object?>{
+    'sender': <String, Object?>{'type': 'session', 'sessionid': 'peer-alice'},
+    'data': <String, Object?>{'type': 'startedTyping'},
+  },
+});
+
+final class _ActiveTypingClient extends http.BaseClient {
+  final List<String> paths = <String>[];
+  late final Map<String, Object?> _room = _activeRoomJson();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    paths.add(request.url.path);
+    if (request.url.path.endsWith('/cloud/capabilities')) {
+      return _activeRawResponse(_activeCapabilitiesJson());
+    }
+    if (request.url.path.endsWith('/participants/active')) {
+      return _activeResponse(_room, cookie: 'nc_session=account-a');
+    }
+    if (request.url.path.endsWith('/settings')) {
+      if (request.headers['Cookie'] != 'nc_session=account-a') {
+        throw StateError('Settings did not receive the account cookie');
+      }
+      return _activeResponse(<String, Object?>{
+        'signalingMode': 'external',
+        'userId': 'fixture-user',
+        'hideWarning': true,
+        'server': 'https://hpb.example.invalid/signaling',
+        'federation': null,
+        'stunservers': <Object?>[],
+        'turnservers': <Object?>[],
+        'sipDialinInfo': '',
+        'helloAuthParams': <String, Object?>{
+          '2.0': <String, Object?>{'token': 'synthetic-token'},
+        },
+      });
+    }
+    if (request.url.path.endsWith('/participants')) {
+      return _activeResponse(const <Object?>[]);
+    }
+    throw StateError('Unexpected request');
+  }
+}
+
+Map<String, Object?> _activeCapabilitiesJson() => <String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': 'ok',
+      'statuscode': 200,
+      'message': 'OK',
+    },
+    'data': <String, Object?>{
+      'version': <String, Object?>{
+        'major': 34,
+        'minor': 0,
+        'micro': 1,
+        'string': '34.0.1',
+        'edition': '',
+        'extendedSupport': false,
+      },
+      'capabilities': <String, Object?>{
+        'spreed': <String, Object?>{
+          'features': <Object?>['signaling-v3', 'typing-privacy'],
+          'config': <String, Object?>{
+            'chat': <String, Object?>{'typing-privacy': 0},
+          },
+          'version': '24.0.2',
+        },
+      },
+    },
+  },
+};
+
+Map<String, Object?> _activeRoomJson() {
+  final fixture =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = fixture['ocs']! as Map<String, Object?>;
+  return Map<String, Object?>.from(
+    (ocs['data']! as List<Object?>).first! as Map<String, Object?>,
+  )..['sessionId'] = 'active-session';
+}
+
+http.StreamedResponse _activeResponse(Object? data, {String? cookie}) {
+  final bytes = utf8.encode(
+    jsonEncode(<String, Object?>{
+      'ocs': <String, Object?>{
+        'meta': <String, Object?>{
+          'status': 'ok',
+          'statuscode': 200,
+          'message': 'OK',
+        },
+        'data': data,
+      },
+    }),
+  );
+  return http.StreamedResponse(
+    Stream.value(bytes),
+    200,
+    contentLength: bytes.length,
+    headers: <String, String>{
+      'content-type': 'application/json',
+      if (cookie != null) 'set-cookie': '$cookie; Path=/; HttpOnly',
+    },
+  );
+}
+
+http.StreamedResponse _activeRawResponse(Object? json) {
+  final bytes = utf8.encode(jsonEncode(json));
+  return http.StreamedResponse(
+    Stream.value(bytes),
+    200,
+    contentLength: bytes.length,
+    headers: const {'content-type': 'application/json'},
+  );
+}
+
+final class _ActiveTypingSockets implements HpbSocketConnector {
+  final Completer<_ActiveTypingSocket> connected = Completer();
+
+  @override
+  Future<HpbSocketConnection> connect(HpbEndpoint endpoint) async {
+    final socket = _ActiveTypingSocket();
+    connected.complete(socket);
+    return socket;
+  }
+}
+
+final class _ActiveTypingSocket implements HpbSocketConnection {
+  final StreamController<String> _frames = StreamController(sync: true);
+  final List<String> _sent = <String>[];
+  final List<Completer<void>> _events = <Completer<void>>[];
+
+  @override
+  Stream<String> get frames => _frames.stream;
+
+  void add(String frame) => _frames.add(frame);
+
+  Future<String> sent(int index) async {
+    if (_sent.length <= index) {
+      final event = Completer<void>();
+      _events.add(event);
+      await event.future.timeout(const Duration(seconds: 5));
+    }
+    return _sent[index];
+  }
+
+  @override
+  Future<void> send(String frame) async {
+    _sent.add(frame);
+    for (final event in _events) {
+      if (!event.isCompleted) event.complete();
+    }
+    _events.clear();
+  }
+
+  @override
+  Future<void> close(HpbCloseReason reason) => _frames.close();
+}
 
 final class _ManualScheduler implements SignalingScheduler {
   final List<_ManualTask> tasks = [];
