@@ -15,8 +15,16 @@ import 'client_push_session.dart';
 /// the caller to sync, and the sync decides what actually changed.
 final class ClientPushCoordinator {
   ClientPushCoordinator({
-    required Future<ClientPushEndpoints?> Function(String accountId) resolve,
-    required Future<String> Function(String accountId, ClientPushEndpoints)
+    required Future<ClientPushEndpoints?> Function(
+      String accountId,
+      Future<void> cancellation,
+    )
+    resolve,
+    required Future<String> Function(
+      String accountId,
+      ClientPushEndpoints endpoints,
+      Future<void> cancellation,
+    )
     fetchToken,
     required ClientPushConnector connector,
     required void Function(String accountId) onWakeUp,
@@ -34,8 +42,16 @@ final class ClientPushCoordinator {
   static Future<void> _sleep(Duration duration) =>
       Future<void>.delayed(duration);
 
-  final Future<ClientPushEndpoints?> Function(String accountId) _resolve;
-  final Future<String> Function(String accountId, ClientPushEndpoints)
+  final Future<ClientPushEndpoints?> Function(
+    String accountId,
+    Future<void> cancellation,
+  )
+  _resolve;
+  final Future<String> Function(
+    String accountId,
+    ClientPushEndpoints endpoints,
+    Future<void> cancellation,
+  )
   _fetchToken;
   final ClientPushConnector _connector;
   final void Function(String accountId) _onWakeUp;
@@ -52,7 +68,7 @@ final class ClientPushCoordinator {
     }
     final channel = _AccountChannel();
     _channels[accountId] = channel;
-    unawaited(_run(accountId, channel));
+    channel.runner = _run(accountId, channel);
   }
 
   /// Drops the channel for [accountId]; a removed account must not keep a
@@ -65,26 +81,29 @@ final class ClientPushCoordinator {
   Future<void> dispose() async {
     final channels = _channels.values.toList(growable: false);
     _channels.clear();
-    for (final channel in channels) {
-      await channel.stop();
-    }
+    await Future.wait(channels.map((channel) => channel.stop()));
   }
 
   Future<void> _run(String accountId, _AccountChannel channel) async {
     var backoff = _firstRetry;
     while (!channel.stopped) {
       try {
-        final endpoints = await _resolve(accountId);
+        final endpoints = await _resolve(accountId, channel.cancellation);
         if (endpoints == null || !endpoints.carriesNotifications) {
           // The server offers no live channel. Polling stays in charge, and
           // retrying a capability that will not appear on its own is waste.
           return;
         }
-        final token = await _fetchToken(accountId, endpoints);
+        final token = await _fetchToken(
+          accountId,
+          endpoints,
+          channel.cancellation,
+        );
         final session = await ClientPushSession.open(
           connector: _connector,
           endpoints: endpoints,
           preAuthToken: token,
+          cancellation: channel.cancellation,
         );
         channel.session = session;
         if (channel.stopped) {
@@ -95,10 +114,22 @@ final class ClientPushCoordinator {
         // anything missed while it was down is caught by syncing right away.
         _onWakeUp(accountId);
         backoff = _firstRetry;
-        await for (final event in session.events) {
-          if (event == ClientPushEvent.notification) {
-            _onWakeUp(accountId);
+        final events = StreamIterator<ClientPushEvent>(session.events);
+        try {
+          while (!channel.stopped) {
+            final hasEvent = await Future.any<bool>([
+              events.moveNext(),
+              channel.cancellation.then((_) => false),
+            ]);
+            if (!hasEvent || channel.stopped) {
+              break;
+            }
+            if (events.current == ClientPushEvent.notification) {
+              _onWakeUp(accountId);
+            }
           }
+        } finally {
+          await events.cancel();
         }
       } on Object {
         // Transport, token and temporary local-credential failures all become
@@ -108,7 +139,10 @@ final class ClientPushCoordinator {
       if (channel.stopped) {
         return;
       }
-      await _delay(backoff);
+      await Future.any<void>([_delay(backoff), channel.cancellation]);
+      if (channel.stopped) {
+        return;
+      }
       final doubled = backoff * 2;
       backoff = doubled > _maximumRetry ? _maximumRetry : doubled;
     }
@@ -116,13 +150,20 @@ final class ClientPushCoordinator {
 }
 
 final class _AccountChannel {
-  bool stopped = false;
+  final _cancellation = Completer<void>();
+  Future<void>? runner;
   ClientPushSession? session;
 
+  bool get stopped => _cancellation.isCompleted;
+  Future<void> get cancellation => _cancellation.future;
+
   Future<void> stop() async {
-    stopped = true;
+    if (!_cancellation.isCompleted) {
+      _cancellation.complete();
+    }
     final open = session;
     session = null;
     await open?.close();
+    await runner;
   }
 }

@@ -86,6 +86,36 @@ void main() {
     expect((await repository.getAccount('account-a'))?.lastSyncError, isNull);
   });
 
+  test('transport failures never escape the public sync boundary', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient(
+        (_) async => throw http.ClientException('network unavailable'),
+      ),
+    );
+    addTearDown(api.close);
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: vault,
+      api: api,
+    );
+
+    await expectLater(
+      service.sync('account-a'),
+      throwsA(
+        isA<ConversationSyncException>().having(
+          (error) => error.code,
+          'code',
+          ConversationSyncError.network,
+        ),
+      ),
+    );
+
+    expect(
+      (await repository.getAccount('account-a'))?.lastSyncError,
+      ConversationSyncError.network.name,
+    );
+  });
+
   test(
     'single-flight sync merges a full conversation response atomically',
     () async {
@@ -503,7 +533,7 @@ void main() {
         if (conversationRequests == 2) {
           incrementalStarted.complete();
           await releaseIncremental.future;
-          return http.Response('', 503);
+          throw http.ClientException('network unavailable');
         }
         return http.Response(
           jsonEncode(fullResponse),
@@ -535,7 +565,7 @@ void main() {
         isA<ConversationSyncException>().having(
           (error) => error.code,
           'code',
-          ConversationSyncError.serviceUnavailable,
+          ConversationSyncError.network,
         ),
       ),
     );

@@ -14,6 +14,56 @@ final class _NeverConnects implements ClientPushConnector {
       throw StateError('the run loop never gets this far');
 }
 
+final class _StalledConnector implements ClientPushConnector {
+  final entered = Completer<void>();
+  final connection = Completer<ClientPushSocket>();
+
+  @override
+  Future<ClientPushSocket> connect(Uri endpoint) {
+    entered.complete();
+    return connection.future;
+  }
+}
+
+final class _CloseableSocket implements ClientPushSocket {
+  _CloseableSocket({required this.authenticate});
+
+  final bool authenticate;
+  final controller = StreamController<String>.broadcast();
+  final handshakeSent = Completer<void>();
+  bool closed = false;
+
+  @override
+  Stream<String> get frames => controller.stream;
+
+  @override
+  void send(String frame) {
+    if (!handshakeSent.isCompleted) {
+      handshakeSent.complete();
+    }
+    if (authenticate && !controller.isClosed) {
+      controller.add('authenticated');
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    if (!controller.isClosed) {
+      await controller.close();
+    }
+  }
+}
+
+final class _ImmediateConnector implements ClientPushConnector {
+  _ImmediateConnector(this.socket);
+
+  final _CloseableSocket socket;
+
+  @override
+  Future<ClientPushSocket> connect(Uri endpoint) async => socket;
+}
+
 /// Accepts the handshake, stays open, and refuses to close.
 final class _UncloseableSocket implements ClientPushSocket {
   _UncloseableSocket();
@@ -61,11 +111,11 @@ void main() {
     var resolves = 0;
     await runZonedGuarded(() async {
       final coordinator = ClientPushCoordinator(
-        resolve: (accountId) async {
+        resolve: (accountId, cancellation) async {
           resolves++;
           throw const NextcloudApiException(NextcloudApiError.timeout);
         },
-        fetchToken: (accountId, endpoints) async => 'unused',
+        fetchToken: (accountId, endpoints, cancellation) async => 'unused',
         connector: const _NeverConnects(),
         onWakeUp: (_) {},
         firstRetry: const Duration(milliseconds: 5),
@@ -81,39 +131,96 @@ void main() {
     expect(unhandled, isEmpty);
   });
 
-  test('disposing an open channel finishes and stays out of the zone', () async {
-    // The last suspect left from NKS-TALK-8: every teardown call site runs
-    // behind `unawaited`, so a dispose that failed would reach the zone. This
-    // used to hang instead of finishing, which is its own way of being wrong.
+  test(
+    'disposing an open channel finishes and stays out of the zone',
+    () async {
+      // The last suspect left from NKS-TALK-8: every teardown call site runs
+      // behind `unawaited`, so a dispose that failed would reach the zone. This
+      // used to hang instead of finishing, which is its own way of being wrong.
+      final unhandled = <Object>[];
+      final connector = _UncloseableConnector();
+      await runZonedGuarded(() async {
+        final coordinator = ClientPushCoordinator(
+          resolve: (accountId, cancellation) async => ClientPushEndpoints(
+            websocket: Uri.parse('wss://cloud.example.invalid/notify'),
+            preAuth: Uri.parse('https://cloud.example.invalid/preauth'),
+            carriesNotifications: true,
+          ),
+          fetchToken: (accountId, endpoints, cancellation) async => 'token',
+          connector: connector,
+          onWakeUp: (_) {},
+          firstRetry: const Duration(milliseconds: 5),
+          maximumRetry: const Duration(milliseconds: 5),
+        );
+        coordinator.follow('account-a');
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        await coordinator.dispose().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => fail('teardown must finish, not hang'),
+        );
+      }, (error, stack) => unhandled.add(error));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(
+        connector.sockets.single.closeAttempted,
+        isTrue,
+        reason: 'the teardown really had an open socket to close',
+      );
+      expect(unhandled, isEmpty);
+    },
+  );
+
+  test('disposing cancels a stalled socket connection', () async {
     final unhandled = <Object>[];
-    final connector = _UncloseableConnector();
+    final connector = _StalledConnector();
     await runZonedGuarded(() async {
       final coordinator = ClientPushCoordinator(
-        resolve: (accountId) async => ClientPushEndpoints(
+        resolve: (accountId, cancellation) async => ClientPushEndpoints(
           websocket: Uri.parse('wss://cloud.example.invalid/notify'),
           preAuth: Uri.parse('https://cloud.example.invalid/preauth'),
           carriesNotifications: true,
         ),
-        fetchToken: (accountId, endpoints) async => 'token',
+        fetchToken: (accountId, endpoints, cancellation) async => 'token',
         connector: connector,
         onWakeUp: (_) {},
-        firstRetry: const Duration(milliseconds: 5),
-        maximumRetry: const Duration(milliseconds: 5),
       );
-      coordinator.follow('account-a');
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-      await coordinator.dispose().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => fail('teardown must finish, not hang'),
-      );
-    }, (error, stack) => unhandled.add(error));
-    await Future<void>.delayed(const Duration(milliseconds: 40));
 
-    expect(
-      connector.sockets.single.closeAttempted,
-      isTrue,
-      reason: 'the teardown really had an open socket to close',
-    );
+      coordinator.follow('account-a');
+      await connector.entered.future;
+      await coordinator.dispose().timeout(const Duration(seconds: 1));
+    }, (error, stack) => unhandled.add(error));
+    final lateSocket = _CloseableSocket(authenticate: false);
+    connector.connection.complete(lateSocket);
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(lateSocket.closed, isTrue);
+    expect(unhandled, isEmpty);
+  });
+
+  test('disposing cancels a connected socket during handshake', () async {
+    final unhandled = <Object>[];
+    final socket = _CloseableSocket(authenticate: false);
+    final connector = _ImmediateConnector(socket);
+    await runZonedGuarded(() async {
+      final coordinator = ClientPushCoordinator(
+        resolve: (accountId, cancellation) async => ClientPushEndpoints(
+          websocket: Uri.parse('wss://cloud.example.invalid/notify'),
+          preAuth: Uri.parse('https://cloud.example.invalid/preauth'),
+          carriesNotifications: true,
+        ),
+        fetchToken: (accountId, endpoints, cancellation) async => 'token',
+        connector: connector,
+        onWakeUp: (_) {},
+      );
+
+      coordinator.follow('account-a');
+      await socket.handshakeSent.future;
+      await coordinator.dispose().timeout(const Duration(seconds: 1));
+    }, (error, stack) => unhandled.add(error));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(socket.closed, isTrue);
     expect(unhandled, isEmpty);
   });
 }

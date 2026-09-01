@@ -67,6 +67,25 @@ final class ConversationSyncService {
     Future<void>? abortTrigger,
     bool forceFull = false,
   }) async {
+    try {
+      await _syncFlights(
+        accountId,
+        abortTrigger: abortTrigger,
+        forceFull: forceFull,
+      );
+    } on NextcloudApiException catch (error) {
+      if (error.code == NextcloudApiError.cancelled) {
+        return;
+      }
+      await _fail(accountId, _classifyApiException(error));
+    }
+  }
+
+  Future<void> _syncFlights(
+    String accountId, {
+    required Future<void>? abortTrigger,
+    required bool forceFull,
+  }) async {
     while (true) {
       final flight =
           _inFlight[accountId] ?? _startFlight(accountId, forceFull: forceFull);
@@ -84,6 +103,8 @@ final class ConversationSyncService {
           }
         } on ConversationSyncException {
           // A weaker flight cannot satisfy or fail the requested full refresh.
+        } on NextcloudApiException {
+          // A transport failure from the weaker flight has the same ownership.
         }
 
         if (identical(_inFlight[accountId], flight)) {
@@ -245,11 +266,6 @@ final class ConversationSyncService {
       await _fail(accountId, ConversationSyncError.invalidResponse);
     } on ConversationSyncException {
       rethrow;
-    } on NextcloudApiException catch (error) {
-      if (error.code == NextcloudApiError.cancelled) {
-        return;
-      }
-      await _fail(accountId, _classifyApiException(error));
     } on TalkProtocolException catch (error) {
       if (kDebugMode) {
         debugPrint(

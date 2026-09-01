@@ -49,7 +49,8 @@ final class _IoClientPushSocket implements ClientPushSocket {
   final WebSocket _socket;
 
   @override
-  Stream<String> get frames => _socket.map((event) => event is String ? event : '');
+  Stream<String> get frames =>
+      _socket.map((event) => event is String ? event : '');
 
   @override
   void send(String frame) => _socket.add(frame);
@@ -93,13 +94,34 @@ final class ClientPushSession {
     required ClientPushEndpoints endpoints,
     required String preAuthToken,
     Duration handshakeTimeout = const Duration(seconds: 15),
+    Future<void>? cancellation,
   }) async {
     if (!endpoints.carriesNotifications) {
       // Holding a socket that only ever reports file changes would look like a
       // working live channel while no message could ever arrive on it.
       throw const ClientPushException(ClientPushFailure.endpoint);
     }
-    final socket = await connector.connect(endpoints.websocket);
+    final connection = connector.connect(endpoints.websocket);
+    final ClientPushSocket socket;
+    if (cancellation == null) {
+      socket = await connection;
+    } else {
+      final cancelled = Object();
+      final result = await Future.any<Object>([
+        connection,
+        cancellation.then<Object>((_) => cancelled),
+      ]);
+      if (identical(result, cancelled)) {
+        connection
+            .then<void>(
+              (lateSocket) => _release(null, lateSocket),
+              onError: (Object _, StackTrace _) {},
+            )
+            .ignore();
+        throw const ClientPushException(ClientPushFailure.connection);
+      }
+      socket = result as ClientPushSocket;
+    }
     final controller = StreamController<ClientPushEvent>.broadcast();
     final authenticated = Completer<void>();
     late final StreamSubscription<String> subscription;
@@ -149,7 +171,14 @@ final class ClientPushSession {
     }
 
     try {
-      await authenticated.future.timeout(handshakeTimeout);
+      await Future.any<void>([
+        authenticated.future.timeout(handshakeTimeout),
+        if (cancellation != null)
+          cancellation.then<void>(
+            (_) =>
+                throw const ClientPushException(ClientPushFailure.connection),
+          ),
+      ]);
     } on Object {
       await _release(subscription, socket);
       await controller.close();

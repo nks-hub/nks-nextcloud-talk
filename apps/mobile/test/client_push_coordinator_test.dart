@@ -46,6 +46,50 @@ final class _Connector implements ClientPushConnector {
   }
 }
 
+final class _BlockingSocket implements ClientPushSocket {
+  final controller = StreamController<String>.broadcast();
+  final closeStarted = Completer<void>();
+  final releaseClose = Completer<void>();
+
+  @override
+  Stream<String> get frames => controller.stream;
+
+  @override
+  void send(String frame) {}
+
+  @override
+  Future<void> close() async {
+    if (!closeStarted.isCompleted) {
+      closeStarted.complete();
+    }
+    await releaseClose.future;
+    if (!controller.isClosed) {
+      await controller.close();
+    }
+  }
+
+  void emit(String frame) {
+    if (!controller.isClosed) {
+      controller.add(frame);
+    }
+  }
+}
+
+final class _TwoAccountConnector implements ClientPushConnector {
+  final first = _BlockingSocket();
+  final second = _FakeSocket();
+
+  @override
+  Future<ClientPushSocket> connect(Uri endpoint) async {
+    if (endpoint.path.endsWith('/account-a')) {
+      Timer(const Duration(milliseconds: 1), () => first.emit('authenticated'));
+      return first;
+    }
+    Timer(const Duration(milliseconds: 1), () => second.emit('authenticated'));
+    return second;
+  }
+}
+
 ClientPushEndpoints _endpoints({bool notifications = true}) =>
     ClientPushEndpoints(
       websocket: Uri.parse('wss://cloud.example.invalid/push/ws'),
@@ -64,8 +108,8 @@ void main() {
     final connector = _Connector();
     final woken = <String>[];
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async => _endpoints(),
-      fetchToken: (_, _) async => 'token',
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: woken.add,
     );
@@ -88,8 +132,8 @@ void main() {
     final connector = _Connector();
     final woken = <String>[];
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async => null,
-      fetchToken: (_, _) async => 'token',
+      resolve: (_, _) async => null,
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: woken.add,
     );
@@ -105,23 +149,23 @@ void main() {
   test('a capability timeout stays inside the retry loop', () async {
     final connector = _Connector();
     final secondRetryStarted = Completer<void>();
-    final releaseSecondRetry = Completer<void>();
+    final blockedRetry = Completer<void>();
     final uncaught = <Object>[];
     var resolves = 0;
     var delays = 0;
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async {
+      resolve: (_, _) async {
         resolves++;
         throw const NextcloudApiException(NextcloudApiError.timeout);
       },
-      fetchToken: (_, _) async => 'token',
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: (_) {},
       delay: (_) async {
         delays++;
         if (delays == 2) {
           secondRetryStarted.complete();
-          await releaseSecondRetry.future;
+          await blockedRetry.future;
         }
       },
     );
@@ -135,10 +179,36 @@ void main() {
     expect(connector.sockets, isEmpty);
     expect(uncaught, isEmpty);
     expect(resolves, 2);
-    await coordinator.dispose();
-    releaseSecondRetry.complete();
+    await coordinator.dispose().timeout(const Duration(seconds: 1));
     await _settle();
     expect(resolves, 2);
+    expect(uncaught, isEmpty);
+  });
+
+  test('dispose waits for an in-flight capability resolve', () async {
+    final resolveStarted = Completer<void>();
+    final resolveCancelled = Completer<void>();
+    final uncaught = <Object>[];
+    final coordinator = ClientPushCoordinator(
+      resolve: (_, cancellation) async {
+        resolveStarted.complete();
+        await cancellation;
+        resolveCancelled.complete();
+        throw const NextcloudApiException(NextcloudApiError.cancelled);
+      },
+      fetchToken: (_, _, _) async => 'unused',
+      connector: _Connector(),
+      onWakeUp: (_) {},
+    );
+
+    await runZonedGuarded(() async {
+      coordinator.follow('account-a');
+      await resolveStarted.future;
+      await coordinator.dispose();
+    }, (error, stack) => uncaught.add(error));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(resolveCancelled.isCompleted, isTrue);
     expect(uncaught, isEmpty);
   });
 
@@ -147,14 +217,14 @@ void main() {
     final uncaught = <Object>[];
     var resolves = 0;
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async {
+      resolve: (_, _) async {
         resolves++;
         if (resolves == 1) {
           throw const CredentialVaultTemporarilyUnavailable();
         }
         return _endpoints();
       },
-      fetchToken: (_, _) async => 'token',
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: (_) {},
       delay: (_) async {},
@@ -176,8 +246,8 @@ void main() {
     final connector = _Connector();
     final woken = <String>[];
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async => _endpoints(),
-      fetchToken: (_, _) async => 'token',
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: woken.add,
       delay: (_) async {},
@@ -201,8 +271,8 @@ void main() {
   test('a removed account stops holding a socket', () async {
     final connector = _Connector();
     final coordinator = ClientPushCoordinator(
-      resolve: (_) async => _endpoints(),
-      fetchToken: (_, _) async => 'token',
+      resolve: (_, _) async => _endpoints(),
+      fetchToken: (_, _, _) async => 'token',
       connector: connector,
       onWakeUp: (_) {},
     );
@@ -215,4 +285,37 @@ void main() {
     expect(connector.sockets.first.closed, isTrue);
     await coordinator.dispose();
   });
+
+  test(
+    'dispose signals every account before awaiting socket teardown',
+    () async {
+      final connector = _TwoAccountConnector();
+      final woken = <String>[];
+      final coordinator = ClientPushCoordinator(
+        resolve: (accountId, cancellation) async => ClientPushEndpoints(
+          websocket: Uri.parse('wss://cloud.example.invalid/push/$accountId'),
+          preAuth: Uri.parse(
+            'https://cloud.example.invalid/preauth/$accountId',
+          ),
+          carriesNotifications: true,
+        ),
+        fetchToken: (accountId, endpoints, cancellation) async => 'token',
+        connector: connector,
+        onWakeUp: woken.add,
+      );
+
+      coordinator.follow('account-a');
+      coordinator.follow('account-b');
+      await _settle();
+      expect(woken, containsAll(<String>['account-a', 'account-b']));
+
+      final disposal = coordinator.dispose();
+      await connector.first.closeStarted.future;
+      await Future<void>.delayed(Duration.zero);
+      expect(connector.second.closed, isTrue);
+
+      connector.first.releaseClose.complete();
+      await disposal;
+    },
+  );
 }

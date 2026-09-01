@@ -251,7 +251,7 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
   }
 
   final coordinator = ClientPushCoordinator(
-    resolve: (accountId) async {
+    resolve: (accountId, cancellation) async {
       final resolved = await credentialsFor(accountId);
       if (resolved == null) {
         return null;
@@ -260,10 +260,11 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
         server: ServerBase.parse(resolved.account.serverUrl),
         loginName: resolved.account.loginName,
         appPassword: resolved.appPassword,
+        abortTrigger: cancellation,
       );
       return readClientPushEndpoints(capabilities.capabilities);
     },
-    fetchToken: (accountId, endpoints) async {
+    fetchToken: (accountId, endpoints, cancellation) async {
       final resolved = await credentialsFor(accountId);
       if (resolved == null) {
         throw const ClientPushException(ClientPushFailure.rejected);
@@ -273,6 +274,7 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
         loginName: resolved.account.loginName,
         appPassword: resolved.appPassword,
         preAuth: endpoints.preAuth,
+        abortTrigger: cancellation,
       );
     },
     connector: const IoClientPushConnector(),
