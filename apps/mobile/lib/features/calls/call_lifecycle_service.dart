@@ -10,10 +10,11 @@ import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
+part 'call_lifecycle_room_session.dart';
+part 'call_lifecycle_mutations.dart';
+
 typedef CallConversationSessionRefresh =
     Future<ConversationSessionId?> Function(String accountId, String roomToken);
-
-typedef CallLifecycleKey = ({String accountId, String roomToken});
 
 enum CallLifecycleError {
   accountMissing,
@@ -102,7 +103,18 @@ final class CallLifecycleService {
   final CallConversationSessionRefresh _refreshConversationSession;
   final DateTime Function() _now;
 
-  final Map<CallLifecycleKey, Future<void>> _tails = {};
+  final Map<String, Future<void>> _tails = {};
+  final Map<String, _CallRoomSession> _roomSessions = {};
+  bool _disposed = false;
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await Future.wait<void>(_tails.values.toList(growable: false));
+    final sessions = _roomSessions.values.toList(growable: false);
+    _roomSessions.clear();
+    await Future.wait<void>(sessions.map(_deactivateRoomSession));
+  }
 
   Future<CallLifecycleState> join({
     required String accountId,
@@ -201,69 +213,84 @@ final class CallLifecycleService {
       throw const CallLifecycleException(CallLifecycleError.consentRequired);
     }
 
-    var existing = await _sessions.load(authority: context.authority);
-    if (existing != null && existing.phase != CallLifecyclePhase.joined) {
-      existing = await _recoverPrepared(context, existing);
-    }
-    if (existing != null) {
-      if (existing.phase != CallLifecyclePhase.joined) {
+    final existingBeforeActivation = await _sessions.load(
+      authority: context.authority,
+      allowSessionMismatch: true,
+    );
+    final activeContext = await _activateRoomSession(context);
+    try {
+      var existing = existingBeforeActivation;
+      if (existing != null &&
+          existing.authority.nextcloudSessionId !=
+              activeContext.authority.nextcloudSessionId) {
         throw const CallLifecycleException(CallLifecycleError.uncertain);
       }
-      return existing;
-    }
+      if (existing != null && existing.phase != CallLifecyclePhase.joined) {
+        existing = await _recoverPrepared(activeContext, existing);
+      }
+      if (existing != null) {
+        if (existing.phase != CallLifecyclePhase.joined) {
+          throw const CallLifecycleException(CallLifecycleError.uncertain);
+        }
+        return existing;
+      }
 
-    var state = CallLifecycleState.beginJoin(
-      authority: context.authority,
-      flags: flags,
-      updatedAt: _utcNow(),
-    );
-    await _sessions.persist(state);
-    final request = JoinCallRequest(
-      context: CallRequestContext(
-        authority: state.authority,
-        mutationSequence: state.mutationSequence,
-      ),
-      flags: flags,
-      silent: silent,
-      recordingConsent: recordingConsent,
-      silentFor: silentFor,
-    );
-    final response = await _mutate(
-      state: state,
-      send: () => _api.joinCall(
-        joinRequest: request,
-        loginName: context.account.loginName,
-        appPassword: context.appPassword,
-      ),
-    );
-    switch (response.classification) {
-      case CallResponseClassification.confirmed:
-        state = state.confirm(updatedAt: _utcNow());
-        await _sessions.persist(state);
-        return state;
-      case CallResponseClassification.serverFailure:
-        await _markUncertain(state);
-      case CallResponseClassification.reauthenticationRequired:
-        await _dropForReauthentication(accountId, roomToken);
-      case CallResponseClassification.rejected:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw CallLifecycleException(
-          response.errorCode == 'consent'
-              ? CallLifecycleError.consentRequired
-              : CallLifecycleError.rejected,
-        );
-      case CallResponseClassification.forbidden:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw const CallLifecycleException(CallLifecycleError.forbidden);
-      case CallResponseClassification.sessionMissing:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw const CallLifecycleException(CallLifecycleError.roomMissing);
-      case CallResponseClassification.conflict:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw const CallLifecycleException(CallLifecycleError.conflict);
-      case CallResponseClassification.rateLimited:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw const CallLifecycleException(CallLifecycleError.rateLimited);
+      var state = CallLifecycleState.beginJoin(
+        authority: activeContext.authority,
+        flags: flags,
+        updatedAt: _utcNow(),
+      );
+      await _sessions.persist(state);
+      final request = JoinCallRequest(
+        context: CallRequestContext(
+          authority: state.authority,
+          mutationSequence: state.mutationSequence,
+        ),
+        flags: flags,
+        silent: silent,
+        recordingConsent: recordingConsent,
+        silentFor: silentFor,
+      );
+      final response = await _mutate(
+        state: state,
+        send: () => _api.joinCall(
+          joinRequest: request,
+          loginName: activeContext.account.loginName,
+          appPassword: activeContext.appPassword,
+        ),
+      );
+      switch (response.classification) {
+        case CallResponseClassification.confirmed:
+          state = state.confirm(updatedAt: _utcNow());
+          await _sessions.persist(state);
+          return state;
+        case CallResponseClassification.serverFailure:
+          await _markUncertain(state);
+        case CallResponseClassification.reauthenticationRequired:
+          await _dropForReauthentication(accountId, roomToken);
+        case CallResponseClassification.rejected:
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw CallLifecycleException(
+            response.errorCode == 'consent'
+                ? CallLifecycleError.consentRequired
+                : CallLifecycleError.rejected,
+          );
+        case CallResponseClassification.forbidden:
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw const CallLifecycleException(CallLifecycleError.forbidden);
+        case CallResponseClassification.sessionMissing:
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw const CallLifecycleException(CallLifecycleError.roomMissing);
+        case CallResponseClassification.conflict:
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw const CallLifecycleException(CallLifecycleError.conflict);
+        case CallResponseClassification.rateLimited:
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw const CallLifecycleException(CallLifecycleError.rateLimited);
+      }
+    } on Object {
+      await _releaseRoomSession(activeContext);
+      rethrow;
     }
   }
 
@@ -276,61 +303,12 @@ final class CallLifecycleService {
     if (!context.policy.canJoinWith(flags)) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }
-    var stable = await _sessions.load(authority: context.authority);
-    if (stable == null) {
-      throw const CallLifecycleException(CallLifecycleError.notJoined);
-    }
-    if (stable.phase != CallLifecyclePhase.joined) {
-      stable = await _recoverPrepared(context, stable);
-    }
-    if (stable == null) {
-      throw const CallLifecycleException(CallLifecycleError.notJoined);
-    }
-    if (stable.phase != CallLifecyclePhase.joined) {
-      throw const CallLifecycleException(CallLifecycleError.uncertain);
-    }
-
-    var state = stable.beginUpdate(flags: flags, updatedAt: _utcNow());
-    await _sessions.persist(state);
-    final request = UpdateCallFlagsRequest(
-      context: CallRequestContext(
-        authority: state.authority,
-        mutationSequence: state.mutationSequence,
-      ),
-      flags: flags,
-    );
-    final response = await _mutate(
-      state: state,
-      send: () => _api.updateCallFlags(
-        updateRequest: request,
-        loginName: context.account.loginName,
-        appPassword: context.appPassword,
-      ),
-    );
-    switch (response.classification) {
-      case CallResponseClassification.confirmed:
-        state = state.confirm(updatedAt: _utcNow());
-        await _sessions.persist(state);
-        return state;
-      case CallResponseClassification.serverFailure:
-        await _markUncertain(state);
-      case CallResponseClassification.reauthenticationRequired:
-        await _dropForReauthentication(accountId, roomToken);
-      case CallResponseClassification.sessionMissing:
-        await _sessions.delete(accountId: accountId, roomToken: roomToken);
-        throw const CallLifecycleException(CallLifecycleError.notJoined);
-      case CallResponseClassification.rejected:
-        await _sessions.persist(stable);
-        throw const CallLifecycleException(CallLifecycleError.rejected);
-      case CallResponseClassification.forbidden:
-        await _sessions.persist(stable);
-        throw const CallLifecycleException(CallLifecycleError.forbidden);
-      case CallResponseClassification.conflict:
-        await _sessions.persist(stable);
-        throw const CallLifecycleException(CallLifecycleError.conflict);
-      case CallResponseClassification.rateLimited:
-        await _sessions.persist(stable);
-        throw const CallLifecycleException(CallLifecycleError.rateLimited);
+    final activeContext = await _activateRoomSession(context);
+    try {
+      return await _updateFlagsActive(activeContext, flags);
+    } on Object {
+      await _releaseRoomSession(activeContext);
+      rethrow;
     }
   }
 
@@ -343,28 +321,29 @@ final class CallLifecycleService {
     if (endForEveryone && !context.policy.canEndForEveryone) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }
-    var stable = await _sessions.load(authority: context.authority);
-    if (stable == null) {
-      return;
-    }
-    if (stable.phase != CallLifecyclePhase.joined &&
-        stable.phase != CallLifecyclePhase.uncertainUpdate) {
-      stable = await _recoverPrepared(context, stable);
-    }
-    if (stable == null) {
-      return;
-    }
-    if (stable.phase != CallLifecyclePhase.joined &&
-        stable.phase != CallLifecyclePhase.uncertainUpdate) {
-      throw const CallLifecycleException(CallLifecycleError.uncertain);
-    }
+    final activeContext = await _activateRoomSession(context);
+    try {
+      var stable = await _sessions.load(authority: activeContext.authority);
+      if (stable == null) return;
+      if (stable.phase != CallLifecyclePhase.joined &&
+          stable.phase != CallLifecyclePhase.uncertainUpdate) {
+        stable = await _recoverPrepared(activeContext, stable);
+      }
+      if (stable == null) return;
+      if (stable.phase != CallLifecyclePhase.joined &&
+          stable.phase != CallLifecyclePhase.uncertainUpdate) {
+        throw const CallLifecycleException(CallLifecycleError.uncertain);
+      }
 
-    final state = stable.beginLeave(
-      endForEveryone: endForEveryone,
-      updatedAt: _utcNow(),
-    );
-    await _sessions.persist(state);
-    await _sendLeave(context, state, rollback: stable);
+      final state = stable.beginLeave(
+        endForEveryone: endForEveryone,
+        updatedAt: _utcNow(),
+      );
+      await _sessions.persist(state);
+      await _sendLeave(activeContext, state, rollback: stable);
+    } finally {
+      await _releaseRoomSession(activeContext);
+    }
   }
 
   Future<CallLifecycleStatus> _status({
@@ -372,13 +351,23 @@ final class CallLifecycleService {
     required String roomToken,
   }) async {
     final context = await _prepare(accountId, roomToken);
-    final state = await _sessions.load(authority: context.authority);
-    final response = await _readPeers(context, state?.mutationSequence ?? 0);
-    return CallLifecycleStatus(
-      ownSessionPresent: response.ownSessionPresent,
-      peers: response.peers,
-      state: state,
-    );
+    final activeContext = await _activateRoomSession(context);
+    try {
+      final state = await _sessions.load(authority: activeContext.authority);
+      final response = await _readPeers(
+        activeContext,
+        state?.mutationSequence ?? 0,
+      );
+      if (state == null) await _releaseRoomSession(activeContext);
+      return CallLifecycleStatus(
+        ownSessionPresent: response.ownSessionPresent,
+        peers: response.peers,
+        state: state,
+      );
+    } on Object {
+      await _releaseRoomSession(activeContext);
+      rethrow;
+    }
   }
 
   Future<CallLifecycleState?> _recover({
@@ -386,12 +375,22 @@ final class CallLifecycleService {
     required String roomToken,
   }) async {
     final context = await _prepare(accountId, roomToken);
-    final state = await _sessions.load(
-      authority: context.authority,
-      afterRestart: true,
-      now: _utcNow(),
-    );
-    return state == null ? null : _recoverPrepared(context, state);
+    final activeContext = await _activateRoomSession(context);
+    try {
+      final state = await _sessions.load(
+        authority: activeContext.authority,
+        afterRestart: true,
+        now: _utcNow(),
+      );
+      final recovered = state == null
+          ? null
+          : await _recoverPrepared(activeContext, state);
+      if (recovered == null) await _releaseRoomSession(activeContext);
+      return recovered;
+    } on Object {
+      await _releaseRoomSession(activeContext);
+      rethrow;
+    }
   }
 
   Future<CallLifecycleStatus> _recoverStatus({
@@ -399,25 +398,37 @@ final class CallLifecycleService {
     required String roomToken,
   }) async {
     final context = await _prepare(accountId, roomToken);
-    final state = await _sessions.load(
-      authority: context.authority,
-      afterRestart: true,
-      now: _utcNow(),
-    );
-    var response = await _readPeers(context, state?.mutationSequence ?? 0);
-    CallLifecycleState? recoveredState;
-    if (state != null) {
-      final recovery = await _applyRecovery(context, state, response);
-      recoveredState = recovery.state;
-      if (recovery.readAgain) {
-        response = await _readPeers(context, state.mutationSequence);
+    final activeContext = await _activateRoomSession(context);
+    try {
+      final state = await _sessions.load(
+        authority: activeContext.authority,
+        afterRestart: true,
+        now: _utcNow(),
+      );
+      var response = await _readPeers(
+        activeContext,
+        state?.mutationSequence ?? 0,
+      );
+      CallLifecycleState? recoveredState;
+      if (state != null) {
+        final recovery = await _applyRecovery(activeContext, state, response);
+        recoveredState = recovery.state;
+        if (recovery.readAgain) {
+          response = await _readPeers(activeContext, state.mutationSequence);
+        }
       }
+      if (recoveredState == null) {
+        await _releaseRoomSession(activeContext);
+      }
+      return CallLifecycleStatus(
+        ownSessionPresent: response.ownSessionPresent,
+        peers: response.peers,
+        state: recoveredState,
+      );
+    } on Object {
+      await _releaseRoomSession(activeContext);
+      rethrow;
     }
-    return CallLifecycleStatus(
-      ownSessionPresent: response.ownSessionPresent,
-      peers: response.peers,
-      state: recoveredState,
-    );
   }
 
   Future<CallLifecycleState?> _recoverPrepared(
@@ -658,12 +669,14 @@ final class CallLifecycleService {
         capabilityGeneration: storedCapabilities.generation,
         capabilityRevision: profile.revision,
       );
-      return _CallContext(
-        account: account,
-        appPassword: appPassword,
-        profile: profile,
-        policy: policy,
-        authority: authority,
+      return _reuseRoomSession(
+        _CallContext(
+          account: account,
+          appPassword: appPassword,
+          profile: profile,
+          policy: policy,
+          authority: authority,
+        ),
       );
     } on CallLifecycleException {
       rethrow;
@@ -676,6 +689,7 @@ final class CallLifecycleService {
     String accountId,
     String roomToken,
   ) async {
+    await _releaseAccountRoomSession(accountId);
     await _chat.markReauthenticationRequired(accountId);
     await _sessions.delete(accountId: accountId, roomToken: roomToken);
     throw const CallLifecycleException(
@@ -700,11 +714,13 @@ final class CallLifecycleService {
     required String roomToken,
     required Future<T> Function() operation,
   }) async {
-    final key = (accountId: accountId, roomToken: roomToken);
-    final previous = _tails[key];
+    if (_disposed) {
+      throw const CallLifecycleException(CallLifecycleError.network);
+    }
+    final previous = _tails[accountId];
     final gate = Completer<void>();
     final tail = gate.future;
-    _tails[key] = tail;
+    _tails[accountId] = tail;
     if (previous != null) {
       try {
         await previous;
@@ -716,8 +732,8 @@ final class CallLifecycleService {
       return await operation();
     } finally {
       gate.complete();
-      if (identical(_tails[key], tail)) {
-        _tails.remove(key);
+      if (identical(_tails[accountId], tail)) {
+        _tails.remove(accountId);
       }
     }
   }

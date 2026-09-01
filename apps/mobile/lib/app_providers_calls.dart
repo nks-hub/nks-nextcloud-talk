@@ -59,7 +59,7 @@ final callConversationSessionResolverProvider =
     });
 
 final callLifecycleServiceProvider = Provider<CallLifecycleService>((ref) {
-  return CallLifecycleService(
+  final service = CallLifecycleService(
     accounts: ref.watch(accountRepositoryProvider),
     chat: ref.watch(chatRepositoryProvider),
     sessions: ref.watch(callLifecycleSessionRepositoryProvider),
@@ -69,6 +69,8 @@ final callLifecycleServiceProvider = Provider<CallLifecycleService>((ref) {
         .watch(callConversationSessionResolverProvider)
         .refresh,
   );
+  ref.onDispose(() => unawaited(service.dispose()));
+  return service;
 });
 
 final callLifecycleControllerProvider = Provider<CallLifecycleController>((

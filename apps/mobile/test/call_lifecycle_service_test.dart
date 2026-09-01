@@ -15,7 +15,11 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'call_lifecycle_room_session_test.part.dart';
+
 void main() {
+  _registerCallLifecycleRoomSessionTests();
+
   test(
     'persists every mutation before dispatch and completes the lifecycle',
     () async {
@@ -385,7 +389,7 @@ void main() {
     },
   );
 
-  test('serializes one room while allowing another room to progress', () async {
+  test('serializes call room sessions across rooms of one account', () async {
     final firstStarted = Completer<void>();
     final releaseFirst = Completer<void>();
     final secondRoomStarted = Completer<void>();
@@ -416,8 +420,8 @@ void main() {
       accountId: 'account-a',
       roomToken: 'roomb123',
     );
-    await secondRoomStarted.future.timeout(const Duration(seconds: 2));
-    await otherRoom;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(secondRoomStarted.isCompleted, isFalse);
     expect(
       harness.server.callRequests.where(
         (request) => request.url.path.endsWith('/rooma123'),
@@ -426,7 +430,8 @@ void main() {
     );
 
     releaseFirst.complete();
-    await Future.wait(<Future<CallLifecycleState>>[first, sameRoom]);
+    await Future.wait(<Future<CallLifecycleState>>[first, sameRoom, otherRoom]);
+    expect(secondRoomStarted.isCompleted, isTrue);
     expect(harness.server.callMethods, <String>['POST', 'POST']);
   });
 }
@@ -453,6 +458,7 @@ final class _CallHarness {
 
   static Future<_CallHarness> create({
     _CallHandler? onCall,
+    _ActiveRoomHandler? onActiveRoom,
     CallConversationSessionRefresh? refresh,
     int initialPermissions = 255,
   }) async {
@@ -469,7 +475,7 @@ final class _CallHarness {
       createdAt: DateTime.utc(2026, 8, 26),
     );
     credentials.values['account-a'] = 'fixture-password';
-    final server = _CallServer(onCall: onCall);
+    final server = _CallServer(onCall: onCall, onActiveRoom: onActiveRoom);
     final api = HttpNextcloudApi(client: server.client, clock: _now);
     final resolvedRefresh =
         refresh ??
@@ -509,7 +515,12 @@ final class _CallHarness {
     now: _now,
   );
 
-  Future<void> seedRoom({required String token, int permissions = 255}) async {
+  Future<void> seedRoom({
+    required String token,
+    int permissions = 255,
+    String? sessionId,
+    String accountId = 'account-a',
+  }) async {
     final root =
         readFixtureJson(
               'conversation-list/fixtures/conversations-full.response.json',
@@ -520,7 +531,7 @@ final class _CallHarness {
     final wire = Map<String, Object?>.from(rooms.first! as Map<String, Object?>)
       ..addAll(<String, Object?>{
         'token': token,
-        'sessionId': 'session-$token',
+        'sessionId': sessionId ?? 'session-$token',
         'permissions': permissions,
         'participantType': 1,
         'lobbyState': 0,
@@ -538,7 +549,7 @@ final class _CallHarness {
         .into(database.cachedConversations)
         .insertOnConflictUpdate(
           CachedConversationsCompanion.insert(
-            accountId: 'account-a',
+            accountId: accountId,
             token: token,
             displayName: room.displayName,
             description: room.description,
@@ -564,17 +575,22 @@ final class _CallHarness {
 
 typedef _CallHandler =
     Future<http.Response> Function(http.Request request, int index);
+typedef _ActiveRoomHandler =
+    Future<http.Response> Function(http.Request request, int index);
 
 final class _CallServer {
-  _CallServer({_CallHandler? onCall})
+  _CallServer({_CallHandler? onCall, this._onActiveRoom})
     : _onCall =
           onCall ?? ((_, _) async => _ocsResponse(200, <String, Object?>{})) {
     client = MockClient(_handle);
   }
 
   final _CallHandler _onCall;
+  final _ActiveRoomHandler? _onActiveRoom;
   late final MockClient client;
   final List<http.Request> callRequests = <http.Request>[];
+  final List<http.Request> activeRoomRequests = <http.Request>[];
+  final List<String> requestSequence = <String>[];
   bool extraFeature = false;
 
   List<String> get callMethods =>
@@ -590,10 +606,53 @@ final class _CallServer {
     if (request.url.path.contains('/apps/spreed/api/v4/call/')) {
       final index = callRequests.length;
       callRequests.add(request);
+      requestSequence.add('call ${request.method}');
       return _onCall(request, index);
+    }
+    if (request.url.path.endsWith('/participants/active')) {
+      final index = activeRoomRequests.length;
+      activeRoomRequests.add(request);
+      requestSequence.add('active ${request.method}');
+      final handler = _onActiveRoom;
+      if (handler != null) {
+        return handler(request, index);
+      }
+      if (request.method == 'DELETE') {
+        return _ocsResponse(200, null);
+      }
+      final token = request
+          .url
+          .pathSegments[request.url.pathSegments.indexOf('room') + 1];
+      return _activeRoomResponse(token, 'session-$token');
     }
     fail('Unexpected request ${request.method} ${request.url}');
   }
+}
+
+http.Response _activeRoomResponse(
+  String token,
+  String sessionId, {
+  String cookie = 'nc_session=call-session; Path=/; HttpOnly',
+}) {
+  final root =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = root['ocs']! as Map<String, Object?>;
+  final rooms = ocs['data']! as List<Object?>;
+  final room = Map<String, Object?>.from(rooms.first! as Map<String, Object?>)
+    ..addAll(<String, Object?>{'token': token, 'sessionId': sessionId});
+  final lastMessage = room['lastMessage'];
+  if (lastMessage is Map<String, Object?>) {
+    room['lastMessage'] = Map<String, Object?>.from(lastMessage)
+      ..['token'] = token;
+  }
+  return http.Response(
+    _ocsBody(200, room),
+    200,
+    headers: <String, String>{'set-cookie': cookie},
+  );
 }
 
 Map<String, Object?> _capabilities({
@@ -635,19 +694,19 @@ Map<String, Object?> _capabilities({
   },
 };
 
-http.Response _ocsResponse(int statusCode, Object? data) => http.Response(
-  jsonEncode(<String, Object?>{
-    'ocs': <String, Object?>{
-      'meta': <String, Object?>{
-        'status': statusCode == 200 ? 'ok' : 'failure',
-        'statuscode': statusCode,
-        'message': statusCode == 200 ? 'OK' : 'Rejected',
-      },
-      'data': data,
+http.Response _ocsResponse(int statusCode, Object? data) =>
+    http.Response(_ocsBody(statusCode, data), statusCode);
+
+String _ocsBody(int statusCode, Object? data) => jsonEncode(<String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': statusCode == 200 ? 'ok' : 'failure',
+      'statuscode': statusCode,
+      'message': statusCode == 200 ? 'OK' : 'Rejected',
     },
-  }),
-  statusCode,
-);
+    'data': data,
+  },
+});
 
 http.Response _ocsFailure(int statusCode, String error) =>
     _ocsResponse(statusCode, <String, Object?>{'error': error});

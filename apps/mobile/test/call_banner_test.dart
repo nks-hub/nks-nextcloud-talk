@@ -378,6 +378,11 @@ void main() {
               },
             ]);
           }
+          if (request.url.path.endsWith('/participants/active')) {
+            return request.method == 'DELETE'
+                ? _ocsResponse(null)
+                : _activeRoomResponse(conversationResponse);
+          }
           if (request.url.path.contains('/apps/spreed/api/v4/room')) {
             conversationReads++;
             return http.Response(
@@ -514,6 +519,11 @@ void main() {
             ]);
           }
           return _ocsResponse(<String, Object?>{});
+        }
+        if (request.url.path.endsWith('/participants/active')) {
+          return request.method == 'DELETE'
+              ? _ocsResponse(null)
+              : _activeRoomResponse(conversationResponse);
         }
         if (request.url.path.contains('/apps/spreed/api/v4/room')) {
           return http.Response(
@@ -691,3 +701,17 @@ http.Response _ocsResponse(Object? data) => http.Response(
   }),
   200,
 );
+
+http.Response _activeRoomResponse(Object? conversationResponse) {
+  final root = conversationResponse! as Map<String, Object?>;
+  final ocs = root['ocs']! as Map<String, Object?>;
+  final rooms = ocs['data']! as List<Object?>;
+  final room = rooms.first! as Map<String, Object?>;
+  return http.Response(
+    _ocsResponse(room).body,
+    200,
+    headers: const <String, String>{
+      'set-cookie': 'nc_session=call-banner; Path=/; HttpOnly',
+    },
+  );
+}

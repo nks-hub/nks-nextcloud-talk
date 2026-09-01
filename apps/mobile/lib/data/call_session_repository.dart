@@ -203,6 +203,7 @@ final class CallLifecycleSessionRepository {
   /// authority is deleted instead of being replayed under a different login.
   Future<CallLifecycleState?> load({
     required CallLifecycleAuthority authority,
+    bool allowSessionMismatch = false,
     bool afterRestart = false,
     DateTime? now,
   }) async {
@@ -233,7 +234,10 @@ final class CallLifecycleSessionRepository {
         capabilityGeneration: stored.capabilityGeneration,
         capabilityRevision: stored.capabilityRevision,
       );
-      if (!storedAuthority.matches(authority) || stored.updatedAtMillis < 0) {
+      final authorityMatches = allowSessionMismatch
+          ? _matchesCallAuthorityExceptSession(storedAuthority, authority)
+          : storedAuthority.matches(authority);
+      if (!authorityMatches || stored.updatedAtMillis < 0) {
         throw const FormatException('Call lifecycle authority drift');
       }
       final phase = CallLifecyclePhase.values.byName(stored.phase);
@@ -277,3 +281,14 @@ final class CallLifecycleSessionRepository {
         .go();
   }
 }
+
+bool _matchesCallAuthorityExceptSession(
+  CallLifecycleAuthority stored,
+  CallLifecycleAuthority expected,
+) =>
+    stored.accountId == expected.accountId &&
+    stored.server == expected.server &&
+    stored.roomToken == expected.roomToken &&
+    stored.credentialGeneration == expected.credentialGeneration &&
+    stored.capabilityGeneration == expected.capabilityGeneration &&
+    stored.capabilityRevision == expected.capabilityRevision;
