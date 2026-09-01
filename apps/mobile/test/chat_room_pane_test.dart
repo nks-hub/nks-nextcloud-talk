@@ -29,6 +29,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_room_pane_interactions.part.dart';
+part 'chat_room_pane_poll_menu.part.dart';
 part 'chat_room_pane_rendering.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
 
@@ -99,6 +100,7 @@ void main() {
 
   _registerChatRoomPaneRenderingTests();
   _registerChatRoomPaneInteractionTests();
+  _registerChatRoomPanePollMenuTests();
   _registerChatRoomPaneThreadContextTests();
 }
 

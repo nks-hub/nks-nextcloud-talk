@@ -27,14 +27,50 @@ final class AttachmentMenuAction {
   final VoidCallback? onSelected;
 }
 
-final class ComposerActionMenuButton extends StatelessWidget {
+final class ComposerActionMenuButton extends StatefulWidget {
   const ComposerActionMenuButton({super.key, required this.actions});
 
   final List<AttachmentMenuAction> actions;
 
   @override
+  State<ComposerActionMenuButton> createState() =>
+      _ComposerActionMenuButtonState();
+}
+
+final class _ComposerActionMenuButtonState
+    extends State<ComposerActionMenuButton> {
+  late final ValueNotifier<List<AttachmentMenuAction>> _actions;
+  var _menuOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _actions = ValueNotifier(widget.actions);
+  }
+
+  @override
+  void didUpdateWidget(ComposerActionMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_menuOpen) {
+      return;
+    }
+    final actions = widget.actions;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _menuOpen && identical(widget.actions, actions)) {
+        _actions.value = actions;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _actions.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final enabled = actions.any((action) => action.onSelected != null);
+    final enabled = widget.actions.any((action) => action.onSelected != null);
     return IconButton(
       key: const Key('pick-image-attachment'),
       tooltip: AppLocalizations.of(context).addAttachment,
@@ -44,31 +80,40 @@ final class ComposerActionMenuButton extends StatelessWidget {
     );
   }
 
-  Future<void> _open(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          key: const Key('attachment-source-sheet'),
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final action in actions)
-              ListTile(
-                key: action.key,
-                leading: action.icon,
-                title: Text(action.label),
-                enabled: action.onSelected != null,
-                onTap: action.onSelected == null
-                    ? null
-                    : () {
-                        Navigator.of(sheetContext).pop();
-                        action.onSelected!.call();
-                      },
-              ),
-          ],
+  Future<void> _open(BuildContext context) async {
+    _actions.value = widget.actions;
+    _menuOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: ValueListenableBuilder<List<AttachmentMenuAction>>(
+            valueListenable: _actions,
+            builder: (context, actions, child) => Column(
+              key: const Key('attachment-source-sheet'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final action in actions)
+                  ListTile(
+                    key: action.key,
+                    leading: action.icon,
+                    title: Text(action.label),
+                    enabled: action.onSelected != null,
+                    onTap: action.onSelected == null
+                        ? null
+                        : () {
+                            Navigator.of(sheetContext).pop();
+                            action.onSelected!.call();
+                          },
+                  ),
+              ],
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _menuOpen = false;
+    }
   }
 }
 
