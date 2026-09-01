@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -85,10 +86,13 @@ void main() {
       lock,
       contains('geolocator_apple: ab36aa0e8b7d7a2d7639b3b4e48308394e8cef5e'),
     );
-    expect(
-      lock,
-      contains('PODFILE CHECKSUM: ${sha1.convert(podfile.readAsBytesSync())}'),
+    // Hashed with the line endings CocoaPods saw on macOS: a Windows checkout
+    // can hold the same Podfile with CRLF, and comparing its raw bytes would
+    // fail on a lock that is perfectly in sync.
+    final podfileChecksum = sha1.convert(
+      utf8.encode(podfile.readAsStringSync().replaceAll('\r\n', '\n')),
     );
+    expect(lock, contains('PODFILE CHECKSUM: $podfileChecksum'));
   });
 
   test(
