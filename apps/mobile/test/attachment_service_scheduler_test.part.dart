@@ -628,6 +628,97 @@ void _registerAttachmentServiceSchedulerTests() {
 
     expect(finalized, 2);
   });
+
+  test('a restart drains a room parked behind a stored confirmation', () async {
+    final fixture = await _Fixture.create(fileBacked: true);
+    addTearDown(fixture.close);
+    var finalized = 0;
+    http.Client roomClient() => MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        return http.Response.bytes(_probeSuccess(), 200);
+      }
+      if (request.method == 'PUT') {
+        return http.Response('', 201);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/attachment')) {
+        finalized++;
+        return http.Response.bytes(
+          _finalizeSuccess(fileName: 'source-$finalized.png'),
+          200,
+        );
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+
+    // Leave the room exactly as a stalled device stores it: an older job that
+    // parked on its confirmation, and a newer one that never finalized.
+    final identifiers = _SequentialIdentifierFactory();
+    var holdFinalization = false;
+    final initialService = fixture.service(
+      roomClient(),
+      identifierFactory: identifiers,
+      confirmationRetryDelays: const <Duration>[],
+      beforeStepPlan: ({required jobId, required phase}) async {
+        if (holdFinalization && phase == AttachmentJobPhase.uploaded) {
+          // Hold the second job at uploaded so the restart has to drain it.
+          throw const AttachmentTransportException(
+            AttachmentTransportError.cancelled,
+            step: AttachmentRequestStep.finalize,
+            stage: AttachmentTransportStage.connect,
+          );
+        }
+      },
+      catchUpConfirmation:
+          ({
+            required accountId,
+            required roomToken,
+            required threadId,
+          }) async {},
+    );
+    final first = await initialService.enqueue(
+      fixture.request(normalMaximum: 32),
+    );
+    await first.events
+        .firstWhere(
+          (event) =>
+              event.errorClass == attachmentConfirmationReconciliationRequired,
+        )
+        .timeout(const Duration(seconds: 2));
+    holdFinalization = true;
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    final second = await initialService.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    await second.events
+        .firstWhere((event) => event.phase == AttachmentJobPhase.uploaded)
+        .timeout(const Duration(seconds: 2));
+    expect(finalized, 1);
+    await initialService.close();
+    await fixture.reopenDatabase();
+
+    // Restarting the app must move the stored backlog without any user action.
+    final resumedService = fixture.service(
+      roomClient(),
+      identifierFactory: identifiers,
+      confirmationRetryDelays: const <Duration>[],
+      catchUpConfirmation:
+          ({
+            required accountId,
+            required roomToken,
+            required threadId,
+          }) async {},
+    );
+    addTearDown(resumedService.close);
+    await resumedService
+        .watchJob(accountId: second.accountId, jobId: second.jobId)
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 5));
+
+    expect(finalized, 2);
+  });
 }
 
 final class _RecordingRetryTimer implements Timer {
