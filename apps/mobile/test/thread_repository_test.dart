@@ -139,6 +139,29 @@ void main() {
     expect(title.endsWith('…'), isTrue);
   });
 
+  test('repeated recent refresh keeps an ordinary reply thread listed', () async {
+    await _insertThreadMessages(database, title: 'Ordinary thread');
+
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+
+    final recent = await threads
+        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+        .first;
+    expect(recent.map((thread) => thread.threadId), <int>[100]);
+    expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
+  });
+
   test(
     'recent replacement is room scoped and preserves subscriptions',
     () async {

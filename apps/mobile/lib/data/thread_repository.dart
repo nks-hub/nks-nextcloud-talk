@@ -185,7 +185,9 @@ final class ThreadRepository {
       // own id, so a root alone means nothing - measured, and without this the
       // list filled up with one entry per message, each reading "0 replies".
       // A thread is a root that somebody answered.
-      if (listed.containsKey(entry.key) || (replies[entry.key] ?? 0) == 0) {
+      final current = listed[entry.key];
+      if ((replies[entry.key] ?? 0) == 0 ||
+          current != null && !isLocallyDerived(current)) {
         continue;
       }
       await _database
@@ -204,8 +206,10 @@ final class ThreadRepository {
               lastMessageId: lastMessage[entry.key] ?? entry.key,
               lastActivity: lastActivity[entry.key] ?? entry.value.timestamp,
               numReplies: replies[entry.key] ?? 0,
-              notificationLevel: 0,
+              notificationLevel: current?.notificationLevel ?? 0,
               recent: const Value(true),
+              subscribed: Value(current?.subscribed ?? false),
+              detailed: Value(current?.detailed ?? false),
               // No server payload to keep: this row was derived from the
               // messages, and an empty object says so honestly instead of
               // pretending a thread object arrived.
