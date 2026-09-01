@@ -186,7 +186,8 @@ final class ThreadRepository {
       // list filled up with one entry per message, each reading "0 replies".
       // A thread is a root that somebody answered.
       final current = listed[entry.key];
-      if ((replies[entry.key] ?? 0) == 0 ||
+      if (_isNamedCachedRoot(entry.value) ||
+          (replies[entry.key] ?? 0) == 0 ||
           current != null && !isLocallyDerived(current)) {
         continue;
       }
@@ -216,6 +217,16 @@ final class ThreadRepository {
               rawJson: '{}',
             ),
           );
+    }
+  }
+
+  static bool _isNamedCachedRoot(CachedChatMessage root) {
+    try {
+      return ChatMessage.fromJson(jsonDecode(root.rawJson)).isThread == true;
+    } on FormatException {
+      return false;
+    } on TalkProtocolException {
+      return false;
     }
   }
 

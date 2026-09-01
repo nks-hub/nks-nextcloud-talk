@@ -140,7 +140,11 @@ void main() {
   });
 
   test('repeated recent refresh keeps an ordinary reply thread listed', () async {
-    await _insertThreadMessages(database, title: 'Ordinary thread');
+    await _insertThreadMessages(
+      database,
+      title: 'Ordinary thread',
+      named: false,
+    );
 
     await threads.replaceRecent(
       accountId: 'account-a',
@@ -160,6 +164,30 @@ void main() {
         .first;
     expect(recent.map((thread) => thread.threadId), <int>[100]);
     expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
+  });
+
+  test('a named root omitted from recent is not degraded to ordinary', () async {
+    await _insertThreadMessages(database, title: 'Named thread');
+
+    await threads.replaceRecent(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      server: _serverFor('account-a'),
+      values: const <RichChatThread>[],
+    );
+
+    final recent = await threads
+        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+        .first;
+    expect(recent, isEmpty);
+    expect(
+      await threads.get(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        threadId: 100,
+      ),
+      equals(null),
+    );
   });
 
   test(
@@ -474,11 +502,12 @@ RichChatThread _threadWithMessages({required String title}) {
 Future<void> _insertThreadMessages(
   AppDatabase database, {
   required String title,
+  bool named = true,
 }) async {
   final root = _messageWire(
     id: 100,
     title: title,
-    isRoot: true,
+    isRoot: named,
     message: 'Root message',
   );
   final reply = _messageWire(
