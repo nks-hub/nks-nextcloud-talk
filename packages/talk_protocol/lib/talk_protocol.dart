@@ -36,6 +36,7 @@ export 'src/conversation_tags/response.dart';
 export 'src/conversations/create_room_request.dart';
 export 'src/conversations/create_room_response.dart';
 export 'src/conversations/identifiers.dart';
+export 'src/conversations/listed_rooms.dart';
 export 'src/conversations/merge.dart';
 export 'src/conversations/models.dart'
     show ConversationPreview, ConversationRichObjectParameter, ConversationRoom;
@@ -79,6 +80,7 @@ export 'src/search/models.dart';
 export 'src/search/request.dart';
 export 'src/search/response.dart';
 export 'src/security/certificate_trust.dart';
+export 'src/security/remote_wipe.dart';
 export 'src/server_base.dart';
 export 'src/signaling/effects.dart';
 export 'src/signaling/hpb.dart';

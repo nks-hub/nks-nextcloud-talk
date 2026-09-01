@@ -45,20 +45,30 @@ final class ConversationSyncException implements Exception {
   String toString() => 'ConversationSyncException(${code.name})';
 }
 
+/// Told once, when a sync first finds the account's credential rejected.
+///
+/// A rejected credential is also how a server-ordered wipe reaches a device,
+/// so somebody has to ask which of the two it is; the sync itself only reports
+/// that the moment happened.
+typedef AuthenticationLostCallback = Future<void> Function(String accountId);
+
 final class ConversationSyncService {
   ConversationSyncService({
     required AccountRepository accounts,
     required CredentialVault credentials,
     required HttpNextcloudApi api,
+    AuthenticationLostCallback? onAuthenticationLost,
     Uuid? uuid,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
+       _onAuthenticationLost = onAuthenticationLost,
        _uuid = uuid ?? const Uuid();
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
+  final AuthenticationLostCallback? _onAuthenticationLost;
   final Uuid _uuid;
   final Map<String, _ConversationSyncFlight> _inFlight = {};
 
@@ -305,6 +315,15 @@ final class ConversationSyncService {
 
   Future<Never> _fail(String accountId, ConversationSyncError error) async {
     await _accounts.recordSyncError(accountId, error.name);
+    if (error == ConversationSyncError.reauthenticationRequired) {
+      // Best effort and never allowed to change the failure the caller sees:
+      // whatever the check decides, this sync still failed to authenticate.
+      try {
+        await _onAuthenticationLost?.call(accountId);
+      } on Object {
+        // Deliberately swallowed; the sync error below is the answer.
+      }
+    }
     throw ConversationSyncException(error);
   }
 }

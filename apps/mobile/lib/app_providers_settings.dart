@@ -1,5 +1,20 @@
 part of 'app_providers.dart';
 
+final Provider<RemoteWipeService> remoteWipeServiceProvider =
+    Provider<RemoteWipeService>((ref) {
+      return RemoteWipeService(
+        accounts: ref.watch(accountRepositoryProvider),
+        credentials: ref.watch(credentialVaultProvider),
+        api: ref.watch(nextcloudApiProvider),
+        removeAccount: (accountId) async {
+          final outcome = await ref
+              .read(accountRemovalServiceProvider)
+              .removeAccount(accountId);
+          return outcome.accountExisted;
+        },
+      );
+    });
+
 final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
   return AccountRemovalService(
     accounts: ref.watch(accountRepositoryProvider),

@@ -51,6 +51,7 @@ import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/profile/profile_service.dart';
 import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
+import 'features/settings/remote_wipe_service.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_fcm_channel.dart';
@@ -212,6 +213,8 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
+    onAuthenticationLost: (accountId) =>
+        ref.read(remoteWipeServiceProvider).wipeIfRequested(accountId),
   );
 });
 

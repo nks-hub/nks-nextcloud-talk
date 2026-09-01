@@ -15,9 +15,11 @@ part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_cookies.dart';
 part 'nextcloud_api_profile.dart';
+part 'nextcloud_api_listed_rooms.dart';
 part 'nextcloud_api_polls.dart';
 part 'nextcloud_api_push.dart';
 part 'nextcloud_api_remote_files.dart';
+part 'nextcloud_api_remote_wipe.dart';
 part 'nextcloud_api_rooms.dart';
 part 'nextcloud_api_translation.dart';
 part 'nextcloud_api_transport.dart';
@@ -362,9 +364,11 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiChat,
         _NextcloudApiCall,
         _NextcloudApiProfile,
+        _NextcloudApiListedRooms,
         _NextcloudApiPolls,
         _NextcloudApiPush,
         _NextcloudApiRemoteFiles,
+        _NextcloudApiRemoteWipe,
         _NextcloudApiTranslation {
   HttpNextcloudApi({
     super.client,
