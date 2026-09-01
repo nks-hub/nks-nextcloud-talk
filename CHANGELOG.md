@@ -16,7 +16,25 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (32) — 1. 9. 2026
+
+Play: AAB se zapnutým Sentry i Rybbit má 82 411 005 B a SHA-256
+`9E9A7A6B1558777F8E7070E3641AFBC4AED393A1DF0823A66CB44019B1845C02`.
+Publishing API jej nahrálo a commitnulo do uzavřeného `alpha` tracku; nový
+edit vrací `(32) 0.1.0` ve stavu `completed` a šest skutečně přeložených sad
+poznámek.
+TestFlight: IPA má 29 760 109 B a SHA-256
+`<fingerprint>`.
+App Store Connect vrací `VALID`, minimum iOS 15.0, encryption `false`, české
+poznámky a interní i externí skupinu `IN_BETA_TESTING`; beta review je
+`APPROVED`.
+
+Android release APK se nainstalovalo přes `adb install -r` se zachovaným
+účtem. Živě potvrdilo toolbar od levého okraje, Anketu ve sponce podporované
+místnosti a tři stejná vlákna po dvou dalších refresh cyklech. Stejný commit
+na zachovaném iOS 18.6 simulátoru potvrdil pořadí toolbaru, Anketu, skutečný
+conversation-list underlay při edge swipe a stabilní trojici vláken po dvou
+pull-refresh gestech.
 
 - Akce pod psacím řádkem začínají od levého okraje v pořadí sponka, Giphy,
   emoji, mikrofon a Odeslat. Stejné zarovnání platí i během načítání a po chybě.
