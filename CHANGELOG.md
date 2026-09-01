@@ -16,7 +16,24 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (34) — 1. 9. 2026
+
+Play: AAB se zapnutým Sentry i Rybbit má 83 485 780 B a SHA-256
+`<fingerprint>`.
+Publishing API jej nahrálo a commitnulo do uzavřeného `alpha` tracku; nový
+edit vrací `(34) 0.1.0` ve stavu `completed` a šest skutečně přeložených sad
+poznámek.
+TestFlight: IPA má 30 024 771 B a SHA-256
+`<fingerprint>`.
+App Store Connect vrací `VALID`, minimum iOS 15.0, encryption `false`, české
+poznámky a interní i externí skupinu `IN_BETA_TESTING`; beta review je
+`APPROVED`.
+
+Android 14 release build aktualizačně zachoval účet a živě prošel app lock,
+cold i warm Direct Share textu, References restartem v light/dark a opraveným
+composerem. iOS 18.6 update install zachoval účet; sponka je na x=12 samostatně
+vlevo a Giphy, emoji, mikrofon a Odeslat jsou vpravo na x=240/288/336/384.
+Podepsané native XCTest skončily 27/27.
 
 - Akční řádek pod psacím polem má vlevo samotnou sponku. Giphy, emoji,
   mikrofon a Odeslat jsou znovu seskupené vpravo v původním pořadí; rozložení
