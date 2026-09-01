@@ -20,19 +20,36 @@ final class AppleDeepLinkDelivery {
       return false
     }
 
-    if !launchLinkWasTaken, launchLink == nil {
-      launchLink = payload
+    if !launchLinkWasTaken {
+      if launchLink == nil {
+        launchLink = payload
+      } else {
+        enqueuePending(payload)
+      }
       return true
     }
     if let emit {
       emit(payload)
       return true
     }
+    enqueuePending(payload)
+    return true
+  }
+
+  private func enqueuePending(_ payload: [String: Any]) {
     if pendingLinks.count == Self.maximumPendingLinks {
       pendingLinks.removeFirst()
     }
     pendingLinks.append(payload)
-    return true
+  }
+
+  func open(_ userActivity: NSUserActivity) -> Bool {
+    guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+          let url = userActivity.webpageURL
+    else {
+      return false
+    }
+    return open(url)
   }
 
   func takeLaunchLink() -> [String: Any]? {

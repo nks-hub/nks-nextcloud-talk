@@ -15,9 +15,7 @@ class SceneDelegate: FlutterSceneDelegate {
       _ = deepLinks?.open(context.url)
     }
     for activity in connectionOptions.userActivities {
-      if let url = activity.webpageURL {
-        _ = deepLinks?.open(url)
-      }
+      _ = deepLinks?.open(activity)
     }
     super.scene(scene, willConnectTo: session, options: connectionOptions)
   }
@@ -30,9 +28,7 @@ class SceneDelegate: FlutterSceneDelegate {
   }
 
   override func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-    if let url = userActivity.webpageURL {
-      _ = deepLinks?.open(url)
-    }
+    _ = deepLinks?.open(userActivity)
     super.scene(scene, continue: userActivity)
   }
 }

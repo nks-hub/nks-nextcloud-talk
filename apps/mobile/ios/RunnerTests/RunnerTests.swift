@@ -58,6 +58,78 @@ class RunnerTests: XCTestCase {
     XCTAssertNil(delivery.takeLaunchLink())
   }
 
+  func testUniversalLinkBrowsingActivityUsesTheExistingDelivery() throws {
+    let delivery = AppleDeepLinkDelivery()
+    let activity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
+    activity.webpageURL = try XCTUnwrap(
+      URL(string: "https://cloud.example.test/index.php/call/room-a")
+    )
+
+    XCTAssertTrue(delivery.open(activity))
+    XCTAssertEqual(
+      delivery.takeLaunchLink()?["uri"] as? String,
+      "https://cloud.example.test/index.php/call/room-a"
+    )
+  }
+
+  func testUniversalLinkRejectsNonBrowsingActivity() throws {
+    let delivery = AppleDeepLinkDelivery()
+    let activity = NSUserActivity(activityType: "com.example.test.unrelated")
+    activity.webpageURL = try XCTUnwrap(
+      URL(string: "https://cloud.example.test/call/room-a")
+    )
+
+    XCTAssertFalse(delivery.open(activity))
+    XCTAssertNil(delivery.takeLaunchLink())
+  }
+
+  func testUniversalLinkRejectsHttpAndUserInfo() throws {
+    let delivery = AppleDeepLinkDelivery()
+
+    XCTAssertFalse(
+      delivery.open(try XCTUnwrap(URL(string: "http://cloud.example.test/call/room-a")))
+    )
+    XCTAssertFalse(
+      delivery.open(
+        try XCTUnwrap(URL(string: "https://user@cloud.example.test/call/room-a"))
+      )
+    )
+    XCTAssertNil(delivery.takeLaunchLink())
+  }
+
+  func testColdAndWarmUniversalLinksKeepArrivalOrder() throws {
+    let delivery = AppleDeepLinkDelivery()
+    var emitted: [String] = []
+    delivery.attach { payload in
+      if let uri = payload["uri"] as? String {
+        emitted.append(uri)
+      }
+    }
+
+    XCTAssertTrue(
+      delivery.open(try XCTUnwrap(URL(string: "https://cloud.example.test/call/room-a")))
+    )
+    XCTAssertTrue(
+      delivery.open(try XCTUnwrap(URL(string: "https://cloud.example.test/call/room-b")))
+    )
+    XCTAssertTrue(
+      delivery.open(try XCTUnwrap(URL(string: "https://cloud.example.test/call/room-c")))
+    )
+    XCTAssertTrue(emitted.isEmpty)
+
+    XCTAssertEqual(
+      delivery.takeLaunchLink()?["uri"] as? String,
+      "https://cloud.example.test/call/room-a"
+    )
+    XCTAssertEqual(
+      emitted,
+      [
+        "https://cloud.example.test/call/room-b",
+        "https://cloud.example.test/call/room-c",
+      ]
+    )
+  }
+
   // MARK: - PushEnvelopeDecryptor
 
   private func makeTestKeyPair() throws -> (privateKey: SecKey, publicKey: SecKey) {
