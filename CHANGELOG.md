@@ -26,8 +26,10 @@ s version code 40. AAB má 84 214 115 B a SHA-256
 v šesti jazycích se po nahrání shodují se zdrojem.
 
 TestFlight: IPA má 30 214 746 B a SHA-256
-`3724174384f3ead271a1020dca55a15f7d9293a0accb1faab18019d699a4a73d`, delivery
-UUID `fbd805e8-3b28-4fe4-9983-e4d9fe96c714`.
+`3724174384f3ead271a1020dca55a15f7d9293a0accb1faab18019d699a4a73d`. Delivery
+UUID i build record jsou `fbd805e8-3b28-4fe4-9983-e4d9fe96c714`, stav `VALID`,
+minimum iOS 15.0, encryption `false`, obě skupiny `IN_BETA_TESTING` a beta
+review `APPROVED`.
 
 Živě ověřeno před vydáním na iOS 18.6 simulátoru (build-mac) a na Androidu 14
 (emulátor, release APK build 40): menu příloh ukazuje všech sedm položek včetně
