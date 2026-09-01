@@ -16,16 +16,27 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (40) — 1. 9. 2026
 
-- Vlastní nebo self-signed certifikát serveru jde potvrdit při přidávání účtu.
-  Aplikace ukáže otisk SHA-256 po dvojicích, aby se dal porovnat s tím, co
-  server vypisuje, a teprve po potvrzení se na server něco pošle. Otisk patří
-  účtu a s jeho odebráním zmizí; opuštěné přidávání serveru po sobě žádnou
-  důvěru nenechá.
-- Certifikát, který se u už důvěřovaného serveru změní, se nepřijme a znovu se
-  na něj neptá. Obnova certifikátu vypadá zvenku stejně jako útok, takže se
-  řeší vědomě: odebráním a novým přidáním účtu.
+Vydáno ze zdroje `ea02f94`.
+
+Play (uzavřené testování, track alpha): vydání `(40) 0.1.0` je `completed`
+s version code 40. AAB má 84 214 115 B a SHA-256
+`af24c7ed8cc3d381fdbdf04f172e061dcbbfa5b59265337dc4cd4f83fa20a928`. Poznámky
+v šesti jazycích se po nahrání shodují se zdrojem.
+
+TestFlight: IPA má 30 214 746 B a SHA-256
+`3724174384f3ead271a1020dca55a15f7d9293a0accb1faab18019d699a4a73d`, delivery
+UUID `fbd805e8-3b28-4fe4-9983-e4d9fe96c714`.
+
+Živě ověřeno před vydáním na iOS 18.6 simulátoru (build-mac) a na Androidu 14
+(emulátor, release APK build 40): menu příloh ukazuje všech sedm položek včetně
+ankety a polohy, procházení vlastního Nextcloudu vrátilo skutečné složky
+i soubory a na iOS proběhlo celé sdílení souboru do konverzace včetně
+potvrzení; testovací zpráva byla potom smazána. macOS a Windows runtime se
+ověřit nepodařilo — důvody jsou zapsané v `docs/TODO-platforms.md` a ani jeden
+z nich nesouvisí s touto změnou.
+
 - V menu příloh přibyl „Soubor z Nextcloudu". Prochází se vlastní úložiště
   účtu po jedné složce a vybraný soubor se sdílí do konverzace — nenahrává se
   kopie a nevzniká veřejný odkaz. Před odesláním je potvrzení, které říká, že
@@ -34,6 +45,14 @@ proto jen to, co je doložitelné z App Store Connect.
 - Menu příloh se přestalo zasekávat. Když se konverzace dozvěděla o anketě
   nebo poloze až po otevření menu, položky se doplnily jen někdy; teď se
   doplní vždy a delší menu jde na krátké obrazovce odrolovat.
+- Vlastní nebo self-signed certifikát serveru jde potvrdit při přidávání účtu.
+  Aplikace ukáže otisk SHA-256 po dvojicích, aby se dal porovnat s tím, co
+  server vypisuje, a teprve po potvrzení se na server něco pošle. Otisk patří
+  účtu a s jeho odebráním zmizí; opuštěné přidávání serveru po sobě žádnou
+  důvěru nenechá.
+- Certifikát, který se u už důvěřovaného serveru změní, se nepřijme a znovu se
+  na něj neptá. Obnova certifikátu vypadá zvenku stejně jako útok, takže se
+  řeší vědomě: odebráním a novým přidáním účtu.
 
 ## 0.1.0 (39) — 1. 9. 2026
 
