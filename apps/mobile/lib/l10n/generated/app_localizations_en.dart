@@ -2533,4 +2533,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String typingOthers(String first, String second, String third, int count) {
     return '$first, $second, $third and $count others are typing…';
   }
+
+  @override
+  String get certificateUnverifiedTitle => 'Unverified server certificate';
+
+  @override
+  String certificateUnverifiedBody(String host) {
+    return '$host presented a certificate this device cannot verify. Continue only if the fingerprint below is the one your server shows.';
+  }
+
+  @override
+  String get certificateFingerprintLabel => 'SHA-256 fingerprint';
+
+  @override
+  String get certificateTrustAction => 'Trust and continue';
+
+  @override
+  String get certificateChangedTitle => 'Server certificate changed';
+
+  @override
+  String certificateChangedBody(String host) {
+    return '$host now presents a different certificate than the one this account trusts. If you replaced the certificate yourself, remove the account and add it again.';
+  }
 }

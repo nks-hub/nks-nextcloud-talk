@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
+import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
 import 'server_address_input.dart';
 
@@ -22,13 +23,25 @@ enum OnboardingFailureCode {
   talkUnavailable,
   accountIdentityMismatch,
   localPersistence,
+
+  /// The server presented a certificate the device does not trust. The user
+  /// has to see its fingerprint and confirm it before anything is sent there.
+  untrustedCertificate,
 }
 
 final class OnboardingFailure implements Exception {
-  const OnboardingFailure(this.code, {this.serverBlockers = const {}});
+  const OnboardingFailure(
+    this.code, {
+    this.serverBlockers = const {},
+    this.certificate,
+  });
 
   final OnboardingFailureCode code;
   final Set<ServerStatusBlocker> serverBlockers;
+
+  /// Set for [OnboardingFailureCode.untrustedCertificate]: what the server
+  /// presented, so the confirmation can name the exact fingerprint.
+  final CertificateEncounter? certificate;
 
   @override
   String toString() => 'OnboardingFailure(${code.name})';
@@ -124,6 +137,7 @@ final class OnboardingCoordinator {
     required AccountRepository accounts,
     required CredentialVault credentials,
     required LoginPageLauncher launcher,
+    CertificateTrustGate? trust,
     Uuid? uuid,
     this.pollInterval = const Duration(seconds: 2),
     this.loginTimeout = const Duration(minutes: 15),
@@ -131,12 +145,14 @@ final class OnboardingCoordinator {
        _accounts = accounts,
        _credentials = credentials,
        _launcher = launcher,
+       _trust = trust,
        _uuid = uuid ?? const Uuid();
 
   final HttpNextcloudApi _api;
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final LoginPageLauncher _launcher;
+  final CertificateTrustGate? _trust;
   final Uuid _uuid;
   final Duration pollInterval;
   final Duration loginTimeout;
@@ -148,7 +164,22 @@ final class OnboardingCoordinator {
     } on TalkProtocolException {
       throw const OnboardingFailure(OnboardingFailureCode.invalidServer);
     }
-    final status = await _api.getServerStatus(server);
+    final ServerStatus status;
+    try {
+      status = await _api.getServerStatus(server);
+    } on Object {
+      // A refused certificate reaches here as a plain transport failure, so
+      // the gate is what says whether the server is unreachable or merely
+      // unconfirmed.
+      final encounter = _pendingCertificate(server);
+      if (encounter == null) {
+        rethrow;
+      }
+      throw OnboardingFailure(
+        OnboardingFailureCode.untrustedCertificate,
+        certificate: encounter,
+      );
+    }
     if (!status.isReady) {
       throw OnboardingFailure(
         OnboardingFailureCode.serverNotReady,
@@ -161,6 +192,23 @@ final class OnboardingCoordinator {
       serverStatus: status,
       initialization: initialization,
     );
+  }
+
+  CertificateEncounter? _pendingCertificate(ServerBase server) {
+    final encounter = _trust?.lastEncounter;
+    if (encounter == null) {
+      return null;
+    }
+    return encounter.host.toLowerCase() ==
+            Uri.parse(server.value).host.toLowerCase()
+        ? encounter
+        : null;
+  }
+
+  /// Accepts the certificate the user just confirmed. It only lasts for this
+  /// session until the account that owns it is created.
+  void trustCertificate(CertificateEncounter encounter) {
+    _trust?.confirm(host: encounter.host, fingerprint: encounter.fingerprint);
   }
 
   Future<void> openLoginPage(PendingLogin pending) async {
@@ -264,6 +312,9 @@ final class OnboardingCoordinator {
         serverProductName: pending.serverStatus.productName,
         talkFeatures: capabilities.talkFeatures,
         serverThemeColor: capabilities.serverThemeColor,
+        certificateFingerprint: _trust?.confirmedFor(
+          Uri.parse(pending.server.value).host,
+        ),
         createdAt: existing == null
             ? DateTime.now().toUtc()
             : DateTime.fromMillisecondsSinceEpoch(

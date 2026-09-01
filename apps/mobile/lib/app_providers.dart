@@ -7,7 +7,6 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart'
     show AppLifecycleListener, NavigatorObserver;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -65,6 +64,7 @@ import 'features/push/client_push_session.dart';
 import 'features/push/push_gateway_client.dart';
 import 'features/push/push_registration_coordinator.dart';
 import 'features/push/windows_notification.dart';
+import 'network/account_http_client.dart';
 import 'network/attachment_transport.dart';
 import 'network/nextcloud_api.dart';
 import 'platform/app_settings.dart';
@@ -134,14 +134,46 @@ final conversationAvatarRepositoryProvider =
       );
     });
 
+/// The last certificate a server presented that the user has not answered for.
+///
+/// Written from inside a TLS handshake, so the UI reads it instead of the
+/// failing request having to carry the reason back through every layer.
+final certificateEncounterProvider = StateProvider<CertificateEncounter?>(
+  (ref) => null,
+);
+
+/// The one place clients that talk to a user's own server are made.
+final certificateTrustGateProvider = Provider<CertificateTrustGate>((ref) {
+  final gate = CertificateTrustGate(
+    onEncounter: (encounter) {
+      ref.read(certificateEncounterProvider.notifier).state = encounter;
+    },
+  );
+  final subscription = ref
+      .watch(accountRepositoryProvider)
+      .watchCertificatePins()
+      .listen((pins) => gate.storedPins = pins);
+  ref.onDispose(subscription.cancel);
+  return gate;
+});
+
 final chatMediaRepositoryProvider = Provider<ChatMediaRepository>((ref) {
-  final repository = ChatMediaRepository(ref.watch(credentialVaultProvider));
-  ref.onDispose(repository.close);
+  final client = ref.watch(certificateTrustGateProvider).createClient();
+  final repository = ChatMediaRepository(
+    ref.watch(credentialVaultProvider),
+    client: client,
+  );
+  ref.onDispose(() {
+    repository.close();
+    client.close();
+  });
   return repository;
 });
 
 final nextcloudApiProvider = Provider<HttpNextcloudApi>((ref) {
-  final api = HttpNextcloudApi();
+  final api = HttpNextcloudApi(
+    client: ref.watch(certificateTrustGateProvider).createClient(),
+  );
   ref.onDispose(api.close);
   return api;
 });
@@ -156,6 +188,7 @@ final onboardingCoordinatorProvider = Provider<OnboardingCoordinator>((ref) {
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     launcher: ref.watch(loginPageLauncherProvider),
+    trust: ref.watch(certificateTrustGateProvider),
   );
 });
 
@@ -438,7 +471,7 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
     credentials: ref.watch(credentialVaultProvider),
     releaseSource: (attachment) => source.discard(attachment.handle),
     transport: HttpAttachmentTransport(
-      client: http.Client(),
+      client: ref.watch(certificateTrustGateProvider).createClient(),
       sourceProvider: source,
     ),
     catchUpConfirmation:

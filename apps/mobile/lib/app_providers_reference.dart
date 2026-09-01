@@ -3,7 +3,7 @@ part of 'app_providers.dart';
 typedef ReferenceUriLauncher = Future<bool> Function(Uri uri);
 
 final referenceResolverProvider = Provider<ReferenceResolver>((ref) {
-  final client = http.Client();
+  final client = ref.watch(certificateTrustGateProvider).createClient();
   final resolver = HttpReferenceResolver(
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),

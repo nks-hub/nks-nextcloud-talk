@@ -6,6 +6,7 @@ import '../../app_providers.dart';
 import '../../core/brand_mark.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
 import 'onboarding_coordinator.dart';
 
@@ -98,6 +99,27 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           _cancellation = null;
         });
       }
+    } on OnboardingFailure catch (failure) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = null;
+        _phase = _OnboardingPhase.entry;
+        _pending = null;
+        _cancellation = null;
+      });
+      final certificate = failure.certificate;
+      if (failure.code == OnboardingFailureCode.untrustedCertificate &&
+          certificate != null) {
+        if (await _confirmCertificate(certificate)) {
+          // The user answered for exactly this fingerprint, so the same
+          // address is worth one more attempt.
+          await _connect();
+        }
+        return;
+      }
+      setState(() => _error = failure);
     } on Object catch (error) {
       if (mounted) {
         setState(() {
@@ -108,6 +130,66 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         });
       }
     }
+  }
+
+  Future<bool> _confirmCertificate(CertificateEncounter encounter) async {
+    final strings = AppLocalizations.of(context);
+    final changed =
+        encounter.outcome.refusal ==
+        CertificateRefusal.pinnedFingerprintMismatch;
+    final trusted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('certificate-trust-dialog'),
+        title: Text(
+          changed
+              ? strings.certificateChangedTitle
+              : strings.certificateUnverifiedTitle,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              changed
+                  ? strings.certificateChangedBody(encounter.host)
+                  : strings.certificateUnverifiedBody(encounter.host),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              strings.certificateFingerprintLabel,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              _groupFingerprint(encounter.fingerprint),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(changed ? strings.close : strings.cancel),
+          ),
+          // A changed fingerprint is never resolved by tapping through it:
+          // the account that trusts the old one has to be removed first.
+          if (!changed)
+            FilledButton(
+              key: const Key('certificate-trust-confirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(strings.certificateTrustAction),
+            ),
+        ],
+      ),
+    );
+    if (trusted != true || !mounted) {
+      return false;
+    }
+    ref.read(onboardingCoordinatorProvider).trustCertificate(encounter);
+    return true;
   }
 
   void _cancel() {
@@ -528,6 +610,8 @@ String? _errorMessage(AppLocalizations strings, Object? error) {
       OnboardingFailureCode.accountIdentityMismatch =>
         strings.reauthenticateAccountMismatch,
       OnboardingFailureCode.localPersistence => strings.localPersistenceFailed,
+      OnboardingFailureCode.untrustedCertificate =>
+        strings.certificateUnverifiedTitle,
     },
     NextcloudApiException(:final code) => switch (code) {
       NextcloudApiError.cancelled => null,
@@ -556,4 +640,16 @@ String _serverBlockerMessage(
     return strings.serverUpgrade;
   }
   return strings.serverNotInstalled;
+}
+
+/// Splits a fingerprint into byte pairs so a person can compare it with what
+/// their server prints without losing their place.
+String _groupFingerprint(String fingerprint) {
+  final groups = <String>[];
+  for (var index = 0; index < fingerprint.length; index += 2) {
+    groups.add(
+      fingerprint.substring(index, (index + 2).clamp(0, fingerprint.length)),
+    );
+  }
+  return groups.join(':').toUpperCase();
 }

@@ -4615,6 +4615,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{first}, {second}, {third} and {count} others are typing…'**
   String typingOthers(String first, String second, String third, int count);
+
+  /// No description provided for @certificateUnverifiedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unverified server certificate'**
+  String get certificateUnverifiedTitle;
+
+  /// No description provided for @certificateUnverifiedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} presented a certificate this device cannot verify. Continue only if the fingerprint below is the one your server shows.'**
+  String certificateUnverifiedBody(String host);
+
+  /// No description provided for @certificateFingerprintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'SHA-256 fingerprint'**
+  String get certificateFingerprintLabel;
+
+  /// No description provided for @certificateTrustAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust and continue'**
+  String get certificateTrustAction;
+
+  /// No description provided for @certificateChangedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Server certificate changed'**
+  String get certificateChangedTitle;
+
+  /// No description provided for @certificateChangedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{host} now presents a different certificate than the one this account trusts. If you replaced the certificate yourself, remove the account and add it again.'**
+  String certificateChangedBody(String host);
 }
 
 class _AppLocalizationsDelegate

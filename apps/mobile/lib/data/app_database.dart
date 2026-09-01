@@ -54,6 +54,25 @@ class AccountThemes extends Table {
   Set<Column<Object>> get primaryKey => {accountId};
 }
 
+/// One certificate the user explicitly trusted for a self-hosted server.
+///
+/// Owned by the account so removing the account removes the trust with it, and
+/// keyed by host as well so a pin can never authorise a different server the
+/// same account happens to talk to.
+@DataClassName('StoredCertificatePin')
+class CertificatePins extends Table {
+  TextColumn get accountId =>
+      text().references(Accounts, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get host => text()();
+
+  /// Lowercase SHA-256 of the DER encoding, never the certificate itself.
+  TextColumn get fingerprint => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, host};
+}
+
 @DataClassName('CachedConversation')
 class CachedConversations extends Table {
   TextColumn get accountId =>
@@ -603,6 +622,7 @@ Future<Directory> _resolveDatabaseDirectory() async {
   tables: [
     Accounts,
     AccountThemes,
+    CertificatePins,
     CachedConversations,
     ConversationAvatars,
     ChatCapabilities,
@@ -633,7 +653,7 @@ final class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.connection);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -883,6 +903,9 @@ final class AppDatabase extends _$AppDatabase {
       }
       if (from < 17) {
         await migrator.createTable(accountThemes);
+      }
+      if (from < 18) {
+        await migrator.createTable(certificatePins);
       }
     },
     beforeOpen: (_) async {

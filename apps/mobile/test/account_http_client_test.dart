@@ -1,5 +1,35 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/network/account_http_client.dart';
+import 'package:talk_protocol/talk_protocol.dart';
+
+final class _FakeCertificate implements X509Certificate {
+  _FakeCertificate({required this.subject, required List<int> der})
+    : der = Uint8List.fromList(der);
+
+  @override
+  final String subject;
+
+  @override
+  final Uint8List der;
+
+  @override
+  DateTime get endValidity => DateTime.utc(2030);
+
+  @override
+  DateTime get startValidity => DateTime.utc(2020);
+
+  @override
+  String get issuer => subject;
+
+  @override
+  String get pem => '';
+
+  @override
+  Uint8List get sha1 => Uint8List(0);
+}
 
 void main() {
   group('certificateFingerprint', () {
@@ -50,6 +80,74 @@ void main() {
 
     test('does not mistake another field for the common name', () {
       expect(certificateSubjectHost('/OU=CN-team/O=NKS'), isNull);
+    });
+  });
+
+  group('CertificateTrustGate', () {
+    const host = 'cloud.example.invalid';
+    final certificate = _FakeCertificate(
+      subject: 'CN=$host',
+      der: const [1, 2],
+    );
+    final renewed = _FakeCertificate(subject: 'CN=$host', der: const [3, 4]);
+
+    test('an unknown certificate is refused and reported for confirmation', () {
+      final seen = <CertificateEncounter>[];
+      final gate = CertificateTrustGate(onEncounter: seen.add);
+
+      expect(gate.accepts(certificate: certificate, host: host), isFalse);
+      expect(seen.single.host, host);
+      expect(seen.single.fingerprint, certificateFingerprint(certificate.der));
+      expect(seen.single.outcome.decision, CertificateTrustDecision.ask);
+    });
+
+    test('a confirmed certificate passes and can be handed to an account', () {
+      final gate = CertificateTrustGate();
+      final fingerprint = certificateFingerprint(certificate.der);
+
+      gate.confirm(host: 'Cloud.Example.Invalid', fingerprint: fingerprint);
+
+      expect(gate.accepts(certificate: certificate, host: host), isTrue);
+      expect(gate.confirmedFor(host), fingerprint);
+    });
+
+    test('a certificate stored by an account passes without asking again', () {
+      final seen = <CertificateEncounter>[];
+      final gate = CertificateTrustGate(onEncounter: seen.add)
+        ..storedPins = {
+          host: {certificateFingerprint(certificate.der)},
+        };
+
+      expect(gate.accepts(certificate: certificate, host: host), isTrue);
+      expect(seen, isEmpty);
+    });
+
+    test('a changed certificate is refused as a mismatch, not re-asked', () {
+      final seen = <CertificateEncounter>[];
+      final gate = CertificateTrustGate(onEncounter: seen.add)
+        ..storedPins = {
+          host: {certificateFingerprint(certificate.der)},
+        };
+
+      expect(gate.accepts(certificate: renewed, host: host), isFalse);
+      expect(
+        seen.single.outcome.refusal,
+        CertificateRefusal.pinnedFingerprintMismatch,
+      );
+    });
+
+    test('what one host trusts never covers another host', () {
+      final gate = CertificateTrustGate()
+        ..storedPins = {
+          host: {certificateFingerprint(certificate.der)},
+        };
+
+      expect(
+        gate.accepts(certificate: certificate, host: 'other.example.invalid'),
+        isFalse,
+      );
+      // Same certificate, same pin, different server: the subject decides.
+      expect(gate.accepts(certificate: certificate, host: host), isTrue);
     });
   });
 }

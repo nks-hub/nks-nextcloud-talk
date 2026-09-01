@@ -166,7 +166,16 @@
   "sharedLocationDefaultName": "Sdílená poloha",
   "locationConfirmTitle": "Sdílet aktuální polohu?",
   "locationCoordinates": "{latitude}, {longitude}",
-  "@locationCoordinates": {"placeholders": {"latitude": {"type": "String"}, "longitude": {"type": "String"}}},
+  "@locationCoordinates": {
+    "placeholders": {
+      "latitude": {
+        "type": "String"
+      },
+      "longitude": {
+        "type": "String"
+      }
+    }
+  },
   "locationPermissionDenied": "Přístup k poloze byl zamítnut.",
   "locationPermissionDeniedForever": "Přístup k poloze je vypnutý v nastavení systému.",
   "openAppSettings": "Otevřít nastavení",
@@ -305,7 +314,9 @@
   "roomDetailsMessageExpirationCustom": "Vlastní ({seconds} sekund)",
   "@roomDetailsMessageExpirationCustom": {
     "placeholders": {
-      "seconds": { "type": "int" }
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "roomDetailsMessageExpirationRejected": "Server toto nastavení expirace odmítl.",
@@ -855,7 +866,13 @@
   "pollQuestion": "Otázka",
   "pollQuestionRequired": "Zadejte otázku.",
   "pollOption": "Možnost {number}",
-  "@pollOption": {"placeholders": {"number": {"type": "int"}}},
+  "@pollOption": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "pollOptionRequired": "Zadejte možnost.",
   "pollAddOption": "Přidat možnost",
   "pollRemoveOption": "Odebrat možnost",
@@ -873,10 +890,36 @@
   "pollLoading": "Načítám anketu",
   "pollReloadAction": "Zkusit znovu",
   "pollOpenAction": "Otevřít anketu {name}",
-  "@pollOpenAction": {"placeholders": {"name": {"type": "String"}}},
+  "@pollOpenAction": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "typingOne": "{name} píše…",
   "typingTwo": "{first} a {second} píší…",
   "typingThree": "{first}, {second} a {third} píší…",
   "typingOneOther": "{first}, {second}, {third} a další píší…",
-  "typingOthers": "{first}, {second}, {third} a {count} dalších píší…"
+  "typingOthers": "{first}, {second}, {third} a {count} dalších píší…",
+  "certificateUnverifiedTitle": "Neověřený certifikát serveru",
+  "certificateUnverifiedBody": "Server {host} předložil certifikát, který zařízení neumí ověřit. Pokračujte jen tehdy, když otisk níže odpovídá tomu, co ukazuje váš server.",
+  "@certificateUnverifiedBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "certificateFingerprintLabel": "Otisk SHA-256",
+  "certificateTrustAction": "Důvěřovat a pokračovat",
+  "certificateChangedTitle": "Certifikát serveru se změnil",
+  "certificateChangedBody": "Server {host} nyní předkládá jiný certifikát, než kterému tento účet důvěřuje. Pokud jste certifikát vyměnili vy, účet odeberte a přidejte znovu.",
+  "@certificateChangedBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  }
 }

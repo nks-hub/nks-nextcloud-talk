@@ -5,69 +5,101 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
-/// Pinned certificate of one account, or `null` when it trusts nothing extra.
-typedef PinnedCertificateLookup = String? Function(String accountId);
-
-/// Called when a host presents an untrusted certificate nobody pinned yet, so
-/// the user can be shown the fingerprint and decide.
-typedef CertificateTrustPrompt =
-    void Function({
-      required String accountId,
-      required String host,
-      required String fingerprint,
-    });
-
-/// Builds every HTTP client the app uses for one account.
-///
-/// It exists because certificate trust cannot be bolted onto call sites: the
-/// app created `http.Client()` in eight independent places, so a pin added to
-/// one of them would leave the rest verifying differently. Everything that
-/// talks to an account's server has to come from here.
-final class AccountHttpClientFactory {
-  const AccountHttpClientFactory({
-    required this.pinnedFingerprint,
-    this.onUntrustedCertificate,
+/// A certificate the platform refused that the user has not answered for yet.
+final class CertificateEncounter {
+  const CertificateEncounter({
+    required this.host,
+    required this.fingerprint,
+    required this.outcome,
   });
 
-  final PinnedCertificateLookup pinnedFingerprint;
-  final CertificateTrustPrompt? onUntrustedCertificate;
+  final String host;
+  final String fingerprint;
+  final CertificateTrustOutcome outcome;
 
-  /// A client bound to [accountId]. A pin of one account never applies to
-  /// another, even on the same server.
-  http.Client forAccount(String accountId) {
+  @override
+  bool operator ==(Object other) =>
+      other is CertificateEncounter &&
+      other.host == host &&
+      other.fingerprint == fingerprint &&
+      other.outcome == outcome;
+
+  @override
+  int get hashCode => Object.hash(host, fingerprint, outcome);
+}
+
+/// Builds every HTTP client the app uses and gates the ones the platform
+/// rejects on what the user has explicitly trusted.
+///
+/// It exists because certificate trust cannot be bolted onto call sites: the
+/// app created `http.Client()` in eight independent places, so a rule added to
+/// one of them would leave the rest verifying differently. Everything that
+/// leaves the app has to come from here.
+final class CertificateTrustGate {
+  CertificateTrustGate({this.onEncounter});
+
+  /// Told about every rejected certificate, so the user can be shown the
+  /// fingerprint. Called during a handshake, so it must not block.
+  final void Function(CertificateEncounter encounter)? onEncounter;
+
+  Map<String, Set<String>> _stored = const {};
+  final Map<String, String> _confirmed = {};
+
+  /// The most recent certificate that did not pass, so a request that failed
+  /// with a bare handshake error can still be explained to the user.
+  CertificateEncounter? lastEncounter;
+
+  /// Replaces what the accounts have trusted so far. Fingerprints the user
+  /// confirmed in this session survive, because the account that will own them
+  /// may not exist yet.
+  set storedPins(Map<String, Set<String>> pins) {
+    _stored = {
+      for (final entry in pins.entries)
+        entry.key.toLowerCase(): Set.unmodifiable(entry.value),
+    };
+  }
+
+  /// Records that the user accepted [fingerprint] for [host]. It only lasts
+  /// for this session until an account on that host persists it; abandoning
+  /// the login therefore leaves nothing trusted behind.
+  void confirm({required String host, required String fingerprint}) {
+    _confirmed[host.toLowerCase()] = fingerprint;
+  }
+
+  /// The fingerprint the user confirmed for [host] but no account owns yet.
+  String? confirmedFor(String host) => _confirmed[host.toLowerCase()];
+
+  http.Client createClient() {
     final client = HttpClient()
       ..badCertificateCallback = (certificate, host, port) =>
-          _accepts(accountId: accountId, certificate: certificate, host: host);
+          accepts(certificate: certificate, host: host);
     return IOClient(client);
   }
 
-  /// A client for requests that belong to no account, such as reaching a
-  /// server before it is added. Nothing is ever pinned for these, so an
-  /// untrusted certificate simply fails.
-  http.Client withoutAccount() => IOClient(HttpClient());
-
-  bool _accepts({
-    required String accountId,
-    required X509Certificate certificate,
-    required String host,
-  }) {
+  /// Visible for testing: the whole handshake decision minus the socket.
+  bool accepts({required X509Certificate certificate, required String host}) {
     final fingerprint = certificateFingerprint(certificate.der);
+    final key = host.toLowerCase();
     final outcome = decideCertificateTrust(
       requestedHost: host,
       certificateHost: certificateSubjectHost(certificate.subject) ?? '',
       presentedFingerprint: fingerprint,
-      pinnedFingerprint: pinnedFingerprint(accountId),
+      pinnedFingerprints: {...?_stored[key], ?_confirmed[key]},
     );
-    if (outcome.decision == CertificateTrustDecision.ask) {
-      onUntrustedCertificate?.call(
-        accountId: accountId,
-        host: host,
-        fingerprint: fingerprint,
-      );
+    if (outcome.decision == CertificateTrustDecision.allow) {
+      return true;
     }
-    // Only an exact, already stored pin continues the handshake. Asking is not
-    // accepting: the request fails now and succeeds after the user pins it.
-    return outcome.decision == CertificateTrustDecision.allow;
+    // Asking is not accepting: the request fails now and succeeds once the
+    // user has answered. A refusal is reported too, because a changed
+    // fingerprint is the one thing the user has to be told about.
+    final encounter = CertificateEncounter(
+      host: host,
+      fingerprint: fingerprint,
+      outcome: outcome,
+    );
+    lastEncounter = encounter;
+    onEncounter?.call(encounter);
+    return false;
   }
 }
 

@@ -52,6 +52,24 @@ final class AccountRepository {
     );
   }
 
+  /// Every certificate any account trusts, grouped by lowercase host.
+  ///
+  /// Grouped by host rather than by account because the TLS handshake only
+  /// knows which server it reached. Two accounts on one self-hosted server
+  /// therefore share what either of them confirmed, while a pin still never
+  /// reaches a host nobody confirmed it for.
+  Stream<Map<String, Set<String>>> watchCertificatePins() {
+    return _database.select(_database.certificatePins).watch().map((rows) {
+      final pins = <String, Set<String>>{};
+      for (final row in rows) {
+        pins
+            .putIfAbsent(row.host.toLowerCase(), () => <String>{})
+            .add(row.fingerprint);
+      }
+      return pins;
+    });
+  }
+
   Stream<List<CachedConversation>> watchConversations(String accountId) {
     final query = _database.select(_database.cachedConversations)
       ..where((conversation) => conversation.accountId.equals(accountId))
@@ -118,6 +136,7 @@ final class AccountRepository {
     required DateTime createdAt,
     Set<String> talkFeatures = const {},
     String? serverThemeColor,
+    String? certificateFingerprint,
   }) async {
     final sortedTalkFeatures = talkFeatures.toList()..sort();
     return _database.transaction(() async {
@@ -139,6 +158,20 @@ final class AccountRepository {
             ),
           );
       await _replaceThemeColor(accountId, serverThemeColor);
+      if (certificateFingerprint != null) {
+        final host = Uri.parse(serverUrl).host.toLowerCase();
+        if (host.isNotEmpty) {
+          await _database
+              .into(_database.certificatePins)
+              .insertOnConflictUpdate(
+                CertificatePinsCompanion.insert(
+                  accountId: accountId,
+                  host: host,
+                  fingerprint: certificateFingerprint,
+                ),
+              );
+        }
+      }
       final account = await getAccount(accountId);
       if (account == null) {
         throw StateError('Upserted account is missing');

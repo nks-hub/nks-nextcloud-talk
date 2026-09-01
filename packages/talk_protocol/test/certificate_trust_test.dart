@@ -9,16 +9,16 @@ void main() {
     String requestedHost = 'cloud.example.invalid',
     String certificateHost = 'cloud.example.invalid',
     String? presented,
-    String? stored,
+    Set<String> stored = const {},
   }) => decideCertificateTrust(
     requestedHost: requestedHost,
     certificateHost: certificateHost,
     presentedFingerprint: presented ?? pinned,
-    pinnedFingerprint: stored,
+    pinnedFingerprints: stored,
   );
 
   test('an exact pin for this account is the only thing that passes', () {
-    expect(decide(stored: pinned), const CertificateTrustOutcome.allow());
+    expect(decide(stored: {pinned}), const CertificateTrustOutcome.allow());
   });
 
   test('nothing pinned yet means the user decides, not the app', () {
@@ -29,7 +29,7 @@ void main() {
     // A renewal and an attack look identical from here, so the pin has to be
     // removed deliberately rather than silently replaced.
     expect(
-      decide(presented: other, stored: pinned),
+      decide(presented: other, stored: {pinned}),
       const CertificateTrustOutcome.refuse(
         CertificateRefusal.pinnedFingerprintMismatch,
       ),
@@ -41,12 +41,12 @@ void main() {
       decide(
         requestedHost: 'cloud.example.invalid',
         certificateHost: 'attacker.example.invalid',
-        stored: pinned,
+        stored: {pinned},
       ),
       const CertificateTrustOutcome.refuse(CertificateRefusal.hostMismatch),
     );
     expect(
-      decide(requestedHost: '', certificateHost: '', stored: pinned),
+      decide(requestedHost: '', certificateHost: '', stored: {pinned}),
       const CertificateTrustOutcome.refuse(CertificateRefusal.hostMismatch),
     );
   });
@@ -56,7 +56,7 @@ void main() {
       decide(
         requestedHost: 'Cloud.Example.Invalid',
         certificateHost: 'cloud.example.invalid',
-        stored: pinned,
+        stored: {pinned},
       ),
       const CertificateTrustOutcome.allow(),
     );
@@ -64,7 +64,7 @@ void main() {
       decide(
         requestedHost: 'cloud.example.invalid',
         certificateHost: 'sub.cloud.example.invalid',
-        stored: pinned,
+        stored: {pinned},
       ),
       const CertificateTrustOutcome.refuse(CertificateRefusal.hostMismatch),
     );
@@ -72,15 +72,30 @@ void main() {
 
   test('a fingerprint that is not a SHA-256 digest is refused', () {
     expect(
-      decide(presented: 'not-a-digest', stored: pinned),
+      decide(presented: 'not-a-digest', stored: {pinned}),
       const CertificateTrustOutcome.refuse(
         CertificateRefusal.malformedFingerprint,
       ),
     );
     expect(
-      decide(stored: 'A' * 64),
+      decide(stored: {'A' * 64}),
       const CertificateTrustOutcome.refuse(
         CertificateRefusal.malformedFingerprint,
+      ),
+    );
+  });
+
+  test('two accounts on one server both keep their own pin working', () {
+    // A second account must not invalidate the certificate the first one
+    // already trusts, and neither pin lets a third certificate through.
+    expect(
+      decide(stored: {pinned, other}),
+      const CertificateTrustOutcome.allow(),
+    );
+    expect(
+      decide(presented: 'c' * 64, stored: {pinned, other}),
+      const CertificateTrustOutcome.refuse(
+        CertificateRefusal.pinnedFingerprintMismatch,
       ),
     );
   });

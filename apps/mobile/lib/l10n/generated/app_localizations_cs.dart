@@ -2532,4 +2532,26 @@ class AppLocalizationsCs extends AppLocalizations {
   String typingOthers(String first, String second, String third, int count) {
     return '$first, $second, $third a $count dalších píší…';
   }
+
+  @override
+  String get certificateUnverifiedTitle => 'Neověřený certifikát serveru';
+
+  @override
+  String certificateUnverifiedBody(String host) {
+    return 'Server $host předložil certifikát, který zařízení neumí ověřit. Pokračujte jen tehdy, když otisk níže odpovídá tomu, co ukazuje váš server.';
+  }
+
+  @override
+  String get certificateFingerprintLabel => 'Otisk SHA-256';
+
+  @override
+  String get certificateTrustAction => 'Důvěřovat a pokračovat';
+
+  @override
+  String get certificateChangedTitle => 'Certifikát serveru se změnil';
+
+  @override
+  String certificateChangedBody(String host) {
+    return 'Server $host nyní předkládá jiný certifikát, než kterému tento účet důvěřuje. Pokud jste certifikát vyměnili vy, účet odeberte a přidejte znovu.';
+  }
 }

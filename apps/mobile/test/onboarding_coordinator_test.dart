@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -12,6 +13,8 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/onboarding/onboarding_coordinator.dart';
+import 'package:nextcloudtalk/network/account_http_client.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
 import 'test_support.dart';
@@ -108,6 +111,83 @@ void main() {
       expect(account.loginName, 'fixture-user');
       expect(vault.values[account.id], 'fixture-app-password-never-use');
       expect((await repository.watchAccounts().first), hasLength(1));
+    },
+  );
+
+  test(
+    'an unverified certificate blocks the server check until confirmed',
+    () async {
+      // The transport only reports a handshake failure, so the gate is what
+      // tells the user which fingerprint they are being asked about.
+      final trust = CertificateTrustGate()
+        ..lastEncounter = CertificateEncounter(
+          host: 'cloud.example.invalid',
+          fingerprint: 'ab12',
+          outcome: CertificateTrustOutcome.ask(),
+        );
+      final api = HttpNextcloudApi(
+        client: MockClient(
+          (_) => throw const HandshakeException('certificate refused'),
+        ),
+      );
+      addTearDown(api.close);
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+        trust: trust,
+        pollInterval: Duration.zero,
+      );
+
+      await expectLater(
+        coordinator.start('https://cloud.example.invalid'),
+        throwsA(
+          isA<OnboardingFailure>()
+              .having(
+                (failure) => failure.code,
+                'code',
+                OnboardingFailureCode.untrustedCertificate,
+              )
+              .having(
+                (failure) => failure.certificate?.fingerprint,
+                'fingerprint',
+                'ab12',
+              ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'a confirmed certificate is stored with the account it belongs to',
+    () async {
+      final trust = CertificateTrustGate()
+        ..confirm(host: 'cloud.example.invalid', fingerprint: 'f' * 64);
+      final api = _onboardingApi(withTalk: true);
+      addTearDown(api.close);
+      final coordinator = OnboardingCoordinator(
+        api: api,
+        accounts: repository,
+        credentials: vault,
+        launcher: launcher,
+        trust: trust,
+        pollInterval: Duration.zero,
+      );
+
+      final pending = await coordinator.start('https://cloud.example.invalid');
+      final account = await coordinator.waitForAccount(
+        pending,
+        CancellationSignal(),
+      );
+
+      expect(await repository.watchCertificatePins().first, {
+        'cloud.example.invalid': {'f' * 64},
+      });
+
+      // Removing the account must take its trust with it.
+      await repository.purgeAccount(account.id);
+      expect(await repository.watchCertificatePins().first, isEmpty);
     },
   );
 

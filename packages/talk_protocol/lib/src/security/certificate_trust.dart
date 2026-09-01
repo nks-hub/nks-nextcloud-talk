@@ -65,14 +65,18 @@ final RegExp _sha256Hex = RegExp(r'^[0-9a-f]{64}$');
 /// the same self-hosted server each answer for themselves, and a pin never
 /// leaks to a different host the same account happens to talk to.
 ///
-/// [presentedFingerprint] and [pinnedFingerprint] are lowercase SHA-256 hex
+/// [presentedFingerprint] and [pinnedFingerprints] are lowercase SHA-256 hex
 /// digests of the DER encoding. The whole certificate is deliberately not
 /// stored: the digest is enough to recognise it and cannot be replayed.
+///
+/// [pinnedFingerprints] holds every digest already trusted for this host. It
+/// is a set because two accounts can live on one self-hosted server; an empty
+/// set means nothing is trusted there yet.
 CertificateTrustOutcome decideCertificateTrust({
   required String requestedHost,
   required String certificateHost,
   required String presentedFingerprint,
-  required String? pinnedFingerprint,
+  required Set<String> pinnedFingerprints,
 }) {
   if (!_sha256Hex.hasMatch(presentedFingerprint)) {
     return const CertificateTrustOutcome.refuse(
@@ -88,15 +92,15 @@ CertificateTrustOutcome decideCertificateTrust({
       CertificateRefusal.hostMismatch,
     );
   }
-  if (pinnedFingerprint == null) {
+  if (pinnedFingerprints.isEmpty) {
     return const CertificateTrustOutcome.ask();
   }
-  if (!_sha256Hex.hasMatch(pinnedFingerprint)) {
+  if (pinnedFingerprints.any((pin) => !_sha256Hex.hasMatch(pin))) {
     return const CertificateTrustOutcome.refuse(
       CertificateRefusal.malformedFingerprint,
     );
   }
-  if (pinnedFingerprint != presentedFingerprint) {
+  if (!pinnedFingerprints.contains(presentedFingerprint)) {
     return const CertificateTrustOutcome.refuse(
       CertificateRefusal.pinnedFingerprintMismatch,
     );

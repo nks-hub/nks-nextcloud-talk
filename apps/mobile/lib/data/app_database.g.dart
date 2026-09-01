@@ -1076,6 +1076,284 @@ class AccountThemesCompanion extends UpdateCompanion<StoredAccountTheme> {
   }
 }
 
+class $CertificatePinsTable extends CertificatePins
+    with TableInfo<$CertificatePinsTable, StoredCertificatePin> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CertificatePinsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _hostMeta = const VerificationMeta('host');
+  @override
+  late final GeneratedColumn<String> host = GeneratedColumn<String>(
+    'host',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fingerprintMeta = const VerificationMeta(
+    'fingerprint',
+  );
+  @override
+  late final GeneratedColumn<String> fingerprint = GeneratedColumn<String>(
+    'fingerprint',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [accountId, host, fingerprint];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'certificate_pins';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<StoredCertificatePin> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('host')) {
+      context.handle(
+        _hostMeta,
+        host.isAcceptableOrUnknown(data['host']!, _hostMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_hostMeta);
+    }
+    if (data.containsKey('fingerprint')) {
+      context.handle(
+        _fingerprintMeta,
+        fingerprint.isAcceptableOrUnknown(
+          data['fingerprint']!,
+          _fingerprintMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_fingerprintMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, host};
+  @override
+  StoredCertificatePin map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return StoredCertificatePin(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      host: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}host'],
+      )!,
+      fingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fingerprint'],
+      )!,
+    );
+  }
+
+  @override
+  $CertificatePinsTable createAlias(String alias) {
+    return $CertificatePinsTable(attachedDatabase, alias);
+  }
+}
+
+class StoredCertificatePin extends DataClass
+    implements Insertable<StoredCertificatePin> {
+  final String accountId;
+  final String host;
+
+  /// Lowercase SHA-256 of the DER encoding, never the certificate itself.
+  final String fingerprint;
+  const StoredCertificatePin({
+    required this.accountId,
+    required this.host,
+    required this.fingerprint,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['host'] = Variable<String>(host);
+    map['fingerprint'] = Variable<String>(fingerprint);
+    return map;
+  }
+
+  CertificatePinsCompanion toCompanion(bool nullToAbsent) {
+    return CertificatePinsCompanion(
+      accountId: Value(accountId),
+      host: Value(host),
+      fingerprint: Value(fingerprint),
+    );
+  }
+
+  factory StoredCertificatePin.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return StoredCertificatePin(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      host: serializer.fromJson<String>(json['host']),
+      fingerprint: serializer.fromJson<String>(json['fingerprint']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'host': serializer.toJson<String>(host),
+      'fingerprint': serializer.toJson<String>(fingerprint),
+    };
+  }
+
+  StoredCertificatePin copyWith({
+    String? accountId,
+    String? host,
+    String? fingerprint,
+  }) => StoredCertificatePin(
+    accountId: accountId ?? this.accountId,
+    host: host ?? this.host,
+    fingerprint: fingerprint ?? this.fingerprint,
+  );
+  StoredCertificatePin copyWithCompanion(CertificatePinsCompanion data) {
+    return StoredCertificatePin(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      host: data.host.present ? data.host.value : this.host,
+      fingerprint: data.fingerprint.present
+          ? data.fingerprint.value
+          : this.fingerprint,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('StoredCertificatePin(')
+          ..write('accountId: $accountId, ')
+          ..write('host: $host, ')
+          ..write('fingerprint: $fingerprint')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(accountId, host, fingerprint);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is StoredCertificatePin &&
+          other.accountId == this.accountId &&
+          other.host == this.host &&
+          other.fingerprint == this.fingerprint);
+}
+
+class CertificatePinsCompanion extends UpdateCompanion<StoredCertificatePin> {
+  final Value<String> accountId;
+  final Value<String> host;
+  final Value<String> fingerprint;
+  final Value<int> rowid;
+  const CertificatePinsCompanion({
+    this.accountId = const Value.absent(),
+    this.host = const Value.absent(),
+    this.fingerprint = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CertificatePinsCompanion.insert({
+    required String accountId,
+    required String host,
+    required String fingerprint,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       host = Value(host),
+       fingerprint = Value(fingerprint);
+  static Insertable<StoredCertificatePin> custom({
+    Expression<String>? accountId,
+    Expression<String>? host,
+    Expression<String>? fingerprint,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (host != null) 'host': host,
+      if (fingerprint != null) 'fingerprint': fingerprint,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CertificatePinsCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? host,
+    Value<String>? fingerprint,
+    Value<int>? rowid,
+  }) {
+    return CertificatePinsCompanion(
+      accountId: accountId ?? this.accountId,
+      host: host ?? this.host,
+      fingerprint: fingerprint ?? this.fingerprint,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (host.present) {
+      map['host'] = Variable<String>(host.value);
+    }
+    if (fingerprint.present) {
+      map['fingerprint'] = Variable<String>(fingerprint.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CertificatePinsCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('host: $host, ')
+          ..write('fingerprint: $fingerprint, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $CachedConversationsTable extends CachedConversations
     with TableInfo<$CachedConversationsTable, CachedConversation> {
   @override
@@ -12487,6 +12765,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $AccountThemesTable accountThemes = $AccountThemesTable(this);
+  late final $CertificatePinsTable certificatePins = $CertificatePinsTable(
+    this,
+  );
   late final $CachedConversationsTable cachedConversations =
       $CachedConversationsTable(this);
   late final $ConversationAvatarsTable conversationAvatars =
@@ -12518,6 +12799,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     accounts,
     accountThemes,
+    certificatePins,
     cachedConversations,
     conversationAvatars,
     chatCapabilities,
@@ -12540,6 +12822,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('account_themes', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'accounts',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('certificate_pins', kind: UpdateKind.delete)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -12666,6 +12955,26 @@ final class $$AccountsTableReferences
     ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_accountThemesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$CertificatePinsTable, List<StoredCertificatePin>>
+  _certificatePinsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.certificatePins,
+    aliasName: 'accounts__id__certificate_pins__account_id',
+  );
+
+  $$CertificatePinsTableProcessedTableManager get certificatePinsRefs {
+    final manager = $$CertificatePinsTableTableManager(
+      $_db,
+      $_db.certificatePins,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _certificatePinsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -12998,6 +13307,31 @@ class $$AccountsTableFilterComposer
           }) => $$AccountThemesTableFilterComposer(
             $db: $db,
             $table: $db.accountThemes,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> certificatePinsRefs(
+    Expression<bool> Function($$CertificatePinsTableFilterComposer f) f,
+  ) {
+    final $$CertificatePinsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.certificatePins,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CertificatePinsTableFilterComposer(
+            $db: $db,
+            $table: $db.certificatePins,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13454,6 +13788,31 @@ class $$AccountsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> certificatePinsRefs<T extends Object>(
+    Expression<T> Function($$CertificatePinsTableAnnotationComposer a) f,
+  ) {
+    final $$CertificatePinsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.certificatePins,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CertificatePinsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.certificatePins,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> cachedConversationsRefs<T extends Object>(
     Expression<T> Function($$CachedConversationsTableAnnotationComposer a) f,
   ) {
@@ -13752,6 +14111,7 @@ class $$AccountsTableTableManager
           StoredAccount,
           PrefetchHooks Function({
             bool accountThemesRefs,
+            bool certificatePinsRefs,
             bool cachedConversationsRefs,
             bool conversationAvatarsRefs,
             bool chatCapabilitiesRefs,
@@ -13857,6 +14217,7 @@ class $$AccountsTableTableManager
           prefetchHooksCallback:
               ({
                 accountThemesRefs = false,
+                certificatePinsRefs = false,
                 cachedConversationsRefs = false,
                 conversationAvatarsRefs = false,
                 chatCapabilitiesRefs = false,
@@ -13873,6 +14234,7 @@ class $$AccountsTableTableManager
                   db: db,
                   explicitlyWatchedTables: [
                     if (accountThemesRefs) db.accountThemes,
+                    if (certificatePinsRefs) db.certificatePins,
                     if (cachedConversationsRefs) db.cachedConversations,
                     if (conversationAvatarsRefs) db.conversationAvatars,
                     if (chatCapabilitiesRefs) db.chatCapabilities,
@@ -13904,6 +14266,27 @@ class $$AccountsTableTableManager
                                 table,
                                 p0,
                               ).accountThemesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.accountId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (certificatePinsRefs)
+                        await $_getPrefetchedData<
+                          StoredAccount,
+                          $AccountsTable,
+                          StoredCertificatePin
+                        >(
+                          currentTable: table,
+                          referencedTable: $$AccountsTableReferences
+                              ._certificatePinsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).certificatePinsRefs,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.accountId == item.id,
@@ -14163,6 +14546,7 @@ typedef $$AccountsTableProcessedTableManager =
       StoredAccount,
       PrefetchHooks Function({
         bool accountThemesRefs,
+        bool certificatePinsRefs,
         bool cachedConversationsRefs,
         bool conversationAvatarsRefs,
         bool chatCapabilitiesRefs,
@@ -14439,6 +14823,300 @@ typedef $$AccountThemesTableProcessedTableManager =
       $$AccountThemesTableUpdateCompanionBuilder,
       (StoredAccountTheme, $$AccountThemesTableReferences),
       StoredAccountTheme,
+      PrefetchHooks Function({bool accountId})
+    >;
+typedef $$CertificatePinsTableCreateCompanionBuilder =
+    CertificatePinsCompanion Function({
+      required String accountId,
+      required String host,
+      required String fingerprint,
+      Value<int> rowid,
+    });
+typedef $$CertificatePinsTableUpdateCompanionBuilder =
+    CertificatePinsCompanion Function({
+      Value<String> accountId,
+      Value<String> host,
+      Value<String> fingerprint,
+      Value<int> rowid,
+    });
+
+final class $$CertificatePinsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $CertificatePinsTable,
+          StoredCertificatePin
+        > {
+  $$CertificatePinsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('certificate_pins__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager get accountId {
+    final $_column = $_itemColumn<String>('account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$CertificatePinsTableFilterComposer
+    extends Composer<_$AppDatabase, $CertificatePinsTable> {
+  $$CertificatePinsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fingerprint => $composableBuilder(
+    column: $table.fingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CertificatePinsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CertificatePinsTable> {
+  $$CertificatePinsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get host => $composableBuilder(
+    column: $table.host,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fingerprint => $composableBuilder(
+    column: $table.fingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CertificatePinsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CertificatePinsTable> {
+  $$CertificatePinsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get host =>
+      $composableBuilder(column: $table.host, builder: (column) => column);
+
+  GeneratedColumn<String> get fingerprint => $composableBuilder(
+    column: $table.fingerprint,
+    builder: (column) => column,
+  );
+
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$CertificatePinsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CertificatePinsTable,
+          StoredCertificatePin,
+          $$CertificatePinsTableFilterComposer,
+          $$CertificatePinsTableOrderingComposer,
+          $$CertificatePinsTableAnnotationComposer,
+          $$CertificatePinsTableCreateCompanionBuilder,
+          $$CertificatePinsTableUpdateCompanionBuilder,
+          (StoredCertificatePin, $$CertificatePinsTableReferences),
+          StoredCertificatePin,
+          PrefetchHooks Function({bool accountId})
+        > {
+  $$CertificatePinsTableTableManager(
+    _$AppDatabase db,
+    $CertificatePinsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CertificatePinsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CertificatePinsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CertificatePinsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> host = const Value.absent(),
+                Value<String> fingerprint = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CertificatePinsCompanion(
+                accountId: accountId,
+                host: host,
+                fingerprint: fingerprint,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String host,
+                required String fingerprint,
+                Value<int> rowid = const Value.absent(),
+              }) => CertificatePinsCompanion.insert(
+                accountId: accountId,
+                host: host,
+                fingerprint: fingerprint,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$CertificatePinsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({accountId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (accountId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.accountId,
+                                referencedTable:
+                                    $$CertificatePinsTableReferences
+                                        ._accountIdTable(db),
+                                referencedColumn:
+                                    $$CertificatePinsTableReferences
+                                        ._accountIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$CertificatePinsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CertificatePinsTable,
+      StoredCertificatePin,
+      $$CertificatePinsTableFilterComposer,
+      $$CertificatePinsTableOrderingComposer,
+      $$CertificatePinsTableAnnotationComposer,
+      $$CertificatePinsTableCreateCompanionBuilder,
+      $$CertificatePinsTableUpdateCompanionBuilder,
+      (StoredCertificatePin, $$CertificatePinsTableReferences),
+      StoredCertificatePin,
       PrefetchHooks Function({bool accountId})
     >;
 typedef $$CachedConversationsTableCreateCompanionBuilder =
@@ -20909,6 +21587,8 @@ class $AppDatabaseManager {
       $$AccountsTableTableManager(_db, _db.accounts);
   $$AccountThemesTableTableManager get accountThemes =>
       $$AccountThemesTableTableManager(_db, _db.accountThemes);
+  $$CertificatePinsTableTableManager get certificatePins =>
+      $$CertificatePinsTableTableManager(_db, _db.certificatePins);
   $$CachedConversationsTableTableManager get cachedConversations =>
       $$CachedConversationsTableTableManager(_db, _db.cachedConversations);
   $$ConversationAvatarsTableTableManager get conversationAvatars =>
