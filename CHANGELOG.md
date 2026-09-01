@@ -18,6 +18,24 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Background síťové úlohy už při zániku vlastníka nezůstávají bez dozoru.
+  Client Push ruší capability request, připojování, handshake, event stream i
+  backoff; pozdě připojený socket zavře a při více účtech signalizuje zrušení
+  všem současně. Veřejná hranice synchronizace konverzací převádí transportní
+  chyby na typed sync stav a zachovává force-full retry po selhání slabšího
+  incremental flightu.
+- Watchdog telemetrie výslovně zapíná AppHang 2 s, native breadcrumbs a scope
+  sync. Předchozí běh ukládá jen čtyři privacy-safe tagy: typ běhu, lifecycle,
+  RSS bucket a zaznamenaný memory pressure. Release gate po vyčištění scope
+  tyto tagy znovu přidá a test kontroluje skutečný výsledný Sentry event.
+- Audit historických Sentry skupin odlišil syntetické release brány od reálných
+  pádů. `NKS-TALK-2` z buildu 1 se na původním ani současném layoutu nepodařilo
+  reprodukovat, proto nevznikla spekulativní oprava. Po vydání buildu 36 přišel
+  nový reálný `NKS-TALK-P`: fyzický iPhone 13 Pro Max zůstal po galerii ve
+  `localPrepared`, bez jediného pokusu nebo credential retry. Tento problém
+  zůstává otevřený pro samostatnou fyzickou iOS reprodukci; aktuální změny jej
+  neopravují a nebyly vydány v novém buildu.
+
 ## 0.1.0 (36) — 1. 9. 2026
 
 Play: build 36 nebyl v této prioritní iOS opravě vydán.
@@ -52,7 +70,8 @@ nainstalovaný simulátorový build 36 a signing zůstaly.
   attachment data. Android 14 release a iOS 18.6 Simulator build 36 odeslaly
   oba eventy pod `production` a `dist=36`; attachment payload neobsahoval user,
   request ani breadcrumbs. Všechna dříve otevřená NKS Talk issue byla po
-  přiřazení fixu a ověření uzavřená; dotaz `is:unresolved` vrací prázdný seznam.
+  přiřazení fixu a ověření uzavřená; v okamžiku release gate vracel dotaz
+  `is:unresolved` prázdný seznam. Pozdější `NKS-TALK-P` je popsán v Nevydáno.
 - Skutečný iOS 18.6 PHPicker upload buildu 36 prošel od výběru JPEG přes
   app-owned kopii, WebDAV a Talk finalize až k jedné autoritativně potvrzené
   serverové zprávě. Zdroj se uvolnil, job neměl chybu a testovací zpráva byla
