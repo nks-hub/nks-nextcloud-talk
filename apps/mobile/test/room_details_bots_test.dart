@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -198,6 +199,76 @@ void main() {
     expect(requests, 0);
   });
 
+  test(
+    'service revalidates room role and classification before mutations',
+    () async {
+      var mutationRequests = 0;
+      final service = BotsService(
+        accounts: accounts,
+        credentials: vault,
+        api: HttpNextcloudApi(
+          client: MockClient((request) async {
+            if (request.method == 'GET') {
+              return _ocs([
+                {
+                  'id': 17,
+                  'name': 'Assistant',
+                  'description': null,
+                  'state': 0,
+                },
+              ]);
+            }
+            mutationRequests++;
+            return _ocs({
+              'id': 17,
+              'name': 'Assistant',
+              'description': null,
+              'state': 1,
+            }, statusCode: 201);
+          }),
+        ),
+      );
+      await service.fetchBots(
+        accountId: account.id,
+        roomToken: conversation.token,
+      );
+
+      await replaceRoom(participantType: 3);
+      await expectLater(
+        service.setEnabled(
+          accountId: account.id,
+          roomToken: conversation.token,
+          botId: 17,
+          enabled: true,
+        ),
+        throwsA(
+          isA<BotsServiceException>().having(
+            (error) => error.code,
+            'code',
+            BotsServiceError.forbidden,
+          ),
+        ),
+      );
+      await replaceRoom(participantType: 1, attributes: 4);
+      await expectLater(
+        service.setEnabled(
+          accountId: account.id,
+          roomToken: conversation.token,
+          botId: 17,
+          enabled: true,
+        ),
+        throwsA(
+          isA<BotsServiceException>().having(
+            (error) => error.code,
+            'code',
+            BotsServiceError.forbidden,
+          ),
+        ),
+      );
+      expect(mutationRequests, 0);
+    },
+  );
+
   test('bot text and controls keep contrast in both production themes', () {
     for (final theme in <ThemeData>[AppTheme.light(), AppTheme.dark()]) {
       final scheme = theme.colorScheme;
@@ -293,6 +364,112 @@ void main() {
     expect(
       tester.getSize(find.byKey(const Key('room-details-bot-17'))).height,
       greaterThanOrEqualTo(48),
+    );
+  });
+
+  testWidgets('reverse mutation completion preserves both bot updates', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final first = Completer<http.Response>();
+    final second = Completer<http.Response>();
+    var mutationRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocs(const <Object?>[]);
+      }
+      if (request.method == 'GET' && request.url.path.contains('/bot/')) {
+        return _ocs([
+          {'id': 17, 'name': 'Assistant', 'description': null, 'state': 0},
+          {'id': 18, 'name': 'Recorder', 'description': null, 'state': 0},
+        ]);
+      }
+      mutationRequests++;
+      return request.url.path.endsWith('/17') ? first.future : second.future;
+    });
+    await _openBotDetails(
+      tester,
+      client: client,
+      database: database,
+      vault: vault,
+      account: account,
+      conversation: conversation,
+    );
+    await tester.tap(find.byKey(const Key('room-details-bots')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-bot-18')).evaluate().isNotEmpty,
+    );
+
+    for (final id in const <int>[17, 18]) {
+      final tile = tester.widget<SwitchListTile>(
+        find.byKey(Key('room-details-bot-$id')),
+      );
+      tile.onChanged!(true);
+      await tester.pump();
+    }
+    await _pumpUntil(tester, () => mutationRequests == 2);
+    expect(find.bySemanticsLabel('Updating bot…'), findsNWidgets(2));
+
+    second.complete(
+      _ocs({
+        'id': 18,
+        'name': 'Recorder',
+        'description': null,
+        'state': 1,
+      }, statusCode: 201),
+    );
+    await _pumpUntil(tester, () => _botEnabled(tester, 18));
+    first.complete(
+      _ocs({
+        'id': 17,
+        'name': 'Assistant',
+        'description': null,
+        'state': 1,
+      }, statusCode: 201),
+    );
+    await _pumpUntil(
+      tester,
+      () => _botEnabled(tester, 17) && _botEnabled(tester, 18),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('mutation forbidden response hides bot management', (
+    tester,
+  ) async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocs(const <Object?>[]);
+      }
+      if (request.method == 'GET') {
+        return _ocs([
+          {'id': 17, 'name': 'Assistant', 'description': null, 'state': 0},
+        ]);
+      }
+      return _ocs(null, statusCode: 403, status: 'failure');
+    });
+    await _openBotDetails(
+      tester,
+      client: client,
+      database: database,
+      vault: vault,
+      account: account,
+      conversation: conversation,
+    );
+    await tester.tap(find.byKey(const Key('room-details-bots')));
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-bot-17')).evaluate().isNotEmpty,
+    );
+    tester
+        .widget<SwitchListTile>(find.byKey(const Key('room-details-bot-17')))
+        .onChanged!(true);
+    await tester.pump();
+
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-details-bots')).evaluate().isEmpty,
     );
   });
 
@@ -515,11 +692,20 @@ Map<String, Object?> _roomJson() {
   return Map<String, Object?>.from(rooms.first! as Map<String, Object?>);
 }
 
-http.Response _ocs(Object? data, {int statusCode = 200, String status = 'ok'}) {
+http.Response _ocs(
+  Object? data, {
+  int statusCode = 200,
+  String status = 'ok',
+  int? metaStatusCode,
+}) {
   return http.Response(
     jsonEncode({
       'ocs': {
-        'meta': {'status': status, 'statuscode': statusCode, 'message': 'OK'},
+        'meta': {
+          'status': status,
+          'statuscode': metaStatusCode ?? (status == 'ok' ? 200 : statusCode),
+          'message': 'OK',
+        },
         'data': data,
       },
     }),
@@ -556,6 +742,12 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
   await tester.tap(finder);
+}
+
+bool _botEnabled(WidgetTester tester, int botId) {
+  final finder = find.byKey(Key('room-details-bot-$botId'));
+  return finder.evaluate().isNotEmpty &&
+      tester.widget<SwitchListTile>(finder).value;
 }
 
 double _contrast(Color first, Color second) {

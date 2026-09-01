@@ -41,9 +41,6 @@ TalkBot _parseBot(Object? json, {required String path}) {
     minimum: 0,
     maximum: 2,
   );
-  if (!object.containsKey('description')) {
-    protocolFailure(_responseCode, '$path.description');
-  }
   final rawDescription = object['description'];
   return TalkBot._(
     id: requireInt(
@@ -185,7 +182,7 @@ BotManagementResponse decodeListBotsResponse({
     );
   }
   final rawBots = requireList(
-    _decodeOcsEnvelope(body, requireSuccess: true),
+    _decodeOcsEnvelope(body, expectedStatus: 'ok', expectedStatusCode: 200),
     path: r'$.ocs.data',
     code: _responseCode,
   );
@@ -222,7 +219,11 @@ BotManagementResponse decodeChangeBotStateResponse({
     return failure;
   }
   if (statusCode == 400) {
-    final data = _decodeOcsEnvelope(body, requireSuccess: false);
+    final data = _decodeOcsEnvelope(
+      body,
+      expectedStatus: 'failure',
+      expectedStatusCode: 400,
+    );
     return BotChangeRejected._(
       request: request,
       reason: _optionalRejectionReason(data),
@@ -235,7 +236,7 @@ BotManagementResponse decodeChangeBotStateResponse({
     );
   }
   final bot = _parseBot(
-    _decodeOcsEnvelope(body, requireSuccess: true),
+    _decodeOcsEnvelope(body, expectedStatus: 'ok', expectedStatusCode: 200),
     path: r'$.ocs.data',
   );
   if (bot.id != request.botId ||
@@ -253,13 +254,25 @@ BotManagementResponse? _decodeSharedFailure(
 ) {
   switch (statusCode) {
     case 401:
-      _decodeOcsEnvelope(body, requireSuccess: false);
+      _decodeOcsEnvelope(
+        body,
+        expectedStatus: 'failure',
+        expectedStatusCode: 401,
+      );
       return BotReauthenticationRequired._(request);
     case 403:
-      _decodeOcsEnvelope(body, requireSuccess: false);
+      _decodeOcsEnvelope(
+        body,
+        expectedStatus: 'failure',
+        expectedStatusCode: 403,
+      );
       return BotForbidden._(request);
     case 404:
-      _decodeOcsEnvelope(body, requireSuccess: false);
+      _decodeOcsEnvelope(
+        body,
+        expectedStatus: 'failure',
+        expectedStatusCode: 404,
+      );
       return BotRoomMissing._(request);
     case 429:
       return BotHttpFailure._(
@@ -291,7 +304,11 @@ String? _optionalRejectionReason(Object? data) {
   );
 }
 
-Object? _decodeOcsEnvelope(Uint8List body, {required bool requireSuccess}) {
+Object? _decodeOcsEnvelope(
+  Uint8List body, {
+  required String expectedStatus,
+  required int expectedStatusCode,
+}) {
   final decoded = _decodeJsonBytes(body);
   final root = requireObject(decoded, path: r'$', code: _responseCode);
   final ocs = requireObject(root['ocs'], path: r'$.ocs', code: _responseCode);
@@ -307,19 +324,19 @@ Object? _decodeOcsEnvelope(Uint8List body, {required bool requireSuccess}) {
     minLength: 1,
     maxLength: 32,
   );
-  if (status != 'ok' && status != 'failure') {
+  if (status != expectedStatus) {
     protocolFailure(_responseCode, r'$.ocs.meta.status');
   }
-  if (requireSuccess && status != 'ok') {
-    protocolFailure(_responseCode, r'$.ocs.meta.status');
-  }
-  requireInt(
+  final statusCode = requireInt(
     meta['statuscode'],
     path: r'$.ocs.meta.statuscode',
     code: _responseCode,
     minimum: 0,
     maximum: 999,
   );
+  if (statusCode != expectedStatusCode) {
+    protocolFailure(_responseCode, r'$.ocs.meta.statuscode');
+  }
   if (!ocs.containsKey('data')) {
     protocolFailure(_responseCode, r'$.ocs.data');
   }

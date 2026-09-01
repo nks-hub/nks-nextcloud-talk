@@ -12,6 +12,7 @@ import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
 const String _botsCapability = 'bots-v1';
+const int _classifiedRoomAttribute = 4;
 
 enum BotsServiceError {
   accountMissing,
@@ -77,6 +78,7 @@ final class BotsService {
     required bool enabled,
   }) async {
     final context = await _authContext(accountId);
+    await _validateMutationRoom(accountId, roomToken);
     final request = _changeRequest(context.account, roomToken, botId, enabled);
     final response = await _call(
       () => _api.changeBotState(
@@ -89,6 +91,34 @@ final class BotsService {
       BotChangeSuccess(:final bot) => bot,
       _ => throw BotsServiceException(_responseError(response)),
     };
+  }
+
+  Future<void> _validateMutationRoom(String accountId, String roomToken) async {
+    final cached = await _accounts.getConversation(
+      accountId: accountId,
+      token: roomToken,
+    );
+    if (cached == null) {
+      throw const BotsServiceException(BotsServiceError.roomMissing);
+    }
+    final ConversationRoom room;
+    try {
+      room = ConversationRoom.fromJson(jsonDecode(cached.rawJson));
+    } on Object {
+      throw const BotsServiceException(BotsServiceError.invalidResponse);
+    }
+    if (room.token.value != roomToken) {
+      throw const BotsServiceException(BotsServiceError.invalidResponse);
+    }
+    final role = participantRoleFor(room.participantType);
+    final attributes = room.wire['attributes'];
+    final classified =
+        attributes is int &&
+        (attributes & _classifiedRoomAttribute) == _classifiedRoomAttribute;
+    if ((role != ParticipantRole.owner && role != ParticipantRole.moderator) ||
+        classified) {
+      throw const BotsServiceException(BotsServiceError.forbidden);
+    }
   }
 
   ListBotsRequest _listRequest(StoredAccount account, String roomToken) {

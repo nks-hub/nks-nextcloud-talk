@@ -121,6 +121,20 @@ void main() {
       expect(success.bots[0].toString(), 'TalkBot(id: 17, state: disabled)');
     });
 
+    test('treats an omitted upstream description as null', () {
+      final response =
+          decodeListBotsResponse(
+                request: listRequest(),
+                statusCode: 200,
+                body: ocs([
+                  {'id': 17, 'name': 'Assistant', 'state': 0},
+                ]),
+              )
+              as BotListSuccess;
+
+      expect(response.bots.single.description, isNull);
+    });
+
     test('decodes enable 201 and disable 200 as authoritative bot state', () {
       final enabled = decodeChangeBotStateResponse(
         request: changeRequest(),
@@ -178,9 +192,6 @@ void main() {
     test('rejects malformed state duplicate ids and oversized payloads', () {
       for (final data in <Object?>[
         [
-          {'id': 17, 'name': 'Assistant', 'state': 0},
-        ],
-        [
           {'id': 17, 'name': 'Assistant', 'description': null, 'state': 9},
         ],
         [
@@ -218,6 +229,54 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('rejects HTTP and OCS meta contradictions', () {
+      final contradictions = <void Function()>[
+        () => decodeListBotsResponse(
+          request: listRequest(),
+          statusCode: 200,
+          body: ocs(const <Object?>[], status: 'failure'),
+        ),
+        () => decodeListBotsResponse(
+          request: listRequest(),
+          statusCode: 200,
+          body: ocs(const <Object?>[], code: 201),
+        ),
+        () => decodeChangeBotStateResponse(
+          request: changeRequest(),
+          statusCode: 201,
+          body: ocs({
+            'id': 17,
+            'name': 'Assistant',
+            'description': null,
+            'state': 1,
+          }, code: 201),
+        ),
+        () => decodeChangeBotStateResponse(
+          request: changeRequest(),
+          statusCode: 400,
+          body: ocs({'error': 'bot'}),
+        ),
+        () => decodeListBotsResponse(
+          request: listRequest(),
+          statusCode: 401,
+          body: ocs(null, status: 'failure', code: 403),
+        ),
+      ];
+
+      for (final contradiction in contradictions) {
+        expect(
+          contradiction,
+          throwsA(
+            isA<TalkProtocolException>().having(
+              (error) => error.code,
+              'code',
+              TalkProtocolErrorCode.invalidBotsResponse,
+            ),
+          ),
+        );
+      }
     });
   });
 }

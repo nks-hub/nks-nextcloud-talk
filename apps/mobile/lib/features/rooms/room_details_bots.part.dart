@@ -3,7 +3,9 @@ part of 'room_details_screen.dart';
 mixin _RoomBotsStateLogic
     on ConsumerState<RoomDetailsScreen>, _RoomDetailsStateLogic {
   Future<List<TalkBot>>? _bots;
+  List<TalkBot>? _botSnapshot;
   final Set<int> _pendingBotIds = <int>{};
+  bool _botManagementDenied = false;
 
   bool get _canManageBots {
     final role = participantRoleFor(_room?.participantType ?? -1);
@@ -11,19 +13,23 @@ mixin _RoomBotsStateLogic
     final classified =
         attributes is int &&
         (attributes & _classifiedRoomAttribute) == _classifiedRoomAttribute;
-    return (role == ParticipantRole.owner ||
-            role == ParticipantRole.moderator) &&
+    return !_botManagementDenied &&
+        (role == ParticipantRole.owner || role == ParticipantRole.moderator) &&
         !classified &&
         _talkFeatures.contains(_botsCapability);
   }
 
-  Future<List<TalkBot>> _loadBots() {
-    return ref
+  Future<List<TalkBot>> _loadBots() async {
+    final bots = await ref
         .read(botsServiceProvider)
         .fetchBots(
           accountId: widget.account.id,
           roomToken: widget.conversation.token,
         );
+    if (mounted) {
+      _botSnapshot = bots;
+    }
+    return bots;
   }
 
   void _expandBots(bool expanded) {
@@ -62,16 +68,28 @@ mixin _RoomBotsStateLogic
       if (!mounted) {
         return;
       }
-      final next = <TalkBot>[
-        for (final item in currentBots) item.id == updated.id ? updated : item,
-      ];
+      final latest = _botSnapshot ?? currentBots;
+      final next = List<TalkBot>.unmodifiable([
+        for (final item in latest) item.id == updated.id ? updated : item,
+      ]);
       setState(() {
+        _botSnapshot = next;
         _bots = Future<List<TalkBot>>.value(next);
       });
-    } on BotsServiceException {
+    } on BotsServiceException catch (error) {
       if (mounted) {
+        final denied =
+            error.code == BotsServiceError.forbidden ||
+            error.code == BotsServiceError.roomMissing ||
+            error.code == BotsServiceError.unsupported;
         setState(() {
-          _bots = _loadBots();
+          if (denied) {
+            _botManagementDenied = true;
+            _botSnapshot = null;
+            _bots = null;
+          } else {
+            _bots = _loadBots();
+          }
         });
         _showMessage(AppLocalizations.of(context).roomDetailsBotsLoadFailed);
       }
@@ -178,13 +196,20 @@ final class _BotTile extends StatelessWidget {
         ? strings.roomDetailsBotDisable
         : strings.roomDetailsBotEnable;
     return Semantics(
-      label: onChanged == null ? stateLabel : actionLabel,
+      label: pending
+          ? strings.roomDetailsBotUpdating
+          : onChanged == null
+          ? stateLabel
+          : actionLabel,
+      liveRegion: pending,
       child: SwitchListTile(
         key: Key('room-details-bot-${bot.id}'),
         secondary: pending
-            ? const SizedBox.square(
-                dimension: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+            ? const ExcludeSemantics(
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               )
             : const Icon(Icons.smart_toy_outlined),
         title: Text(bot.name),
