@@ -38,6 +38,77 @@ void main() {
     }
   });
 
+  test('iOS location purpose string follows the device language', () {
+    const key = 'NSLocationWhenInUseUsageDescription';
+    final runner = Directory(
+      '${Directory.current.path}${Platform.pathSeparator}ios'
+      '${Platform.pathSeparator}Runner',
+    );
+    final czech = File(
+      '${runner.path}${Platform.pathSeparator}cs.lproj'
+      '${Platform.pathSeparator}InfoPlist.strings',
+    ).readAsStringSync();
+    final english = File(
+      '${runner.path}${Platform.pathSeparator}en.lproj'
+      '${Platform.pathSeparator}InfoPlist.strings',
+    ).readAsStringSync();
+
+    expect(
+      czech.trim(),
+      '"$key" = "NKS Talk použije vaši aktuální polohu pouze tehdy, když ji '
+      'sami sdílíte v konverzaci.";',
+    );
+    expect(
+      english.trim(),
+      '"$key" = "NKS Talk uses your current location only when you choose to '
+      'share it in a conversation.";',
+    );
+
+    final project = File(
+      '${Directory.current.path}${Platform.pathSeparator}ios'
+      '${Platform.pathSeparator}Runner.xcodeproj'
+      '${Platform.pathSeparator}project.pbxproj',
+    ).readAsStringSync();
+    final variant = _pbxObject(
+      project,
+      'A17C3E9B2F00000000000007',
+      'InfoPlist.strings',
+    );
+    expect(variant, contains('A17C3E9B2F00000000000005 /* cs */'));
+    expect(variant, contains('A17C3E9B2F00000000000006 /* en */'));
+    expect(variant, contains('isa = PBXVariantGroup'));
+
+    final buildFile = _pbxObject(
+      project,
+      'A17C3E9B2F00000000000004',
+      'InfoPlist.strings in Resources',
+    );
+    expect(
+      buildFile,
+      contains('fileRef = A17C3E9B2F00000000000007 /* InfoPlist.strings */'),
+    );
+    final runnerGroup = _pbxObject(
+      project,
+      '97C146F01CF9000F007C117D',
+      'Runner',
+    );
+    expect(
+      runnerGroup,
+      contains('A17C3E9B2F00000000000007 /* InfoPlist.strings */'),
+    );
+    final resources = _pbxObject(
+      project,
+      '97C146EC1CF9000F007C117D',
+      'Resources',
+    );
+    expect(
+      resources,
+      contains(
+        'A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */',
+      ),
+    );
+  });
+
   test('iOS Info.plist answers the export compliance question up front', () {
     // Without this key every upload lands in TestFlight as "Missing
     // Compliance" and cannot be handed to a tester until somebody answers the
@@ -130,3 +201,12 @@ File _plist() => File(
   '${Directory.current.path}${Platform.pathSeparator}ios'
   '${Platform.pathSeparator}Runner${Platform.pathSeparator}Info.plist',
 );
+
+String _pbxObject(String project, String id, String comment) {
+  final match = RegExp(
+    '${RegExp.escape(id)} /\\* ${RegExp.escape(comment)} \\*/ = \\{.*?\\};',
+    dotAll: true,
+  ).firstMatch(project);
+  expect(match, isNotNull, reason: '$comment is not wired into the project');
+  return match!.group(0)!;
+}
