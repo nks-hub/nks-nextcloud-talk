@@ -1,0 +1,101 @@
+name: tests
+
+# Runs the two suites this repository actually gates on. Nothing here builds a
+# store artifact: signing keys, `telemetry.env` and the Firebase config are not
+# in the repository, so a release build on a runner could only be a fake one.
+#
+# No formatting gate on purpose: the committed sources were written with an
+# older `dart format`, so today's formatter rewrites dozens of untouched files.
+# Adding the gate would mean one reformatting commit across the whole tree, and
+# that is a decision of its own rather than a side effect of setting up CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.4
+
+jobs:
+  protocol:
+    name: talk_protocol
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        working-directory: packages/talk_protocol
+        run: dart pub get
+      - name: Analyze
+        working-directory: packages/talk_protocol
+        run: dart analyze lib test
+      - name: Test
+        working-directory: packages/talk_protocol
+        run: dart test --reporter expanded
+
+  mobile:
+    name: apps/mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # The Google Services plugin refuses to configure without this file, and
+      # the real one is not in the repository. The placeholder carries no
+      # credential: it only lets the Gradle manifest-merge test run, and any
+      # test that needs a working Firebase project is skipped without one.
+      - name: Write a placeholder Firebase config
+        run: |
+          cat > apps/mobile/android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.nkshub.nextcloudtalk"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "ci-placeholder-key" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+      - name: Resolve dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Analyze
+        working-directory: apps/mobile
+        run: flutter analyze lib test
+      - name: Test
+        working-directory: apps/mobile
+        run: flutter test --reporter expanded
