@@ -18,6 +18,13 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Příloha, kterou pořadí v místnosti drží zpátky, už nezastaví celou frontu.
+  Dřív stačila jedna starší úloha čekající na potvrzení a každý další obrázek
+  ve stejné konverzaci zůstal navždy na „Čeká na nahrání“, bez chyby a bez
+  možnosti to rozjet. Odmítnutý plán teď znamená jen přeskočení té jedné
+  úlohy; zaparkované potvrzení navíc nebrání finalizaci pozdějších příloh,
+  protože samo se pohne až na výslovné zopakování. Nevyřízené přílohy se
+  dotáhnou samy, i po restartu aplikace.
 - Background síťové úlohy už při zániku vlastníka nezůstávají bez dozoru.
   Client Push ruší capability request, připojování, handshake, event stream i
   backoff; pozdě připojený socket zavře a při více účtech signalizuje zrušení
