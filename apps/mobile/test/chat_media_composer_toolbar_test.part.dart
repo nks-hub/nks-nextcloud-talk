@@ -159,6 +159,48 @@ void _registerChatMediaComposerToolbarTests(
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('wide recording error toolbar starts at the left edge', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 956);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory(failStart: true);
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        showAttachmentButton: false,
+        idleActions: _aggregatedIdleActions(),
+        trailingActions: _aggregatedTrailingActions(),
+      ),
+    );
+    await tester.tap(find.byKey(const Key('voice-record')));
+    final errorMessage = find.text('The voice message could not be recorded.');
+    await _pumpUntil(tester, () => errorMessage.evaluate().isNotEmpty);
+
+    final actionsRect = tester.getRect(
+      find.byKey(const Key('chat-media-composer-actions')),
+    );
+    final firstActionRect = tester.getRect(
+      find.byKey(const Key('pick-image-attachment')),
+    );
+    final errorControls = find.ancestor(
+      of: errorMessage,
+      matching: find.byType(Row),
+    );
+    expect(firstActionRect.left, actionsRect.left);
+    expect(tester.getCenter(errorControls).dx, actionsRect.center.dx);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unsupported voice capability leaves a disabled microphone', (
     tester,
   ) async {

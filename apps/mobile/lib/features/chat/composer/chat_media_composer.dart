@@ -760,14 +760,17 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                     ? null
                     : () => unawaited(_openAppSettings()),
               ),
-              Wrap(
-                alignment: WrapAlignment.start,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: <Widget>[
-                  ?attachmentAction,
-                  ...widget.idleActions,
-                  ...widget.trailingActions,
-                ],
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Wrap(
+                  alignment: WrapAlignment.start,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    ?attachmentAction,
+                    ...widget.idleActions,
+                    ...widget.trailingActions,
+                  ],
+                ),
               ),
             ],
           )
