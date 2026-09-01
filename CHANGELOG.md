@@ -16,37 +16,36 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (42) — 2. 9. 2026
 
-Od buildu 41 se zatím nezměnilo nic, co by tester poznal. Co je hotové, je
-uvnitř:
+Vydáno ze zdroje `9393081`.
 
+Play (uzavřené testování, track alpha): vydání `(42) 0.1.0` je `completed`
+s version code 42. AAB má 84 293 448 B a SHA-256
+`7b98dbd729171b754e7171cb9c5c9f670bb713795dd0c1181fe60181e6136d08`. Poznámky
+v šesti jazycích se po nahrání shodují se zdrojem.
+
+Oba artefakty se poprvé staví z ČISTÉHO checkoutu `origin/main`, ne z pracovní
+kopie. Ta totiž nese rozdělanou práci jiné větve (iOS Share Extension,
+transkripce, lifecycle policy) a lokálně stavěné buildy ji mohly obsahovat —
+u tohoto vydání je to vyloučené.
+
+- Pruh „Tento účet je potřeba znovu přihlásit" se vejde na obrazovku i při
+  zvětšeném systémovém písmu. Text a tlačítko se dřív tlačily do jedné řady
+  a v češtině při dvojnásobném písmu přetekly o 228 px mimo displej; nad
+  zhruba 1,3× měřítka se akce teď skládá pod zprávu.
+- Uvnitř přibyly tři brány, které tohle hlídají samy: kontrastní matice 28
+  barevných dvojic (nejnižší naměřená hodnota 6,4606:1), sonda na přetečení
+  rozložení při 200 % textu ověřená proti sobě schválně přeteklým případem,
+  a kontrola, že každý ovládací prvek s pouhou ikonou nese jméno pro odečítač
+  obrazovky.
 - Rozhodnutý offline scope prvního release (Q-004): cache historie, durable
-  textový outbox a durable přílohy s obnovou po restartu; ostatní akce zůstávají
-  online-only a fail-closed, protože pro ně neexistuje replay kontrakt.
-- Kontrastní matice se měří testem místo jednorázového reportu: 28 dvojic
-  popředí/pozadí ve světlém i tmavém tématu, s výchozím i serverovým accentem.
-  Nejnižší naměřená hodnota tohoto stromu je 6,4606:1, obrysy drží nad 3:1.
-- Test manifestu pouští Gradle wrapper přes `bash` místo `sh`; wrapper má bash
-  shebang a pod POSIX shellem se rozpadl. Dva testy nativních Windows notifikací
-  se mimo Windows přeskakují, protože tam ten kanál neexistuje.
-
-- Pruh „Tento účet je potřeba znovu přihlásit" se při zvětšeném systémovém
-  písmu vejde na obrazovku. Dřív se tlačítko a text tlačily do jedné řady a
-  v češtině při 200 % textu přetekly o 228 px doprava; nad zhruba 1,3× měřítka
-  se teď akce skládá pod zprávu. Hlídá to sonda, která pumpuje skutečnou
-  obrazovku ve světlém i tmavém tématu, česky i anglicky, a která je ověřená
-  proti sobě schválně přeteklým rozložením.
-
-- Odečítač obrazovky má u seznamu konverzací co číst: nově test vyžaduje, aby
-  každé tlačítko s pouhou ikonou neslo jméno. Na auditované obrazovce žádné
-  bezejmenné nebylo, takže tady se nic neopravovalo — hlídá se, aby to tak
-  zůstalo.
-
-- Připravená měřicí vrstva pro výkonové metriky. Zatím nic neodesílá; smysl
-  má její tvar: měřit jde jen šest pojmenovaných operací, měření nese pouze
-  jméno operace, výsledek a koš trvání, a rozpočet je jedna událost na operaci
-  za minutu. Přesné trvání ani text chyby se nereportují.
+  textový outbox a durable přílohy s obnovou po restartu; ostatní akce
+  zůstávají online-only a fail-closed, protože pro ně neexistuje replay
+  kontrakt.
+- Připravená měřicí vrstva pro výkonové metriky. Zatím nic neodesílá; měřit
+  jde jen šest pojmenovaných operací a měření nese pouze jméno operace,
+  výsledek a koš trvání, takže do něj nejde vložit účet, room ani adresu.
 
 Zbývá prověřit: při zkoušce na ručně sestaveném potvrzovacím dialogu přeteklo
 i to v angličtině, ale měřeno na kopii v testu, ne na skutečné obrazovce —
