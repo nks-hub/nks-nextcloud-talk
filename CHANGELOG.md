@@ -38,6 +38,11 @@ uvnitř:
   obrazovku ve světlém i tmavém tématu, česky i anglicky, a která je ověřená
   proti sobě schválně přeteklým rozložením.
 
+- Odečítač obrazovky má u seznamu konverzací co číst: nově test vyžaduje, aby
+  každé tlačítko s pouhou ikonou neslo jméno. Na auditované obrazovce žádné
+  bezejmenné nebylo, takže tady se nic neopravovalo — hlídá se, aby to tak
+  zůstalo.
+
 Zbývá prověřit: při zkoušce na ručně sestaveném potvrzovacím dialogu přeteklo
 i to v angličtině, ale měřeno na kopii v testu, ne na skutečné obrazovce —
 popsané v `docs/TODO-quality-operations.md`.
