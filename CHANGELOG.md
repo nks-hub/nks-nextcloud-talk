@@ -16,7 +16,26 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (39) — 1. 9. 2026
+
+Vydáno ze zdroje `daa1039`.
+
+Play (uzavřené testování, track alpha): vydání `(39) 0.1.0` je `completed`
+s version code 39. AAB má 84 005 134 B a SHA-256
+`92ee4e5e7278474ee1f101e46b06b5af6ae834cd8aeacd59fae721cb79d555fd`, podepsané
+upload klíčem `CN=NKS Talk`. Poznámky v šesti jazycích se po nahrání znak po
+znaku shodují se zdrojem.
+
+TestFlight: IPA má 30 173 759 B a SHA-256
+`6054a93a4bb5d55d67fa24582248fb236eca1344846fd3a8ca0ed21f63e93526`. Delivery
+UUID i build record jsou `74a53a71-e81e-426b-9bcb-3a58cb3daf39`, stav `VALID`,
+minimum iOS 15.0, encryption `false`, obě skupiny `IN_BETA_TESTING` a beta
+review odesláno.
+
+Během přípravy tohoto buildu jsem si sám způsobil regresi: převedení
+`loadPreview` na nesynchronní metodu začalo házet výjimku dřív, než ji volající
+mohl zachytit ve `Future`. Chytil to existující test
+`chat_media_repository_test.dart`, oprava je součástí vydaného zdroje.
 
 - Obrázky a GIFy v otevřené konverzaci už každých pár sekund neproblikávají.
   Náhledy se držely na klíči, který nesl celý řádek účtu, a ten každá
