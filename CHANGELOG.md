@@ -16,6 +16,36 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (41) — 1. 9. 2026
+
+Vydáno ze zdroje `5fd2a0a`.
+
+Play (uzavřené testování, track alpha): vydání `(41) 0.1.0` je `completed`
+s version code 41. AAB má 84 291 246 B a SHA-256
+`2fdbec524a211642d9109ef0554174404cc90dd8d667d539d8ed4b342cebac6f`. Poznámky
+v šesti jazycích se po nahrání shodují se zdrojem.
+
+TestFlight: IPA má 30 237 177 B a SHA-256
+`629e358d6ac8a839f0a591373294cf59735c9381dbe62ab00679680338a50bef`, delivery
+UUID `4c804b9b-dd16-4822-9d5e-469fdc920a3f`.
+
+Před vydáním prošla celá sada: mobil 1679 testů se 4 přeskočeními, protokol
+1026 testů, oboje bez červené. Na Androidu 14 (emulátor, release APK build 41)
+je „Otevřené konverzace" v nové konverzaci živě dostupné a referenční server
+na dotaz odpověděl, že žádné otevřené konverzace nenabízí — samotné připojení
+proto zatím dokládají jen testy, ne živý průchod.
+
+- V nové konverzaci přibyly „Otevřené konverzace". Server ukáže, co zveřejňuje
+  jako otevřené, a jedno klepnutí do takové konverzace připojí; chráněná se
+  nejdřív zeptá na heslo, které jde v těle požadavku, ne v adrese. Připojení
+  se počítá až podle odpovědi serveru, takže chybová odpověď schovaná
+  v úspěšném HTTP kódu konverzaci neotevře.
+- Aplikace rozumí vzdálenému vymazání účtu. Když správce zařízení vymaže,
+  přestane app password fungovat — a protože stejně vypadá i běžně odvolaný
+  token, aplikace se serveru zeptá, o co jde. Účet a všechna jeho lokální data
+  smaže jen na výslovné potvrzení; nedostupný server, nejasná odpověď ani
+  chybějící přihlašovací údaj nikdy nic nemažou.
+
 ## 0.1.0 (40) — 1. 9. 2026
 
 Vydáno ze zdroje `ea02f94`.
