@@ -121,6 +121,39 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
   }
 
+  Future<void> _pickRemoteFile() async {
+    if (_sending || _isReadOnlyNow()) {
+      return;
+    }
+    final targetKey = _key;
+    final strings = AppLocalizations.of(context);
+    final result = await Navigator.of(context).push<RemoteFilePickerResult>(
+      MaterialPageRoute<RemoteFilePickerResult>(
+        builder: (_) => RemoteFilePickerScreen(
+          accountId: targetKey.accountId,
+          roomToken: targetKey.roomToken,
+        ),
+      ),
+    );
+    if (result == null || !mounted || targetKey != _key) {
+      return;
+    }
+    if (result == RemoteFilePickerResult.shared) {
+      // The server posts the share into the room itself, so the message only
+      // appears here after a sync.
+      await _sync();
+      if (!mounted || targetKey != _key) {
+        return;
+      }
+    }
+    _showLocationSnackBar(switch (result) {
+      RemoteFilePickerResult.shared => strings.remoteFilesShared,
+      RemoteFilePickerResult.forbidden => strings.remoteFilesShareForbidden,
+      RemoteFilePickerResult.signInRequired => strings.remoteFilesSignInAgain,
+      RemoteFilePickerResult.failed => strings.remoteFilesShareFailed,
+    });
+  }
+
   Future<void> _openLocationAppSettings(
     ChatRoomProviderKey targetKey,
     int generation,

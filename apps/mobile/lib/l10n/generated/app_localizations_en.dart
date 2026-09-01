@@ -2555,4 +2555,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String certificateChangedBody(String host) {
     return '$host now presents a different certificate than the one this account trusts. If you replaced the certificate yourself, remove the account and add it again.';
   }
+
+  @override
+  String get attachFromServer => 'File from Nextcloud';
+
+  @override
+  String get remoteFilesTitle => 'Files';
+
+  @override
+  String get remoteFilesEmpty => 'This folder is empty.';
+
+  @override
+  String remoteFilesTruncated(int count) {
+    return 'Showing the first $count items of this folder.';
+  }
+
+  @override
+  String get remoteFilesLoadFailed => 'This folder could not be loaded.';
+
+  @override
+  String get remoteFilesSignInAgain => 'This account must be signed in again.';
+
+  @override
+  String get remoteFilesShareTitle => 'Share this file into the conversation?';
+
+  @override
+  String remoteFilesShareBody(String name) {
+    return '$name stays on your server. Everyone in this conversation gets access to it until you remove the share in Files.';
+  }
+
+  @override
+  String get remoteFilesShareAction => 'Share';
+
+  @override
+  String get remoteFilesShared => 'The file was shared into the conversation.';
+
+  @override
+  String get remoteFilesShareFailed => 'The file could not be shared.';
+
+  @override
+  String get remoteFilesShareForbidden =>
+      'This account may not share that file here.';
 }

@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -28,73 +28,52 @@ final class AttachmentMenuAction {
   final VoidCallback? onSelected;
 }
 
-final class ComposerActionMenuButton extends StatefulWidget {
+/// The composer's attachment menu.
+///
+/// Takes a listenable rather than a list because the open sheet has to follow
+/// what the conversation learns while it is open — a capability that resolves
+/// a moment later adds an action. The listenable belongs to the conversation,
+/// not to this button: the button's element is rebuilt from scratch when the
+/// composer swaps its loading state for the real one, and a notifier owned
+/// here would be disposed under the still-open sheet, freezing the menu on
+/// whatever it showed at that moment.
+final class ComposerActionMenuButton extends StatelessWidget {
   const ComposerActionMenuButton({super.key, required this.actions});
 
-  final List<AttachmentMenuAction> actions;
-
-  @override
-  State<ComposerActionMenuButton> createState() =>
-      _ComposerActionMenuButtonState();
-}
-
-final class _ComposerActionMenuButtonState
-    extends State<ComposerActionMenuButton> {
-  late final ValueNotifier<List<AttachmentMenuAction>> _actions;
-  var _menuOpen = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _actions = ValueNotifier(widget.actions);
-  }
-
-  @override
-  void didUpdateWidget(ComposerActionMenuButton oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_menuOpen) {
-      return;
-    }
-    final actions = widget.actions;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _menuOpen && identical(widget.actions, actions)) {
-        _actions.value = actions;
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _actions.dispose();
-    super.dispose();
-  }
+  final ValueListenable<List<AttachmentMenuAction>> actions;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = widget.actions.any((action) => action.onSelected != null);
-    return IconButton(
-      key: const Key('pick-image-attachment'),
-      tooltip: AppLocalizations.of(context).addAttachment,
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      onPressed: enabled ? () => unawaited(_open(context)) : null,
-      icon: const Icon(Icons.attach_file_rounded),
+    return ValueListenableBuilder<List<AttachmentMenuAction>>(
+      valueListenable: actions,
+      builder: (context, current, child) {
+        final enabled = current.any((action) => action.onSelected != null);
+        return IconButton(
+          key: const Key('pick-image-attachment'),
+          tooltip: AppLocalizations.of(context).addAttachment,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          onPressed: enabled ? () => unawaited(_open(context)) : null,
+          icon: const Icon(Icons.attach_file_rounded),
+        );
+      },
     );
   }
 
-  Future<void> _open(BuildContext context) async {
-    _actions.value = widget.actions;
-    _menuOpen = true;
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        builder: (sheetContext) => SafeArea(
-          child: ValueListenableBuilder<List<AttachmentMenuAction>>(
-            valueListenable: _actions,
-            builder: (context, actions, child) => Column(
+  Future<void> _open(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ValueListenableBuilder<List<AttachmentMenuAction>>(
+          valueListenable: actions,
+          // Scrollable because the menu grows with what the server supports
+          // and a bottom sheet is capped at part of the screen: without it the
+          // last actions fall off a short screen instead of being reachable.
+          builder: (context, current, child) => SingleChildScrollView(
+            child: Column(
               key: const Key('attachment-source-sheet'),
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final action in actions)
+                for (final action in current)
                   ListTile(
                     key: action.key,
                     leading: action.icon,
@@ -111,10 +90,8 @@ final class _ComposerActionMenuButtonState
             ),
           ),
         ),
-      );
-    } finally {
-      _menuOpen = false;
-    }
+      ),
+    );
   }
 }
 

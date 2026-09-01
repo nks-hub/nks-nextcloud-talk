@@ -42,6 +42,7 @@ import 'chat_typing_indicator.dart';
 import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
 import 'media/proportional_image.dart';
+import 'media/remote_file_picker_screen.dart';
 import 'media/image_attachment_upload_panel.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
@@ -320,6 +321,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _draftTimer?.cancel();
     _highlightTimer?.cancel();
     _incomingAnnouncements.dispose();
+    _attachmentMenuActions_.dispose();
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -330,6 +332,22 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ..removeListener(_handleComposerFocusChanged)
       ..dispose();
     super.dispose();
+  }
+
+  /// The attachment menu the composer button shows, owned here so an open
+  /// sheet keeps following the conversation even when the composer subtree is
+  /// rebuilt from scratch underneath it.
+  final ValueNotifier<List<AttachmentMenuAction>> _attachmentMenuActions_ =
+      ValueNotifier<List<AttachmentMenuAction>>(const <AttachmentMenuAction>[]);
+
+  void _publishAttachmentMenuActions(List<AttachmentMenuAction> actions) {
+    // Published after the frame: assigning during build would rebuild the
+    // open sheet in the middle of this one.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _attachmentMenuActions_.value = actions;
+      }
+    });
   }
 
   @override
@@ -583,8 +601,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       actionsProfile: actionsProfile,
       pollAvailable: pollAvailable,
     );
+    _publishAttachmentMenuActions(attachmentMenuActions);
     final leadingComposerAction = ComposerActionMenuButton(
-      actions: attachmentMenuActions,
+      actions: _attachmentMenuActions_,
     );
     final idleComposerActions = <Widget>[
       IconButton(

@@ -26,6 +26,14 @@ proto jen to, co je doložitelné z App Store Connect.
 - Certifikát, který se u už důvěřovaného serveru změní, se nepřijme a znovu se
   na něj neptá. Obnova certifikátu vypadá zvenku stejně jako útok, takže se
   řeší vědomě: odebráním a novým přidáním účtu.
+- V menu příloh přibyl „Soubor z Nextcloudu". Prochází se vlastní úložiště
+  účtu po jedné složce a vybraný soubor se sdílí do konverzace — nenahrává se
+  kopie a nevzniká veřejný odkaz. Před odesláním je potvrzení, které říká, že
+  soubor zůstává na serveru a účastníci k němu mají přístup, dokud se sdílení
+  nezruší v Souborech.
+- Menu příloh se přestalo zasekávat. Když se konverzace dozvěděla o anketě
+  nebo poloze až po otevření menu, položky se doplnily jen někdy; teď se
+  doplní vždy a delší menu jde na krátké obrazovce odrolovat.
 
 ## 0.1.0 (39) — 1. 9. 2026
 

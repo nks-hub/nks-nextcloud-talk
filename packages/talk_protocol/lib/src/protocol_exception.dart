@@ -81,6 +81,8 @@ enum TalkProtocolErrorCode {
   invalidPushRegistration,
   invalidPushState,
   invalidPushCryptoResult,
+  invalidRemoteFilesRequest,
+  invalidRemoteFilesResponse,
   invalidSearchIdentifier,
   invalidSearchRequest,
   invalidSearchResponse,

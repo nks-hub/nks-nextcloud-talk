@@ -4651,6 +4651,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{host} now presents a different certificate than the one this account trusts. If you replaced the certificate yourself, remove the account and add it again.'**
   String certificateChangedBody(String host);
+
+  /// No description provided for @attachFromServer.
+  ///
+  /// In en, this message translates to:
+  /// **'File from Nextcloud'**
+  String get attachFromServer;
+
+  /// No description provided for @remoteFilesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get remoteFilesTitle;
+
+  /// No description provided for @remoteFilesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty.'**
+  String get remoteFilesEmpty;
+
+  /// No description provided for @remoteFilesTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the first {count} items of this folder.'**
+  String remoteFilesTruncated(int count);
+
+  /// No description provided for @remoteFilesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder could not be loaded.'**
+  String get remoteFilesLoadFailed;
+
+  /// No description provided for @remoteFilesSignInAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'This account must be signed in again.'**
+  String get remoteFilesSignInAgain;
+
+  /// No description provided for @remoteFilesShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this file into the conversation?'**
+  String get remoteFilesShareTitle;
+
+  /// No description provided for @remoteFilesShareBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} stays on your server. Everyone in this conversation gets access to it until you remove the share in Files.'**
+  String remoteFilesShareBody(String name);
+
+  /// No description provided for @remoteFilesShareAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get remoteFilesShareAction;
+
+  /// No description provided for @remoteFilesShared.
+  ///
+  /// In en, this message translates to:
+  /// **'The file was shared into the conversation.'**
+  String get remoteFilesShared;
+
+  /// No description provided for @remoteFilesShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The file could not be shared.'**
+  String get remoteFilesShareFailed;
+
+  /// No description provided for @remoteFilesShareForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'This account may not share that file here.'**
+  String get remoteFilesShareForbidden;
 }
 
 class _AppLocalizationsDelegate

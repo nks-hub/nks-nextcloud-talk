@@ -1261,5 +1261,31 @@
         "type": "String"
       }
     }
-  }
+  },
+  "attachFromServer": "File from Nextcloud",
+  "remoteFilesTitle": "Files",
+  "remoteFilesEmpty": "This folder is empty.",
+  "remoteFilesTruncated": "Showing the first {count} items of this folder.",
+  "@remoteFilesTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteFilesLoadFailed": "This folder could not be loaded.",
+  "remoteFilesSignInAgain": "This account must be signed in again.",
+  "remoteFilesShareTitle": "Share this file into the conversation?",
+  "remoteFilesShareBody": "{name} stays on your server. Everyone in this conversation gets access to it until you remove the share in Files.",
+  "@remoteFilesShareBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteFilesShareAction": "Share",
+  "remoteFilesShared": "The file was shared into the conversation.",
+  "remoteFilesShareFailed": "The file could not be shared.",
+  "remoteFilesShareForbidden": "This account may not share that file here."
 }

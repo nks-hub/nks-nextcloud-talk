@@ -921,5 +921,31 @@
         "type": "String"
       }
     }
-  }
+  },
+  "attachFromServer": "Soubor z Nextcloudu",
+  "remoteFilesTitle": "Soubory",
+  "remoteFilesEmpty": "Tato složka je prázdná.",
+  "remoteFilesTruncated": "Zobrazeno prvních {count} položek této složky.",
+  "@remoteFilesTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteFilesLoadFailed": "Složku se nepodařilo načíst.",
+  "remoteFilesSignInAgain": "Tento účet je potřeba znovu přihlásit.",
+  "remoteFilesShareTitle": "Sdílet soubor do konverzace?",
+  "remoteFilesShareBody": "Soubor {name} zůstane na vašem serveru. Všichni v této konverzaci k němu získají přístup, dokud sdílení nezrušíte v Souborech.",
+  "@remoteFilesShareBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteFilesShareAction": "Sdílet",
+  "remoteFilesShared": "Soubor byl sdílen do konverzace.",
+  "remoteFilesShareFailed": "Soubor se nepodařilo sdílet.",
+  "remoteFilesShareForbidden": "Tento účet tady ten soubor sdílet nemůže."
 }

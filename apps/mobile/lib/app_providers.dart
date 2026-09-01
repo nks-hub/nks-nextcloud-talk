@@ -35,6 +35,7 @@ import 'features/chat/message_translation_service.dart';
 import 'features/chat/references/reference_resolver.dart';
 import 'features/chat/location_share_service.dart';
 import 'features/chat/poll_service.dart';
+import 'features/chat/remote_file_share_service.dart';
 import 'features/chat/chat_service.dart';
 import 'features/chat/outgoing_message_status.dart';
 import 'features/chat/composer/giphy.dart';
@@ -193,6 +194,14 @@ final profileServiceProvider = Provider<ProfileService>((ref) {
     ref.watch(accountRepositoryProvider),
     ref.watch(credentialVaultProvider),
     ref.watch(nextcloudApiProvider),
+  );
+});
+
+final remoteFileShareServiceProvider = Provider<RemoteFileShareService>((ref) {
+  return HttpRemoteFileShareService(
+    accounts: ref.watch(accountRepositoryProvider),
+    credentials: ref.watch(credentialVaultProvider),
+    api: ref.watch(nextcloudApiProvider),
   );
 });
 

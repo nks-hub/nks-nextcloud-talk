@@ -2554,4 +2554,45 @@ class AppLocalizationsCs extends AppLocalizations {
   String certificateChangedBody(String host) {
     return 'Server $host nyní předkládá jiný certifikát, než kterému tento účet důvěřuje. Pokud jste certifikát vyměnili vy, účet odeberte a přidejte znovu.';
   }
+
+  @override
+  String get attachFromServer => 'Soubor z Nextcloudu';
+
+  @override
+  String get remoteFilesTitle => 'Soubory';
+
+  @override
+  String get remoteFilesEmpty => 'Tato složka je prázdná.';
+
+  @override
+  String remoteFilesTruncated(int count) {
+    return 'Zobrazeno prvních $count položek této složky.';
+  }
+
+  @override
+  String get remoteFilesLoadFailed => 'Složku se nepodařilo načíst.';
+
+  @override
+  String get remoteFilesSignInAgain => 'Tento účet je potřeba znovu přihlásit.';
+
+  @override
+  String get remoteFilesShareTitle => 'Sdílet soubor do konverzace?';
+
+  @override
+  String remoteFilesShareBody(String name) {
+    return 'Soubor $name zůstane na vašem serveru. Všichni v této konverzaci k němu získají přístup, dokud sdílení nezrušíte v Souborech.';
+  }
+
+  @override
+  String get remoteFilesShareAction => 'Sdílet';
+
+  @override
+  String get remoteFilesShared => 'Soubor byl sdílen do konverzace.';
+
+  @override
+  String get remoteFilesShareFailed => 'Soubor se nepodařilo sdílet.';
+
+  @override
+  String get remoteFilesShareForbidden =>
+      'Tento účet tady ten soubor sdílet nemůže.';
 }

@@ -51,6 +51,12 @@ extension _ChatRoomPaneAttachmentMenu on _ChatRoomPaneState {
           ? null
           : () => unawaited(_mediaComposerController.pickContact()),
     ),
+    AttachmentMenuAction(
+      key: const Key('attach-source-remote-file'),
+      icon: const Icon(Icons.cloud_outlined),
+      label: strings.attachFromServer,
+      onSelected: _sending ? null : () => unawaited(_pickRemoteFile()),
+    ),
     if (actionsProfile?.geoLocation ?? false)
       AttachmentMenuAction(
         key: const Key('share-current-location'),
