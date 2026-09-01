@@ -16,6 +16,25 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+Od buildu 41 se zatím nezměnilo nic, co by tester poznal. Co je hotové, je
+uvnitř:
+
+- Rozhodnutý offline scope prvního release (Q-004): cache historie, durable
+  textový outbox a durable přílohy s obnovou po restartu; ostatní akce zůstávají
+  online-only a fail-closed, protože pro ně neexistuje replay kontrakt.
+- Kontrastní matice se měří testem místo jednorázového reportu: 28 dvojic
+  popředí/pozadí ve světlém i tmavém tématu, s výchozím i serverovým accentem.
+  Nejnižší naměřená hodnota tohoto stromu je 6,4606:1, obrysy drží nad 3:1.
+- Test manifestu pouští Gradle wrapper přes `bash` místo `sh`; wrapper má bash
+  shebang a pod POSIX shellem se rozpadl. Dva testy nativních Windows notifikací
+  se mimo Windows přeskakují, protože tam ten kanál neexistuje.
+
+Nalezené a zatím NEOPRAVENÉ: při 200 % textu přeteče pruh chyby synchronizace
+v češtině o 59 px a potvrzovací dialog v angličtině. Popsané v
+`docs/TODO-quality-operations.md` i s postupem, jak to změřit znovu.
+
 ## 0.1.0 (41) — 1. 9. 2026
 
 Vydáno ze zdroje `5fd2a0a`.
