@@ -1009,6 +1009,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBotDisable => 'Vypnout bota';
 
   @override
+  String get roomDetailsBotUpdating => 'Aktualizuji bota…';
+
+  @override
   String get roomDetailsBotsLoadFailed => 'Boty se nepodařilo načíst.';
 
   @override
@@ -1768,6 +1771,27 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get attachmentSaveCancelled => 'Ukládání bylo zrušeno.';
+
+  @override
+  String get attachmentDownloadFailed => 'Přílohu se nepodařilo stáhnout.';
+
+  @override
+  String get attachmentReauthenticationRequired =>
+      'Pro stažení přílohy se přihlaste znovu.';
+
+  @override
+  String get attachmentTooLarge => 'Tato příloha je pro export příliš velká.';
+
+  @override
+  String get attachmentInvalid => 'Tato příloha už není platná.';
+
+  @override
+  String get attachmentPermissionDenied =>
+      'Vybrané umístění nedovoluje tento soubor uložit.';
+
+  @override
+  String get attachmentStorageFailed =>
+      'Přílohu se nepodařilo zapsat do vybraného umístění.';
 
   @override
   String get jumpToOriginalMessage => 'Zobrazit původní zprávu';

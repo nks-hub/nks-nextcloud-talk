@@ -1892,6 +1892,12 @@ abstract class AppLocalizations {
   /// **'Disable bot'**
   String get roomDetailsBotDisable;
 
+  /// No description provided for @roomDetailsBotUpdating.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating bot…'**
+  String get roomDetailsBotUpdating;
+
   /// No description provided for @roomDetailsBotsLoadFailed.
   ///
   /// In en, this message translates to:
@@ -3265,6 +3271,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saving cancelled.'**
   String get attachmentSaveCancelled;
+
+  /// No description provided for @attachmentDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be downloaded.'**
+  String get attachmentDownloadFailed;
+
+  /// No description provided for @attachmentReauthenticationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in again to download this attachment.'**
+  String get attachmentReauthenticationRequired;
+
+  /// No description provided for @attachmentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment is too large to export.'**
+  String get attachmentTooLarge;
+
+  /// No description provided for @attachmentInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This attachment is no longer valid.'**
+  String get attachmentInvalid;
+
+  /// No description provided for @attachmentPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'The selected location does not allow this file to be saved.'**
+  String get attachmentPermissionDenied;
+
+  /// No description provided for @attachmentStorageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be written to the selected location.'**
+  String get attachmentStorageFailed;
 
   /// No description provided for @jumpToOriginalMessage.
   ///

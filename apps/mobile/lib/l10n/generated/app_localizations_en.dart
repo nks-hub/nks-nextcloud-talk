@@ -1011,6 +1011,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsBotDisable => 'Disable bot';
 
   @override
+  String get roomDetailsBotUpdating => 'Updating bot…';
+
+  @override
   String get roomDetailsBotsLoadFailed => 'Bots could not be loaded.';
 
   @override
@@ -1770,6 +1773,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachmentSaveCancelled => 'Saving cancelled.';
+
+  @override
+  String get attachmentDownloadFailed =>
+      'The attachment could not be downloaded.';
+
+  @override
+  String get attachmentReauthenticationRequired =>
+      'Sign in again to download this attachment.';
+
+  @override
+  String get attachmentTooLarge => 'This attachment is too large to export.';
+
+  @override
+  String get attachmentInvalid => 'This attachment is no longer valid.';
+
+  @override
+  String get attachmentPermissionDenied =>
+      'The selected location does not allow this file to be saved.';
+
+  @override
+  String get attachmentStorageFailed =>
+      'The attachment could not be written to the selected location.';
 
   @override
   String get jumpToOriginalMessage => 'Show the original message';
