@@ -43,6 +43,11 @@ uvnitř:
   bezejmenné nebylo, takže tady se nic neopravovalo — hlídá se, aby to tak
   zůstalo.
 
+- Připravená měřicí vrstva pro výkonové metriky. Zatím nic neodesílá; smysl
+  má její tvar: měřit jde jen šest pojmenovaných operací, měření nese pouze
+  jméno operace, výsledek a koš trvání, a rozpočet je jedna událost na operaci
+  za minutu. Přesné trvání ani text chyby se nereportují.
+
 Zbývá prověřit: při zkoušce na ručně sestaveném potvrzovacím dialogu přeteklo
 i to v angličtině, ale měřeno na kopii v testu, ne na skutečné obrazovce —
 popsané v `docs/TODO-quality-operations.md`.
