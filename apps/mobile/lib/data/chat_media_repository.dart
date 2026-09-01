@@ -175,7 +175,7 @@ final class ChatMediaRepository {
   Future<ChatMediaImage?> loadPreview({
     required StoredAccount account,
     required Uri uri,
-  }) {
+  }) async {
     final server = ServerBase.parse(account.serverUrl);
     if (!_isAllowedPreviewUri(server, uri)) {
       throw const ChatMediaRepositoryException(
@@ -193,7 +193,7 @@ final class ChatMediaRepository {
   Future<ChatMediaImage?> loadReferenceThumbnail({
     required StoredAccount account,
     required Uri uri,
-  }) {
+  }) async {
     final server = ServerBase.parse(account.serverUrl);
     if (!isSafeReferenceThumbnail(server: server, thumbnail: uri)) {
       throw const ChatMediaRepositoryException(
