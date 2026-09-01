@@ -392,7 +392,11 @@ Android/iOS lifecycle spike.
 
 ### D-012: Share Extension a App Intents
 
-Stav: Odloženo.
+Stav: Částečně přijato.
 
-Datový a deep-link model s nimi počítá, ale první implementace je nesmí
-předstírat.
+Android přijímá `ACTION_SEND` přes persistentní nativní inbox. URI grant je
+jen krátkodobá trust boundary: před předáním do Flutteru vznikne bounded
+app-owned kopie a opakované cold/warm doručení se deduplikuje. Flutter vybírá
+účet a místnost a používá existující chat nebo attachment durable tok; nový
+share transport nevzniká. iOS Share Extension a App Intents zůstávají
+odložené a nesmějí se předstírat jako hotové.

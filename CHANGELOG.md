@@ -21,6 +21,10 @@ proto jen to, co je doložitelné z App Store Connect.
 - Akční řádek pod psacím polem má vlevo samotnou sponku. Giphy, emoji,
   mikrofon a Odeslat jsou znovu seskupené vpravo v původním pořadí; rozložení
   zůstává stejné i během načítání a po chybě hlasové zprávy.
+- Na Androidu lze do NKS Talk sdílet text nebo jeden soubor z jiné aplikace.
+  Po cold i warm startu se vybere přesný účet a konverzace; soubor se nejdřív
+  bezpečně zkopíruje do úložiště aplikace a opakované systémové doručení jej
+  neodešle podruhé.
 
 ## 0.1.0 (33) — 1. 9. 2026
 
