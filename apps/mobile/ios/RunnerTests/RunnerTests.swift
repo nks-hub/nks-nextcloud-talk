@@ -1,6 +1,7 @@
 import Contacts
 import ContactsUI
 import Flutter
+import Speech
 import UIKit
 import XCTest
 @testable import Runner
@@ -605,6 +606,241 @@ class RunnerTests: XCTestCase {
 
     XCTAssertEqual(try XCTUnwrap(first.take(identifier: identifier)).accountId, "account-a")
     XCTAssertEqual(try XCTUnwrap(second.take(identifier: identifier)).accountId, "account-b")
+  }
+
+  func testVoiceTranscriberRejectsRelativeAndEscapedFiles() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let outside = FileManager.default.temporaryDirectory
+      .appendingPathComponent("\(UUID().uuidString).m4a")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data([0x01]).write(to: outside)
+    defer {
+      try? FileManager.default.removeItem(at: root)
+      try? FileManager.default.removeItem(at: outside)
+    }
+    let escaped = root.appendingPathComponent("escaped.m4a")
+    try FileManager.default.createSymbolicLink(at: escaped, withDestinationURL: outside)
+    let transcriber = VoiceMessageTranscriber(
+      allowedRootURL: root,
+      authorizationStatus: { .authorized },
+      requestAuthorization: { _ in XCTFail("Permission was already decided") },
+      startRecognition: { _, _, _ in
+        XCTFail("Invalid files must not reach Speech")
+        return {}
+      }
+    )
+
+    for path in ["relative.m4a", escaped.path] {
+      var received: Any?
+      transcriber.handle(
+        FlutterMethodCall(
+          methodName: "transcribe",
+          arguments: ["filePath": path]
+        ),
+        result: { received = $0 }
+      )
+      XCTAssertEqual((received as? FlutterError)?.code, "invalidFile")
+    }
+  }
+
+  func testVoiceTranscriberPassesTheLocalURLAndLocaleToSpeech() throws {
+    let fixture = try voiceTranscriptionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    var receivedURL: URL?
+    var receivedLocale: Locale?
+    var callback: VoiceMessageTranscriber.RecognitionCallback?
+    let transcriber = VoiceMessageTranscriber(
+      allowedRootURL: fixture.root,
+      authorizationStatus: { .authorized },
+      requestAuthorization: { _ in XCTFail("Permission was already decided") },
+      startRecognition: { url, locale, result in
+        receivedURL = url
+        receivedLocale = locale
+        callback = result
+        return {}
+      }
+    )
+    var results: [Any?] = []
+
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: [
+          "filePath": fixture.file.path,
+          "localeIdentifier": "cs-CZ",
+          "timeoutMillis": 45000,
+        ]
+      ),
+      result: { results.append($0) }
+    )
+
+    XCTAssertEqual(receivedURL, fixture.file.resolvingSymlinksInPath())
+    XCTAssertEqual(receivedLocale?.identifier, "cs-CZ")
+    XCTAssertTrue(results.isEmpty)
+    try XCTUnwrap(callback)("spoken words", true, nil)
+    XCTAssertEqual(results.count, 1)
+    XCTAssertEqual(results.first as? String, "spoken words")
+  }
+
+  func testVoiceTranscriberMapsDeniedRestrictedAndUnavailable() throws {
+    let fixture = try voiceTranscriptionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+
+    for (status, code) in [
+      (SFSpeechRecognizerAuthorizationStatus.denied, "denied"),
+      (SFSpeechRecognizerAuthorizationStatus.restricted, "restricted"),
+    ] {
+      let transcriber = VoiceMessageTranscriber(
+        allowedRootURL: fixture.root,
+        authorizationStatus: { status },
+        requestAuthorization: { _ in XCTFail("Permission was already decided") }
+      )
+      var received: Any?
+      transcriber.handle(
+        FlutterMethodCall(
+          methodName: "transcribe",
+          arguments: ["filePath": fixture.file.path]
+        ),
+        result: { received = $0 }
+      )
+      XCTAssertEqual((received as? FlutterError)?.code, code)
+    }
+
+    let unavailable = VoiceMessageTranscriber(
+      allowedRootURL: fixture.root,
+      authorizationStatus: { .authorized },
+      requestAuthorization: { _ in XCTFail("Permission was already decided") },
+      startRecognition: { _, _, _ in
+        throw VoiceMessageTranscriber.StartError.unavailable
+      }
+    )
+    var unavailableResult: Any?
+    unavailable.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { unavailableResult = $0 }
+    )
+    XCTAssertEqual((unavailableResult as? FlutterError)?.code, "unavailable")
+  }
+
+  func testVoiceTranscriberSupersedesAndIgnoresTheOldCallback() throws {
+    let fixture = try voiceTranscriptionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    var callbacks: [VoiceMessageTranscriber.RecognitionCallback] = []
+    var cancellations = 0
+    let transcriber = VoiceMessageTranscriber(
+      allowedRootURL: fixture.root,
+      authorizationStatus: { .authorized },
+      requestAuthorization: { _ in XCTFail("Permission was already decided") },
+      startRecognition: { _, _, callback in
+        callbacks.append(callback)
+        return { cancellations += 1 }
+      }
+    )
+    var first: [Any?] = []
+    var second: [Any?] = []
+
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { first.append($0) }
+    )
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { second.append($0) }
+    )
+
+    XCTAssertEqual((first.first as? FlutterError)?.code, "cancelled")
+    XCTAssertEqual(cancellations, 1)
+    callbacks[0]("stale", true, nil)
+    XCTAssertTrue(second.isEmpty)
+    callbacks[1]("current", true, nil)
+    XCTAssertEqual(second.count, 1)
+    XCTAssertEqual(second.first as? String, "current")
+  }
+
+  func testVoiceTranscriberCancelDisposeAndTimeoutCompleteOnce() throws {
+    let fixture = try voiceTranscriptionFixture()
+    defer { try? FileManager.default.removeItem(at: fixture.root) }
+    var callbacks: [VoiceMessageTranscriber.RecognitionCallback] = []
+    var timeouts: [() -> Void] = []
+    var cancellations = 0
+    let transcriber = VoiceMessageTranscriber(
+      allowedRootURL: fixture.root,
+      authorizationStatus: { .authorized },
+      requestAuthorization: { _ in XCTFail("Permission was already decided") },
+      startRecognition: { _, _, callback in
+        callbacks.append(callback)
+        return { cancellations += 1 }
+      },
+      schedule: { _, action in
+        timeouts.append(action)
+        return {}
+      }
+    )
+
+    var cancelled: [Any?] = []
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { cancelled.append($0) }
+    )
+    transcriber.handle(
+      FlutterMethodCall(methodName: "cancel", arguments: nil),
+      result: { _ in }
+    )
+    callbacks[0]("late", true, nil)
+    XCTAssertEqual(cancelled.count, 1)
+    XCTAssertEqual((cancelled.first as? FlutterError)?.code, "cancelled")
+
+    var timedOut: [Any?] = []
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { timedOut.append($0) }
+    )
+    timeouts.last?()
+    callbacks[1]("late", true, nil)
+    XCTAssertEqual(timedOut.count, 1)
+    XCTAssertEqual((timedOut.first as? FlutterError)?.code, "failed")
+
+    var disposed: [Any?] = []
+    transcriber.handle(
+      FlutterMethodCall(
+        methodName: "transcribe",
+        arguments: ["filePath": fixture.file.path]
+      ),
+      result: { disposed.append($0) }
+    )
+    transcriber.handle(
+      FlutterMethodCall(methodName: "dispose", arguments: nil),
+      result: { _ in }
+    )
+    callbacks[2]("late", true, nil)
+    XCTAssertEqual(disposed.count, 1)
+    XCTAssertEqual((disposed.first as? FlutterError)?.code, "cancelled")
+    XCTAssertEqual(cancellations, 3)
+  }
+
+  private func voiceTranscriptionFixture() throws -> (root: URL, file: URL) {
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let file = root.appendingPathComponent("message.m4a")
+    try Data([0x00, 0x01]).write(to: file)
+    return (root, file)
   }
 
 }

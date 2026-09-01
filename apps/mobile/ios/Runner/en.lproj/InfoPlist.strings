@@ -1,2 +1,3 @@
 "NSLocationWhenInUseUsageDescription" = "NKS Talk uses your current location only when you choose to share it in a conversation.";
 "NSFaceIDUsageDescription" = "NKS Talk uses Face ID to unlock your conversations when app lock is enabled.";
+"NSSpeechRecognitionUsageDescription" = "NKS Talk uses on-device speech recognition to transcribe a voice message you choose.";

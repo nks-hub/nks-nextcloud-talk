@@ -14,6 +14,7 @@
 		A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A17C3E9B2F00000000000007 /* InfoPlist.strings */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		C04A91B12F00000000000001 /* ContactPickerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04A91B12F00000000000002 /* ContactPickerChannel.swift */; };
+		B34A0D100000000000000001 /* VoiceMessageTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34A0D100000000000000002 /* VoiceMessageTranscriber.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		A4839DFDB635FB92EE66B86F /* ApplePushDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */; };
 		30EDC32B327F32A172BAFC65 /* PushDeviceKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */; };
@@ -87,6 +88,7 @@
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C04A91B12F00000000000002 /* ContactPickerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPickerChannel.swift; sourceTree = "<group>"; };
+		B34A0D100000000000000002 /* VoiceMessageTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceMessageTranscriber.swift; sourceTree = "<group>"; };
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePushDelivery.swift; sourceTree = "<group>"; };
 		9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushDeviceKeyStore.swift; sourceTree = "<group>"; };
@@ -207,6 +209,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				C04A91B12F00000000000002 /* ContactPickerChannel.swift */,
+				B34A0D100000000000000002 /* VoiceMessageTranscriber.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				F0E3DAC5E67EB4286EB5984E /* ApplePushDelivery.swift */,
 				9014A68210F86C1BAB01CFD7 /* PushDeviceKeyStore.swift */,
@@ -509,6 +512,7 @@
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				C04A91B12F00000000000001 /* ContactPickerChannel.swift in Sources */,
+				B34A0D100000000000000001 /* VoiceMessageTranscriber.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				A4839DFDB635FB92EE66B86F /* ApplePushDelivery.swift in Sources */,
