@@ -246,6 +246,26 @@ sdks:
             {"flutter_packages": 2, "android_components": 1},
         )
 
+    def test_android_manifest_covers_geolocator_runtime(self) -> None:
+        manifest = (
+            Path(__file__).resolve().parents[1]
+            / "android/app/release-licenses/components.tsv"
+        )
+        rows = {
+            line.split("\t")[0]: line.split("\t")[1:]
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        }
+
+        self.assertEqual(
+            rows.get("com.google.android.gms:play-services-location:21.2.0"),
+            [
+                "LicenseRef-Android-SDK",
+                "android-sdk-license.txt",
+                "30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a",
+            ],
+        )
+
     def test_valid_ios_app_passes(self) -> None:
         self.assertEqual(
             validate_ios_app(self._write_ios_app(), self.lockfile, self.plugins),

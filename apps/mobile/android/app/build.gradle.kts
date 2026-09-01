@@ -3,6 +3,7 @@ import java.security.MessageDigest
 import java.util.Properties
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.attributes.Attribute
+import org.gradle.api.tasks.PathSensitivity
 
 plugins {
     id("com.android.application")
@@ -175,11 +176,30 @@ val mobilePubspecLock = layout.projectDirectory.file("../../pubspec.lock")
 val flutterPluginDependencies =
     layout.projectDirectory.file("../../.flutter-plugins-dependencies")
 val releaseApk = layout.buildDirectory.file("outputs/apk/release/app-release.apk")
+val androidClassesArtifactType = Attribute.of("artifactType", String::class.java)
+val releaseRuntimeArtifacts = providers.provider {
+    configurations.getByName("releaseRuntimeClasspath").incoming.artifactView {
+        attributes.attribute(androidClassesArtifactType, "android-classes-jar")
+    }.artifacts
+}
 
 val generateReleaseLicenseAssets = tasks.register("generateReleaseLicenseAssets") {
     inputs.file(releaseLicenseManifest)
     inputs.file(releasePubLicenseManifest)
     inputs.dir(releaseLicenseNotices)
+    inputs.files(releaseRuntimeArtifacts.map { it.artifactFiles })
+        .withPropertyName("releaseRuntimeArtifacts")
+        .withPathSensitivity(PathSensitivity.NONE)
+    inputs.property(
+        "releaseRuntimeCoordinates",
+        releaseRuntimeArtifacts.map { collection ->
+            collection.artifacts.mapNotNull { artifact ->
+                val id = artifact.id.componentIdentifier as? ModuleComponentIdentifier
+                    ?: return@mapNotNull null
+                "${id.group}:${id.module}:${id.version}"
+            }.sorted()
+        },
+    )
     outputs.dir(generatedReleaseLicenseRoot)
 
     doLast {
@@ -237,12 +257,7 @@ val generateReleaseLicenseAssets = tasks.register("generateReleaseLicenseAssets"
             "Pub release-license manifest contains an invalid archive SHA-256"
         }
 
-        val artifactType = Attribute.of("artifactType", String::class.java)
-        val artifacts = configurations.getByName("releaseRuntimeClasspath")
-            .incoming.artifactView {
-                attributes.attribute(artifactType, "android-classes-jar")
-            }
-            .artifacts.artifacts
+        val artifacts = releaseRuntimeArtifacts.get().artifacts
             .mapNotNull { artifact ->
                 val id = artifact.id.componentIdentifier as? ModuleComponentIdentifier
                     ?: return@mapNotNull null

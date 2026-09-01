@@ -63,6 +63,7 @@ com.google.android.datatransport:transport-runtime:3.1.9	Apache-2.0	apache-2.0.t
 com.google.android.gms:play-services-base:18.9.0	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
 com.google.android.gms:play-services-basement:18.9.0	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
 com.google.android.gms:play-services-cloud-messaging:17.4.0	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
+com.google.android.gms:play-services-location:21.2.0	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
 com.google.android.gms:play-services-stats:17.0.2	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
 com.google.android.gms:play-services-tasks:18.4.0	LicenseRef-Android-SDK	android-sdk-license.txt	30d5e5bce1cb2e1ab783365b2f49cfbb128dddd6be5d81e9adcaa6bbcd97c71a
 com.google.code.findbugs:jsr305:3.0.2	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
