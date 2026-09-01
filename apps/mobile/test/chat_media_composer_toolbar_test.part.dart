@@ -60,6 +60,52 @@ void _registerChatMediaComposerToolbarTests(
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('wide idle toolbar starts its ordered actions at the left edge', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+    final voiceBackends = _VoiceBackendFactory();
+    addTearDown(voiceBackends.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore(),
+        bridge: bridge.bridge,
+        threadId: null,
+        voiceBackends: voiceBackends,
+        showAttachmentButton: false,
+        idleActions: _aggregatedIdleActions(),
+        trailingActions: _aggregatedTrailingActions(),
+      ),
+    );
+
+    const actionKeys = <String>[
+      'pick-image-attachment',
+      'open-giphy-picker',
+      'open-emoji-picker',
+      'voice-record',
+      'send-message',
+    ];
+    final toolbarRect = tester.getRect(
+      find.byKey(const Key('chat-media-composer-actions')),
+    );
+    final actionRects = actionKeys
+        .map((key) => tester.getRect(find.byKey(Key(key))))
+        .toList(growable: false);
+
+    expect(actionRects.first.left, toolbarRect.left);
+    for (var index = 1; index < actionRects.length; index++) {
+      expect(actionRects[index].left, actionRects[index - 1].right);
+      expect(actionRects[index].top, actionRects.first.top);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('recording error fits beside a full narrow toolbar', (
     tester,
   ) async {

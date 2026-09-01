@@ -761,7 +761,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
                     : () => unawaited(_openAppSettings()),
               ),
               Wrap(
-                alignment: WrapAlignment.end,
+                alignment: WrapAlignment.start,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   ?attachmentAction,
@@ -774,7 +774,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         else
           Wrap(
             key: const Key('chat-media-composer-actions'),
-            alignment: WrapAlignment.end,
+            alignment: WrapAlignment.start,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
               ?attachmentAction,
@@ -869,7 +869,7 @@ final class ChatMediaComposerStatus extends StatelessWidget {
         ),
         Wrap(
           key: const Key('chat-media-composer-actions'),
-          alignment: WrapAlignment.end,
+          alignment: WrapAlignment.start,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             ...idleActions,
