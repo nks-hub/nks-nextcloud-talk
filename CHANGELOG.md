@@ -26,8 +26,10 @@ s version code 41. AAB má 84 291 246 B a SHA-256
 v šesti jazycích se po nahrání shodují se zdrojem.
 
 TestFlight: IPA má 30 237 177 B a SHA-256
-`629e358d6ac8a839f0a591373294cf59735c9381dbe62ab00679680338a50bef`, delivery
-UUID `4c804b9b-dd16-4822-9d5e-469fdc920a3f`.
+`629e358d6ac8a839f0a591373294cf59735c9381dbe62ab00679680338a50bef`. Delivery
+UUID i build record jsou `4c804b9b-dd16-4822-9d5e-469fdc920a3f`, stav `VALID`,
+minimum iOS 15.0, encryption `false`, obě skupiny `IN_BETA_TESTING` a beta
+review `APPROVED`.
 
 Před vydáním prošla celá sada: mobil 1679 testů se 4 přeskočeními, protokol
 1026 testů, oboje bez červené. Na Androidu 14 (emulátor, release APK build 41)
