@@ -92,6 +92,11 @@
                 <data android:scheme="https" android:pathPattern="/index.php/call/.*"/>
                 <data android:scheme="https" android:pathPattern="/call/.*"/>
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
         </activity>
         <receiver
             android:name=".push.AndroidWebPushReceiver"

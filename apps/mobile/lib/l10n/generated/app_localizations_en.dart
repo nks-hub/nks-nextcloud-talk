@@ -73,6 +73,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancel => 'Cancel';
 
   @override
+  String get incomingShareTitle => 'Share to a conversation';
+
+  @override
+  String get incomingShareAccount => 'Account';
+
+  @override
+  String get incomingShareConversation => 'Conversation';
+
+  @override
+  String get incomingShareSend => 'Send';
+
+  @override
+  String get incomingShareNoTargets =>
+      'No writable conversations are available.';
+
+  @override
+  String get incomingShareSendFailed =>
+      'The item could not be queued. Check the account and try again.';
+
+  @override
+  String get incomingShareCleanupFailed =>
+      'The shared item was sent, but its temporary copy could not be removed.';
+
+  @override
   String get retry => 'Try again';
 
   @override

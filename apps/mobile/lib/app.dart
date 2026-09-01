@@ -7,6 +7,7 @@ import 'core/app_theme.dart';
 import 'core/brand_mark.dart';
 import 'features/conversations/conversation_shell.dart';
 import 'features/onboarding/onboarding_screen.dart';
+import 'features/share/incoming_share_host.dart';
 import 'l10n/generated/app_localizations.dart';
 
 final class NextcloudTalkApp extends ConsumerStatefulWidget {
@@ -73,7 +74,7 @@ final class _NextcloudTalkAppState extends ConsumerState<NextcloudTalkApp> {
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorObservers: ref.watch(telemetryNavigatorObserversProvider),
-      home: const _AppHome(),
+      home: const IncomingShareHost(child: _AppHome()),
     );
   }
 }

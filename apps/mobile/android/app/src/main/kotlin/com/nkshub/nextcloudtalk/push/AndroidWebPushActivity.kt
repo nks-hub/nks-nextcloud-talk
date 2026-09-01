@@ -9,19 +9,26 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
+import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
+import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
+import com.nkshub.nextcloudtalk.share.AndroidShareInbox
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.ArrayDeque
+import java.util.concurrent.Executors
 
 class AndroidWebPushActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var methodChannel: MethodChannel? = null
     private var deepLinkChannel: MethodChannel? = null
+    private var shareChannel: MethodChannel? = null
     private var deviceKeyChannel: MethodChannel? = null
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var fcmChannel: MethodChannel? = null
     private var contactPickerChannel: ContactPickerChannel? = null
+    private val shareExecutor = Executors.newSingleThreadExecutor()
+    private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
     private val fcmTokenListener: (String) -> Unit = { token ->
         mainHandler.post {
             fcmChannel?.invokeMethod("tokenRefreshed", token)
@@ -38,6 +45,11 @@ class AndroidWebPushActivity : FlutterActivity() {
             deepLinkChannel?.invokeMethod("linkOpened", link)
         }
     }
+    private val shareDelivery = AndroidShareDelivery { share ->
+        mainHandler.post {
+            shareChannel?.invokeMethod("shareOpened", share)
+        }
+    }
     private val notifierListener: (Int) -> Unit = { count ->
         mainHandler.post {
             methodChannel?.invokeMethod("eventsAvailable", mapOf("count" to count))
@@ -48,6 +60,7 @@ class AndroidWebPushActivity : FlutterActivity() {
         notificationAction(intent)?.route?.let(notificationOpenDelivery::opened)
         notificationOpen(intent)?.let(notificationOpenDelivery::opened)
         deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
+        captureShare(intent, deduplicatePending = true)
         super.onCreate(savedInstanceState)
     }
 
@@ -74,6 +87,32 @@ class AndroidWebPushActivity : FlutterActivity() {
             }
         }
         deepLinkChannel = deepLink
+
+        val share = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL_NAME,
+        )
+        share.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getLaunchShare" -> result.success(shareDelivery.markReadyAndTakeLaunch())
+                "completeShare" -> {
+                    val id = call.argument<String>("id")
+                    if (id == null) {
+                        result.error("invalid-share", "A share id is required.", null)
+                    } else {
+                        shareExecutor.execute {
+                            val completed = shareInbox.complete(id)
+                            mainHandler.post { result.success(completed) }
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+        shareChannel = share
+        shareExecutor.execute {
+            shareInbox.pending().forEach(shareDelivery::opened)
+        }
 
         // The push-v2 device key is independent of Web Push: it belongs to the
         // proxy transport, but it lives on the same engine, so it is wired here
@@ -114,6 +153,7 @@ class AndroidWebPushActivity : FlutterActivity() {
         notificationAction(intent)?.route?.let(notificationOpenDelivery::opened)
         notificationOpen(intent)?.let(notificationOpenDelivery::opened)
         deepLinkOpen(intent)?.let(deepLinkDelivery::opened)
+        captureShare(intent, deduplicatePending = false)
     }
 
     internal fun registrationPermissionStatus(): Map<String, String> {
@@ -191,6 +231,8 @@ class AndroidWebPushActivity : FlutterActivity() {
         methodChannel = null
         deepLinkChannel?.setMethodCallHandler(null)
         deepLinkChannel = null
+        shareChannel?.setMethodCallHandler(null)
+        shareChannel = null
         deviceKeyChannel?.setMethodCallHandler(null)
         deviceKeyChannel = null
         deviceKeyStore?.dispose()
@@ -200,6 +242,7 @@ class AndroidWebPushActivity : FlutterActivity() {
         fcmChannel = null
         contactPickerChannel?.dispose()
         contactPickerChannel = null
+        shareExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -254,9 +297,21 @@ class AndroidWebPushActivity : FlutterActivity() {
             .apply()
     }
 
+    private fun captureShare(intent: Intent?, deduplicatePending: Boolean) {
+        shareExecutor.execute {
+            when (val result = shareInbox.capture(intent, deduplicatePending)) {
+                is AndroidShareCaptureResult.Accepted -> shareDelivery.opened(result.share)
+                AndroidShareCaptureResult.Ignored,
+                is AndroidShareCaptureResult.Rejected,
+                -> Unit
+            }
+        }
+    }
+
     companion object {
         private const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/android_web_push"
         private const val DEEP_LINK_CHANNEL_NAME = "com.nkshub.nextcloudtalk/deep_link"
+        private const val SHARE_CHANNEL_NAME = "com.nkshub.nextcloudtalk/share"
         internal const val PERMISSION_PREFERENCES = "android_web_push_permission"
         internal const val PERMISSION_ASKED = "asked"
         internal const val NOTIFICATION_PERMISSION_REQUEST = 4107

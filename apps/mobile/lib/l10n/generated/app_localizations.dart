@@ -218,6 +218,48 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancel;
 
+  /// No description provided for @incomingShareTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share to a conversation'**
+  String get incomingShareTitle;
+
+  /// No description provided for @incomingShareAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get incomingShareAccount;
+
+  /// No description provided for @incomingShareConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation'**
+  String get incomingShareConversation;
+
+  /// No description provided for @incomingShareSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get incomingShareSend;
+
+  /// No description provided for @incomingShareNoTargets.
+  ///
+  /// In en, this message translates to:
+  /// **'No writable conversations are available.'**
+  String get incomingShareNoTargets;
+
+  /// No description provided for @incomingShareSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The item could not be queued. Check the account and try again.'**
+  String get incomingShareSendFailed;
+
+  /// No description provided for @incomingShareCleanupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The shared item was sent, but its temporary copy could not be removed.'**
+  String get incomingShareCleanupFailed;
+
   /// No description provided for @retry.
   ///
   /// In en, this message translates to:

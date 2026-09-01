@@ -1,0 +1,195 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/share/incoming_share_bridge.dart';
+import 'package:nextcloudtalk/features/share/incoming_share_coordinator.dart';
+import 'package:nextcloudtalk/features/share/incoming_share_host.dart';
+import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel(IncomingShareBridge.channelName);
+
+  tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
+  test('bridge parses cold text and completes its exact native id', () async {
+    MethodCall? completed;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'getLaunchShare') {
+            return <String, Object?>{'id': 'share-1', 'text': 'hello'};
+          }
+          completed = call;
+          return true;
+        });
+    final bridge = IncomingShareBridge(channel: channel);
+    addTearDown(bridge.dispose);
+
+    final share = await bridge.getLaunchShare();
+    await bridge.complete(share!.id);
+
+    expect(share.text, 'hello');
+    expect(share.file, isNull);
+    expect(completed?.method, 'completeShare');
+    expect(completed?.arguments, <String, Object?>{'id': 'share-1'});
+  });
+
+  test('file metadata rejects an overlong attachment caption', () {
+    expect(
+      () => parseIncomingShare(<String, Object?>{
+        'id': 'share-2',
+        'text': 'x' * 4001,
+        'filePath': '/owned/file',
+        'mimeType': 'image/jpeg',
+        'displayName': 'photo.jpg',
+        'byteLength': 2,
+        'sha256': 'a' * 64,
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('coordinator delivers cold and warm shares once per id', () async {
+    final platform = _FakeIncomingSharePlatform(
+      launch: const IncomingShare(id: 'cold', text: 'cold', file: null),
+    );
+    final coordinator = IncomingShareCoordinator(platform);
+    addTearDown(coordinator.close);
+
+    await coordinator.start();
+    platform.open(const IncomingShare(id: 'warm', text: 'warm', file: null));
+    platform.open(const IncomingShare(id: 'warm', text: 'warm', file: null));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(coordinator.takeNext()?.id, 'cold');
+    expect(coordinator.takeNext()?.id, 'warm');
+    expect(coordinator.takeNext(), isNull);
+  });
+
+  testWidgets('picker requires an exact account and room before sending', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(id: 'share-3', text: 'hello', file: null),
+          loadAccounts: () async => const [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice · cloud.example',
+              rooms: [IncomingShareRoom(token: 'room-a', label: 'Project')],
+            ),
+            IncomingShareAccount(
+              id: 'account-b',
+              label: 'bob · other.example',
+              rooms: [IncomingShareRoom(token: 'room-b', label: 'Team')],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byKey(const Key('incoming-share-account')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('bob · other.example').last);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byKey(const Key('incoming-share-room')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Team').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.accountId, 'account-b');
+    expect(sent?.roomToken, 'room-b');
+  });
+
+  testWidgets('send failure keeps the picker open for retry', (tester) async {
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(id: 'share-4', text: 'hello', file: null),
+          loadAccounts: () async => const [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [IncomingShareRoom(token: 'room-a', label: 'Project')],
+            ),
+          ],
+          send: (_) => Future<void>.error(StateError('offline')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-account')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('alice').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-room')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Project').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('incoming-share-target-dialog')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('incoming-share-error')), findsOneWidget);
+  });
+}
+
+Widget _localizedApp(Widget home) => MaterialApp(
+  localizationsDelegates: const [
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ],
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: home),
+);
+
+final class _FakeIncomingSharePlatform implements IncomingSharePlatform {
+  _FakeIncomingSharePlatform({this.launch});
+
+  final IncomingShare? launch;
+  final StreamController<IncomingShare> _opened =
+      StreamController<IncomingShare>.broadcast();
+
+  void open(IncomingShare share) => _opened.add(share);
+
+  @override
+  Stream<IncomingShare> get shareOpened => _opened.stream;
+
+  @override
+  Future<IncomingShare?> getLaunchShare() async => launch;
+
+  @override
+  Future<void> complete(String id) async {}
+
+  @override
+  Future<void> dispose() => _opened.close();
+}

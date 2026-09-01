@@ -73,6 +73,30 @@ class AppLocalizationsCs extends AppLocalizations {
   String get cancel => 'Zrušit';
 
   @override
+  String get incomingShareTitle => 'Sdílet do konverzace';
+
+  @override
+  String get incomingShareAccount => 'Účet';
+
+  @override
+  String get incomingShareConversation => 'Konverzace';
+
+  @override
+  String get incomingShareSend => 'Odeslat';
+
+  @override
+  String get incomingShareNoTargets =>
+      'Není dostupná žádná konverzace, do které lze psát.';
+
+  @override
+  String get incomingShareSendFailed =>
+      'Položku se nepodařilo zařadit k odeslání. Zkontrolujte účet a zkuste to znovu.';
+
+  @override
+  String get incomingShareCleanupFailed =>
+      'Položka byla odeslána, ale její dočasnou kopii se nepodařilo odstranit.';
+
+  @override
   String get retry => 'Zkusit znovu';
 
   @override
