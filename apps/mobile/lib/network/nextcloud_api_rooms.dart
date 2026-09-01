@@ -9,6 +9,60 @@ final Set<int> _internalSignalingAllowedStatusCodes = <int>{
   for (var statusCode = 500; statusCode <= 599; statusCode++) statusCode,
 };
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
+  Future<BotManagementResponse> getBots({
+    required ListBotsRequest botsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', botsRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...botsRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 401, 403, 404, 429, 503},
+      maximumBytes: botsMaximumWireBytes,
+      sessionAccountId: botsRequest.accountId,
+      sessionServer: botsRequest.server,
+    );
+    return decodeListBotsResponse(
+      request: botsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Applies one direct bot state change. This adapter never retries it.
+  Future<BotManagementResponse> changeBotState({
+    required ChangeBotStateRequest botsRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(botsRequest.httpMethod, botsRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...botsRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 201, 400, 401, 403, 404, 429, 503},
+      maximumBytes: botsMaximumWireBytes,
+      sessionAccountId: botsRequest.accountId,
+      sessionServer: botsRequest.server,
+    );
+    return decodeChangeBotStateResponse(
+      request: botsRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Fetches the complete user-scoped tag definition list.
   Future<FetchConversationTagsResponse> getConversationTags({
     required FetchConversationTagsRequest tagsRequest,

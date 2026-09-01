@@ -16,6 +16,7 @@ import '../chat/chat_background_surface.dart';
 import '../chat/chat_background_theme.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../shareditems/shared_items_screen.dart';
+import 'bots_service.dart';
 import 'conversation_tags_service.dart';
 import 'guest_link_sharer.dart';
 import 'participants_service.dart';
@@ -23,6 +24,7 @@ import 'room_settings_service.dart';
 
 part 'room_details_actions.part.dart';
 part 'room_details_background.part.dart';
+part 'room_details_bots.part.dart';
 part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
@@ -62,6 +64,7 @@ const String _importantCapability = 'important-conversations';
 const String _sensitiveCapability = 'sensitive-conversations';
 const String _sharedItemsCapability = 'rich-object-list-media';
 const String _federatedSharedItemsCapability = 'federated-shared-items';
+const String _botsCapability = 'bots-v1';
 const int _classifiedRoomAttribute = 4;
 
 /// The emoji the avatar picker offers. Talk accepts any single emoji; this is
@@ -125,7 +128,8 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with
         _RoomDetailsStateLogic,
         _RoomSipStateLogic,
-        _RoomImportanceSensitivityStateLogic {
+        _RoomImportanceSensitivityStateLogic,
+        _RoomBotsStateLogic {
   void _setBusy(bool value) {
     setState(() => _busy = value);
   }
@@ -416,6 +420,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               value: _readOnly != 0,
               onChanged: _busy ? null : _toggleReadOnly,
             ),
+          if (_canManageBots) _buildBotsSection(context),
           if (_canBan)
             ListTile(
               key: const Key('room-details-bans'),
