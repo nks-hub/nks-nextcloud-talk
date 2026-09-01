@@ -30,8 +30,8 @@ proto jen to, co je doložitelné z App Store Connect.
 - Podpora iOS Universal Links pro referenční Nextcloud host je připravená.
   Jeden HTTPS/no-userinfo validator zachovává pořadí cold/warm odkazů.
   Server už publikuje verzovaný AASA dokument pro `/call/*` a
-  `/index.php/call/*` bez
-  redirectu; přímý runtime čeká na obnovu produkční Apple CDN cache.
+  `/index.php/call/*` bez redirectu. Produkční Apple CDN vrací stejný dokument
+  a iOS 18.6 otevřel HTTPS odkaz přímo ve správné místnosti bez Safari.
 - České iOS systémové oprávnění k poloze už nemíchá anglický purpose string.
   Build 33 obsahuje samostatný český a anglický `InfoPlist.strings` a živý
   iOS 18.6 dialog ukázal správnou českou větu.

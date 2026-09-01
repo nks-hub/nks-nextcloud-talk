@@ -29,8 +29,10 @@ commitu `2f1d36f`, ne ručně vloženým souborem v Nextcloud webrootu. Veřejn�
 kontrola 1. září 2026 vrátila 200, `application/json`, 419 B, žádný redirect a
 SHA-256 `0e3b890f8f0d38878f520fa63f8822a50ba31837e1a76a5cbab707d0c8f78e68`.
 Apple developer fetch vrací stejný dokument. Produkční Apple CDN v té chvíli
-ještě držela předchozí 404; TestFlight/runtime Universal Link se nesmí označit
-za hotový, dokud cache neobnoví a přímý odkaz neotevře room bez Safari.
+ještě držela předchozí 404, následně ale obnovila 419B JSON se stavem 200.
+Aktualizačně přeinstalovaný iOS 18.6 build 33 pak z jiné otevřené místnosti
+přijal přímý `/index.php/call/...` HTTPS odkaz, otevřel „Tym NKS“ a AX root
+zůstal `NKS Talk`; Safari se nespustilo.
 
 ## Postup
 
