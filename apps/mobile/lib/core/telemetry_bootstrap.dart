@@ -4,6 +4,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'app_version.dart';
 import 'attachment_upload_telemetry.dart';
+import 'runtime_health_telemetry.dart';
 import 'telemetry.dart';
 
 /// Starts the app, with crash reporting and analytics attached only when the
@@ -52,18 +53,7 @@ Future<void> runWithTelemetry({
 
   observers.add(SentryNavigatorObserver());
   await SentryFlutter.init((options) {
-    options
-      ..dsn = config.sentryDsn
-      ..environment = config.environment
-      ..release = 'com.nkshub.nextcloudtalk@$appVersionName+$appBuildNumber'
-      // Everything below keeps content on the device. The user consented to
-      // crashes without content, so anything that could carry a message body,
-      // a room token or a server address is either off or scrubbed.
-      ..sendDefaultPii = false
-      ..attachScreenshot = false
-      ..tracesSampleRate = 0
-      ..beforeBreadcrumb = scrubSentryBreadcrumb
-      ..beforeSend = (event, hint) => scrubSentryEvent(event);
+    configureSentryOptions(options, config: config);
   }, appRunner: () => runApp(appBuilder(observers)));
 
   if (installation != null) {
@@ -71,9 +61,49 @@ Future<void> runWithTelemetry({
       (scope) => scope.setUser(SentryUser(id: installation.value)),
     );
   }
+  final runtimeHealth = RuntimeHealthTelemetry(
+    runKind: config.releaseGateEnabled
+        ? RuntimeHealthRunKind.releaseGate
+        : RuntimeHealthRunKind.ordinary,
+    reportTags: _reportRuntimeHealthTags,
+  );
+  await runtimeHealth.start();
   if (config.releaseGateEnabled) {
-    await captureTelemetryReleaseGate();
+    await captureTelemetryReleaseGate(runtimeTags: runtimeHealth.tags);
   }
+}
+
+void configureSentryOptions(
+  SentryFlutterOptions options, {
+  required TelemetryConfig config,
+}) {
+  options
+    ..dsn = config.sentryDsn
+    ..environment = config.environment
+    ..release = 'com.nkshub.nextcloudtalk@$appVersionName+$appBuildNumber'
+    // A 2 s hang is reported separately instead of becoming a watchdog guess.
+    ..enableWatchdogTerminationTracking = true
+    ..enableAppHangTracking = true
+    ..appHangTimeoutInterval = const Duration(seconds: 2)
+    ..enableAutoNativeBreadcrumbs = true
+    ..enableMemoryPressureBreadcrumbs = false
+    ..enableScopeSync = true
+    // Everything below keeps content on the device. The user consented to
+    // crashes without content, so anything that could carry a message body,
+    // a room token or a server address is either off or scrubbed.
+    ..sendDefaultPii = false
+    ..attachScreenshot = false
+    ..tracesSampleRate = 0
+    ..beforeBreadcrumb = scrubSentryBreadcrumb
+    ..beforeSend = (event, hint) => scrubSentryEvent(event);
+}
+
+Future<void> _reportRuntimeHealthTags(Map<String, String> tags) async {
+  await Sentry.configureScope((scope) async {
+    for (final entry in tags.entries) {
+      await scope.setTag(entry.key, entry.value);
+    }
+  });
 }
 
 final class TelemetryReleaseGateError implements Exception {
@@ -83,13 +113,20 @@ final class TelemetryReleaseGateError implements Exception {
   String toString() => 'TelemetryReleaseGateError';
 }
 
-Future<List<SentryId>> captureTelemetryReleaseGate() async {
+Future<List<SentryId>> captureTelemetryReleaseGate({
+  Map<String, String>? runtimeTags,
+}) async {
+  final gateTags =
+      runtimeTags ?? currentRuntimeHealthTags(RuntimeHealthRunKind.releaseGate);
   final errorId = await Sentry.captureException(
     const TelemetryReleaseGateError(),
     stackTrace: StackTrace.current,
     withScope: (scope) async {
-      await scope.clear();
-      await scope.setTag('telemetry.release_gate', 'error');
+      await configureTelemetryReleaseGateScope(
+        scope,
+        gateKind: 'error',
+        runtimeTags: gateTags,
+      );
     },
   );
   final diagnosticId = await Sentry.captureEvent(
@@ -102,11 +139,53 @@ Future<List<SentryId>> captureTelemetryReleaseGate() async {
       ),
     ),
     withScope: (scope) async {
-      await scope.clear();
-      await scope.setTag('telemetry.release_gate', 'diagnostic');
+      await configureTelemetryReleaseGateScope(
+        scope,
+        gateKind: 'diagnostic',
+        runtimeTags: gateTags,
+      );
     },
   );
   return <SentryId>[errorId, diagnosticId];
+}
+
+Future<void> configureTelemetryReleaseGateScope(
+  Scope scope, {
+  required String gateKind,
+  required Map<String, String> runtimeTags,
+}) async {
+  if (gateKind != 'error' && gateKind != 'diagnostic') {
+    throw ArgumentError.value(gateKind, 'gateKind');
+  }
+  const lifecycleValues = <String>{'foreground', 'background', 'detached'};
+  const rssValues = <String>{
+    'unknown',
+    '<128m',
+    '128-256m',
+    '256-384m',
+    '384-512m',
+    '512-768m',
+    '768m+',
+  };
+  final lifecycle = runtimeTags['runtime.lifecycle'];
+  final rssBucket = runtimeTags['runtime.rss_bucket'];
+  final pressure = runtimeTags['runtime.memory_pressure_seen'];
+  final safeTags = <String, String>{
+    'runtime.run_kind': 'release_gate',
+    'runtime.lifecycle': lifecycleValues.contains(lifecycle)
+        ? lifecycle!
+        : 'background',
+    'runtime.rss_bucket': rssValues.contains(rssBucket)
+        ? rssBucket!
+        : 'unknown',
+    'runtime.memory_pressure_seen': pressure == 'true' ? 'true' : 'false',
+  };
+
+  await scope.clear();
+  for (final entry in safeTags.entries) {
+    await scope.setTag(entry.key, entry.value);
+  }
+  await scope.setTag('telemetry.release_gate', gateKind);
 }
 
 const _scrubber = TelemetryScrubber();

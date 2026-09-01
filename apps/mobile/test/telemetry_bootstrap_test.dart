@@ -1,8 +1,72 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/core/runtime_health_telemetry.dart';
+import 'package:nextcloudtalk/core/telemetry.dart';
 import 'package:nextcloudtalk/core/telemetry_bootstrap.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('Sentry keeps watchdog and app-hang diagnostics enabled', () {
+    final options = SentryFlutterOptions();
+
+    configureSentryOptions(
+      options,
+      config: const TelemetryConfig(
+        sentryDsn: 'https://key@sentry.example.invalid/1',
+        rybbitHost: '',
+        rybbitSiteId: '',
+        environment: 'production',
+      ),
+    );
+
+    expect(options.enableWatchdogTerminationTracking, isTrue);
+    expect(options.enableAppHangTracking, isTrue);
+    expect(options.appHangTimeoutInterval, const Duration(seconds: 2));
+    expect(options.enableAutoNativeBreadcrumbs, isTrue);
+    expect(options.enableMemoryPressureBreadcrumbs, isFalse);
+    expect(options.enableScopeSync, isTrue);
+  });
+
+  test('release gate scope retains only allowlisted runtime tags', () async {
+    final runtime = RuntimeHealthTelemetry(
+      runKind: RuntimeHealthRunKind.releaseGate,
+      readRssBytes: () => 300 * 1024 * 1024,
+      reportTags: (_) async {},
+      lifecycleState: () => AppLifecycleState.paused,
+    );
+    await runtime.start();
+    addTearDown(runtime.dispose);
+
+    for (final gateKind in <String>['error', 'diagnostic']) {
+      final scope = Scope(SentryFlutterOptions());
+      await scope.setTag('runtime.raw_bytes', '314572800');
+      await scope.setTag('server', 'private.example.invalid');
+      await scope.setUser(SentryUser(id: 'installation-id'));
+      await scope.addBreadcrumb(
+        Breadcrumb(message: 'private breadcrumb', category: 'test'),
+      );
+
+      await configureTelemetryReleaseGateScope(
+        scope,
+        gateKind: gateKind,
+        runtimeTags: runtime.tags,
+      );
+      final event = await scope.applyToEvent(SentryEvent(), Hint());
+
+      expect(event?.tags, <String, String>{
+        'runtime.run_kind': 'release_gate',
+        'runtime.lifecycle': 'background',
+        'runtime.rss_bucket': '256-384m',
+        'runtime.memory_pressure_seen': 'false',
+        'telemetry.release_gate': gateKind,
+      });
+      expect(event?.user, isNull);
+      expect(event?.breadcrumbs, isEmpty);
+    }
+  });
+
   group('scrubSentryEvent', () {
     test('drops the request, which names the server and the room', () {
       final event = SentryEvent(
