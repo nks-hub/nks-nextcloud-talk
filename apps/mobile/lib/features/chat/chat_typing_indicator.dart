@@ -8,6 +8,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
+import '../../network/nextcloud_api.dart';
 import '../calls/call_signaling_session.dart';
 import '../rooms/participants_service.dart';
 
@@ -147,26 +148,52 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         return ChatTypingController.disabled(key);
       }
 
+      final participants = ref.watch(participantsServiceProvider);
+      final coordinator = ref.watch(callSignalingCoordinatorProvider);
+      final chat = ref.watch(chatRepositoryProvider);
+
       final activeRequest = ActiveRoomSessionRequest(
         accountId: AccountId.parse(key.accountId),
         server: server,
         roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
       );
-      final ActiveRoomSessionResponse active;
+      final ActiveRoomSessionActivation activation;
       try {
-        active = await api.activateRoomSession(
+        activation = await api.activateRoomSession(
           activeRequest: activeRequest,
           loginName: account.loginName,
           appPassword: password,
         );
       } on Object {
-        api.clearAccountSession(key.accountId);
+        await api.clearAccountSession(key.accountId);
         return ChatTypingController.disabled(key);
+      }
+      final lease = activation.lease;
+      Future<void> deactivate() async {
+        if (lease == null) return;
+        try {
+          await api.deactivateRoomSession(
+            lease: lease,
+            loginName: account.loginName,
+            appPassword: password,
+          );
+        } on Object {
+          await api.clearAccountSession(key.accountId);
+        }
+      }
+
+      if (disposed) {
+        await deactivate();
+        return ChatTypingController.disabled(key);
+      }
+      final active = activation.response;
+      if (active is ActiveRoomSessionReauthenticationRequired) {
+        await chat.markReauthenticationRequired(key.accountId);
       }
       if (active is! ActiveRoomSessionSuccess ||
           active.room.token.value != key.roomToken ||
           active.room.sessionId.value == '0') {
-        api.clearAccountSession(key.accountId);
+        await deactivate();
         return ChatTypingController.disabled(key);
       }
       final activeKey = (
@@ -174,30 +201,16 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         roomToken: key.roomToken,
         nextcloudSessionId: active.room.sessionId.value,
       );
-      Future<void> deactivate() async {
-        try {
-          await api.deactivateRoomSession(
-            activeRequest: activeRequest,
-            loginName: account.loginName,
-            appPassword: password,
-          );
-        } on Object {
-          api.clearAccountSession(key.accountId);
-        }
-      }
 
-      final participantsFuture = ref
-          .watch(participantsServiceProvider)
+      final participantsFuture = participants
           .fetchParticipants(accountId: key.accountId, roomToken: key.roomToken)
           .catchError((Object _) => const <Participant>[]);
       try {
-        final session = await ref
-            .watch(callSignalingCoordinatorProvider)
-            .start(
-              accountId: activeKey.accountId,
-              roomToken: activeKey.roomToken,
-              nextcloudSessionId: activeKey.nextcloudSessionId,
-            );
+        final session = await coordinator.start(
+          accountId: activeKey.accountId,
+          roomToken: activeKey.roomToken,
+          nextcloudSessionId: activeKey.nextcloudSessionId,
+        );
         final controller = ChatTypingController(
           key: activeKey,
           localLoginName: account.loginName,
@@ -205,8 +218,11 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
           updates: session.updates,
           sendMessages: session.sendPeerMessages,
           release: () async {
-            await session.release();
-            await deactivate();
+            try {
+              await session.release();
+            } finally {
+              await deactivate();
+            }
           },
         );
         owned = controller;

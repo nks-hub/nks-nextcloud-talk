@@ -8,6 +8,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/call_session_repository.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
 import 'package:nextcloudtalk/features/calls/hpb_socket_transport.dart';
 import 'package:nextcloudtalk/features/chat/chat_typing_indicator.dart';
@@ -334,6 +335,11 @@ void main() {
       talkFeatures: const {'signaling-v3', 'typing-privacy'},
       createdAt: DateTime.utc(2026, 9, 1),
     );
+    await ChatRepository(database).recordCapabilities(
+      accountId: 'account-a',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      observedAt: DateTime.utc(2026, 9, 1),
+    );
     credentials.values['account-a'] = 'fixture-password';
     final account = (await accounts.getAccount('account-a'))!;
     final conversation = _sessionZeroConversation();
@@ -401,6 +407,119 @@ void main() {
     );
     final stored = await database.select(database.callSessions).getSingle();
     expect(stored.nextcloudSessionId, 'active-session');
+  });
+
+  test('dispose during activation cleans once without signaling', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final credentials = MemoryCredentialVault();
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      createdAt: DateTime.utc(2026, 9, 1),
+    );
+    credentials.values['account-a'] = 'fixture-password';
+    final account = (await accounts.getAccount('account-a'))!;
+    final key = chatTypingRoomKeyFor(
+      account: account,
+      conversation: _sessionZeroConversation(),
+    )!;
+    final client = _ActiveTypingClient(holdActive: true);
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: CallSessionRepository(database),
+      credentials: credentials,
+      api: api,
+      socketConnector: _ActiveTypingSockets(),
+      refreshConversationSession: (_, _) async => null,
+    );
+    addTearDown(coordinator.dispose);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(credentials),
+        nextcloudApiProvider.overrideWithValue(api),
+        callSignalingCoordinatorProvider.overrideWithValue(coordinator),
+      ],
+    );
+    addTearDown(container.dispose);
+    final subscription = container.listen(
+      chatTypingStateProvider(key),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    await client.activeStarted.future.timeout(const Duration(seconds: 5));
+    subscription.close();
+    await container.pump();
+    client.releaseActive.complete();
+    for (var attempt = 0; attempt < 100 && client.deletes == 0; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(client.deletes, 1);
+    expect(client.settings, 0);
+    expect(await database.select(database.callSessions).get(), isEmpty);
+  });
+
+  test('active session 401 marks the account for reauthentication', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final credentials = MemoryCredentialVault();
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      createdAt: DateTime.utc(2026, 9, 1),
+    );
+    await ChatRepository(database).recordCapabilities(
+      accountId: 'account-a',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      observedAt: DateTime.utc(2026, 9, 1),
+    );
+    credentials.values['account-a'] = 'fixture-password';
+    final account = (await accounts.getAccount('account-a'))!;
+    final api = HttpNextcloudApi(
+      client: _ActiveTypingClient(activeStatus: 401),
+    );
+    addTearDown(api.close);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(credentials),
+        nextcloudApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(container.dispose);
+    final subscription = container.listen(
+      chatTypingStateProvider(
+        chatTypingRoomKeyFor(
+          account: account,
+          conversation: _sessionZeroConversation(),
+        )!,
+      ),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+    for (var attempt = 0; attempt < 100; attempt++) {
+      final capability = await database
+          .select(database.chatCapabilities)
+          .getSingleOrNull();
+      if (capability?.lane == ChatAccountLane.reauthenticationRequired.name) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    fail('Account was not marked for reauthentication');
   });
 }
 
@@ -606,7 +725,15 @@ String _activeTyping() => jsonEncode(<String, Object?>{
 });
 
 final class _ActiveTypingClient extends http.BaseClient {
+  _ActiveTypingClient({this.holdActive = false, this.activeStatus = 200});
+
+  final bool holdActive;
+  final int activeStatus;
   final List<String> paths = <String>[];
+  final Completer<void> activeStarted = Completer<void>();
+  final Completer<void> releaseActive = Completer<void>();
+  int deletes = 0;
+  int settings = 0;
   late final Map<String, Object?> _room = _activeRoomJson();
 
   @override
@@ -616,9 +743,28 @@ final class _ActiveTypingClient extends http.BaseClient {
       return _activeRawResponse(_activeCapabilitiesJson());
     }
     if (request.url.path.endsWith('/participants/active')) {
+      if (request.method == 'DELETE') {
+        deletes++;
+        return _activeResponse(null);
+      }
+      if (!activeStarted.isCompleted) activeStarted.complete();
+      if (holdActive) await releaseActive.future;
+      if (activeStatus == 401) {
+        return _activeRawResponse(<String, Object?>{
+          'ocs': <String, Object?>{
+            'meta': <String, Object?>{
+              'status': 'failure',
+              'statuscode': 401,
+              'message': 'Unauthorised',
+            },
+            'data': <String, Object?>{},
+          },
+        }, statusCode: 401);
+      }
       return _activeResponse(_room, cookie: 'nc_session=account-a');
     }
     if (request.url.path.endsWith('/settings')) {
+      settings++;
       if (request.headers['Cookie'] != 'nc_session=account-a') {
         throw StateError('Settings did not receive the account cookie');
       }
@@ -708,11 +854,11 @@ http.StreamedResponse _activeResponse(Object? data, {String? cookie}) {
   );
 }
 
-http.StreamedResponse _activeRawResponse(Object? json) {
+http.StreamedResponse _activeRawResponse(Object? json, {int statusCode = 200}) {
   final bytes = utf8.encode(jsonEncode(json));
   return http.StreamedResponse(
     Stream.value(bytes),
-    200,
+    statusCode,
     contentLength: bytes.length,
     headers: const {'content-type': 'application/json'},
   );

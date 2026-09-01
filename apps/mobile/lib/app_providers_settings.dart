@@ -18,6 +18,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     onRemovalStarted: (accountId) async {
       final attachment = ref.read(attachmentServiceProvider.future);
       await Future.wait<void>(<Future<void>>[
+        ref.read(callSignalingCoordinatorProvider).shutdownAccount(accountId),
         ref.read(chatServiceProvider).suspendAccount(accountId),
         attachment.then(
           (service) => service.suspendAccount(AccountId.parse(accountId)),

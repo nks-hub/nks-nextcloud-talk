@@ -376,6 +376,41 @@ void main() {
       expect(await first.sendPeerMessage(_peerMessage()), isFalse);
     },
   );
+
+  test('account shutdown leaves another signaling lane durable', () async {
+    await _insertAccount(accounts, credentials, accountId: 'account-a');
+    await _insertAccount(accounts, credentials, accountId: 'account-b');
+    final client = _HeldSettingsClient();
+    final api = HttpNextcloudApi(client: client);
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: sessions,
+      credentials: credentials,
+      api: api,
+      refreshConversationSession: (_, _) async => null,
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      api.close();
+    });
+    await coordinator.start(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      nextcloudSessionId: 'session-a',
+    );
+    await coordinator.start(
+      accountId: 'account-b',
+      roomToken: 'roomb456',
+      nextcloudSessionId: 'session-b',
+    );
+    await client.waitForRequestCount(2);
+
+    await coordinator.shutdownAccount('account-a');
+
+    final stored = await database.select(database.callSessions).get();
+    expect(stored, hasLength(1));
+    expect(stored.single.accountId, 'account-b');
+  });
 }
 
 Future<void> _insertAccount(

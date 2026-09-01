@@ -11,50 +11,98 @@ final Set<int> _internalSignalingAllowedStatusCodes = <int>{
 const _activeRoomSessionMaximumBytes = 1024 * 1024;
 
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
-  Future<ActiveRoomSessionResponse> activateRoomSession({
+  Future<ActiveRoomSessionActivation> activateRoomSession({
     required ActiveRoomSessionRequest activeRequest,
     required String loginName,
     required String appPassword,
     Future<void>? abortTrigger,
-  }) async {
+  }) => _serializeAccountSession(activeRequest.accountId, () async {
+    final previous = _activeRoomSessions[activeRequest.accountId];
+    if (previous != null) {
+      await _deactivateRoomSessionOwned(
+        lease: previous,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+    }
+    final lease = _newRoomSessionLease(activeRequest);
     final request = _request('POST', activeRequest.uri, abortTrigger)
       ..headers.addAll({
         ...activeRequest.headers,
         'Authorization': _basicAuthorization(loginName, appPassword),
       });
-    final payload = await _sendBody(
-      request,
-      allowedStatusCodes: const {200, 400, 401, 403, 404, 409, 429, 503},
-      maximumBytes: _activeRoomSessionMaximumBytes,
-      sessionAccountId: activeRequest.accountId,
-      sessionServer: activeRequest.server,
-    );
-    return decodeActiveRoomSessionResponse(
-      statusCode: payload.statusCode,
-      body: payload.body,
-    );
-  }
-
-  Future<void> deactivateRoomSession({
-    required ActiveRoomSessionRequest activeRequest,
-    required String loginName,
-    required String appPassword,
-  }) async {
     try {
-      final request = _request('DELETE', activeRequest.uri, null)
-        ..headers.addAll({
-          ...activeRequest.headers,
-          'Authorization': _basicAuthorization(loginName, appPassword),
-        });
-      await _sendBody(
+      final payload = await _sendBody(
         request,
-        allowedStatusCodes: const {200, 401, 404},
+        allowedStatusCodes: const {200, 400, 401, 403, 404, 409, 429, 503},
         maximumBytes: _activeRoomSessionMaximumBytes,
         sessionAccountId: activeRequest.accountId,
         sessionServer: activeRequest.server,
       );
+      final response = decodeActiveRoomSessionResponse(
+        statusCode: payload.statusCode,
+        body: payload.body,
+      );
+      if (response is ActiveRoomSessionSuccess) {
+        return ActiveRoomSessionActivation(response: response, lease: lease);
+      }
+      if (_ownsRoomSession(lease)) {
+        _activeRoomSessions.remove(lease.accountId);
+        _accountCookies.clear(lease.accountId);
+      }
+      return ActiveRoomSessionActivation(response: response);
+    } on Object {
+      await _deactivateRoomSessionOwned(
+        lease: lease,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+      rethrow;
+    }
+  });
+
+  Future<void> deactivateRoomSession({
+    required ActiveRoomSessionLease lease,
+    required String loginName,
+    required String appPassword,
+  }) => _serializeAccountSession(lease.accountId, () async {
+    await _deactivateRoomSessionOwned(
+      lease: lease,
+      loginName: loginName,
+      appPassword: appPassword,
+    );
+  });
+
+  Future<void> _deactivateRoomSessionOwned({
+    required ActiveRoomSessionLease lease,
+    required String loginName,
+    required String appPassword,
+  }) async {
+    if (!_ownsRoomSession(lease)) return;
+    try {
+      final request = ActiveRoomSessionRequest(
+        accountId: lease.accountId,
+        server: lease.server,
+        roomToken: lease.roomToken,
+      );
+      final transport = _request('DELETE', request.uri, null)
+        ..headers.addAll({
+          ...request.headers,
+          'Authorization': _basicAuthorization(loginName, appPassword),
+        });
+      await _sendBody(
+        transport,
+        allowedStatusCodes: const {200, 401, 404},
+        maximumBytes: _activeRoomSessionMaximumBytes,
+        timeout: const Duration(seconds: 20),
+        sessionAccountId: lease.accountId,
+        sessionServer: lease.server,
+      );
     } finally {
-      _accountCookies.clear(activeRequest.accountId);
+      if (_ownsRoomSession(lease)) {
+        _activeRoomSessions.remove(lease.accountId);
+        _accountCookies.clear(lease.accountId);
+      }
     }
   }
 

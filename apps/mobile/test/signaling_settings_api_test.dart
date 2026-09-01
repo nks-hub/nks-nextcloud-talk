@@ -179,7 +179,8 @@ void main() {
         loginName: '$accountId-user',
         appPassword: 'fixture-password',
       );
-      expect(response, isA<ActiveRoomSessionSuccess>());
+      expect(response.response, isA<ActiveRoomSessionSuccess>());
+      expect(response.lease, isNotNull);
     }
     await api.getSignalingSettings(
       settingsRequest: request(accountId: 'account-a'),
@@ -196,7 +197,7 @@ void main() {
     expect(requests[1].headers['Cookie'], isNull);
     expect(requests[2].headers['Cookie'], 'nc_session=session-a');
     expect(requests[3].headers['Cookie'], 'nc_session=session-b');
-    api.clearAccountSession('account-a');
+    await api.clearAccountSession('account-a');
     await api.getSignalingSettings(
       settingsRequest: request(accountId: 'account-a'),
       loginName: 'account-a-user',
@@ -204,4 +205,219 @@ void main() {
     );
     expect(requests[4].headers['Cookie'], isNull);
   });
+
+  test('stale room lease cannot clear a replacement session', () async {
+    final room = _activeRoomFixture();
+    final internal = _internalSettingsFixture();
+    final requests = <http.BaseRequest>[];
+    var activation = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.endsWith('/participants/active')) {
+          if (request.method == 'DELETE') return _ocsResponse(null);
+          activation++;
+          room['sessionId'] = 'active-$activation';
+          return _ocsResponse(
+            room,
+            cookie: 'nc_session=session-$activation; Path=/',
+          );
+        }
+        return _ocsResponse(internal);
+      }),
+    );
+    addTearDown(api.close);
+    final activeRequest = _activeRequest('account-a');
+    final first = await api.activateRoomSession(
+      activeRequest: activeRequest,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final second = await api.activateRoomSession(
+      activeRequest: activeRequest,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final beforeStaleRelease = requests.length;
+
+    await api.deactivateRoomSession(
+      lease: first.lease!,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(requests, hasLength(beforeStaleRelease));
+    await api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(requests.last.headers['Cookie'], 'nc_session=session-2');
+
+    await api.deactivateRoomSession(
+      lease: second.lease!,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+  });
+
+  test('invalid active response performs one bounded cleanup', () async {
+    var deletes = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.method == 'DELETE') {
+          deletes++;
+          return _ocsResponse(null);
+        }
+        return http.Response(
+          '{"ocs":{"meta":{"status":"ok","statuscode":200},'
+          '"data":{"sessionId":"broken"}}}',
+          200,
+          headers: const {
+            'content-type': 'application/json',
+            'set-cookie': 'nc_session=broken; Path=/',
+          },
+        );
+      }),
+    );
+    addTearDown(api.close);
+
+    await expectLater(
+      api.activateRoomSession(
+        activeRequest: _activeRequest('account-a'),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      ),
+      throwsA(isA<TalkProtocolException>()),
+    );
+    expect(deletes, 1);
+  });
+
+  test('cookie expiry domain and path stay RFC scoped', () async {
+    var now = DateTime.utc(2026, 9, 1);
+    final room = _activeRoomFixture()..['sessionId'] = 'active-session';
+    final internal = _internalSettingsFixture();
+    final settingsCookies = <String?>[];
+    var activeCookie =
+        'bad cookie, nc_session=short; Max-Age=1; Path=/; HttpOnly';
+    final api = HttpNextcloudApi(
+      clock: () => now,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/participants/active')) {
+          if (request.method == 'DELETE') return _ocsResponse(null);
+          return _ocsResponse(room, cookie: activeCookie);
+        }
+        settingsCookies.add(request.headers['Cookie']);
+        return _ocsResponse(internal);
+      }),
+    );
+    addTearDown(api.close);
+    var activation = await api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    now = now.add(const Duration(seconds: 2));
+    await api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(settingsCookies, ['nc_session=short', isNull]);
+
+    await api.deactivateRoomSession(
+      lease: activation.lease!,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    activeCookie =
+        'nc_session=wrong; Domain=attacker.invalid; Path=/, '
+        'path_cookie=wrong; Path=/ocs2, '
+        'deleted=x; Max-Age=-1; Path=/, default_cookie=wrong';
+    activation = await api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(settingsCookies.last, isNull);
+    await api.deactivateRoomSession(
+      lease: activation.lease!,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+
+    activeCookie =
+        'same=root; Path=/, '
+        'same=scoped; Path=/ocs/v2.php/apps/spreed/api/v3/signaling';
+    activation = await api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(settingsCookies.last, 'same=root; same=scoped');
+    await api.deactivateRoomSession(
+      lease: activation.lease!,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+  });
 }
+
+ActiveRoomSessionRequest _activeRequest(String accountId) =>
+    ActiveRoomSessionRequest(
+      accountId: AccountId.parse(accountId),
+      server: ServerBase.parse('https://cloud.example.invalid'),
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    );
+
+Map<String, Object?> _activeRoomFixture() {
+  final conversations =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  return Map<String, Object?>.from(
+    ((conversations['ocs']! as Map<String, Object?>)['data']! as List).first
+        as Map<String, Object?>,
+  );
+}
+
+Map<String, Object?> _internalSettingsFixture() {
+  final cases =
+      readFixtureJson('signaling/fixtures/settings.cases.json')
+          as List<Object?>;
+  return (cases.first! as Map<String, Object?>)['data']!
+      as Map<String, Object?>;
+}
+
+http.Response _ocsResponse(Object? data, {String? cookie}) => http.Response(
+  jsonEncode(<String, Object?>{
+    'ocs': <String, Object?>{
+      'meta': <String, Object?>{
+        'status': 'ok',
+        'statuscode': 200,
+        'message': 'OK',
+      },
+      'data': data,
+    },
+  }),
+  200,
+  headers: <String, String>{
+    'content-type': 'application/json',
+    'set-cookie': ?cookie,
+  },
+);

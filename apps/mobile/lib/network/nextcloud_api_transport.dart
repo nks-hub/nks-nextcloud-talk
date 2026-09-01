@@ -94,7 +94,51 @@ abstract class _HttpNextcloudApiBase {
   /// fingerprint of the Authorization header, so a rotated app password misses
   /// the cache instead of reusing the snapshot of the revoked session.
   final Map<String, _CachedCapabilities> _capabilityCache = {};
-  final _AccountCookieStore _accountCookies = _AccountCookieStore();
+  late final _AccountCookieStore _accountCookies = _AccountCookieStore(_clock);
+  final Map<AccountId, Future<void>> _accountSessionTails = {};
+  final Map<AccountId, int> _accountSessionGenerations = {};
+  final Map<AccountId, ActiveRoomSessionLease> _activeRoomSessions = {};
+
+  Future<T> _serializeAccountSession<T>(
+    AccountId accountId,
+    Future<T> Function() operation,
+  ) {
+    final previous = _accountSessionTails[accountId] ?? Future<void>.value();
+    final completer = Completer<T>();
+    final next = previous.catchError((_) {}).then((_) async {
+      try {
+        completer.complete(await operation());
+      } on Object catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    late final Future<void> stored;
+    stored = next.whenComplete(() {
+      if (identical(_accountSessionTails[accountId], stored)) {
+        _accountSessionTails.remove(accountId);
+      }
+    });
+    _accountSessionTails[accountId] = stored;
+    return completer.future;
+  }
+
+  ActiveRoomSessionLease _newRoomSessionLease(
+    ActiveRoomSessionRequest request,
+  ) {
+    final generation = (_accountSessionGenerations[request.accountId] ?? 0) + 1;
+    _accountSessionGenerations[request.accountId] = generation;
+    final lease = ActiveRoomSessionLease._(
+      accountId: request.accountId,
+      server: request.server,
+      roomToken: request.roomToken,
+      generation: generation,
+    );
+    _activeRoomSessions[request.accountId] = lease;
+    return lease;
+  }
+
+  bool _ownsRoomSession(ActiveRoomSessionLease lease) =>
+      identical(_activeRoomSessions[lease.accountId], lease);
 
   /// Any authenticated request answered with 401 means the session behind those
   /// credentials no longer holds the authority the snapshot was read under, so
@@ -252,6 +296,7 @@ abstract class _HttpNextcloudApiBase {
           response.headers,
           sessionAccountId,
           sessionServer,
+          request.url,
         );
       }
       if (response.statusCode == 401) {
@@ -308,12 +353,19 @@ abstract class _HttpNextcloudApiBase {
     }
   }
 
-  void clearAccountSession(String accountId) {
-    _accountCookies.clear(AccountId.parse(accountId));
+  Future<void> clearAccountSession(String accountId) {
+    final parsed = AccountId.parse(accountId);
+    return _serializeAccountSession(parsed, () async {
+      _activeRoomSessions.remove(parsed);
+      _accountSessionGenerations[parsed] =
+          (_accountSessionGenerations[parsed] ?? 0) + 1;
+      _accountCookies.clear(parsed);
+    });
   }
 
   void close() {
     _accountCookies.clearAll();
+    _activeRoomSessions.clear();
     _client.close();
   }
 

@@ -341,6 +341,15 @@ final class CallSignalingCoordinator {
     });
   }
 
+  Future<void> shutdownAccount(String accountId) {
+    return _synchronized(() async {
+      final lane = _lanes.remove(accountId);
+      if (lane != null) {
+        await lane.shutdown(deleteDurableState: true);
+      }
+    });
+  }
+
   Future<T> _synchronized<T>(Future<T> Function() operation) {
     final completer = Completer<T>();
     _gate = _gate.catchError((_) {}).then((_) async {

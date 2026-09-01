@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Cookie, Platform;
+import 'dart:io' show Cookie, HttpException, Platform;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -42,6 +42,27 @@ enum NextcloudApiError {
 enum AvatarResponseStatus { image, notModified, notFound }
 
 enum WebPushRegistrationStatus { active, activationRequired }
+
+final class ActiveRoomSessionLease {
+  const ActiveRoomSessionLease._({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.generation,
+  });
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final int generation;
+}
+
+final class ActiveRoomSessionActivation {
+  const ActiveRoomSessionActivation({required this.response, this.lease});
+
+  final ActiveRoomSessionResponse response;
+  final ActiveRoomSessionLease? lease;
+}
 
 final class CurrentOutOfOffice {
   const CurrentOutOfOffice._({
