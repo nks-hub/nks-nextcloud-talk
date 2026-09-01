@@ -382,11 +382,13 @@ void main() {
     final started = Completer<void>();
     final release = Completer<void>();
     var deletes = 0;
+    String? deleteCookie;
     final room = _activeRoomFixture()..['sessionId'] = 'active-session';
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (request.method == 'DELETE') {
           deletes++;
+          deleteCookie = request.headers['Cookie'];
           return _ocsResponse(null);
         }
         started.complete();
@@ -414,6 +416,69 @@ void main() {
       ),
     );
     await close;
+    expect(deletes, 1);
+    expect(deleteCookie, 'nc_session=late');
+  });
+
+  test('shutdown invalidates held signaling and call responses', () async {
+    final settingsStarted = Completer<void>();
+    final callStarted = Completer<void>();
+    final release = Completer<void>();
+    final room = _activeRoomFixture()..['sessionId'] = 'active-session';
+    final internal = _internalSettingsFixture();
+    var deletes = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/participants/active')) {
+          if (request.method == 'DELETE') {
+            deletes++;
+            return _ocsResponse(null);
+          }
+          return _ocsResponse(room, cookie: 'nc_session=current; Path=/');
+        }
+        if (request.url.path.endsWith('/signaling/settings')) {
+          settingsStarted.complete();
+          await release.future;
+          return _ocsResponse(
+            internal,
+            cookie: 'nc_session=late-settings; Path=/',
+          );
+        }
+        callStarted.complete();
+        await release.future;
+        return _ocsResponse(
+          const <Object?>[],
+          cookie: 'nc_session=late-call; Path=/',
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final settings = api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final call = api.getCallPeers(
+      peersRequest: _callPeersRequest(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await Future.wait([settingsStarted.future, callStarted.future]);
+    final shutdown = api.shutdownAccountSession(
+      accountId: 'account-a',
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    release.complete();
+
+    await expectLater(settings, _cancelledApiRequest());
+    await expectLater(call, _cancelledApiRequest());
+    await shutdown;
     expect(deletes, 1);
   });
 }
@@ -461,4 +526,27 @@ http.Response _ocsResponse(Object? data, {String? cookie}) => http.Response(
     'content-type': 'application/json',
     'set-cookie': ?cookie,
   },
+);
+
+CallPeersRequest _callPeersRequest() => CallPeersRequest(
+  context: CallRequestContext(
+    authority: CallLifecycleAuthority(
+      accountId: AccountId.parse('account-a'),
+      server: ServerBase.parse('https://cloud.example.invalid'),
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+      nextcloudSessionId: ConversationSessionId.parse('active-session'),
+      credentialGeneration: 1,
+      capabilityGeneration: 1,
+      capabilityRevision: 'revision-a',
+    ),
+    mutationSequence: 0,
+  ),
+);
+
+Matcher _cancelledApiRequest() => throwsA(
+  isA<NextcloudApiException>().having(
+    (error) => error.code,
+    'code',
+    NextcloudApiError.cancelled,
+  ),
 );

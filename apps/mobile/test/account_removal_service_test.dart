@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -178,6 +179,111 @@ void main() {
       'DELETE /ocs/v2.php/apps/notifications/api/v2/webpush',
       'DELETE /ocs/v2.php/core/apppassword',
     ]);
+  });
+
+  test('removal tombstones a held room activation before revocation', () async {
+    await _seedAccount(database, accounts, vault, 'account-a', _serverA);
+    await _seedAccount(database, accounts, vault, 'account-b', _serverB);
+    final activeStarted = Completer<void>();
+    final releaseActive = Completer<void>();
+    final removalStarted = Completer<void>();
+    final cookies = <String?>[];
+    var activeDeletes = 0;
+    var lateAccountARequests = 0;
+    final roomA = _activeRoom('rooma123', 'active-a');
+    final roomB = _activeRoom('roomb456', 'active-b');
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/participants/active')) {
+          final accountA = request.url.host == Uri.parse(_serverA).host;
+          if (request.method == 'DELETE') {
+            if (accountA) {
+              activeDeletes++;
+              cookies.add(request.headers['Cookie']);
+            }
+            return http.Response(_okOcs(), 200);
+          }
+          if (accountA) {
+            activeStarted.complete();
+            await releaseActive.future;
+          }
+          return _activeRoomResponse(
+            accountA ? roomA : roomB,
+            accountA ? 'session-a' : 'session-b',
+          );
+        }
+        if (request.url.path.endsWith('/signaling/settings')) {
+          if (request.url.host == Uri.parse(_serverA).host) {
+            lateAccountARequests++;
+          }
+          cookies.add(request.headers['Cookie']);
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'ocs': <String, Object?>{
+                'meta': <String, Object?>{
+                  'status': 'ok',
+                  'statuscode': 200,
+                  'message': 'OK',
+                },
+                'data': _internalSettings(),
+              },
+            }),
+            200,
+          );
+        }
+        return http.Response(_okOcs(), 200);
+      }),
+    );
+    addTearDown(api.close);
+    final activationB = await api.activateRoomSession(
+      activeRequest: _activeRequest('account-b', _serverB, 'roomb456'),
+      loginName: 'account-b-user',
+      appPassword: 'fixture-password',
+    );
+    final activationA = api.activateRoomSession(
+      activeRequest: _activeRequest('account-a', _serverA, 'rooma123'),
+      loginName: 'account-a-user',
+      appPassword: 'fixture-password',
+    );
+    await activeStarted.future;
+    final removal = buildService(
+      api,
+      onRemovalStarted: (_) async => removalStarted.complete(),
+    ).removeAccount('account-a');
+    await removalStarted.future;
+    await Future<void>.delayed(Duration.zero);
+    releaseActive.complete();
+
+    await expectLater(
+      activationA,
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.code,
+          'code',
+          NextcloudApiError.cancelled,
+        ),
+      ),
+    );
+    await removal;
+    await api.getSignalingSettings(
+      settingsRequest: _settingsRequest('account-b', _serverB, 'roomb456'),
+      loginName: 'account-b-user',
+      appPassword: 'fixture-password',
+    );
+
+    expect(activeDeletes, 1);
+    expect(cookies, contains('nc_session=session-a'));
+    expect(cookies.last, 'nc_session=session-b');
+    expect(lateAccountARequests, 0);
+    expect(await accounts.getAccount('account-a'), isNull);
+    expect(await accounts.getAccount('account-b'), isNotNull);
+    expect(activationB.lease, isNotNull);
+    expect(
+      await (database.select(
+        database.callSessions,
+      )..where((row) => row.accountId.equals('account-a'))).get(),
+      isEmpty,
+    );
   });
 
   test('leaves nothing of a removed account in the database or the vault, '
@@ -425,6 +531,83 @@ String _okOcs() => jsonEncode(<String, Object?>{
     'data': <String, Object?>{},
   },
 });
+
+Map<String, Object?> _activeRoom(String token, String sessionId) {
+  final fixture =
+      readFixtureJson(
+            'conversation-list/fixtures/conversations-full.response.json',
+          )!
+          as Map<String, Object?>;
+  final ocs = fixture['ocs']! as Map<String, Object?>;
+  final room = Map<String, Object?>.from(
+    (ocs['data']! as List<Object?>).first! as Map<String, Object?>,
+  );
+  final lastMessage = Map<String, Object?>.from(
+    room['lastMessage']! as Map<String, Object?>,
+  )..['token'] = token;
+  return room
+    ..['token'] = token
+    ..['sessionId'] = sessionId
+    ..['lastMessage'] = lastMessage;
+}
+
+http.Response _activeRoomResponse(Map<String, Object?> room, String session) =>
+    http.Response(
+      jsonEncode(<String, Object?>{
+        'ocs': <String, Object?>{
+          'meta': <String, Object?>{
+            'status': 'ok',
+            'statuscode': 200,
+            'message': 'OK',
+          },
+          'data': room,
+        },
+      }),
+      200,
+      headers: <String, String>{
+        'content-type': 'application/json',
+        'set-cookie': 'nc_session=$session; Path=/',
+      },
+    );
+
+ActiveRoomSessionRequest _activeRequest(
+  String accountId,
+  String server,
+  String token,
+) => ActiveRoomSessionRequest(
+  accountId: AccountId.parse(accountId),
+  server: ServerBase.parse(server),
+  roomToken: ConversationToken.parse(token, path: r'$.roomToken'),
+);
+
+SignalingSettingsRequest _settingsRequest(
+  String accountId,
+  String server,
+  String token,
+) => SignalingSettingsRequest(
+  context: SignalingRequestContext(
+    accountId: AccountId.parse(accountId),
+    requestId: SignalingRequestId.parse('request-$accountId'),
+    server: ServerBase.parse(server),
+    roomToken: ConversationToken.parse(token, path: r'$.roomToken'),
+    credentialGeneration: 1,
+    capabilityGeneration: 1,
+    settingsRevision: 'revision-$accountId',
+    connectionEpoch: 1,
+    roomEpoch: 1,
+  ),
+);
+
+Map<String, Object?> _internalSettings() => <String, Object?>{
+  'signalingMode': 'internal',
+  'userId': 'fixture-user',
+  'hideWarning': true,
+  'server': '',
+  'federation': null,
+  'stunservers': <Object?>[],
+  'turnservers': <Object?>[],
+  'sipDialinInfo': '',
+};
 
 /// Counts, for every table that scopes rows by account, how many belong to
 /// [accountId].

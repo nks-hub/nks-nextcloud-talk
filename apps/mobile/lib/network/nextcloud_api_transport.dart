@@ -287,8 +287,15 @@ abstract class _HttpNextcloudApiBase {
     AccountId? sessionAccountId,
     ServerBase? sessionServer,
     bool allowAfterClose = false,
+    ActiveRoomSessionLease? cleanupCookieLease,
   }) async {
-    if (_closed && !allowAfterClose) {
+    final sessionGeneration = sessionAccountId == null
+        ? null
+        : _accountSessionGenerations[sessionAccountId] ?? 0;
+    if (!allowAfterClose &&
+        (_closed ||
+            (sessionAccountId != null &&
+                _roomSessionBlocked(sessionAccountId)))) {
       throw const NextcloudApiException(NextcloudApiError.cancelled);
     }
     if (sessionAccountId != null && sessionServer != null) {
@@ -300,7 +307,23 @@ abstract class _HttpNextcloudApiBase {
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
-      if (_closed && !allowAfterClose) {
+      final sessionInvalidated =
+          !allowAfterClose &&
+          sessionAccountId != null &&
+          (_roomSessionBlocked(sessionAccountId) ||
+              (_accountSessionGenerations[sessionAccountId] ?? 0) !=
+                  sessionGeneration);
+      if ((_closed && !allowAfterClose) || sessionInvalidated) {
+        if (cleanupCookieLease != null &&
+            sessionServer != null &&
+            _ownsRoomSession(cleanupCookieLease)) {
+          _accountCookies.capture(
+            response.headers,
+            cleanupCookieLease.accountId,
+            sessionServer,
+            request.url,
+          );
+        }
         await response.stream.drain<void>();
         throw const NextcloudApiException(NextcloudApiError.cancelled);
       }

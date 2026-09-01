@@ -10,6 +10,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import '../core/app_version.dart';
 
 part 'nextcloud_api_account.dart';
+part 'nextcloud_api_active_room.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_cookies.dart';
@@ -355,6 +356,7 @@ String get _pushUserAgentPlatform {
 final class HttpNextcloudApi extends _HttpNextcloudApiBase
     with
         _NextcloudApiAccount,
+        _NextcloudApiActiveRoom,
         _NextcloudApiRooms,
         _NextcloudApiChat,
         _NextcloudApiCall,
