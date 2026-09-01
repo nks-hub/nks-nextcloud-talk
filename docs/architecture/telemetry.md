@@ -28,6 +28,7 @@ klienta, ne o white-label aplikaci, takže cizí build nesmí hlásit k nám.
 | `RYBBIT_HOST` | adresa Rybbit instance | bez analytiky |
 | `RYBBIT_SITE_ID` | site id v Rybbitu | bez analytiky |
 | `TELEMETRY_ENVIRONMENT` | odliší testovací build od produkce | `development` |
+| `TELEMETRY_RELEASE_GATE` | před vydáním odešle error a diagnostic probe | `false` |
 
 ## Co se posílá
 
@@ -61,6 +62,20 @@ text, název či cesta souboru, source handle nebo hash, účet, room token, ser
 URL, popisek, zpráva, credential ani job ID. Build bez platného `SENTRY_DSN`
 volá jen neaktivní SDK hub a nic neodesílá.
 
+Dočasně nedostupný Apple Keychain se hlásí jako pevný checkpoint
+`credentialUnavailable` s durable/resume fází, bucketem credential retry a
+naplánovaným zpožděním. První výskyt vytvoří event; další pokusy stejného
+výpadku jej nezaplavují. Po úspěšném čtení se čítač zahodí, po vyčerpání se job
+durable přesune do reautentizace.
+
+### Release gate
+
+`TELEMETRY_RELEASE_GATE=true` je explicitní předvydávací režim. Po inicializaci
+SDK odešle jednu pevnou `TelemetryReleaseGateError` se stackem aplikace a jeden
+`attachment-upload-releaseGate` event se strukturovanými tagy. Běžně je vypnutý
+a bez define nevytvoří žádný probe. Spouštěcí nástroj
+`apps/mobile/tool/sentry_release_gate_test.dart` je mimo běžnou test discovery.
+
 Rybbit navíc sám doplňuje model zařízení, verzi OS, verzi aplikace a přibližnou
 polohu odvozenou z IP adresy. Nic z toho neposílá klient a nedá se to vypnout
 na naší straně; je to standardní chování serveru.
@@ -79,20 +94,36 @@ běží dál bez analytiky.
 
 ## Ověření
 
-Živě na Android emulátoru proti `com.nkshub.nextcloudtalk`, build `e5f893d`
-s `--dart-define-from-file=telemetry.env`:
+Build 36 z přesného `da84214` ověřil celý Sentry tok:
+
+- **Android 14 release:** error event `ce2cdb8984d641ee9db81dc64dba1baa`
+  a diagnostic `492f9f5cea9d463f9af94e3137dd4ec1` dorazily jako
+  `com.nkshub.nextcloudtalk@0.1.0+36`, `dist=36`, `production`.
+- **iOS 18.6 Simulator:** Flutter nepodporuje simulator release mode, proto byl
+  použit nejbližší instalovatelný ad-hoc debug artefakt se stejným source,
+  production telemetry a build numberem. Error
+  `9ca434526e00422e9e5372a0910a61b9` a diagnostic
+  `fa615f4dea4447b0bd25fed4fbd2167f` dorazily s `attachment.platform=iOS`;
+  diagnostic neměl user, request ani breadcrumbs.
+- Pět iOS cold launch/terminate cyklů mělo maximum 671 712 KiB RSS a 309 MB
+  physical footprint; release 36 nevytvořil žádný `WatchdogTermination`.
+- Po uzavření historických a syntetických probe issues vrací Sentry dotaz
+  `is:unresolved` pro projekt NKS Talk prázdný seznam.
+
+Původní ověření na Android emulátoru proti `com.nkshub.nextcloudtalk`, build
+`e5f893d` s `--dart-define-from-file=telemetry.env`:
 
 - **Rybbit ověřen (L).** Site `com.nkshub.nextcloudtalk` (org NKS Apps) přijal
   `app_open` s `environment=development` a pageviews `/` → `/search/messages`
   → `/`. Žádný token, id účtu ani název konverzace v payloadu není. Soubor
   `telemetry_installation_id.txt` (32 znaků) vznikl v `files/` aplikace.
-- **Sentry ověřeno jen po inicializaci.** SDK i sentry-native nastartují
+- **Historické omezení tehdejšího testu.** SDK i sentry-native nastartovaly
   (`sentry-native: starting backend` v logcatu), ale event z instance
   nedorazil: Relay na `sentry.example.invalid` v tu dobu nedokázal načíst
   project config (`error fetching project state …: deadline exceeded`) pro
   ~230 klíčů, tedy pro celou instanci. `POST /api/43/store/` vrací HTTP 200,
   přesto nevznikne issue. Je to provozní stav instance, ne chyba integrace —
-  ověření end-to-end zbývá zopakovat, až Relay poběží.
+  Ověření end-to-end je nyní nahrazené build-36 důkazem výše.
 
 Testy:
 

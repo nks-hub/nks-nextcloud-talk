@@ -18,6 +18,21 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- iOS upload už po úspěšném přijetí přílohy nezůstane navždy ve fázi
+  `localPrepared`, když druhé čtení Apple Keychainu dočasně vrátí `-25320`
+  nebo `-60008`. Scheduler chybu zachytí, zopakuje čtení po 2 s, 10 s a 60 s
+  a při trvalém selhání ukáže reautentizaci místo nekonečného čekání. Stejný
+  tok respektuje zrušení účtu, zavření služby, FIFO i existující retry timer.
+- Sentry má povinnou release bránu pro aplikační chybu i strukturovaná
+  attachment data. Android 14 release a iOS 18.6 Simulator build 36 odeslaly
+  oba eventy pod `production` a `dist=36`; attachment payload neobsahoval user,
+  request ani breadcrumbs. Všechna dříve otevřená NKS Talk issue byla po
+  přiřazení fixu a ověření uzavřená; dotaz `is:unresolved` vrací prázdný seznam.
+- Skutečný iOS 18.6 PHPicker upload buildu 36 prošel od výběru JPEG přes
+  app-owned kopii, WebDAV a Talk finalize až k jedné autoritativně potvrzené
+  serverové zprávě. Zdroj se uvolnil, job neměl chybu a testovací zpráva byla
+  po důkazu smazaná.
+
 ## 0.1.0 (35) — 1. 9. 2026
 
 Play: build 35 nebyl v této prioritní iOS opravě vydán.
@@ -33,12 +48,11 @@ nálezu. Distribuční artefakt má platnou Sentry konfiguraci v prostředí
 `production`. Po buildu se odstranilo přibližně 1,62 GiB archive, export,
 DerivedData, Pods a dočasných dat; simulátorová data a signing zůstaly.
 
-- Fotografie vybraná z iOS galerie už nezůstane na „Čeká na nahrání“, když
-  ve stejné konverzaci čeká starší automatický retry. Scheduler přeskočí pouze
-  skutečně odloženou práci, zachová nejbližší timer a při ručním opakování
-  znovu vynutí pořadí. Sentry nově rozliší systémový picker, durable kopii,
-  přijetí do outboxu, jednotlivé upload fáze a 45sekundové zamrznutí fronty,
-  aniž odešle název či cestu souboru, účet, konverzaci, server nebo obsah.
+- Build 35 opravil blokaci nového uploadu starším automatickým retry a přidal
+  fázovou diagnostiku. Následný fyzický test ale doložil druhou nezávislou
+  chybu: dočasně odmítnuté druhé Keychain čtení ukončilo scheduler future a
+  příloha přesto zůstala na „Čeká na nahrání“. Tento build proto není finální
+  oprava iOS galerie; úplná oprava je až v následujícím řezu.
 - V detailu konverzace mohou vlastníci a moderátoři na serveru s `bots-v1`
   zobrazit dostupné boty a zapínat nebo vypínat je. Seznam se načte až po
   otevření sekce, umí prázdný/chybový stav a znovu ověřuje aktuální oprávnění
