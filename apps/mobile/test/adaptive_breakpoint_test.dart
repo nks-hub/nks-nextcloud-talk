@@ -162,6 +162,10 @@ void main() {
     const Key('conversation-shell-compact-conversation'),
   );
   final compactList = find.byKey(const Key('conversation-shell-compact'));
+  final compactNavigator = find.descendant(
+    of: find.byKey(const Key('conversation-shell-compact-navigator')),
+    matching: find.byType(Navigator),
+  );
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
 
@@ -177,9 +181,7 @@ void main() {
 
     expect(compactConversation, findsOneWidget);
     expect(compactList, findsNothing);
-    final navigator = tester.widget<Navigator>(
-      find.byKey(const Key('conversation-shell-compact-navigator')),
-    );
+    final navigator = tester.widget<Navigator>(compactNavigator);
     expect(navigator.pages, hasLength(2));
     expect(
       (navigator.pages.first as MaterialPage<void>).allowSnapshotting,
@@ -207,6 +209,46 @@ void main() {
     expect(compactConversation, findsNothing);
     expect(compactList, findsOneWidget);
 
+    await settle(tester);
+  });
+
+  testWidgets('iOS system back pops a child route before the room', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    await pump(
+      tester,
+      token: _conversation.token,
+      platform: TargetPlatform.iOS,
+    );
+
+    final nestedNavigator = tester.state<NavigatorState>(compactNavigator);
+    expect(
+      Navigator.of(tester.element(compactConversation)),
+      same(nestedNavigator),
+    );
+    nestedNavigator.push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Conversation child route')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation child route'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Conversation child route'), findsNothing);
+    expect(compactConversation, findsOneWidget);
+    expect(compactList, findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(compactConversation, findsNothing);
+    expect(compactList, findsOneWidget);
+    expect(tester.takeException(), isNull);
     await settle(tester);
   });
 

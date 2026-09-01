@@ -203,34 +203,12 @@ final class _CompactShell extends StatelessWidget {
     Widget conversationList,
     CachedConversation? selected,
   ) {
-    final conversationPageKey = selected == null
-        ? null
-        : ValueKey<Object>(('conversation', account.id, selected.token));
-    return NavigatorPopHandler<void>(
-      onPopWithResult: (_) => onCloseConversation(),
-      child: Navigator(
-        key: const Key('conversation-shell-compact-navigator'),
-        pages: <Page<void>>[
-          MaterialPage<void>(
-            key: ValueKey<Object>(('conversation-list', account.id)),
-            name: '/conversations',
-            allowSnapshotting: false,
-            child: conversationList,
-          ),
-          if (selected != null)
-            MaterialPage<void>(
-              key: conversationPageKey,
-              name: '/conversation',
-              allowSnapshotting: false,
-              child: _buildConversation(selected),
-            ),
-        ],
-        onDidRemovePage: (page) {
-          if (page.key == conversationPageKey) {
-            onCloseConversation();
-          }
-        },
-      ),
+    return _IosCompactNavigator(
+      accountId: account.id,
+      conversationToken: selected?.token,
+      conversationList: conversationList,
+      conversation: selected == null ? null : _buildConversation(selected),
+      onCloseConversation: onCloseConversation,
     );
   }
 
@@ -331,6 +309,70 @@ final class _CompactShell extends StatelessWidget {
         ),
         tooltip: strings.newConversationTitle,
         child: const Icon(Icons.chat_bubble_outline_rounded),
+      ),
+    );
+  }
+}
+
+final class _IosCompactNavigator extends StatefulWidget {
+  const _IosCompactNavigator({
+    required this.accountId,
+    required this.conversationToken,
+    required this.conversationList,
+    required this.conversation,
+    required this.onCloseConversation,
+  });
+
+  final String accountId;
+  final String? conversationToken;
+  final Widget conversationList;
+  final Widget? conversation;
+  final VoidCallback onCloseConversation;
+
+  @override
+  State<_IosCompactNavigator> createState() => _IosCompactNavigatorState();
+}
+
+final class _IosCompactNavigatorState extends State<_IosCompactNavigator> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final conversationPageKey = widget.conversationToken == null
+        ? null
+        : ValueKey<Object>((
+            'conversation',
+            widget.accountId,
+            widget.conversationToken,
+          ));
+    return KeyedSubtree(
+      key: const Key('conversation-shell-compact-navigator'),
+      child: NavigatorPopHandler<void>(
+        onPopWithResult: (result) =>
+            _navigatorKey.currentState!.pop<void>(result),
+        child: Navigator(
+          key: _navigatorKey,
+          pages: <Page<void>>[
+            MaterialPage<void>(
+              key: ValueKey<Object>(('conversation-list', widget.accountId)),
+              name: '/conversations',
+              allowSnapshotting: false,
+              child: widget.conversationList,
+            ),
+            if (widget.conversation != null)
+              MaterialPage<void>(
+                key: conversationPageKey,
+                name: '/conversation',
+                allowSnapshotting: false,
+                child: widget.conversation!,
+              ),
+          ],
+          onDidRemovePage: (page) {
+            if (page.key == conversationPageKey) {
+              widget.onCloseConversation();
+            }
+          },
+        ),
       ),
     );
   }
