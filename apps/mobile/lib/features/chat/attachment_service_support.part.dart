@@ -1,7 +1,10 @@
 part of 'attachment_service.dart';
 
-/// Older retryable jobs own no active request, so they cannot enforce room
-/// FIFO while a later user-selected upload is ready to finalize.
+/// Older jobs that own no active request cannot enforce room FIFO while a
+/// later user-selected upload is ready to finalize. That covers a scheduled or
+/// exhausted retry, and a confirmation that gave up its automatic catch-up:
+/// all three move only on an explicit retry, so holding the room for them
+/// would block every later attachment for as long as the account exists.
 Set<AttachmentJobId> _inactiveFinalizationBlockExemptions(
   _AttachmentServiceRuntime service,
   AttachmentJob current,
@@ -15,9 +18,17 @@ Set<AttachmentJobId> _inactiveFinalizationBlockExemptions(
   for (final other in account.jobs.values) {
     if (other.jobId == current.jobId ||
         other.draft.roomToken != current.draft.roomToken ||
-        other.draft.enqueueSequence >= current.draft.enqueueSequence ||
-        (other.phase != AttachmentJobPhase.retryable &&
-            other.phase != AttachmentJobPhase.cleanupFailed)) {
+        other.draft.enqueueSequence >= current.draft.enqueueSequence) {
+      continue;
+    }
+    if (other.phase == AttachmentJobPhase.awaitingConfirmation) {
+      if (other.errorClass == attachmentConfirmationReconciliationRequired) {
+        result.add(other.jobId);
+      }
+      continue;
+    }
+    if (other.phase != AttachmentJobPhase.retryable &&
+        other.phase != AttachmentJobPhase.cleanupFailed) {
       continue;
     }
     final metadata = service._metadata[_jobKey(other.accountId, other.jobId)];
@@ -37,6 +48,11 @@ const List<Duration> _localPersistenceRetryDelays = <Duration>[
   Duration(milliseconds: 250),
   Duration(seconds: 1),
 ];
+
+/// Why one room step returned. [blocked] means the state machine refused the
+/// plan for this job alone, so the room must try its next job instead of
+/// going idle.
+enum _AttachmentStepOutcome { progressed, blocked, stopped }
 
 final class _SelectedAttachmentJob {
   const _SelectedAttachmentJob(this.key, this.roomKey);

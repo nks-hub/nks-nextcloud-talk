@@ -495,6 +495,139 @@ void _registerAttachmentServiceSchedulerTests() {
     expect(finalized, 1);
     await _expectFileRemoved(fixture.sourceFile);
   });
+
+  test('a job held back by room order does not strand later uploads', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var probes = 0;
+    var uploaded = 0;
+    var finalized = 0;
+    final catchUpStarted = Completer<void>();
+    final releaseCatchUp = Completer<void>();
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          probes++;
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          uploaded++;
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          finalized++;
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: _SequentialIdentifierFactory(),
+      confirmationRetryDelays: const <Duration>[Duration(minutes: 10)],
+      catchUpConfirmation:
+          ({required accountId, required roomToken, required threadId}) async {
+            if (!catchUpStarted.isCompleted) {
+              catchUpStarted.complete();
+            }
+            await releaseCatchUp.future;
+          },
+    );
+    addTearDown(service.close);
+    addTearDown(releaseCatchUp.complete);
+
+    // The first job holds the room: its confirmation is still being chased, so
+    // room order legitimately keeps later jobs short of finalization.
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    await first.events
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 2));
+    await catchUpStarted.future.timeout(const Duration(seconds: 2));
+
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    final second = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    await second.events
+        .firstWhere((event) => event.phase == AttachmentJobPhase.uploaded)
+        .timeout(const Duration(seconds: 2));
+
+    // A newly picked attachment must still reach the network. Leaving it at
+    // localPrepared without a single attempt is the permanent "waiting to
+    // upload" the user sees.
+    final thirdSource = await _createDistinctAttachmentSource(
+      fixture,
+      name: 'source-third.bin',
+    );
+    final third = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: thirdSource.source),
+    );
+    final started = await third.events
+        .firstWhere((event) => event.phase == AttachmentJobPhase.uploaded)
+        .timeout(const Duration(seconds: 2));
+
+    expect(started.attemptCount, greaterThan(0));
+    expect(probes, 3);
+    expect(uploaded, 3);
+    expect(finalized, 1);
+  });
+
+  test('a parked confirmation stops holding the room finalization', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var finalized = 0;
+    final service = fixture.service(
+      MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          finalized++;
+          return http.Response.bytes(
+            _finalizeSuccess(fileName: 'source-$finalized.png'),
+            200,
+          );
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      }),
+      identifierFactory: _SequentialIdentifierFactory(),
+      confirmationRetryDelays: const <Duration>[],
+      catchUpConfirmation:
+          ({
+            required accountId,
+            required roomToken,
+            required threadId,
+          }) async {},
+    );
+    addTearDown(service.close);
+
+    // The room never echoes the finalized message back, so the first job gives
+    // up its automatic catch-up and waits for an explicit retry.
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    await first.events
+        .firstWhere(
+          (event) =>
+              event.errorClass == attachmentConfirmationReconciliationRequired,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    // That parked job owns no request, so it must not hold the room hostage.
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    final second = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    await second.events
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    expect(finalized, 2);
+  });
 }
 
 final class _RecordingRetryTimer implements Timer {
@@ -561,10 +694,11 @@ final class _BlockingSecondCredentialVault implements CredentialVault {
 }
 
 Future<({File file, PreparedAttachmentSource source})>
-_createDistinctAttachmentSource(_Fixture fixture) async {
-  final file = File(
-    '${fixture.directory.path}${Platform.pathSeparator}source-second.bin',
-  );
+_createDistinctAttachmentSource(
+  _Fixture fixture, {
+  String name = 'source-second.bin',
+}) async {
+  final file = File('${fixture.directory.path}${Platform.pathSeparator}$name');
   await file.writeAsBytes(fixture.bytes, flush: true);
   final template = fixture.request(normalMaximum: 32).source;
   return (

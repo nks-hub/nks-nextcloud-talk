@@ -414,6 +414,7 @@ void _registerAttachmentServiceLifecycleTests() {
       final finalCatchUpStarted = Completer<void>();
       final releaseFinalCatchUp = Completer<void>();
       var catchUpCalls = 0;
+      var confirmFirstJob = false;
       var uploaded = 0;
       var finalized = 0;
       final service = fixture.service(
@@ -452,7 +453,7 @@ void _registerAttachmentServiceLifecycleTests() {
               } else if (catchUpCalls == 3) {
                 finalCatchUpStarted.complete();
                 await releaseFinalCatchUp.future;
-              } else if (catchUpCalls == 4) {
+              } else if (confirmFirstJob) {
                 await fixture.cacheConfirmation(messageId: 114);
               }
             },
@@ -487,12 +488,15 @@ void _registerAttachmentServiceLifecycleTests() {
         accountId: 'account-a',
         jobId: first.jobId.value,
       );
-      final storedSecond = await fixture.repository.getStoredJob(
-        accountId: 'account-a',
-        jobId: second.jobId.value,
-      );
+      // A parked confirmation waits for an explicit retry, so it stops holding
+      // room order and the second job finalizes without one.
+      await second.events
+          .firstWhere(
+            (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+          )
+          .timeout(const Duration(seconds: 2));
 
-      expect(catchUpCalls, 3);
+      expect(catchUpCalls, greaterThanOrEqualTo(3));
       expect(
         reconciliationRequired.phase,
         AttachmentJobPhase.awaitingConfirmation,
@@ -505,10 +509,10 @@ void _registerAttachmentServiceLifecycleTests() {
       );
       expect(storedFirst?.automaticRetryCount, 3);
       expect(storedFirst?.nextAttemptAtMillis, isNull);
-      expect(storedSecond?.phase, AttachmentJobPhase.uploaded.name);
       expect(await fixture.sourceFile.exists(), isTrue);
-      expect(finalized, 1);
+      expect(finalized, 2);
 
+      confirmFirstJob = true;
       await first.retry();
       await first.events
           .firstWhere((event) => event.phase == AttachmentJobPhase.completed)

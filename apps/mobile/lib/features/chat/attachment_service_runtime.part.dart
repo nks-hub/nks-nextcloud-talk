@@ -283,6 +283,7 @@ mixin _AttachmentServiceRuntime {
     AttachmentPersistenceKey key, {
     required int attemptCount,
   }) async {
+    _AttachmentRoomKey? parkedRoom;
     for (var attempt = 0; ; attempt++) {
       try {
         await _stateMutex.protect(() async {
@@ -315,8 +316,15 @@ mixin _AttachmentServiceRuntime {
           );
           _snapshot = _snapshot.replaceAccount(updatedAccount);
           _metadata[key] = updatedMetadata;
+          parkedRoom = _AttachmentRoomKey(accountId, job.draft.roomToken);
         });
         _confirmationRetryCounts.remove(key);
+        final room = parkedRoom;
+        if (room != null && !_closed) {
+          // The parked job no longer holds room order, so whatever it was
+          // holding back can finalize now instead of on the next upload.
+          unawaited(_scheduleRoom(room));
+        }
         return;
       } on Object {
         if (attempt >= _localPersistenceRetryDelays.length) {
@@ -366,22 +374,33 @@ mixin _AttachmentServiceRuntime {
   }
 
   Future<void> _runRoom(_AttachmentRoomKey roomKey) async {
+    // A job the state machine refuses to plan right now, such as one held back
+    // by room finalization order, must not end the lane: every later
+    // attachment in the room would sit at localPrepared forever.
+    final blocked = <AttachmentPersistenceKey>{};
     while (!_closed) {
       final selection = await _stateMutex.protect(
-        () async => _selectNextJob(roomKey),
+        () async => _selectNextJob(roomKey, blocked),
       );
       if (selection == null) {
         await _beforeRoomIdle?.call();
         return;
       }
-      final progressed = await _executeOneStep(selection);
-      if (!progressed) {
+      final outcome = await _executeOneStep(selection);
+      if (outcome == _AttachmentStepOutcome.blocked) {
+        blocked.add(selection.key);
+        continue;
+      }
+      if (outcome == _AttachmentStepOutcome.stopped) {
         return;
       }
     }
   }
 
-  _SelectedAttachmentJob? _selectNextJob(_AttachmentRoomKey roomKey) {
+  _SelectedAttachmentJob? _selectNextJob(
+    _AttachmentRoomKey roomKey,
+    Set<AttachmentPersistenceKey> blocked,
+  ) {
     final account = _snapshot.accounts[roomKey.accountId];
     if (account == null || account.lane != AttachmentAccountLane.ready) {
       return null;
@@ -410,6 +429,9 @@ mixin _AttachmentServiceRuntime {
         return null;
       }
       final key = _jobKey(account.accountId, job.jobId);
+      if (blocked.contains(key)) {
+        continue;
+      }
       if (phase == AttachmentJobPhase.retryable ||
           phase == AttachmentJobPhase.cleanupFailed) {
         final metadata = _metadata[key]!;
@@ -427,26 +449,28 @@ mixin _AttachmentServiceRuntime {
     return null;
   }
 
-  Future<bool> _executeOneStep(_SelectedAttachmentJob selection) async {
+  Future<_AttachmentStepOutcome> _executeOneStep(
+    _SelectedAttachmentJob selection,
+  ) async {
     final key = selection.key;
     AttachmentJob? job = _jobForKey(key);
     if (job == null || _suspendedAccounts.contains(job.accountId)) {
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     final storedAccount = await _repository.getAccount(key.accountId);
     if (storedAccount == null) {
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     final String? password;
     try {
       password = await _credentials.readAppPassword(key.accountId);
     } on CredentialVaultTemporarilyUnavailable {
       await _deferForCredential(selection.roomKey, key, job);
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     if (password == null || password.isEmpty) {
       await _deferForCredential(selection.roomKey, key, job);
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     _credentialRetryCounts.remove(key);
     final authorization = AttachmentTransportAuthorization(
@@ -479,13 +503,15 @@ mixin _AttachmentServiceRuntime {
         } on AttachmentTransportException catch (error) {
           if (error.code == AttachmentTransportError.cancelled ||
               cancellation.isCancelled) {
-            return false;
+            return _AttachmentStepOutcome.stopped;
           }
-          return _recordUnavailableSource(key, job);
+          return await _recordUnavailableSource(key, job)
+              ? _AttachmentStepOutcome.progressed
+              : _AttachmentStepOutcome.stopped;
         }
       }
       if (cancellation.isCancelled) {
-        return false;
+        return _AttachmentStepOutcome.stopped;
       }
 
       AttachmentRequest? request;
@@ -532,13 +558,15 @@ mixin _AttachmentServiceRuntime {
       final plannedRequest = request;
       if (plannedRequest == null) {
         if (planningRejected) {
-          return false;
+          return _AttachmentStepOutcome.blocked;
         }
         final current = _jobForKey(key);
         if (current != null && _isSourceReleasePhase(current.phase)) {
           await _releaseTerminalSource(key);
         }
-        return !cancellation.isCancelled;
+        return cancellation.isCancelled
+            ? _AttachmentStepOutcome.stopped
+            : _AttachmentStepOutcome.progressed;
       }
 
       dispatchedRequest = plannedRequest;
@@ -565,7 +593,7 @@ mixin _AttachmentServiceRuntime {
     } on AttachmentTransportException catch (error) {
       if (error.code == AttachmentTransportError.cancelled ||
           cancellation.isCancelled) {
-        return false;
+        return _AttachmentStepOutcome.stopped;
       }
       final failedRequest = dispatchedRequest;
       if (failedRequest == null) {
@@ -598,12 +626,12 @@ mixin _AttachmentServiceRuntime {
 
     if (cancellation.isCancelled ||
         _suspendedAccounts.contains(job!.accountId)) {
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
 
     final current = _jobForKey(key);
     if (current == null) {
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     if (current.phase == AttachmentJobPhase.uploaded ||
         current.phase == AttachmentJobPhase.awaitingConfirmation ||
@@ -621,7 +649,7 @@ mixin _AttachmentServiceRuntime {
       await _stateMutex.protect(() async {
         _armEarliestRetry(selection.roomKey);
       });
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
     if ((current.phase == AttachmentJobPhase.retryable ||
             current.phase == AttachmentJobPhase.cleanupFailed) &&
@@ -629,9 +657,9 @@ mixin _AttachmentServiceRuntime {
       await _stateMutex.protect(() async {
         _armEarliestRetry(selection.roomKey);
       });
-      return false;
+      return _AttachmentStepOutcome.stopped;
     }
-    return true;
+    return _AttachmentStepOutcome.progressed;
   }
 
   Future<AttachmentResponse> _dispatch(
