@@ -78,6 +78,7 @@ final class _ReferenceCardConsumer extends ConsumerWidget {
                 key: Key('chat-reference-card-$index'),
                 card: card,
                 target: target,
+                index: index,
                 foregroundColor: foregroundColor,
                 launcher: ref.read(referenceUriLauncherProvider),
               ),
@@ -94,12 +95,14 @@ final class _ReferenceCard extends StatelessWidget {
     super.key,
     required this.card,
     required this.target,
+    required this.index,
     required this.foregroundColor,
     required this.launcher,
   });
 
   final ReferenceCardData card;
   final ReferenceResolutionTarget target;
+  final int index;
   final Color foregroundColor;
   final ReferenceUriLauncher launcher;
 
@@ -137,42 +140,68 @@ final class _ReferenceCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.link, size: 20, color: foregroundColor),
+                // Fixed leading tile. A link with a preview image and one
+                // without keep the same shape, so a thread of mixed links
+                // does not jump around.
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: foregroundColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.link, size: 20, color: foregroundColor),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Title first and loudest, the source right under it,
+                      // the description last and quietest.
                       Text(
                         title,
+                        key: Key('chat-reference-title-$index'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: foregroundColor,
                           fontWeight: FontWeight.w600,
+                          height: 1.2,
                         ),
                       ),
-                      if (description != null && description.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          description,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: foregroundColor),
-                        ),
-                      ],
                       const SizedBox(height: 2),
                       Text(
                         target.reference.host,
+                        key: Key('chat-reference-host-$index'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: foregroundColor),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: foregroundColor.withValues(alpha: 0.70),
+                        ),
                       ),
+                      if (description != null && description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          key: Key('chat-reference-description-$index'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: foregroundColor.withValues(alpha: 0.85),
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.open_in_new, size: 18, color: foregroundColor),
+                Icon(
+                  Icons.open_in_new,
+                  size: 16,
+                  color: foregroundColor.withValues(alpha: 0.70),
+                ),
               ],
             ),
           ),

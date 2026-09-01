@@ -52,6 +52,67 @@ void main() {
     },
   );
 
+  testWidgets('the card keeps its hierarchy with long values at 200% text', (
+    tester,
+  ) async {
+    final resolver = _FakeReferenceResolver((target) async {
+      return ReferenceCardData(
+        reference: target.reference,
+        title:
+            'مرحبا بالعالم — a title long enough to need both of its lines '
+            'and then some more so it has to be cut off',
+        description:
+            'وصف طويل جدا — a description that keeps going well past '
+            'the two lines the card is willing to give it, on purpose',
+        richObjectType: 'integration_unknown',
+      );
+    });
+
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _app(
+        _message('https://docs.example.invalid/original'),
+        overrides: [
+          referenceResolverProvider.overrideWithValue(resolver),
+          referenceUriLauncherProvider.overrideWithValue((uri) async => true),
+        ],
+        textScale: 2,
+      ),
+    );
+    await tester.pump();
+
+    final title = find.byKey(const Key('chat-reference-title-0'));
+    final host = find.byKey(const Key('chat-reference-host-0'));
+    final description = find.byKey(const Key('chat-reference-description-0'));
+    expect(title, findsOneWidget);
+    expect(host, findsOneWidget);
+    expect(description, findsOneWidget);
+
+    // Title, then source, then description: the source must never end up
+    // below the description again.
+    expect(
+      tester.getTopLeft(host).dy,
+      greaterThan(tester.getTopLeft(title).dy),
+    );
+    expect(
+      tester.getTopLeft(description).dy,
+      greaterThan(tester.getTopLeft(host).dy),
+    );
+
+    // The title outranks the description visually.
+    final titleStyle = tester.widget<Text>(title).style!;
+    final descriptionStyle = tester.widget<Text>(description).style!;
+    expect(titleStyle.fontWeight, FontWeight.w600);
+    expect(titleStyle.fontSize! > descriptionStyle.fontSize!, isTrue);
+
+    // A link without a preview image still reserves the same leading slot.
+    expect(find.byIcon(Icons.link), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('resolver failure keeps the ordinary inline link as fallback', (
     tester,
   ) async {
@@ -109,23 +170,29 @@ void main() {
   });
 }
 
-Widget _app(ChatMessage message, {required List<Override> overrides}) =>
-    ProviderScope(
-      overrides: overrides,
-      child: localizedTestApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 320,
-            child: ChatMessageContent(
-              account: _account,
-              message: message,
-              fallbackText: message.message,
-              foregroundColor: Colors.black,
-            ),
+Widget _app(
+  ChatMessage message, {
+  required List<Override> overrides,
+  double textScale = 1,
+}) => ProviderScope(
+  overrides: overrides,
+  child: localizedTestApp(
+    home: MediaQuery(
+      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+      child: Scaffold(
+        body: SizedBox(
+          width: 320,
+          child: ChatMessageContent(
+            account: _account,
+            message: message,
+            fallbackText: message.message,
+            foregroundColor: Colors.black,
           ),
         ),
       ),
-    );
+    ),
+  ),
+);
 
 ChatMessage _message(String text) => ChatMessage.fromJson({
   'id': 42,
