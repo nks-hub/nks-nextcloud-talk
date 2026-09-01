@@ -98,6 +98,8 @@ abstract class _HttpNextcloudApiBase {
   final Map<AccountId, Future<void>> _accountSessionTails = {};
   final Map<AccountId, int> _accountSessionGenerations = {};
   final Map<AccountId, ActiveRoomSessionLease> _activeRoomSessions = {};
+  final Set<AccountId> _suspendedAccountSessions = {};
+  bool _closed = false;
 
   Future<T> _serializeAccountSession<T>(
     AccountId accountId,
@@ -139,6 +141,9 @@ abstract class _HttpNextcloudApiBase {
 
   bool _ownsRoomSession(ActiveRoomSessionLease lease) =>
       identical(_activeRoomSessions[lease.accountId], lease);
+
+  bool _roomSessionBlocked(AccountId accountId) =>
+      _closed || _suspendedAccountSessions.contains(accountId);
 
   /// Any authenticated request answered with 401 means the session behind those
   /// credentials no longer holds the authority the snapshot was read under, so
@@ -281,7 +286,11 @@ abstract class _HttpNextcloudApiBase {
     Duration? timeout,
     AccountId? sessionAccountId,
     ServerBase? sessionServer,
+    bool allowAfterClose = false,
   }) async {
+    if (_closed && !allowAfterClose) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
+    }
     if (sessionAccountId != null && sessionServer != null) {
       _accountCookies.apply(request, sessionAccountId, sessionServer);
     }
@@ -291,7 +300,11 @@ abstract class _HttpNextcloudApiBase {
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
-      if (sessionAccountId != null && sessionServer != null) {
+      if (_closed && !allowAfterClose) {
+        await response.stream.drain<void>();
+        throw const NextcloudApiException(NextcloudApiError.cancelled);
+      }
+      if (!_closed && sessionAccountId != null && sessionServer != null) {
         _accountCookies.capture(
           response.headers,
           sessionAccountId,
@@ -363,7 +376,27 @@ abstract class _HttpNextcloudApiBase {
     });
   }
 
-  void close() {
+  AccountId _suspendAccountSession(String accountId) {
+    final parsed = AccountId.parse(accountId);
+    _suspendedAccountSessions.add(parsed);
+    _accountSessionGenerations[parsed] =
+        (_accountSessionGenerations[parsed] ?? 0) + 1;
+    return parsed;
+  }
+
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    final accounts = <AccountId>{
+      ..._accountSessionTails.keys,
+      ..._activeRoomSessions.keys,
+    };
+    _suspendedAccountSessions.addAll(accounts);
+    for (final accountId in accounts) {
+      _accountSessionGenerations[accountId] =
+          (_accountSessionGenerations[accountId] ?? 0) + 1;
+    }
+    await Future.wait<void>(_accountSessionTails.values.toList());
     _accountCookies.clearAll();
     _activeRoomSessions.clear();
     _client.close();

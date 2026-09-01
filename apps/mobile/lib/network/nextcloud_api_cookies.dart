@@ -20,12 +20,18 @@ final class _AccountCookieStore {
       (_, cookie) =>
           cookie.expiresAt != null && !cookie.expiresAt!.isAfter(now),
     );
-    final eligible = stored.cookies.values.where(
-      (stored) =>
-          (!stored.cookie.secure || request.url.scheme == 'https') &&
-          _domainMatches(request.url.host, stored.domain) &&
-          _pathMatches(request.url.path, stored.path),
-    );
+    final eligible =
+        stored.cookies.values
+            .where(
+              (stored) =>
+                  (!stored.cookie.secure || request.url.scheme == 'https') &&
+                  _domainMatches(request.url.host, stored.domain) &&
+                  _pathMatches(request.url.path, stored.path),
+            )
+            .toList()
+          ..sort(
+            (left, right) => right.path.length.compareTo(left.path.length),
+          );
     if (eligible.isNotEmpty) {
       request.headers['Cookie'] = eligible
           .map((stored) => '${stored.cookie.name}=${stored.cookie.value}')
@@ -71,16 +77,18 @@ final class _AccountCookieStore {
       final path = _cookiePath(cookie.path, requestUri.path);
       final key = (name: cookie.name, domain: domain, path: path);
       final maxAge = cookie.maxAge;
-      if ((maxAge != null && maxAge <= 0) || cookie.value.isEmpty) {
+      final expiresAt = maxAge == null
+          ? cookie.expires?.toUtc()
+          : now.add(Duration(seconds: maxAge));
+      if ((maxAge != null && maxAge <= 0) ||
+          (expiresAt != null && !expiresAt.isAfter(now))) {
         stored.cookies.remove(key);
       } else {
         stored.cookies[key] = _StoredCookie(
           cookie: cookie,
           domain: domain,
           path: path,
-          expiresAt: maxAge == null
-              ? cookie.expires?.toUtc()
-              : now.add(Duration(seconds: maxAge)),
+          expiresAt: expiresAt,
         );
       }
     }

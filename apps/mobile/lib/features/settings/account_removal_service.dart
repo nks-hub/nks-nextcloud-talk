@@ -104,14 +104,24 @@ final class AccountRemovalService {
       );
     }
 
+    final appPassword = await _credentials.readAppPassword(accountId);
     await _onRemovalStarted?.call(accountId);
-    await _api.clearAccountSession(accountId);
+    if (appPassword != null && appPassword.isNotEmpty) {
+      await _bestEffort(
+        () => _api.shutdownAccountSession(
+          accountId: accountId,
+          loginName: account.loginName,
+          appPassword: appPassword,
+        ),
+      );
+    } else {
+      await _api.clearAccountSession(accountId);
+    }
 
     final pushRegistrationRevoked = _revokePush == null
         ? true
         : await _bestEffortResult(() => _revokePush(accountId));
 
-    final appPassword = await _credentials.readAppPassword(accountId);
     var appPasswordRevoked = false;
     if (appPassword != null && appPassword.isNotEmpty) {
       final server = ServerBase.parse(account.serverUrl);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -357,7 +358,8 @@ void main() {
 
     activeCookie =
         'same=root; Path=/, '
-        'same=scoped; Path=/ocs/v2.php/apps/spreed/api/v3/signaling';
+        'same=scoped; Path=/ocs/v2.php/apps/spreed/api/v3/signaling, '
+        'empty=; Path=/';
     activation = await api.activateRoomSession(
       activeRequest: _activeRequest('account-a'),
       loginName: 'fixture-user',
@@ -368,12 +370,51 @@ void main() {
       loginName: 'fixture-user',
       appPassword: 'fixture-password',
     );
-    expect(settingsCookies.last, 'same=root; same=scoped');
+    expect(settingsCookies.last, 'same=scoped; same=root; empty=');
     await api.deactivateRoomSession(
       lease: activation.lease!,
       loginName: 'fixture-user',
       appPassword: 'fixture-password',
     );
+  });
+
+  test('close invalidates a held activation before cookie capture', () async {
+    final started = Completer<void>();
+    final release = Completer<void>();
+    var deletes = 0;
+    final room = _activeRoomFixture()..['sessionId'] = 'active-session';
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.method == 'DELETE') {
+          deletes++;
+          return _ocsResponse(null);
+        }
+        started.complete();
+        await release.future;
+        return _ocsResponse(room, cookie: 'nc_session=late; Path=/');
+      }),
+    );
+    final activation = api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await started.future;
+    final close = api.close();
+    release.complete();
+
+    await expectLater(
+      activation,
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.code,
+          'code',
+          NextcloudApiError.cancelled,
+        ),
+      ),
+    );
+    await close;
+    expect(deletes, 1);
   });
 }
 

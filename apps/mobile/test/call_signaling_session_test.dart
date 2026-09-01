@@ -410,6 +410,20 @@ void main() {
     final stored = await database.select(database.callSessions).get();
     expect(stored, hasLength(1));
     expect(stored.single.accountId, 'account-b');
+    await expectLater(
+      coordinator.start(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        nextcloudSessionId: 'session-a-new',
+      ),
+      throwsA(
+        isA<CallSignalingStartException>().having(
+          (error) => error.code,
+          'code',
+          CallSignalingStartError.suspended,
+        ),
+      ),
+    );
   });
 }
 

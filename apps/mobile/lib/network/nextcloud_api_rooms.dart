@@ -11,12 +11,35 @@ final Set<int> _internalSignalingAllowedStatusCodes = <int>{
 const _activeRoomSessionMaximumBytes = 1024 * 1024;
 
 mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
+  Future<void> shutdownAccountSession({
+    required String accountId,
+    required String loginName,
+    required String appPassword,
+  }) {
+    final parsed = _suspendAccountSession(accountId);
+    return _serializeAccountSession(parsed, () async {
+      final lease = _activeRoomSessions[parsed];
+      if (lease != null) {
+        await _deactivateRoomSessionOwned(
+          lease: lease,
+          loginName: loginName,
+          appPassword: appPassword,
+        );
+      }
+      _activeRoomSessions.remove(parsed);
+      _accountCookies.clear(parsed);
+    });
+  }
+
   Future<ActiveRoomSessionActivation> activateRoomSession({
     required ActiveRoomSessionRequest activeRequest,
     required String loginName,
     required String appPassword,
     Future<void>? abortTrigger,
   }) => _serializeAccountSession(activeRequest.accountId, () async {
+    if (_roomSessionBlocked(activeRequest.accountId)) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
+    }
     final previous = _activeRoomSessions[activeRequest.accountId];
     if (previous != null) {
       await _deactivateRoomSessionOwned(
@@ -43,6 +66,14 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
         statusCode: payload.statusCode,
         body: payload.body,
       );
+      if (_roomSessionBlocked(activeRequest.accountId)) {
+        await _deactivateRoomSessionOwned(
+          lease: lease,
+          loginName: loginName,
+          appPassword: appPassword,
+        );
+        throw const NextcloudApiException(NextcloudApiError.cancelled);
+      }
       if (response is ActiveRoomSessionSuccess) {
         return ActiveRoomSessionActivation(response: response, lease: lease);
       }
@@ -97,6 +128,7 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
         timeout: const Duration(seconds: 20),
         sessionAccountId: lease.accountId,
         sessionServer: lease.server,
+        allowAfterClose: true,
       );
     } finally {
       if (_ownsRoomSession(lease)) {

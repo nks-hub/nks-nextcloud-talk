@@ -26,6 +26,7 @@ enum CallSignalingStartError {
   credentialMissing,
   invalidContext,
   disposed,
+  suspended,
 }
 
 final class CallSignalingStartException implements Exception {
@@ -183,6 +184,7 @@ final class CallSignalingCoordinator {
   final int Function() _nowMicros;
   final int Function() _reconnectJitterUnit;
   final Map<String, _CallSignalingLane> _lanes = {};
+  final Set<String> _suspendedAccounts = {};
   Future<void> _gate = Future<void>.value();
   bool _disposed = false;
 
@@ -195,6 +197,11 @@ final class CallSignalingCoordinator {
       if (_disposed) {
         throw const CallSignalingStartException(
           CallSignalingStartError.disposed,
+        );
+      }
+      if (_suspendedAccounts.contains(accountId)) {
+        throw const CallSignalingStartException(
+          CallSignalingStartError.suspended,
         );
       }
       final parsedAccountId = AccountId.parse(accountId);
@@ -215,12 +222,22 @@ final class CallSignalingCoordinator {
       }
 
       final account = await _accounts.getAccount(accountId);
+      if (_suspendedAccounts.contains(accountId)) {
+        throw const CallSignalingStartException(
+          CallSignalingStartError.suspended,
+        );
+      }
       if (account == null) {
         throw const CallSignalingStartException(
           CallSignalingStartError.accountMissing,
         );
       }
       final appPassword = await _credentials.readAppPassword(accountId);
+      if (_suspendedAccounts.contains(accountId)) {
+        throw const CallSignalingStartException(
+          CallSignalingStartError.suspended,
+        );
+      }
       if (appPassword == null) {
         throw const CallSignalingStartException(
           CallSignalingStartError.credentialMissing,
@@ -294,6 +311,12 @@ final class CallSignalingCoordinator {
           );
         }
         await _sessions.persist(preparedSnapshot.accounts[parsedAccountId]!);
+        if (_suspendedAccounts.contains(accountId)) {
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+          throw const CallSignalingStartException(
+            CallSignalingStartError.suspended,
+          );
+        }
         late final _CallSignalingLane lane;
         lane = _CallSignalingLane(
           snapshot: preparedSnapshot,
@@ -342,6 +365,7 @@ final class CallSignalingCoordinator {
   }
 
   Future<void> shutdownAccount(String accountId) {
+    _suspendedAccounts.add(accountId);
     return _synchronized(() async {
       final lane = _lanes.remove(accountId);
       if (lane != null) {
