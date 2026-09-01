@@ -25,6 +25,9 @@ proto jen to, co je doložitelné z App Store Connect.
   Po cold i warm startu se vybere přesný účet a konverzace; soubor se nejdřív
   bezpečně zkopíruje do úložiště aplikace a opakované systémové doručení jej
   neodešle podruhé.
+- Běžné HTTPS odkazy ve zprávách se na serveru s References API zobrazí jako
+  OpenGraph karta. Neznámý provider má bezpečný obecný náhled; při chybě zůstane
+  původní inline odkaz a klepnutí nikdy nepoužije serverem podvržený cíl.
 
 ## 0.1.0 (33) — 1. 9. 2026
 

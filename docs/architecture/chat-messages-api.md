@@ -201,6 +201,23 @@ platného vlákna bez replies, bezpečný inline link a interní viewer obrázko
 příloh. Čerstvý výběr sedmi chat/Giphy testovacích souborů po commitu `8724281`
 prošel 63/63 a `flutter analyze` skončil bez nálezu.
 
+### Obecné References a OpenGraph
+
+Commit `71fe53c` připojuje obecné odkazy pouze za autentizovanou capability
+`core.reference-api`. Z jedné zprávy vezme nejvýše tři různé validní HTTPS URL
+a volá `GET /ocs/v2.php/references/resolve?reference=...&format=json` s limitem
+1 MiB, 10 sekundami a zakázanými redirecty. Odpověď se přijme jen pod přesným
+map key původního odkazu.
+
+Cache je svázaná s účtem, loginem a přesným server originem, drží nejvýše 128
+položek jednu hodinu a souběžná shodná resolve sdílí jeden request. Známý rich
+object se vykreslí typovaně, neznámý provider používá bounded
+`openGraphObject`. Serverové pole `link` není navigační autorita: zobrazený
+host i tap vždy používají původní validovanou URL. Chyba, nepřístupná reference
+nebo nevalidní payload zachovají běžný inline odkaz. Contract/protocol sada
+prošla 969/969 a dotčená reference/content/Giphy sada 40/40; živý obousměrný a
+restart průchod zatím chybí.
+
 ### Historický Android Giphy wire-reference runtime
 
 Commit `5f6e2f4` má debug APK SHA-256
