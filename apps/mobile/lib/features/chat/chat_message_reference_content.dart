@@ -248,7 +248,9 @@ final class _ReferenceLeading extends ConsumerWidget {
       return fallback;
     }
     final image = ref.watch(
-      referenceThumbnailProvider((account: account, uri: uri)),
+      referenceThumbnailProvider(
+        ChatMediaProviderKey(account: account, uri: uri),
+      ),
     );
     final bytes = image.valueOrNull?.body;
     if (bytes == null) {

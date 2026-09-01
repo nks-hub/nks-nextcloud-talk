@@ -779,7 +779,32 @@ final class ConversationAvatarProviderKey {
           other.versioned == versioned);
 }
 
-typedef ChatMediaProviderKey = ({StoredAccount account, Uri uri});
+/// Identity of one media fetch.
+///
+/// Equality deliberately ignores everything on the account row that a sync
+/// rewrites — cursor, hash, last sync time and last error. A record would
+/// compare the whole row, so every poll produced a new family key, disposed
+/// the running provider and refetched the image; that is what made pictures
+/// and GIFs blink every few seconds while a room was open.
+final class ChatMediaProviderKey {
+  const ChatMediaProviderKey({required this.account, required this.uri});
+
+  final StoredAccount account;
+  final Uri uri;
+
+  @override
+  int get hashCode =>
+      Object.hash(account.id, account.serverUrl, account.loginName, uri);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChatMediaProviderKey &&
+          other.account.id == account.id &&
+          other.account.serverUrl == account.serverUrl &&
+          other.account.loginName == account.loginName &&
+          other.uri == uri);
+}
 
 /// Preview image of a link reference, fetched from the account's own server.
 ///

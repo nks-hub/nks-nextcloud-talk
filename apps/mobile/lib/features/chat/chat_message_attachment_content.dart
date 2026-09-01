@@ -278,7 +278,9 @@ final class _ChatAttachment extends ConsumerWidget {
     final previewUri = _previewUri(account, parameter, mimeType);
     final previewProvider = previewUri == null
         ? null
-        : chatMediaProvider((account: account, uri: previewUri));
+        : chatMediaProvider(
+            ChatMediaProviderKey(account: account, uri: previewUri),
+          );
     final image = previewProvider == null ? null : ref.watch(previewProvider);
     final loadedImage = image?.asData?.value;
     final imageFailed =

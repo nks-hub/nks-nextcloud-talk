@@ -402,6 +402,9 @@ final class _ChatLocationPreviewState extends State<_ChatLocationPreview> {
                                     'chat-location-tile-${tile.x}-${tile.y}',
                                   ),
                                   fit: BoxFit.fill,
+                                  // A redrawn tile keeps the one already on
+                                  // screen instead of blanking for a frame.
+                                  gaplessPlayback: true,
                                   cacheWidth: 256,
                                   cacheHeight: 256,
                                   filterQuality: FilterQuality.low,
