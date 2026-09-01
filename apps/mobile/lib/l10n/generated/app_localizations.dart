@@ -2324,6 +2324,84 @@ abstract class AppLocalizations {
   /// **'Attachments'**
   String get diagnosticsOutboxAttachmentsTitle;
 
+  /// No description provided for @diagnosticsStalledAttachmentsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfinished attachments'**
+  String get diagnosticsStalledAttachmentsSection;
+
+  /// No description provided for @diagnosticsStalledAttachmentsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No unfinished attachment'**
+  String get diagnosticsStalledAttachmentsNone;
+
+  /// No description provided for @diagnosticsStalledAttachmentKindVoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Voice message'**
+  String get diagnosticsStalledAttachmentKindVoice;
+
+  /// No description provided for @diagnosticsStalledAttachmentKindFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get diagnosticsStalledAttachmentKindFile;
+
+  /// No description provided for @diagnosticsStalledAttachmentAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempts'**
+  String get diagnosticsStalledAttachmentAttempts;
+
+  /// No description provided for @diagnosticsStalledAttachmentAge.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get diagnosticsStalledAttachmentAge;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel upload'**
+  String get diagnosticsStalledAttachmentCancel;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel this upload?'**
+  String get diagnosticsStalledAttachmentCancelTitle;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancelBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment will not be sent and its local copy is removed. This cannot be undone.'**
+  String get diagnosticsStalledAttachmentCancelBody;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancelConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel upload'**
+  String get diagnosticsStalledAttachmentCancelConfirm;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancelDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep'**
+  String get diagnosticsStalledAttachmentCancelDismiss;
+
+  /// No description provided for @diagnosticsStalledAttachmentCancelFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The upload could not be cancelled.'**
+  String get diagnosticsStalledAttachmentCancelFailed;
+
+  /// No description provided for @diagnosticsStalledAttachmentLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Already handed to the server, cannot be cancelled'**
+  String get diagnosticsStalledAttachmentLocked;
+
   /// No description provided for @diagnosticsOutboxPending.
   ///
   /// In en, this message translates to:

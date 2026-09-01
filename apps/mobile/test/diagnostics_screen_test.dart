@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/features/diagnostics/diagnostics_screen.dart';
 import 'package:nextcloudtalk/features/diagnostics/local_diagnostics.dart';
 import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
@@ -252,6 +253,10 @@ Future<void> _seedAttachmentJob(
   required String phase,
   String? errorClass,
   required int updatedAtMillis,
+  String messageKind = 'file',
+  int attemptCount = 1,
+  bool finalizationDispatched = false,
+  int? createdAtMillis,
 }) {
   return database
       .into(database.attachmentJobs)
@@ -271,7 +276,7 @@ Future<void> _seedAttachmentJob(
           sourceSha256: 'a' * 64,
           sourceMimeType: 'application/octet-stream',
           sourceDisplayName: _attachmentName,
-          messageKind: 'file',
+          messageKind: messageKind,
           silent: false,
           enqueueSequence: updatedAtMillis,
           normalUploadMaximumBytes: 4,
@@ -280,8 +285,8 @@ Future<void> _seedAttachmentJob(
           chunkCollectionReady: false,
           chunkManifestLoaded: false,
           verifiedChunksJson: '[]',
-          attemptCount: 1,
-          finalizationDispatched: false,
+          attemptCount: attemptCount,
+          finalizationDispatched: finalizationDispatched,
           cleanupChunkSession: false,
           cleanupDraftFile: false,
           messageIdsJson: '[]',
@@ -294,7 +299,7 @@ Future<void> _seedAttachmentJob(
           profileThreads: true,
           profileSilent: true,
           roomCanWrite: true,
-          createdAtMillis: updatedAtMillis,
+          createdAtMillis: createdAtMillis ?? updatedAtMillis,
           updatedAtMillis: updatedAtMillis,
         ),
       );
@@ -707,6 +712,75 @@ void main() {
     // screen has to be scoped to.
     expect(_valueOf(tester, 'diagnostics-conversation-rows'), '1');
     expect(_valueOf(tester, 'diagnostics-message-rows'), '1');
+  });
+
+  test('lists unfinished attachments without anything identifying', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+    await _seedAttachmentJob(
+      database,
+      accountId: 'account-a',
+      jobId: 'job-voice-old',
+      phase: 'uploading',
+      messageKind: 'voice',
+      attemptCount: 3,
+      updatedAtMillis: DateTime.utc(2026, 3, 1, 8).millisecondsSinceEpoch,
+      createdAtMillis: DateTime.utc(2026, 3, 1, 8).millisecondsSinceEpoch,
+    );
+    await _seedAttachmentJob(
+      database,
+      accountId: 'account-a',
+      jobId: 'job-finalizing',
+      phase: 'finalizing',
+      updatedAtMillis: DateTime.utc(2026, 3, 1, 9).millisecondsSinceEpoch,
+      createdAtMillis: DateTime.utc(2026, 3, 1, 9).millisecondsSinceEpoch,
+    );
+    await _seedAttachmentJob(
+      database,
+      accountId: 'account-a',
+      jobId: 'job-dispatched',
+      phase: 'uploaded',
+      finalizationDispatched: true,
+      attemptCount: 9,
+      updatedAtMillis: DateTime.utc(2026, 3, 1, 10).millisecondsSinceEpoch,
+      createdAtMillis: DateTime.utc(2026, 3, 1, 10).millisecondsSinceEpoch,
+    );
+    await _seedAttachmentJob(
+      database,
+      accountId: 'account-a',
+      jobId: 'job-completed',
+      phase: 'completed',
+      updatedAtMillis: DateTime.utc(2026, 3, 1, 11).millisecondsSinceEpoch,
+      createdAtMillis: DateTime.utc(2026, 3, 1, 11).millisecondsSinceEpoch,
+    );
+    final diagnostics = await LocalDiagnosticsLoader(
+      database: database,
+      accounts: AccountRepository(database),
+      clock: () => DateTime.utc(2026, 3, 1, 11),
+    ).load('account-a');
+    final jobs = diagnostics.stalledAttachments;
+
+    // The neighbouring account and every terminal job stay out.
+    expect(jobs.map((job) => job.jobId), <String>[
+      'job-uploading',
+      'job-voice-old',
+      'job-finalizing',
+      'job-dispatched',
+    ]);
+
+    final voice = jobs[1];
+    expect(voice.kind, AttachmentMessageKind.voice);
+    expect(voice.phase, AttachmentJobPhase.uploading);
+    expect(voice.age, const Duration(hours: 3));
+    expect(voice.attemptBucket, '2-4');
+    expect(voice.cancellable, isTrue);
+
+    // A dispatched finalization and an in-flight one are never offered for
+    // cancellation, because the server may already hold the message.
+    expect(jobs[2].cancellable, isFalse);
+    expect(jobs[3].cancellable, isFalse);
+    expect(jobs[3].attemptBucket, '5+');
   });
 
   test('the reported version is the one pubspec.yaml ships', () {

@@ -1242,6 +1242,49 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsOutboxAttachmentsTitle => 'Přílohy';
 
   @override
+  String get diagnosticsStalledAttachmentsSection => 'Nedokončené přílohy';
+
+  @override
+  String get diagnosticsStalledAttachmentsNone => 'Žádná nedokončená příloha';
+
+  @override
+  String get diagnosticsStalledAttachmentKindVoice => 'Hlasová zpráva';
+
+  @override
+  String get diagnosticsStalledAttachmentKindFile => 'Soubor';
+
+  @override
+  String get diagnosticsStalledAttachmentAttempts => 'Pokusů';
+
+  @override
+  String get diagnosticsStalledAttachmentAge => 'Stáří';
+
+  @override
+  String get diagnosticsStalledAttachmentCancel => 'Zrušit nahrávání';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelTitle =>
+      'Zrušit toto nahrávání?';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelBody =>
+      'Příloha se neodešle a její místní kopie se smaže. Vrátit to zpět nejde.';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelConfirm => 'Zrušit nahrávání';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelDismiss => 'Ponechat';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelFailed =>
+      'Nahrávání se nepodařilo zrušit.';
+
+  @override
+  String get diagnosticsStalledAttachmentLocked =>
+      'Už předáno serveru, zrušit nelze';
+
+  @override
   String get diagnosticsOutboxPending => 'Čeká';
 
   @override

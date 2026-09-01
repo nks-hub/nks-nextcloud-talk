@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:talk_protocol/talk_protocol.dart';
+
+import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'local_diagnostics.dart';
 
@@ -34,7 +37,7 @@ final class DiagnosticsScreen extends ConsumerWidget {
         ],
       ),
       body: diagnostics.when(
-        data: (data) => _DiagnosticsList(data),
+        data: (data) => _DiagnosticsList(data, accountId: accountId),
         // Reading a handful of local rows resolves immediately. An
         // indeterminate spinner would animate forever and wedge any
         // pumpAndSettle, so the gap stays quiet instead.
@@ -51,10 +54,106 @@ final class DiagnosticsScreen extends ConsumerWidget {
   }
 }
 
+/// One unfinished attachment. Shows only the safe projection the loader
+/// produced and offers cancellation exactly where the runtime would accept it.
+final class _StalledAttachmentTile extends ConsumerWidget {
+  const _StalledAttachmentTile({required this.job, required this.accountId});
+
+  final StalledAttachmentJob job;
+  final String accountId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = AppLocalizations.of(context);
+    final kind = switch (job.kind) {
+      AttachmentMessageKind.voice =>
+        strings.diagnosticsStalledAttachmentKindVoice,
+      AttachmentMessageKind.file =>
+        strings.diagnosticsStalledAttachmentKindFile,
+    };
+    return ListTile(
+      key: Key('diagnostics-stalled-attachment-${job.jobId}'),
+      dense: true,
+      title: Text('$kind · ${job.phase.name}'),
+      subtitle: Text(
+        '${strings.diagnosticsStalledAttachmentAge} ${_age(job.age)} · '
+        '${strings.diagnosticsStalledAttachmentAttempts} ${job.attemptBucket}',
+      ),
+      trailing: job.cancellable
+          ? TextButton(
+              key: Key('diagnostics-stalled-attachment-cancel-${job.jobId}'),
+              onPressed: () => _confirmCancel(context, ref, strings),
+              child: Text(strings.diagnosticsStalledAttachmentCancel),
+            )
+          : Tooltip(
+              message: strings.diagnosticsStalledAttachmentLocked,
+              child: const Icon(Icons.lock_outline_rounded, size: 18),
+            ),
+    );
+  }
+
+  Future<void> _confirmCancel(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations strings,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('diagnostics-stalled-attachment-cancel-dialog'),
+        title: Text(strings.diagnosticsStalledAttachmentCancelTitle),
+        content: Text(strings.diagnosticsStalledAttachmentCancelBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(strings.diagnosticsStalledAttachmentCancelDismiss),
+          ),
+          FilledButton(
+            key: const Key('diagnostics-stalled-attachment-cancel-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(strings.diagnosticsStalledAttachmentCancelConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      final service = await ref.read(attachmentServiceProvider.future);
+      await service.cancel(
+        accountId: AccountId.parse(accountId),
+        jobId: AttachmentJobId.parse(job.jobId),
+      );
+    } on Object {
+      // The runtime refuses a job it can no longer cancel. Saying so beats
+      // removing the row and implying the upload is gone.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(strings.diagnosticsStalledAttachmentCancelFailed),
+        ),
+      );
+    }
+    ref.invalidate(localDiagnosticsProvider(accountId));
+  }
+
+  static String _age(Duration age) {
+    if (age.inHours >= 24) {
+      return '${age.inDays} d';
+    }
+    if (age.inMinutes >= 60) {
+      return '${age.inHours} h';
+    }
+    return age.inMinutes >= 1 ? '${age.inMinutes} min' : '< 1 min';
+  }
+}
+
 final class _DiagnosticsList extends StatelessWidget {
-  const _DiagnosticsList(this.data);
+  const _DiagnosticsList(this.data, {required this.accountId});
 
   final LocalDiagnostics data;
+  final String accountId;
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +251,17 @@ final class _DiagnosticsList extends StatelessWidget {
           title: strings.diagnosticsOutboxAttachmentsTitle,
           outbox: data.attachmentOutbox,
         ),
+        const Divider(height: 1),
+        _SectionHeader(strings.diagnosticsStalledAttachmentsSection),
+        if (data.stalledAttachments.isEmpty)
+          _Entry(
+            entryKey: const Key('diagnostics-stalled-attachments-none'),
+            label: strings.diagnosticsStalledAttachmentsNone,
+            value: '',
+          )
+        else
+          for (final job in data.stalledAttachments)
+            _StalledAttachmentTile(job: job, accountId: accountId),
         const Divider(height: 1),
         _SectionHeader(strings.diagnosticsSyncSection),
         _Entry(

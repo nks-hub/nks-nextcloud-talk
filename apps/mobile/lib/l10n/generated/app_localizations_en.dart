@@ -1245,6 +1245,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsOutboxAttachmentsTitle => 'Attachments';
 
   @override
+  String get diagnosticsStalledAttachmentsSection => 'Unfinished attachments';
+
+  @override
+  String get diagnosticsStalledAttachmentsNone => 'No unfinished attachment';
+
+  @override
+  String get diagnosticsStalledAttachmentKindVoice => 'Voice message';
+
+  @override
+  String get diagnosticsStalledAttachmentKindFile => 'File';
+
+  @override
+  String get diagnosticsStalledAttachmentAttempts => 'Attempts';
+
+  @override
+  String get diagnosticsStalledAttachmentAge => 'Age';
+
+  @override
+  String get diagnosticsStalledAttachmentCancel => 'Cancel upload';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelTitle => 'Cancel this upload?';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelBody =>
+      'The attachment will not be sent and its local copy is removed. This cannot be undone.';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelConfirm => 'Cancel upload';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelDismiss => 'Keep';
+
+  @override
+  String get diagnosticsStalledAttachmentCancelFailed =>
+      'The upload could not be cancelled.';
+
+  @override
+  String get diagnosticsStalledAttachmentLocked =>
+      'Already handed to the server, cannot be cancelled';
+
+  @override
   String get diagnosticsOutboxPending => 'Waiting';
 
   @override

@@ -50,6 +50,16 @@ const _failedAttachmentPhases = <AttachmentJobPhase>{
   AttachmentJobPhase.cleanupFailed,
 };
 
+/// Mirrors what `requestAttachmentCancel` refuses. A job that already
+/// dispatched its finalization is excluded separately, because the server may
+/// hold the message even though the phase still looks cancellable.
+const _uncancellableAttachmentPhases = <AttachmentJobPhase>{
+  AttachmentJobPhase.finalizing,
+  AttachmentJobPhase.awaitingConfirmation,
+  AttachmentJobPhase.completed,
+  AttachmentJobPhase.cancelled,
+};
+
 /// Why a push registration state could not be reported.
 enum PushDiagnosticsGap { platformUnsupported, readFailed }
 
@@ -128,6 +138,39 @@ final class PushDiagnostics {
   final String? failureCode;
 }
 
+/// One attachment job that has not reached a terminal phase, reduced to what
+/// a support call may hear.
+///
+/// The job id is carried so the screen can act on the row, but nothing about
+/// the payload is: no room token, no server, no file name, path, size or hash,
+/// and no caption. The attempt count is bucketed because an exact number of a
+/// specific upload says more about the account than it helps.
+@immutable
+final class StalledAttachmentJob {
+  const StalledAttachmentJob({
+    required this.jobId,
+    required this.kind,
+    required this.phase,
+    required this.age,
+    required this.attemptBucket,
+    required this.cancellable,
+  });
+
+  final String jobId;
+  final AttachmentMessageKind kind;
+  final AttachmentJobPhase phase;
+  final Duration age;
+
+  /// `0`, `1`, `2-4` or `5+`.
+  final String attemptBucket;
+
+  /// Whether [AttachmentService.cancel] would accept this job. A dispatched
+  /// finalization is never cancellable: the server may already hold the
+  /// message, so removing the row locally would claim an outcome we do not
+  /// know.
+  final bool cancellable;
+}
+
 /// Local state of exactly one account, safe to read out over a support call.
 ///
 /// Nothing here identifies the account or its content: no server, no login
@@ -143,6 +186,7 @@ final class LocalDiagnostics {
     required this.threadCount,
     required this.textOutbox,
     required this.attachmentOutbox,
+    required this.stalledAttachments,
     required this.push,
     required this.lastSyncedAt,
     required this.lastSyncError,
@@ -157,6 +201,9 @@ final class LocalDiagnostics {
   final int threadCount;
   final OutboxDiagnostics textOutbox;
   final OutboxDiagnostics attachmentOutbox;
+
+  /// Unfinished attachment jobs, oldest first.
+  final List<StalledAttachmentJob> stalledAttachments;
   final PushDiagnostics push;
   final DateTime? lastSyncedAt;
 
@@ -172,11 +219,13 @@ final class LocalDiagnosticsLoader {
     required this.database,
     required this.accounts,
     this.push,
+    this.clock = DateTime.now,
   });
 
   final AppDatabase database;
   final AccountRepository accounts;
   final AndroidWebPushPlatform? push;
+  final DateTime Function() clock;
 
   Future<LocalDiagnostics> load(String accountId) async {
     final account = await accounts.getAccount(accountId);
@@ -204,6 +253,7 @@ final class LocalDiagnosticsLoader {
       ),
       textOutbox: await _textOutbox(accountId),
       attachmentOutbox: await _attachmentOutbox(accountId),
+      stalledAttachments: await _stalledAttachments(accountId),
       push: await _pushDiagnostics(accountId),
       lastSyncedAt: _instant(account.lastSyncedAtMillis),
       lastSyncError: account.lastSyncError,
@@ -303,6 +353,64 @@ final class LocalDiagnosticsLoader {
       lastErrorClass: lastErrorClass,
       lastErrorAt: lastErrorAt,
     );
+  }
+
+  /// Unfinished attachment jobs. The projection is deliberately narrow: only
+  /// the columns below leave the database, so a screenshot of this list cannot
+  /// leak a room, a server or a file.
+  Future<List<StalledAttachmentJob>> _stalledAttachments(
+    String accountId,
+  ) async {
+    final table = database.attachmentJobs;
+    final query = database.selectOnly(table)
+      ..addColumns([
+        table.jobId,
+        table.messageKind,
+        table.phase,
+        table.attemptCount,
+        table.finalizationDispatched,
+        table.createdAtMillis,
+      ])
+      ..where(table.accountId.equals(accountId))
+      ..orderBy([OrderingTerm.asc(table.createdAtMillis)]);
+    final rows = await query.get();
+
+    final now = clock().toUtc();
+    final jobs = <StalledAttachmentJob>[];
+    for (final row in rows) {
+      final phase = AttachmentJobPhase.values
+          .asNameMap()[row.read(table.phase)];
+      if (phase == null || !_pendingAttachmentPhases.contains(phase)) {
+        continue;
+      }
+      final kind = AttachmentMessageKind.values
+          .asNameMap()[row.read(table.messageKind)];
+      final createdAt = _instant(row.read(table.createdAtMillis));
+      final attempts = row.read(table.attemptCount) ?? 0;
+      jobs.add(
+        StalledAttachmentJob(
+          jobId: row.read(table.jobId)!,
+          kind: kind ?? AttachmentMessageKind.file,
+          phase: phase,
+          age: createdAt == null ? Duration.zero : now.difference(createdAt),
+          attemptBucket: _attemptBucket(attempts),
+          cancellable:
+              !(row.read(table.finalizationDispatched) ?? false) &&
+              !_uncancellableAttachmentPhases.contains(phase),
+        ),
+      );
+    }
+    return List<StalledAttachmentJob>.unmodifiable(jobs);
+  }
+
+  static String _attemptBucket(int attempts) {
+    if (attempts <= 0) {
+      return '0';
+    }
+    if (attempts == 1) {
+      return '1';
+    }
+    return attempts <= 4 ? '2-4' : '5+';
   }
 
   Future<PushDiagnostics> _pushDiagnostics(String accountId) async {
