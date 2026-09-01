@@ -3,7 +3,7 @@ part of 'chat_composer_integration_test.dart';
 void _registerLocationComposerTests() {
   testWidgets('paperclip shares a confirmed current location', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final sender = _FakeLocationSender();
     await tester.pumpWidget(
       harness.app(
@@ -20,18 +20,21 @@ void _registerLocationComposerTests() {
     expect(find.text('50.087500, 14.420760'), findsOneWidget);
     await tester.tap(find.byKey(const Key('location-share-submit')));
     await _pumpUntil(tester, () => sender.positions.isNotEmpty);
+    await _pumpUntil(
+      tester,
+      () => find.text('Location shared.').evaluate().isNotEmpty,
+    );
 
     expect(sender.positions.single.latitude, 50.0875);
     expect(sender.threadIds, <int?>[null]);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('room change invalidates an open location confirmation', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final sender = _FakeLocationSender();
     final overrides = <Override>[
       currentLocationSourceProvider.overrideWithValue(
@@ -58,15 +61,14 @@ void _registerLocationComposerTests() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(sender.positions, isEmpty);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('permanent location denial opens app settings once', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final opener = _FakeAppSettingsOpener(() async => true);
     await _showLocationError(
       tester,
@@ -84,15 +86,14 @@ void _registerLocationComposerTests() {
 
     expect(opener.calls, 1);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('ordinary location denial has no settings action', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final opener = _FakeAppSettingsOpener(() async => true);
     await _showLocationError(
       tester,
@@ -106,13 +107,12 @@ void _registerLocationComposerTests() {
     expect(find.byType(SnackBarAction), findsNothing);
     expect(find.text('Open settings'), findsNothing);
     expect(opener.calls, 0);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('failed app settings launch is reported', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final opener = _FakeAppSettingsOpener(() async => false);
     await _showLocationError(
       tester,
@@ -134,13 +134,12 @@ void _registerLocationComposerTests() {
 
     expect(opener.calls, 1);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('app settings launch exception is reported', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final opener = _FakeAppSettingsOpener(
       () async => throw StateError('fixture failure'),
     );
@@ -164,13 +163,12 @@ void _registerLocationComposerTests() {
 
     expect(opener.calls, 1);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('room change prevents a stale settings action', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final opener = _FakeAppSettingsOpener(() async => true);
     final overrides = _locationErrorOverrides(
       error: CurrentLocationError.permissionDeniedForever,
@@ -193,15 +191,14 @@ void _registerLocationComposerTests() {
     expect(opener.calls, 0);
     expect(find.text('The system settings could not be opened.'), findsNothing);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('room change suppresses a stale settings failure', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final completion = Completer<bool>();
     final opener = _FakeAppSettingsOpener(() => completion.future);
     final overrides = _locationErrorOverrides(
@@ -230,15 +227,14 @@ void _registerLocationComposerTests() {
     expect(opener.calls, 1);
     expect(find.text('The system settings could not be opened.'), findsNothing);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('ambiguous location write warns against blind retry', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final sender = _FakeLocationSender(
       error: const LocationShareException(LocationShareError.ambiguous),
     );
@@ -265,15 +261,14 @@ void _registerLocationComposerTests() {
           .evaluate()
           .isNotEmpty,
     );
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets('unexpected location error stays inside the UI boundary', (
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     await tester.pumpWidget(
       harness.app(
         wrapInScaffold: true,
@@ -290,8 +285,7 @@ void _registerLocationComposerTests() {
       () =>
           find.text('The location could not be shared.').evaluate().isNotEmpty,
     );
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 }
 

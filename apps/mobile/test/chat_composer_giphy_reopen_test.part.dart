@@ -5,7 +5,7 @@ void _registerGiphyReopenTests() {
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     var trendingRequests = 0;
     final repository = HttpGiphyRepository(
       server: ServerBase.parse('https://cloud.example.invalid'),
@@ -71,7 +71,6 @@ void _registerGiphyReopenTests() {
     Navigator.of(tester.element(find.byType(GiphyPicker))).pop();
     await _pumpTransition(tester);
     expect(find.byKey(const Key('pick-image-attachment')), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 }

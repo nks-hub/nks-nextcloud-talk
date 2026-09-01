@@ -38,7 +38,7 @@ void main() {
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
-      addTearDown(harness.close);
+      _addHarnessTearDown(tester, harness);
       await tester.runAsync(harness.seedReplyMessage);
 
       await tester.pumpWidget(harness.app());
@@ -81,8 +81,7 @@ void main() {
       expect(harness.finalizedMetadata.single['replyTo'], 109);
       expect(harness.finalizedMetadata.single.containsKey('threadId'), isFalse);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
+      await _unmountComposer(tester);
     },
     timeout: const Timeout(Duration(seconds: 20)),
   );
@@ -91,7 +90,7 @@ void main() {
     tester,
   ) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     final giphy = _giphyRepository();
     addTearDown(giphy.close);
 
@@ -173,15 +172,14 @@ void main() {
     expect(harness.sentMessages.last, '👋');
     expect(_composer(tester).text, isEmpty);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   });
 
   testWidgets(
     'unavailable Giphy integration becomes an honest disabled state',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
-      addTearDown(harness.close);
+      _addHarnessTearDown(tester, harness);
 
       await tester.pumpWidget(
         harness.app(
@@ -215,8 +213,7 @@ void main() {
       expect(button.tooltip, 'GIFs are not available on this server.');
       expect(find.byType(GiphyPicker), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
+      await _unmountComposer(tester);
     },
   );
 
@@ -224,7 +221,7 @@ void main() {
     'first Giphy tap keeps the probe alive before the watched frame',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
-      addTearDown(harness.close);
+      _addHarnessTearDown(tester, harness);
       final probeClient = _ControlledGiphyClient();
       addTearDown(probeClient.close);
       var factoryInvocations = 0;
@@ -276,8 +273,7 @@ void main() {
       expect(factoryInvocations, 1);
       expect(probeClient.closed, isFalse);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
+      await _unmountComposer(tester);
     },
   );
 
@@ -285,7 +281,7 @@ void main() {
     'a completed Giphy probe cannot cross a changed account or room scope',
     (tester) async {
       final harness = (await tester.runAsync(_ComposerHarness.create))!;
-      addTearDown(harness.close);
+      _addHarnessTearDown(tester, harness);
       final probeClient = _ControlledGiphyClient();
       addTearDown(probeClient.close);
       final factoryOverride = giphyRepositoryFactoryProvider.overrideWithValue(
@@ -341,8 +337,7 @@ void main() {
       expect(find.byType(GiphyPicker), findsNothing);
       expect(harness.sentMessages, isEmpty);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(milliseconds: 1));
+      await _unmountComposer(tester);
     },
   );
   testWidgets('a bare Enter sends and Shift+Enter does not, in the real pane', (
@@ -355,7 +350,7 @@ void main() {
     // a leaked debug variable runs before tearDowns do.
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
 
     await tester.pumpWidget(harness.app());
     await _pumpUntil(
@@ -389,13 +384,12 @@ void main() {
     // already covered by the emoji test above.
     expect(harness.sentMessages, <String>['ctrl-free send']);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
     debugDefaultTargetPlatformOverride = null;
   });
   testWidgets('Escape backs out of a reply', (tester) async {
     final harness = (await tester.runAsync(_ComposerHarness.create))!;
-    addTearDown(harness.close);
+    _addHarnessTearDown(tester, harness);
     await tester.runAsync(harness.seedReplyMessage);
 
     await tester.pumpWidget(harness.app());
@@ -425,8 +419,7 @@ void main() {
     expect(find.byKey(const Key('chat-reply-banner')), findsNothing);
     expect(harness.sentMessages, isEmpty);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
+    await _unmountComposer(tester);
   }, timeout: const Timeout(Duration(seconds: 20)));
 }
 
@@ -473,6 +466,22 @@ Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
 Future<void> _pumpTransition(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+}
+
+void _addHarnessTearDown(
+  WidgetTester tester,
+  _ComposerHarness harness,
+) {
+  addTearDown(() async {
+    await tester.runAsync(harness.close);
+  });
+}
+
+Future<void> _unmountComposer(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
+  await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+  await tester.pump();
 }
 
 final class _ComposerHarness {
@@ -697,7 +706,7 @@ final class _ComposerHarness {
   }
 
   Future<void> close() async {
-    api.close();
+    await api.close();
     await attachmentService.close();
     attachmentClient.close();
     await database.close();
