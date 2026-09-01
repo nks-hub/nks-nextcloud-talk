@@ -11,6 +11,8 @@ import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/desktop_metrics.dart';
+import 'app_lock/app_lock_controller.dart';
+import 'app_lock/app_lock_settings_tile.dart';
 
 /// Accounts and appearance settings. Reached from the account menu in the
 /// compact shell and from the account rail in the expanded one.
@@ -22,6 +24,7 @@ final class SettingsScreen extends ConsumerWidget {
     final strings = AppLocalizations.of(context);
     final accounts = ref.watch(accountsProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final appLock = ref.watch(appLockControllerProvider);
     final androidPushPlatform = ref.watch(androidWebPushPlatformProvider);
     final notificationPermission = ref.watch(
       androidNotificationPermissionProvider(androidPushPlatform != null),
@@ -192,6 +195,11 @@ final class SettingsScreen extends ConsumerWidget {
                 onRetry: () =>
                     ref.read(desktopAutostartStateProvider.notifier).refresh(),
               ),
+            ],
+            if (appLock.supported) ...[
+              const Divider(height: 1),
+              _SectionHeader(strings.settingsSecuritySection),
+              const AppLockSettingsTile(),
             ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),

@@ -12,13 +12,13 @@ import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
 import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
 import com.nkshub.nextcloudtalk.share.AndroidShareInbox
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
 
-class AndroidWebPushActivity : FlutterActivity() {
+class AndroidWebPushActivity : FlutterFragmentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var methodChannel: MethodChannel? = null
     private var deepLinkChannel: MethodChannel? = null

@@ -1024,6 +1024,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsThemeSection => 'Appearance';
 
   @override
+  String get settingsSecuritySection => 'Security';
+
+  @override
+  String get settingsAppLock => 'App lock';
+
+  @override
+  String get settingsAppLockSubtitle =>
+      'Require device authentication before showing your conversations.';
+
+  @override
+  String get settingsAppLockChangeFailed =>
+      'The app lock setting could not be changed.';
+
+  @override
+  String get appLockAuthenticationReason =>
+      'Unlock your NKS Talk conversations';
+
+  @override
+  String get appLockAuthenticationCancelled =>
+      'Device authentication was cancelled.';
+
+  @override
+  String get appLockLockedTitle => 'NKS Talk is locked';
+
+  @override
+  String get appLockLockedMessage =>
+      'Authenticate with your device to continue.';
+
+  @override
+  String get appLockLoadFailed =>
+      'The app lock setting could not be read safely. Try again to continue.';
+
+  @override
+  String get appLockUnlock => 'Unlock';
+
+  @override
   String get settingsThemeSystem => 'Match system';
 
   @override

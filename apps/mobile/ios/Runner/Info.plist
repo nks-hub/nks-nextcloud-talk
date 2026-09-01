@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>NKS Talk needs camera access to attach a photo you take to a message.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>NKS Talk uses Face ID to unlock your conversations when app lock is enabled.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NKS Talk needs microphone access to record voice messages.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

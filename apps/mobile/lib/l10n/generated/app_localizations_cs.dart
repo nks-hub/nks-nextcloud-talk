@@ -1022,6 +1022,42 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsThemeSection => 'Vzhled';
 
   @override
+  String get settingsSecuritySection => 'Zabezpečení';
+
+  @override
+  String get settingsAppLock => 'Zámek aplikace';
+
+  @override
+  String get settingsAppLockSubtitle =>
+      'Před zobrazením konverzací vyžadovat ověření zařízením.';
+
+  @override
+  String get settingsAppLockChangeFailed =>
+      'Nastavení zámku aplikace se nepodařilo změnit.';
+
+  @override
+  String get appLockAuthenticationReason =>
+      'Odemkněte své konverzace v NKS Talk';
+
+  @override
+  String get appLockAuthenticationCancelled =>
+      'Ověření zařízením bylo zrušeno.';
+
+  @override
+  String get appLockLockedTitle => 'NKS Talk je zamčený';
+
+  @override
+  String get appLockLockedMessage =>
+      'Pro pokračování se ověřte pomocí zařízení.';
+
+  @override
+  String get appLockLoadFailed =>
+      'Nastavení zámku aplikace se nepodařilo bezpečně načíst. Zkuste to znovu.';
+
+  @override
+  String get appLockUnlock => 'Odemknout';
+
+  @override
   String get settingsThemeSystem => 'Podle systému';
 
   @override

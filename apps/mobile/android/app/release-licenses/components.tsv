@@ -6,6 +6,7 @@ androidx.appcompat:appcompat-resources:1.6.1	Apache-2.0	apache-2.0.txt	65e7ce63d
 androidx.appcompat:appcompat:1.6.1	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.arch.core:core-common:2.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.arch.core:core-runtime:2.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
+androidx.biometric:biometric:1.1.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.browser:browser:1.9.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.collection:collection-jvm:1.4.2	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.compose.runtime:runtime-annotation-android:1.9.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
@@ -27,7 +28,7 @@ androidx.drawerlayout:drawerlayout:1.0.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef
 androidx.emoji2:emoji2-views-helper:1.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.emoji2:emoji2:1.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.exifinterface:exifinterface:1.4.2	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
-androidx.fragment:fragment:1.7.1	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
+androidx.fragment:fragment:1.8.9	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.interpolator:interpolator:1.0.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.legacy:legacy-support-core-utils:1.0.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 androidx.lifecycle:lifecycle-common-java8:2.7.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa

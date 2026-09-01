@@ -1,1 +1,2 @@
 "NSLocationWhenInUseUsageDescription" = "NKS Talk použije vaši aktuální polohu pouze tehdy, když ji sami sdílíte v konverzaci.";
+"NSFaceIDUsageDescription" = "NKS Talk používá Face ID k odemknutí vašich konverzací, když je zapnutý zámek aplikace.";

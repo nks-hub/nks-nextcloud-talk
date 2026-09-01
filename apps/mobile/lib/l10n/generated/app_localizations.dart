@@ -1916,6 +1916,66 @@ abstract class AppLocalizations {
   /// **'Appearance'**
   String get settingsThemeSection;
 
+  /// No description provided for @settingsSecuritySection.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get settingsSecuritySection;
+
+  /// No description provided for @settingsAppLock.
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLock;
+
+  /// No description provided for @settingsAppLockSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Require device authentication before showing your conversations.'**
+  String get settingsAppLockSubtitle;
+
+  /// No description provided for @settingsAppLockChangeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The app lock setting could not be changed.'**
+  String get settingsAppLockChangeFailed;
+
+  /// No description provided for @appLockAuthenticationReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock your NKS Talk conversations'**
+  String get appLockAuthenticationReason;
+
+  /// No description provided for @appLockAuthenticationCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Device authentication was cancelled.'**
+  String get appLockAuthenticationCancelled;
+
+  /// No description provided for @appLockLockedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NKS Talk is locked'**
+  String get appLockLockedTitle;
+
+  /// No description provided for @appLockLockedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticate with your device to continue.'**
+  String get appLockLockedMessage;
+
+  /// No description provided for @appLockLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The app lock setting could not be read safely. Try again to continue.'**
+  String get appLockLoadFailed;
+
+  /// No description provided for @appLockUnlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock'**
+  String get appLockUnlock;
+
   /// No description provided for @settingsThemeSystem.
   ///
   /// In en, this message translates to:
