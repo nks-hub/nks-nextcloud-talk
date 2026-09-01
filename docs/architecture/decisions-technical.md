@@ -665,6 +665,21 @@ Live web → iOS round trip na referenční instanci prokázal start i stop bez
 odeslání zprávy. Pixelově změřený banner měl 4,72:1 ve světlém a 11,15:1 v
 tmavém režimu.
 
+Doplnění 1. září 2026, commity `a9e08f4`, `ea19395`, `3c89513`, `2760623` a
+`5c2df5d`: typing provider před
+HPB připojením aktivuje místnost přes `participants/active` a přijme pouze
+odpověď se stejným room tokenem a nenulovým session ID. Talk session cookie je
+jen v paměti, pod klíčem konkrétního `accountId` a přesného serveru. Aktivace a
+deaktivace mají serializovaný generation lease, takže opožděný cleanup starého
+provideru nesmí smazat novější session. Odebrání účtu před revokací credentials
+uzavře admission, serverovou session i HPB lane; opožděný active/settings/call
+response už nesmí zachytit cookie, vrátit úspěch ani obnovit DB stav. API close
+invaliduje generation, bounded zruší response stream a čeká na cleanup tail.
+401, invalidní odpověď, dispose a deaktivace mají bounded cleanup. Cookie path,
+domain, expiry, `Max-Age`, prázdná hodnota a ordering se vyhodnocují bez sdílení
+mezi účty. Živý web → Android průchod zobrazil start do 2 sekund a stop do 5
+sekund.
+
 ### D-040: Absence protistrany je transientní account-scoped DAV pohled
 
 Stav: Přijato 31. srpna 2026, commit `16101db`.

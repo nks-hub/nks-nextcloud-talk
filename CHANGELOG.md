@@ -16,6 +16,30 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Akce pod psacím řádkem začínají od levého okraje v pořadí sponka, Giphy,
+  emoji, mikrofon a Odeslat. Stejné zarovnání platí i během načítání a po chybě.
+- Obyčejná vlákna odvozená z odpovědí už při opakovaném obnovení seznamu
+  střídavě nemizí. Refresh znovu označí lokálně odvozený řádek jako recent a
+  zachová jeho odběr, detail i úroveň oznámení; serverový pojmenovaný řádek
+  lokální projekce nepřepíše.
+- Otevřená nabídka sponky reaguje na dokončení kontroly capability. Anketa se
+  objeví bez zavření a nového otevření nabídky; po chybě kontroly zmizí pouze
+  stav načítání a nepodporovaná akce zůstane skrytá.
+- iOS swipe zpět z hlavní konverzace používá skutečnou route nad živým
+  cachovaným seznamem. Interaktivní náhled proto ukazuje reálné konverzace
+  stejně jako návrat z detailu vlákna. Z podřízeného detailu první krok zpět
+  vrátí hlavní konverzaci a teprve druhý seznam; Android systémové zpět se
+  nemění.
+- Typing protistrany v 1:1 konverzaci znovu funguje. Klient před HPB připojením
+  aktivuje Talk room, použije vrácené nenulové session ID a drží session cookie
+  pouze v paměti konkrétního účtu. Cookies se nesdílejí ani mezi dvěma účty na
+  stejném serveru. Serializovaný lease brání starému cleanupu zrušit novější
+  session; deaktivace, 401, zavření API i odebrání účtu ukončí pouze vlastní
+  generaci. Account removal atomicky zavře admission, serverovou session i HPB
+  lane před revokací credentials; opožděná aktivace ji nemůže znovu otevřít.
+
 ## 0.1.0 (31) — 1. 9. 2026
 
 Play: AAB se zapnutým Sentry i Rybbit má 82 281 069 B a SHA-256

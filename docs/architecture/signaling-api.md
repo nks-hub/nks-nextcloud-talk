@@ -146,6 +146,22 @@ start i stop bez odeslání zprávy. Na `030ffac` prošel také opačný iOS →
 start a stop po nečinnosti. Screenshot iOS 18.6 měl pixelový kontrast 4,72:1
 ve světlém a 11,15:1 v tmavém režimu.
 
+Commity `a9e08f4`, `ea19395`, `3c89513`, `2760623` a `5c2df5d` doplnily
+chybějící Talk room session. Otevřený chat nejdřív provede bounded
+`POST participants/active`, ověří shodný token a
+nenulové session ID a teprve potom spustí signaling. In-memory cookie jar je
+izolovaný přes `accountId` a kanonický server. Per-account serial lease brání
+starému dispose/deactivate toku zasáhnout novější session. Account removal
+atomicky zakáže nové activation/start operace, dokončí vlastní DELETE a zavře
+signaling lane před revokací credentials. Session-scoped signaling i call
+response kontrolují generation před capture i return; invalidovaný stream má
+bounded cancellation a cleanup DELETE používá vlastní late cookie. API close
+čeká na session tails. Redirecty zůstávají zakázané a cookie
+domain/path/expiry se uplatní pouze na matching first-party request. Provider a
+transportní testy pokrývají dva účty na stejném serveru, 401, invalidní 200,
+dispose i removal během POSTu, stale generation, API close, response stream a
+RFC cookie varianty.
+
 ## Executable důkaz
 
 Aktuální contract sada obsahuje:
