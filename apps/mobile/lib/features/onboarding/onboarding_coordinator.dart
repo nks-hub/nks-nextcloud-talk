@@ -12,6 +12,7 @@ import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
+import 'server_address_input.dart';
 
 enum OnboardingFailureCode {
   invalidServer,
@@ -143,7 +144,7 @@ final class OnboardingCoordinator {
   Future<PendingLogin> start(String serverAddress) async {
     final ServerBase server;
     try {
-      server = ServerBase.parse(serverAddress);
+      server = ServerBase.parse(normalizeServerAddressInput(serverAddress));
     } on TalkProtocolException {
       throw const OnboardingFailure(OnboardingFailureCode.invalidServer);
     }

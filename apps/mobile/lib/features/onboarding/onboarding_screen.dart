@@ -38,8 +38,12 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    _serverController = TextEditingController(
-      text: widget.reauthenticateAccount?.serverUrl,
+    // Starting the field at the scheme shows the expected shape and lets a
+    // pasted address land after it without the user deleting anything.
+    final initial = widget.reauthenticateAccount?.serverUrl ?? 'https://';
+    _serverController = TextEditingController(text: initial);
+    _serverController.selection = TextSelection.collapsed(
+      offset: initial.length,
     );
   }
 
