@@ -75,6 +75,7 @@ export 'src/search/identifiers.dart' show SearchRequestId;
 export 'src/search/models.dart';
 export 'src/search/request.dart';
 export 'src/search/response.dart';
+export 'src/security/certificate_trust.dart';
 export 'src/server_base.dart';
 export 'src/signaling/effects.dart';
 export 'src/signaling/hpb.dart';
