@@ -1,6 +1,6 @@
 # Sdílení aktuální polohy
 
-Stav k 31. srpnu 2026. Wire tok odpovídá Talk serveru
+Stav k 1. září 2026. Wire tok odpovídá Talk serveru
 `f2958bb25be6604240c58a3faf9a2033a30d20e5` a Android klientu `5428960`.
 
 Akce se nabízí pouze za capability `geo-location-sharing`, v zapisovatelné
@@ -41,8 +41,15 @@ Menu a potvrzení mají skutečné light/dark snímky v `.artifacts`. Pixelové
 minimum textu je 4,567:1 light a 8,5054:1 dark; minimum ikon je 8,4713:1 light
 a 10,3081:1 dark. Tlačítko potvrzení má 6,4986:1 light a 9,6541:1 dark.
 První pokus skončil systémovým `DeadSystemException` spolu s pádem Chrome a
-Android UI; po úplném startu emulátoru stejný tok prošel. iOS odesílací runtime
-a fyzická Android/iOS poloha zbývají. macOS má požadovaný location purpose
-string, sandbox entitlement a zamknutý `geolocator_apple` pod; živý desktopový
-tok zatím doložený není.
-Nový distribuční build se kvůli tomuto jedinému bodu nevydává.
+Android UI; po úplném startu emulátoru stejný tok prošel.
+
+iOS 18.6 build 32 živě prošel systémovým foreground dialogem, jednorázovým
+povolením, fixem `50.087000, 14.421000`, potvrzením a typed serverovým share.
+Zpráva 78164 se vykreslila jako Sdílená poloha a po smazání přešla na
+`comment_deleted`. Simulovaná poloha i permission byly resetované. Runtime
+odhalil anglický purpose string v českém dialogu; `2f1d36f` jej lokalizoval
+přes skutečně zabalené `cs/en InfoPlist.strings`. Simulátorový build 33 se
+Sentry a Rybbit ukázal českou větu, po získání fixu byl tok zrušen před druhým
+POSTem a testovací stav znovu vyčištěn. Fyzická Android/iOS poloha zbývá.
+macOS má požadovaný location purpose string, sandbox entitlement a zamknutý
+`geolocator_apple` pod; živý desktopový tok zatím doložený není.

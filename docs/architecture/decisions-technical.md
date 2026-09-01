@@ -717,7 +717,7 @@ shodným tokenem.
 
 ### D-042: Sdílený kontakt je vCard file attachment
 
-Stav: Přijato 31. srpna 2026, commit `9d6b0fe`.
+Stav: Přijato 31. srpna 2026, commity `9d6b0fe` a `f743c45`.
 
 Upstream Android exportuje kontakt do `.vcf` a pošle jej standardním attachment
 tokem. Klient proto nepřidává nový rich object druh ani zvláštní download
@@ -730,6 +730,12 @@ Display name není trust boundary a příponu nesmí dodat ani přepsat.
 Odeslání kontaktu z platformního adresáře je samostatná funkce s vlastními
 permission a privacy hranicemi. Příjem vCardu ji nepředstírá ani nevyžaduje
 přístup ke kontaktům zařízení.
+
+Android a iOS používají foreground systémový picker, který vrací právě jeden
+kontakt bez plošného oprávnění. Nativní hranice odstraní PHOTO, odmítne více
+karet nebo chybějící FN a vynutí 2MiB limit. App-owned vCard pokračuje beze
+změny přes stávající file attachment admission, takže zdědí account/room/thread
+binding, durable source a autoritativní serverové potvrzení.
 
 ### D-043: Serverový accent je account-scoped capability state
 

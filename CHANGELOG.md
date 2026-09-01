@@ -16,6 +16,26 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Ze sponky lze vybrat kontakt ze systémového adresáře a odeslat jej jako
+  standardní vCard přílohu. Android ani iOS nepožadují plošný přístup ke
+  kontaktům; uživatel vybírá právě jednu kartu. Fotografie se z exportu
+  odstraní, velikost je omezená na 2 MiB a příloha používá stejný bezpečný
+  upload jako ostatní soubory.
+- Call lifecycle před každou serverovou mutací aktivuje přesnou Talk room
+  session a přenese její cookie pouze v rámci daného účtu. Skutečný hovor
+  spuštěný z webové Talk session se na iOS zobrazil v živém banneru a po
+  ukončení zase zmizel. WebRTC média a tlačítko připojení zůstávají vypnuté.
+- Podpora iOS Universal Links pro referenční Nextcloud host je připravená.
+  Jeden HTTPS/no-userinfo validator zachovává pořadí cold/warm odkazů.
+  Server už publikuje verzovaný AASA dokument pro `/call/*` a
+  `/index.php/call/*` bez
+  redirectu; přímý runtime čeká na obnovu produkční Apple CDN cache.
+- České iOS systémové oprávnění k poloze už nemíchá anglický purpose string.
+  Build 33 obsahuje samostatný český a anglický `InfoPlist.strings` a živý
+  iOS 18.6 dialog ukázal správnou českou větu.
+
 ## 0.1.0 (32) — 1. 9. 2026
 
 Play: AAB se zapnutým Sentry i Rybbit má 82 411 005 B a SHA-256

@@ -16,6 +16,22 @@ z nich se tvářila jako něco jiného, než čím byla.
 - Aktualizovanou Apple Developer Program License Agreement musí odsouhlasit
   account holder ručně. Dokud to neudělá, nejde odeslat nic nového.
 
+## Universal Links
+
+Runner má `com.apple.developer.associated-domains` pro
+`applinks:cloud.example.invalid`. Autoritativní AASA dokument je verzovaný v
+`deploy/reference-server/apple-app-site-association`; povoluje pouze
+`/call/*` a `/index.php/call/*` pro
+`TEAMID0000.com.nkshub.nextcloudtalk`.
+
+Referenční server jej servíruje exact-path Apache aliasem z Git checkoutu
+commitu `2f1d36f`, ne ručně vloženým souborem v Nextcloud webrootu. Veřejná
+kontrola 1. září 2026 vrátila 200, `application/json`, 419 B, žádný redirect a
+SHA-256 `0e3b890f8f0d38878f520fa63f8822a50ba31837e1a76a5cbab707d0c8f78e68`.
+Apple developer fetch vrací stejný dokument. Produkční Apple CDN v té chvíli
+ještě držela předchozí 404; TestFlight/runtime Universal Link se nesmí označit
+za hotový, dokud cache neobnoví a přímý odkaz neotevře room bez Safari.
+
 ## Postup
 
 ```sh

@@ -259,6 +259,21 @@ contact preview. Light/dark/accessibility-large layout nepřetekl; kontrast je
 6,4986:1 a 11,6343:1. Zpráva i soubor byly smazané a následná kontrola vrátila
 0 zpráv a 0 souborů.
 
+### Odeslání kontaktu z adresáře
+
+`f743c45` doplnil samostatnou platformní producer hranici pro Android a iOS.
+Foreground picker nečte celý adresář a nepotřebuje `READ_CONTACTS`; uživatel
+vybere právě jednu kartu. Nativní vrstva sestaví vCard 3.0 s FN, odstraní PHOTO,
+odmítne více karet a omezí výstup na 2 MiB. Flutter uloží app-owned kopii a
+předá ji stávajícímu file attachment admission s MIME `text/vcard`.
+
+Scope účtu, místnosti, ordinary/named threadu, capability a credentialu se
+snapshotuje před otevřením pickeru a po návratu se znovu ověří. Cancel nevytvoří
+job ani chybu; permission, unavailable, invalid a oversized mají oddělené
+lokalizované stavy. iOS 18.6 build 33 živě vybral systémový kontakt, dokončil
+zprávu 78167, vykreslil přístupnou contact kartu a po smazání potvrdil
+`comment_deleted`. DAV kontrola po úklidu nenašla žádnou čerstvou vCard.
+
 ## Spustitelné ověření
 
 ```powershell
