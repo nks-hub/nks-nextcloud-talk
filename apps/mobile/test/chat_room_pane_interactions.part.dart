@@ -226,9 +226,7 @@ void _registerChatRoomPaneInteractionTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
-  testWidgets('losing the chat permission closes the composer', (
-    tester,
-  ) async {
+  testWidgets('losing the chat permission closes the composer', (tester) async {
     // Read-only was the only refusal the pane knew, so a participant whose
     // chat permission had been taken away kept a working-looking composer and
     // only learned otherwise when the send failed.
@@ -452,6 +450,69 @@ void _registerChatRoomPaneInteractionTests() {
 
     expect(find.byKey(const Key('duplicate-risk-dialog')), findsOneWidget);
     expect(find.byKey(const Key('confirm-duplicate-risk')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a retryable send stays compact and complete at 200% text', (
+    tester,
+  ) async {
+    await _insertPendingOperation(
+      database,
+      account,
+      conversation,
+      operationId: 'operation-compact',
+      outboxState: 'retryable',
+      message:
+          'A pending message long enough to wrap over several lines so the '
+          'status footer and its actions have to share the width with it.',
+    );
+
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      app(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: ChatRoomPane(account: account, conversation: conversation),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Nothing the user needs may be dropped to win the height back.
+    expect(
+      find.byKey(const Key('chat-retry-operation-compact')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('chat-cancel-operation-compact')),
+      findsOneWidget,
+    );
+    expect(find.text('Waiting for a connection'), findsOneWidget);
+
+    // The bubble now paints as an outgoing bubble instead of a card, so a
+    // message on its way sits in the same surface as a sent one.
+    final scheme = Theme.of(
+      tester.element(find.byKey(const Key('chat-cancel-operation-compact'))),
+    ).colorScheme;
+    final decorated = tester.widgetList<DecoratedBox>(
+      find.ancestor(
+        of: find.byKey(const Key('chat-cancel-operation-compact')),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    expect(
+      decorated.any(
+        (box) =>
+            (box.decoration as BoxDecoration).color == scheme.primaryContainer,
+      ),
+      isTrue,
+    );
+    expect(find.byType(Card), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
@@ -1225,10 +1286,7 @@ void _registerChatRoomPaneInteractionTests() {
     expect(send.onPressed, isNull);
 
     // Whitespace is not text either.
-    await tester.enterText(
-      find.byKey(const Key('private-reply-field')),
-      '   ',
-    );
+    await tester.enterText(find.byKey(const Key('private-reply-field')), '   ');
     await tester.pumpAndSettle();
     expect(
       tester

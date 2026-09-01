@@ -32,74 +32,103 @@ final class _PendingMessageBubble extends StatelessWidget {
     final ambiguous = operation.outboxState == 'awaitingConfirmation';
     final resourceUrl = exactGiphyResource(operation.message);
     final isGiphy = resourceUrl != null;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: Card(
-          color: scheme.secondaryContainer,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isGiphy)
-                  ChatPendingGiphyReference(
-                    account: account,
-                    resourceUrl: resourceUrl,
-                    foregroundColor: scheme.onSecondaryContainer,
-                  )
-                else
-                  Text(
-                    normalizeGiphyReferencePreview(operation.message),
-                    style: TextStyle(color: scheme.onSecondaryContainer),
-                  ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+    final onBubble = scheme.onPrimaryContainer;
+    final action = IconButtonThemeData(
+      style: IconButton.styleFrom(
+        // The row, not the text, drove the old height: three default icon
+        // buttons reserve 48 each. Compact keeps a 40 target and gives the
+        // bubble back a third of its height.
+        padding: EdgeInsets.zero,
+        minimumSize: const Size.square(40),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: onBubble,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Semantics(
+            container: true,
+            label: status,
+            child: DecoratedBox(
+              // Same shape and colour as a sent outgoing bubble, so a message
+              // on its way no longer reads as a separate card.
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: _bubbleRadius(outgoing: true, groupEnd: true),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      ambiguous || operation.outboxState == 'failed'
-                          ? Icons.warning_amber_rounded
-                          : Icons.schedule_send_rounded,
-                      size: 18,
-                      color: scheme.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        status,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onSecondaryContainer,
-                        ),
+                    if (isGiphy)
+                      ChatPendingGiphyReference(
+                        account: account,
+                        resourceUrl: resourceUrl,
+                        foregroundColor: onBubble,
+                      )
+                    else
+                      Text(
+                        normalizeGiphyReferencePreview(operation.message),
+                        style: TextStyle(color: onBubble),
                       ),
-                    ),
-                    if (retryable)
-                      IconButton(
-                        key: Key('chat-retry-${operation.operationId}'),
-                        onPressed: onRetry,
-                        tooltip: strings.retrySend,
-                        icon: const Icon(Icons.refresh_rounded),
+                    IconButtonTheme(
+                      data: action,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            ambiguous || operation.outboxState == 'failed'
+                                ? Icons.warning_amber_rounded
+                                : Icons.schedule_send_rounded,
+                            size: 14,
+                            color: onBubble.withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              status,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: onBubble.withValues(alpha: 0.75),
+                                  ),
+                            ),
+                          ),
+                          if (retryable)
+                            IconButton(
+                              key: Key('chat-retry-${operation.operationId}'),
+                              onPressed: onRetry,
+                              tooltip: strings.retrySend,
+                              iconSize: 18,
+                              icon: const Icon(Icons.refresh_rounded),
+                            ),
+                          if (ambiguous)
+                            IconButton(
+                              key: Key('chat-resend-${operation.operationId}'),
+                              onPressed: onResend,
+                              tooltip: strings.resendMessage,
+                              iconSize: 18,
+                              icon: const Icon(Icons.send_rounded),
+                            ),
+                          // Every pending state stays cancelable. Ambiguous
+                          // sends can refuse it with a visible explanation.
+                          IconButton(
+                            key: Key('chat-cancel-${operation.operationId}'),
+                            onPressed: onCancel,
+                            tooltip: strings.cancelSend,
+                            iconSize: 18,
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
                       ),
-                    if (ambiguous)
-                      IconButton(
-                        key: Key('chat-resend-${operation.operationId}'),
-                        onPressed: onResend,
-                        tooltip: strings.resendMessage,
-                        icon: const Icon(Icons.send_rounded),
-                      ),
-                    // Every pending state stays cancelable. Ambiguous sends
-                    // can refuse the cancellation with a visible explanation.
-                    IconButton(
-                      key: Key('chat-cancel-${operation.operationId}'),
-                      onPressed: onCancel,
-                      tooltip: strings.cancelSend,
-                      icon: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
