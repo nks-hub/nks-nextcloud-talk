@@ -346,6 +346,35 @@ průběžná distribuční brána, nikoli otevřená volba licence.
 
 Stav: Vyřešeno v D-026.
 
+### Q-004: Offline scope prvního release
+
+Stav: Vyřešeno 2026-09-02 podle toho, co kód už vynucuje.
+
+Zvolen scope: **cache historie + durable textový outbox + durable attachment
+runtime s obnovou po restartu**. Všechno ostatní je online-only a fail-closed.
+
+Rozhodnutí nevzniklo jako preference, ale jako popis stavu, který invarianty
+v kódu už drží:
+
+- Historie je cache-first a stránkuje se s detekcí mezer v chat blocks.
+- Textové odeslání má durable outbox s retry, cancel a ambiguous stavem; je to
+  jediný `operationKind` v celém stromu (`'textSend'`).
+- Přílohy nejedou přes ten outbox, ale přes vlastní durable runtime
+  (`AttachmentJob`) s obnovou nedokončených uploadů po restartu aplikace.
+  „Upload resume" z původní varianty 2 je tedy hotový, jen jinou cestou.
+- Zbývající mutace — editace, mazání, reakce, read/unread, favorite, archivace,
+  úroveň oznámení, připomínky, plánované zprávy, classic share — nemají replay
+  kontrakt a nesmějí se queueovat. Nabídnout je jako offline podporované by
+  znamenalo slíbit doručení, které nikdo negarantuje.
+
+Praktický důsledek: bez sítě aplikace ukáže historii, přijme text i přílohu do
+fronty a dotáhne je, jakmile je spojení zpátky. Ostatní akce se nabízet nebudou
+a chyba se ukáže hned, místo tichého odložení.
+
+Tohle je produktová volba: pokud ji chce vlastník produktu posunout (například
+přidat offline reakce), je to změna scope, ne oprava — a znamená nejdřív replay
+kontrakt pro každý další `operationKind`.
+
 ### Q-005: Giphy režim
 
 Stav: Vyřešeno v D-028.
@@ -365,15 +394,6 @@ Identita aplikace je vyřešená v D-014. Pro vývoj lze iOS podepsat pro vlastn
 zařízení. Před veřejnou distribucí zbývá Android release key workflow, Apple
 developer tým, store provisioning a APNs/PushKit relay credentials. Android
 publisher Firebase projekt není potřeba.
-
-### Q-004: Offline scope prvního release
-
-Možnosti:
-
-1. Cache historie + textový outbox.
-2. Plný outbox včetně upload resume od prvního release.
-
-Architektura podporuje obě, ale acceptance scope a pořadí řezů se liší.
 
 ### Q-006: Podporované serverové řady
 
