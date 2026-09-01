@@ -16,7 +16,22 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (33) — 1. 9. 2026
+
+Play: AAB se zapnutým Sentry i Rybbit má 82 500 756 B a SHA-256
+`5239FEBE8009AFA24945F873148401F24152A3708913A2E58E3AB936A177DE38`.
+Publishing API jej nahrálo a commitnulo do uzavřeného `alpha` tracku; nový
+edit vrací `(33) 0.1.0` ve stavu `completed` a šest skutečně přeložených sad
+poznámek.
+TestFlight: IPA má 29 783 651 B a SHA-256
+`8D5E5C68F34ECC399262E4E0578598A9D3454E1377DBEC8A7CE93D75FE6E9DC2`.
+App Store Connect vrací `VALID`, minimum iOS 15.0, encryption `false`, české
+poznámky a interní i externí skupinu `IN_BETA_TESTING`; beta review je
+`APPROVED`.
+
+Android release APK se aktualizačně nainstalovalo na Android 14 se zachovaným
+účtem. Cold start otevřel přihlášený seznam konverzací, proces zůstal živý a
+jeho log neměl FATAL, ANR ani neošetřenou výjimku.
 
 - Ze sponky lze vybrat kontakt ze systémového adresáře a odeslat jej jako
   standardní vCard přílohu. Android ani iOS nepožadují plošný přístup ke
@@ -35,6 +50,10 @@ proto jen to, co je doložitelné z App Store Connect.
 - České iOS systémové oprávnění k poloze už nemíchá anglický purpose string.
   Build 33 obsahuje samostatný český a anglický `InfoPlist.strings` a živý
   iOS 18.6 dialog ukázal správnou českou větu.
+- Android release licenční brána teď sleduje i přesné Maven souřadnice a obsah
+  skutečného runtime graphu. Změna závislosti proto znovu vygeneruje SBOM a
+  notice místo použití starého cache výstupu; build 33 pokrývá také
+  `play-services-location` přivedené produkčním geolokačním pluginem.
 
 ## 0.1.0 (32) — 1. 9. 2026
 

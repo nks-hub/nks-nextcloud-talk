@@ -111,10 +111,17 @@ je svázaný SHA-256. Build vloží do release APK CycloneDX 1.6 `SBOM.json` a
 a ověří úplnost, SPDX identifikátory, duplicity, integritu notice i shodu s
 plugin metadata.
 
-Čerstvý release APK prošel s 131 Flutter balíky a 58 Android runtime
-komponentami. Validator má 9/9 unit testů, Ruff a C901 jsou čisté a celý
-`assembleRelease` prošel 546 tasky. Brána je Android-only; iOS artefakt a jeho
-nativní dependency graph zatím nepokrývá.
+Commit `105302e` navíc váže Gradle task na obsah `android-classes-jar` i přesné
+Maven souřadnice runtime graphu. Přidání nebo změna závislosti tak invaliduje
+vygenerované assety i při nezměněném manifestu. Regresní běh nejdřív prokázal
+fail-closed chybějící `play-services-location:21.2.0`, poté invalidaci umělou
+změnou graphu a nakonec dva správné `UP-TO-DATE` běhy stabilního graphu.
+
+Build 33 prošel se 145 Flutter balíky a 112 Android runtime komponentami.
+Validator má 17/17 unit testů, `bundleRelease` prošel 721 tasky a vložený SBOM
+obsahuje `pkg:maven/com.google.android.gms/play-services-location@21.2.0`.
+Brána je Android-only; iOS artefakt a jeho nativní dependency graph zatím
+nepokrývá.
 
 ## Transitivní runtime závislosti
 
