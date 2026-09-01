@@ -175,6 +175,9 @@ final class _CompactShell extends StatelessWidget {
     final strings = AppLocalizations.of(context);
     final conversationList = _buildConversationList(context, strings);
     final selected = selectedConversation;
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      return _buildIosNavigator(conversationList, selected);
+    }
     if (selected != null) {
       // One pane, so the conversation takes the list's place instead of being
       // pushed. Selection stays the only record of what is open, which is what
@@ -189,20 +192,59 @@ final class _CompactShell extends StatelessWidget {
         child: _EdgeSwipeBack(
           background: conversationList,
           onDismiss: onCloseConversation,
-          child: Scaffold(
-            key: const Key('conversation-shell-compact-conversation'),
-            body: SafeArea(
-              child: PresenceChatRoomPane(
-                account: account,
-                conversation: selected,
-                onClose: onCloseConversation,
-              ),
-            ),
-          ),
+          child: _buildConversation(selected),
         ),
       );
     }
     return conversationList;
+  }
+
+  Widget _buildIosNavigator(
+    Widget conversationList,
+    CachedConversation? selected,
+  ) {
+    final conversationPageKey = selected == null
+        ? null
+        : ValueKey<Object>(('conversation', account.id, selected.token));
+    return NavigatorPopHandler<void>(
+      onPopWithResult: (_) => onCloseConversation(),
+      child: Navigator(
+        key: const Key('conversation-shell-compact-navigator'),
+        pages: <Page<void>>[
+          MaterialPage<void>(
+            key: ValueKey<Object>(('conversation-list', account.id)),
+            name: '/conversations',
+            allowSnapshotting: false,
+            child: conversationList,
+          ),
+          if (selected != null)
+            MaterialPage<void>(
+              key: conversationPageKey,
+              name: '/conversation',
+              allowSnapshotting: false,
+              child: _buildConversation(selected),
+            ),
+        ],
+        onDidRemovePage: (page) {
+          if (page.key == conversationPageKey) {
+            onCloseConversation();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildConversation(CachedConversation selected) {
+    return Scaffold(
+      key: const Key('conversation-shell-compact-conversation'),
+      body: SafeArea(
+        child: PresenceChatRoomPane(
+          account: account,
+          conversation: selected,
+          onClose: onCloseConversation,
+        ),
+      ),
+    );
   }
 
   Widget _buildConversationList(

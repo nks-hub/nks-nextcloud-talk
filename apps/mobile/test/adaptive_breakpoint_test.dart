@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
@@ -128,6 +129,7 @@ void main() {
     WidgetTester tester, {
     String? token,
     List<CachedConversation> conversations = const [_conversation],
+    TargetPlatform? platform,
   }) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -136,6 +138,9 @@ void main() {
         overrides: [appDatabaseProvider.overrideWithValue(database)],
         child: localizedTestApp(
           home: _Harness(initialToken: token, conversations: conversations),
+          theme: platform == null
+              ? null
+              : AppTheme.light().copyWith(platform: platform),
         ),
       ),
     );
@@ -160,40 +165,47 @@ void main() {
   final expanded = find.byKey(const Key('conversation-shell-expanded'));
   final detailPane = find.byKey(const Key('conversation-detail-pane'));
 
-  testWidgets('an edge drag previews the conversation list underneath', (
+  testWidgets('iOS edge pop reveals the live conversation-list route', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(400, 900);
-    await pump(tester, token: _conversation.token);
+    await pump(
+      tester,
+      token: _conversation.token,
+      platform: TargetPlatform.iOS,
+    );
 
     expect(compactConversation, findsOneWidget);
     expect(compactList, findsNothing);
+    final navigator = tester.widget<Navigator>(
+      find.byKey(const Key('conversation-shell-compact-navigator')),
+    );
+    expect(navigator.pages, hasLength(2));
+    expect(
+      (navigator.pages.first as MaterialPage<void>).allowSnapshotting,
+      isFalse,
+    );
+    expect(
+      (navigator.pages.last as MaterialPage<void>).allowSnapshotting,
+      isFalse,
+    );
 
     final gesture = await tester.startGesture(const Offset(1, 450));
     await gesture.moveBy(const Offset(80, 0));
     await tester.pump();
 
-    final preview = find.byKey(const Key('conversation-edge-swipe-preview'));
-    expect(tester.widget<IgnorePointer>(preview).ignoring, isTrue);
+    expect(compactList, findsOneWidget);
+    expect(find.text(_conversation.lastMessageText!), findsOneWidget);
     expect(
-      tester
-          .widget<HeroMode>(
-            find.descendant(of: preview, matching: find.byType(HeroMode)),
-          )
-          .enabled,
-      isFalse,
+      find.byKey(const Key('conversation-edge-swipe-preview')),
+      findsNothing,
     );
-    expect(
-      find.ancestor(of: preview, matching: find.byType(ExcludeSemantics)),
-      findsOneWidget,
-    );
-    expect(tester.getTopLeft(compactList).dx, 0);
-    expect(tester.getTopLeft(compactConversation).dx, 80);
 
+    await gesture.moveBy(const Offset(240, 0));
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(compactConversation, findsOneWidget);
-    expect(preview, findsNothing);
+    await tester.pumpAndSettle();
+    expect(compactConversation, findsNothing);
+    expect(compactList, findsOneWidget);
 
     await settle(tester);
   });
@@ -408,12 +420,20 @@ void main() {
     await settle(tester);
   });
 
-  testWidgets('system back clears the selection instead of leaving the app', (
+  testWidgets('Android system back still clears the compact selection', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(700, 800);
-    await pump(tester, token: _conversation.token);
+    await pump(
+      tester,
+      token: _conversation.token,
+      platform: TargetPlatform.android,
+    );
     expect(compactConversation, findsOneWidget);
+    expect(
+      find.byKey(const Key('conversation-shell-compact-navigator')),
+      findsNothing,
+    );
 
     await tester.binding.handlePopRoute();
     await tester.pump();
