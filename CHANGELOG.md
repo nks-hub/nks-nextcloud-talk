@@ -31,6 +31,9 @@ proto jen to, co je doložitelné z App Store Connect.
 - Do otevřené konverzace na Windows, macOS a Linuxu lze přetáhnout jeden
   soubor. Adresář, více souborů nebo příliš velký vstup se odmítne; přijatý
   soubor se okamžitě bezpečně zkopíruje a pokračuje stejným uploadem jako sponka.
+- V nastavení na Androidu a iOS lze zapnout zámek aplikace. Účty a zprávy se po
+  startu nebo návratu z pozadí nezobrazí, dokud systém nepotvrdí biometrii nebo
+  kód zařízení; zrušení a chyba nechají aplikaci zamčenou s možností opakování.
 
 ## 0.1.0 (33) — 1. 9. 2026
 

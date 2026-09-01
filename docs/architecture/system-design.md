@@ -225,6 +225,17 @@ Síťová chyba v kroku 6 ponechá zabezpečený účet v capabilitiesPending a 
 lze opakovat bez nového Login Flow. Přesný wire a trust kontrakt popisuje
 [přidání Nextcloud účtu](client-bootstrap-api.md).
 
+### Zámek aplikace
+
+Globální Android/iOS preference je ve výchozím stavu vypnutá a zapnout ji lze
+jen po úspěšném systémovém device authentication. Při zapnutí root gate před
+odemčením vůbec nestaví `_AppHome`, takže se nezobrazí account data ani
+nespustí push, deep-link a account koordinátory. Chyba čtení preference je
+fail-closed; cancel nebo chyba autentizace zůstane na lock screen a jediný
+unlock běží single-flight. `hidden` nebo `paused` znovu zamkne odemčenou relaci,
+ale lifecycle systémového biometrického dialogu rekurzivní lock nespustí.
+Biometrická data ani device credential aplikace nečte ani neukládá.
+
 ### Otevření místnosti
 
 1. UI čte lokální room a dostupné chat blocks.
