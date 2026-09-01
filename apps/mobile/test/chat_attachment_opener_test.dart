@@ -98,6 +98,79 @@ void main() {
 
     expect(result, ChatAttachmentOpenResult.openFailed);
   });
+
+  test(
+    'preserves authentication, size, invalid, and storage failures',
+    () async {
+      final missingCredential = ChatAttachmentOpener(
+        repository: ChatMediaRepository(
+          MemoryCredentialVault(),
+          client: _StreamingClient(
+            (_) async => throw StateError('must not request'),
+          ),
+        ),
+        launcher: _RecordingLauncher(),
+      );
+      final tooLarge = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            const Stream.empty(),
+            200,
+            contentLength: 64 * 1024 * 1024 + 1,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        launcher: _RecordingLauncher(),
+      );
+      final invalid = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('<html>')),
+            200,
+            headers: const {'content-type': 'text/html'},
+          ),
+        ),
+        launcher: _RecordingLauncher(),
+      );
+      final storage = ChatAttachmentOpener(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('body')),
+            200,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        cacheDirectory: () async => throw const FileSystemException('denied'),
+        launcher: _RecordingLauncher(),
+      );
+
+      expect(
+        await _open(missingCredential),
+        ChatAttachmentOpenResult.reauthenticationRequired,
+      );
+      expect(await _open(tooLarge), ChatAttachmentOpenResult.tooLarge);
+      expect(await _open(invalid), ChatAttachmentOpenResult.invalid);
+      expect(await _open(storage), ChatAttachmentOpenResult.storageFailed);
+    },
+  );
+
+  test('safe names reject Windows devices and trailing dots', () {
+    expect(chatAttachmentFileName('CON'), '_CON');
+    expect(chatAttachmentFileName('nul.txt'), '_nul.txt');
+    expect(chatAttachmentFileName('COM1.csv'), '_COM1.csv');
+    expect(chatAttachmentFileName('LPT9.'), '_LPT9');
+    expect(chatAttachmentFileName('report...'), 'report');
+    expect(chatAttachmentFileName(r'..\AUX '), '_AUX');
+  });
+}
+
+Future<ChatAttachmentOpenResult> _open(ChatAttachmentOpener opener) {
+  return opener.open(
+    account: _account,
+    uri: _uri,
+    fileName: 'report.txt',
+    expectedContentType: 'text/plain',
+  );
 }
 
 ChatMediaRepository _repository(

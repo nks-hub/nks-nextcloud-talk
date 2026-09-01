@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,10 +8,15 @@ import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_exporter.dart';
+import 'package:nextcloudtalk/features/chat/media/chat_attachment_mobile_saver.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'test_support.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('save uses authenticated bytes, safe name, and received MIME', () async {
     late http.BaseRequest request;
     final system = _RecordingSystem();
@@ -60,7 +66,7 @@ void main() {
   });
 
   test(
-    'save keeps download, permission, and storage failures distinct',
+    'save keeps repository, permission, and storage failures distinct',
     () async {
       final downloadFailure = ChatAttachmentExporter(
         repository: _repository(
@@ -93,6 +99,42 @@ void main() {
         await _save(storageFailure),
         ChatAttachmentSaveResult.storageFailed,
       );
+
+      final missingCredential = ChatAttachmentExporter(
+        repository: _repository(
+          (_) async => throw StateError('must not request'),
+          withCredential: false,
+        ),
+        system: _RecordingSystem(),
+      );
+      final tooLarge = ChatAttachmentExporter(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            const Stream.empty(),
+            200,
+            contentLength: 64 * 1024 * 1024 + 1,
+            headers: const {'content-type': 'text/plain'},
+          ),
+        ),
+        system: _RecordingSystem(),
+      );
+      final invalid = ChatAttachmentExporter(
+        repository: _repository(
+          (_) async => http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('<html>')),
+            200,
+            headers: const {'content-type': 'text/html'},
+          ),
+        ),
+        system: _RecordingSystem(),
+      );
+
+      expect(
+        await _save(missingCredential),
+        ChatAttachmentSaveResult.reauthenticationRequired,
+      );
+      expect(await _save(tooLarge), ChatAttachmentSaveResult.tooLarge);
+      expect(await _save(invalid), ChatAttachmentSaveResult.invalid);
     },
   );
 
@@ -156,6 +198,292 @@ void main() {
     },
   );
 
+  test('share keeps repository errors typed', () async {
+    final missingCredential = ChatAttachmentExporter(
+      repository: _repository(
+        (_) async => throw StateError('must not request'),
+        withCredential: false,
+      ),
+      system: _RecordingSystem(),
+    );
+    final tooLarge = ChatAttachmentExporter(
+      repository: _repository(
+        (_) async => http.StreamedResponse(
+          const Stream.empty(),
+          200,
+          contentLength: 64 * 1024 * 1024 + 1,
+          headers: const {'content-type': 'text/plain'},
+        ),
+      ),
+      system: _RecordingSystem(),
+    );
+    final invalid = ChatAttachmentExporter(
+      repository: _successfulRepository(),
+      system: _RecordingSystem(),
+    );
+
+    expect(
+      await _share(missingCredential),
+      ChatAttachmentShareResult.reauthenticationRequired,
+    );
+    expect(await _share(tooLarge), ChatAttachmentShareResult.tooLarge);
+    expect(
+      await invalid.share(
+        account: _account,
+        uri: Uri.parse('https://attacker.example.invalid/report.txt'),
+        fileName: 'report.txt',
+        expectedContentType: 'text/plain',
+      ),
+      ChatAttachmentShareResult.invalid,
+    );
+  });
+
+  test(
+    'mobile save materializes an app-private file and always removes it',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'attachment-save-test-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final saver = _RecordingMobileSaver();
+      final system = PlatformChatAttachmentSystem(
+        mobilePlatform: true,
+        mobileSaver: saver,
+        temporaryDirectory: () async => root,
+      );
+
+      final result = await system.save(
+        bytes: Uint8List.fromList(utf8.encode('exact private bytes')),
+        fileName: 'report.txt',
+        contentType: 'text/plain',
+      );
+
+      expect(result, ChatAttachmentSystemResult.completed);
+      expect(saver.fileNames, ['report.txt']);
+      expect(saver.contentTypes, ['text/plain']);
+      expect(saver.bytes.single, utf8.encode('exact private bytes'));
+      expect(await root.list().toList(), isEmpty);
+    },
+  );
+
+  test('mobile save removes its private file after a native failure', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'attachment-save-error-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final saver = _RecordingMobileSaver(
+      failure: ChatAttachmentMobileSaveFailure.permissionDenied,
+    );
+    final system = PlatformChatAttachmentSystem(
+      mobilePlatform: true,
+      mobileSaver: saver,
+      temporaryDirectory: () async => root,
+    );
+
+    final result = await system.save(
+      bytes: Uint8List.fromList(const [1, 2, 3]),
+      fileName: 'report.bin',
+      contentType: 'application/octet-stream',
+    );
+
+    expect(result, ChatAttachmentSystemResult.permissionDenied);
+    expect(await root.list().toList(), isEmpty);
+  });
+
+  test(
+    'mobile save removes its private file after picker cancellation',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'attachment-save-cancel-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) await root.delete(recursive: true);
+      });
+      final saver = _RecordingMobileSaver(
+        result: ChatAttachmentMobileSaveResult.cancelled,
+      );
+      final system = PlatformChatAttachmentSystem(
+        mobilePlatform: true,
+        mobileSaver: saver,
+        temporaryDirectory: () async => root,
+      );
+
+      final result = await system.save(
+        bytes: Uint8List.fromList(const [1, 2, 3]),
+        fileName: 'report.bin',
+        contentType: 'application/octet-stream',
+      );
+
+      expect(result, ChatAttachmentSystemResult.cancelled);
+      expect(await root.list().toList(), isEmpty);
+    },
+  );
+
+  test('missing mobile cache directory is a typed storage failure', () async {
+    final system = PlatformChatAttachmentSystem(
+      mobilePlatform: true,
+      mobileSaver: _RecordingMobileSaver(),
+      temporaryDirectory: () async =>
+          throw MissingPlatformDirectoryException('cache unavailable'),
+    );
+
+    final result = await system.save(
+      bytes: Uint8List.fromList(const [1, 2, 3]),
+      fileName: 'report.bin',
+      contentType: 'application/octet-stream',
+    );
+
+    expect(result, ChatAttachmentSystemResult.storageFailed);
+  });
+
+  test('share without a reportable platform result is still offered', () async {
+    final system = PlatformChatAttachmentSystem(
+      mobilePlatform: false,
+      shareFile: (_) async => ShareResult.unavailable,
+    );
+
+    final result = await system.share(
+      bytes: Uint8List.fromList(const [1]),
+      fileName: 'report.bin',
+      contentType: 'application/octet-stream',
+    );
+
+    expect(result, ChatAttachmentSystemResult.offered);
+
+    final exporter = ChatAttachmentExporter(
+      repository: _successfulRepository(),
+      system: _RecordingSystem(shareResult: ChatAttachmentSystemResult.offered),
+    );
+    expect(await _share(exporter), ChatAttachmentShareResult.offered);
+  });
+
+  test('a thrown share platform failure is unavailable', () async {
+    final platformFailure = PlatformChatAttachmentSystem(
+      mobilePlatform: false,
+      shareFile: (_) async => throw PlatformException(code: 'unavailable'),
+    );
+    final unsupportedDesktop = PlatformChatAttachmentSystem(
+      mobilePlatform: false,
+      shareFile: (_) async => throw UnimplementedError('file sharing'),
+    );
+
+    final result = await platformFailure.share(
+      bytes: Uint8List.fromList(const [1]),
+      fileName: 'report.bin',
+      contentType: 'application/octet-stream',
+    );
+
+    expect(result, ChatAttachmentSystemResult.unavailable);
+    expect(
+      await unsupportedDesktop.share(
+        bytes: Uint8List.fromList(const [1]),
+        fileName: 'report.bin',
+        contentType: 'application/octet-stream',
+      ),
+      ChatAttachmentSystemResult.unavailable,
+    );
+  });
+
+  test('mobile saver channel sends only path, safe name, and MIME', () async {
+    const channel = MethodChannel('test_attachment_mobile_saver');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return 'saved';
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+    final saver = MethodChannelChatAttachmentMobileSaver(
+      channel: channel,
+      supported: true,
+    );
+
+    final result = await saver.save(
+      sourcePath: '/private/cache/export/report.pdf',
+      fileName: 'report.pdf',
+      contentType: 'application/pdf',
+    );
+
+    expect(result, ChatAttachmentMobileSaveResult.saved);
+    expect(calls.single.method, 'save');
+    expect(calls.single.arguments, {
+      'sourcePath': '/private/cache/export/report.pdf',
+      'fileName': 'report.pdf',
+      'contentType': 'application/pdf',
+    });
+  });
+
+  test(
+    'mobile saver preserves native cancellation and error classes',
+    () async {
+      const channel = MethodChannel('test_attachment_mobile_saver_errors');
+      Object? response = 'cancelled';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (response is PlatformException) throw response;
+            return response;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final saver = MethodChannelChatAttachmentMobileSaver(
+        channel: channel,
+        supported: true,
+      );
+
+      expect(
+        await saver.save(
+          sourcePath: '/private/cache/report.pdf',
+          fileName: 'report.pdf',
+          contentType: 'application/pdf',
+        ),
+        ChatAttachmentMobileSaveResult.cancelled,
+      );
+      response = PlatformException(code: 'cancelled');
+      expect(
+        await saver.save(
+          sourcePath: '/private/cache/report.pdf',
+          fileName: 'report.pdf',
+          contentType: 'application/pdf',
+        ),
+        ChatAttachmentMobileSaveResult.cancelled,
+      );
+      const failures = <String, ChatAttachmentMobileSaveFailure>{
+        'permission_denied': ChatAttachmentMobileSaveFailure.permissionDenied,
+        'storage_failed': ChatAttachmentMobileSaveFailure.storageFailed,
+        'invalid_source': ChatAttachmentMobileSaveFailure.invalidSource,
+        'too_large': ChatAttachmentMobileSaveFailure.tooLarge,
+        'save_in_progress': ChatAttachmentMobileSaveFailure.inProgress,
+        'unavailable': ChatAttachmentMobileSaveFailure.unavailable,
+      };
+      for (final entry in failures.entries) {
+        response = PlatformException(code: entry.key);
+        await expectLater(
+          saver.save(
+            sourcePath: '/private/cache/report.pdf',
+            fileName: 'report.pdf',
+            contentType: 'application/pdf',
+          ),
+          throwsA(
+            isA<ChatAttachmentMobileSaveException>().having(
+              (error) => error.failure,
+              'failure',
+              entry.value,
+            ),
+          ),
+        );
+      }
+    },
+  );
+
   test('platform errors classify permission separately from storage', () {
     expect(
       chatAttachmentStorageErrorResult(
@@ -205,11 +533,43 @@ ChatMediaRepository _successfulRepository({String contentType = 'text/plain'}) {
 }
 
 ChatMediaRepository _repository(
-  Future<http.StreamedResponse> Function(http.BaseRequest request) handler,
-) {
-  final vault = MemoryCredentialVault()
-    ..values[_account.id] = 'fixture-app-password';
+  Future<http.StreamedResponse> Function(http.BaseRequest request) handler, {
+  bool withCredential = true,
+}) {
+  final vault = MemoryCredentialVault();
+  if (withCredential) {
+    vault.values[_account.id] = 'fixture-app-password';
+  }
   return ChatMediaRepository(vault, client: _StreamingClient(handler));
+}
+
+final class _RecordingMobileSaver implements ChatAttachmentMobileSaver {
+  _RecordingMobileSaver({
+    this.failure,
+    this.result = ChatAttachmentMobileSaveResult.saved,
+  });
+
+  final ChatAttachmentMobileSaveFailure? failure;
+  final ChatAttachmentMobileSaveResult result;
+  final List<String> fileNames = [];
+  final List<String> contentTypes = [];
+  final List<List<int>> bytes = [];
+
+  @override
+  Future<ChatAttachmentMobileSaveResult> save({
+    required String sourcePath,
+    required String fileName,
+    required String contentType,
+  }) async {
+    fileNames.add(fileName);
+    contentTypes.add(contentType);
+    bytes.add(await File(sourcePath).readAsBytes());
+    final failure = this.failure;
+    if (failure != null) {
+      throw ChatAttachmentMobileSaveException(failure);
+    }
+    return result;
+  }
 }
 
 final class _RecordingSystem implements ChatAttachmentSystem {

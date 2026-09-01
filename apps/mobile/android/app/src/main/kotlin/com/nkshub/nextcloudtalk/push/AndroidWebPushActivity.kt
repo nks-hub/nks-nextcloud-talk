@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
+import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
 import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
@@ -27,6 +29,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var fcmChannel: MethodChannel? = null
     private var contactPickerChannel: ContactPickerChannel? = null
+    private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
     private val fcmTokenListener: (String) -> Unit = { token ->
@@ -138,9 +141,17 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+        attachmentSaver?.dispose()
+        attachmentSaver = ChatAttachmentSaver(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (attachmentSaver?.onActivityResult(requestCode, resultCode, data) == true) {
+            return
+        }
         if (contactPickerChannel?.onActivityResult(requestCode, resultCode, data) == true) {
             return
         }
@@ -242,8 +253,19 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         fcmChannel = null
         contactPickerChannel?.dispose()
         contactPickerChannel = null
+        disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()
+    }
+
+    internal fun installAttachmentSaverForTest(saver: AttachmentSaverActivityLifecycle) {
+        attachmentSaver?.dispose()
+        attachmentSaver = saver
+    }
+
+    internal fun disposeAttachmentSaver() {
+        attachmentSaver?.dispose()
+        attachmentSaver = null
     }
 
     internal fun notificationOpen(intent: Intent?): Map<String, Any?>? {

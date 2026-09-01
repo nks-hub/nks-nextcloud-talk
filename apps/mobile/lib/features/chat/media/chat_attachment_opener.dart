@@ -3,13 +3,22 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
 
-enum ChatAttachmentOpenResult { opened, downloadFailed, openFailed }
+enum ChatAttachmentOpenResult {
+  opened,
+  reauthenticationRequired,
+  tooLarge,
+  invalid,
+  downloadFailed,
+  storageFailed,
+  openFailed,
+}
 
 abstract interface class ChatAttachmentOpenAction {
   Future<ChatAttachmentOpenResult> open({
@@ -33,7 +42,9 @@ final class PlatformChatAttachmentFileLauncher
     try {
       final result = await OpenFilex.open(path, type: contentType);
       return result.type == ResultType.done;
-    } on Object {
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
@@ -75,7 +86,20 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         uri: uri,
         expectedContentType: expectedContentType,
       );
+    } on ChatMediaRepositoryException catch (error) {
+      return switch (error.code) {
+        ChatMediaRepositoryError.credentialMissing =>
+          ChatAttachmentOpenResult.reauthenticationRequired,
+        ChatMediaRepositoryError.responseTooLarge =>
+          ChatAttachmentOpenResult.tooLarge,
+        ChatMediaRepositoryError.invalidUri ||
+        ChatMediaRepositoryError.invalidResponse =>
+          ChatAttachmentOpenResult.invalid,
+        ChatMediaRepositoryError.unavailable =>
+          ChatAttachmentOpenResult.downloadFailed,
+      };
     } on Object {
+      // Credential vault backends can fail outside the repository error enum.
       return ChatAttachmentOpenResult.downloadFailed;
     }
 
@@ -92,8 +116,12 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         '${chatAttachmentFileName(fileName)}',
       );
       await localFile.writeAsBytes(attachment.body, flush: true);
-    } on Object {
-      return ChatAttachmentOpenResult.openFailed;
+    } on FileSystemException {
+      return ChatAttachmentOpenResult.storageFailed;
+    } on PlatformException {
+      return ChatAttachmentOpenResult.storageFailed;
+    } on MissingPluginException {
+      return ChatAttachmentOpenResult.storageFailed;
     }
 
     final opened = await _launcher.open(
@@ -150,9 +178,17 @@ String chatAttachmentFileName(String remoteName) {
   }
   name = name
       .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
-      .replaceAll(RegExp(r'^[._-]+'), '');
+      .replaceAll(RegExp(r'^[._-]+'), '')
+      .replaceAll(RegExp(r'\.+$'), '');
   if (name.isEmpty) {
     return 'attachment';
   }
-  return name.length <= 128 ? name : name.substring(name.length - 128);
+  name = name.length <= 128 ? name : name.substring(name.length - 128);
+  if (RegExp(
+    r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)',
+    caseSensitive: false,
+  ).hasMatch(name)) {
+    name = '_${name.length < 128 ? name : name.substring(name.length - 127)}';
+  }
+  return name;
 }

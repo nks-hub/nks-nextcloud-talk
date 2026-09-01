@@ -315,7 +315,6 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           );
     final openAttachment = openImage ?? openFile;
-    final opensFile = openImage == null && openFile != null;
     Widget loadingImage() => Container(
       key: Key('chat-image-loading-$messageId-$index'),
       width: 240,
@@ -422,132 +421,99 @@ final class _ChatAttachment extends ConsumerWidget {
             color: scheme.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(10),
             clipBehavior: Clip.antiAlias,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Semantics(
-                    button: true,
-                    label: contact
-                        ? strings.openContact(name)
-                        : '${strings.openAttachment}: $name',
-                    onTap: openAttachment,
-                    child: ExcludeSemantics(
-                      child: InkWell(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        contact
+                            ? Icons.contact_page_outlined
+                            : mimeType?.startsWith('image/') == true
+                            ? Icons.image_rounded
+                            : Icons.insert_drive_file_rounded,
+                        color: scheme.primary,
+                      ),
+                      if (contact) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            strings.contactAttachment,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: scheme.primary),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _attachmentAction(
                         key: Key(
+                          'chat-attachment-open-action-$messageId-$index',
+                        ),
+                        semanticsKey: Key(
                           contact
                               ? 'chat-open-contact-$messageId-$index'
                               : 'chat-open-attachment-$messageId-$index',
                         ),
+                        icon: Icons.open_in_new_rounded,
+                        label: strings.openAttachment,
+                        semanticsLabel: contact
+                            ? strings.openContact(name)
+                            : '${strings.openAttachment}: $name',
                         onTap: openAttachment,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            minWidth: 48,
-                            minHeight: 48,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 7,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  contact
-                                      ? Icons.contact_page_outlined
-                                      : mimeType?.startsWith('image/') == true
-                                      ? Icons.image_rounded
-                                      : Icons.insert_drive_file_rounded,
-                                  color: scheme.primary,
-                                ),
-                                if (contact) ...[
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      strings.contactAttachment,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: scheme.primary),
-                                    ),
-                                  ),
-                                ],
-                                if (opensFile) ...[
-                                  const SizedBox(width: 6),
-                                  Icon(
-                                    Icons.open_in_new_rounded,
-                                    size: 18,
-                                    color: scheme.primary,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
                       ),
-                    ),
-                  ),
-                ),
-                SizedBox.square(
-                  key: Key('chat-attachment-actions-$messageId-$index'),
-                  dimension: 48,
-                  child: PopupMenuButton<_ChatAttachmentMenuAction>(
-                    tooltip: strings.attachment,
-                    icon: const Icon(Icons.more_vert_rounded),
-                    onSelected: (action) {
-                      switch (action) {
-                        case _ChatAttachmentMenuAction.open:
-                          openAttachment();
-                        case _ChatAttachmentMenuAction.save:
-                        case _ChatAttachmentMenuAction.share:
-                          unawaited(
-                            _exportDownloadedAttachment(
-                              context,
-                              ref,
-                              action: action,
-                              account: account,
-                              uri: originalUri!,
-                              fileName: name,
-                              contentType: mimeType!,
-                            ),
-                          );
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        key: Key(
-                          'chat-attachment-open-action-$messageId-$index',
-                        ),
-                        value: _ChatAttachmentMenuAction.open,
-                        child: _attachmentMenuItem(
-                          icon: Icons.open_in_new_rounded,
-                          label: strings.openAttachment,
-                        ),
-                      ),
-                      PopupMenuItem(
+                      _attachmentAction(
                         key: Key(
                           'chat-attachment-save-action-$messageId-$index',
                         ),
-                        value: _ChatAttachmentMenuAction.save,
-                        child: _attachmentMenuItem(
-                          icon: Icons.save_alt_rounded,
-                          label: strings.saveAttachment,
+                        icon: Icons.save_alt_rounded,
+                        label: strings.saveAttachment,
+                        semanticsLabel: '${strings.saveAttachment}: $name',
+                        onTap: () => unawaited(
+                          _exportDownloadedAttachment(
+                            context,
+                            ref,
+                            action: _ChatAttachmentMenuAction.save,
+                            account: account,
+                            uri: originalUri!,
+                            fileName: name,
+                            contentType: mimeType!,
+                          ),
                         ),
                       ),
-                      PopupMenuItem(
+                      _attachmentAction(
                         key: Key(
                           'chat-attachment-share-action-$messageId-$index',
                         ),
-                        value: _ChatAttachmentMenuAction.share,
-                        child: _attachmentMenuItem(
-                          icon: Icons.share_rounded,
-                          label: strings.shareAttachment,
+                        icon: Icons.share_rounded,
+                        label: strings.shareAttachment,
+                        semanticsLabel: '${strings.shareAttachment}: $name',
+                        onTap: () => unawaited(
+                          _exportDownloadedAttachment(
+                            context,
+                            ref,
+                            action: _ChatAttachmentMenuAction.share,
+                            account: account,
+                            uri: originalUri!,
+                            fileName: name,
+                            contentType: mimeType!,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
       ],
@@ -555,15 +521,35 @@ final class _ChatAttachment extends ConsumerWidget {
   }
 }
 
-enum _ChatAttachmentMenuAction { open, save, share }
+enum _ChatAttachmentMenuAction { save, share }
 
-Widget _attachmentMenuItem({required IconData icon, required String label}) {
-  return Row(
-    children: [
-      Icon(icon),
-      const SizedBox(width: 12),
-      Expanded(child: Text(label, overflow: TextOverflow.ellipsis)),
-    ],
+Widget _attachmentAction({
+  required Key key,
+  Key? semanticsKey,
+  required IconData icon,
+  required String label,
+  required String semanticsLabel,
+  required VoidCallback onTap,
+}) {
+  return SizedBox.square(
+    key: key,
+    dimension: 48,
+    child: Tooltip(
+      message: label,
+      child: Semantics(
+        key: semanticsKey,
+        button: true,
+        label: semanticsLabel,
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Center(child: Icon(icon, size: 20)),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -687,13 +673,20 @@ Future<void> _openDownloadedAttachment(
   if (result == ChatAttachmentOpenResult.opened || !context.mounted) {
     return;
   }
+  final strings = AppLocalizations.of(context);
+  final message = switch (result) {
+    ChatAttachmentOpenResult.opened => strings.conversationActionErrorGeneric,
+    ChatAttachmentOpenResult.reauthenticationRequired =>
+      strings.attachmentReauthenticationRequired,
+    ChatAttachmentOpenResult.tooLarge => strings.attachmentTooLarge,
+    ChatAttachmentOpenResult.invalid => strings.attachmentInvalid,
+    ChatAttachmentOpenResult.downloadFailed => strings.attachmentDownloadFailed,
+    ChatAttachmentOpenResult.storageFailed => strings.attachmentStorageFailed,
+    ChatAttachmentOpenResult.openFailed =>
+      strings.conversationActionErrorGeneric,
+  };
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        AppLocalizations.of(context).conversationActionErrorGeneric,
-      ),
-      behavior: SnackBarBehavior.floating,
-    ),
+    SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
   );
 }
 
@@ -712,8 +705,6 @@ Future<void> _exportDownloadedAttachment(
   final strings = AppLocalizations.of(context);
   final String? message;
   switch (action) {
-    case _ChatAttachmentMenuAction.open:
-      return;
     case _ChatAttachmentMenuAction.save:
       final result = await exporter.save(
         account: account,
@@ -724,9 +715,16 @@ Future<void> _exportDownloadedAttachment(
       message = switch (result) {
         ChatAttachmentSaveResult.saved => strings.attachmentSaved,
         ChatAttachmentSaveResult.cancelled => strings.attachmentSaveCancelled,
-        ChatAttachmentSaveResult.downloadFailed ||
-        ChatAttachmentSaveResult.permissionDenied ||
-        ChatAttachmentSaveResult.storageFailed => strings.attachmentSaveFailed,
+        ChatAttachmentSaveResult.reauthenticationRequired =>
+          strings.attachmentReauthenticationRequired,
+        ChatAttachmentSaveResult.tooLarge => strings.attachmentTooLarge,
+        ChatAttachmentSaveResult.invalid => strings.attachmentInvalid,
+        ChatAttachmentSaveResult.downloadFailed =>
+          strings.attachmentDownloadFailed,
+        ChatAttachmentSaveResult.permissionDenied =>
+          strings.attachmentPermissionDenied,
+        ChatAttachmentSaveResult.storageFailed =>
+          strings.attachmentStorageFailed,
       };
     case _ChatAttachmentMenuAction.share:
       final result = await exporter.share(
@@ -737,9 +735,16 @@ Future<void> _exportDownloadedAttachment(
       );
       message = switch (result) {
         ChatAttachmentShareResult.shared ||
+        ChatAttachmentShareResult.offered ||
         ChatAttachmentShareResult.cancelled => null,
-        ChatAttachmentShareResult.downloadFailed ||
-        ChatAttachmentShareResult.permissionDenied ||
+        ChatAttachmentShareResult.reauthenticationRequired =>
+          strings.attachmentReauthenticationRequired,
+        ChatAttachmentShareResult.tooLarge => strings.attachmentTooLarge,
+        ChatAttachmentShareResult.invalid => strings.attachmentInvalid,
+        ChatAttachmentShareResult.downloadFailed =>
+          strings.attachmentDownloadFailed,
+        ChatAttachmentShareResult.permissionDenied =>
+          strings.attachmentPermissionDenied,
         ChatAttachmentShareResult.shareFailed => strings.attachmentShareFailed,
       };
   }
