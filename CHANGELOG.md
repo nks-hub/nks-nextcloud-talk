@@ -18,6 +18,12 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+- Fotografie vybraná z iOS galerie už nezůstane na „Čeká na nahrání“, když
+  ve stejné konverzaci čeká starší automatický retry. Scheduler přeskočí pouze
+  skutečně odloženou práci, zachová nejbližší timer a při ručním opakování
+  znovu vynutí pořadí. Sentry nově rozliší systémový picker, durable kopii,
+  přijetí do outboxu, jednotlivé upload fáze a 45sekundové zamrznutí fronty,
+  aniž odešle název či cestu souboru, účet, konverzaci, server nebo obsah.
 - V detailu konverzace mohou vlastníci a moderátoři na serveru s `bots-v1`
   zobrazit dostupné boty a zapínat nebo vypínat je. Seznam se načte až po
   otevření sekce, umí prázdný/chybový stav a znovu ověřuje aktuální oprávnění

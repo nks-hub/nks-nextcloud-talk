@@ -39,7 +39,14 @@ void main() {
         final session = await bridge.startImageUpload(_imageRequest);
         final result = session.events.toList();
         durable
-          ..add(_progress(AttachmentJobPhase.localPrepared))
+          ..add(
+            _progress(
+              AttachmentJobPhase.localPrepared,
+              attemptCount: 2,
+              automaticRetryCount: 1,
+              retryScheduled: true,
+            ),
+          )
           ..add(_progress(AttachmentJobPhase.uploading, progress: 0.4))
           ..add(_progress(AttachmentJobPhase.awaitingConfirmation, progress: 1))
           ..add(_progress(AttachmentJobPhase.completed, progress: 1));
@@ -54,6 +61,10 @@ void main() {
           ImageAttachmentUploadPhase.completed,
         ]);
         expect(events[1].progress, 0.4);
+        expect(events.first.durablePhase, AttachmentJobPhase.localPrepared);
+        expect(events.first.attemptCount, 2);
+        expect(events.first.automaticRetryCount, 1);
+        expect(events.first.retryScheduled, isTrue);
         expect(durable.eventCancellationCount, 1);
       },
     );
@@ -90,6 +101,7 @@ void main() {
         durable.add(
           _progress(
             AttachmentJobPhase.retryable,
+            resumePhase: AttachmentJobPhase.uploading,
             errorClass: 'dav-transient',
             retryAllowed: true,
           ),
@@ -98,6 +110,7 @@ void main() {
         expect(failure.phase, ImageAttachmentUploadPhase.failed);
         expect(failure.failureCode, 'dav-transient');
         expect(failure.retryAllowed, isTrue);
+        expect(failure.resumePhase, AttachmentJobPhase.uploading);
 
         final retried = await bridge.startImageUpload(_imageRequest);
         expect(durable.retryCount, 1);
@@ -512,14 +525,20 @@ AttachmentJobProgress _progress(
   double progress = 0,
   bool retryAllowed = false,
   String? errorClass,
+  int attemptCount = 1,
+  int automaticRetryCount = 0,
+  bool retryScheduled = false,
+  AttachmentJobPhase? resumePhase,
 }) => AttachmentJobProgress(
   accountId: accountId ?? _account,
   jobId: _jobId,
   phase: phase,
+  resumePhase: resumePhase,
   progress: progress,
-  attemptCount: 1,
-  automaticRetryCount: 0,
+  attemptCount: attemptCount,
+  automaticRetryCount: automaticRetryCount,
   retryAllowed: retryAllowed,
+  retryScheduled: retryScheduled,
   errorClass: errorClass,
   messageIds: phase == AttachmentJobPhase.completed
       ? const <int>[42]

@@ -104,6 +104,11 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         presentation: pickerSource == AttachmentPickerSource.file
             ? AttachmentUploadPresentation.file
             : AttachmentUploadPresentation.image,
+        diagnosticSource: switch (pickerSource) {
+          AttachmentPickerSource.gallery => AttachmentUploadSource.gallery,
+          AttachmentPickerSource.camera => AttachmentUploadSource.camera,
+          AttachmentPickerSource.file => AttachmentUploadSource.file,
+        },
       );
     } on ImageAttachmentPickerException catch (error) {
       throw _pickerPreparationFailure(error);
@@ -159,6 +164,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         source: source,
         metadata: admission.metadata,
         presentation: AttachmentUploadPresentation.file,
+        diagnosticSource: AttachmentUploadSource.file,
       );
     } on ImageAttachmentPickerException catch (error) {
       throw _pickerPreparationFailure(error);
@@ -255,6 +261,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         source: source,
         metadata: admission.metadata,
         presentation: AttachmentUploadPresentation.image,
+        diagnosticSource: AttachmentUploadSource.image,
       );
     } finally {
       if (identical(_imagePreparationCancellation, cancellation)) {
@@ -309,6 +316,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
         source: source,
         metadata: admission.metadata,
         presentation: AttachmentUploadPresentation.contact,
+        diagnosticSource: AttachmentUploadSource.contact,
       );
     } on ContactPickerException catch (error) {
       throw ImageAttachmentPreparationFailure(switch (error.failure) {

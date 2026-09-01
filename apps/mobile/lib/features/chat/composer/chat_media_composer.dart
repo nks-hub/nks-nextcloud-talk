@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../core/attachment_upload_telemetry.dart';
 import '../../../network/attachment_transport.dart';
 import '../../../platform/contacts/contact_attachment_picker.dart';
 import '../../../platform/media/desktop_attachment_source.dart';

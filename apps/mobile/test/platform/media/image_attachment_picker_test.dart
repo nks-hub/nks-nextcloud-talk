@@ -4,6 +4,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' as platform_picker;
+import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
+import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 
@@ -209,16 +211,25 @@ void main() {
     test(
       'returns null without creating a source when selection is cancelled',
       () async {
+        final diagnostics = <AttachmentUploadDiagnostic>[];
         final picker = DurableImageAttachmentPicker(
           backend: _FakeImageSelectionBackend(null),
           store: store,
           maximumImageBytes: 64,
+          reportDiagnostic: diagnostics.add,
         );
 
         expect(await picker.pick(), isNull);
         expect(
           await root.list(recursive: true).where((e) => e is File).toList(),
           isEmpty,
+        );
+        expect(
+          diagnostics.map((event) => event.checkpoint),
+          <AttachmentUploadCheckpoint>[
+            AttachmentUploadCheckpoint.pickerPresented,
+            AttachmentUploadCheckpoint.pickerCancelled,
+          ],
         );
       },
     );
@@ -263,10 +274,81 @@ void main() {
       },
     );
 
+    test('reports picker and durable copy boundaries in order', () async {
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final picker = DurableImageAttachmentPicker(
+        backend: _FakeImageSelectionBackend(
+          ImageSelection(
+            displayName: 'camera.png',
+            declaredMimeType: 'image/png',
+            byteLength: _pngBytes.length,
+            openRead: ({int? start, int? end}) => Stream<List<int>>.value(
+              _pngBytes.sublist(start ?? 0, end ?? _pngBytes.length),
+            ),
+          ),
+        ),
+        store: store,
+        maximumImageBytes: 64,
+        reportDiagnostic: diagnostics.add,
+      );
+
+      await picker.pick(source: AttachmentPickerSource.gallery);
+
+      expect(
+        diagnostics.map((event) => event.checkpoint),
+        <AttachmentUploadCheckpoint>[
+          AttachmentUploadCheckpoint.pickerPresented,
+          AttachmentUploadCheckpoint.pickerReturned,
+          AttachmentUploadCheckpoint.prefixRead,
+          AttachmentUploadCheckpoint.durableCopyStarted,
+          AttachmentUploadCheckpoint.durableCopyCompleted,
+        ],
+      );
+      expect(
+        diagnostics.map((event) => event.source).toSet(),
+        <AttachmentUploadSource>{AttachmentUploadSource.gallery},
+      );
+    });
+
+    test('cancelled durable copy is not reported as a failure', () async {
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final cancellation = AttachmentCancellationController()..cancel();
+      final picker = DurableImageAttachmentPicker(
+        backend: _FakeImageSelectionBackend(
+          ImageSelection(
+            displayName: 'camera.png',
+            declaredMimeType: 'image/png',
+            byteLength: _pngBytes.length,
+            openRead: ({int? start, int? end}) => Stream<List<int>>.value(
+              _pngBytes.sublist(start ?? 0, end ?? _pngBytes.length),
+            ),
+          ),
+        ),
+        store: store,
+        maximumImageBytes: 64,
+        reportDiagnostic: diagnostics.add,
+      );
+
+      await expectLater(
+        picker.pick(cancellationSignal: cancellation.signal),
+        throwsA(
+          isA<DurableAttachmentSourceException>().having(
+            (error) => error.code,
+            'code',
+            DurableAttachmentSourceError.cancelled,
+          ),
+        ),
+      );
+
+      expect(diagnostics.last.checkpoint, AttachmentUploadCheckpoint.cancelled);
+      expect(diagnostics.last.capturesEvent, isFalse);
+    });
+
     test(
       'rejects declared oversize files before opening their stream',
       () async {
         var opens = 0;
+        final diagnostics = <AttachmentUploadDiagnostic>[];
         final picker = DurableImageAttachmentPicker(
           backend: _FakeImageSelectionBackend(
             ImageSelection(
@@ -281,6 +363,7 @@ void main() {
           ),
           store: store,
           maximumImageBytes: 64,
+          reportDiagnostic: diagnostics.add,
         );
 
         await expectLater(
@@ -294,6 +377,14 @@ void main() {
           ),
         );
         expect(opens, 0);
+        expect(
+          diagnostics.last.checkpoint,
+          AttachmentUploadCheckpoint.durableCopyFailed,
+        );
+        expect(
+          diagnostics.last.failure,
+          AttachmentUploadFailure.invalidSelection,
+        );
       },
     );
 

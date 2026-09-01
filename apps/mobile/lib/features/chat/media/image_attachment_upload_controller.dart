@@ -1,7 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+
+typedef CreateImageUploadWatchdogTimer =
+    Timer Function(Duration delay, void Function() callback);
 
 enum ImageAttachmentUploadPhase {
   idle,
@@ -26,6 +30,7 @@ final class ImageAttachmentUploadRequest {
     required this.source,
     required this.metadata,
     this.presentation = AttachmentUploadPresentation.image,
+    this.diagnosticSource = AttachmentUploadSource.unknown,
   });
 
   final AccountId accountId;
@@ -34,6 +39,7 @@ final class ImageAttachmentUploadRequest {
   final PreparedAttachmentSource source;
   final AttachmentMetadata metadata;
   final AttachmentUploadPresentation presentation;
+  final AttachmentUploadSource diagnosticSource;
 
   @override
   String toString() => 'ImageAttachmentUploadRequest(<redacted>)';
@@ -46,6 +52,11 @@ final class ImageAttachmentUploadEvent {
     required this.progress,
     required this.failureCode,
     required this.retryAllowed,
+    required this.durablePhase,
+    required this.resumePhase,
+    required this.attemptCount,
+    required this.automaticRetryCount,
+    required this.retryScheduled,
   }) {
     if (phase == ImageAttachmentUploadPhase.idle ||
         phase == ImageAttachmentUploadPhase.preparing ||
@@ -73,59 +84,126 @@ final class ImageAttachmentUploadEvent {
     }
   }
 
-  factory ImageAttachmentUploadEvent.queued() => ImageAttachmentUploadEvent._(
+  factory ImageAttachmentUploadEvent.queued({
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
+  }) => ImageAttachmentUploadEvent._(
     phase: ImageAttachmentUploadPhase.queued,
     progress: null,
     failureCode: null,
     retryAllowed: false,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
   );
 
-  factory ImageAttachmentUploadEvent.uploading(double progress) =>
-      ImageAttachmentUploadEvent._(
-        phase: ImageAttachmentUploadPhase.uploading,
-        progress: progress,
-        failureCode: null,
-        retryAllowed: false,
-      );
+  factory ImageAttachmentUploadEvent.uploading(
+    double progress, {
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
+  }) => ImageAttachmentUploadEvent._(
+    phase: ImageAttachmentUploadPhase.uploading,
+    progress: progress,
+    failureCode: null,
+    retryAllowed: false,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
+  );
 
-  factory ImageAttachmentUploadEvent.awaitingConfirmation() =>
-      ImageAttachmentUploadEvent._(
-        phase: ImageAttachmentUploadPhase.awaitingConfirmation,
-        progress: 1,
-        failureCode: null,
-        retryAllowed: false,
-      );
+  factory ImageAttachmentUploadEvent.awaitingConfirmation({
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
+  }) => ImageAttachmentUploadEvent._(
+    phase: ImageAttachmentUploadPhase.awaitingConfirmation,
+    progress: 1,
+    failureCode: null,
+    retryAllowed: false,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
+  );
 
-  factory ImageAttachmentUploadEvent.completed() =>
-      ImageAttachmentUploadEvent._(
-        phase: ImageAttachmentUploadPhase.completed,
-        progress: 1,
-        failureCode: null,
-        retryAllowed: false,
-      );
+  factory ImageAttachmentUploadEvent.completed({
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
+  }) => ImageAttachmentUploadEvent._(
+    phase: ImageAttachmentUploadPhase.completed,
+    progress: 1,
+    failureCode: null,
+    retryAllowed: false,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
+  );
 
   factory ImageAttachmentUploadEvent.failed(
     String failureCode, {
     required bool retryAllowed,
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
   }) => ImageAttachmentUploadEvent._(
     phase: ImageAttachmentUploadPhase.failed,
     progress: null,
     failureCode: failureCode,
     retryAllowed: retryAllowed,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
   );
 
-  factory ImageAttachmentUploadEvent.cancelled() =>
-      ImageAttachmentUploadEvent._(
-        phase: ImageAttachmentUploadPhase.cancelled,
-        progress: null,
-        failureCode: null,
-        retryAllowed: false,
-      );
+  factory ImageAttachmentUploadEvent.cancelled({
+    AttachmentJobPhase? durablePhase,
+    AttachmentJobPhase? resumePhase,
+    int attemptCount = 0,
+    int automaticRetryCount = 0,
+    bool retryScheduled = false,
+  }) => ImageAttachmentUploadEvent._(
+    phase: ImageAttachmentUploadPhase.cancelled,
+    progress: null,
+    failureCode: null,
+    retryAllowed: false,
+    durablePhase: durablePhase,
+    resumePhase: resumePhase,
+    attemptCount: attemptCount,
+    automaticRetryCount: automaticRetryCount,
+    retryScheduled: retryScheduled,
+  );
 
   final ImageAttachmentUploadPhase phase;
   final double? progress;
   final String? failureCode;
   final bool retryAllowed;
+  final AttachmentJobPhase? durablePhase;
+  final AttachmentJobPhase? resumePhase;
+  final int attemptCount;
+  final int automaticRetryCount;
+  final bool retryScheduled;
 }
 
 final class ImageAttachmentUploadSession {
@@ -262,11 +340,37 @@ final class ImageAttachmentUploadState {
 final class ImageAttachmentUploadController extends ChangeNotifier {
   factory ImageAttachmentUploadController({
     required StartImageAttachmentUpload startUpload,
-  }) => ImageAttachmentUploadController._(startUpload);
+    ReportAttachmentUploadDiagnostic reportDiagnostic =
+        reportAttachmentUploadDiagnostic,
+    Duration queuedWatchdogTimeout = const Duration(seconds: 45),
+    CreateImageUploadWatchdogTimer? createWatchdogTimer,
+    DateTime Function()? clock,
+  }) {
+    if (queuedWatchdogTimeout <= Duration.zero) {
+      throw ArgumentError.value(queuedWatchdogTimeout, 'queuedWatchdogTimeout');
+    }
+    return ImageAttachmentUploadController._(
+      startUpload,
+      reportDiagnostic,
+      queuedWatchdogTimeout,
+      createWatchdogTimer ?? Timer.new,
+      clock ?? DateTime.now,
+    );
+  }
 
-  ImageAttachmentUploadController._(this._startUpload);
+  ImageAttachmentUploadController._(
+    this._startUpload,
+    this._reportDiagnostic,
+    this._queuedWatchdogTimeout,
+    this._createWatchdogTimer,
+    this._clock,
+  );
 
   final StartImageAttachmentUpload _startUpload;
+  final ReportAttachmentUploadDiagnostic _reportDiagnostic;
+  final Duration _queuedWatchdogTimeout;
+  final CreateImageUploadWatchdogTimer _createWatchdogTimer;
+  final DateTime Function() _clock;
 
   ImageAttachmentUploadState _state = const ImageAttachmentUploadState.idle();
   StreamSubscription<ImageAttachmentUploadEvent>? _subscription;
@@ -275,6 +379,14 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
   int _generation = 0;
   bool _cancelRequested = false;
   bool _disposed = false;
+  bool _sessionBound = false;
+  Timer? _queuedWatchdog;
+  DateTime? _queuedSince;
+  AttachmentJobPhase? _durablePhase;
+  AttachmentJobPhase? _resumePhase;
+  int _attemptCount = 0;
+  int _automaticRetryCount = 0;
+  bool _retryScheduled = false;
 
   ImageAttachmentUploadState get state => _state;
 
@@ -392,6 +504,19 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     ImageAttachmentUploadRequest request,
     int generation,
   ) async {
+    _sessionBound = false;
+    _durablePhase = null;
+    _resumePhase = null;
+    _attemptCount = 0;
+    _automaticRetryCount = 0;
+    _retryScheduled = false;
+    _reportDiagnostic(
+      AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.admissionStarted,
+        source: _diagnosticSource(request),
+        uiPhase: AttachmentUploadUiPhase.queued,
+      ),
+    );
     _setState(ImageAttachmentUploadState.queued(request));
     final ImageAttachmentUploadSession session;
     try {
@@ -407,6 +532,14 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
             ),
           );
         } else {
+          _reportDiagnostic(
+            AttachmentUploadDiagnostic(
+              checkpoint: AttachmentUploadCheckpoint.admissionFailed,
+              source: _diagnosticSource(request),
+              uiPhase: AttachmentUploadUiPhase.queued,
+              failure: AttachmentUploadFailure.dispatch,
+            ),
+          );
           _setState(
             ImageAttachmentUploadState.failed(
               request,
@@ -424,12 +557,22 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
       }
       return;
     }
+    _sessionBound = true;
+    _reportDiagnostic(
+      AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.admissionCompleted,
+        source: _diagnosticSource(request),
+        uiPhase: AttachmentUploadUiPhase.queued,
+        sessionBound: true,
+      ),
+    );
     _session = session;
     if (_cancelRequested) {
       _setState(ImageAttachmentUploadState.cancelling(request));
       await _cancelCurrentSession(session, request, generation);
       return;
     }
+    _armQueuedWatchdog(request);
     _subscription = session.events.listen(
       (event) => _handleEvent(generation, request, event),
       onError: (_) => _handleStreamFailure(generation, request),
@@ -446,6 +589,13 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     if (!_isCurrent(generation) || _cancelRequested) {
       return;
     }
+    _durablePhase = event.durablePhase;
+    _resumePhase = event.resumePhase;
+    _attemptCount = event.attemptCount;
+    _automaticRetryCount = event.automaticRetryCount;
+    _retryScheduled = event.retryScheduled;
+    final diagnostic = _diagnosticForEvent(request, event);
+    _reportDiagnostic(diagnostic);
     _setState(ImageAttachmentUploadState.fromEvent(request, event));
     if (_state.isTerminal) {
       unawaited(_subscription?.cancel());
@@ -461,6 +611,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     if (!_isCurrent(generation) || _cancelRequested) {
       return;
     }
+    _reportStreamFailure(request);
     _session = null;
     _subscription = null;
     _setState(
@@ -476,6 +627,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     if (!_isCurrent(generation) || _cancelRequested || _state.isTerminal) {
       return;
     }
+    _reportStreamFailure(request);
     _session = null;
     _subscription = null;
     _setState(
@@ -559,12 +711,69 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
       return;
     }
     _state = value;
+    if (value.phase == ImageAttachmentUploadPhase.queued) {
+      _armQueuedWatchdog(value.request!);
+    } else {
+      _cancelQueuedWatchdog();
+    }
     notifyListeners();
+  }
+
+  void _armQueuedWatchdog(ImageAttachmentUploadRequest request) {
+    _queuedWatchdog?.cancel();
+    _queuedSince ??= _clock().toUtc();
+    final generation = _generation;
+    _queuedWatchdog = _createWatchdogTimer(_queuedWatchdogTimeout, () {
+      _queuedWatchdog = null;
+      if (!_isCurrent(generation) ||
+          _state.phase != ImageAttachmentUploadPhase.queued) {
+        return;
+      }
+      _reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.stalled,
+          source: _diagnosticSource(request),
+          uiPhase: AttachmentUploadUiPhase.queued,
+          durablePhase: _diagnosticDurablePhase(_durablePhase),
+          resumePhase: _diagnosticDurablePhase(_resumePhase),
+          failure: AttachmentUploadFailure.unknown,
+          sessionBound: _sessionBound,
+          retryScheduled: _retryScheduled,
+          attemptCount: _attemptCount,
+          automaticRetryCount: _automaticRetryCount,
+          elapsed: _clock().toUtc().difference(_queuedSince!),
+        ),
+      );
+    });
+  }
+
+  void _cancelQueuedWatchdog() {
+    _queuedWatchdog?.cancel();
+    _queuedWatchdog = null;
+    _queuedSince = null;
+  }
+
+  void _reportStreamFailure(ImageAttachmentUploadRequest request) {
+    _reportDiagnostic(
+      AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.streamFailed,
+        source: _diagnosticSource(request),
+        uiPhase: _diagnosticUiPhase(_state.phase),
+        durablePhase: _diagnosticDurablePhase(_durablePhase),
+        resumePhase: _diagnosticDurablePhase(_resumePhase),
+        failure: AttachmentUploadFailure.stream,
+        sessionBound: _sessionBound,
+        retryScheduled: _retryScheduled,
+        attemptCount: _attemptCount,
+        automaticRetryCount: _automaticRetryCount,
+      ),
+    );
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _cancelQueuedWatchdog();
     _generation++;
     final subscription = _subscription;
     _subscription = null;
@@ -591,3 +800,110 @@ bool _validFailureCode(String value) =>
     value.length <= 128 &&
     value.trim() == value &&
     !value.codeUnits.any((unit) => unit <= 0x20 || unit == 0x7f);
+
+AttachmentUploadDiagnostic _diagnosticForEvent(
+  ImageAttachmentUploadRequest request,
+  ImageAttachmentUploadEvent event,
+) => AttachmentUploadDiagnostic(
+  checkpoint: switch (event.phase) {
+    ImageAttachmentUploadPhase.completed =>
+      AttachmentUploadCheckpoint.completed,
+    ImageAttachmentUploadPhase.cancelled =>
+      AttachmentUploadCheckpoint.cancelled,
+    ImageAttachmentUploadPhase.failed =>
+      AttachmentUploadCheckpoint.durableFailed,
+    _ => AttachmentUploadCheckpoint.durableProgress,
+  },
+  source: _diagnosticSource(request),
+  uiPhase: _diagnosticUiPhase(event.phase),
+  durablePhase: _diagnosticDurablePhase(event.durablePhase),
+  resumePhase: _diagnosticDurablePhase(event.resumePhase),
+  failure: _diagnosticFailure(event.failureCode),
+  progress: _progressBucket(event.progress),
+  sessionBound: true,
+  retryScheduled: event.retryScheduled,
+  attemptCount: event.attemptCount,
+  automaticRetryCount: event.automaticRetryCount,
+);
+
+AttachmentUploadSource _diagnosticSource(ImageAttachmentUploadRequest request) {
+  if (request.diagnosticSource != AttachmentUploadSource.unknown) {
+    return request.diagnosticSource;
+  }
+  return switch (request.presentation) {
+    AttachmentUploadPresentation.image => AttachmentUploadSource.image,
+    AttachmentUploadPresentation.file => AttachmentUploadSource.file,
+    AttachmentUploadPresentation.contact => AttachmentUploadSource.contact,
+  };
+}
+
+AttachmentUploadUiPhase _diagnosticUiPhase(ImageAttachmentUploadPhase phase) =>
+    switch (phase) {
+      ImageAttachmentUploadPhase.idle => AttachmentUploadUiPhase.none,
+      ImageAttachmentUploadPhase.preparing => AttachmentUploadUiPhase.preparing,
+      ImageAttachmentUploadPhase.queued => AttachmentUploadUiPhase.queued,
+      ImageAttachmentUploadPhase.uploading => AttachmentUploadUiPhase.uploading,
+      ImageAttachmentUploadPhase.awaitingConfirmation =>
+        AttachmentUploadUiPhase.awaitingConfirmation,
+      ImageAttachmentUploadPhase.cancelling =>
+        AttachmentUploadUiPhase.cancelling,
+      ImageAttachmentUploadPhase.completed => AttachmentUploadUiPhase.completed,
+      ImageAttachmentUploadPhase.failed => AttachmentUploadUiPhase.failed,
+      ImageAttachmentUploadPhase.cancelled => AttachmentUploadUiPhase.cancelled,
+    };
+
+AttachmentUploadDurablePhase _diagnosticDurablePhase(
+  AttachmentJobPhase? phase,
+) => switch (phase) {
+  null => AttachmentUploadDurablePhase.none,
+  AttachmentJobPhase.localPrepared =>
+    AttachmentUploadDurablePhase.localPrepared,
+  AttachmentJobPhase.probing => AttachmentUploadDurablePhase.probing,
+  AttachmentJobPhase.draftResolved =>
+    AttachmentUploadDurablePhase.draftResolved,
+  AttachmentJobPhase.uploading => AttachmentUploadDurablePhase.uploading,
+  AttachmentJobPhase.uploaded => AttachmentUploadDurablePhase.uploaded,
+  AttachmentJobPhase.finalizing => AttachmentUploadDurablePhase.finalizing,
+  AttachmentJobPhase.awaitingConfirmation =>
+    AttachmentUploadDurablePhase.awaitingConfirmation,
+  AttachmentJobPhase.retryable => AttachmentUploadDurablePhase.retryable,
+  AttachmentJobPhase.cleanupFailed =>
+    AttachmentUploadDurablePhase.cleanupFailed,
+  AttachmentJobPhase.cancelling => AttachmentUploadDurablePhase.cancelling,
+  AttachmentJobPhase.completed => AttachmentUploadDurablePhase.completed,
+  AttachmentJobPhase.failed => AttachmentUploadDurablePhase.failed,
+  AttachmentJobPhase.cancelled => AttachmentUploadDurablePhase.cancelled,
+};
+
+AttachmentUploadFailure _diagnosticFailure(String? code) {
+  if (code == null) {
+    return AttachmentUploadFailure.none;
+  }
+  if (code.contains('permission')) {
+    return AttachmentUploadFailure.permission;
+  }
+  if (code.contains('unavailable')) {
+    return AttachmentUploadFailure.unavailable;
+  }
+  if (code.contains('unsupported') || code.contains('invalid')) {
+    return AttachmentUploadFailure.invalidSelection;
+  }
+  if (code.contains('confirmation')) {
+    return AttachmentUploadFailure.confirmation;
+  }
+  if (code.contains('dispatch')) {
+    return AttachmentUploadFailure.dispatch;
+  }
+  if (code.contains('stream')) {
+    return AttachmentUploadFailure.stream;
+  }
+  return AttachmentUploadFailure.durable;
+}
+
+AttachmentUploadProgressBucket _progressBucket(double? progress) =>
+    switch (progress) {
+      null => AttachmentUploadProgressBucket.none,
+      <= 0 => AttachmentUploadProgressBucket.zero,
+      >= 1 => AttachmentUploadProgressBucket.complete,
+      _ => AttachmentUploadProgressBucket.partial,
+    };

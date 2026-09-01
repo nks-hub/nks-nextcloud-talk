@@ -90,6 +90,9 @@ final class _Fixture {
     CatchUpAttachmentConfirmation? catchUpConfirmation,
     BeforeAttachmentRoomIdle? beforeRoomIdle,
     BeforeAttachmentTransportFailureCommit? beforeTransportFailureCommit,
+    BeforeAttachmentStepPlan? beforeStepPlan,
+    CreateAttachmentRetryTimer? createRetryTimer,
+    DateTime Function()? clock,
     List<Duration> confirmationRetryDelays = const <Duration>[],
     AttachmentIdentifierFactory? identifierFactory,
   }) {
@@ -119,6 +122,9 @@ final class _Fixture {
       catchUpConfirmation: catchUpConfirmation,
       beforeRoomIdle: beforeRoomIdle,
       beforeTransportFailureCommit: beforeTransportFailureCommit,
+      beforeStepPlan: beforeStepPlan,
+      createRetryTimer: createRetryTimer,
+      clock: clock,
       confirmationRetryDelays: confirmationRetryDelays,
     );
   }

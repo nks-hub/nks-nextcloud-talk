@@ -1,6 +1,191 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceSchedulerTests() {
+  test('later retry cannot replace an earlier room retry timer', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var now = DateTime.utc(2026, 9, 1, 12);
+    final timers = <_RecordingRetryTimer>[];
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        return http.Response('', 503);
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+    final service = fixture.service(
+      client,
+      retryDelays: const <Duration>[Duration(minutes: 1)],
+      identifierFactory: _SequentialIdentifierFactory(),
+      clock: () => now,
+      createRetryTimer: (delay, callback) {
+        final timer = _RecordingRetryTimer(delay, callback);
+        timers.add(timer);
+        return timer;
+      },
+    );
+    addTearDown(service.close);
+
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    await first.events
+        .firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.automaticRetryCount == 1,
+        )
+        .timeout(const Duration(seconds: 2));
+    expect(timers, hasLength(1));
+    final firstTimer = timers.single;
+
+    now = now.add(const Duration(seconds: 45));
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    final second = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    await second.events
+        .firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.automaticRetryCount == 1,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    expect(timers, hasLength(1));
+    expect(firstTimer.isActive, isTrue);
+  });
+
+  test('manual retry restores FIFO before later finalization', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var acceptRequests = false;
+    var probeCount = 0;
+    var finalized = 0;
+    final firstRetryProbeStarted = Completer<void>();
+    final releaseFirstRetryProbe = Completer<void>();
+    late _RecordingRetryTimer retryTimer;
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        probeCount++;
+        if (probeCount == 3) {
+          firstRetryProbeStarted.complete();
+          await releaseFirstRetryProbe.future;
+        }
+        return acceptRequests
+            ? http.Response.bytes(_probeSuccess(), 200)
+            : http.Response('', 503);
+      }
+      if (request.method == 'PUT') {
+        return http.Response('', 201);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/attachment')) {
+        finalized++;
+        return http.Response.bytes(_finalizeSuccess(), 200);
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+    AttachmentJobId? secondJobId;
+    final secondFinalizationSelected = Completer<void>();
+    final continueSecondFinalization = Completer<void>();
+    final service = fixture.service(
+      client,
+      retryDelays: const <Duration>[Duration(minutes: 1)],
+      identifierFactory: _SequentialIdentifierFactory(),
+      createRetryTimer: (delay, callback) {
+        retryTimer = _RecordingRetryTimer(delay, callback);
+        return retryTimer;
+      },
+      beforeStepPlan: ({required jobId, required phase}) async {
+        if (jobId == secondJobId && phase == AttachmentJobPhase.uploaded) {
+          if (!secondFinalizationSelected.isCompleted) {
+            secondFinalizationSelected.complete();
+          }
+          await continueSecondFinalization.future;
+        }
+      },
+    );
+    addTearDown(service.close);
+
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    await first.events
+        .firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.automaticRetryCount == 1,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    acceptRequests = true;
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    final second = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    secondJobId = second.jobId;
+    await secondFinalizationSelected.future.timeout(const Duration(seconds: 2));
+
+    final retry = service.retry(accountId: first.accountId, jobId: first.jobId);
+    while (retryTimer.isActive) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    continueSecondFinalization.complete();
+    await firstRetryProbeStarted.future.timeout(const Duration(seconds: 2));
+    expect(finalized, 0);
+
+    releaseFirstRetryProbe.complete();
+    await retry.timeout(const Duration(seconds: 2));
+  });
+
+  test('scheduled retryable job does not hold a later room upload', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    var acceptRequests = false;
+    var uploaded = 0;
+    final client = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+        return acceptRequests
+            ? http.Response.bytes(_probeSuccess(), 200)
+            : http.Response('', 503);
+      }
+      if (request.method == 'PUT') {
+        uploaded++;
+        return http.Response('', 201);
+      }
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/attachment')) {
+        return http.Response.bytes(_finalizeSuccess(), 200);
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+    final service = fixture.service(
+      client,
+      retryDelays: const <Duration>[Duration(minutes: 1)],
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    final first = await service.enqueue(fixture.request(normalMaximum: 32));
+    final firstRetry = await first.events
+        .firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.automaticRetryCount == 1,
+        )
+        .timeout(const Duration(seconds: 2));
+    expect(firstRetry.retryAllowed, isTrue);
+
+    final secondSource = await _createDistinctAttachmentSource(fixture);
+    acceptRequests = true;
+    final second = await service.enqueue(
+      fixture.request(normalMaximum: 32, source: secondSource.source),
+    );
+    await second.events
+        .firstWhere(
+          (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+        )
+        .timeout(const Duration(seconds: 2));
+
+    expect(uploaded, 1);
+  });
+
   test('exhausted retryable job allows a later room upload', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -199,6 +384,25 @@ void _registerAttachmentServiceSchedulerTests() {
     expect(finalized, 1);
     await _expectFileRemoved(fixture.sourceFile);
   });
+}
+
+final class _RecordingRetryTimer implements Timer {
+  _RecordingRetryTimer(this.delay, this.callback);
+
+  final Duration delay;
+  final void Function() callback;
+  bool _active = true;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() {
+    _active = false;
+  }
 }
 
 Future<({File file, PreparedAttachmentSource source})>

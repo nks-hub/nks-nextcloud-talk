@@ -12,12 +12,15 @@ mixin _AttachmentServiceRuntime {
   CatchUpAttachmentConfirmation? get _catchUpConfirmation;
   BeforeAttachmentRoomIdle? get _beforeRoomIdle;
   BeforeAttachmentTransportFailureCommit? get _beforeTransportFailureCommit;
+  BeforeAttachmentStepPlan? get _beforeStepPlan;
+  CreateAttachmentRetryTimer get _createRetryTimer;
   List<Duration> get _confirmationRetryDelays;
   List<Duration> get _retryDelays;
   _AsyncMutex get _stateMutex;
   Map<_AttachmentRoomKey, Future<void>> get _roomRuns;
   Set<_AttachmentRoomKey> get _roomRerunRequests;
   Map<_AttachmentRoomKey, Timer> get _retryTimers;
+  Map<_AttachmentRoomKey, DateTime> get _retryDeadlines;
   Map<AttachmentPersistenceKey, Future<void>> get _confirmationCatchUps;
   Map<AttachmentPersistenceKey, Timer> get _confirmationRetryTimers;
   Map<AttachmentPersistenceKey, int> get _confirmationRetryCounts;
@@ -412,12 +415,12 @@ mixin _AttachmentServiceRuntime {
           continue;
         }
         if (next != null && next.isAfter(_clock().toUtc())) {
-          _armRetry(roomKey, next);
-          return null;
+          continue;
         }
       }
       return _SelectedAttachmentJob(key, roomKey);
     }
+    _armEarliestRetry(roomKey);
     return null;
   }
 
@@ -473,6 +476,7 @@ mixin _AttachmentServiceRuntime {
 
       AttachmentRequest? request;
       var planningRejected = false;
+      await _beforeStepPlan?.call(jobId: job.jobId, phase: job.phase);
       await _stateMutex.protect(() async {
         final currentJob = _jobForKey(key);
         if (cancellation.isCancelled ||
@@ -498,7 +502,7 @@ mixin _AttachmentServiceRuntime {
           authority: authority,
           requestId: _identifierFactory.newRequestId(),
           sourceObservation: observation,
-          finalizationBlockExemptions: _manualFinalizationBlockExemptions(
+          finalizationBlockExemptions: _inactiveFinalizationBlockExemptions(
             this,
             currentJob,
           ),
@@ -600,12 +604,17 @@ mixin _AttachmentServiceRuntime {
     }
     final metadata = _metadata[key]!;
     if (metadata.nextAttemptAt != null) {
-      _armRetry(selection.roomKey, metadata.nextAttemptAt!);
+      await _stateMutex.protect(() async {
+        _armEarliestRetry(selection.roomKey);
+      });
       return false;
     }
     if ((current.phase == AttachmentJobPhase.retryable ||
             current.phase == AttachmentJobPhase.cleanupFailed) &&
         metadata.automaticRetryCount > _retryDelays.length) {
+      await _stateMutex.protect(() async {
+        _armEarliestRetry(selection.roomKey);
+      });
       return false;
     }
     return true;
@@ -863,13 +872,49 @@ mixin _AttachmentServiceRuntime {
   }
 
   void _armRetry(_AttachmentRoomKey roomKey, DateTime at) {
+    final deadline = at.toUtc();
+    final currentDeadline = _retryDeadlines[roomKey];
+    if (currentDeadline != null && !deadline.isBefore(currentDeadline)) {
+      return;
+    }
     final delay = at.difference(_clock().toUtc());
-    final current = _retryTimers[roomKey];
-    current?.cancel();
-    _retryTimers[roomKey] = Timer(delay.isNegative ? Duration.zero : delay, () {
+    _retryTimers.remove(roomKey)?.cancel();
+    _retryDeadlines[roomKey] = deadline;
+    late final Timer timer;
+    timer = _createRetryTimer(delay.isNegative ? Duration.zero : delay, () {
+      if (!identical(_retryTimers[roomKey], timer)) {
+        return;
+      }
       _retryTimers.remove(roomKey);
+      _retryDeadlines.remove(roomKey);
       unawaited(_scheduleRoom(roomKey));
     });
+    _retryTimers[roomKey] = timer;
+  }
+
+  void _armEarliestRetry(_AttachmentRoomKey roomKey) {
+    final account = _snapshot.accounts[roomKey.accountId];
+    DateTime? earliest;
+    if (account != null) {
+      for (final job in account.jobs.values) {
+        if (job.draft.roomToken != roomKey.roomToken ||
+            (job.phase != AttachmentJobPhase.retryable &&
+                job.phase != AttachmentJobPhase.cleanupFailed)) {
+          continue;
+        }
+        final next =
+            _metadata[_jobKey(account.accountId, job.jobId)]?.nextAttemptAt;
+        if (next != null && (earliest == null || next.isBefore(earliest))) {
+          earliest = next;
+        }
+      }
+    }
+    if (earliest == null) {
+      _retryTimers.remove(roomKey)?.cancel();
+      _retryDeadlines.remove(roomKey);
+      return;
+    }
+    _armRetry(roomKey, earliest);
   }
 
   AttachmentJob? _jobForKey(AttachmentPersistenceKey key) => _snapshot

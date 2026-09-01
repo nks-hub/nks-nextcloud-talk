@@ -31,6 +31,13 @@ typedef CatchUpAttachmentConfirmation =
     });
 typedef BeforeAttachmentRoomIdle = Future<void> Function();
 typedef BeforeAttachmentTransportFailureCommit = Future<void> Function();
+typedef BeforeAttachmentStepPlan =
+    Future<void> Function({
+      required AttachmentJobId jobId,
+      required AttachmentJobPhase phase,
+    });
+typedef CreateAttachmentRetryTimer =
+    Timer Function(Duration delay, void Function() callback);
 
 const String attachmentConfirmationReconciliationRequired =
     'confirmation-reconciliation-required';
@@ -102,10 +109,12 @@ final class AttachmentJobProgress {
     required this.accountId,
     required this.jobId,
     required this.phase,
+    this.resumePhase,
     required this.progress,
     required this.attemptCount,
     required this.automaticRetryCount,
     required this.retryAllowed,
+    this.retryScheduled = false,
     required this.errorClass,
     required this.messageIds,
   });
@@ -113,10 +122,12 @@ final class AttachmentJobProgress {
   final AccountId accountId;
   final AttachmentJobId jobId;
   final AttachmentJobPhase phase;
+  final AttachmentJobPhase? resumePhase;
   final double progress;
   final int attemptCount;
   final int automaticRetryCount;
   final bool retryAllowed;
+  final bool retryScheduled;
   final String? errorClass;
   final List<int> messageIds;
 
@@ -167,6 +178,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     CatchUpAttachmentConfirmation? catchUpConfirmation,
     BeforeAttachmentRoomIdle? beforeRoomIdle,
     BeforeAttachmentTransportFailureCommit? beforeTransportFailureCommit,
+    BeforeAttachmentStepPlan? beforeStepPlan,
+    CreateAttachmentRetryTimer? createRetryTimer,
     List<Duration> confirmationRetryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -200,6 +213,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
       catchUpConfirmation: catchUpConfirmation,
       beforeRoomIdle: beforeRoomIdle,
       beforeTransportFailureCommit: beforeTransportFailureCommit,
+      beforeStepPlan: beforeStepPlan,
+      createRetryTimer: createRetryTimer ?? Timer.new,
       confirmationRetryDelays: List<Duration>.unmodifiable(
         confirmationRetryDelays,
       ),
@@ -221,6 +236,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     required this._catchUpConfirmation,
     required this._beforeRoomIdle,
     required this._beforeTransportFailureCommit,
+    required this._beforeStepPlan,
+    required this._createRetryTimer,
     required this._confirmationRetryDelays,
     required this._retryDelays,
   });
@@ -248,6 +265,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   final BeforeAttachmentTransportFailureCommit? _beforeTransportFailureCommit;
   @override
+  final BeforeAttachmentStepPlan? _beforeStepPlan;
+  @override
+  final CreateAttachmentRetryTimer _createRetryTimer;
+  @override
   final List<Duration> _confirmationRetryDelays;
   @override
   final List<Duration> _retryDelays;
@@ -259,6 +280,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
   final Set<_AttachmentRoomKey> _roomRerunRequests = {};
   @override
   final Map<_AttachmentRoomKey, Timer> _retryTimers = {};
+  @override
+  final Map<_AttachmentRoomKey, DateTime> _retryDeadlines = {};
   @override
   final Map<AttachmentPersistenceKey, Future<void>> _confirmationCatchUps = {};
   @override
@@ -328,6 +351,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       if (entry.key.accountId == accountId) {
         entry.value.cancel();
         _retryTimers.remove(entry.key);
+        _retryDeadlines.remove(entry.key);
       }
     }
     for (final entry in _confirmationRetryTimers.entries.toList(
@@ -641,6 +665,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
     final retryRoom = roomKey!;
     _retryTimers.remove(retryRoom)?.cancel();
+    _retryDeadlines.remove(retryRoom);
     await _scheduleRoom(retryRoom);
   }
 
@@ -755,6 +780,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
       timer.cancel();
     }
     _retryTimers.clear();
+    _retryDeadlines.clear();
     for (final timer in _confirmationRetryTimers.values) {
       timer.cancel();
     }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_controller.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -70,6 +71,7 @@ void main() {
     final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
     addTearDown(events.close);
     final requests = <ImageAttachmentUploadRequest>[];
+    final diagnostics = <AttachmentUploadDiagnostic>[];
     final controller = ImageAttachmentUploadController(
       startUpload: (request) async {
         requests.add(request);
@@ -81,6 +83,7 @@ void main() {
           cancel: () async {},
         );
       },
+      reportDiagnostic: diagnostics.add,
     );
     addTearDown(controller.dispose);
 
@@ -88,6 +91,13 @@ void main() {
     expect(controller.state.phase, ImageAttachmentUploadPhase.failed);
     expect(controller.state.failureCode, 'dispatch-failed');
     expect(controller.state.retryAllowed, isTrue);
+    expect(
+      diagnostics.where(
+        (event) =>
+            event.checkpoint == AttachmentUploadCheckpoint.admissionFailed,
+      ),
+      hasLength(1),
+    );
 
     await controller.retry();
     expect(requests, <ImageAttachmentUploadRequest>[_request, _request]);
@@ -151,11 +161,13 @@ void main() {
 
   test('maps an unfinished event stream to a retryable failure', () async {
     final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
+    final diagnostics = <AttachmentUploadDiagnostic>[];
     final controller = ImageAttachmentUploadController(
       startUpload: (_) async => ImageAttachmentUploadSession(
         events: events.stream,
         cancel: () async {},
       ),
+      reportDiagnostic: diagnostics.add,
     );
     addTearDown(controller.dispose);
 
@@ -166,7 +178,114 @@ void main() {
     expect(controller.state.phase, ImageAttachmentUploadPhase.failed);
     expect(controller.state.failureCode, 'event-stream-ended');
     expect(controller.state.retryAllowed, isTrue);
+    expect(
+      diagnostics.where(
+        (event) => event.checkpoint == AttachmentUploadCheckpoint.streamFailed,
+      ),
+      hasLength(1),
+    );
   });
+
+  test(
+    'queued watchdog identifies admission and durable scheduler stalls',
+    () async {
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final timers = <_ManualTimer>[];
+      final pendingSession = Completer<ImageAttachmentUploadSession>();
+      final events = StreamController<ImageAttachmentUploadEvent>(sync: true);
+      addTearDown(events.close);
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) => pendingSession.future,
+        reportDiagnostic: diagnostics.add,
+        queuedWatchdogTimeout: const Duration(seconds: 1),
+        createWatchdogTimer: (delay, callback) {
+          final timer = _ManualTimer(callback);
+          timers.add(timer);
+          return timer;
+        },
+      );
+      addTearDown(controller.dispose);
+
+      final starting = controller.startPrepared(_request);
+      await pumpEventQueue();
+      timers.last.fire();
+      timers.last.fire();
+      var stalled = diagnostics
+          .where(
+            (event) => event.checkpoint == AttachmentUploadCheckpoint.stalled,
+          )
+          .toList();
+      expect(stalled, hasLength(1));
+      expect(stalled.single.sessionBound, isFalse);
+      expect(stalled.single.durablePhase, AttachmentUploadDurablePhase.none);
+
+      pendingSession.complete(
+        ImageAttachmentUploadSession(
+          events: events.stream,
+          cancel: () async {},
+        ),
+      );
+      await starting;
+      events.add(
+        ImageAttachmentUploadEvent.queued(
+          durablePhase: AttachmentJobPhase.localPrepared,
+          attemptCount: 2,
+          automaticRetryCount: 1,
+          retryScheduled: true,
+        ),
+      );
+      timers.last.fire();
+      stalled = diagnostics
+          .where(
+            (event) => event.checkpoint == AttachmentUploadCheckpoint.stalled,
+          )
+          .toList();
+      expect(stalled, hasLength(2));
+      expect(stalled.last.sessionBound, isTrue);
+      expect(stalled.last.source, AttachmentUploadSource.gallery);
+      expect(
+        stalled.last.durablePhase,
+        AttachmentUploadDurablePhase.localPrepared,
+      );
+      expect(stalled.last.attemptCount, 2);
+      expect(stalled.last.automaticRetryCount, 1);
+      expect(stalled.last.retryScheduled, isTrue);
+
+      events.add(
+        ImageAttachmentUploadEvent.uploading(
+          0.25,
+          durablePhase: AttachmentJobPhase.uploading,
+        ),
+      );
+      expect(timers.last.isActive, isFalse);
+    },
+  );
+}
+
+final class _ManualTimer implements Timer {
+  _ManualTimer(this._callback);
+
+  final void Function() _callback;
+  bool _active = true;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() {
+    _active = false;
+  }
+
+  void fire() {
+    if (!_active) {
+      return;
+    }
+    _active = false;
+    _callback();
+  }
 }
 
 final ImageAttachmentUploadRequest _request = ImageAttachmentUploadRequest(
@@ -194,4 +313,5 @@ final ImageAttachmentUploadRequest _request = ImageAttachmentUploadRequest(
     threadTitle: null,
     silent: false,
   ),
+  diagnosticSource: AttachmentUploadSource.gallery,
 );

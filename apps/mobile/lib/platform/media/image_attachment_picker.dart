@@ -7,6 +7,7 @@ import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
 import 'package:image_picker/image_picker.dart' as platform_picker;
 import 'package:mime/mime.dart';
+import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:path/path.dart' as p;
@@ -195,6 +196,7 @@ final class DurableImageAttachmentPicker {
     required this.backend,
     required this.store,
     required this.maximumImageBytes,
+    this.reportDiagnostic = reportAttachmentUploadDiagnostic,
   }) {
     if (maximumImageBytes < 1 || maximumImageBytes > store.maximumSourceBytes) {
       throw ArgumentError.value(
@@ -208,18 +210,65 @@ final class DurableImageAttachmentPicker {
   final ImageSelectionBackend backend;
   final DurableAttachmentSourceStore store;
   final int maximumImageBytes;
+  final ReportAttachmentUploadDiagnostic reportDiagnostic;
 
   Future<PreparedAttachmentSource?> pick({
     AttachmentPickerSource source = AttachmentPickerSource.gallery,
     AttachmentCancellationSignal? cancellationSignal,
   }) async {
-    final selection = await backend.selectImage(source);
+    final diagnosticSource = _diagnosticSource(source);
+    reportDiagnostic(
+      AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.pickerPresented,
+        source: diagnosticSource,
+        uiPhase: AttachmentUploadUiPhase.preparing,
+      ),
+    );
+    final ImageSelection? selection;
+    try {
+      selection = await backend.selectImage(source);
+    } on ImageAttachmentPickerException catch (error) {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.pickerFailed,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+          failure: _pickerFailure(error.code),
+        ),
+      );
+      rethrow;
+    } on Object {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.pickerFailed,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+          failure: AttachmentUploadFailure.unknown,
+        ),
+      );
+      rethrow;
+    }
     if (selection == null) {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.pickerCancelled,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+        ),
+      );
       return null;
     }
+    reportDiagnostic(
+      AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.pickerReturned,
+        source: diagnosticSource,
+        uiPhase: AttachmentUploadUiPhase.preparing,
+      ),
+    );
     return _copySelection(
       selection,
       imageOnly: source != AttachmentPickerSource.file,
+      diagnosticSource: diagnosticSource,
       cancellationSignal: cancellationSignal,
     );
   }
@@ -230,54 +279,153 @@ final class DurableImageAttachmentPicker {
   }) => _copySelection(
     selection,
     imageOnly: false,
+    diagnosticSource: AttachmentUploadSource.file,
     cancellationSignal: cancellationSignal,
   );
 
   Future<PreparedAttachmentSource> _copySelection(
     ImageSelection selection, {
     required bool imageOnly,
+    required AttachmentUploadSource diagnosticSource,
     AttachmentCancellationSignal? cancellationSignal,
   }) async {
-    if (selection.byteLength < 1) {
-      throw const DurableAttachmentSourceException(
-        DurableAttachmentSourceError.emptySource,
+    var failure = AttachmentUploadFailure.invalidSelection;
+    try {
+      if (selection.byteLength < 1) {
+        throw const DurableAttachmentSourceException(
+          DurableAttachmentSourceError.emptySource,
+        );
+      }
+      if (selection.byteLength > maximumImageBytes) {
+        throw const DurableAttachmentSourceException(
+          DurableAttachmentSourceError.sourceTooLarge,
+        );
+      }
+      final displayName = _safeDisplayName(
+        selection.displayName,
+        fallback: imageOnly ? 'image' : 'attachment',
       );
-    }
-    if (selection.byteLength > maximumImageBytes) {
-      throw const DurableAttachmentSourceException(
-        DurableAttachmentSourceError.sourceTooLarge,
+      failure = AttachmentUploadFailure.sourceRead;
+      final header = await _readPrefix(
+        selection.openRead(
+          start: 0,
+          end: min(selection.byteLength, defaultMagicNumbersMaxLength),
+        ),
+        defaultMagicNumbersMaxLength,
       );
-    }
-    final displayName = _safeDisplayName(
-      selection.displayName,
-      fallback: imageOnly ? 'image' : 'attachment',
-    );
-    final header = await _readPrefix(
-      selection.openRead(
-        start: 0,
-        end: min(selection.byteLength, defaultMagicNumbersMaxLength),
-      ),
-      defaultMagicNumbersMaxLength,
-    );
-    final detected = lookupMimeType(displayName, headerBytes: header);
-    final mimeType = _normalizeMimeType(detected ?? selection.declaredMimeType);
-    if (imageOnly && (mimeType == null || !mimeType.startsWith('image/'))) {
-      throw const ImageAttachmentPickerException(
-        ImageAttachmentPickerError.unsupportedType,
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.prefixRead,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+        ),
       );
+      final detected = lookupMimeType(displayName, headerBytes: header);
+      final mimeType = _normalizeMimeType(
+        detected ?? selection.declaredMimeType,
+      );
+      if (imageOnly && (mimeType == null || !mimeType.startsWith('image/'))) {
+        throw const ImageAttachmentPickerException(
+          ImageAttachmentPickerError.unsupportedType,
+        );
+      }
+      failure = AttachmentUploadFailure.sourceCopy;
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.durableCopyStarted,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+        ),
+      );
+      final prepared = await store.copyFromStream(
+        stream: selection.openRead(),
+        expectedByteLength: selection.byteLength,
+        // An unrecognised file still has to reach the server with a MIME type
+        // that describes it honestly, so it falls back to the generic one
+        // instead of borrowing whatever the platform guessed.
+        mimeType: mimeType ?? 'application/octet-stream',
+        displayName: displayName,
+        cancellationSignal: cancellationSignal,
+      );
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.durableCopyCompleted,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+        ),
+      );
+      return prepared;
+    } on DurableAttachmentSourceException catch (error) {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: error.code == DurableAttachmentSourceError.cancelled
+              ? AttachmentUploadCheckpoint.cancelled
+              : AttachmentUploadCheckpoint.durableCopyFailed,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+          failure: error.code == DurableAttachmentSourceError.cancelled
+              ? AttachmentUploadFailure.none
+              : _durableFailure(error.code),
+        ),
+      );
+      rethrow;
+    } on ImageAttachmentPickerException {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.durableCopyFailed,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+          failure: AttachmentUploadFailure.invalidSelection,
+        ),
+      );
+      rethrow;
+    } on Object {
+      reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.durableCopyFailed,
+          source: diagnosticSource,
+          uiPhase: AttachmentUploadUiPhase.preparing,
+          failure: failure,
+        ),
+      );
+      rethrow;
     }
-    return store.copyFromStream(
-      stream: selection.openRead(),
-      expectedByteLength: selection.byteLength,
-      // An unrecognised file still has to reach the server with a MIME type
-      // that describes it honestly, so it falls back to the generic one
-      // instead of borrowing whatever the platform guessed.
-      mimeType: mimeType ?? 'application/octet-stream',
-      displayName: displayName,
-      cancellationSignal: cancellationSignal,
-    );
   }
 }
+
+AttachmentUploadSource _diagnosticSource(AttachmentPickerSource source) =>
+    switch (source) {
+      AttachmentPickerSource.gallery => AttachmentUploadSource.gallery,
+      AttachmentPickerSource.camera => AttachmentUploadSource.camera,
+      AttachmentPickerSource.file => AttachmentUploadSource.file,
+    };
+
+AttachmentUploadFailure _pickerFailure(ImageAttachmentPickerError error) =>
+    switch (error) {
+      ImageAttachmentPickerError.galleryPermissionDenied ||
+      ImageAttachmentPickerError.cameraPermissionDenied =>
+        AttachmentUploadFailure.permission,
+      ImageAttachmentPickerError.galleryUnavailable ||
+      ImageAttachmentPickerError.cameraUnavailable =>
+        AttachmentUploadFailure.unavailable,
+      ImageAttachmentPickerError.unsupportedType ||
+      ImageAttachmentPickerError.invalidSelection =>
+        AttachmentUploadFailure.invalidSelection,
+    };
+
+AttachmentUploadFailure _durableFailure(DurableAttachmentSourceError error) =>
+    switch (error) {
+      DurableAttachmentSourceError.sourceTooLarge ||
+      DurableAttachmentSourceError.emptySource ||
+      DurableAttachmentSourceError.invalidHandle ||
+      DurableAttachmentSourceError.sourceChanged =>
+        AttachmentUploadFailure.invalidSelection,
+      DurableAttachmentSourceError.sourceUnavailable =>
+        AttachmentUploadFailure.sourceRead,
+      DurableAttachmentSourceError.invalidWriteSession =>
+        AttachmentUploadFailure.sourceCopy,
+      DurableAttachmentSourceError.cancelled => AttachmentUploadFailure.none,
+    };
 
 Future<List<int>> _readPrefix(Stream<List<int>> stream, int maximum) async {
   final bytes = <int>[];

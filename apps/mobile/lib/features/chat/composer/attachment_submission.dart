@@ -339,10 +339,21 @@ ImageAttachmentUploadEvent _mapImageProgress(AttachmentJobProgress progress) {
     return ImageAttachmentUploadEvent.failed(
       attachmentConfirmationReconciliationRequired,
       retryAllowed: true,
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
     );
   }
   return switch (progress.phase) {
-    AttachmentJobPhase.localPrepared => ImageAttachmentUploadEvent.queued(),
+    AttachmentJobPhase.localPrepared => ImageAttachmentUploadEvent.queued(
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
+    ),
     AttachmentJobPhase.probing ||
     AttachmentJobPhase.draftResolved ||
     AttachmentJobPhase.uploading ||
@@ -350,17 +361,45 @@ ImageAttachmentUploadEvent _mapImageProgress(AttachmentJobProgress progress) {
     AttachmentJobPhase.finalizing ||
     AttachmentJobPhase.cancelling => ImageAttachmentUploadEvent.uploading(
       progress.progress.clamp(0.0, 1.0).toDouble(),
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
     ),
     AttachmentJobPhase.awaitingConfirmation =>
-      ImageAttachmentUploadEvent.awaitingConfirmation(),
-    AttachmentJobPhase.completed => ImageAttachmentUploadEvent.completed(),
+      ImageAttachmentUploadEvent.awaitingConfirmation(
+        durablePhase: progress.phase,
+        resumePhase: progress.resumePhase,
+        attemptCount: progress.attemptCount,
+        automaticRetryCount: progress.automaticRetryCount,
+        retryScheduled: progress.retryScheduled,
+      ),
+    AttachmentJobPhase.completed => ImageAttachmentUploadEvent.completed(
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
+    ),
     AttachmentJobPhase.retryable ||
     AttachmentJobPhase.failed ||
     AttachmentJobPhase.cleanupFailed => ImageAttachmentUploadEvent.failed(
       progress.errorClass ?? 'attachment-${progress.phase.name}',
       retryAllowed: progress.retryAllowed,
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
     ),
-    AttachmentJobPhase.cancelled => ImageAttachmentUploadEvent.cancelled(),
+    AttachmentJobPhase.cancelled => ImageAttachmentUploadEvent.cancelled(
+      durablePhase: progress.phase,
+      resumePhase: progress.resumePhase,
+      attemptCount: progress.attemptCount,
+      automaticRetryCount: progress.automaticRetryCount,
+      retryScheduled: progress.retryScheduled,
+    ),
   };
 }
 

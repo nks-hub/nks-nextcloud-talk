@@ -45,6 +45,22 @@ klienta, ne o white-label aplikaci, takže cizí build nesmí hlásit k nám.
   s osobou ani s tím, jaký Nextcloud kdo používá. Přežije restart, ne
   přeinstalaci.
 
+### Diagnostika nahrávání příloh
+
+Výběr a upload přílohy mohou skončit v čekajícím stavu bez výjimky, proto mají
+vlastní omezené Sentry události. Zaznamenávají pouze předem dané enumy a
+ořezané hodnoty: hranici pickeru a durable kopie, UI a durable fázi, zda už
+vznikla durable session, bucket průběhu a času, počet pokusů nejvýše jako
+`4+`, informaci o naplánovaném retry, lifecycle a platformu.
+
+Picker, kopie, admission a každá durable změna přidají breadcrumb. Zachycená
+chyba a fronta, která zůstane 45 sekund ve fázi `queued`, vytvoří warning event
+s pevným fingerprintem. Event používá vyčištěný izolovaný scope bez usera,
+zděděných breadcrumbs, tagů a extras. Nikdy do něj nevstupuje výjimka ani její
+text, název či cesta souboru, source handle nebo hash, účet, room token, server,
+URL, popisek, zpráva, credential ani job ID. Build bez platného `SENTRY_DSN`
+volá jen neaktivní SDK hub a nic neodesílá.
+
 Rybbit navíc sám doplňuje model zařízení, verzi OS, verzi aplikace a přibližnou
 polohu odvozenou z IP adresy. Nic z toho neposílá klient a nedá se to vypnout
 na naší straně; je to standardní chování serveru.
@@ -84,3 +100,9 @@ Testy:
   a formát id instalace.
 - `apps/mobile/test/telemetry_bootstrap_test.dart` — zahození
   `SentryEvent.request` a pročištění zpráv, výjimek a breadcrumbs.
+- `apps/mobile/test/attachment_upload_telemetry_test.dart` — pevný event bez
+  requestu, usera, breadcrumbs, výjimky a volného textového payloadu.
+- `apps/mobile/test/platform/media/image_attachment_picker_test.dart`,
+  `image_attachment_upload_controller_test.dart` a
+  `attachment_submission_test.dart` — pořadí picker/kopie, watchdog před a po
+  durable admission a bezpečný přenos fáze a retry metadat.

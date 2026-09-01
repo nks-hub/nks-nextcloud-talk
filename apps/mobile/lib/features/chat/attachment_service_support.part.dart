@@ -1,6 +1,8 @@
 part of 'attachment_service.dart';
 
-Set<AttachmentJobId> _manualFinalizationBlockExemptions(
+/// Older retryable jobs own no active request, so they cannot enforce room
+/// FIFO while a later user-selected upload is ready to finalize.
+Set<AttachmentJobId> _inactiveFinalizationBlockExemptions(
   _AttachmentServiceRuntime service,
   AttachmentJob current,
 ) {
@@ -8,6 +10,7 @@ Set<AttachmentJobId> _manualFinalizationBlockExemptions(
   if (account == null) {
     return const <AttachmentJobId>{};
   }
+  final now = service._clock().toUtc();
   final result = <AttachmentJobId>{};
   for (final other in account.jobs.values) {
     if (other.jobId == current.jobId ||
@@ -18,9 +21,11 @@ Set<AttachmentJobId> _manualFinalizationBlockExemptions(
       continue;
     }
     final metadata = service._metadata[_jobKey(other.accountId, other.jobId)];
-    if (metadata != null &&
-        metadata.nextAttemptAt == null &&
-        metadata.automaticRetryCount > 0) {
+    if (metadata == null) {
+      continue;
+    }
+    final next = metadata.nextAttemptAt;
+    if (next != null ? next.isAfter(now) : metadata.automaticRetryCount > 0) {
       result.add(other.jobId);
     }
   }
@@ -113,6 +118,11 @@ AttachmentJobProgress _progressFromRow(StoredAttachmentJob row) {
     accountId: AccountId.parse(row.accountId),
     jobId: AttachmentJobId.parse(row.jobId),
     phase: phase,
+    resumePhase: row.resumePhase == null
+        ? null
+        : AttachmentJobPhase.values.singleWhere(
+            (value) => value.name == row.resumePhase,
+          ),
     progress: progress,
     attemptCount: row.attemptCount,
     automaticRetryCount: row.automaticRetryCount,
@@ -121,6 +131,7 @@ AttachmentJobProgress _progressFromRow(StoredAttachmentJob row) {
         phase == AttachmentJobPhase.cleanupFailed ||
         phase == AttachmentJobPhase.awaitingConfirmation &&
             row.errorClass == attachmentConfirmationReconciliationRequired,
+    retryScheduled: row.nextAttemptAtMillis != null,
     errorClass: row.localCleanupError ?? row.errorClass,
     messageIds: List<int>.unmodifiable(messageIds),
   );
