@@ -28,7 +28,10 @@ void main() {
         '--quiet',
       ];
       final result = await Process.run(
-        Platform.isWindows ? wrapper.path : 'sh',
+        // `bash`, not `sh`: the committed wrapper declares a bash shebang and
+        // uses bash arrays, so a POSIX shell dies on it at line 154. Windows
+        // and this machine never noticed — Linux CI did.
+        Platform.isWindows ? wrapper.path : 'bash',
         gradleArguments,
         workingDirectory: android.path,
       );
