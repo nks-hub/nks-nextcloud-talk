@@ -500,6 +500,9 @@ Future<void> _seedAccount(
     serverThemeColor: '#00679e',
     talkFeatures: talkFeatures,
     createdAt: DateTime.utc(2026, 1, accountId == 'account-a' ? 1 : 2),
+    // A trusted certificate is account state like any other: removing the
+    // account has to take it along.
+    certificateFingerprint: accountId == 'account-a' ? 'a' * 64 : 'b' * 64,
   );
   vault.values[accountId] = 'fixture-app-password-never-use';
 

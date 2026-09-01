@@ -58,16 +58,15 @@ final class AccountRepository {
   /// knows which server it reached. Two accounts on one self-hosted server
   /// therefore share what either of them confirmed, while a pin still never
   /// reaches a host nobody confirmed it for.
-  Stream<Map<String, Set<String>>> watchCertificatePins() {
-    return _database.select(_database.certificatePins).watch().map((rows) {
-      final pins = <String, Set<String>>{};
-      for (final row in rows) {
-        pins
-            .putIfAbsent(row.host.toLowerCase(), () => <String>{})
-            .add(row.fingerprint);
-      }
-      return pins;
-    });
+  Future<Map<String, Set<String>>> readCertificatePins() async {
+    final rows = await _database.select(_database.certificatePins).get();
+    final pins = <String, Set<String>>{};
+    for (final row in rows) {
+      pins
+          .putIfAbsent(row.host.toLowerCase(), () => <String>{})
+          .add(row.fingerprint);
+    }
+    return pins;
   }
 
   Stream<List<CachedConversation>> watchConversations(String accountId) {

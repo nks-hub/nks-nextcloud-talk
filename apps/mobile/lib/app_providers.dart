@@ -144,17 +144,13 @@ final certificateEncounterProvider = StateProvider<CertificateEncounter?>(
 
 /// The one place clients that talk to a user's own server are made.
 final certificateTrustGateProvider = Provider<CertificateTrustGate>((ref) {
-  final gate = CertificateTrustGate(
+  final accounts = ref.watch(accountRepositoryProvider);
+  return CertificateTrustGate(
+    loadStoredPins: accounts.readCertificatePins,
     onEncounter: (encounter) {
       ref.read(certificateEncounterProvider.notifier).state = encounter;
     },
   );
-  final subscription = ref
-      .watch(accountRepositoryProvider)
-      .watchCertificatePins()
-      .listen((pins) => gate.storedPins = pins);
-  ref.onDispose(subscription.cancel);
-  return gate;
 });
 
 final chatMediaRepositoryProvider = Provider<ChatMediaRepository>((ref) {

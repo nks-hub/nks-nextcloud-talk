@@ -181,13 +181,13 @@ void main() {
         CancellationSignal(),
       );
 
-      expect(await repository.watchCertificatePins().first, {
+      expect(await repository.readCertificatePins(), {
         'cloud.example.invalid': {'f' * 64},
       });
 
       // Removing the account must take its trust with it.
       await repository.purgeAccount(account.id);
-      expect(await repository.watchCertificatePins().first, isEmpty);
+      expect(await repository.readCertificatePins(), isEmpty);
     },
   );
 

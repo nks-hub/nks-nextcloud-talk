@@ -13,14 +13,14 @@ void main() {
   for (final release in _supportedReleaseSchemas) {
     test(
       'release schema v${release.version} (${release.sha.substring(0, 7)}) '
-      'upgrades to v17 with account data intact',
+      'upgrades to v18 with account data intact',
       () => _verifyReleaseUpgrade(release),
     );
   }
 
   test(
     'schema left ahead of user_version by an interrupted migration '
-    'still upgrades to v17',
+    'still upgrades to v18',
     _verifyInterruptedUpgrade,
   );
 }
@@ -66,7 +66,7 @@ Future<void> _verifyInterruptedUpgrade() async {
         .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
         .get();
 
-    expect(version.read<int>('user_version'), 17);
+    expect(version.read<int>('user_version'), 18);
     expect(room.isArchived, isTrue);
     expect(room.peerStatus, 'away');
     expect(
@@ -115,7 +115,7 @@ Future<void> _verifyReleaseUpgrade(_ReleaseSchema release) async {
         .customSelect('PRAGMA foreign_key_check')
         .get();
 
-    expect(version.read<int>('user_version'), 17);
+    expect(version.read<int>('user_version'), 18);
     expect(account.id, 'account-matrix');
     expect(account.loginName, 'fixture-user');
     expect(room.token, 'matrix-room');
@@ -186,8 +186,13 @@ Future<void> _downgradeToReleaseSchema(
   AppDatabase database,
   int version,
 ) async {
-  await database.customStatement('DROP TABLE account_themes');
-  await database.customStatement('DROP TABLE cached_threads');
+  await database.customStatement('DROP TABLE certificate_pins');
+  if (version < 17) {
+    await database.customStatement('DROP TABLE account_themes');
+  }
+  if (version < 14) {
+    await database.customStatement('DROP TABLE cached_threads');
+  }
   if (version < 12) {
     await database.customStatement('DROP TABLE call_lifecycle_sessions');
   }
@@ -232,4 +237,5 @@ const _supportedReleaseSchemas = <_ReleaseSchema>[
   _ReleaseSchema(11, 'ae94f36c9220b9fc5a94272dce6d76018fce8b92'),
   _ReleaseSchema(12, 'd1d6159912748886bad017ba5d5d1b10b4314afd'),
   _ReleaseSchema(13, 'aeac1d3db111fc8ff957cc892d97b11700cdba51'),
+  _ReleaseSchema(17, '75127b9bc66ca09d929628c58cffa4f1cd2a2f2b'),
 ];

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -36,7 +37,15 @@ final class CertificateEncounter {
 /// one of them would leave the rest verifying differently. Everything that
 /// leaves the app has to come from here.
 final class CertificateTrustGate {
-  CertificateTrustGate({this.onEncounter});
+  CertificateTrustGate({this.loadStoredPins, this.onEncounter}) {
+    unawaited(refresh());
+  }
+
+  /// Reads what the accounts trust. Pulled rather than watched: a live
+  /// database stream held for the life of the app leaves a pending close
+  /// timer whenever the tree is torn down, and pins only ever change when an
+  /// account is added or removed.
+  final Future<Map<String, Set<String>>> Function()? loadStoredPins;
 
   /// Told about every rejected certificate, so the user can be shown the
   /// fingerprint. Called during a handshake, so it must not block.
@@ -48,6 +57,22 @@ final class CertificateTrustGate {
   /// The most recent certificate that did not pass, so a request that failed
   /// with a bare handshake error can still be explained to the user.
   CertificateEncounter? lastEncounter;
+
+  /// Rereads the stored pins. Cheap enough to run whenever a client is made,
+  /// which is what keeps a removed account's trust from outliving it.
+  Future<void> refresh() async {
+    final load = loadStoredPins;
+    if (load == null) {
+      return;
+    }
+    try {
+      storedPins = await load();
+    } on Object {
+      // Nothing stored means nothing extra is trusted, which is the safe
+      // answer; the user is asked again instead of a request being let
+      // through on a stale snapshot.
+    }
+  }
 
   /// Replaces what the accounts have trusted so far. Fingerprints the user
   /// confirmed in this session survive, because the account that will own them
@@ -70,6 +95,7 @@ final class CertificateTrustGate {
   String? confirmedFor(String host) => _confirmed[host.toLowerCase()];
 
   http.Client createClient() {
+    unawaited(refresh());
     final client = HttpClient()
       ..badCertificateCallback = (certificate, host, port) =>
           accepts(certificate: certificate, host: host);

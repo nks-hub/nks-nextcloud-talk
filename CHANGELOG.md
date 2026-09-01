@@ -16,6 +16,17 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Vlastní nebo self-signed certifikát serveru jde potvrdit při přidávání účtu.
+  Aplikace ukáže otisk SHA-256 po dvojicích, aby se dal porovnat s tím, co
+  server vypisuje, a teprve po potvrzení se na server něco pošle. Otisk patří
+  účtu a s jeho odebráním zmizí; opuštěné přidávání serveru po sobě žádnou
+  důvěru nenechá.
+- Certifikát, který se u už důvěřovaného serveru změní, se nepřijme a znovu se
+  na něj neptá. Obnova certifikátu vypadá zvenku stejně jako útok, takže se
+  řeší vědomě: odebráním a novým přidáním účtu.
+
 ## 0.1.0 (39) — 1. 9. 2026
 
 Vydáno ze zdroje `daa1039`.
