@@ -19,6 +19,7 @@ final class TelemetryConfig {
     required this.rybbitHost,
     required this.rybbitSiteId,
     required this.environment,
+    this.releaseGateEnabled = false,
   });
 
   factory TelemetryConfig.fromEnvironment() {
@@ -30,6 +31,7 @@ final class TelemetryConfig {
         'TELEMETRY_ENVIRONMENT',
         defaultValue: 'development',
       ),
+      releaseGateEnabled: bool.fromEnvironment('TELEMETRY_RELEASE_GATE'),
     );
   }
 
@@ -37,6 +39,7 @@ final class TelemetryConfig {
   final String rybbitHost;
   final String rybbitSiteId;
   final String environment;
+  final bool releaseGateEnabled;
 
   /// Crash reporting runs only with a DSN that is actually a URL. A malformed
   /// value disables it rather than letting the SDK decide what to do with it.
@@ -66,7 +69,12 @@ final class TelemetryConfig {
 final class TelemetryScrubber {
   const TelemetryScrubber();
 
-  static final _url = RegExp(r'https?://[^\s"' r"'" r']+', caseSensitive: false);
+  static final _url = RegExp(
+    r'https?://[^\s"'
+    r"'"
+    r']+',
+    caseSensitive: false,
+  );
   // Two shapes, because one pattern got this wrong: an `Authorization:` header
   // must lose the WHOLE rest of its line, otherwise `Authorization: Basic
   // <token>` only loses the word "Basic" and ships the credential.
@@ -85,12 +93,12 @@ final class TelemetryScrubber {
     if (value.isEmpty) {
       return value;
     }
-    return value
-        .replaceAll(_credential, '<redacted>')
-        .replaceAllMapped(_url, (match) {
-          final uri = Uri.tryParse(match[0]!);
-          return uri == null ? '<url>' : '${uri.scheme}://<host>';
-        });
+    return value.replaceAll(_credential, '<redacted>').replaceAllMapped(_url, (
+      match,
+    ) {
+      final uri = Uri.tryParse(match[0]!);
+      return uri == null ? '<url>' : '${uri.scheme}://<host>';
+    });
   }
 }
 
@@ -118,7 +126,6 @@ final class InstallationId {
   bool get isValid =>
       value.length == 32 && RegExp(r'^[0-9a-f]{32}$').hasMatch(value);
 }
-
 
 /// Reads this installation's id, creating it on first run.
 ///

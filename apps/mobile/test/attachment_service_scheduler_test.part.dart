@@ -1,6 +1,117 @@
 part of 'attachment_service_test.dart';
 
 void _registerAttachmentServiceSchedulerTests() {
+  test(
+    'temporary credential denial after admission does not strand upload',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      final vault = _SequencedCredentialVault();
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
+          return http.Response.bytes(_probeSuccess(), 200);
+        }
+        if (request.method == 'PUT') {
+          return http.Response('', 201);
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/attachment')) {
+          return http.Response.bytes(_finalizeSuccess(), 200);
+        }
+        fail('Unexpected request: ${request.method} ${request.url}');
+      });
+      final service = fixture.service(
+        client,
+        credentialVault: vault,
+        reportDiagnostic: diagnostics.add,
+        credentialRetryDelays: const <Duration>[Duration.zero],
+        identifierFactory: _SequentialIdentifierFactory(),
+      );
+      addTearDown(service.close);
+
+      final session = await service.enqueue(fixture.request(normalMaximum: 32));
+      await session.events
+          .firstWhere(
+            (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+          )
+          .timeout(const Duration(seconds: 2));
+
+      expect(vault.readCount, greaterThanOrEqualTo(3));
+      final credentialEvents = diagnostics.where(
+        (event) =>
+            event.checkpoint ==
+            AttachmentUploadCheckpoint.credentialUnavailable,
+      );
+      expect(credentialEvents, hasLength(1));
+      final diagnostic = credentialEvents.single;
+      expect(diagnostic.credentialRetryCount, 1);
+      expect(diagnostic.retryScheduled, isTrue);
+      expect(diagnostic.retryDelay, Duration.zero);
+    },
+  );
+
+  test('bounded credential retries end in visible reauthentication', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final vault = _SequencedCredentialVault(denials: 3);
+    final service = fixture.service(
+      MockClient((request) async {
+        fail('Credential denial must stop before HTTP: ${request.url}');
+      }),
+      credentialVault: vault,
+      credentialRetryDelays: const <Duration>[Duration.zero, Duration.zero],
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+    addTearDown(service.close);
+
+    final session = await service.enqueue(fixture.request(normalMaximum: 32));
+    final failed = await session.events
+        .firstWhere(
+          (event) =>
+              event.phase == AttachmentJobPhase.retryable &&
+              event.errorClass == 'reauthentication-required',
+        )
+        .timeout(const Duration(seconds: 2));
+
+    expect(failed.retryAllowed, isTrue);
+    expect(vault.readCount, 4);
+  });
+
+  test('close wins a pending credential read without arming retry', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.close);
+    final vault = _BlockingSecondCredentialVault();
+    final timers = <_RecordingRetryTimer>[];
+    final diagnostics = <AttachmentUploadDiagnostic>[];
+    final service = fixture.service(
+      MockClient((request) async {
+        fail('Closed credential gate must not send HTTP: ${request.url}');
+      }),
+      credentialVault: vault,
+      credentialRetryDelays: const <Duration>[Duration(minutes: 1)],
+      reportDiagnostic: diagnostics.add,
+      createRetryTimer: (delay, callback) {
+        final timer = _RecordingRetryTimer(delay, callback);
+        timers.add(timer);
+        return timer;
+      },
+      identifierFactory: _SequentialIdentifierFactory(),
+    );
+
+    await service.enqueue(fixture.request(normalMaximum: 32));
+    await vault.secondReadStarted.future.timeout(const Duration(seconds: 2));
+    final closing = service.close();
+    await pumpEventQueue();
+    vault.releaseSecondRead.completeError(
+      const CredentialVaultTemporarilyUnavailable(),
+    );
+    await closing.timeout(const Duration(seconds: 2));
+
+    expect(timers.where((timer) => timer.isActive), isEmpty);
+    expect(diagnostics, isEmpty);
+  });
+
   test('later retry cannot replace an earlier room retry timer', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.close);
@@ -403,6 +514,50 @@ final class _RecordingRetryTimer implements Timer {
   void cancel() {
     _active = false;
   }
+}
+
+final class _SequencedCredentialVault implements CredentialVault {
+  _SequencedCredentialVault({this.denials = 1});
+
+  final int denials;
+  int readCount = 0;
+
+  @override
+  Future<String?> readAppPassword(String accountId) async {
+    readCount++;
+    if (readCount >= 2 && readCount <= denials + 1) {
+      throw const CredentialVaultTemporarilyUnavailable();
+    }
+    return 'fixture-app-password-never-use';
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
+}
+
+final class _BlockingSecondCredentialVault implements CredentialVault {
+  final secondReadStarted = Completer<void>();
+  final releaseSecondRead = Completer<String?>();
+  int _readCount = 0;
+
+  @override
+  Future<String?> readAppPassword(String accountId) async {
+    _readCount++;
+    if (_readCount == 2) {
+      secondReadStarted.complete();
+      return releaseSecondRead.future;
+    }
+    return 'fixture-app-password-never-use';
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) async {}
+
+  @override
+  Future<void> deleteAppPassword(String accountId) async {}
 }
 
 Future<({File file, PreparedAttachmentSource source})>

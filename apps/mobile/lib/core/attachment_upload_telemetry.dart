@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 enum AttachmentUploadCheckpoint {
+  releaseGate,
   pickerPresented,
   pickerReturned,
   pickerCancelled,
@@ -16,6 +18,7 @@ enum AttachmentUploadCheckpoint {
   admissionStarted,
   admissionCompleted,
   admissionFailed,
+  credentialUnavailable,
   durableProgress,
   durableFailed,
   streamFailed,
@@ -63,6 +66,7 @@ enum AttachmentUploadFailure {
   sourceRead,
   sourceCopy,
   admission,
+  credential,
   dispatch,
   stream,
   durable,
@@ -85,7 +89,9 @@ final class AttachmentUploadDiagnostic {
     this.retryScheduled = false,
     this.attemptCount = 0,
     this.automaticRetryCount = 0,
+    this.credentialRetryCount = 0,
     this.elapsed = Duration.zero,
+    this.retryDelay = Duration.zero,
   });
 
   final AttachmentUploadCheckpoint checkpoint;
@@ -99,12 +105,15 @@ final class AttachmentUploadDiagnostic {
   final bool retryScheduled;
   final int attemptCount;
   final int automaticRetryCount;
+  final int credentialRetryCount;
   final Duration elapsed;
+  final Duration retryDelay;
 
   bool get capturesEvent => switch (checkpoint) {
     AttachmentUploadCheckpoint.pickerFailed ||
     AttachmentUploadCheckpoint.durableCopyFailed ||
     AttachmentUploadCheckpoint.admissionFailed ||
+    AttachmentUploadCheckpoint.credentialUnavailable ||
     AttachmentUploadCheckpoint.durableFailed ||
     AttachmentUploadCheckpoint.streamFailed ||
     AttachmentUploadCheckpoint.stalled => true,
@@ -145,7 +154,6 @@ void reportAttachmentUploadDiagnostic(AttachmentUploadDiagnostic diagnostic) {
   );
 }
 
-@visibleForTesting
 SentryEvent buildAttachmentUploadSentryEvent(
   AttachmentUploadDiagnostic diagnostic,
 ) {
@@ -184,9 +192,36 @@ Map<String, String> attachmentUploadDiagnosticTags(
   'attachment.retry_scheduled': diagnostic.retryScheduled.toString(),
   'attachment.attempts': _countBucket(diagnostic.attemptCount),
   'attachment.automatic_retries': _countBucket(diagnostic.automaticRetryCount),
+  'attachment.credential_retries': _countBucket(
+    diagnostic.credentialRetryCount,
+  ),
   'attachment.elapsed': _elapsedBucket(diagnostic.elapsed),
+  'attachment.retry_delay': _retryDelayBucket(diagnostic.retryDelay),
   'attachment.lifecycle': _lifecycleName(),
   'attachment.platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+};
+
+AttachmentUploadDurablePhase attachmentUploadDurablePhase(
+  AttachmentJobPhase? phase,
+) => switch (phase) {
+  null => AttachmentUploadDurablePhase.none,
+  AttachmentJobPhase.localPrepared =>
+    AttachmentUploadDurablePhase.localPrepared,
+  AttachmentJobPhase.probing => AttachmentUploadDurablePhase.probing,
+  AttachmentJobPhase.draftResolved =>
+    AttachmentUploadDurablePhase.draftResolved,
+  AttachmentJobPhase.uploading => AttachmentUploadDurablePhase.uploading,
+  AttachmentJobPhase.uploaded => AttachmentUploadDurablePhase.uploaded,
+  AttachmentJobPhase.finalizing => AttachmentUploadDurablePhase.finalizing,
+  AttachmentJobPhase.awaitingConfirmation =>
+    AttachmentUploadDurablePhase.awaitingConfirmation,
+  AttachmentJobPhase.retryable => AttachmentUploadDurablePhase.retryable,
+  AttachmentJobPhase.cleanupFailed =>
+    AttachmentUploadDurablePhase.cleanupFailed,
+  AttachmentJobPhase.cancelling => AttachmentUploadDurablePhase.cancelling,
+  AttachmentJobPhase.completed => AttachmentUploadDurablePhase.completed,
+  AttachmentJobPhase.failed => AttachmentUploadDurablePhase.failed,
+  AttachmentJobPhase.cancelled => AttachmentUploadDurablePhase.cancelled,
 };
 
 String _lifecycleName() {
@@ -212,3 +247,6 @@ String _elapsedBucket(Duration elapsed) => switch (elapsed) {
   < const Duration(minutes: 2) => '1-2m',
   _ => '2m+',
 };
+
+String _retryDelayBucket(Duration delay) =>
+    delay == Duration.zero ? 'none' : _elapsedBucket(delay);

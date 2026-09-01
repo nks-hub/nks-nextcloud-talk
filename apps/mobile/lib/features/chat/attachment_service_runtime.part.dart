@@ -14,6 +14,8 @@ mixin _AttachmentServiceRuntime {
   BeforeAttachmentTransportFailureCommit? get _beforeTransportFailureCommit;
   BeforeAttachmentStepPlan? get _beforeStepPlan;
   CreateAttachmentRetryTimer get _createRetryTimer;
+  ReportAttachmentUploadDiagnostic get _reportDiagnostic;
+  List<Duration> get _credentialRetryDelays;
   List<Duration> get _confirmationRetryDelays;
   List<Duration> get _retryDelays;
   _AsyncMutex get _stateMutex;
@@ -21,6 +23,7 @@ mixin _AttachmentServiceRuntime {
   Set<_AttachmentRoomKey> get _roomRerunRequests;
   Map<_AttachmentRoomKey, Timer> get _retryTimers;
   Map<_AttachmentRoomKey, DateTime> get _retryDeadlines;
+  Map<AttachmentPersistenceKey, int> get _credentialRetryCounts;
   Map<AttachmentPersistenceKey, Future<void>> get _confirmationCatchUps;
   Map<AttachmentPersistenceKey, Timer> get _confirmationRetryTimers;
   Map<AttachmentPersistenceKey, int> get _confirmationRetryCounts;
@@ -431,10 +434,21 @@ mixin _AttachmentServiceRuntime {
       return false;
     }
     final storedAccount = await _repository.getAccount(key.accountId);
-    final password = await _credentials.readAppPassword(key.accountId);
-    if (storedAccount == null || password == null || password.isEmpty) {
+    if (storedAccount == null) {
       return false;
     }
+    final String? password;
+    try {
+      password = await _credentials.readAppPassword(key.accountId);
+    } on CredentialVaultTemporarilyUnavailable {
+      await _deferForCredential(selection.roomKey, key, job);
+      return false;
+    }
+    if (password == null || password.isEmpty) {
+      await _deferForCredential(selection.roomKey, key, job);
+      return false;
+    }
+    _credentialRetryCounts.remove(key);
     final authorization = AttachmentTransportAuthorization(
       accountId: job.accountId,
       server: job.server,
@@ -771,6 +785,7 @@ mixin _AttachmentServiceRuntime {
   }
 
   Future<void> _releaseTerminalSource(AttachmentPersistenceKey key) async {
+    _credentialRetryCounts.remove(key);
     await _releaseVerifiedSource(key);
     Completer<void>? claim;
     AttachmentJob? claimedJob;
@@ -872,6 +887,9 @@ mixin _AttachmentServiceRuntime {
   }
 
   void _armRetry(_AttachmentRoomKey roomKey, DateTime at) {
+    if (_closed || _suspendedAccounts.contains(roomKey.accountId)) {
+      return;
+    }
     final deadline = at.toUtc();
     final currentDeadline = _retryDeadlines[roomKey];
     if (currentDeadline != null && !deadline.isBefore(currentDeadline)) {
@@ -890,6 +908,55 @@ mixin _AttachmentServiceRuntime {
       unawaited(_scheduleRoom(roomKey));
     });
     _retryTimers[roomKey] = timer;
+  }
+
+  Future<void> _deferForCredential(
+    _AttachmentRoomKey roomKey,
+    AttachmentPersistenceKey key,
+    AttachmentJob job,
+  ) async {
+    if (_closed || _suspendedAccounts.contains(job.accountId)) {
+      return;
+    }
+    final previous = _credentialRetryCounts[key] ?? 0;
+    if (previous >= _credentialRetryDelays.length) {
+      await _stateMutex.protect(() async {
+        final current = _jobForKey(key);
+        if (current == null) {
+          return;
+        }
+        final result = requireAttachmentAccountReauthentication(
+          _snapshot,
+          accountId: current.accountId,
+          jobId: current.jobId,
+        );
+        if (result.canCommit) {
+          await _commitTransition(result, key);
+        }
+      });
+      _credentialRetryCounts.remove(key);
+      return;
+    }
+    final index = previous.clamp(0, _credentialRetryDelays.length - 1);
+    final delay = _credentialRetryDelays[index];
+    _credentialRetryCounts[key] = previous + 1;
+    if (previous == 0) {
+      _reportDiagnostic(
+        AttachmentUploadDiagnostic(
+          checkpoint: AttachmentUploadCheckpoint.credentialUnavailable,
+          durablePhase: attachmentUploadDurablePhase(job.phase),
+          resumePhase: attachmentUploadDurablePhase(job.resumePhase),
+          failure: AttachmentUploadFailure.credential,
+          sessionBound: true,
+          attemptCount: job.attemptCount,
+          automaticRetryCount: _metadata[key]?.automaticRetryCount ?? 0,
+          credentialRetryCount: previous + 1,
+          retryScheduled: true,
+          retryDelay: delay,
+        ),
+      );
+    }
+    _armRetry(roomKey, _clock().toUtc().add(delay));
   }
 
   void _armEarliestRetry(_AttachmentRoomKey roomKey) {

@@ -734,8 +734,8 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
           checkpoint: AttachmentUploadCheckpoint.stalled,
           source: _diagnosticSource(request),
           uiPhase: AttachmentUploadUiPhase.queued,
-          durablePhase: _diagnosticDurablePhase(_durablePhase),
-          resumePhase: _diagnosticDurablePhase(_resumePhase),
+          durablePhase: attachmentUploadDurablePhase(_durablePhase),
+          resumePhase: attachmentUploadDurablePhase(_resumePhase),
           failure: AttachmentUploadFailure.unknown,
           sessionBound: _sessionBound,
           retryScheduled: _retryScheduled,
@@ -759,8 +759,8 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
         checkpoint: AttachmentUploadCheckpoint.streamFailed,
         source: _diagnosticSource(request),
         uiPhase: _diagnosticUiPhase(_state.phase),
-        durablePhase: _diagnosticDurablePhase(_durablePhase),
-        resumePhase: _diagnosticDurablePhase(_resumePhase),
+        durablePhase: attachmentUploadDurablePhase(_durablePhase),
+        resumePhase: attachmentUploadDurablePhase(_resumePhase),
         failure: AttachmentUploadFailure.stream,
         sessionBound: _sessionBound,
         retryScheduled: _retryScheduled,
@@ -816,8 +816,8 @@ AttachmentUploadDiagnostic _diagnosticForEvent(
   },
   source: _diagnosticSource(request),
   uiPhase: _diagnosticUiPhase(event.phase),
-  durablePhase: _diagnosticDurablePhase(event.durablePhase),
-  resumePhase: _diagnosticDurablePhase(event.resumePhase),
+  durablePhase: attachmentUploadDurablePhase(event.durablePhase),
+  resumePhase: attachmentUploadDurablePhase(event.resumePhase),
   failure: _diagnosticFailure(event.failureCode),
   progress: _progressBucket(event.progress),
   sessionBound: true,
@@ -852,29 +852,6 @@ AttachmentUploadUiPhase _diagnosticUiPhase(ImageAttachmentUploadPhase phase) =>
       ImageAttachmentUploadPhase.cancelled => AttachmentUploadUiPhase.cancelled,
     };
 
-AttachmentUploadDurablePhase _diagnosticDurablePhase(
-  AttachmentJobPhase? phase,
-) => switch (phase) {
-  null => AttachmentUploadDurablePhase.none,
-  AttachmentJobPhase.localPrepared =>
-    AttachmentUploadDurablePhase.localPrepared,
-  AttachmentJobPhase.probing => AttachmentUploadDurablePhase.probing,
-  AttachmentJobPhase.draftResolved =>
-    AttachmentUploadDurablePhase.draftResolved,
-  AttachmentJobPhase.uploading => AttachmentUploadDurablePhase.uploading,
-  AttachmentJobPhase.uploaded => AttachmentUploadDurablePhase.uploaded,
-  AttachmentJobPhase.finalizing => AttachmentUploadDurablePhase.finalizing,
-  AttachmentJobPhase.awaitingConfirmation =>
-    AttachmentUploadDurablePhase.awaitingConfirmation,
-  AttachmentJobPhase.retryable => AttachmentUploadDurablePhase.retryable,
-  AttachmentJobPhase.cleanupFailed =>
-    AttachmentUploadDurablePhase.cleanupFailed,
-  AttachmentJobPhase.cancelling => AttachmentUploadDurablePhase.cancelling,
-  AttachmentJobPhase.completed => AttachmentUploadDurablePhase.completed,
-  AttachmentJobPhase.failed => AttachmentUploadDurablePhase.failed,
-  AttachmentJobPhase.cancelled => AttachmentUploadDurablePhase.cancelled,
-};
-
 AttachmentUploadFailure _diagnosticFailure(String? code) {
   if (code == null) {
     return AttachmentUploadFailure.none;
@@ -890,6 +867,9 @@ AttachmentUploadFailure _diagnosticFailure(String? code) {
   }
   if (code.contains('confirmation')) {
     return AttachmentUploadFailure.confirmation;
+  }
+  if (code.contains('reauthentication') || code.contains('credential')) {
+    return AttachmentUploadFailure.credential;
   }
   if (code.contains('dispatch')) {
     return AttachmentUploadFailure.dispatch;

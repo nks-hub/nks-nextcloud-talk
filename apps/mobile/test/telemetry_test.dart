@@ -15,6 +15,7 @@ void main() {
       );
       expect(config.crashReportingEnabled, isFalse);
       expect(config.analyticsEnabled, isFalse);
+      expect(config.releaseGateEnabled, isFalse);
     });
 
     test('a malformed DSN disables crash reporting instead of guessing', () {
@@ -73,6 +74,26 @@ void main() {
       );
       expect(config.crashReportingEnabled, isTrue);
       expect(config.analyticsEnabled, isTrue);
+    });
+
+    test('release gate is explicit and off by default', () {
+      const enabled = TelemetryConfig(
+        sentryDsn: 'https://key@sentry.example.invalid/1',
+        rybbitHost: '',
+        rybbitSiteId: '',
+        environment: 'production',
+        releaseGateEnabled: true,
+      );
+      expect(enabled.releaseGateEnabled, isTrue);
+      expect(
+        const TelemetryConfig(
+          sentryDsn: '',
+          rybbitHost: '',
+          rybbitSiteId: '',
+          environment: 'development',
+        ).releaseGateEnabled,
+        isFalse,
+      );
     });
   });
 

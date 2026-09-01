@@ -95,11 +95,14 @@ final class _Fixture {
     DateTime Function()? clock,
     List<Duration> confirmationRetryDelays = const <Duration>[],
     AttachmentIdentifierFactory? identifierFactory,
+    CredentialVault? credentialVault,
+    ReportAttachmentUploadDiagnostic? reportDiagnostic,
+    List<Duration>? credentialRetryDelays,
   }) {
     final sources = sourceProvider ?? _FileSourceProvider();
     return AttachmentService(
       repository: repository,
-      credentials: credentials,
+      credentials: credentialVault ?? credentials,
       releaseSource:
           releaseSource ??
           (source) async {
@@ -124,6 +127,9 @@ final class _Fixture {
       beforeTransportFailureCommit: beforeTransportFailureCommit,
       beforeStepPlan: beforeStepPlan,
       createRetryTimer: createRetryTimer,
+      reportDiagnostic: reportDiagnostic ?? reportAttachmentUploadDiagnostic,
+      credentialRetryDelays:
+          credentialRetryDelays ?? const <Duration>[Duration.zero],
       clock: clock,
       confirmationRetryDelays: confirmationRetryDelays,
     );

@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:rybbit_flutter_sdk/rybbit_flutter_sdk.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
+import 'app_version.dart';
+import 'attachment_upload_telemetry.dart';
 import 'telemetry.dart';
 
 /// Starts the app, with crash reporting and analytics attached only when the
@@ -53,6 +55,7 @@ Future<void> runWithTelemetry({
     options
       ..dsn = config.sentryDsn
       ..environment = config.environment
+      ..release = 'com.nkshub.nextcloudtalk@$appVersionName+$appBuildNumber'
       // Everything below keeps content on the device. The user consented to
       // crashes without content, so anything that could carry a message body,
       // a room token or a server address is either off or scrubbed.
@@ -68,6 +71,42 @@ Future<void> runWithTelemetry({
       (scope) => scope.setUser(SentryUser(id: installation.value)),
     );
   }
+  if (config.releaseGateEnabled) {
+    await captureTelemetryReleaseGate();
+  }
+}
+
+final class TelemetryReleaseGateError implements Exception {
+  const TelemetryReleaseGateError();
+
+  @override
+  String toString() => 'TelemetryReleaseGateError';
+}
+
+Future<List<SentryId>> captureTelemetryReleaseGate() async {
+  final errorId = await Sentry.captureException(
+    const TelemetryReleaseGateError(),
+    stackTrace: StackTrace.current,
+    withScope: (scope) async {
+      await scope.clear();
+      await scope.setTag('telemetry.release_gate', 'error');
+    },
+  );
+  final diagnosticId = await Sentry.captureEvent(
+    buildAttachmentUploadSentryEvent(
+      const AttachmentUploadDiagnostic(
+        checkpoint: AttachmentUploadCheckpoint.releaseGate,
+        durablePhase: AttachmentUploadDurablePhase.localPrepared,
+        failure: AttachmentUploadFailure.none,
+        sessionBound: true,
+      ),
+    ),
+    withScope: (scope) async {
+      await scope.clear();
+      await scope.setTag('telemetry.release_gate', 'diagnostic');
+    },
+  );
+  return <SentryId>[errorId, diagnosticId];
 }
 
 const _scrubber = TelemetryScrubber();
@@ -76,9 +115,13 @@ const _scrubber = TelemetryScrubber();
 ///
 /// [SentryEvent.request] goes entirely: a Talk request URL names the server
 /// and the room, and the failing call is already identifiable from the stack.
-@visibleForTesting
 SentryEvent scrubSentryEvent(SentryEvent event) {
   event.request = null;
+  if (event.logger == 'attachment.upload') {
+    event
+      ..user = null
+      ..breadcrumbs = const <Breadcrumb>[];
+  }
   final message = event.message;
   if (message != null) {
     event.message = SentryMessage(_scrubber.scrub(message.formatted));
@@ -92,7 +135,6 @@ SentryEvent scrubSentryEvent(SentryEvent event) {
   return event;
 }
 
-@visibleForTesting
 Breadcrumb? scrubSentryBreadcrumb(Breadcrumb? breadcrumb, Hint hint) {
   if (breadcrumb == null) {
     return null;

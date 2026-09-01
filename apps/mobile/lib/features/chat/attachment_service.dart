@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/attachment_upload_telemetry.dart';
 import '../../data/app_database.dart';
 import '../../data/attachment_repository.dart';
 import '../../data/credential_vault.dart';
@@ -180,6 +181,13 @@ final class AttachmentService with _AttachmentServiceRuntime {
     BeforeAttachmentTransportFailureCommit? beforeTransportFailureCommit,
     BeforeAttachmentStepPlan? beforeStepPlan,
     CreateAttachmentRetryTimer? createRetryTimer,
+    ReportAttachmentUploadDiagnostic reportDiagnostic =
+        reportAttachmentUploadDiagnostic,
+    List<Duration> credentialRetryDelays = const <Duration>[
+      Duration(seconds: 2),
+      Duration(seconds: 10),
+      Duration(minutes: 1),
+    ],
     List<Duration> confirmationRetryDelays = const <Duration>[
       Duration(seconds: 2),
       Duration(seconds: 10),
@@ -200,6 +208,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
         'confirmationRetryDelays',
       );
     }
+    if (credentialRetryDelays.isEmpty ||
+        credentialRetryDelays.any((delay) => delay < Duration.zero)) {
+      throw ArgumentError.value(credentialRetryDelays, 'credentialRetryDelays');
+    }
     final service = AttachmentService._(
       repository: repository,
       credentials: credentials,
@@ -215,6 +227,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
       beforeTransportFailureCommit: beforeTransportFailureCommit,
       beforeStepPlan: beforeStepPlan,
       createRetryTimer: createRetryTimer ?? Timer.new,
+      reportDiagnostic: reportDiagnostic,
+      credentialRetryDelays: List<Duration>.unmodifiable(credentialRetryDelays),
       confirmationRetryDelays: List<Duration>.unmodifiable(
         confirmationRetryDelays,
       ),
@@ -238,6 +252,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
     required this._beforeTransportFailureCommit,
     required this._beforeStepPlan,
     required this._createRetryTimer,
+    required this._reportDiagnostic,
+    required this._credentialRetryDelays,
     required this._confirmationRetryDelays,
     required this._retryDelays,
   });
@@ -269,6 +285,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   final CreateAttachmentRetryTimer _createRetryTimer;
   @override
+  final ReportAttachmentUploadDiagnostic _reportDiagnostic;
+  @override
+  final List<Duration> _credentialRetryDelays;
+  @override
   final List<Duration> _confirmationRetryDelays;
   @override
   final List<Duration> _retryDelays;
@@ -282,6 +302,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
   final Map<_AttachmentRoomKey, Timer> _retryTimers = {};
   @override
   final Map<_AttachmentRoomKey, DateTime> _retryDeadlines = {};
+  @override
+  final Map<AttachmentPersistenceKey, int> _credentialRetryCounts = {};
   @override
   final Map<AttachmentPersistenceKey, Future<void>> _confirmationCatchUps = {};
   @override
@@ -781,6 +803,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
     _retryTimers.clear();
     _retryDeadlines.clear();
+    _credentialRetryCounts.clear();
     for (final timer in _confirmationRetryTimers.values) {
       timer.cancel();
     }

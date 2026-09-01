@@ -18,7 +18,9 @@ void main() {
       retryScheduled: true,
       attemptCount: 7,
       automaticRetryCount: 5,
+      credentialRetryCount: 2,
       elapsed: Duration(minutes: 3),
+      retryDelay: Duration(seconds: 10),
     );
 
     final event = buildAttachmentUploadSentryEvent(diagnostic);
@@ -51,7 +53,9 @@ void main() {
       'attachment.retry_scheduled': 'true',
       'attachment.attempts': '4+',
       'attachment.automatic_retries': '4+',
+      'attachment.credential_retries': '2',
       'attachment.elapsed': '2m+',
+      'attachment.retry_delay': '10-30s',
     });
     expect(event.exceptions, isNull);
   });

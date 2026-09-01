@@ -610,3 +610,36 @@ AttachmentRuntimeResult completeAttachmentAccountReauthentication(
     AttachmentRuntimeOutcome.reauthenticationSucceeded,
   );
 }
+
+AttachmentRuntimeResult requireAttachmentAccountReauthentication(
+  AttachmentRuntimeSnapshot snapshot, {
+  required AccountId accountId,
+  required AttachmentJobId jobId,
+}) {
+  final binding = _job(snapshot, accountId, jobId);
+  if (binding == null ||
+      binding.account.lane != AttachmentAccountLane.ready ||
+      binding.job.inFlightRequest != null ||
+      const <AttachmentJobPhase>{
+        AttachmentJobPhase.completed,
+        AttachmentJobPhase.failed,
+        AttachmentJobPhase.cancelled,
+      }.contains(binding.job.phase) ||
+      binding.job.phase == AttachmentJobPhase.awaitingConfirmation) {
+    return _result(AttachmentRuntimeOutcome.rejected, jobId: jobId);
+  }
+  final resumePhase = switch (binding.job.phase) {
+    AttachmentJobPhase.retryable => binding.job.resumePhase,
+    AttachmentJobPhase.cleanupFailed => AttachmentJobPhase.cancelling,
+    final phase => phase,
+  };
+  if (resumePhase == null) {
+    return _result(AttachmentRuntimeOutcome.rejected, jobId: jobId);
+  }
+  return _reauthenticationRequired(
+    snapshot,
+    binding.account,
+    binding.job,
+    resumePhase,
+  );
+}

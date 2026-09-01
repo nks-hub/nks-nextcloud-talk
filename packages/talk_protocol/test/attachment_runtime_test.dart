@@ -615,6 +615,34 @@ void main() {
         isA<AttachmentFinalizeRequest>(),
       );
     });
+
+    test(
+      'local credential loss pauses a prepared job for reauthentication',
+      () {
+        final operation = draft();
+        var snapshot = _admit(emptySnapshot(), operation);
+
+        final paused = requireAttachmentAccountReauthentication(
+          snapshot,
+          accountId: accountA,
+          jobId: operation.jobId,
+        );
+        snapshot = commit(snapshot, paused);
+
+        expect(
+          paused.outcome,
+          AttachmentRuntimeOutcome.reauthenticationRequired,
+        );
+        expect(
+          snapshot.accounts[accountA]!.lane,
+          AttachmentAccountLane.reauthenticationRequired,
+        );
+        final job = _state(snapshot, operation);
+        expect(job.phase, AttachmentJobPhase.retryable);
+        expect(job.resumePhase, AttachmentJobPhase.localPrepared);
+        expect(job.errorClass, 'reauthentication-required');
+      },
+    );
   });
 
   _registerAttachmentOrderingAndCleanupTests();

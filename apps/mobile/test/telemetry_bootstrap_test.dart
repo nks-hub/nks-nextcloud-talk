@@ -48,6 +48,25 @@ void main() {
       expect(values, isNot(contains('talk.example.com')));
       expect(values, isNot(contains('a1b2c3d4')));
     });
+
+    test('attachment diagnostics drop inherited user and breadcrumbs', () {
+      final event = SentryEvent(
+        logger: 'attachment.upload',
+        user: SentryUser(id: 'installation-id'),
+        breadcrumbs: <Breadcrumb>[
+          Breadcrumb(
+            category: 'http',
+            data: <String, Object?>{
+              'url': 'https://talk.example.com/call/a1b2c3d4',
+            },
+          ),
+        ],
+      );
+
+      final scrubbed = scrubSentryEvent(event);
+      expect(scrubbed.user, isNull);
+      expect(scrubbed.breadcrumbs, isEmpty);
+    });
   });
 
   group('scrubSentryBreadcrumb', () {
