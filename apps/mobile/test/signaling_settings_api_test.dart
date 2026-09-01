@@ -481,6 +481,107 @@ void main() {
     await shutdown;
     expect(deletes, 1);
   });
+
+  test('shutdown cancels a signaling response held after headers', () async {
+    final bodyListening = Completer<void>();
+    late final StreamController<List<int>> body;
+    body = StreamController<List<int>>(onListen: bodyListening.complete);
+    final room = _activeRoomFixture()..['sessionId'] = 'active-session';
+    final internal = _internalSettingsFixture();
+    var deletes = 0;
+    final api = HttpNextcloudApi(
+      client: _StreamingClient((request) async {
+        if (request.url.path.endsWith('/participants/active')) {
+          if (request.method == 'DELETE') {
+            deletes++;
+            return _streamedOcsResponse(null);
+          }
+          return _streamedOcsResponse(
+            room,
+            cookie: 'nc_session=current; Path=/',
+          );
+        }
+        return _streamedOcsResponse(
+          internal,
+          body: body.stream,
+          cookie: 'nc_session=late-settings; Path=/',
+        );
+      }),
+    );
+    addTearDown(api.close);
+    await api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final settings = api.getSignalingSettings(
+      settingsRequest: request(),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    await bodyListening.future;
+    final shutdown = api.shutdownAccountSession(
+      accountId: 'account-a',
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    body
+      ..add(utf8.encode(jsonEncode(_ocsEnvelope(internal))))
+      ..close();
+
+    await expectLater(settings, _cancelledApiRequest());
+    await shutdown;
+    expect(deletes, 1);
+  });
+
+  test('close bounds an invalidated activation response body', () async {
+    final requestStarted = Completer<void>();
+    final releaseHeaders = Completer<void>();
+    final body = StreamController<List<int>>();
+    final room = _activeRoomFixture()..['sessionId'] = 'active-session';
+    var deletes = 0;
+    final api = HttpNextcloudApi(
+      requestTimeout: const Duration(milliseconds: 20),
+      client: _StreamingClient((request) async {
+        if (request.method == 'DELETE') {
+          deletes++;
+          return _streamedOcsResponse(null);
+        }
+        requestStarted.complete();
+        await releaseHeaders.future;
+        return _streamedOcsResponse(
+          room,
+          body: body.stream,
+          cookie: 'nc_session=late; Path=/',
+        );
+      }),
+    );
+    final activation = api.activateRoomSession(
+      activeRequest: _activeRequest('account-a'),
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    final activationExpectation = expectLater(
+      activation,
+      _cancelledApiRequest(),
+    );
+    await requestStarted.future;
+    final close = api.close();
+    releaseHeaders.complete();
+    Object? closeError;
+    try {
+      await close.timeout(const Duration(milliseconds: 250));
+    } on Object catch (error) {
+      closeError = error;
+    } finally {
+      await body.close();
+      await close;
+    }
+
+    expect(closeError, isNull);
+    await activationExpectation;
+    expect(deletes, 1);
+  });
 }
 
 ActiveRoomSessionRequest _activeRequest(String accountId) =>
@@ -511,22 +612,48 @@ Map<String, Object?> _internalSettingsFixture() {
 }
 
 http.Response _ocsResponse(Object? data, {String? cookie}) => http.Response(
-  jsonEncode(<String, Object?>{
-    'ocs': <String, Object?>{
-      'meta': <String, Object?>{
-        'status': 'ok',
-        'statuscode': 200,
-        'message': 'OK',
-      },
-      'data': data,
-    },
-  }),
+  jsonEncode(_ocsEnvelope(data)),
   200,
   headers: <String, String>{
     'content-type': 'application/json',
     'set-cookie': ?cookie,
   },
 );
+
+Map<String, Object?> _ocsEnvelope(Object? data) => <String, Object?>{
+  'ocs': <String, Object?>{
+    'meta': <String, Object?>{
+      'status': 'ok',
+      'statuscode': 200,
+      'message': 'OK',
+    },
+    'data': data,
+  },
+};
+
+http.StreamedResponse _streamedOcsResponse(
+  Object? data, {
+  Stream<List<int>>? body,
+  String? cookie,
+}) => http.StreamedResponse(
+  body ?? Stream<List<int>>.value(utf8.encode(jsonEncode(_ocsEnvelope(data)))),
+  200,
+  headers: <String, String>{
+    'content-type': 'application/json',
+    'set-cookie': ?cookie,
+  },
+);
+
+final class _StreamingClient extends http.BaseClient {
+  _StreamingClient(this._handler);
+
+  final Future<http.StreamedResponse> Function(http.BaseRequest request)
+  _handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _handler(request);
+}
 
 CallPeersRequest _callPeersRequest() => CallPeersRequest(
   context: CallRequestContext(

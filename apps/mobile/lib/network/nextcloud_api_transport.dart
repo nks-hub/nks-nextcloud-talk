@@ -307,13 +307,14 @@ abstract class _HttpNextcloudApiBase {
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
       final response = await _client.send(request).timeout(effectiveTimeout);
-      final sessionInvalidated =
+      bool sessionInvalidated() =>
           !allowAfterClose &&
-          sessionAccountId != null &&
-          (_roomSessionBlocked(sessionAccountId) ||
-              (_accountSessionGenerations[sessionAccountId] ?? 0) !=
-                  sessionGeneration);
-      if ((_closed && !allowAfterClose) || sessionInvalidated) {
+          ((_closed) ||
+              (sessionAccountId != null &&
+                  (_roomSessionBlocked(sessionAccountId) ||
+                      (_accountSessionGenerations[sessionAccountId] ?? 0) !=
+                          sessionGeneration)));
+      if (sessionInvalidated()) {
         if (cleanupCookieLease != null &&
             sessionServer != null &&
             _ownsRoomSession(cleanupCookieLease)) {
@@ -324,7 +325,11 @@ abstract class _HttpNextcloudApiBase {
             request.url,
           );
         }
-        await response.stream.drain<void>();
+        try {
+          await response.stream.timeout(effectiveTimeout).drain<void>();
+        } on TimeoutException {
+          // The invalidated request must not hold its account cleanup tail.
+        }
         throw const NextcloudApiException(NextcloudApiError.cancelled);
       }
       if (!_closed && sessionAccountId != null && sessionServer != null) {
@@ -355,6 +360,9 @@ abstract class _HttpNextcloudApiBase {
           readBodyForStatusCodes?.contains(response.statusCode) ?? true;
       if (!shouldRead) {
         await response.stream.drain<void>();
+        if (sessionInvalidated()) {
+          throw const NextcloudApiException(NextcloudApiError.cancelled);
+        }
         return _BodyPayload(
           statusCode: response.statusCode,
           body: Uint8List(0),
@@ -374,6 +382,9 @@ abstract class _HttpNextcloudApiBase {
           throw const NextcloudApiException(NextcloudApiError.responseTooLarge);
         }
         bytes.add(chunk);
+      }
+      if (sessionInvalidated()) {
+        throw const NextcloudApiException(NextcloudApiError.cancelled);
       }
       return _BodyPayload(
         statusCode: response.statusCode,
