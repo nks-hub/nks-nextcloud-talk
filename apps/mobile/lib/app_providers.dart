@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'core/giphy_reference_load_coordinator.dart';
 import 'core/connectivity_wake_source.dart';
@@ -32,6 +33,7 @@ import 'features/chat/chat_background_surface.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
 import 'features/chat/message_translation_service.dart';
+import 'features/chat/references/reference_resolver.dart';
 import 'features/chat/location_share_service.dart';
 import 'features/chat/poll_service.dart';
 import 'features/chat/chat_service.dart';
@@ -70,6 +72,7 @@ import 'platform/media/durable_attachment_source_store.dart';
 
 part 'app_providers_push.dart';
 part 'app_providers_calls.dart';
+part 'app_providers_reference.dart';
 part 'app_providers_settings.dart';
 
 final connectivityWakeEventsProvider = Provider<Stream<void>>(

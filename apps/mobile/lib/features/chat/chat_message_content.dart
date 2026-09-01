@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
+import 'references/reference_resolver.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'emoji_only_message.dart';
@@ -21,6 +22,7 @@ import 'media/chat_attachment_opener.dart';
 
 part 'chat_message_attachment_content.dart';
 part 'chat_message_giphy_content.dart';
+part 'chat_message_reference_content.dart';
 part 'chat_message_rich_content.dart';
 part 'chat_location_preview.dart';
 
@@ -73,6 +75,7 @@ final class ChatMessageContent extends StatelessWidget {
         .where((entry) => entry.value.type == 'file')
         .toList(growable: false);
     final giphySelection = _giphyReferences(document);
+    final references = _messageReferences(parsed, document);
     return _PollViewerScope(
       account: account,
       message: parsed,
@@ -116,6 +119,16 @@ final class ChatMessageContent extends StatelessWidget {
                 foregroundColor: foregroundColor,
                 references: giphySelection.references,
                 hasOverflow: giphySelection.hasOverflow,
+              ),
+            for (var index = 0; index < references.length; index++)
+              _ChatMessageReferenceContent(
+                target: ReferenceResolutionTarget(
+                  accountId: account.id,
+                  server: ServerBase.parse(account.serverUrl),
+                  reference: references[index],
+                ),
+                index: index,
+                foregroundColor: foregroundColor,
               ),
             for (var index = 0; index < attachments.length; index++) ...[
               const SizedBox(height: 8),
