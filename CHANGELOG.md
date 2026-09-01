@@ -18,6 +18,21 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## Nevydáno
 
+## 0.1.0 (35) — 1. 9. 2026
+
+Play: build 35 nebyl v této prioritní iOS opravě vydán.
+TestFlight: IPA má 30 151 224 B a SHA-256
+`35C44CAC2C468D28725069626A375B81E13F45C270D3CBBE3A5F827F05843A1E`.
+App Store Connect vrací build record
+`f9f729fa-e50b-4733-b4ef-ae706db5b10a` ve stavu `VALID`, minimum iOS 15.0,
+encryption `false`, přesné české poznámky a interní i externí skupinu
+`IN_BETA_TESTING`; beta review je `APPROVED`.
+
+Čistý build-mac source na `e9b52fe` prošel 75/75 zaměřenými testy a analyze bez
+nálezu. Distribuční artefakt má platnou Sentry konfiguraci v prostředí
+`production`. Po buildu se odstranilo přibližně 1,62 GiB archive, export,
+DerivedData, Pods a dočasných dat; simulátorová data a signing zůstaly.
+
 - Fotografie vybraná z iOS galerie už nezůstane na „Čeká na nahrání“, když
   ve stejné konverzaci čeká starší automatický retry. Scheduler přeskočí pouze
   skutečně odloženou práci, zachová nejbližší timer a při ručním opakování
