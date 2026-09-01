@@ -215,8 +215,11 @@ object se vykreslí typovaně, neznámý provider používá bounded
 `openGraphObject`. Serverové pole `link` není navigační autorita: zobrazený
 host i tap vždy používají původní validovanou URL. Chyba, nepřístupná reference
 nebo nevalidní payload zachovají běžný inline odkaz. Contract/protocol sada
-prošla 969/969 a dotčená reference/content/Giphy sada 40/40; živý obousměrný a
-restart průchod zatím chybí.
+prošla 969/969 a dotčená reference/content/Giphy sada 40/40. Android 14 release
+build 34 odeslal běžný HTTPS odkaz, vykreslil obecnou OpenGraph kartu a po
+force-stop ji znovu vyřešil v light/dark; text a ikony měly 6,646:1 / 6,371:1,
+log byl čistý a testovací zpráva byla smazaná. Recipient-side, iOS a desktop
+průchod zatím chybí.
 
 ### Historický Android Giphy wire-reference runtime
 
