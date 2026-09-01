@@ -39,11 +39,31 @@ Wire a capability chování je vázané na:
 - stabilní Talk `f9b9e9474e3621b47f74bf8890c4642cb49eed97`;
 - Talk Android `5428960f9d1eca708df1b39a0831141dcbba4729`;
 - Talk iOS `2d31eda5e2acbf3cef27aa289376942bdf0de25d`;
+- iOS upload dependency NextcloudKit 2.6.0
+  `a7b1db0ee1394df9ede303a7430a916c1e283765`;
 - Nextcloud core master `a0bf541f667e4d891e05a92254b167840066e1a0`;
 - Nextcloud core stable34 `a599620e9b75dc3c919b39dabd82a4f98b543b74`.
 
 Implementace používá vlastní typy nad veřejným wire kontraktem a syntetickými
 daty. Nebyl převzatý zdrojový kód ani asset oficiálních klientů.
+
+### iOS upstream audit
+
+Talk iOS na ověřeném SHA váže NextcloudKit jako
+[přesnou verzi 2.6.0](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk.xcodeproj/project.pbxproj#L3440-L3447).
+Jeho `ChatFileUploader`
+[předá každý soubor metodě `NextcloudKit.shared.upload`](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk/Chat/Chat%20upload/ChatFileUploader.swift#L149-L160).
+NextcloudKit na přesném commitu tagu 2.6.0 sestaví
+[jeden Alamofire upload s metodou `PUT`](https://github.com/nextcloud/NextcloudKit/blob/a7b1db0ee1394df9ede303a7430a916c1e283765/NextcloudKit/NextcloudKit.swift#L343-L421).
+Knihovna sice obsahuje pomocnou metodu
+[`chunkedFile`](https://github.com/nextcloud/NextcloudKit/blob/a7b1db0ee1394df9ede303a7430a916c1e283765/NextcloudKit/NKCommon.swift#L375-L444),
+ta pouze rozděluje lokální soubor a Talk uploader ji nevolá; nevytváří DAV
+upload session ani `MKCOL`, `PROPFIND` nebo finální `MOVE`.
+
+Oficiální iOS klient tedy není zdroj chunk wire parity. Vlastní klient používá
+platformně neutrální serverový kontrakt v `fixtures/dav.cases.json`, který
+samostatně prokazuje běžný `PUT` i chunk v1 tok. iOS i Android nad ním používají
+stejný Dart transport; platformní picker mění jen durable lokální zdroj.
 
 ## Capability a command hranice
 
