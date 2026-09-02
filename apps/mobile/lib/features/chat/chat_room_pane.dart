@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -396,6 +397,18 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     });
   }
 
+  /// Dragging a selection out of a message is what every other desktop chat
+  /// client does; on touch the same gesture opens the message actions, so it
+  /// stays off there. One region above the whole timeline, not one inside
+  /// each bubble: a region nested under the bubble sits deeper in the gesture
+  /// arena and beats the bubble's long press, which kills the actions sheet.
+  static Widget _pointerSelectable(Widget timeline) {
+    if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+      return timeline;
+    }
+    return SelectionArea(child: timeline);
+  }
+
   @override
   Widget build(BuildContext context) {
     final messagesValue = ref.watch(chatMessagesProvider(_key));
@@ -700,35 +713,38 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
               ? const Center(child: CircularProgressIndicator())
               : Stack(
                   children: [
-                    _ChatTimeline(
-                      account: widget.account,
-                      conversation: widget.conversation,
-                      threadId: widget.threadId,
-                      inlineReplies:
-                          ref.watch(replyLayoutProvider) == ReplyLayout.inline,
-                      messages: messages,
-                      blocks: scopeBlocks,
-                      pending: pending,
-                      hasOlder: scope?.hasHistory ?? false,
-                      loadingOlder: _loadingOlder,
-                      controller: _scrollController,
-                      onLoadOlder: () => unawaited(_loadOlder()),
-                      onRetry: _sync,
-                      onResend: _confirmResend,
-                      onCancel: (operation) =>
-                          unawaited(_cancelPending(operation)),
-                      onOpenThread: _openThread,
-                      onMessageActions: handleMessageActions,
-                      onReplySwipe: canReplyToMessage ? _startReply : null,
-                      onReactionTap: handleReactionTap,
-                      onJumpToMessage: (messageId) =>
-                          unawaited(_jumpToMessage(messageId)),
-                      jumpTargetId: _jumpTargetId,
-                      jumpTargetKey: _jumpTargetKey,
-                      highlightedMessageId: _highlightedMessageId,
-                      deliveryStates: deliveryStates,
-                      lastCommonRead: _cursorValue(scope?.lastCommonRead),
-                      anchorMessageId: _anchorMessageId,
+                    _pointerSelectable(
+                      _ChatTimeline(
+                        account: widget.account,
+                        conversation: widget.conversation,
+                        threadId: widget.threadId,
+                        inlineReplies:
+                            ref.watch(replyLayoutProvider) ==
+                            ReplyLayout.inline,
+                        messages: messages,
+                        blocks: scopeBlocks,
+                        pending: pending,
+                        hasOlder: scope?.hasHistory ?? false,
+                        loadingOlder: _loadingOlder,
+                        controller: _scrollController,
+                        onLoadOlder: () => unawaited(_loadOlder()),
+                        onRetry: _sync,
+                        onResend: _confirmResend,
+                        onCancel: (operation) =>
+                            unawaited(_cancelPending(operation)),
+                        onOpenThread: _openThread,
+                        onMessageActions: handleMessageActions,
+                        onReplySwipe: canReplyToMessage ? _startReply : null,
+                        onReactionTap: handleReactionTap,
+                        onJumpToMessage: (messageId) =>
+                            unawaited(_jumpToMessage(messageId)),
+                        jumpTargetId: _jumpTargetId,
+                        jumpTargetKey: _jumpTargetKey,
+                        highlightedMessageId: _highlightedMessageId,
+                        deliveryStates: deliveryStates,
+                        lastCommonRead: _cursorValue(scope?.lastCommonRead),
+                        anchorMessageId: _anchorMessageId,
+                      ),
                     ),
                     if (_awayFromNewest)
                       Positioned(

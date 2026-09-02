@@ -57,6 +57,57 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('a mouse drag selects bubble text and long press still opens '
+      'the actions', (tester) async {
+    await insertQuestionAndAnswer();
+    MethodCall? clipboardCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardCall = call;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    final region = find.byType(SelectableRegion);
+    expect(region, findsOneWidget, reason: 'tests run on a desktop host');
+    final answer = find.text('Answer');
+    final start = tester.getTopLeft(answer) + const Offset(1, 4);
+    final end = tester.getBottomRight(answer) - const Offset(1, 4);
+    final gesture = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    tester
+        .state<SelectableRegionState>(region)
+        .copySelection(SelectionChangedCause.toolbar);
+    await tester.pump();
+    expect(clipboardCall?.arguments, <String, Object?>{'text': 'Answer'});
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-41')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-copy')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('message-action-copy')));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('the thread layout takes replies out of the room', (
     tester,
   ) async {
