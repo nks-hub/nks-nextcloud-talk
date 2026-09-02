@@ -486,10 +486,16 @@ final class _ExpandedShell extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                             ],
+                            // No visible title: the pane is 300 px wide and
+                            // already carries the account avatar plus three
+                            // actions, so the word wrapped mid-syllable
+                            // ("Konverzac / e"). The pane needs no label to be
+                            // recognised, but a screen reader still gets one.
                             Expanded(
-                              child: Text(
-                                strings.conversations,
-                                style: Theme.of(context).textTheme.titleLarge,
+                              child: Semantics(
+                                header: true,
+                                label: strings.conversations,
+                                child: const SizedBox.shrink(),
                               ),
                             ),
                             IconButton(

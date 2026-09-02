@@ -6,6 +6,8 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 
+import 'accessibility_probe.dart';
+
 /// How much of a wide window the app is allowed to spend on chrome.
 ///
 /// The rationale is in `docs/architecture/desktop-chrome.md`. The short of it:
@@ -116,6 +118,23 @@ void main() {
     await _pumpShell(tester, accounts: [account('account-a')]);
 
     expect(find.byKey(const Key('toggle-conversation-list')), findsNothing);
+  });
+  testWidgets('the list header fits its pane instead of breaking a word', (
+    tester,
+  ) async {
+    // The pane is 300 px wide and the header already carries the account
+    // avatar and three actions. A title there wrapped mid-syllable, which is
+    // what this guards against - on both account counts, because the avatar
+    // only appears when the rail is gone.
+    for (final list in [
+      [account('account-a')],
+      [account('account-a'), account('account-b')],
+    ]) {
+      final overflows = await overflowsWhile(
+        () => _pumpWide(tester, accounts: list),
+      );
+      expect(overflows, isEmpty, reason: overflows.join('\n'));
+    }
   });
 }
 
