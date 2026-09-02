@@ -123,6 +123,15 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         }
       });
 
+      // Presence is what silences the server. Holding a room session while
+      // the window sits behind another one told Talk the user was reading the
+      // conversation, so it suppressed every notification for it — the open
+      // conversation that never notified. Watched, not read once: losing focus
+      // has to tear the session down, and regaining it has to build one again.
+      if (!ref.watch(windowActiveProvider)) {
+        return ChatTypingController.disabled(key);
+      }
+
       final accounts = ref.watch(accountRepositoryProvider);
       final credentials = ref.watch(credentialVaultProvider);
       final api = ref.watch(nextcloudApiProvider);

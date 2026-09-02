@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleListener, NavigatorObserver;
+    show AppLifecycleListener, NavigatorObserver, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'core/giphy_reference_load_coordinator.dart';
 import 'core/connectivity_wake_source.dart';
+import 'core/window_activity.dart';
 import 'data/account_repository.dart';
 import 'data/app_database.dart';
 import 'data/attachment_repository.dart';
@@ -77,6 +78,41 @@ part 'app_providers_push.dart';
 part 'app_providers_calls.dart';
 part 'app_providers_reference.dart';
 part 'app_providers_settings.dart';
+
+/// Whether the app is the window the user is working in right now.
+///
+/// Separate from the foreground sync question on purpose: an unfocused desktop
+/// window should keep syncing, but must stop telling the server it is present
+/// in a conversation, because presence is what makes Talk withhold the
+/// notification. See `core/window_activity.dart`.
+///
+/// Null where there is no widget binding to observe — a plain unit test, or
+/// any isolate without a UI.
+final windowActivityProvider = Provider<WindowActivity?>((ref) {
+  // WidgetsBinding.instance throws where no binding was ever initialised.
+  // That is not an error here, it just means there is no window whose focus
+  // could be observed.
+  final WidgetsBinding binding;
+  try {
+    binding = WidgetsBinding.instance;
+  } on Object {
+    return null;
+  }
+  final activity = WindowActivity(binding: binding);
+  ref.onDispose(activity.dispose);
+  return activity;
+});
+
+final windowActiveProvider = Provider<bool>((ref) {
+  final activity = ref.watch(windowActivityProvider);
+  if (activity == null) {
+    return true;
+  }
+  void listener() => ref.invalidateSelf();
+  activity.addListener(listener);
+  ref.onDispose(() => activity.removeListener(listener));
+  return activity.value;
+});
 
 final connectivityWakeEventsProvider = Provider<Stream<void>>(
   (ref) => ConnectivityWakeSource().events,
