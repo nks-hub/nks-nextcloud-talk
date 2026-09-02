@@ -16,7 +16,25 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (45) — 2. 9. 2026
+
+Vydáno ze zdroje `f5b82dc`, tag `v0.1.0+45`, postaveno z čistého worktree.
+
+Play (uzavřené testování, track alpha): vydání `(45) 0.1.0` je `completed`
+s version code 45. AAB má 84 298 278 B a SHA-256
+`6a63491c6f6ddb3dba63eb712d5221d385c985e7afa3aa96275b27fd10f7fdf4`, SHA-1
+`bd2f07a55a8fecd44e4b42b91f0390e5672ca51d`. Poznámky v šesti jazycích ověřeny
+zpětným dotazem na track.
+
+Windows: poprvé se vydává i desktopový balík. ZIP má SHA-256
+`84e330681f2e8b68243840616dd35d9d67ea3508b5ccc69142a16139c2a6895a` a je
+nasazený na `windows-test-vm` novým instalačním skriptem do
+`C:\Program Files\NKS Talk`; `nextcloudtalk.exe` hlásí `0.1.0+45`.
+
+TestFlight a macOS: NEVYDÁNO. `build-mac` není připojený k RemoteCmd relay
+a Codemagic zatím není k tomuto repozitáři připojený, takže Apple artefakt
+vůbec nevznikl. Nevydává se za to falešný důkaz.
+
 
 - Odkaz na konverzaci konečně otevře aplikaci i na Windows. Schéma `nctalk:`
   se registruje v instalátoru, který ale projekt nikdy neměl, takže každé
