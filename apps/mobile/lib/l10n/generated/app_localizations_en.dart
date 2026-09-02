@@ -1765,6 +1765,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callTransportExternalHpb => 'external HPB';
 
   @override
+  String get messageActionNoteToSelf => 'Send to Note to self';
+
+  @override
   String get messageActionForward => 'Forward';
 
   @override

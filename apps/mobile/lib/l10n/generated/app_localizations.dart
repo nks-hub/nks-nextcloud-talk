@@ -3254,6 +3254,12 @@ abstract class AppLocalizations {
   /// **'external HPB'**
   String get callTransportExternalHpb;
 
+  /// No description provided for @messageActionNoteToSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to Note to self'**
+  String get messageActionNoteToSelf;
+
   /// No description provided for @messageActionForward.
   ///
   /// In en, this message translates to:

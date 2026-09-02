@@ -639,6 +639,7 @@
   "callBannerTransportRoomUnavailable": "This conversation is no longer available on the server.",
   "callTransportInternal": "internal",
   "callTransportExternalHpb": "external HPB",
+  "messageActionNoteToSelf": "Send to Note to self",
   "messageActionForward": "Forward",
   "messageActionPrivateReply": "Reply privately",
   "privateReplyTitle": "Private reply",

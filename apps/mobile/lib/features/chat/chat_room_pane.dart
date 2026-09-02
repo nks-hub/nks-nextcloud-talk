@@ -26,6 +26,7 @@ import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/media/image_attachment_picker.dart';
+import '../conversations/conversation_avatar.dart';
 import '../conversations/conversation_avatar_widget.dart';
 import '../rooms/room_settings_service.dart';
 import 'chat_message_actions_service.dart';

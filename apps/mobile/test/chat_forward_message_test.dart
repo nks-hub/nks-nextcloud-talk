@@ -218,6 +218,59 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  testWidgets('sends the message text straight to Note to self', (
+    tester,
+  ) async {
+    await tester.runAsync(
+      () => _insertConversation(
+        database,
+        accountId: account.id,
+        token: 'roomself1',
+        displayName: 'Note to self',
+        lastActivity: 1724300050,
+        roomType: 6,
+      ),
+    );
+    await tester.pumpWidget(app(api: buildApi()));
+    await settle(tester);
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    await settle(tester);
+    await tester.tap(find.byKey(const Key('message-action-note-to-self')));
+    await flush(tester);
+
+    expect(find.byKey(const Key('chat-forward-sheet')), findsNothing);
+    expect(postedRooms, ['roomself1']);
+    expect(postedMessages, ['Cached hello']);
+    expect(find.text('Message forwarded to Note to self'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('without a Note to self room the action is not offered', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app(api: buildApi()));
+    await settle(tester);
+
+    await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+    // The sheet reads the cached conversation list, which is real Drift I/O.
+    await flush(tester);
+    expect(find.byKey(const Key('message-action-forward')), findsOneWidget);
+    expect(find.byKey(const Key('message-action-note-to-self')), findsNothing);
+    await tester.tap(find.byKey(const Key('message-action-forward')));
+    await flush(tester);
+    expect(find.byKey(const Key('chat-forward-sheet')), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('chat-forward-conversation-roomb456')),
+    );
+    await flush(tester);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets(
     'a refused forward reports the error instead of a false success',
     (tester) async {
@@ -254,12 +307,14 @@ Future<void> _insertConversation(
   required String displayName,
   required int lastActivity,
   int readOnly = 0,
+  int roomType = 2,
 }) async {
   final room = _roomJson(
     token: token,
     displayName: displayName,
     lastActivity: lastActivity,
     readOnly: readOnly,
+    roomType: roomType,
   );
   final parsed = ConversationRoom.fromJson(room);
   await database
@@ -291,6 +346,7 @@ Map<String, Object?> _roomJson({
   required String displayName,
   required int lastActivity,
   required int readOnly,
+  int roomType = 2,
 }) {
   final root =
       readFixtureJson(
@@ -305,6 +361,7 @@ Map<String, Object?> _roomJson({
   room['name'] = token;
   room['lastActivity'] = lastActivity;
   room['readOnly'] = readOnly;
+  room['type'] = roomType;
   final lastMessage = room['lastMessage'];
   if (lastMessage is Map<String, Object?>) {
     room['lastMessage'] = Map<String, Object?>.from(lastMessage)

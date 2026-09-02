@@ -1764,6 +1764,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callTransportExternalHpb => 'externí HPB';
 
   @override
+  String get messageActionNoteToSelf => 'Poslat do Note to self';
+
+  @override
   String get messageActionForward => 'Přeposlat';
 
   @override

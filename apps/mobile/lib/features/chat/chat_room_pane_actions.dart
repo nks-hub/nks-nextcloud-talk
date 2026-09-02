@@ -62,6 +62,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                     unawaited(_forwardMessage(copyText));
                   },
                 ),
+              if (copyText.isNotEmpty && _noteToSelf() != null)
+                ListTile(
+                  key: const Key('message-action-note-to-self'),
+                  leading: const Icon(Icons.edit_note_rounded),
+                  title: Text(strings.messageActionNoteToSelf),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(_forwardMessage(copyText, target: _noteToSelf()));
+                  },
+                ),
               if (canEdit)
                 ListTile(
                   key: const Key('message-action-edit'),
@@ -161,9 +171,27 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// simplification: quoted attribution of the original author and forwarding
   /// of rich objects (files, polls, locations) are not carried over — those
   /// need a documented contract first.
-  Future<void> _forwardMessage(String text) async {
+  /// The account's own note-to-self room, when the cached list has one and
+  /// this is not it. Talk creates the room server-side; the app only reads it.
+  CachedConversation? _noteToSelf() {
+    final conversations =
+        ref.read(conversationsProvider(widget.account.id)).valueOrNull ??
+        const <CachedConversation>[];
+    for (final conversation in conversations) {
+      if (conversation.roomType == ConversationRoomType.noteToSelf &&
+          conversation.token != widget.conversation.token) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _forwardMessage(
+    String text, {
+    CachedConversation? target,
+  }) async {
     final accountId = widget.account.id;
-    final target = await showModalBottomSheet<CachedConversation>(
+    target ??= await showModalBottomSheet<CachedConversation>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
