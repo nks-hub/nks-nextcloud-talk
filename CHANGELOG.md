@@ -16,7 +16,30 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (46) — 2. 9. 2026
+
+Vydáno ze zdroje `f9d2380`, tag `v0.1.0+46`, postaveno z čistého worktree.
+Poprvé na všechny tři platformy najednou.
+
+Play (uzavřené testování, track alpha): vydání `(46) 0.1.0` je `completed`
+s version code 46. AAB má 84 306 565 B a SHA-256
+`7fe346441b6c2e88408523060ff2d35ec3e498e13ea53e462de4d1d8ea73d37a`, SHA-1
+`d553b29fe37624008c892bff28ff4cc087340d36`. Poznámky v šesti jazycích ověřeny
+zpětným dotazem na track.
+
+Windows: ZIP má SHA-256
+`ef7508d85aefb2c6beaccf74698aee3f758239fa879e0755a478ef1d5200e600`, nasazený
+instalačním skriptem na `windows-test-vm` do `C:\Program Files\NKS Talk`. Ověřeno za
+běhu: jediná instance, `0.1.0+46`, okno „NKS Talk".
+
+macOS: postaveno na Codemagicu (build `<codemagic-app-id>`), ZIP má
+SHA-256 `df4cd128b1e2a1487430a7638c5cd21abe11a541013bb935b56c8c6d9841827b`,
+`CFBundleVersion` 46, minimum macOS 12.0. POZOR: balík je podepsaný AD-HOC a
+NEMÁ provisioning profil, takže na něm nemohou fungovat push notifikace —
+integrace App Store Connect nedodala CLI `ISSUER_ID`. Zbývá dořešit.
+
+TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběželo.
+
 
 - Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
   čím přepínat. S jediným účtem zabírala svislá lišta vlevo 88 pixelů na celou
