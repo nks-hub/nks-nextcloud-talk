@@ -1,5 +1,10 @@
 part of 'conversation_shell.dart';
 
+/// Width of the account rail. The Material touch target inside it is 56 px and
+/// the rail pads both sides; the layout needs this number to work out whether
+/// the conversation still has room to breathe.
+const double kAccountRailWidth = 88;
+
 final class _AccountRail extends StatelessWidget {
   const _AccountRail({
     required this.selected,

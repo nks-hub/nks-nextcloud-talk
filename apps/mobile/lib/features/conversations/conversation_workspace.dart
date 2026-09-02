@@ -4,6 +4,16 @@ part of 'conversation_shell.dart';
 /// conversation moves onto the navigator instead.
 const double kExpandedShellBreakpoint = 720;
 
+/// How much room the conversation has to keep before the list folds itself.
+///
+/// A window wide enough for two panes is not automatically a roomy one: the
+/// rail and the list can leave the chat narrower than its own composer wants,
+/// and typing in a slot is worse than one click to bring the list back. The
+/// list folds itself below this and returns when the window grows, without
+/// touching the stored preference - that one is the person's choice for
+/// windows that do have the room.
+const double kMinConversationWidth = 620;
+
 final class ConversationWorkspace extends StatelessWidget {
   const ConversationWorkspace({
     super.key,
@@ -113,6 +123,12 @@ final class ConversationWorkspace extends StatelessWidget {
             onOpenCreatedConversation: onOpenCreatedConversation,
           );
         }
+        // Chrome is what stands between the window edge and the conversation:
+        // the account rail when it is drawn, plus the list pane itself.
+        final chromeWidth =
+            (accounts.length > 1 ? kAccountRailWidth + 1 : 0) + context.listPaneWidth;
+        final cramped =
+            constraints.maxWidth - chromeWidth < kMinConversationWidth;
         return _ExpandedShell(
           account: account,
           accounts: accounts,
@@ -130,7 +146,7 @@ final class ConversationWorkspace extends StatelessWidget {
           detailsOpen: detailsOpen,
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
-          listCollapsed: listCollapsed,
+          listCollapsed: listCollapsed || cramped,
           onToggleList: onToggleList,
         );
       },
