@@ -53,8 +53,33 @@ TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběže
 
 ## 0.1.0 (48) — 2. 9. 2026
 
-Vydáno ze zdroje `BUILD48SHA`. Build 47 k testerům šel jen jako lokální
-Android instalace na emulátoru a jeho položky jsou zahrnuté zde.
+Vydáno ze zdroje `8b32836` (+ docs). Build 47 k testerům nešel jako
+distribuční balík, jeho položky jsou zahrnuté zde.
+
+Android: release APK 89 098 936 B, SHA-256
+`3ee52907b5cd5fd8edae0254eb0f10fd5a8044e1beee54347033d0067a9dc483`,
+versionCode 48. Ověřeno živě na Android 14 emulátoru: přihlášení fixture-user,
+Note to self (zpráva dorazila na server), odpověď jako citovaná bublina,
+průběh stahování 6 MB přílohy s procenty. Play track zatím nenahrán.
+
+Windows: instalátor `NKS-Talk-0.1.0-48-windows-x64-setup.exe` 35 210 814 B,
+SHA-256 `e1988a72d6694499da89bed6f056df2df9b2dd6ab7186cf4e80bb0d7493f0c25`,
+nepodepsaný; nainstalován tichým během na `windows-vm` pod uživatelem RDP do
+`%LOCALAPPDATA%\Programs\NKS Talk`, `nextcloudtalk.exe` hlásí `0.1.0+48`
+a okno „NKS Talk" žije. Build na tom VM nejde (MSVC × `jni`), stavěno
+lokálně. Účet na VM je od dřívějška ve stavu „přihlásit se znovu", takže
+UI důkaz nových položek na Windows je jen z widget testů pro platformu
+windows.
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build z téhož zdroje.
+Ověřeno přihlášení, Share Extension ze Safari až po zprávu na serveru,
+odpověď v konverzaci, tlačítko přepisu (přepis sám v simulátoru nedoběhne,
+viz níže). TestFlight NEVYDÁN: App Store profil nemá App Groups a pro
+Share Extension profil neexistuje.
+
+macOS: debug build přes `xcodebuild` bez podpisu + ad-hoc `codesign`
+(`valid on disk`), aplikace běžela 40 s bez pádu; přihlášení na build-mac
+vyžaduje člověka u stroje, GUI důkaz chybí.
 
 - Otevřená konverzace na desktopu konečně dá vědět o nové zprávě. Aplikace
   serveru hlásila, že je uživatel v místnosti přítomný, dokud tu konverzaci
@@ -82,7 +107,12 @@ Android instalace na emulátoru a jeho položky jsou zahrnuté zde.
 - Na desktopu jde myší vybrat text z bubliny a zkopírovat ho. Dlouhé stisknutí
   bubliny dál otevírá akce zprávy.
 - Hlasovou zprávu jde na iPhonu přepsat na text přímo v zařízení, bez odeslání
-  nahrávky kamkoli ven; přepis jde jedním klepnutím zkopírovat.
+  nahrávky kamkoli ven; přepis jde jedním klepnutím zkopírovat. Když jazyk
+  aplikace nemá v iOS offline model (čeština ho nemá), použije se jazyk
+  zařízení. V simulátoru rozpoznávání končí systémovou chybou 1101, skutečný
+  přepis potvrdí až fyzický iPhone.
+- Akce zprávy „Poslat do Note to self" pošle text rovnou do vlastní poznámkové
+  konverzace bez výběru cíle.
 - iOS má Share Extension: text nebo jeden soubor sdílený ze systémové nabídky
   jde poslat do vybraného účtu a konverzace, stejně jako na Androidu.
 - macOS: „Uložit jako" u přílohy dřív skončilo bez souboru, protože sandbox
