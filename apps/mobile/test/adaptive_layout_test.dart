@@ -212,7 +212,7 @@ void main() {
   testWidgets('expanded conversation header grows at 200 percent text scale', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(900, 800));
+    await _setViewport(tester, const Size(1400, 800));
 
     await tester.pumpWidget(
       localizedTestApp(
@@ -237,7 +237,7 @@ void main() {
   testWidgets('selected conversation is one labeled semantic button', (
     tester,
   ) async {
-    await _setViewport(tester, const Size(900, 800));
+    await _setViewport(tester, const Size(1400, 800));
     final semantics = tester.ensureSemantics();
     final database = openTestDatabase();
     addTearDown(database.close);

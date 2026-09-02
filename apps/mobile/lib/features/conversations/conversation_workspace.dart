@@ -133,6 +133,14 @@ final class ConversationWorkspace extends StatelessWidget {
             onOpenCreatedConversation: onOpenCreatedConversation,
           );
         }
+        // Chrome is what stands between the window edge and the conversation:
+        // the account rail when it is drawn, plus the list pane itself. A
+        // window wide enough for two panes is not automatically a roomy one.
+        final chromeWidth =
+            (accounts.length > 1 ? kAccountRailWidth + 1 : 0) +
+            context.listPaneWidth;
+        final cramped =
+            constraints.maxWidth - chromeWidth < kMinConversationWidth;
         return _ExpandedShell(
           account: account,
           accounts: accounts,
@@ -150,7 +158,7 @@ final class ConversationWorkspace extends StatelessWidget {
           detailsOpen: detailsOpen,
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
-          listCollapsed: listCollapsed,
+          listCollapsed: listCollapsed || cramped,
           listWidth: listWidth,
           onResizeList: onResizeList,
           onResizeListEnd: onResizeListEnd,

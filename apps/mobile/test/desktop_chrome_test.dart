@@ -145,6 +145,28 @@ void main() {
     expect(find.byKey(const Key('conversation-list-splitter')), findsNothing);
   });
 
+  testWidgets('a cramped window folds the list without being asked', (
+    tester,
+  ) async {
+    // Two panes fit long before the conversation has room to be used: at
+    // 1000 px the rail and the list leave the chat under 620, and typing in a
+    // slot is worse than one click to bring the list back.
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pumpShell(
+      tester,
+      accounts: [account('account-a'), account('account-b')],
+    );
+    expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
+
+    // ... and comes back on its own once the window can afford it, because
+    // the stored preference was never touched.
+    tester.view.physicalSize = const Size(1600, 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
+  });
+
   testWidgets('the list header fits its pane instead of breaking a word', (
     tester,
   ) async {
