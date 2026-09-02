@@ -197,7 +197,7 @@ final class ShareViewController: UIViewController {
               fileURL: url,
               mimeType: mimeType,
               displayName: provider.suggestedName ?? url.lastPathComponent,
-              cancelled: { [cancellation] in cancellation.isCancelled }
+              cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
             )
           )
         } catch {
@@ -231,7 +231,7 @@ final class ShareViewController: UIViewController {
         fileURL: url,
         mimeType: mimeType,
         displayName: provider.suggestedName ?? url.lastPathComponent,
-        cancelled: { [cancellation] in cancellation.isCancelled }
+        cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
       )
     }
     let data: Data
@@ -255,7 +255,7 @@ final class ShareViewController: UIViewController {
       fileURL: temporary,
       mimeType: item is UIImage ? "image/png" : mimeType,
       displayName: provider.suggestedName ?? "shared-file.\(suffix)",
-      cancelled: { [cancellation] in cancellation.isCancelled }
+      cancelled: { [cancellation = self.cancellation] in cancellation.isCancelled }
     )
   }
 
