@@ -95,6 +95,26 @@ void main() {
     expect(lock, contains('PODFILE CHECKSUM: $podfileChecksum'));
   });
 
+  test('macOS save picker may write to a user-selected destination', () {
+    for (final name in const [
+      'DebugProfile.entitlements',
+      'Release.entitlements',
+    ]) {
+      final contents = read('$runner$separator$name');
+      expect(
+        contents,
+        contains('<key>com.apple.security.files.user-selected.read-write</key>'),
+        reason: '$name cannot complete Save As with a read-only grant',
+      );
+      expect(
+        contents,
+        isNot(
+          contains('<key>com.apple.security.files.user-selected.read-only</key>'),
+        ),
+      );
+    }
+  });
+
   test(
     'macOS AppDelegate registers with APNs and exposes the push channel',
     () {
