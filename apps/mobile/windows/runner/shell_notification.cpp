@@ -203,7 +203,15 @@ std::wstring ToastXml(const std::wstring& route_id,
          L"\" activationType=\"foreground\" hint-inputId=\"replyText\"/>"
          L"<action content=\"Mark as read\" arguments=\"markRead:" + route +
          L"\" activationType=\"foreground\"/>"
-         L"</actions></toast>";
+         L"</actions>"
+         // Stated rather than left to the default, and stated as the instant
+         // message sound rather than the generic one. Upstream Talk makes the
+         // same distinction on Android: its message channel and its call
+         // channel carry different sounds, because a chat message and a
+         // ringing call are not the same interruption. `Notification.IM` is
+         // what Windows itself uses for chat.
+         L"<audio src=\"ms-winsoundevent:Notification.IM\" loop=\"false\"/>"
+         L"</toast>";
 }
 
 struct Route {

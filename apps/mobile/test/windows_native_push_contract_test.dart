@@ -40,6 +40,29 @@ void main() {
     expect(xmlBuilder, isNot(contains('room_token')));
   });
 
+  test('a message toast sounds like a message, not like anything else', () {
+    // Windows plays a default sound for a toast that names none, so this is
+    // not about being audible at all — it is about being the RIGHT sound.
+    // Upstream Talk draws the same line on Android, where the message channel
+    // and the call channel carry different audio; a chat message and a
+    // ringing call are not the same interruption.
+    final xmlStart = source.indexOf('std::wstring ToastXml(');
+    final xmlEnd = source.indexOf('struct Route {', xmlStart);
+    final xmlBuilder = source.substring(xmlStart, xmlEnd);
+
+    expect(xmlBuilder, contains('ms-winsoundevent:Notification.IM'));
+    expect(
+      xmlBuilder,
+      isNot(contains('silent=')),
+      reason: 'a silenced toast is how a notification stops being noticed',
+    );
+    expect(
+      xmlBuilder.indexOf('<audio'),
+      greaterThan(xmlBuilder.indexOf('</actions>')),
+      reason: 'audio belongs after actions, or the toast XML is invalid',
+    );
+  });
+
   test('activation returns to the Flutter platform thread', () {
     expect(header, contains('kActivationMessage'));
     expect(source, contains('::PostMessageW('));
