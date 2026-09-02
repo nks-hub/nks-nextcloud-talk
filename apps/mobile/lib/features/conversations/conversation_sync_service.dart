@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/performance_telemetry.dart';
 import '../../data/account_repository.dart';
+import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
@@ -216,7 +217,8 @@ final class ConversationSyncService {
       );
     }
     if (account.lastSyncError ==
-        ConversationSyncError.reauthenticationRequired.name) {
+            ConversationSyncError.reauthenticationRequired.name &&
+        !await _reauthenticationCleared(account)) {
       throw const ConversationSyncException(
         ConversationSyncError.reauthenticationRequired,
       );
@@ -356,6 +358,7 @@ final class ConversationSyncService {
   }
 
   static const _credentialReadAttempts = 3;
+  static const _reauthenticationConfirmDelay = Duration(seconds: 2);
   static const _credentialReadRetryDelay = Duration(milliseconds: 400);
 
   /// Credential each in-flight sync authenticated with. A 401 that comes back
@@ -365,7 +368,8 @@ final class ConversationSyncService {
 
   Future<Never> _fail(String accountId, ConversationSyncError error) async {
     if (error == ConversationSyncError.reauthenticationRequired &&
-        await _isStaleCredentialFailure(accountId)) {
+        (await _isStaleCredentialFailure(accountId) ||
+            await _isTransient401(accountId))) {
       throw const ConversationSyncException(ConversationSyncError.network);
     }
     await _accounts.recordSyncError(accountId, error.name);
@@ -379,6 +383,61 @@ final class ConversationSyncService {
       }
     }
     throw ConversationSyncException(error);
+  }
+
+  /// An account parked in re-login by a 401 the server later took back
+  /// (see [_isTransient401]) gets one authenticated probe per sync attempt.
+  /// If the stored token works again the row is released and this sync goes
+  /// on as usual, so nobody has to log in again for a server hiccup.
+  Future<bool> _reauthenticationCleared(StoredAccount account) async {
+    final String? appPassword;
+    try {
+      appPassword = await _credentials.readAppPassword(account.id);
+    } on Object {
+      return false;
+    }
+    if (appPassword == null) {
+      return false;
+    }
+    try {
+      await _api.getAuthenticatedCapabilitiesWithSource(
+        server: ServerBase.parse(account.serverUrl),
+        loginName: account.loginName,
+        appPassword: appPassword,
+        forceRefresh: true,
+      );
+    } on Object {
+      return false;
+    }
+    await _accounts.clearSyncError(account.id);
+    return true;
+  }
+
+  /// The reference server answered 401 for a token it accepted seconds later
+  /// (2. 9. 2026, 23:54–23:59, three clients at once, token never revoked).
+  /// One 401 therefore is not proof the login is gone: it is confirmed with a
+  /// fresh authenticated read after a pause, and only a second 401 signs the
+  /// account out. Anything else — including a network error — is retried.
+  Future<bool> _isTransient401(String accountId) async {
+    final account = await _accounts.getAccount(accountId);
+    final appPassword = _flightPasswords[accountId];
+    if (account == null || appPassword == null) {
+      return false;
+    }
+    await _delay(_reauthenticationConfirmDelay);
+    try {
+      await _api.getAuthenticatedCapabilitiesWithSource(
+        server: ServerBase.parse(account.serverUrl),
+        loginName: account.loginName,
+        appPassword: appPassword,
+        forceRefresh: true,
+      );
+      return true;
+    } on NextcloudApiException catch (error) {
+      return error.statusCode != 401;
+    } on Object {
+      return true;
+    }
   }
 
   Future<bool> _isStaleCredentialFailure(String accountId) async {

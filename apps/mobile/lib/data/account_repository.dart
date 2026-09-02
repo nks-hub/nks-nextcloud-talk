@@ -474,6 +474,12 @@ final class AccountRepository {
         .write(AccountsCompanion(lastSyncError: Value(errorCode)));
   }
 
+  Future<void> clearSyncError(String accountId) {
+    return (_database.update(_database.accounts)
+          ..where((account) => account.id.equals(accountId)))
+        .write(const AccountsCompanion(lastSyncError: Value(null)));
+  }
+
   Future<void> clearConversationSyncMetadata(String accountId) {
     return (_database.update(
       _database.accounts,

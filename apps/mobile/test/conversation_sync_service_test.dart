@@ -811,13 +811,85 @@ void main() {
     },
   );
 
-  test('capabilities 401 enters the reauthentication lane', () async {
-    var requests = 0;
+  test(
+    'a confirmed capabilities 401 enters the reauthentication lane',
+    () async {
+      var requests = 0;
+      final delays = <Duration>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.url.path, endsWith('/cloud/capabilities'));
+          return http.Response('', 401);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+        delay: (duration) async => delays.add(duration),
+      );
+
+      await expectLater(
+        service.sync('account-a'),
+        throwsA(
+          isA<ConversationSyncException>().having(
+            (error) => error.code,
+            'code',
+            ConversationSyncError.reauthenticationRequired,
+          ),
+        ),
+      );
+
+      final account = await repository.getAccount('account-a');
+      expect(
+        account?.lastSyncError,
+        ConversationSyncError.reauthenticationRequired.name,
+      );
+      await expectLater(
+        service.sync('account-a'),
+        throwsA(
+          isA<ConversationSyncException>().having(
+            (error) => error.code,
+            'code',
+            ConversationSyncError.reauthenticationRequired,
+          ),
+        ),
+      );
+      // One request failed, one confirmed it; the parked account then spends
+      // exactly one probe per later attempt and never reaches the room list.
+      expect(requests, 3, reason: 'a parked account probes once per attempt');
+      expect(delays, hasLength(1));
+    },
+  );
+
+  test('a parked re-login account is released once its token works', () async {
+    await repository.recordSyncError(
+      'account-a',
+      ConversationSyncError.reauthenticationRequired.name,
+    );
+    var conversationRequests = 0;
+    final conversationResponse =
+        readFixtureJson(
+              'conversation-list/fixtures/conversations-full.response.json',
+            )
+            as Map<String, Object?>;
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
-        requests++;
-        expect(request.url.path, endsWith('/cloud/capabilities'));
-        return http.Response('', 401);
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        conversationRequests++;
+        return http.Response.bytes(
+          utf8.encode(jsonEncode(conversationResponse)),
+          200,
+          headers: const <String, String>{
+            'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+            'X-Nextcloud-Talk-Modified-Before': '1724300001',
+            'X-Nextcloud-Talk-Federation-Invites': '0',
+          },
+        );
       }),
     );
     addTearDown(api.close);
@@ -827,34 +899,48 @@ void main() {
       api: api,
     );
 
-    await expectLater(
-      service.sync('account-a'),
-      throwsA(
-        isA<ConversationSyncException>().having(
-          (error) => error.code,
-          'code',
-          ConversationSyncError.reauthenticationRequired,
-        ),
-      ),
-    );
+    await service.sync('account-a');
 
-    final account = await repository.getAccount('account-a');
-    expect(
-      account?.lastSyncError,
-      ConversationSyncError.reauthenticationRequired.name,
-    );
-    await expectLater(
-      service.sync('account-a'),
-      throwsA(
-        isA<ConversationSyncException>().having(
-          (error) => error.code,
-          'code',
-          ConversationSyncError.reauthenticationRequired,
-        ),
-      ),
-    );
-    expect(requests, 1, reason: 'durable re-auth state must stop retry loops');
+    expect(conversationRequests, 1);
+    expect((await repository.getAccount('account-a'))?.lastSyncError, isNull);
   });
+
+  test(
+    'a single 401 that the server takes back is retried, not sign-out',
+    () async {
+      var requests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requests++;
+          expect(request.url.path, endsWith('/cloud/capabilities'));
+          return http.Response(
+            requests == 1 ? '' : jsonEncode(capabilitiesJson()),
+            requests == 1 ? 401 : 200,
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+        delay: (_) async {},
+      );
+
+      await expectLater(
+        service.sync('account-a'),
+        throwsA(
+          isA<ConversationSyncException>().having(
+            (error) => error.code,
+            'code',
+            ConversationSyncError.network,
+          ),
+        ),
+      );
+      expect(requests, 2);
+      expect((await repository.getAccount('account-a'))?.lastSyncError, isNull);
+    },
+  );
 
   test(
     'a rejected credential asks once whether this device was wiped',
@@ -869,6 +955,7 @@ void main() {
         credentials: vault,
         api: api,
         onAuthenticationLost: (accountId) async => asked.add(accountId),
+        delay: (_) async {},
       );
 
       await expectLater(
@@ -890,6 +977,7 @@ void main() {
       credentials: vault,
       api: api,
       onAuthenticationLost: (_) async => throw StateError('synthetic'),
+      delay: (_) async {},
     );
 
     await expectLater(
