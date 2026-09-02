@@ -7,27 +7,27 @@ void main() {
   final separator = Platform.pathSeparator;
   final runner = '${Directory.current.path}${separator}ios${separator}Runner';
 
-  test('the iOS target associates the documented Nextcloud host', () {
-    final entitlements = File(
-      '$runner${separator}Runner.entitlements',
-    ).readAsStringSync();
+  test(
+    'the iOS target carries no associated domain until the profile does',
+    () {
+      // The App Store profile predates the entitlement and export refuses an
+      // archive that claims it. The custom scheme carries deep links meanwhile;
+      // the applinks entry returns together with a regenerated profile.
+      final entitlements = File(
+        '$runner${separator}Runner.entitlements',
+      ).readAsStringSync();
 
-    expect(
-      entitlements,
-      contains('<key>com.apple.developer.associated-domains</key>'),
-    );
-    expect(
-      entitlements,
-      contains('<string>applinks:cloud.example.invalid</string>'),
-    );
-    expect(
-      RegExp(
-        r'<string>applinks:[^<]+</string>',
-      ).allMatches(entitlements).length,
-      1,
-      reason: 'Only a documented host may be entitled.',
-    );
-  });
+      expect(
+        entitlements,
+        isNot(contains('<key>com.apple.developer.associated-domains</key>')),
+      );
+      expect(
+        RegExp(r'<string>applinks:[^<]+</string>').hasMatch(entitlements),
+        isFalse,
+        reason: 'An applinks entry without profile support breaks the export.',
+      );
+    },
+  );
 
   test('the reference server artifact permits only supported room routes', () {
     final repository = Directory.current.parent.parent;

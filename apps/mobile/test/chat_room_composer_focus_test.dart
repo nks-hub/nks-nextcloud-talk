@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -444,8 +445,13 @@ void main() {
         tester.state<ScrollableState>(scrollable).position.maxScrollExtent,
         greaterThan(0),
       );
-      expect(tester.getSemantics(emptyTitle).label, strings.chatEmpty);
-      expect(tester.getSemantics(emptyBody).label, strings.chatEmptyBody);
+      // Inside the desktop selection region a paragraph reports its text
+      // through selectable fragment children rather than its own label.
+      expect(_spokenText(tester.getSemantics(emptyTitle)), strings.chatEmpty);
+      expect(
+        _spokenText(tester.getSemantics(emptyBody)),
+        strings.chatEmptyBody,
+      );
       await settle(tester);
     },
     timeout: const Timeout(Duration(seconds: 30)),
@@ -466,4 +472,16 @@ Map<String, Object?> _roomJson() {
   )..['id'] = 109;
   room['lastMessage'] = lastMessage;
   return room;
+}
+
+String _spokenText(SemanticsNode node) {
+  if (node.label.isNotEmpty) {
+    return node.label;
+  }
+  final parts = <String>[];
+  node.visitChildren((child) {
+    parts.add(_spokenText(child));
+    return true;
+  });
+  return parts.join();
 }

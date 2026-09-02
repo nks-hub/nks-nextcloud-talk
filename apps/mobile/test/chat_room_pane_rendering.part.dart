@@ -59,6 +59,9 @@ void _registerChatRoomPaneRenderingTests() {
 
   testWidgets('a mouse drag selects bubble text and long press still opens '
       'the actions', (tester) async {
+    // Tests default to Android, where the region is off on purpose. Reset in
+    // the body: the leaked-debug-variable invariant runs before tearDowns.
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     await insertQuestionAndAnswer();
     MethodCall? clipboardCall;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -78,7 +81,7 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pump();
 
     final region = find.byType(SelectableRegion);
-    expect(region, findsOneWidget, reason: 'tests run on a desktop host');
+    expect(region, findsOneWidget);
     final answer = find.text('Answer');
     final start = tester.getTopLeft(answer) + const Offset(1, 4);
     final end = tester.getBottomRight(answer) - const Offset(1, 4);
@@ -92,6 +95,7 @@ void _registerChatRoomPaneRenderingTests() {
     await gesture.up();
     await tester.pump();
 
+    // ignore: deprecated_member_use
     tester
         .state<SelectableRegionState>(region)
         .copySelection(SelectionChangedCause.toolbar);
@@ -106,6 +110,7 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('the thread layout takes replies out of the room', (

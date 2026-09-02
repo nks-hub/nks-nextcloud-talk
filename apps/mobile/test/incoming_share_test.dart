@@ -43,6 +43,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(launchCalls, 1);
+    // Reset in the body: the invariant that catches a leaked debug variable
+    // runs before tearDowns do.
+    debugDefaultTargetPlatformOverride = null;
   });
 
   test('bridge parses cold text and completes its exact native id', () async {

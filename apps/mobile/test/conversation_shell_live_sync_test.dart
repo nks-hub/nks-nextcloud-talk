@@ -21,6 +21,11 @@ void main() {
   testWidgets('manual refresh queues a full sync during foreground progress', (
     tester,
   ) async {
+    // The expanded shell folds its list below 620 px of conversation width,
+    // so the default 800x600 surface hides the header these tests reach for.
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final database = openTestDatabase();
     addTearDown(database.close);
     final accounts = AccountRepository(database);

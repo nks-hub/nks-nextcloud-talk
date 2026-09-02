@@ -25,6 +25,11 @@ void main() {
   testWidgets(
     'a stale thread sync cannot replace the route opened after search closes',
     (tester) async {
+      // The expanded shell folds its list below 620 px of conversation width,
+      // so the default 800x600 surface hides the header these tests reach for.
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final fixture = await _LifecycleFixture.create();
       addTearDown(fixture.dispose);
       final selectedAccounts = StreamController<StoredAccount?>();
@@ -130,6 +135,11 @@ void main() {
   testWidgets('the current result replaces search with its destination', (
     tester,
   ) async {
+    // The expanded shell folds its list below 620 px of conversation width,
+    // so the default 800x600 surface hides the header these tests reach for.
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final fixture = await _LifecycleFixture.create();
     addTearDown(fixture.dispose);
     final selectedAccounts = StreamController<StoredAccount?>();
@@ -164,6 +174,11 @@ void main() {
   testWidgets('a missing conversation reports the failure without a guess', (
     tester,
   ) async {
+    // The expanded shell folds its list below 620 px of conversation width,
+    // so the default 800x600 surface hides the header these tests reach for.
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final fixture = await _LifecycleFixture.create();
     addTearDown(fixture.dispose);
     final selectedAccounts = StreamController<StoredAccount?>();
@@ -201,6 +216,11 @@ void main() {
   testWidgets(
     'a current thread failure stays on search and reports its cause',
     (tester) async {
+      // The expanded shell folds its list below 620 px of conversation width,
+      // so the default 800x600 surface hides the header these tests reach for.
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final fixture = await _LifecycleFixture.create();
       addTearDown(fixture.dispose);
       final selectedAccounts = StreamController<StoredAccount?>();
@@ -240,6 +260,11 @@ void main() {
   testWidgets('an account switch invalidates a pending thread completion', (
     tester,
   ) async {
+    // The expanded shell folds its list below 620 px of conversation width,
+    // so the default 800x600 surface hides the header these tests reach for.
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final fixture = await _LifecycleFixture.create();
     addTearDown(fixture.dispose);
     final accountB = await fixture.createSecondaryAccount();

@@ -335,12 +335,11 @@ void main() {
     ) async {
       await pumpShell(tester);
 
-      if (isCompact) {
-        // Compact hides the accounts behind a menu; expanded shows a rail.
-        await tester.tap(find.byTooltip('Switch account'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 400));
-      }
+      // With a single account both layouts keep settings behind the avatar
+      // menu; the rail only appears once there is a second account.
+      await tester.tap(find.byTooltip('Switch account'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.byKey(const Key('open-settings')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('open-settings')));

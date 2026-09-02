@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart'
@@ -403,10 +403,14 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// each bubble: a region nested under the bubble sits deeper in the gesture
   /// arena and beats the bubble's long press, which kills the actions sheet.
   static Widget _pointerSelectable(Widget timeline) {
-    if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
-      return timeline;
-    }
-    return SelectionArea(child: timeline);
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.macOS ||
+      TargetPlatform.windows ||
+      TargetPlatform.linux => SelectionArea(child: timeline),
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia => timeline,
+    };
   }
 
   @override

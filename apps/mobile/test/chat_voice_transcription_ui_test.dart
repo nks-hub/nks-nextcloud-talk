@@ -228,7 +228,7 @@ Widget _voiceContent(StoredAccount account) {
 }
 
 final class _ControlledTranscriber implements VoiceTranscriber {
-  Completer<String> _completion = Completer<String>();
+  final Completer<String> _completion = Completer<String>();
   final List<String> paths = <String>[];
   final List<String?> locales = <String?>[];
   int cancelCalls = 0;

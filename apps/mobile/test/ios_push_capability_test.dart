@@ -144,7 +144,7 @@ void main() {
     );
   });
 
-  test('device keys and routes use Keychain without a dead App Group', () {
+  test('device keys and routes use Keychain, not the share App Group', () {
     final entitlements = File(
       '$ios${Platform.pathSeparator}Runner.entitlements',
     ).readAsStringSync();
@@ -155,11 +155,17 @@ void main() {
         reason: 'Runner.entitlements is missing $needle',
       );
     }
+    // The App Group exists for the share extension inbox only. Push keys and
+    // routes stay in the Keychain access group, which the checks below pin.
     expect(
       entitlements,
-      isNot(contains('com.apple.security.application-groups')),
-      reason: 'the shipped builds never used the legacy App Group route store',
+      contains('<string>group.com.nkshub.nextcloudtalk</string>'),
+      reason: 'the share extension hands its inbox over through this group',
     );
+    final keyStoreSource = File(
+      '$ios${Platform.pathSeparator}PushDeviceKeyStore.swift',
+    ).readAsStringSync();
+    expect(keyStoreSource, isNot(contains('group.com.nkshub.nextcloudtalk')));
 
     final keyStore = File(
       '$ios${Platform.pathSeparator}PushDeviceKeyStore.swift',
