@@ -21,6 +21,7 @@ import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 part 'room_details_administration_test.part.dart';
@@ -101,6 +102,7 @@ Widget app({
   required Widget home,
   required http.Client client,
   List<Override> overrides = const [],
+  double textScale = 1,
 }) {
   final api = HttpNextcloudApi(client: client);
   return ProviderScope(
@@ -119,7 +121,7 @@ Widget app({
       ),
       ...overrides,
     ],
-    child: localizedTestApp(home: home),
+    child: localizedTestApp(home: home, textScale: textScale),
   );
 }
 
@@ -155,6 +157,7 @@ Future<void> openDetails(
   GuestLinkSharer? sharer,
   List<Override> overrides = const [],
   double height = 2600,
+  double textScale = 1,
 }) async {
   _growViewport(tester, height: height);
   await tester.pumpWidget(
@@ -171,6 +174,7 @@ Future<void> openDetails(
       ),
       client: client,
       overrides: overrides,
+      textScale: textScale,
     ),
   );
   await _pumpUntil(

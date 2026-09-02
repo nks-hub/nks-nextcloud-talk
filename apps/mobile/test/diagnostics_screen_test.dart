@@ -13,6 +13,7 @@ import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 /// Identity and content that must never reach a shareable diagnostics screen.
@@ -790,5 +791,30 @@ void main() {
         .substring('version:'.length)
         .trim();
     expect(declared, '$appVersionName+$appBuildNumber');
+  });
+
+  testWidgets('diagnostics names every control and reads in layout order', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    _useTallSurface(tester);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await tester.runAsync(() => _seedFixture(database));
+
+    await tester.pumpWidget(_wrapDiagnostics(database: database, push: null));
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await _settleRealAsync(tester);
+
+    // Diagnostics is a long list of value rows with a refresh action and the
+    // stalled-upload entries; a row that reads as a bare "button" here is a
+    // control the user cannot identify at all.
+    expectEveryButtonNamed(tester, screen: 'diagnostics');
+    expectReadingOrderFollowsLayout(tester, screen: 'diagnostics');
+    expectLiveRegions(tester, screen: 'diagnostics', count: 0);
+    semantics.dispose();
   });
 }

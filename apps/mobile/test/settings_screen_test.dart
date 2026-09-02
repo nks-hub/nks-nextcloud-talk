@@ -18,6 +18,7 @@ import 'package:nextcloudtalk/features/settings/theme_preference.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 final class _MemoryThemePreferenceStore implements ThemePreferenceStore {
@@ -92,6 +93,7 @@ Widget _wrap({
   required AccountRepository accountRepository,
   required Stream<List<StoredAccount>> accountsStream,
   List<Override> overrides = const [],
+  double textScale = 1,
 }) {
   return ProviderScope(
     overrides: [
@@ -104,7 +106,10 @@ Widget _wrap({
       accountsProvider.overrideWith((ref) => accountsStream),
       ...overrides,
     ],
-    child: localizedTestApp(home: const SettingsScreen()),
+    child: localizedTestApp(
+      home: const SettingsScreen(),
+      textScale: textScale,
+    ),
   );
 }
 
@@ -660,5 +665,99 @@ void main() {
       find.byType(RadioGroup<ThemeMode>),
     );
     expect(group.groupValue, ThemeMode.dark);
+  });
+
+  testWidgets('settings names every control and reads in layout order', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+
+    await tester.pumpWidget(
+      _wrap(accountRepository: accounts, accountsStream: Stream.value(initial)),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    // Settings is where the account rows, the theme group and the app-lock
+    // switch live, so it is the densest screen for an assistive technology
+    // and the one the earlier audit could not reach without this harness.
+    expectEveryButtonNamed(tester, screen: 'settings');
+    expectReadingOrderFollowsLayout(tester, screen: 'settings');
+    expectLiveRegions(tester, screen: 'settings', count: 0);
+    semantics.dispose();
+  });
+
+  testWidgets('the account removal warning fits at 200 % text', (tester) async {
+    useTightPhoneViewport(tester);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud-a.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+    final removal = _removalService(tester, accounts);
+    removal.vault.values['account-a'] = 'fixture-app-password-never-use';
+
+    // A dialog does not scroll on its own, and this one names the account and
+    // the server in its body, so it is one of the few places large text can
+    // push the confirm action off the screen entirely.
+    final overflows = await overflowsWhile(() async {
+      await tester.pumpWidget(
+        _wrap(
+          accountRepository: accounts,
+          accountsStream: Stream.value(initial),
+          overrides: [
+            accountRemovalServiceProvider.overrideWithValue(removal.service),
+          ],
+          textScale: 2,
+        ),
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      });
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('account-remove-account-a')));
+      await _pumpRouteTransition(tester);
+    });
+
+    expect(find.byKey(const Key('account-remove-dialog')), findsOneWidget);
+    expect(
+      find.byKey(const Key('account-remove-cancel')),
+      findsOneWidget,
+      reason: 'the way out of the dialog must survive the larger text',
+    );
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+
+    await tester.tap(find.byKey(const Key('account-remove-cancel')));
+    await _pumpRouteTransition(tester);
+    await _settleRealAsync(tester);
   });
 }

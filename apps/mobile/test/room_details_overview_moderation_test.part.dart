@@ -966,4 +966,36 @@ void _registerOverviewAndModerationTests() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+
+  testWidgets('room details names every control and reads in layout order', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    _growViewport(tester);
+    await tester.pumpWidget(
+      app(
+        home: RoomDetailsScreen(account: account, conversation: conversation),
+        client: participantsClient([
+          _participantJson(
+            attendeeId: 1,
+            participantType: 2,
+            displayName: 'Synthetic Moderator',
+            sessionIds: const ['session-a'],
+            status: 'online',
+          ),
+        ]),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.byKey(const Key('room-participant-1')).evaluate().isNotEmpty,
+    );
+
+    // Room details carries the avatar, share, moderation and settings
+    // actions; an unnamed one here leaves a moderator guessing which button
+    // clears the history.
+    expectEveryButtonNamed(tester, screen: 'room details');
+    expectReadingOrderFollowsLayout(tester, screen: 'room details');
+    semantics.dispose();
+  });
 }
