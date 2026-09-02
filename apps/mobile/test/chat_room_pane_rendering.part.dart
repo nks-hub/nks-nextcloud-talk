@@ -95,9 +95,9 @@ void _registerChatRoomPaneRenderingTests() {
     await gesture.up();
     await tester.pump();
 
-    // ignore: deprecated_member_use
     tester
         .state<SelectableRegionState>(region)
+        // ignore: deprecated_member_use
         .copySelection(SelectionChangedCause.toolbar);
     await tester.pump();
     expect(clipboardCall?.arguments, <String, Object?>{'text': 'Answer'});

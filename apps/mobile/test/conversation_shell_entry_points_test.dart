@@ -104,8 +104,6 @@ void main() {
   };
 
   for (final layout in layouts.entries) {
-    final isCompact = layout.key == 'compact';
-
     Future<StoredAccount> pumpShell(
       WidgetTester tester, {
       Map<String, List<CachedConversation>> conversationsByAccount = const {},
