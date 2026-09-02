@@ -67,6 +67,23 @@ TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběže
   zprávy a zvukem hovoru dělá i oficiální aplikace Talk.
 - Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
   čím přepínat, a seznam konverzací jde složit; volba přežije restart.
+- Odpověď zůstává v konverzaci. Server od Talku 22 zakládá každou odpovědí
+  vlákno a aplikace ji podle toho z konverzace schovávala, takže odpověď šla
+  najít jen přes „N odpovědí" pod původní zprávou. Teď se odpověď zobrazí
+  klasicky: citovaná bublina, na kterou reaguje, a pod ní vlastní text. Kdo
+  chce vlákna, přepne si to v Nastavení → Odpovědi; pojmenovaná vlákna
+  zůstávají dostupná v obou režimech.
+- Stahování přílohy už nemlčí. Otevření, uložení i sdílení přílohy ukazuje od
+  prvního okamžiku lištu s procenty; když server délku neprozradí, běží lišta
+  neurčitě, ale aspoň je vidět, že se něco děje.
+- Na desktopu jde myší vybrat text z bubliny a zkopírovat ho. Dlouhé stisknutí
+  bubliny dál otevírá akce zprávy.
+- Hlasovou zprávu jde na iPhonu přepsat na text přímo v zařízení, bez odeslání
+  nahrávky kamkoli ven; přepis jde jedním klepnutím zkopírovat.
+- iOS má Share Extension: text nebo jeden soubor sdílený ze systémové nabídky
+  jde poslat do vybraného účtu a konverzace, stejně jako na Androidu.
+- macOS: „Uložit jako" u přílohy dřív skončilo bez souboru, protože sandbox
+  povoloval jen čtení vybraného umístění. Zápis je teď povolený.
 
 ## 0.1.0 (45) — 2. 9. 2026
 
