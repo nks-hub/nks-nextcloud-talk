@@ -529,6 +529,20 @@ final class ChatService {
     );
   }
 
+  /// A 401 for a password the user has since replaced belongs to the old
+  /// login and must not push the account back into re-login.
+  Future<bool> _credentialReplacedSince(
+    String accountId,
+    String usedAppPassword,
+  ) async {
+    try {
+      final current = await _credentials.readAppPassword(accountId);
+      return current != null && current != usedAppPassword;
+    } on Object {
+      return false;
+    }
+  }
+
   void _ensureAccountActive(String accountId) {
     if (_suspendedAccounts.contains(accountId)) {
       throw const _ChatSynchronizationCancelled();
@@ -580,7 +594,8 @@ final class ChatService {
       );
     } on NextcloudApiException catch (error) {
       _ensureAccountActive(account.id);
-      if (error.statusCode == 401) {
+      if (error.statusCode == 401 &&
+          !await _credentialReplacedSince(account.id, appPassword)) {
         await _chat.markReauthenticationRequired(account.id);
       }
       if (allowPersistedCapabilitiesForSend &&

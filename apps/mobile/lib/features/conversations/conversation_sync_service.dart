@@ -227,6 +227,7 @@ final class ConversationSyncService {
     if (appPassword == null) {
       await _fail(accountId, ConversationSyncError.credentialMissing);
     }
+    _flightPasswords[accountId] = appPassword;
 
     try {
       final server = ServerBase.parse(account.serverUrl);
@@ -333,7 +334,16 @@ final class ConversationSyncService {
     };
   }
 
+  /// Credential each in-flight sync authenticated with. A 401 that comes back
+  /// for a password the user has since replaced belongs to the old login, not
+  /// to the new one, and must not push the account back into re-login.
+  final Map<String, String> _flightPasswords = <String, String>{};
+
   Future<Never> _fail(String accountId, ConversationSyncError error) async {
+    if (error == ConversationSyncError.reauthenticationRequired &&
+        await _isStaleCredentialFailure(accountId)) {
+      throw const ConversationSyncException(ConversationSyncError.network);
+    }
     await _accounts.recordSyncError(accountId, error.name);
     if (error == ConversationSyncError.reauthenticationRequired) {
       // Best effort and never allowed to change the failure the caller sees:
@@ -345,6 +355,19 @@ final class ConversationSyncService {
       }
     }
     throw ConversationSyncException(error);
+  }
+
+  Future<bool> _isStaleCredentialFailure(String accountId) async {
+    final used = _flightPasswords[accountId];
+    if (used == null) {
+      return false;
+    }
+    try {
+      final current = await _credentials.readAppPassword(accountId);
+      return current != null && current != used;
+    } on Object {
+      return false;
+    }
   }
 }
 

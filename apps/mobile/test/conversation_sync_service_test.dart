@@ -716,6 +716,42 @@ void main() {
     },
   );
 
+  test(
+    'a 401 for a password the user already replaced is not re-login',
+    () async {
+      // The flight authenticated with the old password; while it was in the
+      // air the user logged in again. That 401 belongs to the old login.
+      var requests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          requests++;
+          await vault.writeAppPassword('account-a', 'fresh-app-password');
+          return http.Response('', 401);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: vault,
+        api: api,
+      );
+
+      await expectLater(
+        service.sync('account-a'),
+        throwsA(
+          isA<ConversationSyncException>().having(
+            (error) => error.code,
+            'code',
+            ConversationSyncError.network,
+          ),
+        ),
+      );
+      final account = await repository.getAccount('account-a');
+      expect(account?.lastSyncError, isNull);
+      expect(requests, 1);
+    },
+  );
+
   test('capabilities 401 enters the reauthentication lane', () async {
     var requests = 0;
     final api = HttpNextcloudApi(
