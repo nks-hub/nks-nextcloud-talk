@@ -51,7 +51,10 @@ TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběže
   tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
   je k dispozici celé okno. Volba přežije restart aplikace.
 
-## Nevydáno
+## 0.1.0 (48) — 2. 9. 2026
+
+Vydáno ze zdroje `BUILD48SHA`. Build 47 k testerům šel jen jako lokální
+Android instalace na emulátoru a jeho položky jsou zahrnuté zde.
 
 - Otevřená konverzace na desktopu konečně dá vědět o nové zprávě. Aplikace
   serveru hlásila, že je uživatel v místnosti přítomný, dokud tu konverzaci
