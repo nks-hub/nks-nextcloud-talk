@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart' show MessageSearchResult;
 
 import '../../app_providers.dart';
-import '../../core/app_lifecycle_policy.dart';
 import '../../core/brand_mark.dart';
 import '../../core/desktop_metrics.dart';
 import '../../core/foreground_sync_loop.dart';
@@ -57,7 +56,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   StreamSubscription<void>? _windowsPushOpenSubscription;
   StreamSubscription<void>? _deepLinkSubscription;
   var _liveSyncGeneration = 0;
-  var _liveSyncAllowed = true;
+  var _isForeground = true;
   var _handlingPushOpen = false;
   var _handlingApplePushOpen = false;
   var _handlingWindowsPushOpen = false;
@@ -68,7 +67,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    _liveSyncAllowed = shouldRunForegroundSync(lifecycleState);
+    _isForeground =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _attachPushNavigation();
@@ -270,12 +270,12 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 
   void _scheduleInitialSync(StoredAccount account) {
     _selectedAccountId = account.id;
-    if (!_liveSyncAllowed || _scheduledAccountId == account.id) {
+    if (!_isForeground || _scheduledAccountId == account.id) {
       return;
     }
     _scheduledAccountId = account.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _liveSyncAllowed && _selectedAccountId == account.id) {
+      if (mounted && _isForeground && _selectedAccountId == account.id) {
         unawaited(_replaceLiveSync(account.id));
       }
     });
@@ -301,7 +301,7 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
       await previous.stop();
     }
     if (!mounted ||
-        !_liveSyncAllowed ||
+        !_isForeground ||
         _selectedAccountId != accountId ||
         generation != _liveSyncGeneration) {
       return;
@@ -357,20 +357,20 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final allowed = shouldRunForegroundSync(state);
-    if (_liveSyncAllowed == allowed) {
+    final resumed = state == AppLifecycleState.resumed;
+    if (_isForeground == resumed) {
       return;
     }
-    _liveSyncAllowed = allowed;
+    _isForeground = resumed;
     _scheduledAccountId = null;
-    if (!allowed) {
+    if (!resumed) {
       unawaited(_stopLiveSync());
       return;
     }
     final accountId = _selectedAccountId;
     if (accountId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _liveSyncAllowed && _selectedAccountId == accountId) {
+        if (mounted && _isForeground && _selectedAccountId == accountId) {
           _scheduledAccountId = accountId;
           unawaited(_replaceLiveSync(accountId));
         }
