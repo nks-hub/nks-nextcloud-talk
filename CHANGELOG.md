@@ -16,6 +16,19 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Odkaz na konverzaci konečně otevře aplikaci i na Windows. Schéma `nctalk:`
+  se registruje v instalátoru, který ale projekt nikdy neměl, takže každé
+  ruční rozbalení buildu deep linky tiše postrádalo — v registru nebyl
+  po odkazu ani záznam. Registraci teď dělá nový instalační skript a běžící
+  aplikace odkaz převezme místo aby se spustila podruhé.
+- Přibyl instalační skript pro Windows. Vznikl z chyby, která se nemá
+  opakovat: build se rozbalil vedle starší instalace, ta si nechala své
+  zástupce a tester pak otevíral týden starou verzi. Skript instaluje vždy
+  přes existující kopii, přesměruje zástupce a odmítne skončit se dvěma
+  kopiemi na jednom stroji.
+
 ## 0.1.0 (44) — 2. 9. 2026
 
 Vydáno ze zdroje `26a1c5c`, tag `v0.1.0+44`, postaveno z čistého worktree

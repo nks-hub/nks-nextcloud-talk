@@ -1,0 +1,102 @@
+# Apple builds for this client, so a release does not depend on one Mac being
+# reachable.
+#
+# The Mac this project normally builds on (`build-mac`, driven over the RemoteCmd
+# relay) was offline for builds 43 and 44, which is why both shipped to Google
+# Play with no TestFlight half at all. This file exists so that stops being a
+# single point of failure — not to move the whole release here.
+#
+# Windows is deliberately NOT here. It builds locally in about four minutes
+# with Visual Studio 2022, and a Windows instance is the one machine type this
+# plan charges for; paying to replace a working local build would be silly.
+#
+# Nothing secret is in this file. The telemetry values are read from Codemagic
+# environment groups, which is the same set `apps/mobile/telemetry.env` holds
+# locally — that file is gitignored and must stay that way.
+
+definitions:
+  telemetry: &telemetry
+    - --dart-define=SENTRY_DSN=$SENTRY_DSN
+    - --dart-define=RYBBIT_HOST=$RYBBIT_HOST
+    - --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID
+    - --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: chatujme-asc-key
+    environment:
+      groups:
+        - nks-talk-telemetry
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.nkshub.nextcloudtalk
+    scripts:
+      # First, and not optional: with Swift Package Manager on, the build
+      # resolves sentry-cocoa itself instead of honouring Podfile.lock, and
+      # the two versions drift until the Swift compile fails. Learned the hard
+      # way on two other apps in this account.
+      - name: Pin dependency resolution to CocoaPods
+        script: flutter config --no-enable-swift-package-manager
+      - name: Fetch packages
+        script: cd apps/mobile && flutter pub get
+      - name: Install pods
+        script: cd apps/mobile/ios && pod install
+      - name: Attach signing profiles
+        script: cd apps/mobile && xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          cd apps/mobile
+          flutter build ipa --release \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - apps/mobile/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  macos-release:
+    name: macOS build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - nks-talk-telemetry
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Pin dependency resolution to CocoaPods
+        script: flutter config --no-enable-swift-package-manager
+      - name: Fetch packages
+        script: cd apps/mobile && flutter pub get
+      - name: Install pods
+        script: cd apps/mobile/macos && pod install
+      - name: Build the app
+        script: |
+          cd apps/mobile
+          flutter build macos --release \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+      # Zipped rather than shipped as a .app directory, because an artifact
+      # download would otherwise lose the bundle's symlinks and the result
+      # would not launch.
+      - name: Package the app
+        script: |
+          cd apps/mobile/build/macos/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent *.app nks-talk-macos.zip
+    artifacts:
+      - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
