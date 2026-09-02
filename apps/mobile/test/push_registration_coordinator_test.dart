@@ -446,6 +446,93 @@ void main() {
     expect(keyStore.ensured, isEmpty);
   });
 
+  test(
+    'a capabilities timeout does not escape follow and is retried',
+    () async {
+      await seedAccount('account-a');
+      var capabilityRequests = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.contains('/capabilities')) {
+            capabilityRequests++;
+            if (capabilityRequests == 1) {
+              throw TimeoutException('capabilities');
+            }
+            return http.Response(
+              jsonEncode(
+                capabilitiesJson(
+                  notificationPushFeatures: const <String>['devices'],
+                ),
+              ),
+              200,
+            );
+          }
+          return nextcloudRegisterResponse();
+        }),
+      );
+      addTearDown(api.close);
+      final gatewayClient = PushGatewayClient(
+        client: MockClient((request) async => http.Response('', 200)),
+      );
+      final coordinator = PushRegistrationCoordinator(
+        accounts: accounts,
+        credentials: credentials,
+        api: api,
+        keyStore: _FakeDeviceKeyStore(),
+        gateway: gateway,
+        tokenHandlePrefix: 'fcm-token',
+        pushProvider: PushGatewayProvider.fcm,
+        gatewayClient: gatewayClient,
+        delay: (_) async {},
+      );
+      addTearDown(coordinator.dispose);
+
+      coordinator.installToken(_fcmToken);
+      // Every caller fires this and forgets it; a thrown exception here used
+      // to be a fatal crash report.
+      await coordinator.follow('account-a');
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(capabilityRequests, greaterThanOrEqualTo(2));
+    },
+  );
+
+  test('a 401 on capabilities ends follow without a retry loop', () async {
+    await seedAccount('account-a');
+    var capabilityRequests = 0;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.contains('/capabilities')) {
+          capabilityRequests++;
+          return http.Response('', 401);
+        }
+        return nextcloudRegisterResponse();
+      }),
+    );
+    addTearDown(api.close);
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: api,
+      keyStore: _FakeDeviceKeyStore(),
+      gateway: gateway,
+      tokenHandlePrefix: 'fcm-token',
+      pushProvider: PushGatewayProvider.fcm,
+      gatewayClient: PushGatewayClient(
+        client: MockClient((request) async => http.Response('', 200)),
+      ),
+      delay: (_) async {},
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken(_fcmToken);
+    await coordinator.follow('account-a');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(capabilityRequests, 1);
+  });
+
   test('unfollow invalidates a follow waiting for capabilities', () async {
     await seedAccount('account-a');
     final capabilitiesStarted = Completer<void>();

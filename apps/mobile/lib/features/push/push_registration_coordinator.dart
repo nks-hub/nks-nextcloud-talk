@@ -178,11 +178,25 @@ final class PushRegistrationCoordinator {
     // for five minutes, and nothing in this coordinator triggers a sync, so
     // there is no loop to close.
     final server = ServerBase.parse(resolved.account.serverUrl);
-    final capabilities = await _api.getAuthenticatedCapabilities(
-      server: server,
-      loginName: resolved.account.loginName,
-      appPassword: resolved.appPassword,
-    );
+    final CapabilitySnapshot capabilities;
+    try {
+      capabilities = await _api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: resolved.account.loginName,
+        appPassword: resolved.appPassword,
+      );
+    } on NextcloudApiException catch (error) {
+      // Every caller fires `follow` and forgets it, so an exception here
+      // escaped to the zone and was reported as a fatal crash (timeout,
+      // network and 401 on builds 45 to 48). A server that cannot answer now
+      // is retried with backoff; a rejected login is left to the account's
+      // own re-login flow, which calls `follow` again once it succeeds.
+      if (error.statusCode != 401 &&
+          _isCurrentFollow(accountId, lifecycleGeneration)) {
+        _scheduleCredentialRetry(accountId, lifecycleGeneration);
+      }
+      return;
+    }
     if (!_isCurrentFollow(accountId, lifecycleGeneration)) {
       return;
     }
