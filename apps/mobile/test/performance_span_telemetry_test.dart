@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/performance_span_telemetry.dart';
+import 'package:nextcloudtalk/core/telemetry_bootstrap.dart';
 import 'package:nextcloudtalk/core/performance_telemetry.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -112,5 +113,38 @@ void main() {
       hasLength(1),
       reason: 'restoring must stop the sink, or a test leaks into the next',
     );
+  });
+
+  test('the scrubber strips what the SDK puts back after the scope', () {
+    // MEASURED ON THE LIVE SERVER, not assumed: build 43's
+    // `performance-conversation.sync` arrived carrying three breadcrumbs
+    // (app lifecycle, battery, navigation) even though the event is built with
+    // none and captured with a cleared scope. Native and lifecycle breadcrumbs
+    // are merged after the scope is applied, so the only place that can strip
+    // them is beforeSend.
+    final event = buildPerformanceSpanSentryEvent(span)
+      ..breadcrumbs = <Breadcrumb>[
+        Breadcrumb(message: 'https://cloud.example.invalid/index.php'),
+      ]
+      ..user = SentryUser(id: 'installation-a');
+
+    final scrubbed = scrubSentryEvent(event);
+
+    expect(scrubbed.breadcrumbs, isEmpty);
+    expect(scrubbed.user, isNull);
+    expect(scrubbed.request, isNull);
+    expect(scrubbed.tags, isNotEmpty, reason: 'the measurement must survive');
+  });
+
+  test('an ordinary crash keeps its breadcrumbs', () {
+    // The strip is deliberately narrow: a crash report without breadcrumbs is
+    // much harder to act on, and those events are scrubbed field by field
+    // instead.
+    final crash = SentryEvent(
+      logger: 'flutter',
+      breadcrumbs: <Breadcrumb>[Breadcrumb(message: 'tapped send')],
+    );
+
+    expect(scrubSentryEvent(crash).breadcrumbs, hasLength(1));
   });
 }

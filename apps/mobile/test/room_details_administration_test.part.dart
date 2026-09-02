@@ -876,4 +876,49 @@ void _registerAdministrationTests() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('the room password dialog fits at 200 % text', (tester) async {
+    final publicConversation = await _insertConversation(
+      database,
+      account,
+      overrides: {'type': 3},
+    );
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      return http.Response('', 404);
+    });
+
+    // One of the thirteen dialogs that were given `scrollable: true` after the
+    // share confirmation was measured overflowing. A dialog holding a text
+    // field is the case Flutter itself recommends the flag for, so it is worth
+    // one real screen rather than trust.
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: publicConversation,
+      client: client,
+      textScale: 2,
+      height: 6000,
+    );
+    await tester.tap(find.byKey(const Key('room-details-password')));
+    await tester.pump();
+
+    final overflows = await overflowsWhile(() async {
+      tester.view.physicalSize = const Size(360, 640);
+      await tester.pump();
+      await tester.pump();
+    });
+
+    expect(
+      find.byKey(const Key('room-details-password-field')),
+      findsOneWidget,
+      reason: 'the field must survive the larger text on a small screen',
+    );
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 }

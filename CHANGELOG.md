@@ -16,6 +16,16 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Výkonové metriky odcházely s drobečkovou stopou navíc. Serverové ověření
+  buildu 43 ukázalo, že událost dorazí s záznamy o životním cyklu, baterii
+  a navigaci, přestože se staví prázdná a odesílá s vyčištěným kontextem —
+  SDK je doplní až za ním. Sráží se teď na stejném místě, kde se to už dělá
+  pro diagnostiku příloh. Běžné hlášení pádu si svoje záznamy ponechává.
+- Sondy přístupnosti pokrývají navíc psací lištu, obrazovku nové konverzace,
+  diagnostiku a dialog hesla místnosti.
+
 ## 0.1.0 (43) — 2. 9. 2026
 
 Vydáno ze zdroje `c171d71`, tag `v0.1.0+43`, postaveno z čistého worktree

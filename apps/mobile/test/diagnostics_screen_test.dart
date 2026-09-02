@@ -415,6 +415,8 @@ Future<void> _seedFixture(AppDatabase database) async {
 Widget _wrapDiagnostics({
   required AppDatabase database,
   required AndroidWebPushPlatform? push,
+  double textScale = 1,
+  Locale locale = const Locale('en'),
 }) {
   return ProviderScope(
     overrides: [
@@ -424,6 +426,8 @@ Widget _wrapDiagnostics({
     ],
     child: localizedTestApp(
       home: const DiagnosticsScreen(accountId: 'account-a'),
+      textScale: textScale,
+      locale: locale,
     ),
   );
 }
@@ -817,4 +821,40 @@ void main() {
     expectLiveRegions(tester, screen: 'diagnostics', count: 0);
     semantics.dispose();
   });
+
+  for (final locale in const [Locale('cs'), Locale('en')]) {
+    testWidgets('diagnostics fits at 200 % text — ${locale.languageCode}', (
+      tester,
+    ) async {
+      // Each row is a label with its value beside it, and those rows do not
+      // wrap out of a bigger text size on their own — unlike the list they
+      // sit in, which scrolls.
+      useTightPhoneViewport(tester);
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      await tester.runAsync(() => _seedFixture(database));
+
+      final overflows = await overflowsWhile(() async {
+        await tester.pumpWidget(
+          _wrapDiagnostics(
+            database: database,
+            push: null,
+            textScale: 2,
+            locale: locale,
+          ),
+        );
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+        });
+        await _settleRealAsync(tester);
+      });
+
+      expect(
+        overflows,
+        isEmpty,
+        reason: '${locale.languageCode}: ${overflows.join(' | ')}',
+      );
+    });
+  }
 }
