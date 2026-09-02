@@ -1857,6 +1857,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachmentSaveCancelled => 'Ukládání bylo zrušeno.';
 
   @override
+  String get attachmentDownloading => 'Stahuji přílohu…';
+
+  @override
+  String attachmentDownloadingPercent(Object percent) {
+    return 'Stahuji přílohu… $percent %';
+  }
+
+  @override
   String get attachmentDownloadFailed => 'Přílohu se nepodařilo stáhnout.';
 
   @override

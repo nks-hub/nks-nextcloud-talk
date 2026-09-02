@@ -681,6 +681,8 @@
   "attachmentSaveFailed": "The attachment could not be saved.",
   "attachmentShareFailed": "The attachment could not be shared.",
   "attachmentSaveCancelled": "Saving cancelled.",
+  "attachmentDownloading": "Downloading the attachment…",
+  "attachmentDownloadingPercent": "Downloading the attachment… {percent}%",
   "attachmentDownloadFailed": "The attachment could not be downloaded.",
   "attachmentReauthenticationRequired": "Sign in again to download this attachment.",
   "attachmentTooLarge": "This attachment is too large to export.",

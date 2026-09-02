@@ -653,6 +653,8 @@
   "attachmentSaveFailed": "Přílohu se nepodařilo uložit.",
   "attachmentShareFailed": "Přílohu se nepodařilo sdílet.",
   "attachmentSaveCancelled": "Ukládání bylo zrušeno.",
+  "attachmentDownloading": "Stahuji přílohu…",
+  "attachmentDownloadingPercent": "Stahuji přílohu… {percent} %",
   "attachmentDownloadFailed": "Přílohu se nepodařilo stáhnout.",
   "attachmentReauthenticationRequired": "Pro stažení přílohy se přihlaste znovu.",
   "attachmentTooLarge": "Tato příloha je pro export příliš velká.",

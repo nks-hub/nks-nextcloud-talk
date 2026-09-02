@@ -131,16 +131,16 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     final strings = AppLocalizations.of(context);
     if (error is VoiceTranscriptionException) {
       return switch (error.failure) {
-      VoiceTranscriptionFailure.denied => strings.voiceTranscriptionDenied,
-      VoiceTranscriptionFailure.restricted =>
-        strings.voiceTranscriptionRestricted,
-      VoiceTranscriptionFailure.unavailable =>
-        strings.voiceTranscriptionUnavailable,
-      VoiceTranscriptionFailure.invalidFile =>
-        strings.voiceTranscriptionInvalidFile,
-      VoiceTranscriptionFailure.failed ||
-      VoiceTranscriptionFailure.cancelled ||
-      VoiceTranscriptionFailure.unsupported =>
+        VoiceTranscriptionFailure.denied => strings.voiceTranscriptionDenied,
+        VoiceTranscriptionFailure.restricted =>
+          strings.voiceTranscriptionRestricted,
+        VoiceTranscriptionFailure.unavailable =>
+          strings.voiceTranscriptionUnavailable,
+        VoiceTranscriptionFailure.invalidFile =>
+          strings.voiceTranscriptionInvalidFile,
+        VoiceTranscriptionFailure.failed ||
+        VoiceTranscriptionFailure.cancelled ||
+        VoiceTranscriptionFailure.unsupported =>
           strings.voiceTranscriptionFailed,
       };
     }
@@ -284,41 +284,41 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
     Duration? total,
   ) {
     return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            key: Key('chat-voice-toggle-${widget.messageId}'),
-            tooltip: label,
-            onPressed: _loading ? null : () => unawaited(_toggle()),
-            icon: _loading
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    semanticLabel: label,
-                  ),
-          ),
-          Flexible(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _failed ? strings.voicePlaybackFailed : widget.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: _failed ? scheme.error : scheme.onSurface,
-                  ),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: Key('chat-voice-toggle-${widget.messageId}'),
+          tooltip: label,
+          onPressed: _loading ? null : () => unawaited(_toggle()),
+          icon: _loading
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  semanticLabel: label,
                 ),
-                if (total != null) _timeline(context, strings, total),
-              ],
-            ),
+        ),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _failed ? strings.voicePlaybackFailed : widget.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: _failed ? scheme.error : scheme.onSurface,
+                ),
+              ),
+              if (total != null) _timeline(context, strings, total),
+            ],
           ),
-          const SizedBox(width: 4),
-        ],
+        ),
+        const SizedBox(width: 4),
+      ],
     );
   }
 
@@ -910,6 +910,101 @@ Uri _fullScreenPreviewUri(Uri previewUri) {
   );
 }
 
+/// A download over a slow link can run for many seconds. Without an immediate
+/// indicator the bubble stays silent and the listener cannot tell a slow
+/// download from a button that did nothing, so the notice goes up before the
+/// request starts and comes down however the request ends. The server does not
+/// always declare a length, so the bar falls back to indeterminate rather than
+/// inventing a percentage.
+///
+/// An overlay entry rather than a snack bar: the messenger queues snack bars
+/// behind whatever is still animating out, and closing one that is not at the
+/// head of that queue is an assertion failure.
+Future<T> _withDownloadNotice<T>(
+  BuildContext context,
+  Future<T> Function(ChatDownloadProgress onProgress) run,
+) async {
+  final overlay = Overlay.of(context);
+  final progress = ValueNotifier<({int received, int? total})>((
+    received: 0,
+    total: null,
+  ));
+  final notice = OverlayEntry(
+    builder: (_) => _AttachmentDownloadNotice(progress: progress),
+  );
+  overlay.insert(notice);
+  try {
+    return await run((received, total) {
+      progress.value = (received: received, total: total);
+    });
+  } finally {
+    notice
+      ..remove()
+      ..dispose();
+    progress.dispose();
+  }
+}
+
+final class _AttachmentDownloadNotice extends StatelessWidget {
+  const _AttachmentDownloadNotice({required this.progress});
+
+  final ValueListenable<({int received, int? total})> progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return IgnorePointer(
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Material(
+              key: const Key('chat-attachment-downloading'),
+              color: scheme.inverseSurface,
+              elevation: 6,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: ValueListenableBuilder<({int received, int? total})>(
+                  valueListenable: progress,
+                  builder: (context, value, _) {
+                    final total = value.total;
+                    final fraction = total != null && total > 0
+                        ? (value.received / total).clamp(0.0, 1.0)
+                        : null;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fraction == null
+                              ? strings.attachmentDownloading
+                              : strings.attachmentDownloadingPercent(
+                                  (fraction * 100).round(),
+                                ),
+                          key: const Key('chat-attachment-downloading-label'),
+                          style: TextStyle(color: scheme.onInverseSurface),
+                        ),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          key: const Key('chat-attachment-downloading-bar'),
+                          value: fraction,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> _openDownloadedAttachment(
   BuildContext context,
   WidgetRef ref, {
@@ -921,11 +1016,15 @@ Future<void> _openDownloadedAttachment(
   final opener = ref.read(chatAttachmentOpenActionFactoryProvider)(
     ref.read(chatMediaRepositoryProvider),
   );
-  final result = await opener.open(
-    account: account,
-    uri: uri,
-    fileName: fileName,
-    expectedContentType: contentType,
+  final result = await _withDownloadNotice(
+    context,
+    (onProgress) => opener.open(
+      account: account,
+      uri: uri,
+      fileName: fileName,
+      expectedContentType: contentType,
+      onProgress: onProgress,
+    ),
   );
   if (result == ChatAttachmentOpenResult.opened || !context.mounted) {
     return;
@@ -963,11 +1062,15 @@ Future<void> _exportDownloadedAttachment(
   final String? message;
   switch (action) {
     case _ChatAttachmentMenuAction.save:
-      final result = await exporter.save(
-        account: account,
-        uri: uri,
-        fileName: fileName,
-        expectedContentType: contentType,
+      final result = await _withDownloadNotice(
+        context,
+        (onProgress) => exporter.save(
+          account: account,
+          uri: uri,
+          fileName: fileName,
+          expectedContentType: contentType,
+          onProgress: onProgress,
+        ),
       );
       message = switch (result) {
         ChatAttachmentSaveResult.saved => strings.attachmentSaved,
@@ -984,11 +1087,15 @@ Future<void> _exportDownloadedAttachment(
           strings.attachmentStorageFailed,
       };
     case _ChatAttachmentMenuAction.share:
-      final result = await exporter.share(
-        account: account,
-        uri: uri,
-        fileName: fileName,
-        expectedContentType: contentType,
+      final result = await _withDownloadNotice(
+        context,
+        (onProgress) => exporter.share(
+          account: account,
+          uri: uri,
+          fileName: fileName,
+          expectedContentType: contentType,
+          onProgress: onProgress,
+        ),
       );
       message = switch (result) {
         ChatAttachmentShareResult.shared ||

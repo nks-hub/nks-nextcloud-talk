@@ -1858,6 +1858,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentSaveCancelled => 'Saving cancelled.';
 
   @override
+  String get attachmentDownloading => 'Downloading the attachment…';
+
+  @override
+  String attachmentDownloadingPercent(Object percent) {
+    return 'Downloading the attachment… $percent%';
+  }
+
+  @override
   String get attachmentDownloadFailed =>
       'The attachment could not be downloaded.';
 

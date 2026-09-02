@@ -9,6 +9,10 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'app_database.dart';
 import 'credential_vault.dart';
 
+/// Bytes received so far and, when the server declared one, the total length.
+/// A null total means the caller can only show that something is moving.
+typedef ChatDownloadProgress = void Function(int received, int? total);
+
 enum ChatMediaRepositoryError {
   credentialMissing,
   invalidUri,
@@ -305,6 +309,7 @@ final class ChatMediaRepository {
     required StoredAccount account,
     required Uri uri,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     final server = ServerBase.parse(account.serverUrl);
     final expected = _normalizedMediaType(expectedContentType);
@@ -368,9 +373,12 @@ final class ChatMediaRepository {
       );
     }
 
+    onProgress?.call(0, response.contentLength);
     final body = await _readBoundedBody(
       response,
       maximumBytes: _maximumOriginalBytes,
+      onProgress: onProgress,
+      total: response.contentLength,
     );
     if (body.isEmpty ||
         (contentType.startsWith('image/') &&
@@ -400,6 +408,8 @@ final class ChatMediaRepository {
   Future<Uint8List> _readBoundedBody(
     http.StreamedResponse response, {
     required int maximumBytes,
+    ChatDownloadProgress? onProgress,
+    int? total,
   }) async {
     final builder = BytesBuilder(copy: false);
     var length = 0;
@@ -414,6 +424,7 @@ final class ChatMediaRepository {
             );
           }
           builder.add(iterator.current);
+          onProgress?.call(length, total);
         }
       })().timeout(requestTimeout);
     } on ChatMediaRepositoryException {

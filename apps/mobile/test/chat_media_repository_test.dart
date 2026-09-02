@@ -169,6 +169,69 @@ void main() {
   });
 
   group('original attachment download', () {
+    test('reports cumulative progress against the declared length', () async {
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final body = <int>[..._pngSignature, 1, 2, 3];
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient((_) async {
+          return http.StreamedResponse(
+            Stream<List<int>>.fromIterable(<List<int>>[
+              body.sublist(0, 4),
+              body.sublist(4),
+            ]),
+            200,
+            contentLength: body.length,
+            headers: const <String, String>{'content-type': 'image/png'},
+          );
+        }),
+      );
+
+      final reported = <({int received, int? total})>[];
+      await repository.loadOriginalFile(
+        account: _account,
+        uri: _originalUri,
+        expectedContentType: 'image/png',
+        onProgress: (received, total) =>
+            reported.add((received: received, total: total)),
+      );
+
+      expect(reported.first, (received: 0, total: body.length));
+      expect(reported.last, (received: body.length, total: body.length));
+      expect(reported.map((entry) => entry.received).toList(), <int>[
+        0,
+        4,
+        body.length,
+      ]);
+    });
+
+    test('a server that declares no length reports a null total', () async {
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient((_) async {
+          return http.StreamedResponse(
+            Stream<List<int>>.value(<int>[..._pngSignature, 1, 2, 3]),
+            200,
+            headers: const <String, String>{'content-type': 'image/png'},
+          );
+        }),
+      );
+
+      final totals = <int?>[];
+      await repository.loadOriginalFile(
+        account: _account,
+        uri: _originalUri,
+        expectedContentType: 'image/png',
+        onProgress: (_, total) => totals.add(total),
+      );
+
+      expect(totals, everyElement(isNull));
+      expect(totals, isNotEmpty);
+    });
+
     test('returns authenticated original bytes from this account DAV', () async {
       late http.BaseRequest captured;
       final vault = MemoryCredentialVault()

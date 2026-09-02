@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
+import '../../data/chat_media_repository.dart';
 import 'references/reference_resolver.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../platform/media/voice_transcription.dart';
@@ -63,7 +65,6 @@ final class ChatMessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final parsed = message;
     if (parsed == null) {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));

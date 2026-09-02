@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_exporter.dart';
@@ -49,6 +52,56 @@ void main() {
     await tester.pumpAndSettle();
     expect(opener.openedNames, ['report.pdf']);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a running download shows its percentage until it finishes', (
+    tester,
+  ) async {
+    final opener = _RecordingOpener()..heldProgress = (received: 3, total: 4);
+    await tester.pumpWidget(
+      _app(exporter: _RecordingExporter(), opener: opener),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-81-0')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat-attachment-downloading')),
+      findsOneWidget,
+    );
+    expect(find.text('Downloading the attachment… 75%'), findsOneWidget);
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byKey(const Key('chat-attachment-downloading-bar')),
+    );
+    expect(bar.value, 0.75);
+
+    opener.release();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-attachment-downloading')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a download without a declared length stays indeterminate', (
+    tester,
+  ) async {
+    final opener = _RecordingOpener()
+      ..heldProgress = (received: 512, total: null);
+    await tester.pumpWidget(
+      _app(exporter: _RecordingExporter(), opener: opener),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-81-0')));
+    await tester.pump();
+
+    expect(find.text('Downloading the attachment…'), findsOneWidget);
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byKey(const Key('chat-attachment-downloading-bar')),
+    );
+    expect(bar.value, isNull);
+
+    opener.release();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-attachment-downloading')), findsNothing);
   });
 
   testWidgets('cancelled save is informational and share cancel is silent', (
@@ -283,6 +336,7 @@ final class _RecordingExporter implements ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     savedNames.add(fileName);
     return saveResult;
@@ -294,6 +348,7 @@ final class _RecordingExporter implements ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     sharedNames.add(fileName);
     return shareResult;
@@ -306,14 +361,26 @@ final class _RecordingOpener implements ChatAttachmentOpenAction {
   final ChatAttachmentOpenResult result;
   final List<String> openedNames = [];
 
+  /// When set, `open` reports this progress and then waits for [release].
+  ({int received, int? total})? heldProgress;
+  final Completer<void> _released = Completer<void>();
+
+  void release() => _released.complete();
+
   @override
   Future<ChatAttachmentOpenResult> open({
     required StoredAccount account,
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     openedNames.add(fileName);
+    final held = heldProgress;
+    if (held != null) {
+      onProgress?.call(held.received, held.total);
+      await _released.future;
+    }
     return result;
   }
 }

@@ -26,6 +26,7 @@ abstract interface class ChatAttachmentOpenAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   });
 }
 
@@ -78,6 +79,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     final ChatMediaFile attachment;
     try {
@@ -85,6 +87,7 @@ final class ChatAttachmentOpener implements ChatAttachmentOpenAction {
         account: account,
         uri: uri,
         expectedContentType: expectedContentType,
+        onProgress: onProgress,
       );
     } on ChatMediaRepositoryException catch (error) {
       return switch (error.code) {

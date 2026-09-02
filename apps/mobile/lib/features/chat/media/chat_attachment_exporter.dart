@@ -52,6 +52,7 @@ abstract interface class ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   });
 
   Future<ChatAttachmentShareResult> share({
@@ -59,6 +60,7 @@ abstract interface class ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   });
 }
 
@@ -290,11 +292,13 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     final download = await _download(
       account: account,
       uri: uri,
       expectedContentType: expectedContentType,
+      onProgress: onProgress,
     );
     if (download case _AttachmentDownloadFailure(:final failure)) {
       return _saveDownloadFailure(failure);
@@ -326,11 +330,13 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     final download = await _download(
       account: account,
       uri: uri,
       expectedContentType: expectedContentType,
+      onProgress: onProgress,
     );
     if (download case _AttachmentDownloadFailure(:final failure)) {
       return _shareDownloadFailure(failure);
@@ -360,12 +366,14 @@ final class ChatAttachmentExporter implements ChatAttachmentExportAction {
     required StoredAccount account,
     required Uri uri,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     try {
       final file = await _repository.loadOriginalFile(
         account: account,
         uri: uri,
         expectedContentType: expectedContentType,
+        onProgress: onProgress,
       );
       return _AttachmentDownloadSuccess(file);
     } on ChatMediaRepositoryException catch (error) {

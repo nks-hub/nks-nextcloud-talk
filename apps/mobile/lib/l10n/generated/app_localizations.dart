@@ -3422,6 +3422,18 @@ abstract class AppLocalizations {
   /// **'Saving cancelled.'**
   String get attachmentSaveCancelled;
 
+  /// No description provided for @attachmentDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the attachment…'**
+  String get attachmentDownloading;
+
+  /// No description provided for @attachmentDownloadingPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the attachment… {percent}%'**
+  String attachmentDownloadingPercent(Object percent);
+
   /// No description provided for @attachmentDownloadFailed.
   ///
   /// In en, this message translates to:
