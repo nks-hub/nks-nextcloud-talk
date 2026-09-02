@@ -16,7 +16,22 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (44) — 2. 9. 2026
+
+Vydáno ze zdroje `26a1c5c`, tag `v0.1.0+44`, postaveno z čistého worktree
+`origin/main`.
+
+Play (uzavřené testování, track alpha): vydání `(44) 0.1.0` je `completed`
+s version code 44. AAB má 84 298 247 B a SHA-256
+`cfa37169aad17dc30c23b114c5e2ff7dde9400442b79d7211f721f30ea8961f3`, SHA-1
+`75560d3ac0d4755a2297d9c5edd1cc9804aee738`. Poznámky v šesti jazycích ověřeny
+zpětným dotazem na track. Licenční brána prošla se 148 Flutter balíky a 113
+Android runtime komponentami. Na emulátoru Android 16 ověřen `versionCode=44`,
+běžící proces a log bez FATAL/ANR.
+
+TestFlight: NEVYDÁNO, stejně jako u buildu 43 — `build-mac` není připojený
+k RemoteCmd relay, takže iOS artefakt nevznikl a iOS ani macOS se neotestovaly.
+
 
 - Výkonové metriky odcházely s drobečkovou stopou navíc. Serverové ověření
   buildu 43 ukázalo, že událost dorazí s záznamy o životním cyklu, baterii
