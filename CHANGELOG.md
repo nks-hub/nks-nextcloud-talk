@@ -16,6 +16,22 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Potvrzovací dialogy jde odpovědět i při dvojnásobném systémovém písmu.
+  Dialog „Sdílet soubor do konverzace" v angličtině přetékal o 48 px dolů,
+  takže tlačítka Zrušit a Sdílet skončila mimo obrazovku a soubor nešlo ani
+  sdílet, ani dialog zavřít. Změřeno na skutečné obrazovce, ne na kopii
+  v testu. Stejná ochrana je nasazená na dalších dvanácti dialozích, které
+  nemají vlastní rolování — mazání zprávy, odebrání účtu, opuštění a smazání
+  konverzace, vymazání historie, odebrání účastníka, zrušení nedokončeného
+  uploadu, heslo k otevřené konverzaci, otisk certifikátu, úprava zprávy
+  a pojmenování vlákna.
+- Audit přístupnosti se rozšířil ze dvou obrazovek na pět skutečných:
+  pracovní plocha konverzací, nastavení, diagnostika, detail konverzace
+  a potvrzovací dialogy. Nově hlídá i pořadí čtení odečítačem a počet
+  živých oblastí, ne jen jména ovládacích prvků.
+
 ## 0.1.0 (42) — 2. 9. 2026
 
 Vydáno ze zdroje `9393081`.
