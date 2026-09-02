@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 part 'chat_media_composer_test_support.dart';
@@ -764,5 +765,63 @@ void main() {
       () => find.byKey(const Key('voice-record')).evaluate().isNotEmpty,
     );
     expect(find.byKey(const Key('voice-waveform')), findsNothing);
+  });
+
+  for (final locale in const [Locale('cs'), Locale('en')]) {
+    testWidgets('the composer fits at 200 % text — ${locale.languageCode}', (
+      tester,
+    ) async {
+      useTightPhoneViewport(tester);
+      final bridge = _RecordingBridge();
+      addTearDown(bridge.close);
+
+      // The composer is a fixed row of controls above the keyboard: it
+      // cannot scroll its way out of a bigger text size the way a form can,
+      // which is exactly the shape the overflow probe is meant for.
+      final overflows = await overflowsWhile(() async {
+        await tester.pumpWidget(
+          _composerApp(
+            sourceStore: sourceStore,
+            bridge: bridge.bridge,
+            threadId: null,
+            locale: locale,
+            textScale: 2,
+          ),
+        );
+        await tester.pump();
+      });
+
+      expect(
+        find.byKey(const Key('media-composer-under-test')),
+        findsOneWidget,
+      );
+      expect(
+        overflows,
+        isEmpty,
+        reason: '${locale.languageCode}: ${overflows.join(' | ')}',
+      );
+    });
+  }
+
+  testWidgets('the composer names every control it shows', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final bridge = _RecordingBridge();
+    addTearDown(bridge.close);
+
+    await tester.pumpWidget(
+      _composerApp(
+        sourceStore: sourceStore,
+        bridge: bridge.bridge,
+        threadId: null,
+      ),
+    );
+    await tester.pump();
+
+    // The composer is where the icon-only controls actually live — paperclip,
+    // Giphy, emoji, microphone and send — so a screen reader user who cannot
+    // tell them apart cannot send anything but plain text.
+    expectEveryButtonNamed(tester, screen: 'chat composer');
+    expectReadingOrderFollowsLayout(tester, screen: 'chat composer');
+    semantics.dispose();
   });
 }

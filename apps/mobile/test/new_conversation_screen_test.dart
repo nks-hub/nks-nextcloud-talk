@@ -6,6 +6,7 @@ import 'package:nextcloudtalk/features/newconversation/new_conversation_screen.d
 import 'package:nextcloudtalk/features/newconversation/new_conversation_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 void main() {
@@ -15,10 +16,16 @@ void main() {
     service = _FakeNewConversationService();
   });
 
-  Widget app({required ValueChanged<ConversationToken> onCreated}) {
+  Widget app({
+    required ValueChanged<ConversationToken> onCreated,
+    double textScale = 1,
+    Locale locale = const Locale('en'),
+  }) {
     return ProviderScope(
       overrides: [newConversationServiceProvider.overrideWithValue(service)],
       child: localizedTestApp(
+        locale: locale,
+        textScale: textScale,
         home: NewConversationScreen(
           accountId: 'account-a',
           onConversationCreated: onCreated,
@@ -268,6 +275,44 @@ void main() {
 
     expect(find.byKey(const Key('open-conversations-error')), findsOneWidget);
     expect(find.byKey(const Key('open-conversations-list')), findsNothing);
+  });
+
+  for (final locale in const [Locale('cs'), Locale('en')]) {
+    testWidgets(
+      'the new conversation screen fits at 200 % text — ${locale.languageCode}',
+      (tester) async {
+        useTightPhoneViewport(tester);
+        service.searchResult = [_syntheticUser(), _syntheticGroup()];
+
+        // The room-type chips and the search field sit in fixed rows above the
+        // result list, so a bigger text size has nowhere to scroll to here.
+        final overflows = await overflowsWhile(() async {
+          await tester.pumpWidget(
+            app(onCreated: (_) {}, textScale: 2, locale: locale),
+          );
+          await tester.enterText(find.byType(TextField), 'ali');
+          await tester.pump(const Duration(milliseconds: 350));
+        });
+
+        expect(
+          overflows,
+          isEmpty,
+          reason: '${locale.languageCode}: ${overflows.join(' | ')}',
+        );
+      },
+    );
+  }
+
+  testWidgets('the new conversation screen names every control', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(app(onCreated: (_) {}));
+    await tester.pump();
+
+    expectEveryButtonNamed(tester, screen: 'new conversation');
+    expectReadingOrderFollowsLayout(tester, screen: 'new conversation');
+    semantics.dispose();
   });
 }
 

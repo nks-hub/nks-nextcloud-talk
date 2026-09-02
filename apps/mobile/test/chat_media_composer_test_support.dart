@@ -22,9 +22,11 @@ Widget _composerApp({
   VoidCallback? onCaptionConsumed,
   Future<bool> Function()? openAppSettings,
   Locale locale = const Locale('en'),
+  double textScale = 1,
 }) {
   return localizedTestApp(
     locale: locale,
+    textScale: textScale,
     home: Scaffold(
       body: ChatMediaComposer(
         key: composerKey,
