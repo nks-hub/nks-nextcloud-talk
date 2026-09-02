@@ -7,6 +7,7 @@ import 'dart:math';
 
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../core/performance_telemetry.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/credential_vault.dart';
@@ -362,9 +363,19 @@ final class AndroidPushCoordinator {
     }
     await _drainAccount(accountId, context: context);
     if (_isAccountActive(accountId, epoch)) {
-      await _onWakeUp(accountId);
+      await _wakeUp(accountId);
     }
   }
+
+  /// Catches the app up after a push woke it, and times how long that took.
+  ///
+  /// The one boundary every wake path crosses — after a fresh registration,
+  /// after an incoming event, and after the user opened a notification — so
+  /// measuring here cannot miss a wake or count one twice.
+  Future<void> _wakeUp(String accountId) => performanceTelemetry.trace(
+    TracedOperation.backgroundWake,
+    () => _onWakeUp(accountId),
+  );
 
   /// Revokes this device's Web Push subscription for every account, at the
   /// server and natively, and stops subscribing again.
@@ -593,7 +604,7 @@ final class AndroidPushCoordinator {
       return;
     }
     try {
-      await _onWakeUp(context.account.id);
+      await _wakeUp(context.account.id);
       await _acknowledge(context.account.id, event.id);
     } on Object catch (error) {
       if (_shouldRetry(error)) {
@@ -742,7 +753,7 @@ final class AndroidPushCoordinator {
       _pendingOpens.add(open);
       _notificationOpenedController.add(null);
       try {
-        await _onWakeUp(open.accountId);
+        await _wakeUp(open.accountId);
       } on Object catch (error) {
         if (_shouldRetry(error)) {
           _scheduleRetry(open.accountId);

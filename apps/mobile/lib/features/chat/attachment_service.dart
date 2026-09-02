@@ -5,6 +5,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/attachment_upload_telemetry.dart';
+import '../../core/performance_telemetry.dart';
 import '../../data/app_database.dart';
 import '../../data/attachment_repository.dart';
 import '../../data/credential_vault.dart';
@@ -338,6 +339,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
   @override
   Map<AttachmentPersistenceKey, AttachmentExecutionMetadata> _metadata = {};
   @override
+  final Map<AttachmentPersistenceKey, DateTime> _uploadStartedAt = {};
+  @override
   bool _closed = false;
 
   Future<void> get ready => _ready;
@@ -541,6 +544,7 @@ final class AttachmentService with _AttachmentServiceRuntime {
         _snapshot = candidate;
         _metadata[key] = metadata;
         _verifiedSources[key] = verifiedSource;
+        _uploadStartedAt[key] = DateTime.now();
         admittedJobId = jobId;
       });
     } on Object {

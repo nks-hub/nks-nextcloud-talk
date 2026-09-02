@@ -27,6 +27,15 @@ proto jen to, co je doložitelné z App Store Connect.
   konverzace, vymazání historie, odebrání účastníka, zrušení nedokončeného
   uploadu, heslo k otevřené konverzaci, otisk certifikátu, úprava zprávy
   a pojmenování vlákna.
+- Výkonové metriky se poprvé opravdu měří. Vrstva byla hotová už dřív, ale
+  nikdo ji nevolal; teď měří start aplikace, synchronizaci seznamu, otevření
+  konverzace, upload přílohy a probuzení pushem. Ven jde jméno operace
+  z uzavřeného výčtu, výsledek a koš trvání — nikdy adresa serveru, room token
+  ani název souboru. Sentry tracing zůstává vypnutý schválně: jeho automatické
+  spany jsou popsané URL, na kterou šly.
+- Dva účty na dvou serverech se stejným tokenem konverzace: doloženo, že
+  požadavek jde na vlastní server s vlastním heslem, že přečtený stav jednoho
+  účtu nehne druhým a že běžící dotaz jednoho účtu nikdy neodpoví za druhý.
 - Audit přístupnosti se rozšířil ze dvou obrazovek na pět skutečných:
   pracovní plocha konverzací, nastavení, diagnostika, detail konverzace
   a potvrzovací dialogy. Nově hlídá i pořadí čtení odečítačem a počet

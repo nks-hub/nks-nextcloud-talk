@@ -1,6 +1,12 @@
 part of 'attachment_service.dart';
 
 mixin _AttachmentServiceRuntime {
+  /// When each upload admitted in THIS process started.
+  ///
+  /// A job recovered after a restart is absent on purpose: its start is on the
+  /// other side of a process death, so there is no honest duration to report,
+  /// and timing it from recovery would understate every recovered upload.
+  Map<AttachmentPersistenceKey, DateTime> get _uploadStartedAt;
   AttachmentRepository get _repository;
   CredentialVault get _credentials;
   ReleaseDurableAttachmentSource get _releaseSource;
@@ -783,6 +789,34 @@ mixin _AttachmentServiceRuntime {
     );
     _snapshot = candidate;
     _metadata[key] = metadata;
+    _reportUploadIfTerminal(key, job.phase);
+  }
+
+  /// Reports an upload once, when it reaches a phase it cannot leave.
+  ///
+  /// Every phase change funnels through [_commitTransition], so this is the
+  /// one place that sees a job finish no matter which path got it there —
+  /// a completed confirmation, a refused upload, or a cancellation.
+  void _reportUploadIfTerminal(
+    AttachmentPersistenceKey key,
+    AttachmentJobPhase phase,
+  ) {
+    if (!_isTerminal(phase)) {
+      return;
+    }
+    final started = _uploadStartedAt.remove(key);
+    if (started == null) {
+      return;
+    }
+    performanceTelemetry.record(
+      operation: TracedOperation.attachmentUpload,
+      started: started,
+      outcome: switch (phase) {
+        AttachmentJobPhase.completed => TracedOutcome.completed,
+        AttachmentJobPhase.cancelled => TracedOutcome.cancelled,
+        _ => TracedOutcome.failed,
+      },
+    );
   }
 
   Future<void> _persistCurrentJob(

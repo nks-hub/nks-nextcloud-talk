@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/performance_telemetry.dart';
 import '../../data/account_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
@@ -77,6 +78,12 @@ final class ConversationSyncService {
     Future<void>? abortTrigger,
     bool forceFull = false,
   }) async {
+    final started = DateTime.now();
+    // The outcome is decided on every exit, including the failures raised
+    // deeper in the flight rather than by the transport here. Recording only
+    // in the catch below would have measured the successful syncs and the
+    // transport errors while silently dropping every classified failure.
+    var outcome = TracedOutcome.completed;
     try {
       await _syncFlights(
         accountId,
@@ -85,9 +92,22 @@ final class ConversationSyncService {
       );
     } on NextcloudApiException catch (error) {
       if (error.code == NextcloudApiError.cancelled) {
+        // An abandoned sync is not a slow one; reported apart so a user who
+        // closes the app mid-sync does not look like a failing server.
+        outcome = TracedOutcome.cancelled;
         return;
       }
+      outcome = TracedOutcome.failed;
       await _fail(accountId, _classifyApiException(error));
+    } on Object {
+      outcome = TracedOutcome.failed;
+      rethrow;
+    } finally {
+      performanceTelemetry.record(
+        operation: TracedOperation.conversationSync,
+        started: started,
+        outcome: outcome,
+      );
     }
   }
 

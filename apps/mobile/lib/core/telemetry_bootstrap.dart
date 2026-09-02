@@ -4,6 +4,8 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'app_version.dart';
 import 'attachment_upload_telemetry.dart';
+import 'performance_span_telemetry.dart';
+import 'performance_telemetry.dart';
 import 'runtime_health_telemetry.dart';
 import 'telemetry.dart';
 
@@ -18,6 +20,7 @@ Future<void> runWithTelemetry({
   required Widget Function(List<NavigatorObserver> observers) appBuilder,
   InstallationIdStore installationIds = const InstallationIdStore(),
 }) async {
+  final launchStarted = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!config.crashReportingEnabled && !config.analyticsEnabled) {
@@ -52,9 +55,21 @@ Future<void> runWithTelemetry({
   }
 
   observers.add(SentryNavigatorObserver());
+  // Installed before the app runs, so the very first sync and the first room
+  // opened are measured instead of falling into the no-op sink.
+  installPerformanceTelemetry(reportPerformanceSpanToSentry);
   await SentryFlutter.init((options) {
     configureSentryOptions(options, config: config);
   }, appRunner: () => runApp(appBuilder(observers)));
+  // Measured to the first frame the app schedules, which is what a user calls
+  // "the app started" — not to the end of this function.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    performanceTelemetry.record(
+      operation: TracedOperation.appStart,
+      started: launchStarted,
+      outcome: TracedOutcome.completed,
+    );
+  });
 
   if (installation != null) {
     await Sentry.configureScope(
@@ -93,6 +108,13 @@ void configureSentryOptions(
     // a room token or a server address is either off or scrubbed.
     ..sendDefaultPii = false
     ..attachScreenshot = false
+    // Stays off deliberately, and turning it on is not how this app reports
+    // performance. Sentry's own tracing auto-instruments HTTP and navigation,
+    // and those spans are DESCRIBED by the URL they hit and the route they
+    // opened — server address and room token, the two things this telemetry
+    // exists to keep on the device. Measurements go out through
+    // `performance_span_telemetry.dart` instead, as events built from a closed
+    // set of names, outcomes and duration buckets.
     ..tracesSampleRate = 0
     ..beforeBreadcrumb = scrubSentryBreadcrumb
     ..beforeSend = (event, hint) => scrubSentryEvent(event);

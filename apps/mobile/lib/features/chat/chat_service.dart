@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/performance_telemetry.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_repository.dart';
@@ -160,8 +161,11 @@ final class ChatService {
     final key = _scopeSyncKey(accountId, roomToken, threadId);
     final existing = _syncInFlight[key];
     if (existing != null) {
+      // Joining somebody else's sync is not this caller's wait; measuring it
+      // would report the tail of a request that started earlier.
       return existing;
     }
+    final started = DateTime.now();
     late final Future<void> operation;
     operation = _serializeRoom<void>(_roomKey(accountId, roomToken), () async {
       await _withRoomErrorPersistence(accountId, roomToken, () async {
@@ -178,6 +182,21 @@ final class ChatService {
       }, threadId: threadId);
     });
     _syncInFlight[key] = operation;
+    operation
+        .then(
+          (_) => performanceTelemetry.record(
+            operation: TracedOperation.roomOpen,
+            started: started,
+            outcome: TracedOutcome.completed,
+          ),
+          onError: (Object error, StackTrace stackTrace) =>
+              performanceTelemetry.record(
+                operation: TracedOperation.roomOpen,
+                started: started,
+                outcome: TracedOutcome.failed,
+              ),
+        )
+        .ignore();
     operation.whenComplete(() {
       if (identical(_syncInFlight[key], operation)) {
         _syncInFlight.remove(key);

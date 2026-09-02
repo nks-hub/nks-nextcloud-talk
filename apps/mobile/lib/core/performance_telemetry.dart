@@ -113,6 +113,15 @@ final class PerformanceTelemetry {
     }
   }
 
+  /// Records an operation whose start and end are not one call — an upload,
+  /// for instance, which is enqueued in one place and reaches its terminal
+  /// phase in another.
+  void record({
+    required TracedOperation operation,
+    required DateTime started,
+    required TracedOutcome outcome,
+  }) => _finish(operation, started, outcome);
+
   /// Records an operation that ended without running to completion, such as a
   /// sync abandoned because the room was closed.
   void recordCancelled(TracedOperation operation, DateTime started) =>
@@ -137,4 +146,34 @@ final class PerformanceTelemetry {
       ),
     );
   }
+}
+
+/// The process-wide measurement.
+///
+/// Ambient on purpose. The crash reporter it feeds is ambient too, and
+/// threading a measurement through the constructor of every service — and
+/// therefore through the provider graph — would touch far more code than the
+/// measurement is worth. It reports nothing until [installPerformanceTelemetry]
+/// gives it a sink, so a test or a build with crash reporting off measures
+/// into a hole rather than into a stub that pretends to work.
+PerformanceTelemetry get performanceTelemetry => _ambient;
+
+PerformanceTelemetry _ambient = PerformanceTelemetry(report: _discard);
+
+void _discard(TracedSpan span) {}
+
+/// Points the ambient measurement at [report]. Returns a callback that puts
+/// the previous one back, so a test never leaks its sink into the next one.
+void Function() installPerformanceTelemetry(
+  TracedSpanSink report, {
+  Duration interval = const Duration(minutes: 1),
+  DateTime Function() clock = DateTime.now,
+}) {
+  final previous = _ambient;
+  _ambient = PerformanceTelemetry(
+    report: report,
+    interval: interval,
+    clock: clock,
+  );
+  return () => _ambient = previous;
 }
