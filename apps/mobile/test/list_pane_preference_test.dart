@@ -61,4 +61,23 @@ void main() {
       expect(await deep.readCollapsed(), isTrue);
     },
   );
+
+  test('a dragged width survives a restart, an absurd one does not', () async {
+    final directory = await Directory.systemTemp.createTemp('list-pane-width');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final store = FileListPanePreferenceStore(directory: directory);
+
+    expect(await store.readWidth(), isNull, reason: 'never dragged');
+
+    await store.writeWidth(361);
+    expect(await store.readWidth(), 361);
+
+    // Written by something else, or by a build whose limits differed. Clamping
+    // it silently would hide that; ignoring it opens at the platform default,
+    // which is always usable.
+    await File(
+      '${directory.path}/conversation_list_width.txt',
+    ).writeAsString('4000');
+    expect(await store.readWidth(), isNull);
+  });
 }

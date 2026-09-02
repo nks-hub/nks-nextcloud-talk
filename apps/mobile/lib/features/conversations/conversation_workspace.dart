@@ -36,6 +36,9 @@ final class ConversationWorkspace extends StatelessWidget {
     this.onOpenDetails,
     this.onCloseDetails,
     this.listCollapsed = false,
+    this.listWidth,
+    this.onResizeList,
+    this.onResizeListEnd,
     this.onToggleList = _ignoreToggle,
   });
 
@@ -76,6 +79,13 @@ final class ConversationWorkspace extends StatelessWidget {
 
   /// Whether the conversation list is folded away on a wide window.
   final bool listCollapsed;
+
+  /// Width the person dragged the list to, or null for the platform default.
+  final double? listWidth;
+
+  /// Called while the splitter is dragged; the end callback is what persists.
+  final ValueChanged<double>? onResizeList;
+  final VoidCallback? onResizeListEnd;
   final VoidCallback onToggleList;
 
   @override
@@ -147,6 +157,9 @@ final class ConversationWorkspace extends StatelessWidget {
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
           listCollapsed: listCollapsed || cramped,
+          listWidth: listWidth,
+          onResizeList: onResizeList,
+          onResizeListEnd: onResizeListEnd,
           onToggleList: onToggleList,
         );
       },
@@ -425,6 +438,9 @@ final class _ExpandedShell extends StatelessWidget {
     required this.onOpenDetails,
     required this.onCloseDetails,
     required this.listCollapsed,
+    required this.listWidth,
+    required this.onResizeList,
+    required this.onResizeListEnd,
     required this.onToggleList,
   });
 
@@ -449,6 +465,13 @@ final class _ExpandedShell extends StatelessWidget {
   /// conversation. Held by the shell, not here: a resize rebuilds this widget
   /// and would lose it.
   final bool listCollapsed;
+
+  /// Width the person dragged the list to, or null for the platform default.
+  final double? listWidth;
+
+  /// Called while the splitter is dragged; the end callback is what persists.
+  final ValueChanged<double>? onResizeList;
+  final VoidCallback? onResizeListEnd;
   final VoidCallback onToggleList;
 
   @override
@@ -477,7 +500,7 @@ final class _ExpandedShell extends StatelessWidget {
             if (!listCollapsed)
               SizedBox(
                 key: const Key('conversation-list-pane'),
-                width: context.listPaneWidth,
+                width: listWidth ?? context.listPaneWidth,
                 child: Column(
                   children: [
                     ConstrainedBox(
@@ -566,7 +589,12 @@ final class _ExpandedShell extends StatelessWidget {
                   ],
                 ),
               ),
-            if (!listCollapsed) const VerticalDivider(),
+            if (!listCollapsed)
+              _ListPaneSplitter(
+                width: listWidth ?? context.listPaneWidth,
+                onResize: onResizeList,
+                onResizeEnd: onResizeListEnd,
+              ),
             Expanded(
               key: const Key('conversation-detail-pane'),
               child: selectedConversation == null
@@ -831,6 +859,45 @@ final class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The line between the list and the conversation, made draggable.
+///
+/// It is the divider itself rather than a bar of its own: a splitter that
+/// takes width costs the conversation the very space the fold was added to
+/// give back. The hit area is wider than the visible line so it can be
+/// grabbed, and the cursor says so.
+final class _ListPaneSplitter extends StatelessWidget {
+  const _ListPaneSplitter({
+    required this.width,
+    required this.onResize,
+    required this.onResizeEnd,
+  });
+
+  final double width;
+  final ValueChanged<double>? onResize;
+  final VoidCallback? onResizeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final resize = onResize;
+    if (resize == null) {
+      return const VerticalDivider();
+    }
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      child: GestureDetector(
+        key: const Key('conversation-list-splitter'),
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragUpdate: (details) => resize(width + details.delta.dx),
+        onHorizontalDragEnd: (_) => onResizeEnd?.call(),
+        child: const SizedBox(
+          width: 9,
+          child: Center(child: VerticalDivider()),
+        ),
+      ),
     );
   }
 }

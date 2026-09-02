@@ -89,6 +89,7 @@ void main() {
       tester,
       accounts: [account('account-a')],
       listCollapsed: true,
+      onResizeList: (_) {},
     );
 
     expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
@@ -119,6 +120,31 @@ void main() {
 
     expect(find.byKey(const Key('toggle-conversation-list')), findsNothing);
   });
+  testWidgets('the divider between list and conversation can be grabbed', (
+    tester,
+  ) async {
+    var dragged = 0.0;
+    await _pumpWide(
+      tester,
+      accounts: [account('account-a')],
+      onResizeList: (width) => dragged = width,
+    );
+    final splitter = find.byKey(const Key('conversation-list-splitter'));
+    expect(splitter, findsOneWidget);
+
+    await tester.drag(splitter, const Offset(60, 0));
+    expect(dragged, greaterThan(0), reason: 'the drag has to reach the pane');
+
+    // Folded away, there is no boundary left to drag - offering one would be
+    // a handle for a pane that is not there.
+    await _pumpWide(
+      tester,
+      accounts: [account('account-a')],
+      listCollapsed: true,
+    );
+    expect(find.byKey(const Key('conversation-list-splitter')), findsNothing);
+  });
+
   testWidgets('a cramped window folds the list without being asked', (
     tester,
   ) async {
@@ -164,17 +190,24 @@ Future<void> _pumpWide(
   WidgetTester tester, {
   required List<StoredAccount> accounts,
   bool listCollapsed = false,
+  ValueChanged<double>? onResizeList,
 }) async {
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await _pumpShell(tester, accounts: accounts, listCollapsed: listCollapsed);
+  await _pumpShell(
+    tester,
+    accounts: accounts,
+    listCollapsed: listCollapsed,
+    onResizeList: onResizeList,
+  );
 }
 
 Future<void> _pumpShell(
   WidgetTester tester, {
   required List<StoredAccount> accounts,
   bool listCollapsed = false,
+  ValueChanged<double>? onResizeList,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -196,6 +229,7 @@ Future<void> _pumpShell(
           onCloseConversation: () {},
           onSelectConversation: (_) {},
           listCollapsed: listCollapsed,
+          onResizeList: onResizeList,
         ),
       ),
     ),

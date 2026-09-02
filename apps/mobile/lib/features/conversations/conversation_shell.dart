@@ -516,6 +516,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           // Read from the store rather than held here: a desktop window that
           // forgets its layout on every launch gets refolded on every launch.
           listCollapsed: ref.watch(conversationListCollapsedProvider),
+          listWidth: ref.watch(conversationListWidthProvider),
+          onResizeList: (width) => ref
+              .read(conversationListWidthProvider.notifier)
+              .preview(width),
+          onResizeListEnd: () => unawaited(
+            ref.read(conversationListWidthProvider.notifier).commit(),
+          ),
           onToggleList: () => unawaited(
             ref.read(conversationListCollapsedProvider.notifier).toggle(),
           ),

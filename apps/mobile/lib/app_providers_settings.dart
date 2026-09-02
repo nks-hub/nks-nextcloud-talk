@@ -66,6 +66,43 @@ final listPanePreferenceStoreProvider = Provider<ListPanePreferenceStore>((
   return FileListPanePreferenceStore();
 });
 
+final conversationListWidthProvider =
+    NotifierProvider<ConversationListWidthController, double?>(
+      ConversationListWidthController.new,
+    );
+
+/// Width the person dragged the conversation list to, or null for the
+/// platform default. Null rather than a number, so the default can change with
+/// the window without overriding a deliberate drag.
+final class ConversationListWidthController extends Notifier<double?> {
+  @override
+  double? build() {
+    unawaited(_load());
+    return null;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(listPanePreferenceStoreProvider).readWidth();
+    if (stored != null && state != stored) {
+      state = stored;
+    }
+  }
+
+  /// Called while the splitter is dragged, so the pane follows the pointer;
+  /// only [commit] touches the disk.
+  void preview(double width) {
+    state = width.clamp(kMinListPaneWidth, kMaxListPaneWidth);
+  }
+
+  Future<void> commit() async {
+    final width = state;
+    if (width == null) {
+      return;
+    }
+    await ref.read(listPanePreferenceStoreProvider).writeWidth(width);
+  }
+}
+
 final conversationListCollapsedProvider =
     NotifierProvider<ConversationListCollapsedController, bool>(
       ConversationListCollapsedController.new,
