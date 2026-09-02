@@ -147,7 +147,8 @@ void expectReadingOrderFollowsLayout(
   final columns = <({double left, double right, List<AuditedNode> members})>[];
   for (final leaf in leaves) {
     final hit = columns.indexWhere(
-      (column) => leaf.rect.left < column.right && leaf.rect.right > column.left,
+      (column) =>
+          leaf.rect.left < column.right && leaf.rect.right > column.left,
     );
     if (hit < 0) {
       columns.add((
