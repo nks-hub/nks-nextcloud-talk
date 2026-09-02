@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -17,12 +18,25 @@ final class WindowsNotificationChannel {
   WindowsNotificationChannel({
     MethodChannel? channel,
     WindowsNotificationActionHandler? onNotificationAction,
-  }) : _channel = channel ?? const MethodChannel(channelName),
+  }) : _channel = channel ?? MethodChannel(resolveChannelName()),
        _onNotificationAction = onNotificationAction {
-    _channel.setMethodCallHandler(_handleNativeCall);
+    // macOS shares the push channel, whose handler belongs to
+    // ApplePushCoordinator: taps and actions on a local notification arrive
+    // through the same route store as a push one, so installing a second
+    // handler here would only unhook the first.
+    if (!Platform.isMacOS) {
+      _channel.setMethodCallHandler(_handleNativeCall);
+    }
   }
 
   static const channelName = 'com.nkshub.nextcloudtalk/windows_notification';
+
+  /// macOS has no channel of its own; it raises local notifications through
+  /// the Apple push channel, which already owns the notification categories.
+  static const macosChannelName = 'com.nkshub.nextcloudtalk/apple_push';
+
+  static String resolveChannelName() =>
+      Platform.isMacOS ? macosChannelName : channelName;
 
   final MethodChannel _channel;
   final WindowsNotificationActionHandler? _onNotificationAction;
@@ -41,12 +55,15 @@ final class WindowsNotificationChannel {
     required String title,
     required String body,
   }) {
-    return _channel.invokeMethod<bool>('show', {
-      'accountId': accountId,
-      'roomToken': roomToken,
-      'title': title,
-      'body': body,
-    });
+    return _channel.invokeMethod<bool>(
+      Platform.isMacOS ? 'showLocalNotification' : 'show',
+      {
+        'accountId': accountId,
+        'roomToken': roomToken,
+        'title': title,
+        'body': body,
+      },
+    );
   }
 
   Future<Object?> _handleNativeCall(MethodCall call) async {

@@ -151,6 +151,8 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
         self?.destroyDeviceKey(call.arguments, result)
       case "recordDeviceKeyAccount":
         self?.recordDeviceKeyAccount(call.arguments, result)
+      case "showLocalNotification":
+        self?.showLocalNotification(call.arguments, result)
       case "getLaunchNotificationOpen":
         let open = self?.pushOpens.takeLaunchOpen()
         result(open)
@@ -180,6 +182,47 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
       }
     }
     pushChannel = channel
+  }
+
+  /// Raises a Talk message as a local notification.
+  ///
+  /// macOS never receives a Talk push: Nextcloud maps only the Android and iOS
+  /// user agents to `apptype='talk'`, and its proxy filter hands a desktop
+  /// client nothing whenever the account has any phone registered. Client Push
+  /// keeps this app in sync over its websocket, so the message is already here
+  /// - this is what finally tells the user about it. Windows has had the same
+  /// thing since build 45; the route store is shared with push so the Reply and
+  /// Mark as Read actions need no separate plumbing.
+  private func showLocalNotification(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any],
+      let accountId = args["accountId"] as? String, !accountId.isEmpty,
+      let roomToken = args["roomToken"] as? String, !roomToken.isEmpty,
+      let title = args["title"] as? String,
+      let body = args["body"] as? String
+    else {
+      result(false)
+      return
+    }
+    let identifier = "local-\(UUID().uuidString)"
+    guard
+      PushNotificationRouteStore.production.remember(
+        identifier: identifier,
+        route: PushNotificationRouteStore.Route(accountId: accountId, roomToken: roomToken)
+      )
+    else {
+      result(false)
+      return
+    }
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = body
+    content.sound = .default
+    content.categoryIdentifier = Self.messageCategoryIdentifier
+    UNUserNotificationCenter.current().add(
+      UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+    ) { error in
+      DispatchQueue.main.async { result(error == nil) }
+    }
   }
 
   private func registerNotificationCategories() {

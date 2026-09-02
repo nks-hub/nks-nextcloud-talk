@@ -304,14 +304,21 @@ Future<void> _ensureAndroidNotificationPermission(
   }
 }
 
-/// Shows Talk messages as Windows notifications while the app runs. Null
-/// elsewhere: every other platform already has one.
+/// Shows Talk messages as desktop notifications while the app runs.
+///
+/// Windows and macOS both need this, and for the same reason: Nextcloud maps
+/// only the Android and iOS user agents to `apptype='talk'`, so its push proxy
+/// hands a desktop client nothing as soon as the account has a phone
+/// registered. Client Push keeps the app in sync over its websocket - the gap
+/// this fills is that nothing ever told the user. Null on Android and iOS,
+/// which really do get a push of their own.
 final windowsNotificationServiceProvider =
     Provider<WindowsNotificationService?>((ref) {
-      // Same gate as `clientPushEnabledProvider`: a widget test on a Windows
+      // Same gate as `clientPushEnabledProvider`: a widget test on a desktop
       // host would otherwise open a live Drift query and leave its timer
       // pending after the tree is gone.
-      if (!Platform.isWindows || !ref.watch(clientPushEnabledProvider)) {
+      if ((!Platform.isWindows && !Platform.isMacOS) ||
+          !ref.watch(clientPushEnabledProvider)) {
         return null;
       }
       final service = WindowsNotificationService(
