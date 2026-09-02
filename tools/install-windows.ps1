@@ -124,16 +124,91 @@ if ($installedVersion -ne $sourceVersion) {
     throw "Installed $installedVersion but the source was $sourceVersion."
 }
 
+# The Start Menu shortcut is not decoration: Windows refuses to show a toast
+# from an unpackaged app unless a shortcut carries its AppUserModelID. The
+# first version of this script wrote both shortcuts with WScript.Shell, which
+# cannot set that property, and silently cost the app every notification —
+# the app asked, Windows dropped it, and nothing anywhere said so.
+function Set-AppUserModelId {
+    param([string]$ShortcutPath, [string]$AppId)
+    $code = @'
+using System;
+using System.Runtime.InteropServices;
+public static class NksAumid {
+  [ComImport, Guid("00021401-0000-0000-C000-000000000046")] private class CShellLink {}
+  [ComImport, Guid("0000010b-0000-0000-C000-000000000046"),
+   InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  private interface IPersistFile {
+    void GetClassID(out Guid pClassID);
+    [PreserveSig] int IsDirty();
+    void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, int dwMode);
+    void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName,
+              [MarshalAs(UnmanagedType.Bool)] bool fRemember);
+    void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+    void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  private struct PropertyKey { public Guid fmtid; public uint pid; }
+  [StructLayout(LayoutKind.Sequential)]
+  private struct PropVariant {
+    public ushort vt; public ushort r1, r2, r3; public IntPtr p; public IntPtr p2;
+  }
+  [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"),
+   InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  private interface IPropertyStore {
+    void GetCount(out uint cProps);
+    void GetAt(uint iProp, out PropertyKey pkey);
+    void GetValue(ref PropertyKey key, out PropVariant pv);
+    void SetValue(ref PropertyKey key, ref PropVariant pv);
+    void Commit();
+  }
+  public static void Apply(string path, string appId) {
+    object link = new CShellLink();
+    ((IPersistFile)link).Load(path, 2);
+    IPropertyStore store = (IPropertyStore)link;
+    PropertyKey key = new PropertyKey();
+    key.fmtid = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
+    key.pid = 5;
+    PropVariant pv = new PropVariant();
+    pv.vt = 31;
+    pv.p = Marshal.StringToCoTaskMemUni(appId);
+    store.SetValue(ref key, ref pv);
+    store.Commit();
+    Marshal.FreeCoTaskMem(pv.p);
+    ((IPersistFile)link).Save(path, true);
+    Marshal.ReleaseComObject(link);
+  }
+}
+'@
+    Add-Type -TypeDefinition $code -Language CSharp -ErrorAction Stop
+    [NksAumid]::Apply($ShortcutPath, $AppId)
+}
+
+# A service account has no Desktop and no Start Menu, and GetFolderPath then
+# returns an empty string rather than failing - which turned into a Join-Path
+# error AFTER the files were already copied, leaving a half-done install.
+# Measured on a machine where the relay client runs as SYSTEM.
 $shell = New-Object -ComObject WScript.Shell
+$startMenu = [Environment]::GetFolderPath('StartMenu')
+$desktop = [Environment]::GetFolderPath('Desktop')
+$startMenuShortcut = if ($startMenu) { Join-Path $startMenu 'Programs\NKS Talk.lnk' } else { $null }
 $shortcuts = @(
-    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'NKS Talk.lnk'),
-    (Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs\NKS Talk.lnk')
-)
+    $(if ($desktop) { Join-Path $desktop 'NKS Talk.lnk' }),
+    $startMenuShortcut
+) | Where-Object { $_ }
 foreach ($shortcutPath in $shortcuts) {
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = $destinationExe
     $shortcut.WorkingDirectory = $Destination
     $shortcut.Save()
+}
+if ($startMenuShortcut) {
+    Set-AppUserModelId -ShortcutPath $startMenuShortcut -AppId 'com.nkshub.nextcloudtalk'
+    Write-Host 'AppUserModelID set on the Start Menu shortcut'
+} else {
+    # Without a Start Menu shortcut Windows has nowhere to read the
+    # AppUserModelID from, so this account cannot raise a toast at all.
+    Write-Warning 'No Start Menu for this account - notifications will not appear.'
 }
 
 # What turns a conversation link into an opened room. The runner already
