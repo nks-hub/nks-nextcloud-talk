@@ -30,10 +30,7 @@ void main() {
   });
 
   test('today ends at the next midnight, not 24 hours later', () {
-    expect(
-      StatusExpiry.today.clearAt(sunday),
-      seconds(DateTime(2026, 8, 31)),
-    );
+    expect(StatusExpiry.today.clearAt(sunday), seconds(DateTime(2026, 8, 31)));
   });
 
   test('week ends after the last day of the current week', () {

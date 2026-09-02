@@ -347,48 +347,54 @@ void main() {
     await Future.wait([second, third]);
   });
 
-  test('retainWhileCached releases immediately when key is not cached', () async {
-    final coordinator = _coordinator();
-    var released = 0;
+  test(
+    'retainWhileCached releases immediately when key is not cached',
+    () async {
+      final coordinator = _coordinator();
+      var released = 0;
 
-    coordinator.retainWhileCached(
-      accountId: 'account-a',
-      resourceUrl: _resource(0),
-      release: () => released++,
-    );
+      coordinator.retainWhileCached(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        release: () => released++,
+      );
 
-    expect(released, 1);
-  });
+      expect(released, 1);
+    },
+  );
 
-  test('retainWhileCached release runs when the LRU evicts the entry', () async {
-    final coordinator = _coordinator(maximumCacheBytes: 4);
-    var released = 0;
+  test(
+    'retainWhileCached release runs when the LRU evicts the entry',
+    () async {
+      final coordinator = _coordinator(maximumCacheBytes: 4);
+      var released = 0;
 
-    await coordinator.load(
-      accountId: 'account-a',
-      resourceUrl: _resource(0),
-      loader: () async => _bytes(2, 0),
-    );
-    coordinator.retainWhileCached(
-      accountId: 'account-a',
-      resourceUrl: _resource(0),
-      release: () => released++,
-    );
-    expect(released, 0);
+      await coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        loader: () async => _bytes(2, 0),
+      );
+      coordinator.retainWhileCached(
+        accountId: 'account-a',
+        resourceUrl: _resource(0),
+        release: () => released++,
+      );
+      expect(released, 0);
 
-    await coordinator.load(
-      accountId: 'account-a',
-      resourceUrl: _resource(1),
-      loader: () async => _bytes(2, 1),
-    );
-    await coordinator.load(
-      accountId: 'account-a',
-      resourceUrl: _resource(2),
-      loader: () async => _bytes(2, 2),
-    );
+      await coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(1),
+        loader: () async => _bytes(2, 1),
+      );
+      await coordinator.load(
+        accountId: 'account-a',
+        resourceUrl: _resource(2),
+        loader: () async => _bytes(2, 2),
+      );
 
-    expect(released, 1);
-  });
+      expect(released, 1);
+    },
+  );
 
   test(
     'retainWhileCached release runs when the key is re-cached with a new value',

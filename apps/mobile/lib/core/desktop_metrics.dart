@@ -20,9 +20,8 @@ extension AppMetrics on BuildContext {
   // ponytail: fixed per platform, not a draggable splitter. Add the splitter
   // when someone actually asks to resize it — it needs its own Dart-side
   // persistence, since the window bounds live in the native runner.
-  double get listPaneWidth => _pointerFirst
-      ? 300
-      : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
+  double get listPaneWidth =>
+      _pointerFirst ? 300 : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
 
   /// Height of one conversation row in the list.
   double get listRowHeight => _pointerFirst ? 56 : 80;

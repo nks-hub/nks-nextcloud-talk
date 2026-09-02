@@ -114,7 +114,9 @@ void main() {
     final perRow = (filled - empty) / rows;
     final jsonBytes =
         await database
-            .customSelect('select sum(length(raw_json)) c from cached_chat_messages')
+            .customSelect(
+              'select sum(length(raw_json)) c from cached_chat_messages',
+            )
             .map((row) => row.read<int>('c'))
             .getSingle() /
         rows;

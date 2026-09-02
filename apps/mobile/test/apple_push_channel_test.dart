@@ -79,32 +79,32 @@ void main() {
         .instance
         .defaultBinaryMessenger
         .handlePlatformMessage(ApplePushCoordinator.channelName, data, (_) {});
-    expect(
-      const StandardMethodCodec().decodeEnvelope(response!),
-      isNull,
-    );
+    expect(const StandardMethodCodec().decodeEnvelope(response!), isNull);
   });
 
-  test('onToken fires for the token requestPermissionAndLogToken fetches', () async {
-    final tokens = <String>[];
-    final onTokenCoordinator = ApplePushCoordinator(
-      channel: channel,
-      onToken: tokens.add,
-    );
-    addTearDown(onTokenCoordinator.dispose);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          return switch (call.method) {
-            'requestPermission' => true,
-            'getDeviceToken' => 'abcd1234deadbeef',
-            _ => null,
-          };
-        });
+  test(
+    'onToken fires for the token requestPermissionAndLogToken fetches',
+    () async {
+      final tokens = <String>[];
+      final onTokenCoordinator = ApplePushCoordinator(
+        channel: channel,
+        onToken: tokens.add,
+      );
+      addTearDown(onTokenCoordinator.dispose);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            return switch (call.method) {
+              'requestPermission' => true,
+              'getDeviceToken' => 'abcd1234deadbeef',
+              _ => null,
+            };
+          });
 
-    await onTokenCoordinator.requestPermissionAndLogToken();
+      await onTokenCoordinator.requestPermissionAndLogToken();
 
-    expect(tokens, <String>['abcd1234deadbeef']);
-  });
+      expect(tokens, <String>['abcd1234deadbeef']);
+    },
+  );
 
   test('onToken fires for a native token refresh too', () async {
     final tokens = <String>[];

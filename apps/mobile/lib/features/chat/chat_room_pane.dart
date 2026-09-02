@@ -37,6 +37,7 @@ import 'poll_dialog.dart';
 import 'chat_participant_avatar.dart';
 import 'chat_posting_access.dart';
 import 'chat_service.dart';
+import '../settings/reply_layout_preference.dart';
 import 'chat_thread_context.dart';
 import 'chat_typing_indicator.dart';
 import 'incoming_message_announcement.dart';
@@ -703,6 +704,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
                       account: widget.account,
                       conversation: widget.conversation,
                       threadId: widget.threadId,
+                      inlineReplies:
+                          ref.watch(replyLayoutProvider) == ReplyLayout.inline,
                       messages: messages,
                       blocks: scopeBlocks,
                       pending: pending,

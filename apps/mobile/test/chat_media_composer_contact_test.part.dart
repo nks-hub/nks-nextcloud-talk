@@ -38,7 +38,10 @@ void _registerChatMediaComposerContactTests(
       (widget) => widget is Semantics && widget.properties.label == 'Contact',
     );
     expect(contactSemantics, findsOneWidget);
-    expect(tester.widget<Semantics>(contactSemantics).properties.image, isFalse);
+    expect(
+      tester.widget<Semantics>(contactSemantics).properties.image,
+      isFalse,
+    );
   });
 
   testWidgets('dismissed contact picker queues nothing and shows no error', (

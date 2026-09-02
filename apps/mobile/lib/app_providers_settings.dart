@@ -56,6 +56,12 @@ final telemetryNavigatorObserversProvider = Provider<List<NavigatorObserver>>(
   (ref) => const [],
 );
 
+final replyLayoutPreferenceStoreProvider = Provider<ReplyLayoutPreferenceStore>(
+  (ref) {
+    return FileReplyLayoutPreferenceStore();
+  },
+);
+
 final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
   return FileThemePreferenceStore();
 });
@@ -159,5 +165,30 @@ final class ThemeModeController extends Notifier<ThemeMode> {
   Future<void> setThemeMode(ThemeMode mode) async {
     state = mode;
     await ref.read(themePreferenceStoreProvider).write(mode);
+  }
+}
+
+final replyLayoutProvider =
+    NotifierProvider<ReplyLayoutController, ReplyLayout>(
+      ReplyLayoutController.new,
+    );
+
+base class ReplyLayoutController extends Notifier<ReplyLayout> {
+  @override
+  ReplyLayout build() {
+    unawaited(_load());
+    return ReplyLayout.inline;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(replyLayoutPreferenceStoreProvider).read();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  Future<void> setReplyLayout(ReplyLayout layout) async {
+    state = layout;
+    await ref.read(replyLayoutPreferenceStoreProvider).write(layout);
   }
 }

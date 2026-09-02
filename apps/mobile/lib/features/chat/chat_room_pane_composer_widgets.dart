@@ -238,10 +238,7 @@ final class _ChatComposer extends StatelessWidget {
   final VoidCallback onSubmit;
 
   /// Routes Escape and, where the platform sends on Enter, a bare Enter.
-  KeyEventResult _handleKey(
-    KeyEvent event, {
-    required bool sendsOnEnter,
-  }) {
+  KeyEventResult _handleKey(KeyEvent event, {required bool sendsOnEnter}) {
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
@@ -328,31 +325,29 @@ final class _ChatComposer extends StatelessWidget {
                       ),
                     ),
                     Focus(
-                      onKeyEvent: (node, event) => _handleKey(
-                        event,
-                        sendsOnEnter: context.sendsOnEnter,
-                      ),
+                      onKeyEvent: (node, event) =>
+                          _handleKey(event, sendsOnEnter: context.sendsOnEnter),
                       child: TextField(
-                      key: const Key('chat-composer'),
-                      controller: controller,
-                      focusNode: focusNode,
-                      autofocus: autofocus,
-                      minLines: 1,
-                      maxLines: 5,
-                      maxLength: 32000,
-                      buildCounter:
-                          (
-                            _, {
-                            required currentLength,
-                            required isFocused,
-                            maxLength,
-                          }) => null,
-                      textCapitalization: TextCapitalization.sentences,
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(
-                        labelText: strings.messageHint,
-                        border: const OutlineInputBorder(),
-                      ),
+                        key: const Key('chat-composer'),
+                        controller: controller,
+                        focusNode: focusNode,
+                        autofocus: autofocus,
+                        minLines: 1,
+                        maxLines: 5,
+                        maxLength: 32000,
+                        buildCounter:
+                            (
+                              _, {
+                              required currentLength,
+                              required isFocused,
+                              maxLength,
+                            }) => null,
+                        textCapitalization: TextCapitalization.sentences,
+                        keyboardType: TextInputType.multiline,
+                        decoration: InputDecoration(
+                          labelText: strings.messageHint,
+                          border: const OutlineInputBorder(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),

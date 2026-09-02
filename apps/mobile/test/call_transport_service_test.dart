@@ -87,13 +87,16 @@ void main() {
     expect(transport, CallTransport.reauthenticationRequired);
   });
 
-  test('a missing room is reported as unavailable, never as a transport', () async {
-    final transport = await service(
-      MockClient((_) async => ocs(const <String, Object?>{}, 404)),
-    ).resolve(accountId: 'account-a', roomToken: 'rooma123');
+  test(
+    'a missing room is reported as unavailable, never as a transport',
+    () async {
+      final transport = await service(
+        MockClient((_) async => ocs(const <String, Object?>{}, 404)),
+      ).resolve(accountId: 'account-a', roomToken: 'rooma123');
 
-    expect(transport, CallTransport.roomUnavailable);
-  });
+      expect(transport, CallTransport.roomUnavailable);
+    },
+  );
 
   test('a server failure never guesses a transport', () async {
     final transport = await service(

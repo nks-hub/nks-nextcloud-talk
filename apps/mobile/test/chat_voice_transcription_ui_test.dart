@@ -54,10 +54,7 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-voice-transcribe-44')));
     await tester.pump();
 
-    expect(
-      find.byKey(const Key('chat-voice-transcribing-44')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('chat-voice-transcribing-44')), findsOneWidget);
     expect(
       find.byKey(const Key('chat-voice-transcription-cancel-44')),
       findsOneWidget,
@@ -68,10 +65,7 @@ void main() {
     transcriber.complete('Recognized words');
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('chat-voice-transcript-44')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('chat-voice-transcript-44')), findsOneWidget);
     expect(find.text('Recognized words'), findsOneWidget);
     final copy = find.byKey(const Key('chat-voice-transcript-copy-44'));
     expect(tester.getSize(copy), const Size(48, 48));
@@ -95,10 +89,7 @@ void main() {
     );
     await tester.pump();
     expect(transcriber.cancelCalls, 1);
-    expect(
-      find.byKey(const Key('chat-voice-transcribing-44')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('chat-voice-transcribing-44')), findsNothing);
 
     transcriber.complete('Too late');
     await tester.pumpAndSettle();

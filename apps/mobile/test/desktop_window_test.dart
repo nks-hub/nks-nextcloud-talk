@@ -65,9 +65,7 @@ void main() {
   });
 
   test('windows runner wires save and restore of the window bounds', () {
-    final runner = File(
-      'windows/runner/flutter_window.cpp',
-    ).readAsStringSync();
+    final runner = File('windows/runner/flutter_window.cpp').readAsStringSync();
     expect(runner, contains('RestoreWindowBounds('));
     expect(runner, contains('SaveWindowBounds('));
     expect(runner, contains('WM_EXITSIZEMOVE'));

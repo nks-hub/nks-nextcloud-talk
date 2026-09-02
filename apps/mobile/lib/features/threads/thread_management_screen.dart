@@ -893,11 +893,7 @@ final class _ThreadFullErrorState extends StatelessWidget {
 }
 
 final class _ThreadEmptyState extends StatelessWidget {
-  const _ThreadEmptyState({
-    required this.title,
-    required this.body,
-    super.key,
-  });
+  const _ThreadEmptyState({required this.title, required this.body, super.key});
 
   final String title;
   final String body;

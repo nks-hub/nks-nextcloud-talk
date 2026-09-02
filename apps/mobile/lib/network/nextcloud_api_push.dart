@@ -60,15 +60,13 @@ mixin _NextcloudApiPush on _HttpNextcloudApiBase {
     required String appPassword,
     Future<void>? abortTrigger,
   }) async {
-    final request =
-        _authenticatedOcsRequest(
-            'DELETE',
-            effect.uri,
-            loginName: loginName,
-            appPassword: appPassword,
-            abortTrigger: abortTrigger,
-          )
-          ..headers['User-Agent'] = pushRegistrationUserAgent;
+    final request = _authenticatedOcsRequest(
+      'DELETE',
+      effect.uri,
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    )..headers['User-Agent'] = pushRegistrationUserAgent;
     final payload = await _sendBody(
       request,
       allowedStatusCodes: _pushRegistrationStatusCodes,

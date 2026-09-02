@@ -99,13 +99,12 @@ final class CallTransportService {
     }
 
     return switch (response.classification) {
-      SignalingSettingsClassification.confirmed => switch (response
-          .settings
-          ?.transport) {
-        SignalingTransportKind.internal => CallTransport.internal,
-        SignalingTransportKind.externalHpb => CallTransport.externalHpb,
-        null => CallTransport.unavailable,
-      },
+      SignalingSettingsClassification.confirmed =>
+        switch (response.settings?.transport) {
+          SignalingTransportKind.internal => CallTransport.internal,
+          SignalingTransportKind.externalHpb => CallTransport.externalHpb,
+          null => CallTransport.unavailable,
+        },
       SignalingSettingsClassification.reauthenticationRequired =>
         CallTransport.reauthenticationRequired,
       SignalingSettingsClassification.roomRefreshRequired =>

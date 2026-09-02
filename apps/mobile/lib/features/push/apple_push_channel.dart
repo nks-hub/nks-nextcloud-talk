@@ -29,7 +29,10 @@ final class ApplePushNotificationOpen {
         roomToken.isEmpty) {
       throw const FormatException('Native push notification open is invalid.');
     }
-    return ApplePushNotificationOpen(accountId: accountId, roomToken: roomToken);
+    return ApplePushNotificationOpen(
+      accountId: accountId,
+      roomToken: roomToken,
+    );
   }
 
   @override

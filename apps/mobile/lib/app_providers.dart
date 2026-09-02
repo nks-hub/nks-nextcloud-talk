@@ -55,6 +55,7 @@ import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
 import 'features/settings/remote_wipe_service.dart';
 import 'features/conversations/list_pane_preference.dart';
+import 'features/settings/reply_layout_preference.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_fcm_channel.dart';
@@ -970,12 +971,14 @@ final chatMediaProvider = FutureProvider.autoDispose
 
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<CachedChatMessage>, ChatRoomProviderKey>((ref, key) {
+      final replyLayout = ref.watch(replyLayoutProvider);
       return ref
           .watch(chatRepositoryProvider)
           .watchMessages(
             accountId: key.accountId,
             roomToken: key.roomToken,
             threadId: key.threadId,
+            includeThreadReplies: replyLayout == ReplyLayout.inline,
           );
     });
 

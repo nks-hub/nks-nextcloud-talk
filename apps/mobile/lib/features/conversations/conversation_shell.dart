@@ -517,9 +517,8 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           // forgets its layout on every launch gets refolded on every launch.
           listCollapsed: ref.watch(conversationListCollapsedProvider),
           listWidth: ref.watch(conversationListWidthProvider),
-          onResizeList: (width) => ref
-              .read(conversationListWidthProvider.notifier)
-              .preview(width),
+          onResizeList: (width) =>
+              ref.read(conversationListWidthProvider.notifier).preview(width),
           onResizeListEnd: () => unawaited(
             ref.read(conversationListWidthProvider.notifier).commit(),
           ),

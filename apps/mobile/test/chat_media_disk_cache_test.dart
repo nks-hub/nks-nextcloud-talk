@@ -38,11 +38,7 @@ void main() {
 
   test('a preview written by one run is served to the next one', () async {
     final uri = uriFor(42);
-    await open().write(
-      accountId: 'account-a',
-      uri: uri,
-      image: image(64, 3),
-    );
+    await open().write(accountId: 'account-a', uri: uri, image: image(64, 3));
 
     // A fresh instance stands in for the next cold start.
     final restarted = open();
@@ -91,8 +87,16 @@ void main() {
 
   test('the byte bound evicts the least recently read entry', () async {
     final cache = open(maximumBytes: 300);
-    await cache.write(accountId: 'account-a', uri: uriFor(1), image: image(100));
-    await cache.write(accountId: 'account-a', uri: uriFor(2), image: image(100));
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(1),
+      image: image(100),
+    );
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(2),
+      image: image(100),
+    );
 
     // Reading 1 makes 2 the least recently used one. The stamps are written
     // with a real clock, so they need to be distinguishable.
@@ -100,7 +104,11 @@ void main() {
     expect(await cache.read(accountId: 'account-a', uri: uriFor(1)), isNotNull);
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
-    await cache.write(accountId: 'account-a', uri: uriFor(3), image: image(100));
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(3),
+      image: image(100),
+    );
 
     expect(cache.byteLength, lessThanOrEqualTo(300));
     expect(await cache.read(accountId: 'account-a', uri: uriFor(2)), isNull);
@@ -110,34 +118,43 @@ void main() {
 
   test('an entry larger than the whole bound is skipped', () async {
     final cache = open(maximumBytes: 100);
-    await cache.write(accountId: 'account-a', uri: uriFor(1), image: image(500));
+    await cache.write(
+      accountId: 'account-a',
+      uri: uriFor(1),
+      image: image(500),
+    );
 
     expect(await cache.read(accountId: 'account-a', uri: uriFor(1)), isNull);
     expect(cache.byteLength, 0);
   });
 
-  test('a shrunken bound is enforced while scanning an existing store', () async {
-    final seed = open();
-    for (var fileId = 1; fileId <= 4; fileId++) {
-      await seed.write(
-        accountId: 'account-a',
-        uri: uriFor(fileId),
-        image: image(100),
+  test(
+    'a shrunken bound is enforced while scanning an existing store',
+    () async {
+      final seed = open();
+      for (var fileId = 1; fileId <= 4; fileId++) {
+        await seed.write(
+          accountId: 'account-a',
+          uri: uriFor(fileId),
+          image: image(100),
+        );
+      }
+      expect(seed.length, 4);
+
+      final restarted = open(maximumBytes: 250);
+      // Any read forces the scan that applies the new bound.
+      await restarted.read(accountId: 'account-a', uri: uriFor(1));
+
+      expect(restarted.byteLength, lessThanOrEqualTo(250));
+      expect(restarted.length, 2);
+      expect(
+        Directory(
+          '${root.path}/previews',
+        ).listSync(recursive: true).whereType<File>().length,
+        2,
       );
-    }
-    expect(seed.length, 4);
-
-    final restarted = open(maximumBytes: 250);
-    // Any read forces the scan that applies the new bound.
-    await restarted.read(accountId: 'account-a', uri: uriFor(1));
-
-    expect(restarted.byteLength, lessThanOrEqualTo(250));
-    expect(restarted.length, 2);
-    expect(
-      Directory('${root.path}/previews').listSync(recursive: true).whereType<File>().length,
-      2,
-    );
-  });
+    },
+  );
 
   test('evicting an account erases its bytes from disk only', () async {
     final cache = open();
@@ -149,7 +166,9 @@ void main() {
     expect(await cache.read(accountId: 'account-a', uri: uriFor(1)), isNull);
     expect(await cache.read(accountId: 'account-b', uri: uriFor(1)), isNotNull);
     expect(
-      Directory('${root.path}/previews').listSync(recursive: true).whereType<File>().length,
+      Directory(
+        '${root.path}/previews',
+      ).listSync(recursive: true).whereType<File>().length,
       1,
     );
 

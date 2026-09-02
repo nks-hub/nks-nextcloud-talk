@@ -94,10 +94,7 @@ void main() {
               Uri.splitQueryString(request.body)['lastReadMessage']!,
             );
             readTargets.add(target);
-            return http.Response(
-              jsonEncode(_readMarkerResponse(target)),
-              200,
-            );
+            return http.Response(jsonEncode(_readMarkerResponse(target)), 200);
           }
           if (request.url.queryParameters['lookIntoFuture'] == '0') {
             return http.Response('', 304);
@@ -112,9 +109,7 @@ void main() {
       );
       addTearDown(api.close);
 
-      tester.binding.handleAppLifecycleStateChanged(
-        AppLifecycleState.resumed,
-      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -164,9 +159,7 @@ void main() {
 
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 1));
-      tester.binding.handleAppLifecycleStateChanged(
-        AppLifecycleState.resumed,
-      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     },
   );
 }
@@ -179,9 +172,7 @@ Map<String, Object?> _noteToSelfRoomJson() {
           as Map<String, Object?>;
   final ocs = root['ocs']! as Map<String, Object?>;
   final rooms = ocs['data']! as List<Object?>;
-  final room = Map<String, Object?>.from(
-    rooms.first! as Map<String, Object?>,
-  );
+  final room = Map<String, Object?>.from(rooms.first! as Map<String, Object?>);
   final lastMessage = Map<String, Object?>.from(
     room['lastMessage']! as Map<String, Object?>,
   )..['id'] = 109;

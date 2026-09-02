@@ -56,35 +56,38 @@ void main() {
 
   tearDown(() => database.close());
 
-  test('an unreadable credential is retried, not taken as no channel', () async {
-    final vault = _CountingVault(null);
-    final container = ProviderContainer(
-      overrides: [
-        appDatabaseProvider.overrideWithValue(database),
-        accountRepositoryProvider.overrideWithValue(accounts),
-        credentialVaultProvider.overrideWithValue(vault),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'an unreadable credential is retried, not taken as no channel',
+    () async {
+      final vault = _CountingVault(null);
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          accountRepositoryProvider.overrideWithValue(accounts),
+          credentialVaultProvider.overrideWithValue(vault),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final coordinator = container.read(clientPushCoordinatorProvider);
-    expect(coordinator, isNotNull);
-    coordinator!.follow('account-a');
+      final coordinator = container.read(clientPushCoordinatorProvider);
+      expect(coordinator, isNotNull);
+      coordinator!.follow('account-a');
 
-    // Long enough for the first attempt and at least one retry after the
-    // two-second backoff. A give-up shows up as exactly one read that never
-    // grows.
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    final afterFirst = vault.reads;
-    expect(afterFirst, greaterThan(0), reason: 'it has to try at least once');
+      // Long enough for the first attempt and at least one retry after the
+      // two-second backoff. A give-up shows up as exactly one read that never
+      // grows.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      final afterFirst = vault.reads;
+      expect(afterFirst, greaterThan(0), reason: 'it has to try at least once');
 
-    await Future<void>.delayed(const Duration(seconds: 3));
-    expect(
-      vault.reads,
-      greaterThan(afterFirst),
-      reason: 'a missing credential must keep the retry loop alive',
-    );
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect(
+        vault.reads,
+        greaterThan(afterFirst),
+        reason: 'a missing credential must keep the retry loop alive',
+      );
 
-    await coordinator.dispose();
-  });
+      await coordinator.dispose();
+    },
+  );
 }

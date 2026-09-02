@@ -16,6 +16,65 @@ void _registerChatRoomPaneRenderingTests() {
     await tester.pump(const Duration(milliseconds: 1));
   });
 
+  Future<void> insertQuestionAndAnswer() async {
+    const timestamp = 1724300000;
+    final root = _messageJson(
+      id: 40,
+      actorId: 'someone-else',
+      actorDisplayName: 'Other person',
+      timestamp: timestamp,
+      message: 'Question',
+      threadId: 40,
+      threadReplies: 1,
+    );
+    final reply = _messageJson(
+      id: 41,
+      actorId: 'reply-author',
+      actorDisplayName: 'Reply author',
+      timestamp: timestamp + 60,
+      message: 'Answer',
+      threadId: 40,
+      parent: root,
+    );
+    await _insertCachedMessage(database, root, displayText: 'Question');
+    await _insertCachedMessage(database, reply, displayText: 'Answer');
+  }
+
+  testWidgets('inline replies stay in the room under their quote', (
+    tester,
+  ) async {
+    await insertQuestionAndAnswer();
+
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Answer'), findsOneWidget);
+    expect(find.byKey(const Key('chat-reply-preview-41')), findsOneWidget);
+    expect(find.byKey(const Key('chat-open-thread-40')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('the thread layout takes replies out of the room', (
+    tester,
+  ) async {
+    await insertQuestionAndAnswer();
+
+    await tester.pumpWidget(
+      app(home: roomScreen(), overrides: [threadReplyLayout]),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Answer'), findsNothing);
+    expect(find.byKey(const Key('chat-open-thread-40')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets(
     'renders rich grouped timeline and opens an isolated thread pane',
     (tester) async {
@@ -127,6 +186,7 @@ void _registerChatRoomPaneRenderingTests() {
         app(
           home: roomScreen(),
           overrides: [
+            threadReplyLayout,
             mediaOverride,
             chatMediaRepositoryProvider.overrideWithValue(viewerRepository),
           ],
@@ -919,6 +979,7 @@ final class _RecordingAttachmentOpenAction implements ChatAttachmentOpenAction {
     required Uri uri,
     required String fileName,
     required String expectedContentType,
+    ChatDownloadProgress? onProgress,
   }) async {
     uris.add(uri);
     contentTypes.add(expectedContentType);

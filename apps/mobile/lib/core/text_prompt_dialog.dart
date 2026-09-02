@@ -114,8 +114,9 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
           decoration: InputDecoration(labelText: widget.fieldLabel),
           validator: emptyErrorText == null
               ? null
-              : (value) =>
-                    value == null || value.trim().isEmpty ? emptyErrorText : null,
+              : (value) => value == null || value.trim().isEmpty
+                    ? emptyErrorText
+                    : null,
           onFieldSubmitted: (_) => _confirm(),
         ),
       ),

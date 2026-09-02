@@ -125,9 +125,9 @@ void main() {
             blocksJson: '[["100","${100 + messages - 1}"]]',
           ),
         );
-    return (database.select(database.cachedConversations)
-          ..where((row) => row.token.equals(token)))
-        .getSingle();
+    return (database.select(
+      database.cachedConversations,
+    )..where((row) => row.token.equals(token))).getSingle();
   }
 
   Widget app(Widget home) => ProviderScope(
@@ -147,16 +147,13 @@ void main() {
     child: localizedTestApp(home: home),
   );
 
-  ChatRoomProviderKey keyFor(CachedConversation conversation) => (
-    accountId: account.id,
-    roomToken: conversation.token,
-    threadId: null,
-  );
+  ChatRoomProviderKey keyFor(CachedConversation conversation) =>
+      (accountId: account.id, roomToken: conversation.token, threadId: null);
 
   bool aliveIn(ProviderContainer container, ProviderBase<Object?> provider) =>
-      container
-          .getAllProviderElements()
-          .any((element) => element.origin == provider);
+      container.getAllProviderElements().any(
+        (element) => element.origin == provider,
+      );
 
   testWidgets('a closed room releases its providers and its message list', (
     tester,
@@ -172,7 +169,10 @@ void main() {
       tester.element(find.byType(ChatRoomPane)),
     );
     final key = keyFor(conversation);
-    expect(container.read(chatMessagesProvider(key)).valueOrNull, hasLength(messages));
+    expect(
+      container.read(chatMessagesProvider(key)).valueOrNull,
+      hasLength(messages),
+    );
 
     // Close the room the way the app does: the pane leaves the tree while the
     // root ProviderScope stays up.
@@ -238,7 +238,9 @@ void main() {
     const messages = 2000;
     final conversations = <CachedConversation>[];
     for (var index = 0; index < rooms; index++) {
-      conversations.add(await seedRoom('room${index.toString().padLeft(4, '0')}', messages));
+      conversations.add(
+        await seedRoom('room${index.toString().padLeft(4, '0')}', messages),
+      );
     }
     final seeded = ProcessInfo.currentRss;
 

@@ -23,6 +23,7 @@ import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
 import 'package:nextcloudtalk/features/chat/message_translation_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
+import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -102,6 +103,17 @@ void main() {
   _registerChatRoomPaneInteractionTests();
   _registerChatRoomPanePollMenuTests();
   _registerChatRoomPaneThreadContextTests();
+}
+
+/// The thread layout, for tests that walk into a thread pane from a derived
+/// reply count. The default keeps replies inline, where that count is gone.
+final threadReplyLayout = replyLayoutProvider.overrideWith(
+  _ThreadReplyLayout.new,
+);
+
+base class _ThreadReplyLayout extends ReplyLayoutController {
+  @override
+  ReplyLayout build() => ReplyLayout.thread;
 }
 
 Widget app({

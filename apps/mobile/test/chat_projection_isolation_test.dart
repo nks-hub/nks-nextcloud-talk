@@ -142,7 +142,6 @@ void main() {
     );
   });
 
-
   test("someone else's reaction reaches the message it is about", () async {
     // The notice is stored like any other message, but nothing used to touch
     // the row it is about, so the pill only ever showed reactions this device
@@ -180,7 +179,6 @@ void main() {
     expect(wire['reactionsSelf'], <String>['🔥']);
   });
 
-
   test('a silent send stays silent across a process restart', () async {
     // The whole point of the durable column: the flag lives with the
     // operation, not in the composer, so an outbox replayed after process
@@ -204,51 +202,56 @@ void main() {
     // the flag has to come back off disk, not out of the object above.
     final restored = ChatRepository(database);
     final replayed = await restored
-        .watchTextSendOperations(
-          accountId: 'account-a',
-          roomToken: 'rooma123',
-        )
+        .watchTextSendOperations(accountId: 'account-a', roomToken: 'rooma123')
         .first;
     expect(replayed.single.silent, isTrue);
   });
 
+  test(
+    'the outbox never leaks between two servers sharing a room token',
+    () async {
+      // Two accounts on two servers can hold the same room token; Talk tokens
+      // are unique per server, not globally. A queued message that showed up
+      // under the other account would be sent to the wrong server entirely.
+      final onA = await repository.admitTextSend(
+        accountId: 'account-a',
+        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        authority: _silentAuthority(),
+        operationId: ChatOperationId.parse(
+          '33333333-3333-4333-8333-333333333333',
+        ),
+        referenceId: ChatReferenceId.parse(
+          '44444444-4444-4444-8444-444444444444',
+        ),
+        message: 'Only account A may see this',
+      );
 
-  test('the outbox never leaks between two servers sharing a room token', () async {
-    // Two accounts on two servers can hold the same room token; Talk tokens
-    // are unique per server, not globally. A queued message that showed up
-    // under the other account would be sent to the wrong server entirely.
-    final onA = await repository.admitTextSend(
-      accountId: 'account-a',
-      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
-      authority: _silentAuthority(),
-      operationId: ChatOperationId.parse(
-        '33333333-3333-4333-8333-333333333333',
-      ),
-      referenceId: ChatReferenceId.parse(
-        '44444444-4444-4444-8444-444444444444',
-      ),
-      message: 'Only account A may see this',
-    );
+      final seenByA = await repository
+          .watchTextSendOperations(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+          )
+          .first;
+      expect(seenByA.single.operationId, onA.operationId.value);
 
-    final seenByA = await repository
-        .watchTextSendOperations(accountId: 'account-a', roomToken: 'rooma123')
-        .first;
-    expect(seenByA.single.operationId, onA.operationId.value);
+      final seenByB = await repository
+          .watchTextSendOperations(
+            accountId: 'account-b',
+            roomToken: 'rooma123',
+          )
+          .first;
+      expect(
+        seenByB,
+        isEmpty,
+        reason: 'the same token on another server is another conversation',
+      );
 
-    final seenByB = await repository
-        .watchTextSendOperations(accountId: 'account-b', roomToken: 'rooma123')
-        .first;
-    expect(
-      seenByB,
-      isEmpty,
-      reason: 'the same token on another server is another conversation',
-    );
-
-    // And the row itself carries the account it was admitted for, so a query
-    // that forgets to scope cannot silently pick it up either.
-    final rows = await database.select(database.textSendOperations).get();
-    expect(rows.single.accountId, 'account-a');
-  });
+      // And the row itself carries the account it was admitted for, so a query
+      // that forgets to scope cannot silently pick it up either.
+      final rows = await database.select(database.textSendOperations).get();
+      expect(rows.single.accountId, 'account-a');
+    },
+  );
 
   test('root merge projects only into the matching account and room', () async {
     await _insertScope(
@@ -464,7 +467,6 @@ ChatGetResponse _threadReplyResponse() {
     }),
   );
 }
-
 
 ChatGetResponse _reactionCountsResponse() {
   final request = ChatFetchRequest(

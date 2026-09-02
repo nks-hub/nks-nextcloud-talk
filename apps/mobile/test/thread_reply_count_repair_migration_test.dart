@@ -14,77 +14,98 @@ import 'package:nextcloudtalk/data/app_database.dart';
 /// value as a floor, so the fix in the projection cannot heal a bubble that
 /// already claims "1 reply".
 void main() {
-  test('repairs a count inflated by a reaction, leaving the real reply', () async {
-    await _withDatabaseAt13((database) async {
-      await _seedThread(
-        database,
-        threadId: 500,
-        storedReplyCount: 2,
-        replies: const [
-          (messageId: 501, systemMessage: ''),
-          (messageId: 502, systemMessage: 'reaction'),
-        ],
+  test(
+    'repairs a count inflated by a reaction, leaving the real reply',
+    () async {
+      await _withDatabaseAt13(
+        (database) async {
+          await _seedThread(
+            database,
+            threadId: 500,
+            storedReplyCount: 2,
+            replies: const [
+              (messageId: 501, systemMessage: ''),
+              (messageId: 502, systemMessage: 'reaction'),
+            ],
+          );
+        },
+        (database) async {
+          expect(database.schemaVersion, 18);
+          expect(await _storedReplyCount(database, 500), 1);
+        },
       );
-    }, (database) async {
-      expect(database.schemaVersion, 18);
-      expect(await _storedReplyCount(database, 500), 1);
-    });
-  });
+    },
+  );
 
   test('repairs a count left behind by a deleted message', () async {
-    await _withDatabaseAt13((database) async {
-      await _seedThread(
-        database,
-        threadId: 600,
-        storedReplyCount: 1,
-        replies: const [(messageId: 601, systemMessage: 'message_deleted')],
-      );
-    }, (database) async {
-      expect(await _storedReplyCount(database, 600), 0);
-    });
+    await _withDatabaseAt13(
+      (database) async {
+        await _seedThread(
+          database,
+          threadId: 600,
+          storedReplyCount: 1,
+          replies: const [(messageId: 601, systemMessage: 'message_deleted')],
+        );
+      },
+      (database) async {
+        expect(await _storedReplyCount(database, 600), 0);
+      },
+    );
   });
 
   test('keeps a server count the cache cannot account for', () async {
-    await _withDatabaseAt13((database) async {
-      await _seedThread(
-        database,
-        threadId: 700,
-        storedReplyCount: 25,
-        replies: const [
-          (messageId: 701, systemMessage: ''),
-          (messageId: 702, systemMessage: 'reaction'),
-        ],
-      );
-    }, (database) async {
-      expect(await _storedReplyCount(database, 700), 25);
-    });
+    await _withDatabaseAt13(
+      (database) async {
+        await _seedThread(
+          database,
+          threadId: 700,
+          storedReplyCount: 25,
+          replies: const [
+            (messageId: 701, systemMessage: ''),
+            (messageId: 702, systemMessage: 'reaction'),
+          ],
+        );
+      },
+      (database) async {
+        expect(await _storedReplyCount(database, 700), 25);
+      },
+    );
   });
 
   test('leaves an already correct count alone', () async {
-    await _withDatabaseAt13((database) async {
-      await _seedThread(
-        database,
-        threadId: 800,
-        storedReplyCount: 1,
-        replies: const [(messageId: 801, systemMessage: '')],
-      );
-    }, (database) async {
-      expect(await _storedReplyCount(database, 800), 1);
-    });
+    await _withDatabaseAt13(
+      (database) async {
+        await _seedThread(
+          database,
+          threadId: 800,
+          storedReplyCount: 1,
+          replies: const [(messageId: 801, systemMessage: '')],
+        );
+      },
+      (database) async {
+        expect(await _storedReplyCount(database, 800), 1);
+      },
+    );
   });
 
   test('does not touch a root without a stored count', () async {
-    await _withDatabaseAt13((database) async {
-      await _seedThread(
-        database,
-        threadId: 900,
-        storedReplyCount: null,
-        replies: const [(messageId: 901, systemMessage: 'reaction')],
-      );
-    }, (database) async {
-      final raw = await _rootRawJson(database, 900);
-      expect(jsonDecode(raw) as Map<String, Object?>, isNot(contains('threadReplies')));
-    });
+    await _withDatabaseAt13(
+      (database) async {
+        await _seedThread(
+          database,
+          threadId: 900,
+          storedReplyCount: null,
+          replies: const [(messageId: 901, systemMessage: 'reaction')],
+        );
+      },
+      (database) async {
+        final raw = await _rootRawJson(database, 900);
+        expect(
+          jsonDecode(raw) as Map<String, Object?>,
+          isNot(contains('threadReplies')),
+        );
+      },
+    );
   });
 }
 

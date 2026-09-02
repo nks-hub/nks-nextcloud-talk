@@ -1087,6 +1087,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'View your profile and manage your availability';
 
   @override
+  String get settingsRepliesSection => 'Replies';
+
+  @override
+  String get settingsReplyLayoutInline => 'In the conversation';
+
+  @override
+  String get settingsReplyLayoutInlineDescription =>
+      'A reply stays in the conversation under a quote of the message it answers.';
+
+  @override
+  String get settingsReplyLayoutThread => 'In a thread';
+
+  @override
+  String get settingsReplyLayoutThreadDescription =>
+      'Replies leave the conversation and open in a separate thread.';
+
+  @override
   String get settingsThemeSection => 'Appearance';
 
   @override

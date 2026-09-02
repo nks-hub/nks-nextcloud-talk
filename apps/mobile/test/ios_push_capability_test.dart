@@ -194,10 +194,7 @@ void main() {
       'NotificationServiceExtension${Platform.pathSeparator}'
       'NotificationService.swift',
     ).readAsStringSync();
-    expect(
-      service,
-      contains('PushNotificationRouteStore.production.remember'),
-    );
+    expect(service, contains('PushNotificationRouteStore.production.remember'));
     expect(service, isNot(contains('content.userInfo["accountId"]')));
     expect(service, isNot(contains('content.userInfo["roomToken"]')));
   });

@@ -24,171 +24,183 @@ void main() {
 
   tearDown(() => database.close());
 
+  test(
+    'a thread started by replying shows up even when the server omits it',
+    () async {
+      // Measured on the reference server: `threads/recent` lists only threads
+      // that were given a name. Three replies under root 77777 left it
+      // returning nothing while every message carried `threadId: 77777`, so the
+      // screen was empty for somebody who demonstrably had thread replies.
+      for (final row in <({int id, int thread, String text, String system})>[
+        (id: 500, thread: 500, text: 'Root of an unnamed thread', system: ''),
+        (id: 501, thread: 500, text: 'First reply', system: ''),
+        (id: 502, thread: 500, text: 'Second reply', system: ''),
+        (id: 503, thread: 500, text: '', system: 'reaction'),
+        // Every message on the reference server carries its own id as threadId,
+        // so a root nobody answered must not become an entry of its own.
+        (id: 600, thread: 600, text: 'A message nobody replied to', system: ''),
+      ]) {
+        await database
+            .into(database.cachedChatMessages)
+            .insert(
+              CachedChatMessagesCompanion.insert(
+                accountId: 'account-a',
+                roomToken: 'rooma123',
+                messageId: row.id,
+                actorType: 'users',
+                actorId: 'someone',
+                actorDisplayName: 'Someone',
+                timestamp: 1724300000 + row.id,
+                systemMessage: row.system,
+                messageType: 'comment',
+                referenceId: 'reference-${row.id}',
+                displayText: row.text,
+                deleted: false,
+                threadId: Value(row.thread),
+                rawJson: '{}',
+              ),
+            );
+      }
 
-  test('a thread started by replying shows up even when the server omits it', () async {
-    // Measured on the reference server: `threads/recent` lists only threads
-    // that were given a name. Three replies under root 77777 left it
-    // returning nothing while every message carried `threadId: 77777`, so the
-    // screen was empty for somebody who demonstrably had thread replies.
-    for (final row in <({int id, int thread, String text, String system})>[
-      (id: 500, thread: 500, text: 'Root of an unnamed thread', system: ''),
-      (id: 501, thread: 500, text: 'First reply', system: ''),
-      (id: 502, thread: 500, text: 'Second reply', system: ''),
-      (id: 503, thread: 500, text: '', system: 'reaction'),
-      // Every message on the reference server carries its own id as threadId,
-      // so a root nobody answered must not become an entry of its own.
-      (id: 600, thread: 600, text: 'A message nobody replied to', system: ''),
-    ]) {
-      await database
-          .into(database.cachedChatMessages)
-          .insert(
-            CachedChatMessagesCompanion.insert(
-              accountId: 'account-a',
-              roomToken: 'rooma123',
-              messageId: row.id,
-              actorType: 'users',
-              actorId: 'someone',
-              actorDisplayName: 'Someone',
-              timestamp: 1724300000 + row.id,
-              systemMessage: row.system,
-              messageType: 'comment',
-              referenceId: 'reference-${row.id}',
-              displayText: row.text,
-              deleted: false,
-              threadId: Value(row.thread),
-              rawJson: '{}',
-            ),
-          );
-    }
-
-    await threads.replaceRecent(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-      server: _serverFor('account-a'),
-      values: const <RichChatThread>[],
-    );
-
-    final recent = await threads
-        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
-        .first;
-    expect(
-      recent.map((thread) => thread.threadId),
-      <int>[500],
-      reason: 'a root nobody answered is not a thread',
-    );
-    expect(
-      recent.single.numReplies,
-      2,
-      reason: 'a reaction carries the thread but is not a reply',
-    );
-    expect(
-      recent.single.title,
-      'Root of an unnamed thread',
-      reason: 'the root message stands in for the name the server lacks',
-    );
-    expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
-  });
-
-  test('a derived title collapses whitespace and stays one short line', () async {
-    final root = 'Koren  s\n  vice radky ${'a' * 200}';
-    for (final row in <({int id, int thread, String text})>[
-      (id: 700, thread: 700, text: root),
-      (id: 701, thread: 700, text: 'Odpoved'),
-    ]) {
-      await database
-          .into(database.cachedChatMessages)
-          .insert(
-            CachedChatMessagesCompanion.insert(
-              accountId: 'account-a',
-              roomToken: 'rooma123',
-              messageId: row.id,
-              actorType: 'users',
-              actorId: 'someone',
-              actorDisplayName: 'Someone',
-              timestamp: 1724300000 + row.id,
-              systemMessage: '',
-              messageType: 'comment',
-              referenceId: 'reference-${row.id}',
-              displayText: row.text,
-              deleted: false,
-              threadId: Value(row.thread),
-              rawJson: '{}',
-            ),
-          );
-    }
-
-    await threads.replaceRecent(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-      server: _serverFor('account-a'),
-      values: const <RichChatThread>[],
-    );
-
-    final title = (await threads
-            .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
-            .first)
-        .singleWhere((thread) => thread.threadId == 700)
-        .title;
-    expect(title.contains('\n'), isFalse, reason: 'the row shows one line');
-    expect(title.startsWith('Koren s vice radky'), isTrue);
-    expect(
-      title.length,
-      lessThanOrEqualTo(121),
-      reason: 'capped at 120 plus the ellipsis',
-    );
-    expect(title.endsWith('…'), isTrue);
-  });
-
-  test('repeated recent refresh keeps an ordinary reply thread listed', () async {
-    await _insertThreadMessages(
-      database,
-      title: 'Ordinary thread',
-      named: false,
-    );
-
-    await threads.replaceRecent(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-      server: _serverFor('account-a'),
-      values: const <RichChatThread>[],
-    );
-    await threads.replaceRecent(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-      server: _serverFor('account-a'),
-      values: const <RichChatThread>[],
-    );
-
-    final recent = await threads
-        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
-        .first;
-    expect(recent.map((thread) => thread.threadId), <int>[100]);
-    expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
-  });
-
-  test('a named root omitted from recent is not degraded to ordinary', () async {
-    await _insertThreadMessages(database, title: 'Named thread');
-
-    await threads.replaceRecent(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-      server: _serverFor('account-a'),
-      values: const <RichChatThread>[],
-    );
-
-    final recent = await threads
-        .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
-        .first;
-    expect(recent, isEmpty);
-    expect(
-      await threads.get(
+      await threads.replaceRecent(
         accountId: 'account-a',
         roomToken: 'rooma123',
-        threadId: 100,
-      ),
-      equals(null),
-    );
-  });
+        server: _serverFor('account-a'),
+        values: const <RichChatThread>[],
+      );
+
+      final recent = await threads
+          .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+          .first;
+      expect(
+        recent.map((thread) => thread.threadId),
+        <int>[500],
+        reason: 'a root nobody answered is not a thread',
+      );
+      expect(
+        recent.single.numReplies,
+        2,
+        reason: 'a reaction carries the thread but is not a reply',
+      );
+      expect(
+        recent.single.title,
+        'Root of an unnamed thread',
+        reason: 'the root message stands in for the name the server lacks',
+      );
+      expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
+    },
+  );
+
+  test(
+    'a derived title collapses whitespace and stays one short line',
+    () async {
+      final root = 'Koren  s\n  vice radky ${'a' * 200}';
+      for (final row in <({int id, int thread, String text})>[
+        (id: 700, thread: 700, text: root),
+        (id: 701, thread: 700, text: 'Odpoved'),
+      ]) {
+        await database
+            .into(database.cachedChatMessages)
+            .insert(
+              CachedChatMessagesCompanion.insert(
+                accountId: 'account-a',
+                roomToken: 'rooma123',
+                messageId: row.id,
+                actorType: 'users',
+                actorId: 'someone',
+                actorDisplayName: 'Someone',
+                timestamp: 1724300000 + row.id,
+                systemMessage: '',
+                messageType: 'comment',
+                referenceId: 'reference-${row.id}',
+                displayText: row.text,
+                deleted: false,
+                threadId: Value(row.thread),
+                rawJson: '{}',
+              ),
+            );
+      }
+
+      await threads.replaceRecent(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        server: _serverFor('account-a'),
+        values: const <RichChatThread>[],
+      );
+
+      final title =
+          (await threads
+                  .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+                  .first)
+              .singleWhere((thread) => thread.threadId == 700)
+              .title;
+      expect(title.contains('\n'), isFalse, reason: 'the row shows one line');
+      expect(title.startsWith('Koren s vice radky'), isTrue);
+      expect(
+        title.length,
+        lessThanOrEqualTo(121),
+        reason: 'capped at 120 plus the ellipsis',
+      );
+      expect(title.endsWith('…'), isTrue);
+    },
+  );
+
+  test(
+    'repeated recent refresh keeps an ordinary reply thread listed',
+    () async {
+      await _insertThreadMessages(
+        database,
+        title: 'Ordinary thread',
+        named: false,
+      );
+
+      await threads.replaceRecent(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        server: _serverFor('account-a'),
+        values: const <RichChatThread>[],
+      );
+      await threads.replaceRecent(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        server: _serverFor('account-a'),
+        values: const <RichChatThread>[],
+      );
+
+      final recent = await threads
+          .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+          .first;
+      expect(recent.map((thread) => thread.threadId), <int>[100]);
+      expect(ThreadRepository.isLocallyDerived(recent.single), isTrue);
+    },
+  );
+
+  test(
+    'a named root omitted from recent is not degraded to ordinary',
+    () async {
+      await _insertThreadMessages(database, title: 'Named thread');
+
+      await threads.replaceRecent(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        server: _serverFor('account-a'),
+        values: const <RichChatThread>[],
+      );
+
+      final recent = await threads
+          .watchRecent(accountId: 'account-a', roomToken: 'rooma123')
+          .first;
+      expect(recent, isEmpty);
+      expect(
+        await threads.get(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          threadId: 100,
+        ),
+        equals(null),
+      );
+    },
+  );
 
   test(
     'recent replacement is room scoped and preserves subscriptions',

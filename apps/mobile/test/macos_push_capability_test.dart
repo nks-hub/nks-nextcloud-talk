@@ -103,13 +103,17 @@ void main() {
       final contents = read('$runner$separator$name');
       expect(
         contents,
-        contains('<key>com.apple.security.files.user-selected.read-write</key>'),
+        contains(
+          '<key>com.apple.security.files.user-selected.read-write</key>',
+        ),
         reason: '$name cannot complete Save As with a read-only grant',
       );
       expect(
         contents,
         isNot(
-          contains('<key>com.apple.security.files.user-selected.read-only</key>'),
+          contains(
+            '<key>com.apple.security.files.user-selected.read-only</key>',
+          ),
         ),
       );
     }

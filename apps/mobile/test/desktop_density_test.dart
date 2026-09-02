@@ -133,11 +133,14 @@ void main() {
       TargetPlatform.macOS,
       TargetPlatform.linux,
     ]) {
-      expect(
-        await metrics(platform),
-        [56, 20, 52, 52, 44, 300],
-        reason: '$platform',
-      );
+      expect(await metrics(platform), [
+        56,
+        20,
+        52,
+        52,
+        44,
+        300,
+      ], reason: '$platform');
     }
   });
 

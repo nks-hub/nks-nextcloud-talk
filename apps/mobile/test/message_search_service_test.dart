@@ -98,22 +98,25 @@ void main() {
     expect(results.single.roomToken.value, 'abcd1234');
   });
 
-  test('a room token asks the current-room provider and scopes with from', () async {
-    // Measured on Talk 24.0.2: the current-room provider returns only that
-    // room, while the global one EXCLUDES it — pairing them the other way
-    // round silently hides the room the user is reading.
-    final service = buildService((request) async {
-      expect(request.url.path, endsWith('/talk-message-current/search'));
-      expect(request.url.queryParameters['from'], '/call/abcd1234');
-      return http.Response(jsonEncode(_successBody(const [])), 200);
-    });
+  test(
+    'a room token asks the current-room provider and scopes with from',
+    () async {
+      // Measured on Talk 24.0.2: the current-room provider returns only that
+      // room, while the global one EXCLUDES it — pairing them the other way
+      // round silently hides the room the user is reading.
+      final service = buildService((request) async {
+        expect(request.url.path, endsWith('/talk-message-current/search'));
+        expect(request.url.queryParameters['from'], '/call/abcd1234');
+        return http.Response(jsonEncode(_successBody(const [])), 200);
+      });
 
-    await service.search(
-      accountId: 'account-a',
-      term: 'hello',
-      roomToken: 'abcd1234',
-    );
-  });
+      await service.search(
+        accountId: 'account-a',
+        term: 'hello',
+        roomToken: 'abcd1234',
+      );
+    },
+  );
 
   test('a global search never sends a room route', () async {
     final service = buildService((request) async {
@@ -130,7 +133,10 @@ void main() {
       (request) async => http.Response(jsonEncode(_successBody(const [])), 200),
     );
 
-    final results = await service.search(accountId: 'account-a', term: 'nothing');
+    final results = await service.search(
+      accountId: 'account-a',
+      term: 'nothing',
+    );
 
     expect(results, isEmpty);
   });

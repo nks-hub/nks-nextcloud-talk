@@ -111,9 +111,7 @@ enum StatusExpiry {
     StatusExpiry.halfHour => _seconds(now.add(const Duration(minutes: 30))),
     StatusExpiry.hour => _seconds(now.add(const Duration(hours: 1))),
     StatusExpiry.fourHours => _seconds(now.add(const Duration(hours: 4))),
-    StatusExpiry.today => _seconds(
-      DateTime(now.year, now.month, now.day + 1),
-    ),
+    StatusExpiry.today => _seconds(DateTime(now.year, now.month, now.day + 1)),
     StatusExpiry.week => _seconds(
       DateTime(now.year, now.month, now.day + (8 - now.weekday)),
     ),

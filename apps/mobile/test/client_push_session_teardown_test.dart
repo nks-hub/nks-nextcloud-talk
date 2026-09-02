@@ -45,36 +45,39 @@ final class _FixedConnector implements ClientPushConnector {
 }
 
 void main() {
-  test('a socket that fails to close does not reach the zone handler', () async {
-    // The teardown that runs when the frame stream ends sits behind
-    // `unawaited`, so its failure has nobody to reach except the zone, where
-    // it is filed as a crash. Losing a socket is not a crash: it is the
-    // ordinary end of a connection, and the close only fails because the
-    // handle is already gone.
-    final unhandled = <Object>[];
-    final socket = _EndingSocket();
-    await runZonedGuarded(() async {
-      final session = await ClientPushSession.open(
-        connector: _FixedConnector(socket),
-        endpoints: ClientPushEndpoints(
-          websocket: Uri.parse('wss://cloud.example.invalid/notify'),
-          preAuth: Uri.parse('https://cloud.example.invalid/preauth'),
-          carriesNotifications: true,
-        ),
-        preAuthToken: 'token',
-      );
-      final drained = session.events.drain<void>();
-      await socket.drop();
-      await drained;
+  test(
+    'a socket that fails to close does not reach the zone handler',
+    () async {
+      // The teardown that runs when the frame stream ends sits behind
+      // `unawaited`, so its failure has nobody to reach except the zone, where
+      // it is filed as a crash. Losing a socket is not a crash: it is the
+      // ordinary end of a connection, and the close only fails because the
+      // handle is already gone.
+      final unhandled = <Object>[];
+      final socket = _EndingSocket();
+      await runZonedGuarded(() async {
+        final session = await ClientPushSession.open(
+          connector: _FixedConnector(socket),
+          endpoints: ClientPushEndpoints(
+            websocket: Uri.parse('wss://cloud.example.invalid/notify'),
+            preAuth: Uri.parse('https://cloud.example.invalid/preauth'),
+            carriesNotifications: true,
+          ),
+          preAuthToken: 'token',
+        );
+        final drained = session.events.drain<void>();
+        await socket.drop();
+        await drained;
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      }, (error, stack) => unhandled.add(error));
       await Future<void>.delayed(const Duration(milliseconds: 40));
-    }, (error, stack) => unhandled.add(error));
-    await Future<void>.delayed(const Duration(milliseconds: 40));
 
-    expect(
-      socket.closeAttempted,
-      isTrue,
-      reason: 'the teardown really tried to close the socket',
-    );
-    expect(unhandled, isEmpty);
-  });
+      expect(
+        socket.closeAttempted,
+        isTrue,
+        reason: 'the teardown really tried to close the socket',
+      );
+      expect(unhandled, isEmpty);
+    },
+  );
 }

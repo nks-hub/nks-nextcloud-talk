@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
@@ -70,6 +71,31 @@ void main() {
     expect(thread20.map((message) => message.messageId), [20, 21]);
     expect(thread30.map((message) => message.messageId), [30, 31]);
   });
+
+  test(
+    'the inline reply layout keeps every reply in the room stream',
+    () async {
+      final inline = await repository
+          .watchMessages(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            includeThreadReplies: true,
+          )
+          .first;
+      final thread20 = await repository
+          .watchMessages(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+            threadId: 20,
+            includeThreadReplies: true,
+          )
+          .first;
+
+      expect(inline.map((message) => message.messageId), [10, 20, 21, 30, 31]);
+      // A thread pane is still scoped to its own thread.
+      expect(thread20.map((message) => message.messageId), [20, 21]);
+    },
+  );
 
   test(
     'runtime reconstruction excludes replies inside root ChatBlocks',
@@ -699,7 +725,15 @@ void main() {
       textSendOperationsProvider(thread30Key).future,
     );
 
-    expect(rootMessages.map((message) => message.messageId), [10, 20, 30]);
+    // The default reply layout keeps replies in the room, so the root stream
+    // carries them; a thread key is still scoped to its own thread.
+    expect(rootMessages.map((message) => message.messageId), [
+      10,
+      20,
+      21,
+      30,
+      31,
+    ]);
     expect(thread20Messages.map((message) => message.messageId), [20, 21]);
     expect(thread30Messages.map((message) => message.messageId), [30, 31]);
     expect(rootOperations.map((operation) => operation.operationId), [
@@ -709,6 +743,15 @@ void main() {
       '00000000-0000-4000-8000-000000000002',
     ]);
     expect(thread30Operations, isEmpty);
+
+    // Switching to the thread layout takes the replies back out of the room.
+    await container
+        .read(replyLayoutProvider.notifier)
+        .setReplyLayout(ReplyLayout.thread);
+    final threadedRoot = await container.read(
+      chatMessagesProvider(rootKey).future,
+    );
+    expect(threadedRoot.map((message) => message.messageId), [10, 20, 30]);
   });
 }
 

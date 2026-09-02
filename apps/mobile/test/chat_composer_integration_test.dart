@@ -468,10 +468,7 @@ Future<void> _pumpTransition(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
-void _addHarnessTearDown(
-  WidgetTester tester,
-  _ComposerHarness harness,
-) {
+void _addHarnessTearDown(WidgetTester tester, _ComposerHarness harness) {
   addTearDown(() async {
     await tester.runAsync(harness.close);
   });

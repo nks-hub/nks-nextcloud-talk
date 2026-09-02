@@ -47,6 +47,5 @@ final class ConversationCallState {
   }
 
   @override
-  String toString() =>
-      'ConversationCallState(started: ${startedAt != null})';
+  String toString() => 'ConversationCallState(started: ${startedAt != null})';
 }

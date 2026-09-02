@@ -116,14 +116,17 @@ void main() {
       );
     });
 
-    test('bare zero permissions mean the server defaults, which include chat', () {
-      expect(
-        ChatPostingAccess.fromCachedConversation(
-          _conversation(room: const {'permissions': 0, 'lobbyState': 0}),
-        ).canPost,
-        isTrue,
-      );
-    });
+    test(
+      'bare zero permissions mean the server defaults, which include chat',
+      () {
+        expect(
+          ChatPostingAccess.fromCachedConversation(
+            _conversation(room: const {'permissions': 0, 'lobbyState': 0}),
+          ).canPost,
+          isTrue,
+        );
+      },
+    );
 
     test('unparseable payload', () {
       expect(

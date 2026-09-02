@@ -41,14 +41,22 @@ final class ChatRepository {
 
   final AppDatabase _database;
 
+  /// Messages of a room, or of one thread when [threadId] is given.
+  ///
+  /// The server files every reply under a thread. [includeThreadReplies]
+  /// keeps those replies in the room timeline as well, which is the classic
+  /// quoted-reply layout; without it the room shows only thread roots and
+  /// plain messages.
   Stream<List<CachedChatMessage>> watchMessages({
     required String accountId,
     required String roomToken,
     int? threadId,
+    bool includeThreadReplies = false,
   }) => _watchMessagesQuery(
     accountId: accountId,
     roomToken: roomToken,
     threadId: threadId,
+    includeThreadReplies: includeThreadReplies,
   );
 
   Future<bool?> cachedRootIsNamedThread({

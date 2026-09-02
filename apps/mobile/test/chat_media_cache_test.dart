@@ -5,10 +5,8 @@ import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 
 void main() {
-  ChatMediaImage image(int bytes) => ChatMediaImage(
-    body: Uint8List(bytes),
-    contentType: 'image/png',
-  );
+  ChatMediaImage image(int bytes) =>
+      ChatMediaImage(body: Uint8List(bytes), contentType: 'image/png');
 
   test('a stored preview is served again without a refetch', () {
     final cache = ChatMediaCache();
@@ -25,7 +23,9 @@ void main() {
 
   test('accounts never read each other cached bytes', () {
     final cache = ChatMediaCache();
-    final uri = Uri.parse('https://cloud.example.invalid/index.php/core/preview');
+    final uri = Uri.parse(
+      'https://cloud.example.invalid/index.php/core/preview',
+    );
     cache.write(
       ChatMediaCache.keyOf(accountId: 'account-a', uri: uri),
       image(10),
@@ -66,7 +66,9 @@ void main() {
 
   test('removing an account drops only its bytes', () {
     final cache = ChatMediaCache();
-    final uri = Uri.parse('https://cloud.example.invalid/index.php/core/preview');
+    final uri = Uri.parse(
+      'https://cloud.example.invalid/index.php/core/preview',
+    );
     cache
       ..write(ChatMediaCache.keyOf(accountId: 'account-a', uri: uri), image(10))
       ..write(ChatMediaCache.keyOf(accountId: 'account-b', uri: uri), image(20))

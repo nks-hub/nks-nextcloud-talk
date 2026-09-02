@@ -62,6 +62,7 @@ final class _ChatTimeline extends StatelessWidget {
     required this.account,
     required this.conversation,
     required this.threadId,
+    required this.inlineReplies,
     required this.messages,
     required this.blocks,
     required this.pending,
@@ -88,6 +89,10 @@ final class _ChatTimeline extends StatelessWidget {
   final StoredAccount account;
   final CachedConversation conversation;
   final int? threadId;
+
+  /// Replies are shown in this timeline under their quoted parent, so a
+  /// derived reply count would only point at what is already on screen.
+  final bool inlineReplies;
   final List<CachedChatMessage> messages;
 
   /// The scope's confirmed message-id ranges, `null` when the scope itself
@@ -138,83 +143,82 @@ final class _ChatTimeline extends StatelessWidget {
     }
     final itemCount = messages.length + pending.length + (hasOlder ? 1 : 0);
     Widget buildAt(BuildContext context, int chronologicalIndex) {
-        if (hasOlder && chronologicalIndex == 0) {
-          return Center(
-            key: const Key('chat-load-older'),
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: TextButton.icon(
-                onPressed: loadingOlder ? null : onLoadOlder,
-                icon: loadingOlder
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.history_rounded),
-                label: Text(
-                  loadingOlder
-                      ? AppLocalizations.of(context).loadingOlderMessages
-                      : AppLocalizations.of(context).loadOlderMessages,
-                ),
+      if (hasOlder && chronologicalIndex == 0) {
+        return Center(
+          key: const Key('chat-load-older'),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextButton.icon(
+              onPressed: loadingOlder ? null : onLoadOlder,
+              icon: loadingOlder
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.history_rounded),
+              label: Text(
+                loadingOlder
+                    ? AppLocalizations.of(context).loadingOlderMessages
+                    : AppLocalizations.of(context).loadOlderMessages,
               ),
             ),
-          );
-        }
-        final contentIndex = chronologicalIndex - (hasOlder ? 1 : 0);
-        if (contentIndex < messages.length) {
-          final message = messages[contentIndex];
-          final parsed = _parseCachedMessage(message);
-          final previous = contentIndex == 0
-              ? null
-              : messages[contentIndex - 1];
-          final next = contentIndex + 1 >= messages.length
-              ? null
-              : messages[contentIndex + 1];
-          final gapBeforeThis = _gapBeforeContentIndex(contentIndex);
-          final groupedWithPrevious =
-              !gapBeforeThis &&
-              previous != null &&
-              _messagesShareGroup(previous, message);
-          final groupedWithNext =
-              next != null && _messagesShareGroup(message, next);
-          final startsDay =
-              gapBeforeThis ||
-              previous == null ||
-              !_sameLocalDay(previous.timestamp, message.timestamp);
-          return KeyedSubtree(
-            key: ValueKey(
-              'chat-message-${account.id}-${conversation.token}-${message.messageId}',
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (gapBeforeThis)
-                  const _ChatHistoryGapNotice(key: Key('chat-history-gap')),
-                if (startsDay) _DaySeparator(timestamp: message.timestamp),
-                _MessageBubble(
-                  key: message.messageId == jumpTargetId ? jumpTargetKey : null,
-                  account: account,
-                  message: message,
-                  parsed: parsed,
-                  highlighted: message.messageId == highlightedMessageId,
-                  onJumpToMessage: onJumpToMessage,
-                  showAuthor: !groupedWithPrevious,
-                  showAvatar: !groupedWithNext,
-                  groupedWithPrevious: groupedWithPrevious,
-                  groupEnd: !groupedWithNext,
-                  showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
-                  onOpenThread: threadId == null ? onOpenThread : null,
-                  onMessageActions: onMessageActions,
-                  onReplySwipe: onReplySwipe,
-                  onReactionTap: onReactionTap,
-                  deliveryState:
-                      deliveryStates[message.messageId] ??
-                      _serverDeliveryState(message.messageId, lastCommonRead),
-                ),
-              ],
-            ),
-          );
-        }
+          ),
+        );
+      }
+      final contentIndex = chronologicalIndex - (hasOlder ? 1 : 0);
+      if (contentIndex < messages.length) {
+        final message = messages[contentIndex];
+        final parsed = _parseCachedMessage(message);
+        final previous = contentIndex == 0 ? null : messages[contentIndex - 1];
+        final next = contentIndex + 1 >= messages.length
+            ? null
+            : messages[contentIndex + 1];
+        final gapBeforeThis = _gapBeforeContentIndex(contentIndex);
+        final groupedWithPrevious =
+            !gapBeforeThis &&
+            previous != null &&
+            _messagesShareGroup(previous, message);
+        final groupedWithNext =
+            next != null && _messagesShareGroup(message, next);
+        final startsDay =
+            gapBeforeThis ||
+            previous == null ||
+            !_sameLocalDay(previous.timestamp, message.timestamp);
+        return KeyedSubtree(
+          key: ValueKey(
+            'chat-message-${account.id}-${conversation.token}-${message.messageId}',
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (gapBeforeThis)
+                const _ChatHistoryGapNotice(key: Key('chat-history-gap')),
+              if (startsDay) _DaySeparator(timestamp: message.timestamp),
+              _MessageBubble(
+                key: message.messageId == jumpTargetId ? jumpTargetKey : null,
+                account: account,
+                message: message,
+                parsed: parsed,
+                highlighted: message.messageId == highlightedMessageId,
+                onJumpToMessage: onJumpToMessage,
+                showAuthor: !groupedWithPrevious,
+                showAvatar: !groupedWithNext,
+                groupedWithPrevious: groupedWithPrevious,
+                groupEnd: !groupedWithNext,
+                showReplyPreview: _shouldShowReplyPreview(parsed, threadId),
+                inlineReplies: inlineReplies,
+                onOpenThread: threadId == null ? onOpenThread : null,
+                onMessageActions: onMessageActions,
+                onReplySwipe: onReplySwipe,
+                onReactionTap: onReactionTap,
+                deliveryState:
+                    deliveryStates[message.messageId] ??
+                    _serverDeliveryState(message.messageId, lastCommonRead),
+              ),
+            ],
+          ),
+        );
+      }
       final operation = pending[contentIndex - messages.length];
       return _PendingMessageBubble(
         key: ValueKey('chat-pending-${operation.operationId}'),
@@ -328,6 +332,7 @@ final class _MessageBubble extends StatelessWidget {
     required this.groupedWithPrevious,
     required this.groupEnd,
     required this.showReplyPreview,
+    required this.inlineReplies,
     required this.onOpenThread,
     required this.onMessageActions,
     required this.onReplySwipe,
@@ -348,6 +353,7 @@ final class _MessageBubble extends StatelessWidget {
   final bool groupedWithPrevious;
   final bool groupEnd;
   final bool showReplyPreview;
+  final bool inlineReplies;
   final ValueChanged<CachedChatMessage>? onOpenThread;
   final void Function(CachedChatMessage message, ChatMessage? parsed)
   onMessageActions;
@@ -378,7 +384,8 @@ final class _MessageBubble extends StatelessWidget {
     );
     final threadReplies = parsed?.threadReplies ?? 0;
     final canOpenThread =
-        onOpenThread != null && (parsed?.isThread == true || threadReplies > 0);
+        onOpenThread != null &&
+        (parsed?.isThread == true || (!inlineReplies && threadReplies > 0));
     if (isSystem) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),

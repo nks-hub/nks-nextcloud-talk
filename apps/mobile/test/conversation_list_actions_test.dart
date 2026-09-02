@@ -244,10 +244,7 @@ void main() {
     // Holding a mouse button down is the wrong gesture on a desktop, so the
     // sheet has to be reachable with the secondary button.
     final tile = find.byKey(const Key('conversation-tile-roomread'));
-    await tester.tapAt(
-      tester.getCenter(tile),
-      buttons: kSecondaryButton,
-    );
+    await tester.tapAt(tester.getCenter(tile), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
 
     expect(

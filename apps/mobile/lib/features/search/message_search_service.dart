@@ -114,14 +114,11 @@ final class HttpMessageSearchService implements MessageSearchService {
           MessageSearchError.reauthenticationRequired,
         ),
       MessageSearchClassification.providerNotFound =>
-        throw const MessageSearchException(
-          MessageSearchError.providerNotFound,
-        ),
+        throw const MessageSearchException(MessageSearchError.providerNotFound),
       MessageSearchClassification.transientError =>
         throw const MessageSearchException(MessageSearchError.transientError),
-      MessageSearchClassification.ocsError => throw const MessageSearchException(
-        MessageSearchError.ocsFailure,
-      ),
+      MessageSearchClassification.ocsError =>
+        throw const MessageSearchException(MessageSearchError.ocsFailure),
     };
   }
 

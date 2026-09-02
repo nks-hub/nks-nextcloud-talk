@@ -35,22 +35,20 @@ void main() {
       '${repository.path}${separator}deploy${separator}reference-server'
       '${separator}apple-app-site-association',
     );
-    final document = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+    final document =
+        jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
     final applinks = document['applinks']! as Map<String, Object?>;
     final details = applinks['details']! as List<Object?>;
 
     expect(details, hasLength(1));
     final detail = details.single! as Map<String, Object?>;
-    expect(
-      detail['appIDs'],
-      <String>['TEAMID0000.com.nkshub.nextcloudtalk'],
-    );
+    expect(detail['appIDs'], <String>['TEAMID0000.com.nkshub.nextcloudtalk']);
     final components = (detail['components']! as List<Object?>)
         .cast<Map<String, Object?>>();
-    expect(
-      components.map((component) => component['/']),
-      <String>['/call/*', '/index.php/call/*'],
-    );
+    expect(components.map((component) => component['/']), <String>[
+      '/call/*',
+      '/index.php/call/*',
+    ]);
     expect(
       components.any((component) => component['exclude'] == true),
       isFalse,

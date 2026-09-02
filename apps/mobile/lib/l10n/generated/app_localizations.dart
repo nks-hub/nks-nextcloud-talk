@@ -2030,6 +2030,36 @@ abstract class AppLocalizations {
   /// **'View your profile and manage your availability'**
   String get settingsOpenProfileSubtitle;
 
+  /// No description provided for @settingsRepliesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Replies'**
+  String get settingsRepliesSection;
+
+  /// No description provided for @settingsReplyLayoutInline.
+  ///
+  /// In en, this message translates to:
+  /// **'In the conversation'**
+  String get settingsReplyLayoutInline;
+
+  /// No description provided for @settingsReplyLayoutInlineDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A reply stays in the conversation under a quote of the message it answers.'**
+  String get settingsReplyLayoutInlineDescription;
+
+  /// No description provided for @settingsReplyLayoutThread.
+  ///
+  /// In en, this message translates to:
+  /// **'In a thread'**
+  String get settingsReplyLayoutThread;
+
+  /// No description provided for @settingsReplyLayoutThreadDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Replies leave the conversation and open in a separate thread.'**
+  String get settingsReplyLayoutThreadDescription;
+
   /// No description provided for @settingsThemeSection.
   ///
   /// In en, this message translates to:

@@ -203,7 +203,7 @@ void main() {
           .select(database.textSendOperations)
           .getSingle();
 
-    expect(database.schemaVersion, 18);
+      expect(database.schemaVersion, 18);
       expect(operation.operationId, 'operation-a');
       expect(operation.threadId, isNull);
     },

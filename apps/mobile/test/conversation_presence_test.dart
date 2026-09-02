@@ -47,15 +47,14 @@ void main() {
       reason: 'group rooms do not carry a single peer status',
     );
     expect(
-      ConversationPresence.fromConversation(
-        conversation(status: 'offline'),
-      ),
+      ConversationPresence.fromConversation(conversation(status: 'offline')),
       isNull,
       reason: 'offline and invisible must not render a presence badge',
     );
     expect(
-      ConversationPresence.fromConversation(conversation(status: 'online'))!
-          .kind,
+      ConversationPresence.fromConversation(
+        conversation(status: 'online'),
+      )!.kind,
       ConversationPresenceKind.online,
     );
     expect(

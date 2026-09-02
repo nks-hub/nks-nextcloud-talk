@@ -198,9 +198,7 @@ void main() {
             (row) =>
                 row.accountId.equals('account-a') & row.token.equals('room-a'),
           ))
-          .write(
-            const CachedConversationsCompanion(unreadMessages: Value(9)),
-          );
+          .write(const CachedConversationsCompanion(unreadMessages: Value(9)));
 
       await updatedToNine.future.timeout(const Duration(seconds: 2));
     });
@@ -338,9 +336,7 @@ void main() {
             (row) =>
                 row.accountId.equals('account-a') & row.token.equals('room-a'),
           ))
-          .write(
-            const CachedConversationsCompanion(unreadMessages: Value(4)),
-          );
+          .write(const CachedConversationsCompanion(unreadMessages: Value(4)));
 
       await _waitUntil(() => seen.contains(4));
       expect(seen.last, 4);

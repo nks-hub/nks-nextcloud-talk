@@ -252,10 +252,7 @@ void _registerClearHistoryTests() {
       textScale: 2,
       height: 6000,
     );
-    expect(
-      find.byKey(const Key('room-details-clear-history')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('room-details-clear-history')), findsOneWidget);
     await tester.tap(find.byKey(const Key('room-details-clear-history')));
     await tester.pump();
 

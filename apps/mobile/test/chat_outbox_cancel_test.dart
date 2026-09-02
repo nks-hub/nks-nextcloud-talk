@@ -150,17 +150,11 @@ void main() {
     await insertOperation(operationId: 'queued', outboxState: 'queued');
 
     expect(
-      await chat.cancelTextSend(
-        accountId: 'account-a',
-        operationId: 'queued',
-      ),
+      await chat.cancelTextSend(accountId: 'account-a', operationId: 'queued'),
       isTrue,
     );
     expect(
-      await chat.cancelTextSend(
-        accountId: 'account-a',
-        operationId: 'queued',
-      ),
+      await chat.cancelTextSend(accountId: 'account-a', operationId: 'queued'),
       isTrue,
     );
   });
@@ -169,10 +163,7 @@ void main() {
     await insertOperation(operationId: 'queued', outboxState: 'queued');
 
     expect(
-      await chat.cancelTextSend(
-        accountId: 'account-b',
-        operationId: 'queued',
-      ),
+      await chat.cancelTextSend(accountId: 'account-b', operationId: 'queued'),
       isTrue,
     );
     expect(await rowExists('queued'), isTrue);

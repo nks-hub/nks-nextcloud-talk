@@ -125,7 +125,9 @@ void _registerChatRoomPaneThreadContextTests() {
         displayText: 'Ordinary thread root',
       );
 
-      await tester.pumpWidget(app(home: roomScreen()));
+      await tester.pumpWidget(
+        app(home: roomScreen(), overrides: [threadReplyLayout]),
+      );
       await tester.pump();
       await tester.ensureVisible(find.byKey(const Key('chat-open-thread-72')));
       await tester.tap(find.byKey(const Key('chat-open-thread-72')));

@@ -27,6 +27,7 @@ extension _ChatRepositoryQueries on ChatRepository {
     required String accountId,
     required String roomToken,
     int? threadId,
+    bool includeThreadReplies = false,
   }) {
     final query = _database.select(_database.cachedChatMessages)
       ..where(
@@ -34,8 +35,10 @@ extension _ChatRepositoryQueries on ChatRepository {
             message.accountId.equals(accountId) &
             message.roomToken.equals(roomToken) &
             (threadId == null
-                ? (message.threadId.isNull() |
-                      message.threadId.equalsExp(message.messageId))
+                ? (includeThreadReplies
+                      ? const Constant(true)
+                      : (message.threadId.isNull() |
+                            message.threadId.equalsExp(message.messageId)))
                 : (message.threadId.equals(threadId) |
                       message.messageId.equals(threadId))),
       )

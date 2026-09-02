@@ -12,7 +12,8 @@ export 'push_device_key_store.dart' show PushDeviceKeyStore;
 /// to the Keychain APIs it depends on.
 final class ApplePushDeviceKeyChannel implements PushDeviceKeyStore {
   ApplePushDeviceKeyChannel({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(ApplePushCoordinator.channelName);
+    : _channel =
+          channel ?? const MethodChannel(ApplePushCoordinator.channelName);
 
   final MethodChannel _channel;
 
@@ -22,7 +23,9 @@ final class ApplePushDeviceKeyChannel implements PushDeviceKeyStore {
       'handle': handle,
     });
     if (pem == null || pem.isEmpty) {
-      throw const FormatException('Native device key generation returned nothing.');
+      throw const FormatException(
+        'Native device key generation returned nothing.',
+      );
     }
     return pem;
   }

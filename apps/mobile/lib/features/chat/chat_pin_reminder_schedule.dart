@@ -211,8 +211,9 @@ enum ReminderSheetAction { set, remove }
 final class ReminderSheetResult {
   const ReminderSheetResult.set(DateTime this.at)
     : action = ReminderSheetAction.set;
-  const ReminderSheetResult.remove() : action = ReminderSheetAction.remove,
-        at = null;
+  const ReminderSheetResult.remove()
+    : action = ReminderSheetAction.remove,
+      at = null;
 
   final ReminderSheetAction action;
   final DateTime? at;
@@ -246,9 +247,11 @@ final class TimePreset {
 /// moment the server would refuse.
 List<TimePreset> timePresets(AppLocalizations strings, DateTime now) {
   DateTime at(int addDays, int hour) {
-    final day = DateTime(now.year, now.month, now.day).add(
-      Duration(days: addDays),
-    );
+    final day = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: addDays));
     return DateTime(day.year, day.month, day.day, hour);
   }
 
@@ -342,9 +345,9 @@ Future<ReminderSheetResult?> showReminderSheet({
               if (!sheetContext.mounted) {
                 return;
               }
-              Navigator.of(sheetContext).pop(
-                picked == null ? null : ReminderSheetResult.set(picked),
-              );
+              Navigator.of(
+                sheetContext,
+              ).pop(picked == null ? null : ReminderSheetResult.set(picked));
             },
           ),
           if (existing != null)
@@ -541,9 +544,7 @@ final class _ScheduledMessagesSheetState
                       ),
                     ),
                     trailing: IconButton(
-                      key: Key(
-                        'delete-scheduled-${message.scheduleId.value}',
-                      ),
+                      key: Key('delete-scheduled-${message.scheduleId.value}'),
                       tooltip: strings.scheduledMessageDelete,
                       icon: const Icon(Icons.delete_outline_rounded),
                       onPressed: () => unawaited(_delete(message)),

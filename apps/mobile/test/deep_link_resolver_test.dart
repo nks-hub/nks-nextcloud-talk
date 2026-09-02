@@ -38,48 +38,54 @@ void main() {
     expect(resolved.token.value, 'abc12345');
   });
 
-  test('resolves an /index.php/call/<token> link to the matching account', () async {
-    final account = await accounts.upsertAccount(
-      accountId: 'account-a',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'fixture-user',
-      serverProductName: 'Nextcloud',
-      createdAt: DateTime.utc(2026, 1, 1),
-    );
-    final resolver = DeepLinkResolver(accounts);
+  test(
+    'resolves an /index.php/call/<token> link to the matching account',
+    () async {
+      final account = await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      final resolver = DeepLinkResolver(accounts);
 
-    final resolved = await resolver.resolve(
-      Uri.parse('https://cloud.example.invalid/index.php/call/abc12345'),
-    );
+      final resolved = await resolver.resolve(
+        Uri.parse('https://cloud.example.invalid/index.php/call/abc12345'),
+      );
 
-    expect(resolved, isNotNull);
-    expect(resolved!.accountId, account.id);
-    expect(resolved.token.value, 'abc12345');
-  });
+      expect(resolved, isNotNull);
+      expect(resolved!.accountId, account.id);
+      expect(resolved.token.value, 'abc12345');
+    },
+  );
 
-  test('picks the account whose server shares the origin, out of several', () async {
-    await accounts.upsertAccount(
-      accountId: 'account-other',
-      serverUrl: 'https://other.example.invalid',
-      loginName: 'fixture-user',
-      serverProductName: 'Nextcloud',
-      createdAt: DateTime.utc(2026, 1, 1),
-    );
-    final target = await accounts.upsertAccount(
-      accountId: 'account-target',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'fixture-user',
-      serverProductName: 'Nextcloud',
-      createdAt: DateTime.utc(2026, 1, 2),
-    );
-    final resolver = DeepLinkResolver(accounts);
+  test(
+    'picks the account whose server shares the origin, out of several',
+    () async {
+      await accounts.upsertAccount(
+        accountId: 'account-other',
+        serverUrl: 'https://other.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      final target = await accounts.upsertAccount(
+        accountId: 'account-target',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 2),
+      );
+      final resolver = DeepLinkResolver(accounts);
 
-    final resolved = await resolver.resolve(
-      Uri.parse('https://cloud.example.invalid/call/abc12345'),
-    );
+      final resolved = await resolver.resolve(
+        Uri.parse('https://cloud.example.invalid/call/abc12345'),
+      );
 
-    expect(resolved?.accountId, target.id);
-  });
+      expect(resolved?.accountId, target.id);
+    },
+  );
 
   test('never guesses when no account shares the link origin', () async {
     await accounts.upsertAccount(

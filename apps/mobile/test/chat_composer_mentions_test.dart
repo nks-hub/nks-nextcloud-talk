@@ -41,7 +41,10 @@ void main() {
 
   group('mentionSuggestionMarkup', () {
     test('plain ids are not quoted', () {
-      expect(mentionSuggestionMarkup(_suggestion(mentionId: 'alice')), '@alice');
+      expect(
+        mentionSuggestionMarkup(_suggestion(mentionId: 'alice')),
+        '@alice',
+      );
     });
 
     test('ids with a space are quoted', () {
@@ -123,10 +126,16 @@ void main() {
       tester,
     ) async {
       final controller = TextEditingController();
-      final source = _FakeMentionSource((query) async => <RichChatMentionSuggestion>[
-        _suggestion(mentionId: 'alice', label: 'Alice', details: 'alice@talk'),
-        _suggestion(mentionId: 'bob', label: 'Bob'),
-      ]);
+      final source = _FakeMentionSource(
+        (query) async => <RichChatMentionSuggestion>[
+          _suggestion(
+            mentionId: 'alice',
+            label: 'Alice',
+            details: 'alice@talk',
+          ),
+          _suggestion(mentionId: 'bob', label: 'Bob'),
+        ],
+      );
       addTearDown(controller.dispose);
 
       await pumpComposer(tester, controller: controller, source: source);
@@ -145,7 +154,9 @@ void main() {
         const all = ['Alice', 'Alina', 'Bob'];
         return all
             .where((name) => name.toLowerCase().startsWith(query.toLowerCase()))
-            .map((name) => _suggestion(mentionId: name.toLowerCase(), label: name))
+            .map(
+              (name) => _suggestion(mentionId: name.toLowerCase(), label: name),
+            )
             .toList();
       });
       addTearDown(controller.dispose);
@@ -233,7 +244,9 @@ void main() {
       tester,
     ) async {
       final controller = TextEditingController();
-      final source = _FakeMentionSource((query) async => const <RichChatMentionSuggestion>[]);
+      final source = _FakeMentionSource(
+        (query) async => const <RichChatMentionSuggestion>[],
+      );
       addTearDown(controller.dispose);
 
       await pumpComposer(tester, controller: controller, source: source);

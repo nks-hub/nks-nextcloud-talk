@@ -1085,6 +1085,23 @@ class AppLocalizationsCs extends AppLocalizations {
       'Zobrazit profil a nastavit dostupnost';
 
   @override
+  String get settingsRepliesSection => 'Odpovědi';
+
+  @override
+  String get settingsReplyLayoutInline => 'V konverzaci';
+
+  @override
+  String get settingsReplyLayoutInlineDescription =>
+      'Odpověď zůstává v konverzaci pod citací zprávy, na kterou reaguje.';
+
+  @override
+  String get settingsReplyLayoutThread => 'V podvláknu';
+
+  @override
+  String get settingsReplyLayoutThreadDescription =>
+      'Odpovědi z konverzace mizí a otevírají se v samostatném vlákně.';
+
+  @override
   String get settingsThemeSection => 'Vzhled';
 
   @override

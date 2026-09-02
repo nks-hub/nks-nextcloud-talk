@@ -14,12 +14,27 @@ import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/features/chat/composer/emoji_usage_store.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
+import 'package:nextcloudtalk/features/settings/reply_layout_preference.dart';
 import 'package:nextcloudtalk/features/settings/theme_preference.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 
 import 'accessibility_probe.dart';
 import 'test_support.dart';
+
+final class _MemoryReplyLayoutStore implements ReplyLayoutPreferenceStore {
+  ReplyLayout stored = ReplyLayout.inline;
+  int writeCount = 0;
+
+  @override
+  Future<ReplyLayout> read() async => stored;
+
+  @override
+  Future<void> write(ReplyLayout layout) async {
+    writeCount++;
+    stored = layout;
+  }
+}
 
 final class _MemoryThemePreferenceStore implements ThemePreferenceStore {
   ThemeMode stored = ThemeMode.system;
@@ -106,10 +121,7 @@ Widget _wrap({
       accountsProvider.overrideWith((ref) => accountsStream),
       ...overrides,
     ],
-    child: localizedTestApp(
-      home: const SettingsScreen(),
-      textScale: textScale,
-    ),
+    child: localizedTestApp(home: const SettingsScreen(), textScale: textScale),
   );
 }
 
@@ -630,7 +642,62 @@ void main() {
     expect(store.writeCount, 2);
   });
 
+  testWidgets('replies default to the conversation and the thread choice '
+      'persists', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+    final store = _MemoryReplyLayoutStore();
+
+    await tester.pumpWidget(
+      _wrap(
+        accountRepository: accounts,
+        accountsStream: Stream.value(initial),
+        overrides: [
+          replyLayoutPreferenceStoreProvider.overrideWithValue(store),
+        ],
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    await tester.pump();
+    await tester.pump();
+
+    RadioGroup<ReplyLayout> group() => tester.widget<RadioGroup<ReplyLayout>>(
+      find.byType(RadioGroup<ReplyLayout>),
+    );
+    expect(group().groupValue, ReplyLayout.inline);
+
+    await tester.ensureVisible(find.byKey(const Key('reply-layout-thread')));
+    await tester.tap(find.byKey(const Key('reply-layout-thread')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(group().groupValue, ReplyLayout.thread);
+    expect(store.stored, ReplyLayout.thread);
+    expect(store.writeCount, 1);
+  });
+
   testWidgets('loads the persisted theme mode on start', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final database = openTestDatabase();
     addTearDown(database.close);
     final accounts = AccountRepository(database);

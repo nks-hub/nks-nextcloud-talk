@@ -21,6 +21,7 @@ final class ConversationAvatar extends ConsumerWidget {
 
   final StoredAccount account;
   final CachedConversation conversation;
+
   /// Defaults to the platform's list avatar size when omitted.
   final double? radius;
 

@@ -102,9 +102,9 @@ void main() {
             blocksJson: '[["100","${100 + messages - 1}"]]',
           ),
         );
-    return (database.select(database.cachedConversations)
-          ..where((row) => row.token.equals(token)))
-        .getSingle();
+    return (database.select(
+      database.cachedConversations,
+    )..where((row) => row.token.equals(token))).getSingle();
   }
 
   Widget app(Widget home) => ProviderScope(

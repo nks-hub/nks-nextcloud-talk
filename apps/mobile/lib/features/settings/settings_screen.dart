@@ -12,6 +12,7 @@ import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../core/desktop_metrics.dart';
 import 'app_lock/app_lock_controller.dart';
+import 'reply_layout_preference.dart';
 import 'app_lock/app_lock_settings_tile.dart';
 
 /// Accounts and appearance settings. Reached from the account menu in the
@@ -202,6 +203,32 @@ final class SettingsScreen extends ConsumerWidget {
               const AppLockSettingsTile(),
             ],
             const Divider(height: 1),
+            _SectionHeader(strings.settingsRepliesSection),
+            RadioGroup<ReplyLayout>(
+              groupValue: ref.watch(replyLayoutProvider),
+              onChanged: (layout) => _setReplyLayout(ref, layout),
+              child: Column(
+                children: [
+                  RadioListTile<ReplyLayout>(
+                    key: const Key('reply-layout-inline'),
+                    title: Text(strings.settingsReplyLayoutInline),
+                    subtitle: Text(
+                      strings.settingsReplyLayoutInlineDescription,
+                    ),
+                    value: ReplyLayout.inline,
+                  ),
+                  RadioListTile<ReplyLayout>(
+                    key: const Key('reply-layout-thread'),
+                    title: Text(strings.settingsReplyLayoutThread),
+                    subtitle: Text(
+                      strings.settingsReplyLayoutThreadDescription,
+                    ),
+                    value: ReplyLayout.thread,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
             _SectionHeader(strings.settingsThemeSection),
             RadioGroup<ThemeMode>(
               groupValue: themeMode,
@@ -318,6 +345,13 @@ final class SettingsScreen extends ConsumerWidget {
         );
       }
     }
+  }
+
+  void _setReplyLayout(WidgetRef ref, ReplyLayout? layout) {
+    if (layout == null) {
+      return;
+    }
+    ref.read(replyLayoutProvider.notifier).setReplyLayout(layout);
   }
 
   void _setTheme(WidgetRef ref, ThemeMode? mode) {

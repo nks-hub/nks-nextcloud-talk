@@ -206,7 +206,8 @@ final class MentionSuggestionController extends ChangeNotifier {
   final Duration debounce;
 
   MentionSuggestionPhase _phase = MentionSuggestionPhase.idle;
-  List<RichChatMentionSuggestion> _suggestions = const <RichChatMentionSuggestion>[];
+  List<RichChatMentionSuggestion> _suggestions =
+      const <RichChatMentionSuggestion>[];
   MentionSuggestionError? _error;
   int _generation = 0;
   Timer? _debounceTimer;
@@ -297,7 +298,10 @@ final class MentionSuggestionController extends ChangeNotifier {
 }
 
 final class MentionSuggestionsLabels {
-  const MentionSuggestionsLabels({required this.noResults, required this.error});
+  const MentionSuggestionsLabels({
+    required this.noResults,
+    required this.error,
+  });
 
   final String noResults;
   final String error;
@@ -469,7 +473,11 @@ final class _MentionSuggestionsPanel extends StatelessWidget {
               key: Key('mention-suggestion-${suggestion.mentionId}'),
               dense: true,
               leading: const Icon(Icons.alternate_email_rounded),
-              title: Text(suggestion.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                suggestion.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: suggestion.details == null
                   ? null
                   : Text(
