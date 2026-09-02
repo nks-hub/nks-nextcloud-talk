@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,132 +138,163 @@ void main() {
 
   testWidgets(
     'conversation list sync restarts for the selected account on resume',
-    (tester) async {
-      final database = openTestDatabase();
-      addTearDown(database.close);
-      final accounts = AccountRepository(database);
-      final vault = MemoryCredentialVault();
-      final account = await accounts.upsertAccount(
-        accountId: 'account-a',
-        serverUrl: 'https://cloud.example.invalid',
-        loginName: 'fixture-user',
-        serverProductName: 'Nextcloud',
-        createdAt: DateTime.utc(2026, 1, 1),
-      );
-      vault.values[account.id] = 'fixture-app-password-never-use';
-
-      var conversationRequests = 0;
-      final api = HttpNextcloudApi(
-        client: _CallbackClient((request) async {
-          expect(request, isA<http.Abortable>());
-          if (request.url.path.endsWith('/cloud/capabilities')) {
-            return _response(jsonEncode(capabilitiesJson()), 200);
-          }
-          if (request.url.path.endsWith('/apps/spreed/api/v4/room')) {
-            conversationRequests++;
-            final response =
-                jsonDecode(
-                      jsonEncode(
-                        readFixtureJson(
-                          'conversation-list/fixtures/'
-                          'conversations-full.response.json',
-                        ),
-                      ),
-                    )!
-                    as Map<String, Object?>;
-            if (conversationRequests > 1) {
-              final ocs = response['ocs']! as Map<String, Object?>;
-              ocs['data'] = <Object?>[];
-            }
-            return _response(
-              jsonEncode(response),
-              200,
-              headers: <String, String>{
-                'X-Nextcloud-Talk-Hash': 'fixture-hash-$conversationRequests',
-                'X-Nextcloud-Talk-Modified-Before':
-                    '${1724300000 + conversationRequests}',
-                'X-Nextcloud-Talk-Federation-Invites': '0',
-              },
-            );
-          }
-          if (request.url.path.contains('/avatar')) {
-            return _response('', 404);
-          }
-          return _response('', 404);
-        }),
-      );
-      addTearDown(api.close);
-      final service = ConversationSyncService(
-        accounts: accounts,
-        credentials: vault,
-        api: api,
-      );
-      final selectedAccounts = StreamController<StoredAccount?>();
-      addTearDown(selectedAccounts.close);
-
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            appDatabaseProvider.overrideWithValue(database),
-            // Push owns separate call-chain coverage; this test only exercises
-            // conversation sync and must not open its unrelated Drift watcher.
-            clientPushEnabledProvider.overrideWithValue(false),
-            credentialVaultProvider.overrideWithValue(vault),
-            nextcloudApiProvider.overrideWithValue(api),
-            conversationSyncServiceProvider.overrideWithValue(service),
-            accountsProvider.overrideWith((ref) => Stream.value([account])),
-            selectedAccountProvider.overrideWith(
-              (ref) => selectedAccounts.stream,
-            ),
-            conversationsProvider.overrideWith(
-              (ref, accountId) => Stream.value(const <CachedConversation>[]),
-            ),
-          ],
-          child: localizedTestApp(home: const ConversationShell()),
-        ),
-      );
-      addTearDown(() async {
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump();
-      });
-      selectedAccounts.add(account);
-      await _pumpUntil(
-        tester,
-        () =>
-            find
-                .byKey(const Key('conversation-shell-expanded'))
-                .evaluate()
-                .isNotEmpty ||
-            find
-                .byKey(const Key('conversation-shell-compact'))
-                .evaluate()
-                .isNotEmpty,
-      );
-      await _pumpUntil(tester, () => conversationRequests == 1);
-      expect(conversationRequests, 1);
-
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 16));
-      expect(conversationRequests, 1);
-
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pump();
-      await _pumpUntil(tester, () => conversationRequests == 2);
-
-      expect(conversationRequests, 2);
-      expect(tester.takeException(), isNull);
-
-      selectedAccounts.add(null);
-      await _pumpUntil(
-        tester,
-        () => find.byType(OnboardingScreen).evaluate().isNotEmpty,
-      );
-      await tester.pump(const Duration(seconds: 16));
-      expect(conversationRequests, 2);
-    },
+    (tester) => _verifyLifecycleSync(tester, desktop: false),
   );
+
+  testWidgets(
+    'desktop keeps conversation sync while inactive and hidden',
+    (tester) => _verifyLifecycleSync(tester, desktop: true),
+  );
+}
+
+Future<void> _verifyLifecycleSync(
+  WidgetTester tester, {
+  required bool desktop,
+}) async {
+  final previousPlatform = debugDefaultTargetPlatformOverride;
+  debugDefaultTargetPlatformOverride = desktop
+      ? TargetPlatform.windows
+      : TargetPlatform.android;
+  // Reset inside the body, not in addTearDown: the framework verifies that
+  // no foundation debug variable is still set BEFORE tear-downs run, so a
+  // reset scheduled there arrives too late and fails the test it cleaned up
+  // after.
+  try {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final vault = MemoryCredentialVault();
+    final account = await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      createdAt: DateTime.utc(2026, 1, 1),
+    );
+    vault.values[account.id] = 'fixture-app-password-never-use';
+
+    var conversationRequests = 0;
+    final api = HttpNextcloudApi(
+      client: _CallbackClient((request) async {
+        expect(request, isA<http.Abortable>());
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return _response(jsonEncode(capabilitiesJson()), 200);
+        }
+        if (request.url.path.endsWith('/apps/spreed/api/v4/room')) {
+          conversationRequests++;
+          final response =
+              jsonDecode(
+                    jsonEncode(
+                      readFixtureJson(
+                        'conversation-list/fixtures/'
+                        'conversations-full.response.json',
+                      ),
+                    ),
+                  )!
+                  as Map<String, Object?>;
+          if (conversationRequests > 1) {
+            final ocs = response['ocs']! as Map<String, Object?>;
+            ocs['data'] = <Object?>[];
+          }
+          return _response(
+            jsonEncode(response),
+            200,
+            headers: <String, String>{
+              'X-Nextcloud-Talk-Hash': 'fixture-hash-$conversationRequests',
+              'X-Nextcloud-Talk-Modified-Before':
+                  '${1724300000 + conversationRequests}',
+              'X-Nextcloud-Talk-Federation-Invites': '0',
+            },
+          );
+        }
+        if (request.url.path.contains('/avatar')) {
+          return _response('', 404);
+        }
+        return _response('', 404);
+      }),
+    );
+    addTearDown(api.close);
+    final service = ConversationSyncService(
+      accounts: accounts,
+      credentials: vault,
+      api: api,
+    );
+    final selectedAccounts = StreamController<StoredAccount?>();
+    addTearDown(selectedAccounts.close);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          // Push owns separate call-chain coverage; this test only exercises
+          // conversation sync and must not open its unrelated Drift watcher.
+          clientPushEnabledProvider.overrideWithValue(false),
+          credentialVaultProvider.overrideWithValue(vault),
+          nextcloudApiProvider.overrideWithValue(api),
+          conversationSyncServiceProvider.overrideWithValue(service),
+          accountsProvider.overrideWith((ref) => Stream.value([account])),
+          selectedAccountProvider.overrideWith(
+            (ref) => selectedAccounts.stream,
+          ),
+          conversationsProvider.overrideWith(
+            (ref, accountId) => Stream.value(const <CachedConversation>[]),
+          ),
+        ],
+        child: localizedTestApp(home: const ConversationShell()),
+      ),
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+    selectedAccounts.add(account);
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const Key('conversation-shell-expanded'))
+              .evaluate()
+              .isNotEmpty ||
+          find
+              .byKey(const Key('conversation-shell-compact'))
+              .evaluate()
+              .isNotEmpty,
+    );
+    await _pumpUntil(tester, () => conversationRequests == 1);
+
+    if (desktop) {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump(const Duration(seconds: 16));
+      await _pumpUntil(tester, () => conversationRequests == 2);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump(const Duration(seconds: 16));
+      await _pumpUntil(tester, () => conversationRequests == 3);
+    }
+    final requestsBeforePause = desktop ? 3 : 1;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 16));
+    expect(conversationRequests, requestsBeforePause);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      () => conversationRequests == requestsBeforePause + 1,
+    );
+    expect(tester.takeException(), isNull);
+
+    selectedAccounts.add(null);
+    await _pumpUntil(
+      tester,
+      () => find.byType(OnboardingScreen).evaluate().isNotEmpty,
+    );
+    await tester.pump(const Duration(seconds: 16));
+    expect(conversationRequests, requestsBeforePause + 1);
+  } finally {
+    debugDefaultTargetPlatformOverride = previousPlatform;
+  }
 }
 
 typedef _RequestHandler =
