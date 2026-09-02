@@ -121,8 +121,19 @@ final class ApplePushCoordinator {
       return;
     }
     _requested = true;
-    final granted =
-        await _channel.invokeMethod<bool>('requestPermission') ?? false;
+    final bool granted;
+    try {
+      granted = await _channel.invokeMethod<bool>('requestPermission') ?? false;
+    } on PlatformException {
+      // `UNErrorDomain 1` (notifications not allowed for this app) and a
+      // simulator without a push entitlement both come back as a platform
+      // error, not as `false`. Neither is something the app can act on beyond
+      // running without push; the caller fires this and forgets it, so the
+      // error must not reach the zone (fatal report on build 47).
+      return;
+    } on MissingPluginException {
+      return;
+    }
     if (!granted) {
       return;
     }

@@ -611,10 +611,16 @@ Future<List<String>> moveLegacyDatabaseFiles(
 Future<Directory> _resolveDatabaseDirectory() async {
   final support = await getApplicationSupportDirectory();
   await support.create(recursive: true);
-  await moveLegacyDatabaseFiles(
-    await getApplicationDocumentsDirectory(),
-    support,
-  );
+  final Directory documents;
+  try {
+    documents = await getApplicationDocumentsDirectory();
+  } on MissingPlatformDirectoryException {
+    // A profile without a Documents folder (a service account, a redirected
+    // or missing known folder) has nothing to migrate, and refusing to open
+    // the database over that killed the whole app on start (build 47).
+    return support;
+  }
+  await moveLegacyDatabaseFiles(documents, support);
   return support;
 }
 

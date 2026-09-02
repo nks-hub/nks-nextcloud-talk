@@ -372,15 +372,18 @@ final clientPushCoordinatorProvider = Provider<ClientPushCoordinator?>((ref) {
       // was reported as a fatal crash - seen on build 7 as a plain
       // "network" code, moments after the device fell back to cellular.
       // The push transport already treats the same codes as retryable, so
-      // swallowing them here keeps the two wake-up paths consistent. Anything
-      // the service did not classify still surfaces with its own stack.
+      // swallowing them here keeps the two wake-up paths consistent. A
+      // non-transient outcome such as re-login is already written to the
+      // account row, which is what the UI reads, so it has nowhere else to
+      // go either (seen as a fatal `reauthenticationRequired` on build 47).
+      // Anything the service did not classify still surfaces with its own
+      // stack.
       ref
           .read(conversationSyncServiceProvider)
           .sync(accountId)
           .catchError(
             (Object _, StackTrace _) {},
-            test: (error) =>
-                error is ConversationSyncException && error.isTransient,
+            test: (error) => error is ConversationSyncException,
           ),
     ),
   );

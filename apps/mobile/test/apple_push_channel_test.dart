@@ -51,6 +51,23 @@ void main() {
     expect(calls.map((call) => call.method), <String>['requestPermission']);
   });
 
+  test('a platform error from the permission request stays inside', () async {
+    // UNErrorDomain 1: notifications are not allowed for this app. The call
+    // is fire-and-forget, so this used to reach the zone as a fatal crash.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          throw PlatformException(
+            code: 'permission_failed',
+            message: 'UNErrorDomain error 1.',
+          );
+        });
+
+    await coordinator.requestPermissionAndLogToken();
+
+    expect(calls.map((call) => call.method), <String>['requestPermission']);
+  });
+
   test('only asks once per coordinator, even if called again', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
