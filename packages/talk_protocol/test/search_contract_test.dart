@@ -494,15 +494,19 @@ void main() {
       );
     });
 
-    test('rejects a current-room result that belongs to a different room', () {
-      expect(
-        () => decodeMessageSearchResponse(
-          request: currentRoomRequest(token: otherRoomToken),
-          statusCode: 200,
-          json: successBody(),
-        ),
-        throwsA(isA<TalkProtocolException>()),
+    test('drops a current-room result that belongs to a different room', () {
+      // `from` is a ranking hint, not a filter: a live Nextcloud 34 answered a
+      // one-room search with an entry from another conversation. Rejecting the
+      // whole response left the user with an error and no results, so the
+      // foreign entry is dropped and the rest still arrives.
+      final response = decodeMessageSearchResponse(
+        request: currentRoomRequest(token: otherRoomToken),
+        statusCode: 200,
+        json: successBody(),
       );
+
+      expect(response.results, isEmpty);
+      expect(response.classification, MessageSearchClassification.empty);
     });
   });
 }

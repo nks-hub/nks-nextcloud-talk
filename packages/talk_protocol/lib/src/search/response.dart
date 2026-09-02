@@ -134,12 +134,15 @@ MessageSearchResponse _decodeSuccessOrOcsFailure({
       rawEntries[index],
       path: '\$.ocs.data.entries[$index]',
     );
+    // `from` is a ranking hint to unified search, not a filter: a live server
+    // puts the current conversation first and still returns matches from
+    // elsewhere. Measured on Nextcloud 34 - searching one room answered with
+    // an entry from another. Dropping those is right; rejecting the whole
+    // response left the user with "the server sent a search answer the app
+    // does not understand" and no results at all.
     if (request.scope == MessageSearchScope.currentRoom &&
         result.roomToken != request.roomToken) {
-      protocolFailure(
-        code,
-        '\$.ocs.data.entries[$index].attributes.conversation',
-      );
+      continue;
     }
     results.add(result);
   }
