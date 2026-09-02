@@ -51,7 +51,30 @@ TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběže
   tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
   je k dispozici celé okno. Volba přežije restart aplikace.
 
-## Nevydáno
+## 0.1.0 (49) — 3. 9. 2026
+
+Vydáno ze zdroje `1e1f4ca`, tag `v0.1.0+49`. Dávka vznikla ze Sentry nálezů
+buildu 47 a z živého ladění stavu „přihlásit se znovu".
+
+Android: release APK 89 115 320 B, SHA-256
+`88a8f8a550050a20c69a8f1658db8aef54211c7febc15fe9befca86ebd7619b5`,
+versionCode 49. Živě na Android 14 emulátoru: zaparkovaný účet se po
+instalaci sám uvolnil (room sync 200 bez zásahu), cold-start sdílení textu
+do vybrané místnosti, „Poslat do Note to self" z akcí zprávy. Play track
+nenahrán.
+
+Windows: instalátor `NKS-Talk-0.1.0-49-windows-x64-setup.exe` 35 212 253 B,
+SHA-256 `3ca79e7bcbe450716e57ca5adfb464c78391e271d5aab4e35555cea2c3411ff5`,
+nepodepsaný; tichá instalace na `windows-vm` pod RDP, `nextcloudtalk.exe`
+hlásí `0.1.0+49`, okno „NKS Talk" žije (PID 9960).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build z téhož zdroje
+nainstalován a spuštěn, seznam konverzací přihlášeného účtu. TestFlight
+NEVYDÁN (provisioning, viz 48).
+
+macOS: debug build přes `xcodebuild` + ad-hoc podpis, běh 30 s bez pádu;
+bez přihlášeného účtu.
+
 
 - Účet už nespadne do „přihlásit se znovu" kvůli jednomu chybnému 401.
   Referenční server 2. 9. večer vracel na několik sekund 401 pro platné
