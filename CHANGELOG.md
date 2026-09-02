@@ -16,7 +16,21 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## Nevydáno
+## 0.1.0 (43) — 2. 9. 2026
+
+Vydáno ze zdroje `c171d71`, tag `v0.1.0+43`, postaveno z čistého worktree
+`origin/main`, ne z pracovní kopie.
+
+Play (uzavřené testování, track alpha): vydání `(43) 0.1.0` je `completed`
+s version code 43. AAB má 84 298 648 B a SHA-256
+`02f8e35b3630671a2151c73e1b8216f276276a30e4dbd4d9f4c99f9ebee6cf9a`, SHA-1
+`547ad0066276685f4de18adf200eef509e206db1`. Poznámky v šesti jazycích
+ověřeny zpětným dotazem na track. Licenční brána prošla se 148 Flutter
+balíky a 113 Android runtime komponentami.
+
+TestFlight: NEVYDÁNO. Stroj `build-mac` nebyl v době vydání připojený k RemoteCmd
+relay, takže iOS artefakt nevznikl a iOS ani macOS se neotestovaly. Nevydává
+se za to falešný důkaz; iOS půlka buildu 43 zbývá.
 
 - Potvrzovací dialogy jde odpovědět i při dvojnásobném systémovém písmu.
   Dialog „Sdílet soubor do konverzace" v angličtině přetékal o 48 px dolů,
