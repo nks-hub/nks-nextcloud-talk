@@ -291,6 +291,8 @@ final class PresenceChatRoomPane extends StatelessWidget {
     required this.conversation,
     this.onClose,
     this.onOpenDetails,
+    this.onToggleList,
+    this.listCollapsed = false,
   });
 
   final StoredAccount account;
@@ -303,6 +305,12 @@ final class PresenceChatRoomPane extends StatelessWidget {
   /// Hands the details to the caller instead of pushing them over everything.
   /// Only a caller with room for a third column supplies this.
   final VoidCallback? onOpenDetails;
+
+  /// Folds the conversation list away and back. Supplied only by a layout
+  /// that draws the list beside this pane; a narrow window has nowhere to
+  /// fold it to.
+  final VoidCallback? onToggleList;
+  final bool listCollapsed;
 
   @override
   Widget build(BuildContext context) {
@@ -322,6 +330,21 @@ final class PresenceChatRoomPane extends StatelessWidget {
           ),
           child: Row(
             children: [
+              if (onToggleList != null) ...[
+                IconButton(
+                  key: const Key('toggle-conversation-list'),
+                  tooltip: listCollapsed
+                      ? strings.showConversationList
+                      : strings.hideConversationList,
+                  icon: Icon(
+                    listCollapsed
+                        ? Icons.menu_open_rounded
+                        : Icons.menu_rounded,
+                  ),
+                  onPressed: onToggleList,
+                ),
+                const SizedBox(width: 4),
+              ],
               if (onClose != null) ...[
                 IconButton(
                   key: const Key('close-conversation'),

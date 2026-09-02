@@ -188,14 +188,16 @@ void main() {
       find.byKey(const Key('conversation-shell-expanded')),
       findsOneWidget,
     );
-    final accountRail = tester.getRect(find.byKey(const Key('account-rail')));
+    // The rail is deliberately absent with a single account — see
+    // docs/architecture/desktop-chrome.md, D-041. What this case is about is
+    // the left-to-right order of the panes that ARE drawn.
+    expect(find.byKey(const Key('account-rail')), findsNothing);
     final conversationList = tester.getRect(
       find.byKey(const Key('conversation-list-pane')),
     );
     final conversationDetail = tester.getRect(
       find.byKey(const Key('conversation-detail-pane')),
     );
-    expect(accountRail.right, lessThan(conversationList.left));
     expect(conversationList.right, lessThan(conversationDetail.left));
 
     await _setViewport(tester, const Size(390, 844));

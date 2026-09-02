@@ -25,7 +25,11 @@ final class ConversationWorkspace extends StatelessWidget {
     this.detailsOpen = false,
     this.onOpenDetails,
     this.onCloseDetails,
+    this.listCollapsed = false,
+    this.onToggleList = _ignoreToggle,
   });
+
+  static void _ignoreToggle() {}
 
   final StoredAccount account;
   final List<StoredAccount> accounts;
@@ -59,6 +63,10 @@ final class ConversationWorkspace extends StatelessWidget {
   final bool detailsOpen;
   final VoidCallback? onOpenDetails;
   final VoidCallback? onCloseDetails;
+
+  /// Whether the conversation list is folded away on a wide window.
+  final bool listCollapsed;
+  final VoidCallback onToggleList;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +130,8 @@ final class ConversationWorkspace extends StatelessWidget {
           detailsOpen: detailsOpen,
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
+          listCollapsed: listCollapsed,
+          onToggleList: onToggleList,
         );
       },
     );
@@ -398,6 +408,8 @@ final class _ExpandedShell extends StatelessWidget {
     required this.detailsOpen,
     required this.onOpenDetails,
     required this.onCloseDetails,
+    required this.listCollapsed,
+    required this.onToggleList,
   });
 
   final StoredAccount account;
@@ -417,6 +429,12 @@ final class _ExpandedShell extends StatelessWidget {
   final VoidCallback? onOpenDetails;
   final VoidCallback? onCloseDetails;
 
+  /// Whether the conversation list is folded away, leaving the window to the
+  /// conversation. Held by the shell, not here: a resize rebuilds this widget
+  /// and would lose it.
+  final bool listCollapsed;
+  final VoidCallback onToggleList;
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -425,85 +443,108 @@ final class _ExpandedShell extends StatelessWidget {
       body: SafeArea(
         child: Row(
           children: [
-            _AccountRail(
-              selected: account,
-              accounts: accounts,
-              unreadByAccount: unreadByAccount,
-              onSelect: onSelectAccount,
-              onAdd: onAddAccount,
-            ),
-            const VerticalDivider(),
-            SizedBox(
-              key: const Key('conversation-list-pane'),
-              width: context.listPaneWidth,
-              child: Column(
-                children: [
-                  ConstrainedBox(
-                    key: const Key('conversation-list-header'),
-                    constraints: BoxConstraints(
-                      minHeight: context.paneHeaderHeight,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              strings.conversations,
-                              style: Theme.of(context).textTheme.titleLarge,
+            // Only drawn when it has something to switch between. With one
+            // account the rail is 88 px of window height showing a logo, an
+            // avatar whose own onTap is null, and two buttons that the
+            // account menu in the header already carries. See
+            // docs/architecture/desktop-chrome.md, D-041.
+            if (accounts.length > 1) ...[
+              _AccountRail(
+                selected: account,
+                accounts: accounts,
+                unreadByAccount: unreadByAccount,
+                onSelect: onSelectAccount,
+                onAdd: onAddAccount,
+              ),
+              const VerticalDivider(),
+            ],
+            if (!listCollapsed)
+              SizedBox(
+                key: const Key('conversation-list-pane'),
+                width: context.listPaneWidth,
+                child: Column(
+                  children: [
+                    ConstrainedBox(
+                      key: const Key('conversation-list-header'),
+                      constraints: BoxConstraints(
+                        minHeight: context.paneHeaderHeight,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+                        child: Row(
+                          children: [
+                            // Takes the rail's place when the rail is gone, so
+                            // switching accounts, adding one and reaching
+                            // settings never depend on a pane that is not drawn.
+                            if (accounts.length <= 1) ...[
+                              _AccountMenu(
+                                selected: account,
+                                accounts: accounts,
+                                unreadByAccount: unreadByAccount,
+                                onSelect: onSelectAccount,
+                                onAdd: onAddAccount,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Expanded(
+                              child: Text(
+                                strings.conversations,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            key: const Key('open-new-conversation'),
-                            onPressed: () => _openNewConversation(
-                              context,
-                              account.id,
-                              onRefresh,
-                              onCreated: onOpenCreatedConversation,
-                            ),
-                            tooltip: strings.newConversationTitle,
-                            icon: const Icon(Icons.chat_bubble_outline_rounded),
-                          ),
-                          if (talkFeaturesOf(
-                            account,
-                          ).contains('unified-search'))
                             IconButton(
-                              key: const Key('open-message-search'),
-                              onPressed: () =>
-                                  openMessageSearch(context, account.id),
-                              tooltip: strings.searchMessagesTooltip,
-                              icon: const Icon(Icons.search),
+                              key: const Key('open-new-conversation'),
+                              onPressed: () => _openNewConversation(
+                                context,
+                                account.id,
+                                onRefresh,
+                                onCreated: onOpenCreatedConversation,
+                              ),
+                              tooltip: strings.newConversationTitle,
+                              icon: const Icon(
+                                Icons.chat_bubble_outline_rounded,
+                              ),
                             ),
-                          IconButton(
-                            onPressed: syncing ? null : onRefresh,
-                            tooltip: strings.refresh,
-                            icon: const Icon(Icons.refresh_rounded),
-                          ),
-                        ],
+                            if (talkFeaturesOf(
+                              account,
+                            ).contains('unified-search'))
+                              IconButton(
+                                key: const Key('open-message-search'),
+                                onPressed: () =>
+                                    openMessageSearch(context, account.id),
+                                tooltip: strings.searchMessagesTooltip,
+                                icon: const Icon(Icons.search),
+                              ),
+                            IconButton(
+                              onPressed: syncing ? null : onRefresh,
+                              tooltip: strings.refresh,
+                              icon: const Icon(Icons.refresh_rounded),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (syncing) const LinearProgressIndicator(minHeight: 3),
-                  if (account.lastSyncError != null)
-                    _SyncNotice(
-                      errorCode: account.lastSyncError!,
-                      onReauthenticate: onReauthenticate,
+                    if (syncing) const LinearProgressIndicator(minHeight: 3),
+                    if (account.lastSyncError != null)
+                      _SyncNotice(
+                        errorCode: account.lastSyncError!,
+                        onReauthenticate: onReauthenticate,
+                      ),
+                    const Divider(),
+                    Expanded(
+                      child: ConversationListView(
+                        account: account,
+                        conversations: conversations,
+                        loading: loading,
+                        onRefresh: onRefresh,
+                        onSelect: onSelectConversation,
+                        selectedToken: selectedConversation?.token,
+                      ),
                     ),
-                  const Divider(),
-                  Expanded(
-                    child: ConversationListView(
-                      account: account,
-                      conversations: conversations,
-                      loading: loading,
-                      onRefresh: onRefresh,
-                      onSelect: onSelectConversation,
-                      selectedToken: selectedConversation?.token,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const VerticalDivider(),
+            if (!listCollapsed) const VerticalDivider(),
             Expanded(
               key: const Key('conversation-detail-pane'),
               child: selectedConversation == null
@@ -513,6 +554,8 @@ final class _ExpandedShell extends StatelessWidget {
                         account: account,
                         conversation: selectedConversation!,
                         onOpenDetails: onOpenDetails,
+                        onToggleList: onToggleList,
+                        listCollapsed: listCollapsed,
                       ),
                     ),
             ),

@@ -344,6 +344,18 @@ abstract class AppLocalizations {
   /// **'Accounts'**
   String get accounts;
 
+  /// Tooltip for folding the conversation list away on a wide window
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the conversation list'**
+  String get hideConversationList;
+
+  /// Tooltip for bringing the folded conversation list back
+  ///
+  /// In en, this message translates to:
+  /// **'Show the conversation list'**
+  String get showConversationList;
+
   /// No description provided for @conversations.
   ///
   /// In en, this message translates to:

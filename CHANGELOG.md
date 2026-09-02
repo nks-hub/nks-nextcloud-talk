@@ -16,6 +16,18 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## Nevydáno
+
+- Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
+  čím přepínat. S jediným účtem zabírala svislá lišta vlevo 88 pixelů na celou
+  výšku okna pro logo, avatar, na který nešlo ani kliknout, a dvě tlačítka.
+  Lišta se teď objeví až u druhého účtu; její akce mezitím drží nabídka pod
+  avatarem v hlavičce seznamu, stejná jako na telefonu. Konverzace tím dostala
+  89 pixelů zpět — na notebooku s šířkou 1024 skoro devět procent obrazovky.
+- Seznam konverzací jde složit. V hlavičce otevřené konverzace přibylo
+  tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
+  je k dispozici celé okno.
+
 ## 0.1.0 (45) — 2. 9. 2026
 
 Vydáno ze zdroje `f5b82dc`, tag `v0.1.0+45`, postaveno z čistého worktree.

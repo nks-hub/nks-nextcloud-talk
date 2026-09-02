@@ -148,6 +148,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accounts => 'Accounts';
 
   @override
+  String get hideConversationList => 'Hide the conversation list';
+
+  @override
+  String get showConversationList => 'Show the conversation list';
+
+  @override
   String get conversations => 'Conversations';
 
   @override

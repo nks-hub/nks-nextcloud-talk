@@ -147,6 +147,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get accounts => 'Účty';
 
   @override
+  String get hideConversationList => 'Skrýt seznam konverzací';
+
+  @override
+  String get showConversationList => 'Zobrazit seznam konverzací';
+
+  @override
   String get conversations => 'Konverzace';
 
   @override
