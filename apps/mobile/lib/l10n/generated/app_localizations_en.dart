@@ -764,6 +764,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceCleanupFailed => 'The recording could not be removed safely.';
 
   @override
+  String get transcribeVoiceMessage => 'Transcribe';
+
+  @override
+  String get cancelVoiceTranscription => 'Cancel transcription';
+
+  @override
+  String get voiceTranscriptionRunning => 'Transcribing the voice message…';
+
+  @override
+  String get copyVoiceTranscript => 'Copy transcription';
+
+  @override
+  String get voiceTranscriptCopied => 'Transcription copied to clipboard';
+
+  @override
+  String get voiceTranscriptionDenied =>
+      'Speech recognition permission was denied.';
+
+  @override
+  String get voiceTranscriptionRestricted =>
+      'Speech recognition is restricted on this device.';
+
+  @override
+  String get voiceTranscriptionUnavailable =>
+      'On-device speech recognition is unavailable.';
+
+  @override
+  String get voiceTranscriptionInvalidFile =>
+      'This voice message cannot be transcribed.';
+
+  @override
+  String get voiceTranscriptionFailed =>
+      'The voice message could not be transcribed.';
+
+  @override
   String get presenceOnline => 'Online';
 
   @override

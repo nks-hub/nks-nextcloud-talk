@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:talk_protocol/talk_protocol.dart';
@@ -13,6 +14,7 @@ import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import 'references/reference_resolver.dart';
 import '../../platform/media/voice_platform_adapters.dart';
+import '../../platform/media/voice_transcription.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'emoji_only_message.dart';
 import 'poll_dialog.dart';
@@ -61,6 +63,7 @@ final class ChatMessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     final parsed = message;
     if (parsed == null) {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));

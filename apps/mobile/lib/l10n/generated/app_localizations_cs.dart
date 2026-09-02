@@ -763,6 +763,41 @@ class AppLocalizationsCs extends AppLocalizations {
   String get voiceCleanupFailed => 'Nahrávku se nepodařilo bezpečně odstranit.';
 
   @override
+  String get transcribeVoiceMessage => 'Přepsat';
+
+  @override
+  String get cancelVoiceTranscription => 'Zrušit přepis';
+
+  @override
+  String get voiceTranscriptionRunning => 'Přepisuji hlasovou zprávu…';
+
+  @override
+  String get copyVoiceTranscript => 'Kopírovat přepis';
+
+  @override
+  String get voiceTranscriptCopied => 'Přepis zkopírován do schránky';
+
+  @override
+  String get voiceTranscriptionDenied =>
+      'Přístup k rozpoznávání řeči byl zamítnut.';
+
+  @override
+  String get voiceTranscriptionRestricted =>
+      'Rozpoznávání řeči je na tomto zařízení omezeno.';
+
+  @override
+  String get voiceTranscriptionUnavailable =>
+      'Rozpoznávání řeči v zařízení není dostupné.';
+
+  @override
+  String get voiceTranscriptionInvalidFile =>
+      'Tuto hlasovou zprávu nelze přepsat.';
+
+  @override
+  String get voiceTranscriptionFailed =>
+      'Hlasovou zprávu se nepodařilo přepsat.';
+
+  @override
   String get presenceOnline => 'Online';
 
   @override

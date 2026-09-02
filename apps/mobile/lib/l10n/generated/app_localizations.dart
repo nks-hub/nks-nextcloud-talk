@@ -1436,6 +1436,66 @@ abstract class AppLocalizations {
   /// **'The recording could not be removed safely.'**
   String get voiceCleanupFailed;
 
+  /// No description provided for @transcribeVoiceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe'**
+  String get transcribeVoiceMessage;
+
+  /// No description provided for @cancelVoiceTranscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel transcription'**
+  String get cancelVoiceTranscription;
+
+  /// No description provided for @voiceTranscriptionRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribing the voice message…'**
+  String get voiceTranscriptionRunning;
+
+  /// No description provided for @copyVoiceTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy transcription'**
+  String get copyVoiceTranscript;
+
+  /// No description provided for @voiceTranscriptCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcription copied to clipboard'**
+  String get voiceTranscriptCopied;
+
+  /// No description provided for @voiceTranscriptionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition permission was denied.'**
+  String get voiceTranscriptionDenied;
+
+  /// No description provided for @voiceTranscriptionRestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition is restricted on this device.'**
+  String get voiceTranscriptionRestricted;
+
+  /// No description provided for @voiceTranscriptionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device speech recognition is unavailable.'**
+  String get voiceTranscriptionUnavailable;
+
+  /// No description provided for @voiceTranscriptionInvalidFile.
+  ///
+  /// In en, this message translates to:
+  /// **'This voice message cannot be transcribed.'**
+  String get voiceTranscriptionInvalidFile;
+
+  /// No description provided for @voiceTranscriptionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The voice message could not be transcribed.'**
+  String get voiceTranscriptionFailed;
+
   /// No description provided for @presenceOnline.
   ///
   /// In en, this message translates to:

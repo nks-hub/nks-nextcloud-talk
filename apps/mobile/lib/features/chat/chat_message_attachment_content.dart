@@ -32,13 +32,126 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   /// not fight the thumb under their finger.
   Duration? _scrubbing;
 
+  VoiceTranscriber? _transcriber;
+  bool _transcribing = false;
+  String? _transcript;
+  String? _transcriptionError;
+  bool _transcriptCopied = false;
+
+  /// Bumped by every cancel, account switch and dispose. A transcription that
+  /// resolves against an older generation belongs to a request the listener
+  /// already walked away from, so its text never reaches the bubble.
+  int _transcriptionGeneration = 0;
+
+  @override
+  void didUpdateWidget(_VoiceAttachment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.account.id != widget.account.id ||
+        oldWidget.messageId != widget.messageId) {
+      _discardTranscription();
+    }
+  }
+
   @override
   void dispose() {
     unawaited(_completion?.cancel());
     unawaited(_positionUpdates?.cancel());
     unawaited(_durationUpdates?.cancel());
     unawaited(_backend?.dispose());
+    _transcriptionGeneration++;
+    unawaited(_transcriber?.dispose());
     super.dispose();
+  }
+
+  /// Drops whatever the current request would produce and tells the platform
+  /// recogniser to stop. Shared by the cancel button and the account switch.
+  void _discardTranscription() {
+    _transcriptionGeneration++;
+    final transcriber = _transcriber;
+    if (transcriber != null) {
+      unawaited(transcriber.cancel());
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _transcribing = false;
+      _transcript = null;
+      _transcriptionError = null;
+      _transcriptCopied = false;
+    });
+  }
+
+  Future<void> _transcribe(ChatVoiceTranscriberFactory factory) async {
+    final generation = ++_transcriptionGeneration;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    setState(() {
+      _transcribing = true;
+      _transcript = null;
+      _transcriptionError = null;
+      _transcriptCopied = false;
+    });
+    final transcriber = _transcriber ??= factory();
+    try {
+      final file = await ref.read(
+        chatVoiceFileProvider((
+          account: widget.account,
+          uri: widget.uri,
+          messageId: widget.messageId,
+        )).future,
+      );
+      final text = await transcriber.transcribe(
+        filePath: file.path,
+        localeIdentifier: locale,
+      );
+      if (!mounted || generation != _transcriptionGeneration) {
+        return;
+      }
+      setState(() {
+        _transcribing = false;
+        _transcript = text;
+      });
+    } on Object catch (error) {
+      if (!mounted || generation != _transcriptionGeneration) {
+        return;
+      }
+      if (error is VoiceTranscriptionException &&
+          error.failure == VoiceTranscriptionFailure.cancelled) {
+        setState(() => _transcribing = false);
+        return;
+      }
+      setState(() {
+        _transcribing = false;
+        _transcriptionError = _transcriptionErrorText(error);
+      });
+    }
+  }
+
+  String _transcriptionErrorText(Object error) {
+    final strings = AppLocalizations.of(context);
+    if (error is VoiceTranscriptionException) {
+      return switch (error.failure) {
+      VoiceTranscriptionFailure.denied => strings.voiceTranscriptionDenied,
+      VoiceTranscriptionFailure.restricted =>
+        strings.voiceTranscriptionRestricted,
+      VoiceTranscriptionFailure.unavailable =>
+        strings.voiceTranscriptionUnavailable,
+      VoiceTranscriptionFailure.invalidFile =>
+        strings.voiceTranscriptionInvalidFile,
+      VoiceTranscriptionFailure.failed ||
+      VoiceTranscriptionFailure.cancelled ||
+      VoiceTranscriptionFailure.unsupported =>
+          strings.voiceTranscriptionFailed,
+      };
+    }
+    return strings.voiceTranscriptionFailed;
+  }
+
+  Future<void> _copyTranscript(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      setState(() => _transcriptCopied = true);
+    }
   }
 
   Future<void> _toggle() async {
@@ -142,6 +255,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
         ? strings.pauseVoiceMessage
         : strings.playVoiceMessage;
     final total = _total;
+    final transcriberFactory = ref.watch(chatVoiceTranscriberFactoryProvider);
     return Container(
       key: Key('chat-voice-${widget.messageId}'),
       margin: const EdgeInsets.only(top: 8),
@@ -150,7 +264,26 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
         color: scheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _player(context, strings, scheme, label, total),
+          if (transcriberFactory != null)
+            _transcription(context, strings, scheme, transcriberFactory),
+        ],
+      ),
+    );
+  }
+
+  Widget _player(
+    BuildContext context,
+    AppLocalizations strings,
+    ColorScheme scheme,
+    String label,
+    Duration? total,
+  ) {
+    return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
@@ -186,7 +319,129 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           ),
           const SizedBox(width: 4),
         ],
-      ),
+    );
+  }
+
+  /// On-device speech recognition, so the audio never leaves the phone. The
+  /// action only exists where a recogniser is actually wired up.
+  Widget _transcription(
+    BuildContext context,
+    AppLocalizations strings,
+    ColorScheme scheme,
+    ChatVoiceTranscriberFactory factory,
+  ) {
+    final transcript = _transcript;
+    final error = _transcriptionError;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_transcribing)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox.square(
+                key: Key('chat-voice-transcribing-${widget.messageId}'),
+                dimension: 48,
+                child: const Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  strings.voiceTranscriptionRunning,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              SizedBox.square(
+                dimension: 48,
+                child: IconButton(
+                  key: Key(
+                    'chat-voice-transcription-cancel-${widget.messageId}',
+                  ),
+                  tooltip: strings.cancelVoiceTranscription,
+                  onPressed: _discardTranscription,
+                  icon: Icon(
+                    Icons.close_rounded,
+                    semanticLabel: strings.cancelVoiceTranscription,
+                  ),
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox.square(
+                key: Key('chat-voice-transcribe-${widget.messageId}'),
+                dimension: 48,
+                child: IconButton(
+                  tooltip: strings.transcribeVoiceMessage,
+                  onPressed: () => unawaited(_transcribe(factory)),
+                  icon: Icon(
+                    Icons.subtitles_rounded,
+                    semanticLabel: strings.transcribeVoiceMessage,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  strings.transcribeVoiceMessage,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        if (transcript != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    transcript,
+                    key: Key('chat-voice-transcript-${widget.messageId}'),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
+              SizedBox.square(
+                key: Key('chat-voice-transcript-copy-${widget.messageId}'),
+                dimension: 48,
+                child: IconButton(
+                  tooltip: strings.copyVoiceTranscript,
+                  onPressed: () => unawaited(_copyTranscript(transcript)),
+                  icon: Icon(
+                    Icons.copy_rounded,
+                    semanticLabel: strings.copyVoiceTranscript,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (_transcriptCopied)
+          Text(
+            strings.voiceTranscriptCopied,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              error,
+              key: Key('chat-voice-transcription-error-${widget.messageId}'),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          ),
+      ],
     );
   }
 
