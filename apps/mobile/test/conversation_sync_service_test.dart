@@ -717,6 +717,60 @@ void main() {
   );
 
   test(
+    'a null credential read is re-read before it counts as missing',
+    () async {
+      // Right after a cold start the vault answers null once, then the real
+      // value. One null must not sign the account out.
+      vault.values.remove('account-a');
+      var reads = 0;
+      final delays = <Duration>[];
+      final flakyVault = _FlakyVault(() {
+        reads++;
+        if (reads == 2) {
+          vault.values['account-a'] = 'fixture-app-password-never-use';
+        }
+      }, vault);
+      var conversationRequests = 0;
+      final conversationResponse =
+          readFixtureJson(
+                'conversation-list/fixtures/conversations-full.response.json',
+              )
+              as Map<String, Object?>;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(jsonEncode(capabilitiesJson()), 200);
+          }
+          conversationRequests++;
+          return http.Response.bytes(
+            utf8.encode(jsonEncode(conversationResponse)),
+            200,
+            headers: const <String, String>{
+              'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+              'X-Nextcloud-Talk-Modified-Before': '1724300001',
+              'X-Nextcloud-Talk-Federation-Invites': '0',
+            },
+          );
+        }),
+      );
+      addTearDown(api.close);
+      final service = ConversationSyncService(
+        accounts: repository,
+        credentials: flakyVault,
+        api: api,
+        delay: (duration) async => delays.add(duration),
+      );
+
+      await service.sync('account-a');
+
+      expect(reads, 2);
+      expect(delays, hasLength(1));
+      expect(conversationRequests, 1);
+      expect((await repository.getAccount('account-a'))?.lastSyncError, isNull);
+    },
+  );
+
+  test(
     'a 401 for a password the user already replaced is not re-login',
     () async {
       // The flight authenticated with the old password; while it was in the
@@ -993,4 +1047,26 @@ final class _ControlledConversationClient extends http.BaseClient {
       headers: headers,
     );
   }
+}
+
+/// Calls [onRead] before every read so a test can flip what the vault holds.
+final class _FlakyVault implements CredentialVault {
+  _FlakyVault(this.onRead, this.inner);
+
+  final void Function() onRead;
+  final MemoryCredentialVault inner;
+
+  @override
+  Future<String?> readAppPassword(String accountId) {
+    onRead();
+    return inner.readAppPassword(accountId);
+  }
+
+  @override
+  Future<void> writeAppPassword(String accountId, String appPassword) =>
+      inner.writeAppPassword(accountId, appPassword);
+
+  @override
+  Future<void> deleteAppPassword(String accountId) =>
+      inner.deleteAppPassword(accountId);
 }

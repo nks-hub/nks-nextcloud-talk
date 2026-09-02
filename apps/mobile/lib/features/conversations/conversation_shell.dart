@@ -780,8 +780,11 @@ bool _isPermanentConversationSyncError(ConversationSyncError error) {
     ConversationSyncError.rateLimited ||
     ConversationSyncError.serviceUnavailable ||
     ConversationSyncError.network => false,
+    // Not permanent: secure storage can answer null briefly after a cold
+    // start. The banner stays up while the row says so, but the loop keeps
+    // trying with backoff and clears it by itself once the vault answers.
+    ConversationSyncError.credentialMissing => false,
     ConversationSyncError.accountMissing ||
-    ConversationSyncError.credentialMissing ||
     ConversationSyncError.talkUnavailable ||
     ConversationSyncError.conversationProfileUnsupported ||
     ConversationSyncError.reauthenticationRequired ||

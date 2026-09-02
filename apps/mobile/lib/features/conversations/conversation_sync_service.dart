@@ -60,12 +60,15 @@ final class ConversationSyncService {
     required HttpNextcloudApi api,
     AuthenticationLostCallback? onAuthenticationLost,
     Uuid? uuid,
+    Future<void> Function(Duration)? delay,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _onAuthenticationLost = onAuthenticationLost,
-       _uuid = uuid ?? const Uuid();
+       _uuid = uuid ?? const Uuid(),
+       _delay = delay ?? Future<void>.delayed;
 
+  final Future<void> Function(Duration) _delay;
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
@@ -218,11 +221,24 @@ final class ConversationSyncService {
         ConversationSyncError.reauthenticationRequired,
       );
     }
-    final String? appPassword;
-    try {
-      appPassword = await _credentials.readAppPassword(accountId);
-    } on CredentialVaultTemporarilyUnavailable {
-      throw const ConversationSyncException(ConversationSyncError.network);
+    String? appPassword;
+    // Secure storage answers null for "not stored" but also, briefly, right
+    // after a cold start while the keystore is not ready. One such null used
+    // to be recorded as a missing credential and the shell stopped syncing
+    // until the user logged in again (Android 14 build 49, account intact on
+    // the server). A handful of re-reads separates the two.
+    for (var attempt = 0; attempt < _credentialReadAttempts; attempt++) {
+      try {
+        appPassword = await _credentials.readAppPassword(accountId);
+      } on CredentialVaultTemporarilyUnavailable {
+        throw const ConversationSyncException(ConversationSyncError.network);
+      }
+      if (appPassword != null) {
+        break;
+      }
+      if (attempt + 1 < _credentialReadAttempts) {
+        await _delay(_credentialReadRetryDelay);
+      }
     }
     if (appPassword == null) {
       await _fail(accountId, ConversationSyncError.credentialMissing);
@@ -333,6 +349,9 @@ final class ConversationSyncService {
       _ => ConversationSyncError.network,
     };
   }
+
+  static const _credentialReadAttempts = 3;
+  static const _credentialReadRetryDelay = Duration(milliseconds: 400);
 
   /// Credential each in-flight sync authenticated with. A 401 that comes back
   /// for a password the user has since replaced belongs to the old login, not
