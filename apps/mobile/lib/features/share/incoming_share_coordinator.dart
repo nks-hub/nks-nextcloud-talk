@@ -17,18 +17,34 @@ final class IncomingShareCoordinator {
       StreamController<void>.broadcast();
   StreamSubscription<IncomingShare>? _subscription;
   Future<void>? _startFuture;
+  Future<void>? _refreshFuture;
 
   Stream<void> get shareAvailable => _availableController.stream;
 
   IncomingShare? takeNext() => _pending.isEmpty ? null : _pending.removeFirst();
 
-  Future<void> start() => _startFuture ??= _start();
+  Future<void> start() => _startFuture ??= refresh();
 
-  Future<void> _start() async {
+  Future<void> refresh() {
+    final running = _refreshFuture;
+    if (running != null) return running;
+    late final Future<void> current;
+    current = _readLaunchShare().whenComplete(() {
+      if (identical(_refreshFuture, current)) {
+        _refreshFuture = null;
+      }
+    });
+    _refreshFuture = current;
+    return current;
+  }
+
+  Future<void> _readLaunchShare() async {
     try {
       final share = await _platform.getLaunchShare();
       if (share != null) _accept(share);
     } on MissingPluginException {
+      return;
+    } on PlatformException {
       return;
     }
   }
@@ -41,6 +57,8 @@ final class IncomingShareCoordinator {
 
   Future<void> complete(IncomingShare share) async {
     await _platform.complete(share.id);
+    _knownIds.remove(share.id);
+    await refresh();
   }
 
   Future<void> close() async {

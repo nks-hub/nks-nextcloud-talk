@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_bridge.dart';
 import 'package:nextcloudtalk/features/share/incoming_share_coordinator.dart';
@@ -14,8 +16,33 @@ void main() {
   const channel = MethodChannel(IncomingShareBridge.channelName);
 
   tearDown(() async {
+    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('host asks the native inbox for an iOS launch share', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    var launchCalls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'getLaunchShare') {
+            launchCalls++;
+            return null;
+          }
+          return true;
+        });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: _localizedApp(const IncomingShareHost(child: SizedBox.shrink())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(launchCalls, 1);
   });
 
   test('bridge parses cold text and completes its exact native id', () async {
@@ -69,6 +96,23 @@ void main() {
 
     expect(coordinator.takeNext()?.id, 'cold');
     expect(coordinator.takeNext()?.id, 'warm');
+    expect(coordinator.takeNext(), isNull);
+  });
+
+  test('completing one native share pulls the next durable item', () async {
+    final platform = _QueuedIncomingSharePlatform([
+      const IncomingShare(id: 'first', text: 'first', file: null),
+      const IncomingShare(id: 'second', text: 'second', file: null),
+    ]);
+    final coordinator = IncomingShareCoordinator(platform);
+    addTearDown(coordinator.close);
+
+    await coordinator.start();
+    final first = coordinator.takeNext()!;
+    await coordinator.complete(first);
+
+    expect(platform.completed, ['first']);
+    expect(coordinator.takeNext()?.id, 'second');
     expect(coordinator.takeNext(), isNull);
   });
 
@@ -189,6 +233,29 @@ final class _FakeIncomingSharePlatform implements IncomingSharePlatform {
 
   @override
   Future<void> complete(String id) async {}
+
+  @override
+  Future<void> dispose() => _opened.close();
+}
+
+final class _QueuedIncomingSharePlatform implements IncomingSharePlatform {
+  _QueuedIncomingSharePlatform(this.launches);
+
+  final List<IncomingShare> launches;
+  final List<String> completed = [];
+  final StreamController<IncomingShare> _opened =
+      StreamController<IncomingShare>.broadcast();
+
+  @override
+  Stream<IncomingShare> get shareOpened => _opened.stream;
+
+  @override
+  Future<IncomingShare?> getLaunchShare() async {
+    return launches.isEmpty ? null : launches.removeAt(0);
+  }
+
+  @override
+  Future<void> complete(String id) async => completed.add(id);
 
   @override
   Future<void> dispose() => _opened.close();

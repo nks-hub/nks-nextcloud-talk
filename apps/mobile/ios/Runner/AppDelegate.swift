@@ -115,6 +115,7 @@ final class AppleDeepLinkDelivery {
   private var pushChannel: FlutterMethodChannel?
   private var contactPickerChannel: ContactPickerChannel?
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
+  private var incomingShareChannel: AppleIncomingShareChannel?
 
   override func application(
     _ application: UIApplication,
@@ -240,6 +241,10 @@ final class AppleDeepLinkDelivery {
       presentingViewController: ContactPickerChannel.activeViewController
     )
     voiceMessageTranscriber = VoiceMessageTranscriber(
+      messenger: engineBridge.applicationRegistrar.messenger()
+    )
+    incomingShareChannel?.dispose()
+    incomingShareChannel = AppleIncomingShareChannel(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
 

@@ -57,15 +57,22 @@ final class IncomingShareHost extends ConsumerStatefulWidget {
 final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
   IncomingShareCoordinator? _coordinator;
   StreamSubscription<void>? _subscription;
+  AppLifecycleListener? _lifecycle;
   var _draining = false;
 
   @override
   void initState() {
     super.initState();
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
     final coordinator = IncomingShareCoordinator(IncomingShareBridge());
     _coordinator = coordinator;
     _subscription = coordinator.shareAvailable.listen((_) => _scheduleDrain());
+    _lifecycle = AppLifecycleListener(
+      onResume: () => unawaited(coordinator.refresh()),
+    );
     unawaited(coordinator.start().then((_) => _scheduleDrain()));
   }
 
@@ -199,6 +206,7 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
 
   @override
   void dispose() {
+    _lifecycle?.dispose();
     unawaited(_subscription?.cancel());
     unawaited(_coordinator?.close());
     super.dispose();
