@@ -51,6 +51,27 @@ TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběže
   tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
   je k dispozici celé okno. Volba přežije restart aplikace.
 
+## Nevydáno
+
+- Účet už nespadne do „přihlásit se znovu" kvůli jednomu chybnému 401.
+  Referenční server 2. 9. večer vracel na několik sekund 401 pro platné
+  tokeny třem klientům najednou; aplikace každý takový výpadek brala jako
+  odvolané přihlášení a zůstala v něm, dokud se uživatel nepřihlásil ručně.
+  Teď se 401 ověřuje druhým čtením po dvou sekundách, a účet, který už
+  v tom stavu je, se sám uvolní, jakmile jeho token zase funguje.
+- Krátce po startu mohl trezor s heslem odpovědět „nic tu není", než byl
+  systémový keystore připravený; aplikace to zapsala jako chybějící
+  přihlášení a přestala synchronizovat. Čtení se opakuje a stav není trvalý.
+- Přihlášení znovu už neshodí stará odpověď: 401 pro heslo, které uživatel
+  mezitím nahradil, se ignoruje.
+- Čtyři pády hlášené ze Sentry (build 47): registrace push při výpadku sítě,
+  probuzení synchronizace zaparkovaného účtu, odmítnuté oprávnění
+  k oznámením na iOS a start bez složky Dokumenty. Žádný z nich už není pád.
+- Akce zprávy „Poslat do Note to self" pošle text rovnou do vlastní
+  poznámkové konverzace.
+- Lišta stahování přílohy zná procenta i tam, kde server nepošle délku:
+  vezme velikost souboru ze sdílení.
+
 ## 0.1.0 (48) — 2. 9. 2026
 
 Vydáno ze zdroje `8b32836` (+ docs). Build 47 k testerům nešel jako
@@ -111,8 +132,6 @@ vyžaduje člověka u stroje, GUI důkaz chybí.
   aplikace nemá v iOS offline model (čeština ho nemá), použije se jazyk
   zařízení. V simulátoru rozpoznávání končí systémovou chybou 1101, skutečný
   přepis potvrdí až fyzický iPhone.
-- Akce zprávy „Poslat do Note to self" pošle text rovnou do vlastní poznámkové
-  konverzace bez výběru cíle.
 - iOS má Share Extension: text nebo jeden soubor sdílený ze systémové nabídky
   jde poslat do vybraného účtu a konverzace, stejně jako na Androidu.
 - macOS: „Uložit jako" u přílohy dřív skončilo bez souboru, protože sandbox
