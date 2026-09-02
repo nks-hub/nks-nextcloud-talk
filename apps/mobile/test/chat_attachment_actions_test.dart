@@ -104,6 +104,27 @@ void main() {
     expect(find.byKey(const Key('chat-attachment-downloading')), findsNothing);
   });
 
+  testWidgets('a missing response length falls back to the declared size', (
+    tester,
+  ) async {
+    final opener = _RecordingOpener()
+      ..heldProgress = (received: 1024, total: null);
+    await tester.pumpWidget(
+      _app(
+        exporter: _RecordingExporter(),
+        opener: opener,
+        message: _sizedFileMessage,
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-81-0')));
+    await tester.pump();
+
+    expect(find.text('Downloading the attachment… 25%'), findsOneWidget);
+    opener.release();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('cancelled save is informational and share cancel is silent', (
     tester,
   ) async {
@@ -436,4 +457,33 @@ final ChatMessage _voiceMessage = ChatMessage.fromJson({
       'mimetype': 'audio/mp4',
     },
   },
+});
+
+/// The same file with the size Talk sends alongside the share.
+final ChatMessage _sizedFileMessage = ChatMessage.fromJson({
+  'id': 81,
+  'token': 'rooma123',
+  'actorType': 'users',
+  'actorId': 'fixture-author',
+  'actorDisplayName': 'Fixture author',
+  'timestamp': 1767225600,
+  'systemMessage': '',
+  'messageType': 'comment',
+  'isReplyable': true,
+  'referenceId': 'reference-81',
+  'message': '{file}',
+  'messageParameters': {
+    'file': {
+      'type': 'file',
+      'id': '81',
+      'name': 'report.pdf',
+      'path': 'Talk/report.pdf',
+      'mimetype': 'application/pdf',
+      'size': '4096',
+    },
+  },
+  'markdown': false,
+  'reactions': <String, Object?>{},
+  'reactionsSelf': <Object?>[],
+  'deleted': null,
 });

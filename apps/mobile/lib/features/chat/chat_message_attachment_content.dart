@@ -569,6 +569,7 @@ final class _ChatAttachment extends ConsumerWidget {
               uri: originalUri,
               fileName: name,
               contentType: mimeType,
+              expectedBytes: _attachmentExpectedBytes(parameter),
             ),
           );
     final openAttachment = openImage ?? openFile;
@@ -745,6 +746,7 @@ final class _ChatAttachment extends ConsumerWidget {
                             uri: originalUri!,
                             fileName: name,
                             contentType: mimeType!,
+                            expectedBytes: _attachmentExpectedBytes(parameter),
                           ),
                         ),
                       ),
@@ -764,6 +766,7 @@ final class _ChatAttachment extends ConsumerWidget {
                             uri: originalUri!,
                             fileName: name,
                             contentType: mimeType!,
+                            expectedBytes: _attachmentExpectedBytes(parameter),
                           ),
                         ),
                       ),
@@ -850,6 +853,18 @@ _DavAttachment? _davAttachment(
   );
 }
 
+/// Declared size of the shared file, when Talk sent one. Only a fallback for
+/// the progress bar when the download response carries no length.
+int? _attachmentExpectedBytes(ChatRichObjectParameter parameter) {
+  final value = parameter.wire['size'];
+  final size = switch (value) {
+    int() => value,
+    String() => int.tryParse(value),
+    _ => null,
+  };
+  return size != null && size > 0 ? size : null;
+}
+
 String? _mimeType(ChatRichObjectParameter parameter) {
   final value = parameter.wire['mimetype'] ?? parameter.wire['mimeType'];
   return value is String ? value.trim().toLowerCase() : null;
@@ -922,8 +937,9 @@ Uri _fullScreenPreviewUri(Uri previewUri) {
 /// head of that queue is an assertion failure.
 Future<T> _withDownloadNotice<T>(
   BuildContext context,
-  Future<T> Function(ChatDownloadProgress onProgress) run,
-) async {
+  Future<T> Function(ChatDownloadProgress onProgress) run, {
+  int? expectedBytes,
+}) async {
   final overlay = Overlay.of(context);
   final progress = ValueNotifier<({int received, int? total})>((
     received: 0,
@@ -935,7 +951,7 @@ Future<T> _withDownloadNotice<T>(
   overlay.insert(notice);
   try {
     return await run((received, total) {
-      progress.value = (received: received, total: total);
+      progress.value = (received: received, total: total ?? expectedBytes);
     });
   } finally {
     notice
@@ -1012,12 +1028,14 @@ Future<void> _openDownloadedAttachment(
   required Uri uri,
   required String fileName,
   required String contentType,
+  int? expectedBytes,
 }) async {
   final opener = ref.read(chatAttachmentOpenActionFactoryProvider)(
     ref.read(chatMediaRepositoryProvider),
   );
   final result = await _withDownloadNotice(
     context,
+    expectedBytes: expectedBytes,
     (onProgress) => opener.open(
       account: account,
       uri: uri,
@@ -1054,6 +1072,7 @@ Future<void> _exportDownloadedAttachment(
   required Uri uri,
   required String fileName,
   required String contentType,
+  int? expectedBytes,
 }) async {
   final exporter = ref.read(chatAttachmentExportActionFactoryProvider)(
     ref.read(chatMediaRepositoryProvider),
@@ -1064,6 +1083,7 @@ Future<void> _exportDownloadedAttachment(
     case _ChatAttachmentMenuAction.save:
       final result = await _withDownloadNotice(
         context,
+        expectedBytes: expectedBytes,
         (onProgress) => exporter.save(
           account: account,
           uri: uri,
@@ -1089,6 +1109,7 @@ Future<void> _exportDownloadedAttachment(
     case _ChatAttachmentMenuAction.share:
       final result = await _withDownloadNotice(
         context,
+        expectedBytes: expectedBytes,
         (onProgress) => exporter.share(
           account: account,
           uri: uri,
