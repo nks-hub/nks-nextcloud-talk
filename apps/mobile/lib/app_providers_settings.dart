@@ -60,6 +60,47 @@ final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
   return FileThemePreferenceStore();
 });
 
+final listPanePreferenceStoreProvider = Provider<ListPanePreferenceStore>((
+  ref,
+) {
+  return FileListPanePreferenceStore();
+});
+
+final conversationListCollapsedProvider =
+    NotifierProvider<ConversationListCollapsedController, bool>(
+      ConversationListCollapsedController.new,
+    );
+
+/// Whether the conversation list is folded away on a wide window.
+///
+/// Starts shown and corrects itself once the stored value is read: a list that
+/// flickers into view is a smaller problem than a window that opens with the
+/// conversations apparently gone.
+final class ConversationListCollapsedController extends Notifier<bool> {
+  @override
+  bool build() {
+    unawaited(_load());
+    return false;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref
+        .read(listPanePreferenceStoreProvider)
+        .readCollapsed();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  Future<void> toggle() async {
+    final collapsed = !state;
+    state = collapsed;
+    await ref
+        .read(listPanePreferenceStoreProvider)
+        .writeCollapsed(collapsed: collapsed);
+  }
+}
+
 final themeModeProvider = NotifierProvider<ThemeModeController, ThemeMode>(
   ThemeModeController.new,
 );

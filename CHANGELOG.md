@@ -26,7 +26,7 @@ proto jen to, co je doložitelné z App Store Connect.
   89 pixelů zpět — na notebooku s šířkou 1024 skoro devět procent obrazovky.
 - Seznam konverzací jde složit. V hlavičce otevřené konverzace přibylo
   tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
-  je k dispozici celé okno.
+  je k dispozici celé okno. Volba přežije restart aplikace.
 
 ## 0.1.0 (45) — 2. 9. 2026
 

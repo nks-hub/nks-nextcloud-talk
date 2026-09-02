@@ -21,6 +21,32 @@ Než začne chat, je tedy **390 px spotřebováno vždy**, bez ohledu na to, co
 v těch pásech je. Na okně 1400 px je to 28 % šířky; na 1024 px, což je pořád
 běžný notebook, **38 %**.
 
+## Naměřený rozpočet šířky
+
+Změřeno vykreslením skutečného `ConversationWorkspace` na čtyřech šířkách okna;
+`chrome` je rail plus seznam, tedy všechno vlevo od konverzace.
+
+| okno | účty | rail | seznam | konverzace | chrome | podíl |
+| ---: | ---: | ---: | -----: | ---------: | -----: | ----: |
+| 1024 | 1 | 0 | 330 | 693 | 330 | **32,2 %** |
+| 1024 | 2 | 88 | 330 | 604 | 418 | **40,8 %** |
+| 1280 | 1 | 0 | 390 | 889 | 390 | 30,5 % |
+| 1280 | 2 | 88 | 390 | 800 | 478 | 37,3 % |
+| 1400 | 1 | 0 | 390 | 1009 | 390 | 27,9 % |
+| 1400 | 2 | 88 | 390 | 920 | 478 | 34,1 % |
+| 1920 | 1 | 0 | 390 | 1529 | 390 | 20,3 % |
+| 1920 | 2 | 88 | 390 | 1440 | 478 | 24,9 % |
+
+Dvě věci z té tabulky stojí za pozornost.
+
+Zaprvé, **rail je nejdražší přesně tam, kde je místa nejmíň**: na 1024 px stojí
+8,6 procentního bodu, na 1920 px jen 4,6. Chrome s pevnou šířkou zdražuje, čím
+menší je okno — a notebook s 1024 px není okrajový případ.
+
+Zadruhé, čísla jsou z widget testu, kde platí **dotyková** `VisualDensity`,
+takže seznam vychází 330–390 px. Na skutečném desktopu je 300 px, takže reálný
+podíl je o něco nižší; poměry mezi řádky ale platí.
+
 ## Co v tom railu doopravdy je
 
 Obsah `_AccountRail` shora dolů: `BrandMark` 44 px, oddělovač, `ListView`
@@ -70,12 +96,21 @@ Proč ne jinak:
 
 Detail konverzace se přepínat dá (`detailsOpen`), seznam ne, přestože je
 širší a při čtení delší konverzace stejně zbytečný. Přibývá přepínač
-v hlavičce chatu, který seznam složí, a stav žije ve `_ConversationShellState`
-vedle `_detailsOpen` — ze stejného důvodu: rozvržení je špatné místo pro stav,
-který samo rozvržení při resize zahodí.
+v hlavičce chatu, který seznam složí. Stav nedrží rozvržení — to je špatné
+místo pro stav, který samo při resize zahodí — ale předvolba, viz D-043.
 
 Skládá se na nulu, ne na ikonový proužek. Proužek je třetí šířkový režim
 navíc, a to jen proto, aby se ušetřilo jedno kliknutí zpět.
+
+**D-043: složení seznamu si aplikace pamatuje.**
+
+Stav fold přežije restart. Desktopová aplikace, která si rozvržení nepamatuje,
+se skládá znovu při každém spuštění. Ukládá se do souboru vedle volby motivu,
+tedy NE per účet: fold je vlastnost toho, jak člověk používá tohle okno, a
+přepnutí účtu není důvod ho rozbalit.
+
+Nečitelná předvolba spadne na „zobrazeno". Ten směr je schválně: omylem skrytý
+seznam vypadá jako ztracené konverzace, omylem zobrazený stojí jedno kliknutí.
 
 ## Co se vědomě nemění
 

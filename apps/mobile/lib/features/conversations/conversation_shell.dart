@@ -50,7 +50,6 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   /// Lives here, not in the layout, for the same reason the selected token
   /// does: a resize rebuilds the layout and would take the flag with it.
   bool _detailsOpen = false;
-  bool _listCollapsed = false;
   String? _selectedAccountId;
   ForegroundSyncLoop? _liveSyncLoop;
   StreamSubscription<void>? _pushOpenSubscription;
@@ -514,8 +513,12 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           detailsOpen: _detailsOpen,
           onOpenDetails: () => setState(() => _detailsOpen = true),
           onCloseDetails: () => setState(() => _detailsOpen = false),
-          listCollapsed: _listCollapsed,
-          onToggleList: () => setState(() => _listCollapsed = !_listCollapsed),
+          // Read from the store rather than held here: a desktop window that
+          // forgets its layout on every launch gets refolded on every launch.
+          listCollapsed: ref.watch(conversationListCollapsedProvider),
+          onToggleList: () => unawaited(
+            ref.read(conversationListCollapsedProvider.notifier).toggle(),
+          ),
           onOpenCreatedConversation: (token) {
             unawaited(_openAccountConversation(selected.id, token));
           },
