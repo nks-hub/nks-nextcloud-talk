@@ -70,6 +70,11 @@ workflows:
     name: macOS build
     instance_type: mac_mini_m2
     max_build_duration: 60
+    # Without this the App Store Connect CLI has no credentials at all, and
+    # `fetch-signing-files` fails with "argument --issuer-id: Missing value
+    # ISSUER_ID". That was the whole reason macOS builds went out unsigned.
+    integrations:
+      app_store_connect: chatujme-asc-key
     environment:
       groups:
         - nks-talk-telemetry
@@ -88,30 +93,36 @@ workflows:
       # notification service extension, found neither, and automatic signing
       # was off. The account already holds the identities, so they are fetched
       # rather than assumed.
+      # Direct distribution, not development: the artifact is a zip handed to
+      # testers, so a development profile would only run on registered Macs.
+      # Nothing here may fail quietly - see the build step for why.
       - name: Set up signing
         script: |
           keychain initialize
-          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk"             --platform MAC_OS --type MAC_APP_DEVELOPMENT --create || true
-          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk.NotificationService"             --platform MAC_OS --type MAC_APP_DEVELOPMENT --create || true
-          keychain add-certificates || true
-          cd apps/mobile && xcode-project use-profiles || true
+          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk"             --platform MAC_OS --type MAC_APP_DIRECT --create
+          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk.NotificationService"             --platform MAC_OS --type MAC_APP_DIRECT --create
+          keychain add-certificates
+          cd apps/mobile && xcode-project use-profiles
+      # There is deliberately NO ad-hoc fallback here. An ad-hoc macOS build
+      # carries no entitlements, so it loses `com.apple.security.app-sandbox`,
+      # and macOS then resolves Application Support to the real home directory
+      # instead of the app's container. The app silently starts with an empty
+      # database: no account, no polling, no notifications - and the account is
+      # still sitting in the container nobody reads any more. Measured on build-mac
+      # with build 46 on 2026-09-02. A build that loses the user's login is
+      # worse than no build, so a failed signature must fail the workflow.
       - name: Build the app
         script: |
           cd apps/mobile
-          # If no profile could be fetched, the build still has to produce
-          # something openable, so it falls back to an ad-hoc signature. A
-          # tester then allows it once in Gatekeeper; a build that does not
-          # exist helps nobody.
-          if ! flutter build macos --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT; then
-            echo "Signed build failed; retrying ad-hoc."
-            export FLUTTER_XCODE_CODE_SIGN_IDENTITY="-"
-            export FLUTTER_XCODE_CODE_SIGN_STYLE="Manual"
-            export FLUTTER_XCODE_CODE_SIGNING_REQUIRED="NO"
-            export FLUTTER_XCODE_CODE_SIGNING_ALLOWED="NO"
-            export FLUTTER_XCODE_DEVELOPMENT_TEAM=""
-            export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
-            flutter build macos --release               --dart-define=SENTRY_DSN=$SENTRY_DSN               --dart-define=RYBBIT_HOST=$RYBBIT_HOST               --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID               --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
-          fi
+          flutter build macos --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+      # A signature that came out ad-hoc anyway must not reach a tester, so it
+      # is checked rather than trusted.
+      - name: Verify the signature carries the sandbox
+        script: |
+          APP=apps/mobile/build/macos/Build/Products/Release/nextcloudtalk.app
+          codesign -dv --entitlements - "$APP" 2>&1 | tee /tmp/sig.txt
+          grep -q "TeamIdentifier=TEAMID0000" /tmp/sig.txt             || { echo "Unsigned or wrong team - refusing to publish."; exit 1; }
+          codesign -d --entitlements - "$APP" 2>&1 | grep -q "app-sandbox"             || { echo "No app-sandbox entitlement - the app would lose its account."; exit 1; }
       # Zipped rather than shipped as a .app directory, because an artifact
       # download would otherwise lose the bundle's symlinks and the result
       # would not launch.
