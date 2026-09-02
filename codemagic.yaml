@@ -83,14 +83,35 @@ workflows:
         script: cd apps/mobile && flutter pub get
       - name: Install pods
         script: cd apps/mobile/macos && pod install
+      # The first run failed here, and the message was precise: Xcode wanted a
+      # Mac App Development provisioning profile for the app AND for the
+      # notification service extension, found neither, and automatic signing
+      # was off. The account already holds the identities, so they are fetched
+      # rather than assumed.
+      - name: Set up signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk"             --platform MAC_OS --type MAC_APP_DEVELOPMENT --create || true
+          app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk.NotificationService"             --platform MAC_OS --type MAC_APP_DEVELOPMENT --create || true
+          keychain add-certificates || true
+          cd apps/mobile && xcode-project use-profiles || true
       - name: Build the app
         script: |
           cd apps/mobile
-          flutter build macos --release \
-            --dart-define=SENTRY_DSN=$SENTRY_DSN \
-            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
-            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
-            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          # If no profile could be fetched, the build still has to produce
+          # something openable, so it falls back to an ad-hoc signature. A
+          # tester then allows it once in Gatekeeper; a build that does not
+          # exist helps nobody.
+          if ! flutter build macos --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT; then
+            echo "Signed build failed; retrying ad-hoc."
+            export FLUTTER_XCODE_CODE_SIGN_IDENTITY="-"
+            export FLUTTER_XCODE_CODE_SIGN_STYLE="Manual"
+            export FLUTTER_XCODE_CODE_SIGNING_REQUIRED="NO"
+            export FLUTTER_XCODE_CODE_SIGNING_ALLOWED="NO"
+            export FLUTTER_XCODE_DEVELOPMENT_TEAM=""
+            export FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER=""
+            flutter build macos --release               --dart-define=SENTRY_DSN=$SENTRY_DSN               --dart-define=RYBBIT_HOST=$RYBBIT_HOST               --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID               --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          fi
       # Zipped rather than shipped as a .app directory, because an artifact
       # download would otherwise lose the bundle's symlinks and the result
       # would not launch.
