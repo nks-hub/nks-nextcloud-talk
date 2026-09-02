@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -61,19 +59,8 @@ final class ChatMessageContent extends StatelessWidget {
   final ValueChanged<int>? onOpenParent;
   final LocationTileClientFactory locationTileClientFactory;
 
-  /// Dragging a selection out of a message is what every other desktop chat
-  /// client does. On touch the same gesture opens the message actions, so it
-  /// stays off there rather than fighting them.
-  static bool get _selectableWithAPointer =>
-      Platform.isMacOS || Platform.isWindows || Platform.isLinux;
-
   @override
   Widget build(BuildContext context) {
-    final content = _buildContent(context);
-    return _selectableWithAPointer ? SelectionArea(child: content) : content;
-  }
-
-  Widget _buildContent(BuildContext context) {
     final parsed = message;
     if (parsed == null) {
       return Text(fallbackText, style: TextStyle(color: foregroundColor));
