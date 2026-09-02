@@ -236,6 +236,11 @@ final class ConversationSyncService {
       if (appPassword != null) {
         break;
       }
+      // Only an account that has synced before earns the re-reads: a null
+      // for one that never had a credential is the plain answer.
+      if (account.lastSyncedAtMillis == null) {
+        break;
+      }
       if (attempt + 1 < _credentialReadAttempts) {
         await _delay(_credentialReadRetryDelay);
       }

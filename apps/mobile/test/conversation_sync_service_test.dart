@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -722,6 +723,10 @@ void main() {
       // Right after a cold start the vault answers null once, then the real
       // value. One null must not sign the account out.
       vault.values.remove('account-a');
+      // Only an account that has synced before earns the re-reads.
+      await (database.update(database.accounts)
+            ..where((row) => row.id.equals('account-a')))
+          .write(const AccountsCompanion(lastSyncedAtMillis: Value(1)));
       var reads = 0;
       final delays = <Duration>[];
       final flakyVault = _FlakyVault(() {
