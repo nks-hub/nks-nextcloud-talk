@@ -28,6 +28,23 @@ proto jen to, co je doložitelné z App Store Connect.
   tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
   je k dispozici celé okno. Volba přežije restart aplikace.
 
+## Nevydáno
+
+- Otevřená konverzace na desktopu konečně dá vědět o nové zprávě. Aplikace
+  serveru hlásila, že je uživatel v místnosti přítomný, dokud tu konverzaci
+  neopustil — a Nextcloud přítomnému schválně notifikaci potlačí, aby mu
+  nepípal na zprávu, kterou si právě čte. Na telefonu to sedí, na desktopu ale
+  okno drží konverzaci otevřenou za třemi jinými okny, takže server mlčel celou
+  dobu. Nezaostřené okno se teď za přítomnost nepovažuje.
+- Živý kanál se po výpadku zase zvedne. Když přihlašovací údaj nebyl v tu
+  chvíli čitelný — a na desktopu není hned po startu okna — aplikace to četla
+  jako „tenhle server živý kanál nenabízí" a vypnula ho na celý běh. Teď to
+  zkouší dál.
+- Notifikace na Windows zní jako zpráva, ne obecně. Stejný rozdíl mezi zvukem
+  zprávy a zvukem hovoru dělá i oficiální aplikace Talk.
+- Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
+  čím přepínat, a seznam konverzací jde složit; volba přežije restart.
+
 ## 0.1.0 (45) — 2. 9. 2026
 
 Vydáno ze zdroje `f5b82dc`, tag `v0.1.0+45`, postaveno z čistého worktree.
