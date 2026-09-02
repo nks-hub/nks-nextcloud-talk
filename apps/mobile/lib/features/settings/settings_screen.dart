@@ -449,6 +449,10 @@ final class _AccountTileState extends ConsumerState<_AccountTile> {
         return AlertDialog(
           key: const Key('account-remove-dialog'),
           title: Text(dialogStrings.settingsRemoveAccountDialogTitle),
+          // Large text can make the body taller than the screen; without this
+          // the actions are pushed off the bottom and the dialog cannot be
+          // answered at all.
+          scrollable: true,
           content: Text(
             dialogStrings.settingsRemoveAccountDialogMessage(
               account.loginName,

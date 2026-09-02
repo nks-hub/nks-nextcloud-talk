@@ -47,12 +47,23 @@ Widget localizedTestApp({
   required Widget home,
   ThemeData? theme,
   Locale locale = const Locale('en'),
+  double textScale = 1,
 }) {
   return MaterialApp(
     locale: locale,
     theme: theme ?? AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
+    // Accessibility text sizes are a real device setting, so a suite has to be
+    // able to pump its own screen at one instead of building a second app.
+    builder: textScale == 1
+        ? null
+        : (context, inner) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScale)),
+            child: inner!,
+          ),
     home: home,
   );
 }

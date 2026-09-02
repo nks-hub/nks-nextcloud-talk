@@ -593,6 +593,10 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
       builder: (dialogContext) => AlertDialog(
         key: const Key('delete-message-dialog'),
         title: Text(strings.deleteMessageConfirmTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.deleteMessageConfirmBody),
         actions: [
           TextButton(

@@ -367,6 +367,10 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       builder: (dialogContext) => AlertDialog(
         key: const Key('room-details-leave-dialog'),
         title: Text(strings.roomDetailsLeaveDialogTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.roomDetailsLeaveDialogMessage),
         actions: [
           TextButton(
@@ -406,6 +410,10 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       builder: (dialogContext) => AlertDialog(
         key: const Key('room-details-delete-dialog'),
         title: Text(strings.roomDetailsDeleteDialogTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.roomDetailsDeleteDialogMessage),
         actions: [
           TextButton(
@@ -754,6 +762,10 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       builder: (dialogContext) => AlertDialog(
         key: Key(key),
         title: Text(title(strings)),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(message(strings)),
         actions: [
           TextButton(
@@ -806,6 +818,10 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       builder: (dialogContext) => AlertDialog(
         key: const Key('room-details-remove-participant-dialog'),
         title: Text(strings.roomDetailsRemoveDialogTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(
           strings.roomDetailsRemoveDialogMessage(participant.displayName),
         ),

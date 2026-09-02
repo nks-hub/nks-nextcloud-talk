@@ -98,6 +98,10 @@ final class _TextPromptDialogState extends State<_TextPromptDialog> {
     final emptyErrorText = widget.emptyErrorText;
     return AlertDialog(
       title: Text(widget.title),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: Form(
         key: _formKey,
         child: TextFormField(

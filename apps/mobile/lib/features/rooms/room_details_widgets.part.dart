@@ -189,6 +189,10 @@ final class _PasswordDialogState extends State<_PasswordDialog> {
     return AlertDialog(
       key: const Key('room-details-password-dialog'),
       title: Text(strings.roomDetailsPasswordDialogTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: TextField(
         key: const Key('room-details-password-field'),
         controller: _controller,
@@ -290,6 +294,10 @@ final class _LobbyDialogState extends State<_LobbyDialog> {
     return AlertDialog(
       key: const Key('room-details-lobby-dialog'),
       title: Text(strings.roomDetailsLobbyDialogTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,6 +395,10 @@ final class _AvatarDialogState extends State<_AvatarDialog> {
     return AlertDialog(
       key: const Key('room-details-avatar-dialog'),
       title: Text(strings.roomDetailsAvatarDialogTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,6 +541,10 @@ final class _BanDialogState extends State<_BanDialog> {
     return AlertDialog(
       key: const Key('room-details-ban-dialog'),
       title: Text(strings.roomDetailsBanDialogTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

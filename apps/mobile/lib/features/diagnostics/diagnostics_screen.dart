@@ -103,6 +103,10 @@ final class _StalledAttachmentTile extends ConsumerWidget {
       builder: (context) => AlertDialog(
         key: const Key('diagnostics-stalled-attachment-cancel-dialog'),
         title: Text(strings.diagnosticsStalledAttachmentCancelTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.diagnosticsStalledAttachmentCancelBody),
         actions: [
           TextButton(

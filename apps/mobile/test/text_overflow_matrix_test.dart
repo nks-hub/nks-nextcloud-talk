@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
+
+import 'accessibility_probe.dart';
 
 /// The screenshot half of the accessibility matrix, written as an assertion.
 ///
@@ -15,8 +17,15 @@ import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 /// on the overflow Flutter reports while painting.
 ///
 /// A naive version of this file passed even at nine times the text size, so
-/// the harness now proves it can fail: the last test feeds it a row that
-/// really does overflow and requires a complaint.
+/// the harness proves it can fail: the last test feeds it a row that really
+/// does overflow and requires a complaint.
+///
+/// Screens that need a database and a mocked server are probed inside their
+/// own suites, where that harness already exists — the share confirmation in
+/// `remote_file_picker_screen_test.dart`, the account removal dialog in
+/// `settings_screen_test.dart`, the clear-history warning in the room details
+/// suite. Rebuilding those harnesses here is what kept the probe on the two
+/// screens it could afford.
 void main() {
   const account = StoredAccount(
     id: 'account-a',
@@ -107,24 +116,8 @@ Future<List<String>> _overflowsWhilePainting(
   required ({String name, Locale locale, ThemeData theme}) variant,
   required Widget child,
 }) async {
-  // A small phone at double text is the tightest combination the app ships
-  // for; anything wider only gets easier.
-  tester.view.physicalSize = const Size(1080, 1920);
-  tester.view.devicePixelRatio = 3;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-
-  final overflows = <String>[];
-  final previous = FlutterError.onError;
-  FlutterError.onError = (details) {
-    final message = details.exceptionAsString();
-    if (message.contains('overflowed')) {
-      overflows.add(message.split('\n').first);
-      return;
-    }
-    previous?.call(details);
-  };
-  try {
+  useTightPhoneViewport(tester);
+  return overflowsWhile(() async {
     await tester.pumpWidget(
       MaterialApp(
         locale: variant.locale,
@@ -141,8 +134,5 @@ Future<List<String>> _overflowsWhilePainting(
       ),
     );
     await tester.pump();
-  } finally {
-    FlutterError.onError = previous;
-  }
-  return overflows;
+  });
 }

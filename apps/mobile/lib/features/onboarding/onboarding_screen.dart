@@ -146,6 +146,10 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ? strings.certificateChangedTitle
               : strings.certificateUnverifiedTitle,
         ),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

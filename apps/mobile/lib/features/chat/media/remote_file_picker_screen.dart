@@ -93,6 +93,10 @@ final class _RemoteFilePickerScreenState
       context: context,
       builder: (dialogContext) => AlertDialog(
         key: const Key('remote-file-share-dialog'),
+        // Large text turns two lines of body into a dialog taller than the
+        // phone; without this the actions are pushed off the bottom and the
+        // user cannot confirm or cancel at all.
+        scrollable: true,
         title: Text(strings.remoteFilesShareTitle),
         // Says what actually happens: the file is not copied and the access
         // it grants outlives this message.

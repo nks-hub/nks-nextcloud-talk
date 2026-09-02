@@ -7,6 +7,8 @@ import 'package:nextcloudtalk/features/chat/remote_file_share_service.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
+
 final class _FakeRemoteFiles implements RemoteFileShareService {
   _FakeRemoteFiles({required this.directories, this.shareFailure});
 
@@ -67,15 +69,24 @@ RemoteFileEntry _file(String path, {int size = 1024}) => RemoteFileEntry(
 /// can read what the picker reported after it closed.
 Future<List<RemoteFilePickerResult?>> _open(
   WidgetTester tester,
-  _FakeRemoteFiles files,
-) async {
+  _FakeRemoteFiles files, {
+  double textScale = 1,
+  Locale locale = const Locale('en'),
+}) async {
   final results = <RemoteFilePickerResult?>[];
   await tester.pumpWidget(
     ProviderScope(
       overrides: [remoteFileShareServiceProvider.overrideWithValue(files)],
       child: MaterialApp(
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, inner) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: inner!,
+        ),
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(
@@ -207,4 +218,50 @@ void main() {
     expect(files.listed, <String>['', 'Documents', '']);
     expect(find.byKey(const Key('remote-file-Documents')), findsOneWidget);
   });
+
+  for (final locale in const [Locale('cs'), Locale('en')]) {
+    testWidgets(
+      'the share confirmation fits at 200 % text — ${locale.languageCode}',
+      (tester) async {
+        useTightPhoneViewport(tester);
+        final files = _FakeRemoteFiles(
+          directories: {
+            // A long real-world name, because the body text interpolates it
+            // and a short fixture would hide the case that actually breaks.
+            '': [_file('Quarterly-infrastructure-review-final-v3.pdf')],
+          },
+        );
+
+        // A dialog does not scroll its actions, so this is one of the screens
+        // that can genuinely overflow — unlike the scrolled forms, where a
+        // bigger text size only produces a longer scroll.
+        final overflows = await overflowsWhile(() async {
+          await _open(tester, files, textScale: 2, locale: locale);
+          await tester.tap(
+            find.byKey(
+              const Key(
+                'remote-file-Quarterly-infrastructure-review-final-v3.pdf',
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        });
+
+        expect(
+          find.byKey(const Key('remote-file-share-dialog')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('remote-file-share-confirm')),
+          findsOneWidget,
+          reason: 'the confirmation must survive the larger text',
+        );
+        expect(
+          overflows,
+          isEmpty,
+          reason: '${locale.languageCode}: ${overflows.join(' | ')}',
+        );
+      },
+    );
+  }
 }

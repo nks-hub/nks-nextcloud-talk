@@ -46,6 +46,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         builder: (dialogContext) => AlertDialog(
           key: const Key('location-share-confirmation'),
           title: Text(strings.locationConfirmTitle),
+          // Large text can make the body taller than the screen; without this
+          // the actions are pushed off the bottom and the dialog cannot be
+          // answered at all.
+          scrollable: true,
           content: Text(strings.locationCoordinates(latitude, longitude)),
           actions: [
             TextButton(
@@ -586,6 +590,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       builder: (context) => AlertDialog(
         key: const Key('duplicate-risk-dialog'),
         title: Text(strings.duplicateRiskTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.duplicateRiskBody),
         actions: [
           TextButton(

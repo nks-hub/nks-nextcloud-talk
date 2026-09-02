@@ -14,6 +14,10 @@ extension _RoomDetailsClearHistoryState on _RoomDetailsScreenState {
       builder: (dialogContext) => AlertDialog(
         key: const Key('room-details-clear-history-dialog'),
         title: Text(strings.roomDetailsClearHistoryDialogTitle),
+        // Large text can make the body taller than the screen; without this
+        // the actions are pushed off the bottom and the dialog cannot be
+        // answered at all.
+        scrollable: true,
         content: Text(strings.roomDetailsClearHistoryDialogMessage),
         actions: [
           TextButton(

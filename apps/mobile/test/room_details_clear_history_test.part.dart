@@ -227,6 +227,60 @@ void _registerClearHistoryTests() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('the clear-history warning fits at 200 % text', (tester) async {
+    final capableAccount = await withCapabilities({'clear-history'});
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess();
+      }
+      return http.Response('', 500);
+    });
+
+    // The most destructive confirmation in the app: if large text pushed its
+    // buttons off the screen, a moderator would be left with a warning they
+    // can neither accept nor dismiss.
+    // The screen itself scrolls, so it is loaded on a surface tall enough to
+    // reach the action; the window is then cut down to a real phone before
+    // the dialog opens, because a dialog is sized against the screen and a
+    // tall test window would hide exactly the overflow this is looking for.
+    await openDetails(
+      tester,
+      forAccount: capableAccount,
+      forConversation: conversation,
+      client: client,
+      textScale: 2,
+      height: 6000,
+    );
+    expect(
+      find.byKey(const Key('room-details-clear-history')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('room-details-clear-history')));
+    await tester.pump();
+
+    final overflows = await overflowsWhile(() async {
+      tester.view.physicalSize = const Size(360, 640);
+      await tester.pump();
+      await tester.pump();
+    });
+
+    expect(
+      find.byKey(const Key('room-details-clear-history-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('room-details-clear-history-cancel')),
+      findsOneWidget,
+      reason: 'the way out of the warning must survive the larger text',
+    );
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+
+    await tester.tap(
+      find.byKey(const Key('room-details-clear-history-cancel')),
+    );
+    await tester.pumpAndSettle();
+  });
 }
 
 Future<void> _confirmClearHistory(WidgetTester tester) async {

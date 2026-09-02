@@ -177,6 +177,10 @@ final class _EditMessageDialogState extends State<_EditMessageDialog> {
     return AlertDialog(
       key: const Key('edit-message-dialog'),
       title: Text(strings.editMessageTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: TextField(
         key: const Key('edit-message-field'),
         controller: _controller,
@@ -501,6 +505,10 @@ final class _PrivateReplyDialogState extends State<_PrivateReplyDialog> {
     return AlertDialog(
       key: const Key('private-reply-dialog'),
       title: Text(strings.privateReplyTitle),
+      // Large text can make the body taller than the screen; without this
+      // the actions are pushed off the bottom and the dialog cannot be
+      // answered at all.
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
