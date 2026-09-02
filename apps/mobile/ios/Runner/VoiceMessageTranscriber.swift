@@ -375,15 +375,31 @@ final class VoiceMessageTranscriber {
     return request
   }
 
+  /// The UI language comes first, but iOS ships on-device models for only a
+  /// few languages, so a Czech UI would otherwise never transcribe anything.
+  /// The device's own language list is the next best guess at what the
+  /// speaker used; audio never leaves the phone either way.
+  static func onDeviceRecognizer(preferring locale: Locale) -> SFSpeechRecognizer? {
+    var candidates = [locale.identifier]
+    candidates.append(contentsOf: Locale.preferredLanguages)
+    candidates.append(Locale.current.identifier)
+    var seen = Set<String>()
+    for identifier in candidates where seen.insert(identifier).inserted {
+      guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: identifier)),
+            recognizer.isAvailable,
+            recognizer.supportsOnDeviceRecognition
+      else { continue }
+      return recognizer
+    }
+    return nil
+  }
+
   private static func startOnDeviceRecognition(
     request: SFSpeechURLRecognitionRequest,
     locale: Locale,
     callback: @escaping RecognitionCallback
   ) throws -> () -> Void {
-    guard let recognizer = SFSpeechRecognizer(locale: locale),
-          recognizer.isAvailable,
-          recognizer.supportsOnDeviceRecognition
-    else {
+    guard let recognizer = onDeviceRecognizer(preferring: locale) else {
       throw StartError.unavailable
     }
     var task: SFSpeechRecognitionTask?

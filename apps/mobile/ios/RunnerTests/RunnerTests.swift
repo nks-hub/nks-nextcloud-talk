@@ -694,6 +694,23 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(request.shouldReportPartialResults)
   }
 
+  func testOnDeviceRecognizerFallsBackFromALanguageWithoutAModel() throws {
+    // Czech has no on-device model on any iOS release so far; the device's
+    // English must take over rather than the whole feature reporting itself
+    // unavailable.
+    guard let english = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
+          english.supportsOnDeviceRecognition
+    else {
+      throw XCTSkip("this host has no on-device English model")
+    }
+    let recognizer = VoiceMessageTranscriber.onDeviceRecognizer(
+      preferring: Locale(identifier: "cs")
+    )
+    XCTAssertNotNil(recognizer)
+    XCTAssertTrue(recognizer?.supportsOnDeviceRecognition ?? false)
+    XCTAssertNotEqual(recognizer?.locale.identifier, "cs")
+  }
+
   func testVoiceTranscriberMapsDeniedRestrictedAndUnavailable() throws {
     let fixture = try voiceTranscriptionFixture()
     defer { try? FileManager.default.removeItem(at: fixture.root) }
