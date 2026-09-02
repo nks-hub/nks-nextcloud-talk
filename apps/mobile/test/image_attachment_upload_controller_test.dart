@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
+import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_controller.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -258,6 +259,85 @@ void main() {
         ),
       );
       expect(timers.last.isActive, isFalse);
+    },
+  );
+
+  // A refused upload has to say WHY it was refused.
+  //
+  // The first field report of this — a gallery pick that failed instantly on
+  // a foldable — reached Sentry as `attachment.failure=dispatch` and stopped
+  // there, because every cause was caught with `on Object` and reported as
+  // one class. They are not one problem: a room the user may not write to, an
+  // account whose server moved, a missing credential and an app that never
+  // came back from the picker each need a different fix, and telemetry that
+  // cannot tell them apart cannot start any of them.
+  const admissionCauses = <AttachmentAdmissionError, AttachmentUploadFailure>{
+    AttachmentAdmissionError.roomUnsupported:
+        AttachmentUploadFailure.roomUnsupported,
+    AttachmentAdmissionError.accountBinding:
+        AttachmentUploadFailure.accountBinding,
+    AttachmentAdmissionError.accountStale:
+        AttachmentUploadFailure.accountBinding,
+    AttachmentAdmissionError.credentialMissing:
+        AttachmentUploadFailure.credential,
+    AttachmentAdmissionError.rejected: AttachmentUploadFailure.admission,
+    AttachmentAdmissionError.lifecycleTimeout:
+        AttachmentUploadFailure.lifecycleTimeout,
+    AttachmentAdmissionError.composerGone: AttachmentUploadFailure.composerGone,
+  };
+
+  test('every admission cause is mapped, so none can be added silently', () {
+    expect(
+      admissionCauses.keys.toSet(),
+      AttachmentAdmissionError.values.toSet(),
+    );
+  });
+
+  for (final entry in admissionCauses.entries) {
+    test('a refusal for ${entry.key.name} is reported as itself', () async {
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) async => throw AttachmentAdmissionException(entry.key),
+        reportDiagnostic: diagnostics.add,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.startPrepared(_request);
+
+      final failed = diagnostics.singleWhere(
+        (event) =>
+            event.checkpoint == AttachmentUploadCheckpoint.admissionFailed,
+      );
+      expect(failed.failure, entry.value);
+      expect(
+        attachmentUploadDiagnosticTags(failed)['attachment.failure'],
+        entry.value.name,
+      );
+    });
+  }
+
+  test(
+    'an unmapped cause stays dispatch instead of borrowing a class',
+    () async {
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) async => throw TimeoutException('something else'),
+        reportDiagnostic: diagnostics.add,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.startPrepared(_request);
+
+      expect(
+        diagnostics
+            .singleWhere(
+              (event) =>
+                  event.checkpoint ==
+                  AttachmentUploadCheckpoint.admissionFailed,
+            )
+            .failure,
+        AttachmentUploadFailure.dispatch,
+      );
     },
   );
 }

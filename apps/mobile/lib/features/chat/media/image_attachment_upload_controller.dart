@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
+import 'package:nextcloudtalk/features/chat/attachment_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 typedef CreateImageUploadWatchdogTimer =
@@ -521,7 +522,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     final ImageAttachmentUploadSession session;
     try {
       session = await _startUpload(request);
-    } on Object {
+    } on Object catch (error) {
       if (_isCurrent(generation)) {
         if (_cancelRequested) {
           _cancelRequested = false;
@@ -537,7 +538,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
               checkpoint: AttachmentUploadCheckpoint.admissionFailed,
               source: _diagnosticSource(request),
               uiPhase: AttachmentUploadUiPhase.queued,
-              failure: AttachmentUploadFailure.dispatch,
+              failure: _classifyAdmissionFailure(error),
             ),
           );
           _setState(
@@ -887,3 +888,31 @@ AttachmentUploadProgressBucket _progressBucket(double? progress) =>
       >= 1 => AttachmentUploadProgressBucket.complete,
       _ => AttachmentUploadProgressBucket.partial,
     };
+
+/// Names why admission refused an upload.
+///
+/// Everything here used to be reported as `dispatch`, which is why the first
+/// field report — a gallery pick that failed instantly on a foldable — could
+/// be seen in telemetry but not explained. The causes are genuinely different
+/// problems with genuinely different fixes: a room the user may not write to,
+/// an account whose server moved, a missing credential, or an app that never
+/// came back to the foreground after the picker closed.
+AttachmentUploadFailure _classifyAdmissionFailure(Object error) {
+  if (error is! AttachmentAdmissionException) {
+    return AttachmentUploadFailure.dispatch;
+  }
+  return switch (error.error) {
+    AttachmentAdmissionError.roomUnsupported =>
+      AttachmentUploadFailure.roomUnsupported,
+    AttachmentAdmissionError.accountBinding ||
+    AttachmentAdmissionError.accountStale =>
+      AttachmentUploadFailure.accountBinding,
+    AttachmentAdmissionError.credentialMissing =>
+      AttachmentUploadFailure.credential,
+    AttachmentAdmissionError.rejected => AttachmentUploadFailure.admission,
+    AttachmentAdmissionError.lifecycleTimeout =>
+      AttachmentUploadFailure.lifecycleTimeout,
+    AttachmentAdmissionError.composerGone =>
+      AttachmentUploadFailure.composerGone,
+  };
+}

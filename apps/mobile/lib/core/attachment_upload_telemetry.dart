@@ -67,6 +67,20 @@ enum AttachmentUploadFailure {
   sourceCopy,
   admission,
   credential,
+
+  /// The room, the capability profile or the source refuses this attachment.
+  roomUnsupported,
+
+  /// The stored account no longer matches the server the request was built
+  /// against, or the account was switched while admission ran.
+  accountBinding,
+
+  /// The app never came back to the foreground after the picker closed, so
+  /// admission gave up waiting rather than uploading from the background.
+  lifecycleTimeout,
+
+  /// The screen that owns the upload was gone before admission finished.
+  composerGone,
   dispatch,
   stream,
   durable,

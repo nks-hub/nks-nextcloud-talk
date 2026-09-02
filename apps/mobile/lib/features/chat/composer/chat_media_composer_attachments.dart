@@ -4,9 +4,17 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
   Future<ImageAttachmentUploadSession> _startImageUpload(
     ImageAttachmentUploadRequest request,
   ) async {
-    await _waitForResumedLifecycle();
+    try {
+      await _waitForResumedLifecycle();
+    } on TimeoutException {
+      throw const AttachmentAdmissionException(
+        AttachmentAdmissionError.lifecycleTimeout,
+      );
+    }
     if (_disposed) {
-      throw StateError('Media composer was disposed before upload admission');
+      throw const AttachmentAdmissionException(
+        AttachmentAdmissionError.composerGone,
+      );
     }
     final bridge = _retainedImageSubmissionBridge ?? widget.submissionBridge;
     final admissionSourceStore = widget.sourceStore;

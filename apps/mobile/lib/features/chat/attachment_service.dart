@@ -164,6 +164,47 @@ final class DurableAttachmentSession {
   Future<void> retry() => _retry();
 }
 
+/// Why an upload was refused before it ever became a durable job.
+///
+/// These were untyped `StateError`s with an English sentence. Every one of
+/// them is a distinct, actionable cause — a room the user may not write to, an
+/// account whose server no longer matches, a credential that is gone — and
+/// collapsing them into one class is why the first field report of a refused
+/// gallery pick could only be described as "dispatch failed".
+enum AttachmentAdmissionError {
+  /// The room, the capability profile or the source refuses this attachment.
+  roomUnsupported,
+
+  /// The stored account is gone, or its server is no longer the one the
+  /// request was built against.
+  accountBinding,
+
+  /// No app password for this account; nothing can be uploaded with it.
+  credentialMissing,
+
+  /// The account was switched or re-registered while admission ran.
+  accountStale,
+
+  /// The durable store refused the job.
+  rejected,
+
+  /// The app never returned to the foreground after the picker closed, so
+  /// admission gave up waiting instead of uploading from the background.
+  lifecycleTimeout,
+
+  /// The screen that owns the upload was gone before admission finished.
+  composerGone,
+}
+
+final class AttachmentAdmissionException implements Exception {
+  const AttachmentAdmissionException(this.error);
+
+  final AttachmentAdmissionError error;
+
+  @override
+  String toString() => 'AttachmentAdmissionException(${error.name})';
+}
+
 final class AttachmentService with _AttachmentServiceRuntime {
   static const Duration _accountSuspendDrainTimeout = Duration(seconds: 5);
 
@@ -424,18 +465,24 @@ final class AttachmentService with _AttachmentServiceRuntime {
     if (!request.roomCanWrite ||
         !request.profile.supports(request.metadata) ||
         !request.metadata.supportsSource(request.source)) {
-      throw StateError('Attachment request is not supported by this room');
+      throw const AttachmentAdmissionException(
+        AttachmentAdmissionError.roomUnsupported,
+      );
     }
     final storedAccount = await _repository.getAccount(request.accountId.value);
     if (storedAccount == null ||
         ServerBase.parse(storedAccount.serverUrl) != request.server) {
-      throw StateError('Attachment account binding is invalid');
+      throw const AttachmentAdmissionException(
+        AttachmentAdmissionError.accountBinding,
+      );
     }
     final appPassword = await _credentials.readAppPassword(
       request.accountId.value,
     );
     if (appPassword == null || appPassword.isEmpty) {
-      throw StateError('Attachment account credential is unavailable');
+      throw const AttachmentAdmissionException(
+        AttachmentAdmissionError.credentialMissing,
+      );
     }
     final authorization = AttachmentTransportAuthorization(
       accountId: request.accountId,
@@ -469,10 +516,14 @@ final class AttachmentService with _AttachmentServiceRuntime {
           if (account.server != request.server ||
               request.credentialGeneration < account.credentialGeneration ||
               request.capabilityGeneration < account.capabilityGeneration) {
-            throw StateError('Attachment account generation is stale');
+            throw const AttachmentAdmissionException(
+              AttachmentAdmissionError.accountStale,
+            );
           }
           if (account.lane != AttachmentAccountLane.ready) {
-            throw StateError('Attachment account is not active');
+            throw const AttachmentAdmissionException(
+              AttachmentAdmissionError.accountStale,
+            );
           }
           if (request.credentialGeneration != account.credentialGeneration ||
               request.capabilityGeneration != account.capabilityGeneration) {
@@ -519,7 +570,9 @@ final class AttachmentService with _AttachmentServiceRuntime {
           draft: draft,
         );
         if (!admission.canCommit) {
-          throw StateError('Attachment job admission was rejected');
+          throw const AttachmentAdmissionException(
+            AttachmentAdmissionError.rejected,
+          );
         }
         final candidate = admission.plan!.commit(current);
         final candidateAccount = candidate.accounts[request.accountId]!;

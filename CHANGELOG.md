@@ -27,6 +27,14 @@ proto jen to, co je doložitelné z App Store Connect.
   konverzace, vymazání historie, odebrání účastníka, zrušení nedokončeného
   uploadu, heslo k otevřené konverzaci, otisk certifikátu, úprava zprávy
   a pojmenování vlákna.
+- Odmítnutá příloha konečně řekne proč. Hlášení z terénu (Galaxy Z Fold 6,
+  Android 16): sponka → vybrat obrázek → okamžitě „zkusit znovu". V telemetrii
+  z toho byla jediná značka `dispatch`, protože se všechny příčiny odchytávaly
+  jedním `on Object`. Přitom jsou to čtyři různé problémy s různými opravami —
+  místnost, do které se nesmí psát; účet, jehož server se rozešel s požadavkem;
+  chybějící heslo aplikace; a aplikace, která se po zavření galerie nevrátila
+  do popředí. Služba je teď hlásí typovaně a příští výskyt se pozná na první
+  pohled. Samotná příčina onoho hlášení tím ještě opravená není.
 - Výkonové metriky se poprvé opravdu měří. Vrstva byla hotová už dřív, ale
   nikdo ji nevolal; teď měří start aplikace, synchronizaci seznamu, otevření
   konverzace, upload přílohy a probuzení pushem. Ven jde jméno operace

@@ -12,6 +12,7 @@ import '../../../platform/media/desktop_attachment_source.dart';
 import '../../../platform/media/durable_attachment_source_store.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import '../../../platform/media/voice_platform_adapters.dart';
+import '../attachment_service.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
 import '../../conversations/desktop_attachment_drop.dart';
