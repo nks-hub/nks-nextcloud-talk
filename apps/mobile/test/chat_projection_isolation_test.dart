@@ -219,6 +219,45 @@ void main() {
     expect(wire['deleted'], isTrue);
   });
 
+  test(
+    'a deletion notice updates the message but is not a row of its own',
+    () async {
+      // From the field 2026-09-03: two deleted messages left four rows — two
+      // „Message deleted" bubbles and two „You deleted a message" lines.
+      // Upstream Android drops the notice before rendering; the notice is still
+      // what carries the new state of the message it points at.
+      await _insertScope(
+        database,
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        scopeKey: 'root',
+        threadId: null,
+        cursor: 20,
+      );
+      await _insertMessage(
+        database,
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+
+      expect(
+        await repository.applyChatGetResponse(_deletionNoticeResponse()),
+        ChatMergeOutcome.applied,
+      );
+
+      final shown = await repository
+          .watchMessages(accountId: 'account-a', roomToken: 'rooma123')
+          .first;
+      expect(shown.map((message) => message.messageId), [20]);
+      expect(shown.single.deleted, isTrue);
+      // The notice itself is still cached — that is where the state came from.
+      final all = await (database.select(
+        database.cachedChatMessages,
+      )..where((row) => row.accountId.equals('account-a'))).get();
+      expect(all.map((row) => row.messageId), containsAll(<int>[20, 33]));
+    },
+  );
+
   test('a silent send stays silent across a process restart', () async {
     // The whole point of the durable column: the flag lives with the
     // operation, not in the composer, so an outbox replayed after process

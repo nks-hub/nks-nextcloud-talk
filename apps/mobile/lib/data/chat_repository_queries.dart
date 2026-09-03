@@ -23,6 +23,25 @@ extension ValidatedChatRepositoryThreadQueries on ChatRepository {
 }
 
 extension _ChatRepositoryQueries on ChatRepository {
+  /// System messages the timeline never shows, because the thing they
+  /// announce is already visible on the message they point at.
+  ///
+  /// Reported from the field 2026-09-03: deleting two messages left four rows
+  /// — two „Message deleted" bubbles and two „You deleted a message" lines.
+  /// Upstream Android drops exactly these before rendering
+  /// (`ChatViewModel.shouldRemoveMessage`: message_deleted with a parent,
+  /// the three reaction kinds, poll_voted, message_edited, thread_created).
+  /// They stay in the cache — the parent update is derived from them.
+  static const _noticeSystemMessages = <String>[
+    'message_deleted',
+    'message_edited',
+    'reaction',
+    'reaction_deleted',
+    'reaction_revoked',
+    'poll_voted',
+    'thread_created',
+  ];
+
   Stream<List<CachedChatMessage>> _watchMessagesQuery({
     required String accountId,
     required String roomToken,
@@ -34,6 +53,7 @@ extension _ChatRepositoryQueries on ChatRepository {
         (message) =>
             message.accountId.equals(accountId) &
             message.roomToken.equals(roomToken) &
+            message.systemMessage.isNotIn(_noticeSystemMessages) &
             (threadId == null
                 ? (includeThreadReplies
                       ? const Constant(true)
