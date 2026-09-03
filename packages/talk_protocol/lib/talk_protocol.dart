@@ -35,6 +35,7 @@ export 'src/conversation_tags/request.dart';
 export 'src/conversation_tags/response.dart';
 export 'src/conversations/create_room_request.dart';
 export 'src/conversations/create_room_response.dart';
+export 'src/conversations/federation_invitations.dart';
 export 'src/conversations/identifiers.dart';
 export 'src/conversations/listed_rooms.dart';
 export 'src/conversations/merge.dart';

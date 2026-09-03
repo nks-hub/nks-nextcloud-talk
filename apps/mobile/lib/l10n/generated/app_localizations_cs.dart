@@ -2676,6 +2676,52 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openConversationsJoin => 'Připojit se';
 
   @override
+  String federationInvitationsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pozvánek do konverzací na jiných serverech',
+      few: '$count pozvánky do konverzací na jiných serverech',
+      one: '1 pozvánka do konverzace na jiném serveru',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get federationInvitationsShow => 'Zobrazit';
+
+  @override
+  String get federationInvitationsTitle => 'Federované pozvánky';
+
+  @override
+  String get federationInvitationsEmpty => 'Žádné čekající pozvánky.';
+
+  @override
+  String federationInvitationFrom(String inviter, String server) {
+    return 'Od $inviter na $server';
+  }
+
+  @override
+  String get federationInvitationAccept => 'Přijmout';
+
+  @override
+  String get federationInvitationDecline => 'Odmítnout';
+
+  @override
+  String get federationInvitationAccepted =>
+      'Pozvánka přijata. Konverzace je teď v seznamu.';
+
+  @override
+  String get federationInvitationDeclined => 'Pozvánka odmítnuta.';
+
+  @override
+  String get federationInvitationGone => 'Tato pozvánka už není k dispozici.';
+
+  @override
+  String get federationInvitationFailed =>
+      'Pozvánku se nepodařilo zpracovat. Zkuste to později.';
+
+  @override
   String get openConversationsPasswordTitle => 'Konverzace má heslo';
 
   @override

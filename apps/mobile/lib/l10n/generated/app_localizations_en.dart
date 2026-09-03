@@ -2677,6 +2677,52 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openConversationsJoin => 'Join';
 
   @override
+  String federationInvitationsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count invitations to conversations on other servers',
+      one: '1 invitation to a conversation on another server',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get federationInvitationsShow => 'Show';
+
+  @override
+  String get federationInvitationsTitle => 'Federated invitations';
+
+  @override
+  String get federationInvitationsEmpty => 'No pending invitations.';
+
+  @override
+  String federationInvitationFrom(String inviter, String server) {
+    return 'From $inviter on $server';
+  }
+
+  @override
+  String get federationInvitationAccept => 'Accept';
+
+  @override
+  String get federationInvitationDecline => 'Decline';
+
+  @override
+  String get federationInvitationAccepted =>
+      'Invitation accepted. The conversation is now in your list.';
+
+  @override
+  String get federationInvitationDeclined => 'Invitation declined.';
+
+  @override
+  String get federationInvitationGone =>
+      'This invitation is no longer available.';
+
+  @override
+  String get federationInvitationFailed =>
+      'The invitation could not be processed. Try again later.';
+
+  @override
   String get openConversationsPasswordTitle =>
       'This conversation has a password';
 

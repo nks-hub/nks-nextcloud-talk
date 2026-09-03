@@ -48,6 +48,7 @@ import 'features/search/message_search_service.dart';
 import 'platform/media/voice_platform_adapters.dart';
 import 'platform/media/voice_transcription.dart';
 import 'features/conversations/deep_link_bridge.dart';
+import 'features/conversations/federation_invitation_service.dart';
 import 'features/conversations/deep_link_coordinator.dart';
 import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/profile/profile_service.dart';
@@ -246,6 +247,46 @@ final remoteFileShareServiceProvider = Provider<RemoteFileShareService>((ref) {
   );
 });
 
+final federationInvitationServiceProvider =
+    Provider<FederationInvitationService>((ref) {
+      return FederationInvitationService(
+        accounts: ref.watch(accountRepositoryProvider),
+        credentials: ref.watch(credentialVaultProvider),
+        api: ref.watch(nextcloudApiProvider),
+      );
+    });
+
+/// Count signal only; see [FederationInviteCounter].
+final federationInviteCounterProvider = Provider<FederationInviteCounter>(
+  (ref) => FederationInviteCounter(),
+);
+
+/// Pending federated invitations of one account.
+///
+/// Re-read whenever the room list's invitation count for the account changes
+/// (the header travels with every sync, so no extra polling) and after every
+/// decision; an account whose count is zero never asks the endpoint at all —
+/// nor does it construct the service behind it.
+final federationInvitationsProvider =
+    FutureProvider.family<List<FederationInvitation>, String>((
+      ref,
+      accountId,
+    ) async {
+      final counter = ref.watch(federationInviteCounterProvider);
+      final subscription = counter.changed.listen((changed) {
+        if (changed == accountId) {
+          ref.invalidateSelf();
+        }
+      });
+      ref.onDispose(subscription.cancel);
+      if (counter.pending(accountId) == 0) {
+        return const <FederationInvitation>[];
+      }
+      return ref
+          .read(federationInvitationServiceProvider)
+          .listPending(accountId);
+    });
+
 final conversationSyncServiceProvider = Provider<ConversationSyncService>((
   ref,
 ) {
@@ -253,6 +294,7 @@ final conversationSyncServiceProvider = Provider<ConversationSyncService>((
     accounts: ref.watch(accountRepositoryProvider),
     credentials: ref.watch(credentialVaultProvider),
     api: ref.watch(nextcloudApiProvider),
+    federationInvites: ref.watch(federationInviteCounterProvider),
     onAuthenticationLost: (accountId) =>
         ref.read(remoteWipeServiceProvider).wipeIfRequested(accountId),
   );

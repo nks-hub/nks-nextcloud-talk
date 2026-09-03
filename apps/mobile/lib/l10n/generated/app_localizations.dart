@@ -4862,6 +4862,72 @@ abstract class AppLocalizations {
   /// **'Join'**
   String get openConversationsJoin;
 
+  /// No description provided for @federationInvitationsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 invitation to a conversation on another server} other{{count} invitations to conversations on other servers}}'**
+  String federationInvitationsCount(int count);
+
+  /// No description provided for @federationInvitationsShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get federationInvitationsShow;
+
+  /// No description provided for @federationInvitationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Federated invitations'**
+  String get federationInvitationsTitle;
+
+  /// No description provided for @federationInvitationsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pending invitations.'**
+  String get federationInvitationsEmpty;
+
+  /// No description provided for @federationInvitationFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From {inviter} on {server}'**
+  String federationInvitationFrom(String inviter, String server);
+
+  /// No description provided for @federationInvitationAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get federationInvitationAccept;
+
+  /// No description provided for @federationInvitationDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get federationInvitationDecline;
+
+  /// No description provided for @federationInvitationAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation accepted. The conversation is now in your list.'**
+  String get federationInvitationAccepted;
+
+  /// No description provided for @federationInvitationDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation declined.'**
+  String get federationInvitationDeclined;
+
+  /// No description provided for @federationInvitationGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This invitation is no longer available.'**
+  String get federationInvitationGone;
+
+  /// No description provided for @federationInvitationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The invitation could not be processed. Try again later.'**
+  String get federationInvitationFailed;
+
   /// No description provided for @openConversationsPasswordTitle.
   ///
   /// In en, this message translates to:

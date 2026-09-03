@@ -83,6 +83,8 @@ enum TalkProtocolErrorCode {
   invalidPushCryptoResult,
   invalidListedRoomsRequest,
   invalidListedRoomsResponse,
+  invalidFederationInvitationRequest,
+  invalidFederationInvitationResponse,
   invalidRemoteFilesRequest,
   invalidRemoteWipeRequest,
   invalidRemoteWipeResponse,

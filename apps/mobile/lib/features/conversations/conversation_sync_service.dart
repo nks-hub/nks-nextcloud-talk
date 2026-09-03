@@ -63,13 +63,15 @@ final class ConversationSyncService {
     Uuid? uuid,
     Future<void> Function(Duration)? delay,
     DateTime Function()? clock,
+    FederationInviteCounter? federationInvites,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _onAuthenticationLost = onAuthenticationLost,
        _uuid = uuid ?? const Uuid(),
        _delay = delay ?? Future<void>.delayed,
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _federationInvites = federationInvites ?? FederationInviteCounter();
 
   /// How long the loop may stay incremental before it asks for the whole
   /// list again. The delta only carries rooms that changed; a room deleted
@@ -81,6 +83,7 @@ final class ConversationSyncService {
   final Future<void> Function(Duration) _delay;
   final DateTime Function() _clock;
   final Map<String, DateTime> _lastFullFetch = <String, DateTime>{};
+  final FederationInviteCounter _federationInvites;
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
@@ -317,6 +320,7 @@ final class ConversationSyncService {
           abortTrigger: abortTrigger,
         );
         if (response case ConversationListSuccess()) {
+          _recordFederationInvites(accountId, response.federationInvites);
           final snapshot = ConversationSnapshot(
             accounts: {typedAccountId: state},
           );
@@ -385,6 +389,13 @@ final class ConversationSyncService {
   /// for a password the user has since replaced belongs to the old login, not
   /// to the new one, and must not push the account back into re-login.
   final Map<String, String> _flightPasswords = <String, String>{};
+
+  void _recordFederationInvites(String accountId, ConversationCursor? raw) {
+    _federationInvites.record(
+      accountId,
+      raw == null ? 0 : (int.tryParse(raw.value) ?? 0),
+    );
+  }
 
   Future<Never> _fail(String accountId, ConversationSyncError error) async {
     if (error == ConversationSyncError.reauthenticationRequired &&
@@ -521,6 +532,33 @@ final class _ConversationSyncFlight {
           _transportCancellation.complete();
         }
       }
+    }
+  }
+}
+
+/// Pending federated invitation count per account, as the room list's
+/// `X-Nextcloud-Talk-Federation-Invites` header last reported it.
+///
+/// Lives outside the sync service so the invitation strip can watch the
+/// count without pulling the database and credentials behind the service in;
+/// an account whose count is zero costs nothing more than a map lookup.
+final class FederationInviteCounter {
+  final Map<String, int> _counts = <String, int>{};
+  final StreamController<String> _changed =
+      StreamController<String>.broadcast();
+
+  /// Account ids whose count just changed.
+  Stream<String> get changed => _changed.stream;
+
+  int pending(String accountId) => _counts[accountId] ?? 0;
+
+  void record(String accountId, int count) {
+    if (_counts[accountId] == count) {
+      return;
+    }
+    _counts[accountId] = count;
+    if (!_changed.isClosed) {
+      _changed.add(accountId);
     }
   }
 }

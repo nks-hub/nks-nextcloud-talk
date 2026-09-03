@@ -32,6 +32,8 @@ final class ConversationWorkspace extends StatelessWidget {
     required this.onSelectConversation,
     required this.onCloseConversation,
     this.onOpenCreatedConversation,
+    this.federationInvitations = const <FederationInvitation>[],
+    this.onDecideFederationInvitation,
     this.detailsOpen = false,
     this.onOpenDetails,
     this.onCloseDetails,
@@ -67,6 +69,8 @@ final class ConversationWorkspace extends StatelessWidget {
 
   /// Opens a room the new-conversation screen just created or resolved.
   final ValueChanged<String>? onOpenCreatedConversation;
+  final List<FederationInvitation> federationInvitations;
+  final FederationInvitationDecision? onDecideFederationInvitation;
 
   /// Whether the conversation's details are showing beside it.
   ///
@@ -131,6 +135,8 @@ final class ConversationWorkspace extends StatelessWidget {
             onOpenConversation: onOpenConversation,
             onCloseConversation: onCloseConversation,
             onOpenCreatedConversation: onOpenCreatedConversation,
+            federationInvitations: federationInvitations,
+            onDecideFederationInvitation: onDecideFederationInvitation,
           );
         }
         // Chrome is what stands between the window edge and the conversation:
@@ -155,6 +161,8 @@ final class ConversationWorkspace extends StatelessWidget {
           onAddAccount: onAddAccount,
           onSelectConversation: onSelectConversation,
           onOpenCreatedConversation: onOpenCreatedConversation,
+          federationInvitations: federationInvitations,
+          onDecideFederationInvitation: onDecideFederationInvitation,
           detailsOpen: detailsOpen,
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
@@ -193,6 +201,8 @@ final class _CompactShell extends StatelessWidget {
     required this.onOpenConversation,
     required this.onCloseConversation,
     required this.onOpenCreatedConversation,
+    required this.federationInvitations,
+    required this.onDecideFederationInvitation,
     this.selectedConversation,
   });
 
@@ -210,6 +220,8 @@ final class _CompactShell extends StatelessWidget {
   final ValueChanged<CachedConversation> onOpenConversation;
   final VoidCallback onCloseConversation;
   final ValueChanged<String>? onOpenCreatedConversation;
+  final List<FederationInvitation> federationInvitations;
+  final FederationInvitationDecision? onDecideFederationInvitation;
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +343,11 @@ final class _CompactShell extends StatelessWidget {
               errorCode: account.lastSyncError!,
               onReauthenticate: onReauthenticate,
             ),
+          if (onDecideFederationInvitation != null)
+            FederationInvitationStrip(
+              invitations: federationInvitations,
+              onDecide: onDecideFederationInvitation!,
+            ),
           Expanded(
             child: ConversationListView(
               account: account,
@@ -436,6 +453,8 @@ final class _ExpandedShell extends StatelessWidget {
     required this.onAddAccount,
     required this.onSelectConversation,
     required this.onOpenCreatedConversation,
+    required this.federationInvitations,
+    required this.onDecideFederationInvitation,
     required this.detailsOpen,
     required this.onOpenDetails,
     required this.onCloseDetails,
@@ -459,6 +478,8 @@ final class _ExpandedShell extends StatelessWidget {
   final VoidCallback onAddAccount;
   final ValueChanged<CachedConversation> onSelectConversation;
   final ValueChanged<String>? onOpenCreatedConversation;
+  final List<FederationInvitation> federationInvitations;
+  final FederationInvitationDecision? onDecideFederationInvitation;
   final bool detailsOpen;
   final VoidCallback? onOpenDetails;
   final VoidCallback? onCloseDetails;
@@ -576,6 +597,11 @@ final class _ExpandedShell extends StatelessWidget {
                       _SyncNotice(
                         errorCode: account.lastSyncError!,
                         onReauthenticate: onReauthenticate,
+                      ),
+                    if (onDecideFederationInvitation != null)
+                      FederationInvitationStrip(
+                        invitations: federationInvitations,
+                        onDecide: onDecideFederationInvitation!,
                       ),
                     const Divider(),
                     Expanded(

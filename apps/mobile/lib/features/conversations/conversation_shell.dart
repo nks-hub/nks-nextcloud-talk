@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:talk_protocol/talk_protocol.dart' show MessageSearchResult;
+import 'package:talk_protocol/talk_protocol.dart'
+    show FederationInvitation, MessageSearchResult;
 
 import '../../app_providers.dart';
 import '../../core/app_lifecycle_policy.dart';
@@ -25,6 +26,8 @@ import '../search/message_search_thread_screen.dart';
 import '../settings/settings_screen.dart';
 import 'conversation_list_actions.dart';
 import 'desktop_attachment_drop.dart';
+import 'federation_invitation_service.dart';
+import 'federation_invitation_strip.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
 import 'unread_badge.dart';
@@ -235,6 +238,44 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
   ///
   /// A missing account or a room that never lands in the cache leaves the
   /// app exactly where it was; this never navigates to a guess.
+  /// Accepts or rejects a federated invitation and, on accept, opens the
+  /// local room the server created. Returns the notice for the sheet.
+  Future<String> _decideFederationInvitation(
+    String accountId,
+    FederationInvitation invitation,
+    bool accept,
+  ) async {
+    final strings = AppLocalizations.of(context);
+    final service = ref.read(federationInvitationServiceProvider);
+    String notice;
+    String? token;
+    try {
+      if (accept) {
+        token = (await service.accept(
+          accountId: accountId,
+          invitationId: invitation.id,
+        )).value;
+        notice = strings.federationInvitationAccepted;
+      } else {
+        await service.reject(accountId: accountId, invitationId: invitation.id);
+        notice = strings.federationInvitationDeclined;
+      }
+    } on FederationInvitationException catch (error) {
+      notice = switch (error.code) {
+        FederationInvitationError.unavailable =>
+          strings.federationInvitationGone,
+        _ => strings.federationInvitationFailed,
+      };
+    }
+    // The server's list changed either way; read it back rather than editing
+    // a local copy.
+    ref.invalidate(federationInvitationsProvider(accountId));
+    if (token != null && mounted) {
+      unawaited(_openAccountConversation(accountId, token));
+    }
+    return notice;
+  }
+
   Future<void> _openAccountConversation(String accountId, String token) async {
     if (!mounted) {
       return;
@@ -528,6 +569,13 @@ final class _ConversationShellState extends ConsumerState<ConversationShell>
           onOpenCreatedConversation: (token) {
             unawaited(_openAccountConversation(selected.id, token));
           },
+          federationInvitations:
+              ref
+                  .watch(federationInvitationsProvider(selected.id))
+                  .valueOrNull ??
+              const <FederationInvitation>[],
+          onDecideFederationInvitation: (invitation, {required accept}) =>
+              _decideFederationInvitation(selected.id, invitation, accept),
         );
       },
     );

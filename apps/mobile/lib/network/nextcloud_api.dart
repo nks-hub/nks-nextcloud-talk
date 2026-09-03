@@ -14,6 +14,7 @@ part 'nextcloud_api_active_room.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_cookies.dart';
+part 'nextcloud_api_federation.dart';
 part 'nextcloud_api_profile.dart';
 part 'nextcloud_api_listed_rooms.dart';
 part 'nextcloud_api_polls.dart';
@@ -362,6 +363,7 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
         _NextcloudApiActiveRoom,
         _NextcloudApiRooms,
         _NextcloudApiChat,
+        _NextcloudApiFederation,
         _NextcloudApiCall,
         _NextcloudApiProfile,
         _NextcloudApiListedRooms,
