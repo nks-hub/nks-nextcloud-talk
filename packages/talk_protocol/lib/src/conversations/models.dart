@@ -338,7 +338,7 @@ ConversationRoom parseConversationRoom(
   final readOnly = _requireInt(room, 'readOnly', path);
   _requireInt(room, 'recordingConsent', path);
   final remoteServer = _optionalString(room, 'remoteServer', path);
-  _optionalString(room, 'remoteToken', path);
+  final remoteToken = _optionalString(room, 'remoteToken', path);
   final sessionId = ConversationSessionId.parse(
     room['sessionId'],
     path: '$path.sessionId',
@@ -386,7 +386,17 @@ ConversationRoom parseConversationRoom(
   );
   final attributes = _optionalIntOr(room, 'attributes', path, 0, minimum: 0);
 
-  if (lastMessage != null && lastMessage.token != token) {
+  // A federated room's preview is the remote server's message, so it carries
+  // the remote token (measured on Talk 22 ↔ 24 on 2026-09-03); a local room's
+  // preview must name the room itself.
+  final previewToken = lastMessage?.token;
+  final previewBelongsHere =
+      lastMessage == null ||
+      previewToken == token ||
+      (remoteServer != null &&
+          remoteToken != null &&
+          previewToken?.value == remoteToken);
+  if (!previewBelongsHere) {
     protocolFailure(
       TalkProtocolErrorCode.previewConversationMismatch,
       '$path.lastMessage.token',

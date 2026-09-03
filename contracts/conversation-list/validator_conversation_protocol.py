@@ -24,6 +24,7 @@ SCHEMA_PATH_MEMBER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 REQUIRED_FIXTURE_IDS = {
     "compact",
     "talk22",
+    "federated",
     "duplicate-token",
     "empty",
     "full",
@@ -342,7 +343,10 @@ def classify_response(
         token = require_string(room.get("token"), f"room {index} token")
         tokens.append(token)
         preview = room.get("lastMessage")
-        if isinstance(preview, dict) and preview.get("token") != token:
+        preview_token = preview.get("token") if isinstance(preview, dict) else None
+        remote_token = room.get("remoteToken") if room.get("remoteServer") else None
+        # A federated room's preview names the remote conversation.
+        if preview_token is not None and preview_token not in (token, remote_token):
             raise ResponseSemanticError(
                 f"Room {index} preview token does not match its room token"
             )

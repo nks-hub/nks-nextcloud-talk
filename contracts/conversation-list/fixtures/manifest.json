@@ -97,6 +97,19 @@
       "expectLastMessageAbsent": true
     },
     {
+      "id": "federated",
+      "name": "federated conversation whose preview carries the remote token",
+      "file": "conversations-federated.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "full",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 1
+    },
+    {
       "id": "empty",
       "name": "successful empty conversation list",
       "file": "conversations-empty.response.json",
