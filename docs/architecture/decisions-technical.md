@@ -641,6 +641,16 @@ v `TODO-notifications-calls.md`.
 Proxy obsah notifikace nedešifruje. Otevře ho až klientský RSA klíč, takže
 účet určuje ten klíč, který payload rozšifroval, ne hostitel ani aktivní účet.
 
+DVA DŮSLEDKY UZAVŘENÉ 3. ZÁŘÍ 2026 MAJITELEM, obojí jako rozhodnutí, ne jako
+odklad. (1) Embedded FCM distributor se NEBUDE forkovat. Jeho slabší záruka —
+ACK vůči GMS dřív než předání aplikaci — se týká už jen záložní Web Push
+větve, a ztracené probuzení stejně dohání autoritativní OCS catch-up; fork
+LGPL-2.1 knihovny by za to platil trvalou údržbou. (2) AGPL Web Push backport
+pro Nextcloud 33 se NEBUDE stavět. Na starších řadách jede výchozí cesta přes
+proxy na klasickém push-v2 `/devices`, což je živě ověřené i na Nextcloud 32;
+backport by vylepšil jen záložní větev na jedné serverové řadě a addon navíc
+nikdy nesmí být povinnou instalací.
+
 ### D-039: Typing stav je transientní room session se zdroji per composer
 
 Stav: Přijato 30. srpna 2026, commit `9499288`.
