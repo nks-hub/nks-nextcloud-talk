@@ -16,6 +16,48 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (57) — 3. 9. 2026
+
+Vydáno ze zdroje `23c01b7`, tag `v0.1.0+57`.
+
+Android: release APK 91 196 816 B, SHA-256
+`eb0a89ced31c782884265cf8feca6b838a73c532da6be45e8a19b19182fa31fe`,
+versionCode 57; na Android 14 emulátoru živě: příloha čeká na odeslání a po
+Odeslat odejde s popiskem, odebrání připravené přílohy na server nic nezapíše,
+karta z Decku se otevře v prohlížeči, vlastní status, štítek konverzace,
+lobby a hlasová zpráva (viz níže). Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-57-windows-x64-setup.exe` 35 479 397 B,
+SHA-256 `9dd86a86a2844fc528b83a8d607a4d12449795ead499c7c8cc0bdc352ce18377`,
+nepodepsaný; `nextcloudtalk.exe` hlásí `0.1.0+57`. Instalace na `windows-test-vm`
+NEPROBĚHLA — stroj byl v době vydání odpojený (je to živá pracovní stanice);
+instalátor čeká na příští připojení.
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build 57 nainstalován a
+spuštěn. TestFlight nenahrán (kadence, poslední je 51).
+
+macOS: `nks-talk-macos-57.zip` 33 016 873 B, SHA-256
+`0eea6b8d0066cac37b0d734a943d10b6619dfeb498374179a2dd9b6f598407bb`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID, `stapler validate` OK — ověřeno na souboru
+staženém zpět z Nextcloudu; běží na build-mac. Poslán do chatu Pimpula (share
+8936, zpráva 78914).
+
+- Vybraná příloha se nahraje až po odeslání zprávy. Do té doby leží jen
+  v aplikaci, karta v psacím řádku říká „Připraveno k odeslání se zprávou"
+  a tlačítko Odebrat ji zahodí, aniž by se čehokoli dotkla na serveru.
+  Text v poli se použije jako popisek přílohy — a bere se až v okamžiku
+  odeslání, takže jde dopsat po výběru souboru.
+- Screenshot ze schránky jde vložit přímo do zprávy (Ctrl+V / Cmd+V; na
+  Androidu i z klávesnice). Obrázek se převede na PNG a chová se jako
+  vybraný soubor, tedy čeká na odeslání.
+- Karty z Decku a další sdílené objekty s odkazem jdou otevřít klepnutím.
+- Konverzace čekající v lobby už nehlásí chybu spojení; ukáže se jen
+  informace, že místnost ještě neotevřel moderátor.
+- Nedokončené přílohy z dřívějšího pádu aplikace se při startu uklidí.
+- Méně telemetrie: běžná rychlá synchronizace konverzací se už neodesílá,
+  hlásí se jen pomalá nebo neúspěšná.
+
 ## 0.1.0 (56) — 3. 9. 2026
 
 Vydáno ze zdroje `a9919e0`, tag `v0.1.0+56`.
