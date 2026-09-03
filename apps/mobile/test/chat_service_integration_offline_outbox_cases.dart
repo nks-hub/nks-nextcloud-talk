@@ -96,6 +96,84 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       },
     );
 
+    test('a drain delivers queued sends without the room being open', () async {
+      const storedFeatures = <String>{
+        'conversation-v4',
+        'chat-v2',
+        'chat-reference-id',
+      };
+      await accounts.updateTalkFeatures('account-a', storedFeatures);
+      await chat.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: storedFeatures,
+        observedAt: DateTime.utc(2026, 1, 1),
+      );
+      final offlineApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          throw http.ClientException('offline', request.url);
+        }),
+      );
+      addTearDown(offlineApi.close);
+      final offline = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: offlineApi,
+      );
+      await offline.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'first in the tunnel',
+      );
+      await offline.sendText(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        message: 'second in the tunnel',
+      );
+      expect(await chat.roomsWithPendingTextSends(), hasLength(1));
+
+      final sent = <String>[];
+      final onlineApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(talkFeatures: storedFeatures.toList()),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            return http.Response('', 304);
+          }
+          sent.add(request.bodyFields['message']!);
+          return http.Response(
+            jsonEncode(
+              _sendResponse(
+                referenceId: request.bodyFields['referenceId']!,
+                message: request.bodyFields['message']!,
+              ),
+            ),
+            201,
+            headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+          );
+        }),
+      );
+      addTearDown(onlineApi.close);
+
+      await ChatService(
+        accounts: AccountRepository(database),
+        chat: ChatRepository(database),
+        credentials: credentials,
+        api: onlineApi,
+      ).drainPendingSends();
+
+      expect(sent, ['first in the tunnel', 'second in the tunnel']);
+      final states = await database.select(database.textSendOperations).get();
+      expect(states.map((row) => row.outboxState), ['completed', 'completed']);
+      expect(await chat.roomsWithPendingTextSends(), isEmpty);
+    });
+
     test(
       'hot capability cache cannot authorize offline chat transport',
       () async {

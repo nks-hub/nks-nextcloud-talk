@@ -424,6 +424,40 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   );
 });
 
+/// Replays queued text sends for rooms that are not open, on start and on
+/// every hint that the network is back. The room pane covers its own room.
+final outboxDrainProvider = Provider<void>((ref) {
+  final chat = ref.watch(chatServiceProvider);
+  var running = false;
+  Future<void> drain() async {
+    if (running) {
+      return;
+    }
+    running = true;
+    try {
+      await chat.drainPendingSends();
+    } on Object {
+      // A drain is best effort; the outbox keeps its rows for the next one.
+    } finally {
+      running = false;
+    }
+  }
+
+  final wakes = <StreamSubscription<void>>[
+    for (final events in [
+      ref.watch(connectivityWakeEventsProvider),
+      ref.watch(appLifecycleResumeEventsProvider),
+    ])
+      events.listen((_) => unawaited(drain())),
+  ];
+  ref.onDispose(() {
+    for (final wake in wakes) {
+      unawaited(wake.cancel());
+    }
+  });
+  unawaited(drain());
+});
+
 final threadManagementServiceProvider = Provider<ThreadManagementService>((
   ref,
 ) {
@@ -693,6 +727,7 @@ final giphyReferenceMediaProvider = FutureProvider.autoDispose
 
 final accountsProvider = StreamProvider<List<StoredAccount>>((ref) {
   ref.watch(attachmentServiceProvider);
+  ref.watch(outboxDrainProvider);
   return ref.watch(accountRepositoryProvider).watchAccounts();
 });
 

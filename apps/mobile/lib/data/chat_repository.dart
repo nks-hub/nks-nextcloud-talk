@@ -79,6 +79,32 @@ final class ChatRepository {
     threadId: threadId,
   );
 
+  /// Rooms that still hold a text send the outbox may deliver on its own:
+  /// `queued`, `retryable` and `sending` (the last one is recovered before
+  /// replay). Ambiguous and failed rows wait for the sender.
+  Future<List<({String accountId, String roomToken})>>
+  roomsWithPendingTextSends() async {
+    final operations = _database.textSendOperations;
+    final rows =
+        await (_database.selectOnly(operations, distinct: true)
+              ..addColumns([operations.accountId, operations.roomToken])
+              ..where(
+                operations.outboxState.isIn(const [
+                  'queued',
+                  'retryable',
+                  'sending',
+                ]),
+              ))
+            .get();
+    return [
+      for (final row in rows)
+        (
+          accountId: row.read(operations.accountId)!,
+          roomToken: row.read(operations.roomToken)!,
+        ),
+    ];
+  }
+
   Stream<List<StoredOutgoingTextMessage>> watchOutgoingTextMessages({
     required String accountId,
     required String roomToken,

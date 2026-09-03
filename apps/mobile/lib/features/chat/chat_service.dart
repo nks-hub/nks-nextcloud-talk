@@ -153,6 +153,30 @@ final class ChatService {
     ).timeout(_accountSuspendDrainTimeout, onTimeout: () => const <void>[]);
   }
 
+  /// Delivers what the outbox still holds in rooms nobody has open.
+  ///
+  /// The room pane replays its own room while it is on screen. A message
+  /// queued in a tunnel and an app reopened on the conversation list have no
+  /// pane, so without this the text would wait until the room was opened
+  /// again. Each room goes through the ordinary sync, which also verifies
+  /// capabilities online before anything is claimed; a room whose sync fails
+  /// keeps its rows and the error is the pane's to show.
+  Future<void> drainPendingSends() async {
+    final rooms = await _chat.roomsWithPendingTextSends();
+    for (final room in rooms) {
+      if (_suspendedAccounts.contains(room.accountId)) {
+        continue;
+      }
+      try {
+        await syncRoom(accountId: room.accountId, roomToken: room.roomToken);
+      } on ChatServiceException {
+        // Recorded on the room by syncRoom; the next wake tries again.
+      } on _ChatSynchronizationCancelled {
+        // The account went away underneath; nothing to deliver for it.
+      }
+    }
+  }
+
   Future<void> syncRoom({
     required String accountId,
     required String roomToken,
