@@ -16,6 +16,44 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (54) — 3. 9. 2026
+
+Vydáno ze zdroje `8730973`, tag `v0.1.0+54`.
+
+Android: release APK 91 097 916 B, SHA-256
+`3376a891408ac4689bba302c6ae9e6cb5ab7498167b7fd870e57c0785639c18f`,
+versionCode 54; na Android 14 emulátoru běží dva účty na dvou serverech,
+federovaná pozvánka přijata a zprávy tečou oběma směry, push z druhého
+serveru dorazil. Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-54-windows-x64-setup.exe` 35 457 353 B,
+SHA-256 `97d9e14b3fb1f1daa985db2bcf7a0b8cf91b1858000b31c78b9dc965be74e159`,
+nepodepsaný; tichá instalace na `windows-test-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+54` (PID 7868).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build nainstalován a
+spuštěn. TestFlight nenahrán (kadence, poslední je 51).
+
+macOS: `nks-talk-macos-54.zip` 32 917 467 B, SHA-256
+`20df8cde271e16cc808e13f4c3a225b6c923ff860b0347511e235dd511aafd74`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID — ověřeno na souboru staženém zpět z
+Nextcloudu; běží na build-mac (PID 76194). Poslán do chatu Pimpula (share 8919,
+zpráva 78838).
+
+- Pozvánky do konverzací na jiných serverech (federace): pruh nad seznamem
+  s počtem čekajících pozvánek, přehled s tlačítky Přijmout / Odmítnout;
+  přijatá konverzace se rovnou otevře. Federovaná konverzace se načte a
+  zprávy jdou oběma směry.
+- Přihlášení na server s „hezkými" adresami bez `index.php` (výchozí u
+  Docker image Nextcloudu) už neskončí chybou.
+- Seznam konverzací ze serveru s Talkem 22 (bez štítků, připnutých a
+  plánovaných zpráv) se už neodmítá.
+- Dva účty na dvou různých serverech v jedné aplikaci — živě ověřeno včetně
+  oddělených přihlášení a push notifikací z obou serverů.
+- Nový testovací server `talk2.example.invalid` (Nextcloud 32 / Talk 22) pro
+  federaci a scénáře se dvěma servery.
+
 ## 0.1.0 (53) — 3. 9. 2026
 
 Vydáno ze zdroje `fdbc3eb`, tag `v0.1.0+53`.
