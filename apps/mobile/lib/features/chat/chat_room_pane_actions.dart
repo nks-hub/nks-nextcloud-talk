@@ -17,6 +17,9 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
     final forwardFilePath = _forwardableFilePath(parsed);
+    final canForward =
+        forwardFilePath != null ||
+        (copyText.isNotEmpty && _forwardableAsText(parsed));
     unawaited(
       showModalBottomSheet<void>(
         context: context,
@@ -53,7 +56,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                     unawaited(_startPrivateReply(message));
                   },
                 ),
-              if (copyText.isNotEmpty || forwardFilePath != null)
+              if (canForward)
                 ListTile(
                   key: const Key('message-action-forward'),
                   leading: const Icon(Icons.forward_rounded),
@@ -65,8 +68,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                     );
                   },
                 ),
-              if ((copyText.isNotEmpty || forwardFilePath != null) &&
-                  _noteToSelf() != null)
+              if (canForward && _noteToSelf() != null)
                 ListTile(
                   key: const Key('message-action-note-to-self'),
                   leading: const Icon(Icons.edit_note_rounded),
@@ -214,6 +216,29 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     }
     final path = files.single.wire['path'];
     return path is String && path.isNotEmpty ? path : null;
+  }
+
+  /// Mentions render as names and survive a forward as plain text; a poll,
+  /// a location or a contact would be reduced to its label, which is not the
+  /// object — Talk has no re-share for those, so they are not offered.
+  static bool _forwardableAsText(ChatMessage? parsed) {
+    if (parsed == null) {
+      return true;
+    }
+    const mentionTypes = <String>{
+      'user',
+      'guest',
+      'group',
+      'circle',
+      'team',
+      'email',
+      'federated_user',
+      'call',
+      'highlight',
+    };
+    return parsed.messageParameters.values.every(
+      (parameter) => mentionTypes.contains(parameter.type),
+    );
   }
 
   /// Forwards a message: a file by sharing it into the target from the
