@@ -1,0 +1,7 @@
+{
+  "poll": {
+    "token": "fixture-poll-token-pretty-00000000000000000000000000000000",
+    "endpoint": "https://cloud.example.invalid/login/v2/poll"
+  },
+  "login": "https://cloud.example.invalid/login/v2/flow/fixture-login-token-pretty-0000000000000000000000000000000"
+}

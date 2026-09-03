@@ -81,11 +81,21 @@ final class LoginFlowInitialization {
       protocolFailure(TalkProtocolErrorCode.untrustedLoginEndpoint, r'$.login');
     }
 
+    // Nextcloud advertises the endpoints with `index.php` unless the server
+    // is configured for pretty URLs (`htaccess.RewriteBase`, the default of
+    // the official Docker image), in which case the same routes come without
+    // it. Both are the server's own routes; anything else is not.
     final basePath = verifiedServer.basePath;
-    final expectedPollPath = '$basePath/index.php/login/v2/poll';
-    final loginPrefix = '$basePath/index.php/login/v2/flow/';
-    if (pollEndpoint.path != expectedPollPath ||
-        !loginUri.path.startsWith(loginPrefix)) {
+    const routePrefixes = <String>['/index.php', ''];
+    String? loginPrefix;
+    for (final route in routePrefixes) {
+      if (pollEndpoint.path == '$basePath$route/login/v2/poll' &&
+          loginUri.path.startsWith('$basePath$route/login/v2/flow/')) {
+        loginPrefix = '$basePath$route/login/v2/flow/';
+        break;
+      }
+    }
+    if (loginPrefix == null) {
       protocolFailure(
         TalkProtocolErrorCode.untrustedLoginEndpoint,
         r'$.poll.endpoint',

@@ -31,6 +31,8 @@ REQUIRED_FIXTURE_IDS = {
     "login-init-empty-request",
     "login-init-root",
     "login-init-subpath",
+    "login-init-pretty-urls",
+    "login-init-mixed-routes",
     "login-init-debug-http",
     "login-init-cross-origin",
     "login-init-base-path-escape",
@@ -370,14 +372,19 @@ def validate_login_initialization(
         raise ContractValidationError("Login Flow v2 returned a cross-origin URL")
 
     base_path = urlsplit(base_url).path.rstrip("/")
-    expected_poll_path = f"{base_path}/index.php/login/v2/poll"
-    login_prefix = f"{base_path}/index.php/login/v2/flow/"
     actual_poll_path = urlsplit(poll_url).path
     actual_login_path = urlsplit(login_url).path
-    if actual_poll_path != expected_poll_path:
-        raise ContractValidationError("Login Flow v2 returned an unexpected poll path")
-    if not actual_login_path.startswith(login_prefix):
-        raise ContractValidationError("Login Flow v2 returned an unexpected login path")
+    # With `index.php` by default, without it on a pretty-URL server; both
+    # endpoints must agree on one of the two shapes.
+    login_prefix = None
+    for route in ("/index.php", ""):
+        if actual_poll_path == f"{base_path}{route}/login/v2/poll" and actual_login_path.startswith(
+            f"{base_path}{route}/login/v2/flow/"
+        ):
+            login_prefix = f"{base_path}{route}/login/v2/flow/"
+            break
+    if login_prefix is None:
+        raise ContractValidationError("Login Flow v2 returned an unexpected poll or login path")
 
     login_token = actual_login_path[len(login_prefix) :]
     if TOKEN_SEGMENT.fullmatch(login_token) is None:

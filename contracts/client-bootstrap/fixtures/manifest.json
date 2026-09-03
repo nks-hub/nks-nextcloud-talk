@@ -65,6 +65,30 @@
       "expectedTrusted": true
     },
     {
+      "id": "login-init-pretty-urls",
+      "name": "pretty-URL Login Flow v2 initialization without index.php",
+      "file": "login-init-pretty-urls.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid",
+      "expectedTrusted": true
+    },
+    {
+      "id": "login-init-mixed-routes",
+      "name": "Login Flow v2 initialization mixing index.php and pretty routes",
+      "file": "login-init-mixed-routes.response.json",
+      "operationId": "initializeLoginFlowV2",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "valid": true,
+      "loginBaseUrl": "https://cloud.example.invalid",
+      "expectedTrusted": false
+    },
+    {
       "id": "login-init-debug-http",
       "name": "explicit debug HTTP Login Flow v2 initialization",
       "file": "login-init-debug-http.response.json",

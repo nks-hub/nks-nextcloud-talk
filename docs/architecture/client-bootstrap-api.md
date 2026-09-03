@@ -89,8 +89,11 @@ Před otevřením browseru nebo odesláním poll tokenu klient ověří:
 
 - stejný origin jako ověřený server; v production vždy HTTPS;
 - stejný Nextcloud base path;
-- přesný poll path `/index.php/login/v2/poll`;
-- login path `/index.php/login/v2/flow/{opaque-token}`;
+- přesný poll path `/index.php/login/v2/poll`, nebo `/login/v2/poll` u
+  serveru s pretty URL (`htaccess.RewriteBase`, výchozí u oficiálního Docker
+  image) — oba endpointy musí používat tentýž tvar;
+- login path `/index.php/login/v2/flow/{opaque-token}` (resp.
+  `/login/v2/flow/{opaque-token}`);
 - žádné userinfo, query, fragment, control character ani encoded path úniky.
 
 Cross-origin login URL se nikdy neotevře a cross-origin poll endpoint nikdy
@@ -178,12 +181,12 @@ Validátor provádí:
 7. Oddělenou klasifikaci anonymních a account capabilities.
 8. Úplnost manifestu a zákaz nevypsaného fixture.
 
-Aktuální výsledek: 1 OpenAPI dokument, 20 fixtures, 22 origin případů,
-2 status klasifikace, 7 login trust scénářů, 5 credential scénářů a 2 capability
+Aktuální výsledek: 1 OpenAPI dokument, 22 fixtures, 22 origin případů,
+2 status klasifikace, 9 login trust scénářů, 5 credential scénářů a 2 capability
 snapshoty prošly. Živý smoke navíc potvrdil 5 anonymních namespace a 105 Talk
 features bez zápisu na server.
 
-Stejných 20 fixtures a 22 origin případů nyní načítají testy produkčního pure
+Stejných 22 fixtures a 22 origin případů nyní načítají testy produkčního pure
 Dart balíku [`talk_protocol`](../../packages/talk_protocol). Implementace navíc
 ověřuje IDN/Punycode host, subpath-aware endpointy, redigované výjimky,
 duplicitní feature a zákaz domýšlet význam neznámého poll HTTP statusu.
