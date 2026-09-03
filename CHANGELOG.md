@@ -16,6 +16,57 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (58) — 4. 9. 2026
+
+Vydáno ze zdroje `52aecdd`, tag `v0.1.0+58`.
+
+Android: release APK 93 577 506 B, SHA-256
+`f9a51f3b40568806f1490a2e6d478c9fd4a84d99996a0b510619260b9fdb04bf`,
+versionCode 58; na Android 14 emulátoru živě: odeslání ze zabitého procesu po
+obnovení sítě, chat po websocketu s nulou HTTP dotazů v 96sekundovém okně,
+přihlášení naskenovaným QR kódem, launcher shortcuts a studený start rovnou
+do konverzace. Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-58-windows-x64-setup.exe` 35 491 818 B,
+SHA-256 `f558c4141be8a243c5eec8c9fa113b2ba368c44fe00edabc4ee22352ccd94805`,
+nepodepsaný. Instalace na `windows-test-vm` NEPROBĚHLA — stroj byl v době vydání
+odpojený (je to živá pracovní stanice).
+
+iOS: simulátor iPhone / iOS 18.6, debug build 58 nainstalován a spuštěn,
+`Runner.app` 228 MB, `CFBundleVersion` 58; na obrazovce vykreslený český
+onboarding včetně nového tlačítka „Načíst přihlašovací kód".
+TestFlight nenahrán (kadence, poslední je 51).
+
+macOS: `nextcloudtalk.app` 177 MB, zip 55 593 797 B, SHA-256
+`e35327ce4535f440a1e1eab0c5041720e842db55b6f8289f6a38617ee1a5af30`,
+ad-hoc podpis (`codesign --verify --strict` OK i pro Designated Requirement),
+běžel 1:19 na build-mac. Notarizovaný Developer ID balík se pro tento build
+nedělal.
+
+Linux: `nextcloudtalk` 35 608 B, SHA-256
+`2b7ebf3f525f152c1da28127dc3bfdb0326508b572848751ea03469fbc4838c9`, bundle
+24 souborů / 40 260 854 B; postaveno za 307 s a spuštěno na testovací VM,
+okno 1280×720 s vykresleným českým onboardingem. `camera` nemá linuxovou
+implementaci a nic se nepřilinkovalo — skener se na desktopu nenabízí.
+
+- Zprávy odejdou, i když je aplikace zavřená. Telefon se probudí, jakmile je
+  síť zpátky, a odešle, co zůstalo ve frontě; rozdělaný upload se dobere.
+- V otevřené konverzaci teče chat po websocketu, pokud ho server nabízí.
+  Zpráva se objeví bez čekání na dotaz; když spojení spadne, aplikace se
+  tiše vrátí k dosavadní cestě a nic nechybí ani nepřijde dvakrát.
+- Přihlásit se jde načtením QR kódu z Nextcloudu (Nastavení → Zabezpečení).
+  Kód se čte jen z kamery; aplikace kvůli tomu neregistruje žádné vlastní
+  odkazové schéma, takže heslo nikdy nejede přes systémový odkaz.
+- Poslední konverzace jsou na Androidu pod dlouhým stiskem ikony aplikace.
+  Klepnutí otevře rovnou tu místnost. Při zapnutém zámku aplikace se
+  nenabízejí vůbec.
+- Na desktopu jde klávesnicí i to, co dosud šlo jen myší: zprávu vybere Tab,
+  Enter na ní otevře stejnou nabídku jako pravé tlačítko a Escape zavře
+  panel detailu. Najetí myší je nově vidět i na reakcích.
+- Aplikace má vlastní sestavení pro Linux; přihlašovací údaje ukládá do
+  systémové klíčenky.
+- Opraveno: smazaná zpráva zabírala v konverzaci dva řádky místo jednoho.
+
 ## 0.1.0 (57) — 3. 9. 2026
 
 Vydáno ze zdroje `23c01b7`, tag `v0.1.0+57`.
