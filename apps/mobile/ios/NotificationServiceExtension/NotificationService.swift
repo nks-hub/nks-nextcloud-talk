@@ -71,7 +71,11 @@ final class NotificationService: UNNotificationServiceExtension {
     {
       PushNotificationRouteStore.production.remember(
         identifier: request.identifier,
-        route: PushNotificationRouteStore.Route(accountId: accountId, roomToken: roomToken)
+        route: PushNotificationRouteStore.Route(
+          accountId: accountId,
+          roomToken: roomToken,
+          notificationId: payload["nid"] as? Int
+        )
       )
       // Matches AppDelegate's registered category — without this the banner
       // offers no Reply/Mark-as-read actions at all.

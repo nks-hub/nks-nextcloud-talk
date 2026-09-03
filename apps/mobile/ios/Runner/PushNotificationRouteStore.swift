@@ -38,14 +38,25 @@ final class PushNotificationRouteStore {
   struct Route {
     let accountId: String
     let roomToken: String
+    /// Nextcloud notification id (`nid` in the push), so a Reply can look up
+    /// which message it answers. Absent on pushes that carry none.
+    var notificationId: Int? = nil
+    /// Chat message the notification shows, known up front for local
+    /// notifications the app builds from its own cache (macOS).
+    var messageId: Int? = nil
   }
 
   @discardableResult
   func remember(identifier: String, route: Route) -> Bool {
+    var object: [String: Any] = ["accountId": route.accountId, "token": route.roomToken]
+    if let notificationId = route.notificationId, notificationId > 0 {
+      object["nid"] = notificationId
+    }
+    if let messageId = route.messageId, messageId > 0 {
+      object["messageId"] = messageId
+    }
     guard !identifier.isEmpty, !route.accountId.isEmpty, !route.roomToken.isEmpty,
-      let data = try? JSONSerialization.data(
-        withJSONObject: ["accountId": route.accountId, "token": route.roomToken]
-      )
+      let data = try? JSONSerialization.data(withJSONObject: object)
     else {
       return false
     }
@@ -79,7 +90,14 @@ final class PushNotificationRouteStore {
     else {
       return nil
     }
-    return Route(accountId: accountId, roomToken: token)
+    let notificationId = object["nid"] as? Int
+    let messageId = object["messageId"] as? Int
+    return Route(
+      accountId: accountId,
+      roomToken: token,
+      notificationId: (notificationId ?? 0) > 0 ? notificationId : nil,
+      messageId: (messageId ?? 0) > 0 ? messageId : nil
+    )
   }
 
   func removeAll() {

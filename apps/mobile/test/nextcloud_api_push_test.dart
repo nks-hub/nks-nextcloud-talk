@@ -160,6 +160,66 @@ void main() {
     expect(completion.classification, PushCompletionClass.success);
   });
 
+  test('a notification names the message a shade reply answers', () async {
+    Uri? requested;
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        requested = request.url;
+        expect(request.headers['OCS-APIRequest'], 'true');
+        return http.Response(
+          '{"ocs":{"meta":{"status":"ok","statuscode":200},"data":{'
+          '"notification_id":54975,"app":"spreed","object_type":"chat",'
+          '"object_id":"<room-token>/78663/78653"}}}',
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final messageId = await api.getNotificationChatMessageId(
+      server: server,
+      loginName: 'tester',
+      appPassword: 'secret',
+      notificationId: 54975,
+      roomToken: '<room-token>',
+    );
+    expect(messageId, 78663);
+    expect(
+      requested?.path,
+      '/ocs/v2.php/apps/notifications/api/v2/notifications/54975',
+    );
+  });
+
+  test('a gone or foreign notification yields no reply target', () async {
+    var status = 404;
+    var objectId = '<room-token>/78663';
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (status == 404) {
+          return http.Response('', 404);
+        }
+        return http.Response(
+          '{"ocs":{"meta":{"status":"ok","statuscode":200},"data":{'
+          '"object_type":"chat","object_id":"$objectId"}}}',
+          200,
+        );
+      }),
+    );
+    addTearDown(api.close);
+    Future<int?> lookup() => api.getNotificationChatMessageId(
+      server: server,
+      loginName: 'tester',
+      appPassword: 'secret',
+      notificationId: 1,
+      roomToken: '<room-token>',
+    );
+    expect(await lookup(), isNull);
+    status = 200;
+    objectId = 'otherroom/78663';
+    expect(await lookup(), isNull);
+    objectId = '<room-token>';
+    expect(await lookup(), isNull);
+  });
+
   test('the registration announces itself as a Talk client', () async {
     late http.BaseRequest seen;
     final api = HttpNextcloudApi(

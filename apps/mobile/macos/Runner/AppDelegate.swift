@@ -207,7 +207,11 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
     guard
       PushNotificationRouteStore.production.remember(
         identifier: identifier,
-        route: PushNotificationRouteStore.Route(accountId: accountId, roomToken: roomToken)
+        route: PushNotificationRouteStore.Route(
+          accountId: accountId,
+          roomToken: roomToken,
+          messageId: args["messageId"] as? Int
+        )
       )
     else {
       result(false)
@@ -378,6 +382,7 @@ class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
         accountId: route.accountId,
         roomToken: route.roomToken,
         replyText: replyText,
+        messageId: route.messageId,
         completion: completionHandler
       )
     default:

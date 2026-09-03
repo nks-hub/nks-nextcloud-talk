@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -54,6 +55,7 @@ final class WindowsNotificationChannel {
     required String roomToken,
     required String title,
     required String body,
+    int? messageId,
   }) {
     return _channel.invokeMethod<bool>(
       Platform.isMacOS ? 'showLocalNotification' : 'show',
@@ -62,6 +64,7 @@ final class WindowsNotificationChannel {
         'roomToken': roomToken,
         'title': title,
         'body': body,
+        'messageId': ?messageId,
       },
     );
   }
@@ -93,11 +96,13 @@ final class WindowsNotificationChannel {
         if (kind != 'reply' && kind != 'markRead') {
           return false;
         }
+        final messageId = args?['messageId'];
         await _onNotificationAction?.call(
           kind: kind!,
           accountId: accountId,
           roomToken: roomToken,
           replyText: args?['replyText'] as String?,
+          messageId: messageId is int && messageId > 0 ? messageId : null,
         );
         return true;
       default:
@@ -118,6 +123,7 @@ typedef WindowsNotificationActionHandler =
       required String accountId,
       required String roomToken,
       String? replyText,
+      int? messageId,
     });
 
 final class WindowsNotificationOpen {
@@ -204,9 +210,24 @@ final class WindowsNotificationService {
               roomToken: conversation.token,
               title: conversation.displayName,
               body: body,
+              messageId: _lastMessageId(conversation),
             )
             .catchError((Object _) {}),
       );
+    }
+  }
+
+  /// Id of the message the notification shows, so a reply can quote it. The
+  /// cached row keeps the room's raw JSON; anything unexpected is simply no
+  /// quote.
+  static int? _lastMessageId(CachedConversation conversation) {
+    try {
+      final room = jsonDecode(conversation.rawJson);
+      final last = room is Map<String, Object?> ? room['lastMessage'] : null;
+      final id = last is Map<String, Object?> ? last['id'] : null;
+      return id is int && id > 0 ? id : null;
+    } on FormatException {
+      return null;
     }
   }
 }

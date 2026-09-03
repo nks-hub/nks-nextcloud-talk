@@ -255,6 +255,8 @@ final class ApplePushNotificationActionDelivery {
     accountId: String,
     roomToken: String,
     replyText: String?,
+    notificationId: Int? = nil,
+    messageId: Int? = nil,
     completion: @escaping () -> Void
   ) {
     var payload: [String: Any] = [
@@ -264,6 +266,12 @@ final class ApplePushNotificationActionDelivery {
     ]
     if let replyText {
       payload["replyText"] = replyText
+    }
+    if let notificationId {
+      payload["notificationId"] = notificationId
+    }
+    if let messageId {
+      payload["messageId"] = messageId
     }
 
     let action = PendingAction(

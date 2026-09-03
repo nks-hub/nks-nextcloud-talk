@@ -61,6 +61,8 @@ final class ApplePushCoordinator {
       required String accountId,
       required String roomToken,
       String? replyText,
+      int? notificationId,
+      int? messageId,
     })?
     onNotificationAction,
   }) : _channel = channel ?? const MethodChannel(channelName),
@@ -78,6 +80,8 @@ final class ApplePushCoordinator {
     required String accountId,
     required String roomToken,
     String? replyText,
+    int? notificationId,
+    int? messageId,
   })?
   _onNotificationAction;
   bool _requested = false;
@@ -178,6 +182,8 @@ final class ApplePushCoordinator {
             accountId: accountId,
             roomToken: roomToken,
             replyText: args?['replyText'] as String?,
+            notificationId: _positiveInt(args?['notificationId']),
+            messageId: _positiveInt(args?['messageId']),
           );
         }
         return null;
@@ -219,3 +225,5 @@ final class ApplePushCoordinator {
     unawaited(_notificationOpenedController.close());
   }
 }
+
+int? _positiveInt(Object? value) => value is int && value > 0 ? value : null;

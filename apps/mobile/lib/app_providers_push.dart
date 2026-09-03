@@ -330,12 +330,14 @@ final windowsNotificationServiceProvider =
                 required accountId,
                 required roomToken,
                 replyText,
+                messageId,
               }) => _runOneShotNotificationAction(
                 ref,
                 kind: kind,
                 accountId: accountId,
                 roomToken: roomToken,
                 replyText: replyText,
+                messageId: messageId,
               ),
         ),
       );
@@ -375,14 +377,22 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
   final coordinator = ApplePushCoordinator(
     onToken: registration?.installToken,
     onNotificationAction:
-        ({required kind, required accountId, required roomToken, replyText}) =>
-            _runOneShotNotificationAction(
-              ref,
-              kind: kind,
-              accountId: accountId,
-              roomToken: roomToken,
-              replyText: replyText,
-            ),
+        ({
+          required kind,
+          required accountId,
+          required roomToken,
+          replyText,
+          notificationId,
+          messageId,
+        }) => _runOneShotNotificationAction(
+          ref,
+          kind: kind,
+          accountId: accountId,
+          roomToken: roomToken,
+          replyText: replyText,
+          notificationId: notificationId,
+          messageId: messageId,
+        ),
   );
   ref.onDispose(coordinator.dispose);
   unawaited(coordinator.checkLaunchNotificationOpen());
@@ -462,15 +472,85 @@ final applePushRegistrationCoordinatorProvider =
 ///
 /// Shared by Android's and iOS's notification-action handlers below, so the
 /// two platforms cannot diverge on what "reply from a notification" means.
+///
+/// A reply from the shade answers the notified message, not the room: the
+/// message id comes with the notification ([messageId], desktop builds the
+/// notification from the cached message) or is looked up through the
+/// Notifications API by [notificationId] (Android and iOS only get the room
+/// token in the push). When neither yields a message — the notification is
+/// gone, or the server has no reply support — the text still goes out as a
+/// plain message rather than being lost.
 Future<void> _sendNotificationReply(
   Ref ref, {
   required String accountId,
   required String roomToken,
   required String text,
-}) {
-  return ref
-      .read(chatServiceProvider)
-      .sendText(accountId: accountId, roomToken: roomToken, message: text);
+  int? notificationId,
+  int? messageId,
+}) async {
+  final chat = ref.read(chatServiceProvider);
+  var replyTo = messageId;
+  if (replyTo == null && notificationId != null) {
+    replyTo = await _notifiedMessageId(
+      ref,
+      accountId: accountId,
+      roomToken: roomToken,
+      notificationId: notificationId,
+    );
+  }
+  if (replyTo != null) {
+    try {
+      await chat.sendText(
+        accountId: accountId,
+        roomToken: roomToken,
+        message: text,
+        replyTo: replyTo,
+      );
+      return;
+    } on ChatServiceException catch (error) {
+      if (error.code != ChatServiceError.sendUnsupported) {
+        rethrow;
+      }
+    }
+  }
+  await chat.sendText(
+    accountId: accountId,
+    roomToken: roomToken,
+    message: text,
+  );
+}
+
+/// Message id behind a notification, or null when the server cannot say.
+/// A network failure here is not the reply's failure: the text is still
+/// worth sending, just without the quote.
+Future<int?> _notifiedMessageId(
+  Ref ref, {
+  required String accountId,
+  required String roomToken,
+  required int notificationId,
+}) async {
+  final account = await ref
+      .read(accountRepositoryProvider)
+      .getAccount(accountId);
+  final appPassword = await ref
+      .read(credentialVaultProvider)
+      .readAppPassword(accountId);
+  if (account == null || appPassword == null) {
+    return null;
+  }
+  try {
+    return await ref
+        .read(nextcloudApiProvider)
+        .getNotificationChatMessageId(
+          server: ServerBase.parse(account.serverUrl),
+          loginName: account.loginName,
+          appPassword: appPassword,
+          notificationId: notificationId,
+          roomToken: roomToken,
+        );
+  } on NextcloudApiException {
+    return null;
+  }
 }
 
 /// Marks a conversation read from a notification-shade action. The read
@@ -502,6 +582,7 @@ Future<AndroidPushActionOutcome> _runNotificationAction(
           accountId: action.accountId,
           roomToken: action.roomToken,
           text: action.replyText ?? '',
+          notificationId: action.notificationId,
         );
       case AndroidNotificationActionKind.markRead:
         await _markNotificationRead(
@@ -554,6 +635,8 @@ Future<void> _runOneShotNotificationAction(
   required String accountId,
   required String roomToken,
   String? replyText,
+  int? notificationId,
+  int? messageId,
 }) async {
   switch (kind) {
     case 'reply':
@@ -566,6 +649,8 @@ Future<void> _runOneShotNotificationAction(
         accountId: accountId,
         roomToken: roomToken,
         text: text,
+        notificationId: notificationId,
+        messageId: messageId,
       );
     case 'markRead':
       await _markNotificationRead(

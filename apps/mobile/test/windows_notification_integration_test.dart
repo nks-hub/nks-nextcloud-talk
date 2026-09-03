@@ -207,6 +207,7 @@ void main() {
       'chat-reference-id',
       'chat-read-marker',
       'chat-read-last',
+      'chat-replies',
     };
     await accounts.updateTalkFeatures(accountB.id, features);
     await chat.recordCapabilities(
@@ -301,6 +302,7 @@ void main() {
         'accountId': 'account-b',
         'roomToken': 'sharedroom',
         'replyText': 'Reply from Windows',
+        'messageId': 4242,
       }),
     );
     expect(replyResponse, isTrue);
@@ -311,6 +313,8 @@ void main() {
     expect(queued.single.roomToken, 'sharedroom');
     expect(queued.single.message, 'Reply from Windows');
     expect(queued.single.outboxState, 'queued');
+    // The toast quoted message 4242; the reply answers it, not the room.
+    expect(queued.single.replyTo, 4242);
 
     online = true;
     final markReadResponse = await _dispatchNative(

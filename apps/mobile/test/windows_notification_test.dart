@@ -46,6 +46,7 @@ void main() {
     required String token,
     required int unread,
     String? lastMessage = 'hello',
+    int? lastMessageId,
   }) async {
     await database
         .into(database.cachedConversations)
@@ -60,7 +61,9 @@ void main() {
             favorite: false,
             lastMessageText: Value(lastMessage),
             lastMessageTimestamp: const Value(20),
-            rawJson: '{}',
+            rawJson: lastMessageId == null
+                ? '{}'
+                : '{"lastMessage":{"id":$lastMessageId}}',
           ),
         );
   }
@@ -90,11 +93,17 @@ void main() {
     // notifications for messages the user has had all along.
     expect(shown, isEmpty);
 
-    await store(token: 'roomtoken1', unread: 4, lastMessage: 'a new one');
+    await store(
+      token: 'roomtoken1',
+      unread: 4,
+      lastMessage: 'a new one',
+      lastMessageId: 4711,
+    );
     await settle();
 
     expect(shown, hasLength(1));
     expect(shown.single['body'], 'a new one');
+    expect(shown.single['messageId'], 4711);
     expect(shown.single['title'], 'Room roomtoken1');
     expect(shown.single['accountId'], 'account-a');
     expect(shown.single['roomToken'], 'roomtoken1');
@@ -152,7 +161,7 @@ void main() {
   });
 
   test('native actions remain account scoped', () async {
-    final actions = <Map<String, String?>>[];
+    final actions = <Map<String, Object?>>[];
     final notificationChannel = WindowsNotificationChannel(
       channel: channel,
       onNotificationAction:
@@ -161,12 +170,14 @@ void main() {
             required accountId,
             required roomToken,
             replyText,
+            messageId,
           }) async {
-            actions.add(<String, String?>{
+            actions.add(<String, Object?>{
               'kind': kind,
               'accountId': accountId,
               'roomToken': roomToken,
               'replyText': replyText,
+              'messageId': messageId,
             });
           },
     );
@@ -183,18 +194,21 @@ void main() {
               'accountId': 'account-b',
               'roomToken': 'shared-host-room',
               'replyText': 'Reply text',
+              'messageId': 4711,
             }),
           ),
           (_) {},
         );
 
     expect(const StandardMethodCodec().decodeEnvelope(response!), isTrue);
-    expect(actions, <Map<String, String?>>[
-      <String, String?>{
+    // The quoted message rides along so the reply answers it, not the room.
+    expect(actions, <Map<String, Object?>>[
+      <String, Object?>{
         'kind': 'reply',
         'accountId': 'account-b',
         'roomToken': 'shared-host-room',
         'replyText': 'Reply text',
+        'messageId': 4711,
       },
     ]);
   });

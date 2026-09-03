@@ -10,6 +10,7 @@
 #include <winrt/base.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <mutex>
 #include <optional>
@@ -217,6 +218,9 @@ std::wstring ToastXml(const std::wstring& route_id,
 struct Route {
   std::string account_id;
   std::string room_token;
+  // Message the toast showed; a reply from the toast answers it. Zero when
+  // the caller did not know one.
+  int64_t message_id = 0;
 };
 
 struct Activation {
@@ -251,7 +255,8 @@ class ShellNotification::Impl
   }
 
   bool Show(const std::wstring& account_id, const std::wstring& room_token,
-            const std::wstring& title, const std::wstring& body) {
+            const std::wstring& title, const std::wstring& body,
+            int64_t message_id) {
     if (!IsValidText(account_id, kMaximumIdentifierLength) ||
         !IsValidText(room_token, kMaximumIdentifierLength) ||
         !IsValidText(title, kMaximumTitleLength) ||
@@ -306,7 +311,8 @@ class ShellNotification::Impl
           notification.Activated(token);
           return false;
         }
-        routes_[route_id] = Route{Utf8From(account_id), Utf8From(room_token)};
+        routes_[route_id] =
+            Route{Utf8From(account_id), Utf8From(room_token), message_id};
         route_order_.push_back(route_id);
         toasts_.push_back({route_id, notification, token});
         while (route_order_.size() > kMaximumRoutes) {
@@ -435,9 +441,20 @@ ShellNotification::ShellNotification(flutter::BinaryMessenger* messenger,
       result->Error("invalid_arguments", "A notification needs a route.");
       return;
     }
+    int64_t message_id = 0;
+    const auto message_entry =
+        arguments->find(flutter::EncodableValue("messageId"));
+    if (message_entry != arguments->end()) {
+      if (const auto* wide = std::get_if<int64_t>(&message_entry->second)) {
+        message_id = *wide > 0 ? *wide : 0;
+      } else if (const auto* narrow =
+                     std::get_if<int32_t>(&message_entry->second)) {
+        message_id = *narrow > 0 ? *narrow : 0;
+      }
+    }
     result->Success(flutter::EncodableValue(impl_->Show(
         Utf16From(*account_id), Utf16From(*room_token), Utf16From(*title),
-        Utf16From(*body))));
+        Utf16From(*body), message_id)));
   });
 }
 
@@ -472,6 +489,10 @@ bool ShellNotification::HandleActivation() {
       if (activation->kind == L"reply") {
         payload[flutter::EncodableValue("replyText")] =
             flutter::EncodableValue(activation->reply_text);
+        if (activation->route.message_id > 0) {
+          payload[flutter::EncodableValue("messageId")] =
+              flutter::EncodableValue(activation->route.message_id);
+        }
       }
       channel_->InvokeMethod(
           "notificationAction",
