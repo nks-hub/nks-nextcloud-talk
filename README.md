@@ -7,7 +7,10 @@ iOS, Windows, macOS a Linux.
 Nejde o pixelovou kopii oficiálních klientů. Upstream Android a iOS aplikace
 slouží jako SHA-bound reference chování a kompatibility; UI, datový model a
 implementace jsou vlastní a licencované pod
-[`GPL-3.0-or-later`](LICENSE).
+[`GPL-3.0-or-later`](LICENSE). České názvy emoji v
+`apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` jsou
+odvozené z anotací Unicode CLDR pod licencí Unicode
+(https://www.unicode.org/license.txt).
 
 ## Aktuální stav
 
