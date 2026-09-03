@@ -133,19 +133,30 @@ final class PerformanceTelemetry {
     TracedOutcome outcome,
   ) {
     final now = _clock();
+    final duration = now.difference(started);
+    // A sync that finished quickly is the expected state, and there is one
+    // every few seconds: measured on 2026-09-03 it made up ~50 of ~52
+    // events an hour, ~13 KB each, for a graph of "fine". Only a slow or
+    // broken sync carries information; the other operations are rare enough
+    // that their completions still say something.
+    if (operation == TracedOperation.conversationSync &&
+        outcome == TracedOutcome.completed &&
+        duration < _routineSyncCeiling) {
+      return;
+    }
     final last = _lastReported[operation];
     if (last != null && now.difference(last) < _interval) {
       return;
     }
     _lastReported[operation] = now;
     _report(
-      TracedSpan(
-        operation: operation,
-        outcome: outcome,
-        duration: now.difference(started),
-      ),
+      TracedSpan(operation: operation, outcome: outcome, duration: duration),
     );
   }
+
+  /// Completed syncs below this are not reported; it is the lower edge of the
+  /// `<10s` bucket, so what does get through is already "slow".
+  static const _routineSyncCeiling = Duration(seconds: 2);
 }
 
 /// The process-wide measurement.

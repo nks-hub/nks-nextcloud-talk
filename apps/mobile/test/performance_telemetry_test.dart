@@ -104,12 +104,12 @@ void main() {
       final telemetry = build();
 
       for (var index = 0; index < 60; index++) {
-        await telemetry.trace(TracedOperation.conversationSync, () async {
+        await telemetry.trace(TracedOperation.roomOpen, () async {
           now = now.add(const Duration(seconds: 1));
         });
       }
 
-      // Sixty syncs across a minute of fake time, one span.
+      // Sixty opens across a minute of fake time, one span.
       expect(reported, hasLength(1));
     },
   );
@@ -119,9 +119,13 @@ void main() {
     () async {
       final telemetry = build();
 
-      await telemetry.trace(TracedOperation.conversationSync, () async {});
+      Future<void> slowSync() => telemetry.trace(
+        TracedOperation.conversationSync,
+        () async => now = now.add(const Duration(seconds: 3)),
+      );
+      await slowSync();
       await telemetry.trace(TracedOperation.roomOpen, () async {});
-      await telemetry.trace(TracedOperation.conversationSync, () async {});
+      await slowSync();
 
       expect(reported.map((span) => span.operation), <TracedOperation>[
         TracedOperation.conversationSync,
@@ -129,6 +133,33 @@ void main() {
       ]);
     },
   );
+
+  test('a routine fast sync is silent, a slow or failed one is not', () async {
+    // Measured on the emulator on 2026-09-03: fast completed syncs were ~50
+    // of ~52 performance events an hour. They say nothing; they only cost.
+    final telemetry = build();
+
+    await telemetry.trace(TracedOperation.conversationSync, () async {
+      now = now.add(const Duration(milliseconds: 300));
+    });
+    expect(reported, isEmpty);
+
+    now = now.add(const Duration(minutes: 2));
+    await telemetry.trace(TracedOperation.conversationSync, () async {
+      now = now.add(const Duration(seconds: 3));
+    });
+    expect(reported.single.durationBucket, '<10s');
+
+    now = now.add(const Duration(minutes: 2));
+    await expectLater(
+      telemetry.trace<void>(
+        TracedOperation.conversationSync,
+        () async => throw StateError('server unreachable'),
+      ),
+      throwsStateError,
+    );
+    expect(reported.last.outcome, TracedOutcome.failed);
+  });
 
   test('a cancelled operation is reported as cancelled', () {
     final telemetry = build();
