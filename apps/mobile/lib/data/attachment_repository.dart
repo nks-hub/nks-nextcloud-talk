@@ -230,6 +230,17 @@ final class AttachmentRepository {
           ))
           .getSingleOrNull();
 
+  /// Every source handle a durable job still names, across accounts. The
+  /// source store deletes what is not in here.
+  Future<Set<String>> referencedSourceHandles() async {
+    final rows = await (_database.selectOnly(
+      _database.attachmentJobs,
+    )..addColumns([_database.attachmentJobs.sourceHandle])).get();
+    return {
+      for (final row in rows) row.read(_database.attachmentJobs.sourceHandle)!,
+    };
+  }
+
   Future<StoredAccount?> getAccount(String accountId) => (_database.select(
     _database.accounts,
   )..where((row) => row.id.equals(accountId))).getSingleOrNull();

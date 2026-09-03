@@ -189,6 +189,40 @@ void main() {
       expect(await File(pending.filePath).exists(), isFalse);
     });
 
+    test('the sweep removes only old sources no job names', () async {
+      // A picked file waits in the composer until the send; when the process
+      // dies first, its durable copy has no job and nothing would ever delete
+      // it. Referenced and freshly written sources must survive the sweep.
+      final store = DurableAttachmentSourceStore(root: root);
+      Future<PreparedAttachmentSource> put(String name) => store.copyFromStream(
+        stream: Stream<List<int>>.value(<int>[1, 2, 3]),
+        mimeType: 'image/png',
+        displayName: name,
+      );
+      final orphan = await put('orphan.png');
+      final referenced = await put('referenced.png');
+      final fresh = await put('fresh.png');
+      final sources = Directory('${root.path}${Platform.pathSeparator}sources');
+      final old = DateTime.now().subtract(const Duration(hours: 1));
+      for (final file in await _filesBelow(sources)) {
+        if (!file.path.contains(_sourceId(fresh))) {
+          await file.setLastModified(old);
+        }
+      }
+
+      final removed = await store.discardUnreferenced(
+        referenced: {referenced.handle.value},
+      );
+
+      expect(removed, 1);
+      final remaining = (await _filesBelow(
+        sources,
+      )).map((file) => file.uri.pathSegments.last).toList();
+      expect(remaining, isNot(contains('${_sourceId(orphan)}.source')));
+      expect(remaining, contains('${_sourceId(referenced)}.source'));
+      expect(remaining, contains('${_sourceId(fresh)}.source'));
+    });
+
     test('verified resolution detects changed bytes', () async {
       final store = DurableAttachmentSourceStore(root: root);
       final source = await store.copyFromStream(
@@ -260,3 +294,6 @@ Future<List<File>> _filesBelow(Directory directory) async {
 }
 
 Future<List<File>> _allStoreFiles(Directory root) async => _filesBelow(root);
+
+String _sourceId(PreparedAttachmentSource source) =>
+    source.handle.value.split(':').last;

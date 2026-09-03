@@ -656,6 +656,18 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
     unawaited(service.close());
   });
   await service.ready;
+  // Jobs are loaded, so anything the store holds without a job is an orphan:
+  // a pick the user never sent before the process died, or a job removed
+  // without its source. Best effort; the next start tries again.
+  unawaited(
+    ref
+        .read(attachmentRepositoryProvider)
+        .referencedSourceHandles()
+        .then(
+          (referenced) => source.discardUnreferenced(referenced: referenced),
+        )
+        .catchError((Object _) => 0),
+  );
   return service;
 });
 

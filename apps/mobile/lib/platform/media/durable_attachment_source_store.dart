@@ -320,6 +320,46 @@ final class DurableAttachmentSourceStore implements AttachmentSourceProvider {
     return deletion.future;
   }
 
+  /// Deletes committed sources nothing points at any more.
+  ///
+  /// A source outlives its purpose in two ways: a durable job that was removed
+  /// without discarding it, and — since attachments wait in the composer for
+  /// the send button — a picked file whose process died before the send.
+  /// [referenced] is every handle a job still names; anything else older than
+  /// [olderThan] goes. Returns how many were removed.
+  Future<int> discardUnreferenced({
+    required Set<String> referenced,
+    Duration olderThan = const Duration(minutes: 5),
+  }) async {
+    await initialize();
+    final cutoff = DateTime.now().subtract(olderThan);
+    var removed = 0;
+    await for (final entity in Directory(
+      _sourcesPath,
+    ).list(followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.source')) {
+        continue;
+      }
+      final sourceId = p.basenameWithoutExtension(entity.path);
+      if (!_sourceIdPattern.hasMatch(sourceId) ||
+          referenced.contains('$_handlePrefix$sourceId')) {
+        continue;
+      }
+      final FileStat stat;
+      try {
+        stat = await entity.stat();
+      } on FileSystemException {
+        continue;
+      }
+      if (stat.modified.isAfter(cutoff)) {
+        continue;
+      }
+      await discard(AttachmentSourceHandle.parse('$_handlePrefix$sourceId'));
+      removed++;
+    }
+    return removed;
+  }
+
   Future<int> cleanupTemporaryFiles() async {
     await initialize();
     var removed = 0;
