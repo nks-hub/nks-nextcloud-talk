@@ -194,6 +194,10 @@ final class _DiagnosticsList extends StatelessWidget {
             context: context,
             applicationName: 'NKS Talk',
             applicationVersion: '$appVersionName ($appBuildNumber)',
+            // The written offer LGPL-2.1 §3 / GPL-3 §6 ask for: the repo is
+            // private, so recipients of a build must be told where the
+            // complete corresponding source comes from.
+            applicationLegalese: strings.diagnosticsLicensesLegalese,
           ),
         ),
         const Divider(height: 1),

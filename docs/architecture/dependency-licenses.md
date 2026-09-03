@@ -102,6 +102,23 @@ Error Prone annotations) jsou pokryté přesným Android release classpathem,
 CycloneDX SBOM a notice vloženým do APK. Samotná přítomnost LGPL textu ale
 nenahrazuje finální corresponding-source/relink clearance distributora.
 
+## LGPL-2.1 distributor: clearance
+
+Rozhodnuto 2026-09-03. `embedded-fcm-distributor` 3.1.0 je LGPL-2.1 a je
+zkompilovaný do APK, takže §6 LGPL (možnost relinku) nejde splnit dodáním
+objektových souborů. Cesta, kterou LGPL sama nabízí, je §3: knihovnu lze
+šířit pod GPL (verze 2 nebo novější) jako součást GPL díla. NKS Talk je
+GPL-3.0-or-later, distributor je v něm tedy šířen pod GPL-3.0-or-later a
+povinností vůči příjemci sestavení je úplný odpovídající zdrojový kód celého
+díla — tím je relink pokrytý (příjemce může knihovnu vyměnit a dílo sestavit).
+Repozitář je privátní, proto sestavení nese PÍSEMNOU NABÍDKU: obrazovka
+Open source licences uvádí GPL-3.0-or-later, LGPL §3 převod distributora a
+dostupnost úplného zdroje na vyžádání od toho, kdo sestavení předal
+(`diagnosticsLicensesLegalese`). SBOM v APK vede komponentu jako
+`LGPL-2.1-only` s hashovaným textem licence; rozpor Maven POM (Apache-2.0)
+vs. tag LICENSE (LGPL-2.1) se řeší tím, že se bere PŘÍSNĚJŠÍ z obou, protože
+POM nemůže licenci zdrojů rozšířit. iOS sestavení distributor neobsahuje.
+
 ## Android release artefaktová brána
 
 Commit `94a0987` přidal fail-closed generování z přesného

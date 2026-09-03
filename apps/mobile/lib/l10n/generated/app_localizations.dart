@@ -2312,6 +2312,12 @@ abstract class AppLocalizations {
   /// **'Licences of the libraries this app is built from'**
   String get diagnosticsLicensesSubtitle;
 
+  /// No description provided for @diagnosticsLicensesLegalese.
+  ///
+  /// In en, this message translates to:
+  /// **'NKS Talk is free software under the GNU GPL-3.0-or-later. It ships the UnifiedPush embedded FCM distributor (LGPL-2.1) as part of this GPL work under LGPL section 3. The complete corresponding source of this build is available to every recipient on request from whoever distributed it to you.'**
+  String get diagnosticsLicensesLegalese;
+
   /// No description provided for @diagnosticsAppVersion.
   ///
   /// In en, this message translates to:

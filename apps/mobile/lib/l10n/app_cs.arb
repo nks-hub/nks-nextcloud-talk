@@ -432,6 +432,7 @@
   "diagnosticsLoadFailed": "Lokální stav se nepodařilo načíst.",
   "diagnosticsAppSection": "Aplikace",
   "diagnosticsLicenses": "Licence otevřeného softwaru",
+  "diagnosticsLicensesLegalese": "NKS Talk je svobodný software pod licencí GNU GPL-3.0-or-later. Obsahuje UnifiedPush embedded FCM distributor (LGPL-2.1) jako součást tohoto GPL díla podle LGPL, oddíl 3. Úplný odpovídající zdrojový kód tohoto sestavení dostane každý příjemce na vyžádání od toho, kdo mu sestavení předal.",
   "diagnosticsLicensesSubtitle": "Licence knihoven, ze kterých je aplikace složená",
   "diagnosticsAppVersion": "Verze",
   "diagnosticsAppBuild": "Sestavení",

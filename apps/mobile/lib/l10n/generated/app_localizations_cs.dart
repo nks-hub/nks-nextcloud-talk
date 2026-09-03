@@ -1243,6 +1243,10 @@ class AppLocalizationsCs extends AppLocalizations {
       'Licence knihoven, ze kterých je aplikace složená';
 
   @override
+  String get diagnosticsLicensesLegalese =>
+      'NKS Talk je svobodný software pod licencí GNU GPL-3.0-or-later. Obsahuje UnifiedPush embedded FCM distributor (LGPL-2.1) jako součást tohoto GPL díla podle LGPL, oddíl 3. Úplný odpovídající zdrojový kód tohoto sestavení dostane každý příjemce na vyžádání od toho, kdo mu sestavení předal.';
+
+  @override
   String get diagnosticsAppVersion => 'Verze';
 
   @override
