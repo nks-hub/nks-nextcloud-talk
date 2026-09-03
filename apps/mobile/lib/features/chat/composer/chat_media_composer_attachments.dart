@@ -174,6 +174,29 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     return true;
   }
 
+  /// A pasted or keyboard-inserted image joins the same held-until-send path
+  /// as a desktop drop: the bytes become an app-owned durable copy first.
+  Future<bool> _attachImageBytes(
+    Uint8List bytes,
+    String mimeType,
+    String displayName,
+  ) async {
+    if (_disposed ||
+        !_imageSupported ||
+        _imageController.state.isActive ||
+        bytes.isEmpty) {
+      return false;
+    }
+    final item = DropItemFile.fromData(
+      bytes,
+      name: displayName,
+      path: displayName,
+      mimeType: mimeType,
+    );
+    await _imageController.pickAndHold(() => _prepareDroppedAttachment(item));
+    return _imageController.state.isPrepared;
+  }
+
   Future<bool> _pickAttachment(AttachmentPickerSource source) async {
     if (_disposed || !_imageSupported || _imageController.state.isActive) {
       return false;

@@ -13,7 +13,9 @@ import 'package:flutter/services.dart'
         HardwareKeyboard,
         KeyDownEvent,
         KeyEvent,
+        KeyboardInsertedContent,
         LogicalKeyboardKey;
+import 'package:pasteboard/pasteboard.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -50,6 +52,7 @@ import 'media/image_attachment_upload_panel.dart';
 import 'composer/attachment_submission.dart';
 import 'composer/chat_media_composer.dart';
 import 'composer/composer_text_editing.dart';
+import 'composer/pasted_image.dart';
 import 'composer/emoji_picker.dart';
 import 'composer/emoji_usage_store.dart';
 import 'composer/giphy.dart';
@@ -783,6 +786,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           autofocus: widget.threadId != null && context.sendsOnEnter,
           sending: _sending,
           onSubmit: _send,
+          onPasteImage: (image) => _mediaComposerController.attachImageBytes(
+            image.bytes,
+            mimeType: image.mimeType,
+            displayName: image.displayName,
+          ),
           postingBlock: postingAccess.block,
           mentionSource: mentionSource?.valueOrNull,
           mediaComposer: attachmentDependencies == null

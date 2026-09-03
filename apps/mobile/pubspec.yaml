@@ -74,6 +74,7 @@ dependencies:
   # file_selector does not cover; image_picker (BSD-3-Clause, flutter/packages)
   # is the first-party plugin for it and is used for the camera source only.
   image_picker: ^1.2.3
+  pasteboard: ^0.5.0
 
   # Crash reporting for our own builds only; without a compiled-in DSN
   # lib/core/telemetry.dart never initialises it.

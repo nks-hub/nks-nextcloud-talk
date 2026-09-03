@@ -216,10 +216,16 @@ final class _ChatComposer extends StatelessWidget {
     required this.onCancelReply,
     required this.mentionSource,
     required this.onSubmit,
+    required this.onPasteImage,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+
+  /// Receives an image that arrived as bytes — Ctrl/Cmd+V with a screenshot
+  /// on the clipboard, or content a mobile keyboard inserted — so it can wait
+  /// in the composer like a picked file.
+  final Future<bool> Function(PastedImage image) onPasteImage;
 
   /// Whether the field should claim focus the moment it is built.
   final bool autofocus;
@@ -238,6 +244,33 @@ final class _ChatComposer extends StatelessWidget {
   final VoidCallback onSubmit;
 
   /// Routes Escape and, where the platform sends on Enter, a bare Enter.
+  Future<void> _pasteImageFromClipboard() async {
+    final Uint8List? raw;
+    try {
+      raw = await Pasteboard.image;
+    } on Object {
+      return;
+    }
+    if (raw == null) {
+      return;
+    }
+    final image = await normalizePastedImage(raw);
+    if (image != null) {
+      await onPasteImage(image);
+    }
+  }
+
+  Future<void> _insertKeyboardContent(KeyboardInsertedContent content) async {
+    final data = content.data;
+    if (data == null || data.isEmpty) {
+      return;
+    }
+    final image = await normalizePastedImage(data);
+    if (image != null) {
+      await onPasteImage(image);
+    }
+  }
+
   KeyEventResult _handleKey(KeyEvent event, {required bool sendsOnEnter}) {
     if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
@@ -253,6 +286,18 @@ final class _ChatComposer extends StatelessWidget {
       }
       onCancelReply();
       return KeyEventResult.handled;
+    }
+    // Paste stays with the field for text. The clipboard can only be asked
+    // for an image asynchronously, so the key is not consumed: a text paste
+    // still lands, and an image on the clipboard — which the field would
+    // paste as nothing — becomes an attachment a moment later.
+    if (key == LogicalKeyboardKey.keyV &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) &&
+        !readOnly &&
+        !sending) {
+      unawaited(_pasteImageFromClipboard());
+      return KeyEventResult.ignored;
     }
     final isEnter =
         key == LogicalKeyboardKey.enter ||
@@ -344,6 +389,20 @@ final class _ChatComposer extends StatelessWidget {
                             }) => null,
                         textCapitalization: TextCapitalization.sentences,
                         keyboardType: TextInputType.multiline,
+                        // Android keyboards hand over an image from their
+                        // clipboard or GIF tray through commitContent.
+                        contentInsertionConfiguration:
+                            ContentInsertionConfiguration(
+                              allowedMimeTypes: const <String>[
+                                'image/png',
+                                'image/jpeg',
+                                'image/gif',
+                                'image/webp',
+                                'image/bmp',
+                              ],
+                              onContentInserted: (content) =>
+                                  unawaited(_insertKeyboardContent(content)),
+                            ),
                         decoration: InputDecoration(
                           labelText: strings.messageHint,
                           border: const OutlineInputBorder(),

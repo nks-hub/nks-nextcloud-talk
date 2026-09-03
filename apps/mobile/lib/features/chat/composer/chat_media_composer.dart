@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
@@ -111,6 +112,19 @@ final class ChatMediaComposerController {
   Future<bool> Function()? _pickContact;
   bool Function()? _hasPreparedAttachment;
   Future<bool> Function()? _sendPreparedAttachment;
+  Future<bool> Function(Uint8List bytes, String mimeType, String displayName)?
+  _attachImageBytes;
+
+  /// Prepares an in-memory image — a pasted screenshot, keyboard-inserted
+  /// content — exactly like a picked file: it waits for the send button.
+  Future<bool> attachImageBytes(
+    Uint8List bytes, {
+    required String mimeType,
+    required String displayName,
+  }) async {
+    final attach = _attachImageBytes;
+    return attach == null ? false : attach(bytes, mimeType, displayName);
+  }
 
   /// True while a picked file waits in the composer for the send button.
   bool get hasPreparedAttachment => _hasPreparedAttachment?.call() ?? false;
@@ -144,6 +158,7 @@ final class ChatMediaComposerController {
     Future<bool> Function() pickContact, {
     required bool Function() hasPreparedAttachment,
     required Future<bool> Function() sendPreparedAttachment,
+    required Future<bool> Function(Uint8List, String, String) attachImageBytes,
   }) {
     _owner = owner;
     _submitGiphy = submitGiphy;
@@ -151,6 +166,7 @@ final class ChatMediaComposerController {
     _pickContact = pickContact;
     _hasPreparedAttachment = hasPreparedAttachment;
     _sendPreparedAttachment = sendPreparedAttachment;
+    _attachImageBytes = attachImageBytes;
   }
 
   void _detach(Object owner) {
@@ -163,6 +179,7 @@ final class ChatMediaComposerController {
     _pickContact = null;
     _hasPreparedAttachment = null;
     _sendPreparedAttachment = null;
+    _attachImageBytes = null;
   }
 }
 
@@ -361,6 +378,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       _pickContact,
       hasPreparedAttachment: () => _imageController.state.isPrepared,
       sendPreparedAttachment: _sendPreparedAttachment,
+      attachImageBytes: _attachImageBytes,
     );
   }
 
@@ -388,6 +406,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         _pickContact,
         hasPreparedAttachment: () => _imageController.state.isPrepared,
         sendPreparedAttachment: _sendPreparedAttachment,
+        attachImageBytes: _attachImageBytes,
       );
     }
     if (oldWidget.accountId == widget.accountId &&
