@@ -370,5 +370,106 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       expect(nonCapabilityRequests, 0);
       expect(await database.select(database.textSendOperations).get(), isEmpty);
     });
+
+    test('a drain gives each account its own lane', () async {
+      const storedFeatures = <String>{
+        'conversation-v4',
+        'chat-v2',
+        'chat-reference-id',
+      };
+      const secondHost = 'second.example.invalid';
+      final second = await accounts.upsertAccount(
+        accountId: 'account-b',
+        serverUrl: 'https://$secondHost',
+        loginName: 'fixture-user-b',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      credentials.values[second.id] = 'fixture-app-password-never-use';
+      await _cacheConversation(database, accountId: second.id);
+      for (final accountId in const ['account-a', 'account-b']) {
+        await accounts.updateTalkFeatures(accountId, storedFeatures);
+        await chat.recordCapabilities(
+          accountId: accountId,
+          talkFeatures: storedFeatures,
+          observedAt: DateTime.utc(2026, 1, 1),
+        );
+      }
+
+      final offlineApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          throw http.ClientException('offline', request.url);
+        }),
+      );
+      addTearDown(offlineApi.close);
+      final offline = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: offlineApi,
+      );
+      for (final accountId in const ['account-a', 'account-b']) {
+        await offline.sendText(
+          accountId: accountId,
+          roomToken: 'rooma123',
+          message: 'queued for $accountId',
+        );
+      }
+
+      // Neither server answers until both have been reached. A drain that
+      // walks the rooms in one line only ever reaches the account it starts
+      // with, so the barrier never opens and the drain times out.
+      final reached = <String>{};
+      final bothReached = Completer<void>();
+      final sent = <String>[];
+      final onlineApi = HttpNextcloudApi(
+        client: MockClient((request) async {
+          reached.add(request.url.host);
+          if (reached.length == 2 && !bothReached.isCompleted) {
+            bothReached.complete();
+          }
+          await bothReached.future;
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(
+              jsonEncode(
+                _chatCapabilities(talkFeatures: storedFeatures.toList()),
+              ),
+              200,
+            );
+          }
+          if (request.method == 'GET') {
+            return http.Response('', 304);
+          }
+          sent.add(request.bodyFields['message']!);
+          return http.Response(
+            jsonEncode(
+              _sendResponse(
+                referenceId: request.bodyFields['referenceId']!,
+                message: request.bodyFields['message']!,
+              ),
+            ),
+            201,
+            headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
+          );
+        }),
+      );
+      addTearDown(onlineApi.close);
+
+      await ChatService(
+        accounts: AccountRepository(database),
+        chat: ChatRepository(database),
+        credentials: credentials,
+        api: onlineApi,
+      ).drainPendingSends().timeout(const Duration(seconds: 10));
+
+      expect(reached, {'cloud.example.invalid', secondHost});
+      expect(
+        sent,
+        unorderedEquals(['queued for account-a', 'queued for account-b']),
+      );
+      final states = await database.select(database.textSendOperations).get();
+      expect(states.map((row) => row.outboxState), ['completed', 'completed']);
+      expect(await chat.roomsWithPendingTextSends(), isEmpty);
+    });
   }
 }

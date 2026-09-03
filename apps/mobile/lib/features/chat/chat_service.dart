@@ -162,14 +162,34 @@ final class ChatService {
   /// again. Each room goes through the ordinary sync, which also verifies
   /// capabilities online before anything is claimed; a room whose sync fails
   /// keeps its rows and the error is the pane's to show.
+  ///
+  /// Each account drains in its own lane. A server that hangs until its
+  /// timeout would otherwise hold every later room in the drain behind it,
+  /// including the rooms of a second account whose server is reachable, so a
+  /// signed-in account's queued text waits on an unrelated account's outage.
   Future<void> drainPendingSends() async {
-    final rooms = await _chat.roomsWithPendingTextSends();
-    for (final room in rooms) {
-      if (_suspendedAccounts.contains(room.accountId)) {
-        continue;
+    final lanes = <String, List<String>>{};
+    for (final room in await _chat.roomsWithPendingTextSends()) {
+      (lanes[room.accountId] ??= <String>[]).add(room.roomToken);
+    }
+    await Future.wait<void>([
+      for (final lane in lanes.entries) _drainAccountLane(lane.key, lane.value),
+    ]);
+  }
+
+  /// One account's rooms, one at a time. The transport serializes an account's
+  /// requests onto a single session anyway, so racing them inside a lane buys
+  /// no parallelism and only reorders the sends.
+  Future<void> _drainAccountLane(
+    String accountId,
+    List<String> roomTokens,
+  ) async {
+    for (final roomToken in roomTokens) {
+      if (_suspendedAccounts.contains(accountId)) {
+        return;
       }
       try {
-        await syncRoom(accountId: room.accountId, roomToken: room.roomToken);
+        await syncRoom(accountId: accountId, roomToken: roomToken);
       } on ChatServiceException {
         // Recorded on the room by syncRoom; the next wake tries again.
       } on _ChatSynchronizationCancelled {

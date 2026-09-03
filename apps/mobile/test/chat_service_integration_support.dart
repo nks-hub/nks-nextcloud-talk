@@ -21,31 +21,38 @@ final class _ChatServiceIntegrationSuite {
     );
     credentials.values[account.id] = 'fixture-app-password-never-use';
 
-    final roomJson = _conversationRoomJson();
-    final room = ConversationRoom.fromJson(roomJson);
-    await database
-        .into(database.cachedConversations)
-        .insert(
-          CachedConversationsCompanion.insert(
-            accountId: account.id,
-            token: room.token.value,
-            displayName: room.displayName,
-            description: room.description,
-            lastActivity: room.lastActivity,
-            unreadMessages: room.unreadMessages,
-            favorite: room.isFavorite,
-            readOnly: Value(room.readOnly),
-            roomType: Value(room.type),
-            roomName: Value(room.name),
-            objectType: Value(room.objectType),
-            avatarVersion: Value(room.avatarVersion),
-            isCustomAvatar: Value(room.isCustomAvatar),
-            rawJson: jsonEncode(roomJson),
-          ),
-        );
+    await _cacheConversation(database, accountId: account.id);
   }
 
   Future<void> dispose() => database.close();
+}
+
+Future<void> _cacheConversation(
+  AppDatabase database, {
+  required String accountId,
+}) async {
+  final roomJson = _conversationRoomJson();
+  final room = ConversationRoom.fromJson(roomJson);
+  await database
+      .into(database.cachedConversations)
+      .insert(
+        CachedConversationsCompanion.insert(
+          accountId: accountId,
+          token: room.token.value,
+          displayName: room.displayName,
+          description: room.description,
+          lastActivity: room.lastActivity,
+          unreadMessages: room.unreadMessages,
+          favorite: room.isFavorite,
+          readOnly: Value(room.readOnly),
+          roomType: Value(room.type),
+          roomName: Value(room.name),
+          objectType: Value(room.objectType),
+          avatarVersion: Value(room.avatarVersion),
+          isCustomAvatar: Value(room.isCustomAvatar),
+          rawJson: jsonEncode(roomJson),
+        ),
+      );
 }
 
 Future<void> _cacheThreadRoot(
