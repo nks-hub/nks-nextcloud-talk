@@ -29,7 +29,22 @@ class MainFlutterWindow: NSWindow {
     // Set after `minSize` on purpose: a restored frame smaller than the
     // minimum is clamped to it rather than reopening a window the adaptive
     // layout cannot fill.
+    //
+    // Measured on macOS 14 (setFrame call stacks): the autosave frame was
+    // applied and then overwritten by `-[NSWindow restoreStateWithCoder:]`,
+    // AppKit's window-state resume, which keeps its own copy of the frame
+    // and knows nothing about `minSize`. The saved frame in defaults is the
+    // one source of truth here, so state restoration is off for this window
+    // and the restore is explicit — `setFrameUsingName` does not clamp to
+    // the minimum either, hence the clamp by hand.
+    self.isRestorable = false
     self.setFrameAutosaveName(windowFrameAutosaveName)
+    if self.setFrameUsingName(windowFrameAutosaveName) {
+      var restored = self.frame
+      restored.size.width = max(restored.width, minimumWindowWidth)
+      restored.size.height = max(restored.height, minimumWindowHeight)
+      self.setFrame(restored, display: true)
+    }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
