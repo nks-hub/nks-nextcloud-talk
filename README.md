@@ -49,6 +49,15 @@ Androidu: `sentry_flutter` závisí na balíčku `jni`, ten se registruje jako F
 plugin i na Windows a jeho `find_package(JNI)` bez JDK shodí CMake hláškou
 `FindJNI.cmake`, ve které se Java nikde nezmiňuje.
 
+Linux build potřebuje totéž JDK a k tomu čtyři balíčky nad oficiálním seznamem
+Flutteru — změřeno 3. září 2026 na čisté instalaci Linux Mintu, kde build padal
+postupně na každém z nich: `libgstreamer1.0-dev` a
+`libgstreamer-plugins-base1.0-dev` (kvůli `audioplayers_linux`),
+`libcurl4-openssl-dev` (sentry-native) a `default-jdk-headless` (tentýž balíček
+`jni`). Past navrch: po neúspěšném configure zůstane v CMake cache
+`CMAKE_INSTALL_PREFIX=/usr/local` a další pokus padne na `Permission denied`
+při instalaci — řeší to `flutter clean`, ne úprava `linux/CMakeLists.txt`.
+
 Pure Dart balík [`talk_protocol`](packages/talk_protocol) navíc implementuje a
 testuje bootstrap, conversations, chat, rich chat, attachment, signaling
 preparation a původní Notifications push-v2 wire modely. Tyto protokolové řezy
@@ -74,11 +83,18 @@ Přesný stav vede
 ## Push bez per-server rebuildu
 
 Podporovaná řada serveru začíná Talkem 22 (Nextcloud 32), viz D-047.
-Android cílí na Notifications Web Push v Nextcloud 34+ přes UnifiedPush
-connector a vestavěný FCM distributor. Veřejný Android build proto nebude mít
-publisher Firebase projekt, `google-services.json`, vlastní mobilní gateway ani
-rebuild pro každý Nextcloud server. VAPID klíč a Web Push subscription se
-vyjednají za běhu s konkrétním serverem.
+
+Výchozí androidí cesta je od 27. srpna 2026 **vlastní push proxy** — viz D-038.
+Android i Apple registrují push-v2 proti `nks-talk-notify`, ta drží odesílací
+větev na FCM v1 a na APNs. Projekt tedy publisher Firebase projekt i vlastní
+gateway MÁ; `google-services.json` je gitignorovaný. Per-server rebuild ale
+odpadá dál, protože adresu proxy volí klient při registraci, ne správce serveru.
+
+Web Push přes UnifiedPush connector a vestavěný FCM distributor zůstává jako
+**přepínatelná záloha** pro Nextcloud 34+, ovladatelná v Nastavení → Push
+notifikace za běhu bez nového buildu. Právě a jen tahle záložní větev se obejde
+bez publisher Firebase projektu a vlastní gateway; VAPID klíč a Web Push
+subscription se v ní vyjednají za běhu s konkrétním serverem.
 
 Nativní Android push implementaci v commitu `3c74165` uzavřelo bezpečnostní
 review, striktní parser, account-bound one-time tap token a čerstvé Kotlin testy.
