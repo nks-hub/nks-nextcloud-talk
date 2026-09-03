@@ -18,7 +18,22 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (51) — 3. 9. 2026
 
-Vydáno ze zdroje `BUILD51SHA`, tag `v0.1.0+51`.
+Vydáno ze zdroje `24390c5`, tag `v0.1.0+51`.
+
+Android: release APK 90 884 792 B, SHA-256
+`a86548a9b8848ffab82087fb779cdac016643898cf7ab20ab346b246e273566c`,
+versionCode 51; na Android 14 emulátoru hledání „hlodavec" v anglickém UI
+vrací Mouse, Rat, Hamster a Beaver. Play track nenahrán.
+
+Windows: instalátor `NKS-Talk-0.1.0-51-windows-x64-setup.exe` 35 439 793 B,
+SHA-256 `07dae9d6a952b10b775fa302390a63a3ebb1592a157ce2b2c69e32b9392a47b2`,
+nepodepsaný; tichá instalace na `windows-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+51` (PID 320).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build nainstalován a
+spuštěn. TestFlight NEVYDÁN (provisioning).
+
+macOS: debug build + ad-hoc podpis, 30 s bez pádu.
 
 - Výběr emoji zná česky celý katalog: 4 361 názvů a klíčových slov z Unicode
   CLDR, takže „hlodavec" najde bobra a „tající" tající obličej. Ručně psaných
