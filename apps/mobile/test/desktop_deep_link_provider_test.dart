@@ -7,10 +7,10 @@ import 'package:nextcloudtalk/app_providers.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('macOS creates the native deep link bridge', () {
+  test('desktops with a deep link runner create the native bridge', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
     expect(container.read(deepLinkPlatformProvider), isNotNull);
-  }, skip: !Platform.isMacOS);
+  }, skip: !Platform.isMacOS && !Platform.isWindows);
 }

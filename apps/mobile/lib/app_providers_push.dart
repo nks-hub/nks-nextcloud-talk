@@ -662,7 +662,13 @@ Future<void> _runOneShotNotificationAction(
 }
 
 final deepLinkPlatformProvider = Provider<DeepLinkPlatform?>((ref) {
-  if (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS) {
+  // Every runner with a `com.nkshub.nextcloudtalk/deep_link` channel. Windows
+  // was missing here while its runner already spoke the channel, so a link
+  // handed over via WM_COPYDATA restored the window and went nowhere.
+  if (!Platform.isAndroid &&
+      !Platform.isIOS &&
+      !Platform.isMacOS &&
+      !Platform.isWindows) {
     return null;
   }
   final bridge = DeepLinkBridge();
