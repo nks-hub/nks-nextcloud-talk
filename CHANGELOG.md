@@ -16,6 +16,50 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (56) — 3. 9. 2026
+
+Vydáno ze zdroje `a9919e0`, tag `v0.1.0+56`.
+
+Android: release APK 91 097 916 B, SHA-256
+`08dea544c27017cc330b1d437e45485474da3d2977c9635a3e8a4d8704db3c56`,
+versionCode 56; na Android 14 emulátoru živě: odebrání účtu offline a
+dokončení odvolání hesla po návratu sítě, zrušení běžícího uploadu z
+diagnostiky, stav přečtení ve skupině, vlákno přejmenované a s upravenou
+úrovní oznámení, obrázek od protistrany, force-stop a cold start bez
+duplicit. Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-56-windows-x64-setup.exe` 35 467 496 B,
+SHA-256 `6be82917c35dd3f1144ed346f169f82826dc7ebcfb6cbdfb7b80e11f966c451a`,
+nepodepsaný; tichá instalace na `windows-test-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+56` (PID 23288).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build 56 nainstalován a
+spuštěn. TestFlight nenahrán (kadence, poslední je 51).
+
+macOS: `nks-talk-macos-56.zip` 32 929 803 B, SHA-256
+`7513ff7816d507a202988d188f0009e14e3e9ecac6a971e765f0005116df584f`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID, `stapler validate` OK — ověřeno na souboru
+staženém zpět z Nextcloudu; běží na build-mac. Poslán do chatu Pimpula (share
+8932, zpráva 78878).
+
+- Odebrání účtu bez připojení: aplikační heslo, které server nestihl
+  odvolat, si aplikace bezpečně uloží a odvolání dokončí sama, jakmile je
+  server dostupný (nejvýše 5 hesel, 20 pokusů, 14 dní). Hláška po odebrání
+  to říká.
+- Příloha na pomalé síti: když se nestihne načíst nastavení serveru,
+  upload se nevzdá hned — zkusí to ještě dvakrát (po 3 a 8 s). Telemetrie
+  přitom už rozlišuje nedostupný server od ostatních příčin; tím se
+  vysvětlilo hlášení „okamžitě zkusit znovu" z Galaxy Z Fold 6.
+- macOS: okno si pamatuje velikost a polohu mezi spuštěními (systémové
+  obnovení stavu oken tomu dřív bránilo) a nikdy se neotevře menší než
+  600×400.
+- Stránka Open source licences uvádí, že aplikace je GPL-3.0-or-later a jak
+  získat úplný zdrojový kód sestavení.
+- Ověřeno živě: odmítnutí oprávnění k oznámením v nastavení, stav přečtení
+  vlastní zprávy ve skupině, přejmenování vlákna a úroveň oznámení,
+  zrušení právě běžícího uploadu z Diagnostiky.
+
 ## 0.1.0 (55) — 3. 9. 2026
 
 Vydáno ze zdroje `95d01a7`, tag `v0.1.0+55`.
