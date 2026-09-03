@@ -56,10 +56,12 @@ void main() {
   late StoredAccount account;
   late CachedConversation source;
   late List<String> postedRooms;
+  late List<String> sharedFiles;
   late List<String> postedMessages;
 
   setUp(() async {
     postedRooms = <String>[];
+    sharedFiles = <String>[];
     postedMessages = <String>[];
     database = openTestDatabase();
     accounts = AccountRepository(database);
@@ -126,6 +128,21 @@ void main() {
         if (request.url.path.endsWith('/cloud/capabilities')) {
           return http.Response(
             jsonEncode(capabilitiesJson(talkFeatures: talkFeatures)),
+            200,
+          );
+        }
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/files_sharing/api/v1/shares')) {
+          sharedFiles.add(
+            '${request.bodyFields['shareWith']}:${request.bodyFields['path']}',
+          );
+          return http.Response(
+            jsonEncode({
+              'ocs': {
+                'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+                'data': {'id': '1'},
+              },
+            }),
             200,
           );
         }
@@ -213,6 +230,65 @@ void main() {
     expect(postedMessages, ['Cached hello']);
     expect(find.byKey(const Key('chat-forward-success')), findsOneWidget);
     expect(find.text('Message forwarded to Target room'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('forwards a file message by sharing the file again', (
+    tester,
+  ) async {
+    // A received attachment: the text is only the `{file}` placeholder and
+    // the `file` parameter names the viewer's own copy under Talk/.
+    await (database.update(
+      database.cachedChatMessages,
+    )..where((row) => row.messageId.equals(10))).write(
+      CachedChatMessagesCompanion(
+        displayText: const Value('{file}'),
+        rawJson: Value(
+          jsonEncode({
+            'id': 10,
+            'token': 'rooma123',
+            'actorType': 'users',
+            'actorId': 'someone-else',
+            'actorDisplayName': 'Other person',
+            'timestamp': 1724300000,
+            'message': '{file}',
+            'messageType': 'comment',
+            'systemMessage': '',
+            'referenceId': 'fixture-reference',
+            'isReplyable': true,
+            'markdown': false,
+            'reactions': <String, Object?>{},
+            'expirationTimestamp': 0,
+            'messageParameters': {
+              'file': {
+                'type': 'file',
+                'id': '77',
+                'name': 'plan.pdf',
+                'path': 'Talk/plan.pdf',
+                'link': 'https://cloud.example.invalid/f/77',
+                'mimetype': 'application/pdf',
+                'preview-available': 'no',
+              },
+            },
+          }),
+        ),
+      ),
+    );
+    await tester.pumpWidget(app(api: buildApi()));
+    await settle(tester);
+
+    await openForwardPicker(tester);
+    await tester.tap(
+      find.byKey(const Key('chat-forward-conversation-roomb456')),
+    );
+    await flush(tester);
+
+    expect(sharedFiles, ['roomb456:/Talk/plan.pdf']);
+    // No text message with a literal `{file}` went anywhere.
+    expect(postedMessages, isEmpty);
+    expect(find.byKey(const Key('chat-forward-success')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));

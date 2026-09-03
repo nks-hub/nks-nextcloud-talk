@@ -16,6 +16,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   }) {
     final strings = AppLocalizations.of(context);
     final copyText = message.displayText;
+    final forwardFilePath = _forwardableFilePath(parsed);
     unawaited(
       showModalBottomSheet<void>(
         context: context,
@@ -52,24 +53,33 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                     unawaited(_startPrivateReply(message));
                   },
                 ),
-              if (copyText.isNotEmpty)
+              if (copyText.isNotEmpty || forwardFilePath != null)
                 ListTile(
                   key: const Key('message-action-forward'),
                   leading: const Icon(Icons.forward_rounded),
                   title: Text(strings.messageActionForward),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(_forwardMessage(copyText));
+                    unawaited(
+                      _forwardMessage(copyText, filePath: forwardFilePath),
+                    );
                   },
                 ),
-              if (copyText.isNotEmpty && _noteToSelf() != null)
+              if ((copyText.isNotEmpty || forwardFilePath != null) &&
+                  _noteToSelf() != null)
                 ListTile(
                   key: const Key('message-action-note-to-self'),
                   leading: const Icon(Icons.edit_note_rounded),
                   title: Text(strings.messageActionNoteToSelf),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(_forwardMessage(copyText, target: _noteToSelf()));
+                    unawaited(
+                      _forwardMessage(
+                        copyText,
+                        target: _noteToSelf(),
+                        filePath: forwardFilePath,
+                      ),
+                    );
                   },
                 ),
               if (canEdit)
@@ -186,9 +196,32 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     return null;
   }
 
+  /// Path of the shared file behind a message, when there is exactly one.
+  ///
+  /// Talk's `file` parameter carries the viewer's own path (`Talk/…`), so a
+  /// received attachment can be shared onward from the recipient's storage
+  /// just like an own one; the message text is only a `{file}` placeholder
+  /// and forwarding it as text would send the literal braces.
+  static String? _forwardableFilePath(ChatMessage? parsed) {
+    if (parsed == null) {
+      return null;
+    }
+    final files = parsed.messageParameters.values
+        .where((parameter) => parameter.type == 'file')
+        .toList(growable: false);
+    if (files.length != 1) {
+      return null;
+    }
+    final path = files.single.wire['path'];
+    return path is String && path.isNotEmpty ? path : null;
+  }
+
+  /// Forwards a message: a file by sharing it into the target from the
+  /// account's own storage, anything else as text.
   Future<void> _forwardMessage(
     String text, {
     CachedConversation? target,
+    String? filePath,
   }) async {
     final accountId = widget.account.id;
     target ??= await showModalBottomSheet<CachedConversation>(
@@ -206,13 +239,23 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
     final strings = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref
-          .read(chatServiceProvider)
-          .sendText(
-            accountId: accountId,
-            roomToken: target.token,
-            message: text,
-          );
+      if (filePath != null) {
+        await ref
+            .read(remoteFileShareServiceProvider)
+            .shareIntoRoom(
+              accountId: accountId,
+              roomToken: target.token,
+              path: filePath,
+            );
+      } else {
+        await ref
+            .read(chatServiceProvider)
+            .sendText(
+              accountId: accountId,
+              roomToken: target.token,
+              message: text,
+            );
+      }
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
