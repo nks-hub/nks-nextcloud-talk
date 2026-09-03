@@ -540,7 +540,19 @@ final attachmentServiceProvider = FutureProvider<AttachmentService>((
               threadId: threadId,
             ),
   );
+  // A network hint or a resumed app is worth one more attempt for uploads
+  // whose automatic retries ran out while the device was offline.
+  final wakes = <StreamSubscription<void>>[
+    for (final events in [
+      ref.watch(connectivityWakeEventsProvider),
+      ref.watch(appLifecycleResumeEventsProvider),
+    ])
+      events.listen((_) => unawaited(service.resumeRetries())),
+  ];
   ref.onDispose(() {
+    for (final wake in wakes) {
+      unawaited(wake.cancel());
+    }
     unawaited(service.close());
   });
   await service.ready;

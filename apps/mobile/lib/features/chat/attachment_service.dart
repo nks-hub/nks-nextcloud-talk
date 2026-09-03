@@ -748,6 +748,53 @@ final class AttachmentService with _AttachmentServiceRuntime {
     await _scheduleRoom(retryRoom);
   }
 
+  /// Gives every upload that ran out of automatic retries, or is still
+  /// waiting for its next one, a fresh attempt now.
+  ///
+  /// The automatic retries stop after about a minute, which is right for a
+  /// server that keeps failing but wrong for a phone that simply had no
+  /// network: a picture sent in a tunnel would sit on "could not be sent"
+  /// until the sender found the retry button. A connectivity hint or a
+  /// resumed app is the moment to try again; the probe still has to succeed,
+  /// so a false hint costs one more failed attempt and nothing else.
+  Future<void> resumeRetries() async {
+    await _ready;
+    if (_closed) {
+      return;
+    }
+    final rooms = <_AttachmentRoomKey>{};
+    await _stateMutex.protect(() async {
+      for (final account in _snapshot.accounts.values) {
+        if (_suspendedAccounts.contains(account.accountId)) {
+          continue;
+        }
+        for (final job in account.jobs.values) {
+          if (job.phase != AttachmentJobPhase.retryable &&
+              job.phase != AttachmentJobPhase.cleanupFailed) {
+            continue;
+          }
+          final key = _jobKey(account.accountId, job.jobId);
+          final metadata = _metadata[key];
+          if (metadata == null || metadata.automaticRetryCount == 0) {
+            continue;
+          }
+          final updated = metadata.copyWith(
+            automaticRetryCount: 0,
+            nextAttemptAt: null,
+          );
+          await _persistCurrentJob(key, updated);
+          _metadata[key] = updated;
+          rooms.add(_AttachmentRoomKey(account.accountId, job.draft.roomToken));
+        }
+      }
+    });
+    for (final room in rooms) {
+      _retryTimers.remove(room)?.cancel();
+      _retryDeadlines.remove(room);
+      await _scheduleRoom(room);
+    }
+  }
+
   Future<void> completeReauthentication({
     required AccountId accountId,
     required int credentialGeneration,
