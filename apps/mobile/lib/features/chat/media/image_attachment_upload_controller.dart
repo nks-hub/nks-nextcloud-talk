@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
+import 'package:nextcloudtalk/features/chat/chat_attachment_context.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 typedef CreateImageUploadWatchdogTimer =
@@ -521,7 +522,7 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     _setState(ImageAttachmentUploadState.queued(request));
     final ImageAttachmentUploadSession session;
     try {
-      session = await _startUpload(request);
+      session = await _startUploadWithAdmissionRetry(request, generation);
     } on Object catch (error) {
       if (_isCurrent(generation)) {
         if (_cancelRequested) {
@@ -889,6 +890,45 @@ AttachmentUploadProgressBucket _progressBucket(double? progress) =>
       _ => AttachmentUploadProgressBucket.partial,
     };
 
+/// Admission fetches a fresh capability snapshot, and on a slow network that
+/// fetch is the first thing to time out. Failing the whole upload on it made
+/// a gallery pick die instantly on a throttled emulator (and, by the same
+/// class, in the field) although the upload itself would have gone through.
+/// Two more attempts, spaced out, cover a slow server; a switched room or a
+/// cancelled pick is not retried.
+const _admissionRetryDelays = <Duration>[
+  Duration(seconds: 3),
+  Duration(seconds: 8),
+];
+
+extension on ImageAttachmentUploadController {
+  Future<ImageAttachmentUploadSession> _startUploadWithAdmissionRetry(
+    ImageAttachmentUploadRequest request,
+    int generation,
+  ) async {
+    for (final delay in _admissionRetryDelays) {
+      try {
+        return await _startUpload(request);
+      } on ChatAttachmentContextException catch (error) {
+        if (error.code != ChatAttachmentContextError.capabilitiesUnavailable ||
+            !_isCurrent(generation) ||
+            _cancelRequested) {
+          rethrow;
+        }
+      }
+      final paused = Completer<void>();
+      _createWatchdogTimer(delay, paused.complete);
+      await paused.future;
+      if (!_isCurrent(generation) || _cancelRequested) {
+        throw const ChatAttachmentContextException(
+          ChatAttachmentContextError.capabilitiesUnavailable,
+        );
+      }
+    }
+    return _startUpload(request);
+  }
+}
+
 /// Names why admission refused an upload.
 ///
 /// Everything here used to be reported as `dispatch`, which is why the first
@@ -898,6 +938,9 @@ AttachmentUploadProgressBucket _progressBucket(double? progress) =>
 /// an account whose server moved, a missing credential, or an app that never
 /// came back to the foreground after the picker closed.
 AttachmentUploadFailure _classifyAdmissionFailure(Object error) {
+  if (error is ChatAttachmentContextException) {
+    return _classifyContextFailure(error.code);
+  }
   if (error is! AttachmentAdmissionException) {
     return AttachmentUploadFailure.dispatch;
   }
@@ -916,3 +959,29 @@ AttachmentUploadFailure _classifyAdmissionFailure(Object error) {
       AttachmentUploadFailure.composerGone,
   };
 }
+
+/// The context resolver's refusals, which used to fall through as `dispatch`
+/// because they are not admission exceptions. Found on 2026-09-03 when a
+/// throttled emulator reproduced the foldable report's exact class.
+AttachmentUploadFailure _classifyContextFailure(
+  ChatAttachmentContextError code,
+) => switch (code) {
+  ChatAttachmentContextError.capabilitiesUnavailable =>
+    AttachmentUploadFailure.serverUnreachable,
+  ChatAttachmentContextError.invalidCapabilities ||
+  ChatAttachmentContextError.talkUnavailable ||
+  ChatAttachmentContextError.attachmentUnsupported ||
+  ChatAttachmentContextError.sourceUnsupported ||
+  ChatAttachmentContextError.readOnly ||
+  ChatAttachmentContextError.federatedUnsupported ||
+  ChatAttachmentContextError.invalidConversation =>
+    AttachmentUploadFailure.roomUnsupported,
+  ChatAttachmentContextError.credentialMissing ||
+  ChatAttachmentContextError.reauthenticationRequired =>
+    AttachmentUploadFailure.credential,
+  ChatAttachmentContextError.accountMissing ||
+  ChatAttachmentContextError.conversationMissing ||
+  ChatAttachmentContextError.contextChanged ||
+  ChatAttachmentContextError.identityUnverified =>
+    AttachmentUploadFailure.accountBinding,
+};

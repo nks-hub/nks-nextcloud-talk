@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
+import 'package:nextcloudtalk/features/chat/chat_attachment_context.dart';
 import 'package:nextcloudtalk/features/chat/media/image_attachment_upload_controller.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -338,6 +339,104 @@ void main() {
             .failure,
         AttachmentUploadFailure.dispatch,
       );
+    },
+  );
+
+  // The context resolver refuses with its own exception type, and every one
+  // of those used to be reported as `dispatch` too. A throttled emulator
+  // network reproduced the foldable report's class on 2026-09-03: the fresh
+  // capability fetch timed out and the pick failed at once.
+  for (final code in ChatAttachmentContextError.values) {
+    test(
+      'a context refusal for ${code.name} is not reported as dispatch',
+      () async {
+        final diagnostics = <AttachmentUploadDiagnostic>[];
+        final timers = <_ManualTimer>[];
+        final controller = ImageAttachmentUploadController(
+          startUpload: (_) async => throw ChatAttachmentContextException(code),
+          reportDiagnostic: diagnostics.add,
+          createWatchdogTimer: (delay, callback) {
+            final timer = _ManualTimer(callback);
+            timers.add(timer);
+            return timer;
+          },
+        );
+        addTearDown(controller.dispose);
+
+        final started = controller.startPrepared(_request);
+        // An unreachable server is asked twice more; everything else fails at
+        // once. Firing whatever retry timers exist drives both paths to the end.
+        for (var round = 0; round < 3; round++) {
+          await Future<void>.delayed(Duration.zero);
+          for (final timer in timers.toList()) {
+            timer.fire();
+          }
+        }
+        await started;
+
+        final failed = diagnostics.singleWhere(
+          (event) =>
+              event.checkpoint == AttachmentUploadCheckpoint.admissionFailed,
+        );
+        expect(
+          failed.failure,
+          isNot(AttachmentUploadFailure.dispatch),
+          reason: code.name,
+        );
+        if (code == ChatAttachmentContextError.capabilitiesUnavailable) {
+          expect(failed.failure, AttachmentUploadFailure.serverUnreachable);
+        }
+      },
+    );
+  }
+
+  test(
+    'a server that answers late is asked again before the pick fails',
+    () async {
+      var attempts = 0;
+      final diagnostics = <AttachmentUploadDiagnostic>[];
+      final timers = <_ManualTimer>[];
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) async {
+          attempts++;
+          if (attempts < 3) {
+            throw const ChatAttachmentContextException(
+              ChatAttachmentContextError.capabilitiesUnavailable,
+            );
+          }
+          return ImageAttachmentUploadSession(
+            events: const Stream<ImageAttachmentUploadEvent>.empty(),
+            cancel: () async {},
+          );
+        },
+        reportDiagnostic: diagnostics.add,
+        createWatchdogTimer: (delay, callback) {
+          final timer = _ManualTimer(callback);
+          timers.add(timer);
+          return timer;
+        },
+      );
+      addTearDown(controller.dispose);
+
+      final started = controller.startPrepared(_request);
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, 1);
+      // The queued watchdog is the first timer; the retry pause is the last.
+      expect(timers, hasLength(2), reason: 'the first retry is waiting');
+      timers.last.fire();
+      await Future<void>.delayed(Duration.zero);
+      expect(attempts, 2);
+      timers.last.fire();
+      await started;
+      expect(attempts, 3);
+      expect(
+        diagnostics.where(
+          (event) =>
+              event.checkpoint == AttachmentUploadCheckpoint.admissionFailed,
+        ),
+        isEmpty,
+      );
+      expect(controller.state.phase, ImageAttachmentUploadPhase.queued);
     },
   );
 }

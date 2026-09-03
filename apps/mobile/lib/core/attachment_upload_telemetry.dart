@@ -81,6 +81,11 @@ enum AttachmentUploadFailure {
 
   /// The screen that owns the upload was gone before admission finished.
   composerGone,
+
+  /// Admission needed a fresh capability snapshot and the server did not
+  /// answer in time. Reproduced on a throttled emulator network, and the
+  /// likely shape of the first foldable field report.
+  serverUnreachable,
   dispatch,
   stream,
   durable,
