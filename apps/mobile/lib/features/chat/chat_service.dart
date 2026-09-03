@@ -3,7 +3,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
@@ -991,7 +992,10 @@ final class ChatService {
         errorCode: mapped.code.name,
       );
       throw mapped;
-    } on TalkProtocolException {
+    } on TalkProtocolException catch (error) {
+      if (kDebugMode) {
+        debugPrint('Chat sync rejected: ${error.code.name} at ${error.path}');
+      }
       _ensureAccountActive(accountId);
       await _chat.recordRoomError(
         accountId: accountId,

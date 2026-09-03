@@ -55,6 +55,10 @@ def add_block(
 ) -> list[list[str]]:
     intervals = [(int(block[0]), int(block[1])) for block in blocks]
     intervals.append((int(start), int(end)))
+    # `[0, 0]` marks a scope that never saw a message; it is no range once a
+    # real one exists.
+    real = [interval for interval in intervals if interval[1] != 0]
+    intervals = real or intervals
     intervals.sort()
     merged: list[list[int]] = []
     for interval_start, interval_end in intervals:
@@ -246,13 +250,23 @@ def apply_sync_step(
     if cursor is None:
         return "rejected"
     cursor = canonical_cursor(cursor, "merge response cursor")
-    if direction == "history" and int(cursor) > int(anchor):
+    # Anchor 0 is a scope that has never seen a message; its first history
+    # page is the newest page and may lie above the anchor.
+    open_anchor = direction == "history" and int(anchor) == 0
+    if direction == "history" and int(cursor) > int(anchor) and not open_anchor:
         return "rejected"
     if direction == "future" and int(cursor) < int(anchor):
         return "rejected"
     message_ids = [message["id"] for message in result.get("messages", [])]
     scope["messageIds"] = sorted(set(scope["messageIds"]) | set(message_ids))
-    if direction == "history":
+    if open_anchor:
+        newest = str(max([int(cursor)] + message_ids))
+        scope["historyCursor"] = cursor
+        scope["futureCursor"] = newest
+        scope["blocks"] = add_block(
+            [block for block in scope["blocks"] if int(block[1]) != 0], cursor, newest
+        )
+    elif direction == "history":
         scope["historyCursor"] = cursor
         scope["blocks"] = add_block(scope["blocks"], cursor, anchor)
     else:

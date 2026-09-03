@@ -56,7 +56,10 @@
     "rate-limit": {
       "Retry-After": "30"
     },
-    "none": {}
+    "none": {},
+    "federated-history": {
+      "X-Chat-Last-Given": "70"
+    }
   },
   "fixtures": [
     {
@@ -75,6 +78,24 @@
       "expectedClassification": "messages",
       "expectedMessageCount": 2,
       "expectedCursor": "103"
+    },
+    {
+      "id": "federated-history-page",
+      "file": "chat-federated-history.response.json",
+      "direction": "response",
+      "operationId": "getChatMessages",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "federated-history",
+      "schemaValid": true,
+      "context": {
+        "roomToken": "fedlocal1",
+        "direction": "history",
+        "cursor": "0"
+      },
+      "expectedClassification": "messages",
+      "expectedMessageCount": 3,
+      "expectedCursor": "70"
     },
     {
       "id": "future-page",

@@ -131,22 +131,31 @@ ChatMergeResult planChatGetMerge(
       final ids = <int>{...scope.messageIds};
       ids.addAll(response.messages.map((message) => message.messageId));
       final sortedIds = ids.toList()..sort();
-      final newBlock = response.request.direction == ChatFetchDirection.history
-          ? ChatBlock(start: cursor, end: anchor)
+      final history = response.request.direction == ChatFetchDirection.history;
+      // Anchor `0` is a scope that has never seen a message (a federated
+      // room's preview carries no id). Its first history page is the newest
+      // page: it becomes the only block, and the future cursor moves to the
+      // newest id so polling continues from there instead of from nothing.
+      final openAnchor = history && anchor.value == '0';
+      final newest = openAnchor && sortedIds.isNotEmpty
+          ? ChatCursor.parse(
+              sortedIds.last.toString(),
+              code: TalkProtocolErrorCode.invalidChatMerge,
+            )
+          : cursor;
+      final newBlock = history
+          ? ChatBlock(start: cursor, end: openAnchor ? newest : anchor)
           : ChatBlock(start: anchor, end: cursor);
+      final keptBlocks = openAnchor
+          ? scope.blocks.where((block) => block.end.value != '0')
+          : scope.blocks;
       candidateScope = scope.copyWith(
         messageIds: sortedIds,
-        historyCursor: response.request.direction == ChatFetchDirection.history
-            ? cursor
-            : null,
-        futureCursor: response.request.direction == ChatFetchDirection.future
-            ? cursor
-            : null,
+        historyCursor: history ? cursor : null,
+        futureCursor: openAnchor ? newest : (history ? null : cursor),
         lastCommonRead: lastCommonRead,
-        futureConverged: response.request.direction == ChatFetchDirection.future
-            ? false
-            : null,
-        blocks: mergeChatBlocks(<ChatBlock>[...scope.blocks, newBlock]),
+        futureConverged: history ? null : false,
+        blocks: mergeChatBlocks(<ChatBlock>[...keptBlocks, newBlock]),
       );
       outcome = ChatMergeOutcome.applied;
     case ChatGetClassification.commonReadOnly:
@@ -244,7 +253,12 @@ ChatMergeResult planChatReadMerge(
 }
 
 List<ChatBlock> mergeChatBlocks(Iterable<ChatBlock> blocks) {
-  final sorted = blocks.toList()
+  // `[0, 0]` is the block of a scope that has never seen a message. Once a
+  // real range exists it is not a range of anything and would only drag the
+  // history cursor back to zero wherever blocks are recombined.
+  final all = blocks.toList();
+  final real = all.where((block) => block.end.value != '0').toList();
+  final sorted = (real.isEmpty ? all : real)
     ..sort((left, right) => left.start.compareTo(right.start));
   if (sorted.isEmpty) {
     protocolFailure(TalkProtocolErrorCode.invalidChatState, r'$.blocks');

@@ -1,0 +1,100 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "ok",
+      "statuscode": 200,
+      "message": "OK"
+    },
+    "data": [
+      {
+        "id": 72,
+        "token": "fedlocal1",
+        "actorType": "users",
+        "actorId": "fixture-user",
+        "actorDisplayName": "Fixture User",
+        "timestamp": 1788437452,
+        "message": "You accepted the invitation",
+        "messageParameters": {
+          "actor": {
+            "type": "user",
+            "id": "fixture-user",
+            "name": "Fixture User",
+            "mention-id": "federated_user/fixture-user@https://cloud.example.invalid"
+          },
+          "federated_user": {
+            "type": "user",
+            "id": "fixture-user",
+            "name": "Fixture User",
+            "mention-id": "federated_user/fixture-user@https://cloud.example.invalid"
+          }
+        },
+        "systemMessage": "federated_user_added",
+        "messageType": "system",
+        "isReplyable": false,
+        "referenceId": "",
+        "reactions": [],
+        "expirationTimestamp": 0,
+        "markdown": false,
+        "threadId": 72
+      },
+      {
+        "id": 71,
+        "token": "fedlocal1",
+        "actorType": "federated_users",
+        "actorId": "talk2-user@talk2.example.invalid",
+        "actorDisplayName": "Talk2 Test",
+        "timestamp": 1788437316,
+        "message": "{actor} invited you",
+        "messageParameters": {
+          "actor": {
+            "type": "user",
+            "id": "talk2-user",
+            "name": "Talk2 Test",
+            "mention-id": "talk2-user",
+            "server": "https://talk2.example.invalid"
+          },
+          "federated_user": {
+            "type": "user",
+            "id": "fixture-user",
+            "name": "Fixture User",
+            "mention-id": "federated_user/fixture-user@https://cloud.example.invalid"
+          }
+        },
+        "systemMessage": "federated_user_added",
+        "messageType": "system",
+        "isReplyable": false,
+        "referenceId": "",
+        "reactions": [],
+        "expirationTimestamp": 0,
+        "markdown": false,
+        "threadId": 71
+      },
+      {
+        "id": 70,
+        "token": "fedlocal1",
+        "actorType": "federated_users",
+        "actorId": "talk2-user@talk2.example.invalid",
+        "actorDisplayName": "Talk2 Test",
+        "timestamp": 1788437227,
+        "message": "{actor} created the conversation",
+        "messageParameters": {
+          "actor": {
+            "type": "user",
+            "id": "talk2-user",
+            "name": "Talk2 Test",
+            "mention-id": "talk2-user",
+            "server": "https://talk2.example.invalid"
+          }
+        },
+        "systemMessage": "conversation_created",
+        "messageType": "system",
+        "isReplyable": false,
+        "referenceId": "",
+        "reactions": [],
+        "expirationTimestamp": 0,
+        "markdown": false,
+        "threadId": 70
+      }
+    ]
+  }
+}

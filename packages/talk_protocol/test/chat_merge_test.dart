@@ -27,10 +27,10 @@ void main() {
       .toList(growable: false);
 
   test('covers all executable merge scenarios', () {
-    expect(cases.length, 23);
+    expect(cases.length, 24);
     expect(
       cases.expand((testCase) => testCase['steps']! as List<Object?>).length,
-      25,
+      26,
     );
   });
 

@@ -2,6 +2,86 @@ part of 'chat_service_integration_test.dart';
 
 extension _ChatServiceSyncCases on _ChatServiceIntegrationSuite {
   void registerSyncCases() {
+    test('a federated room whose preview has no id syncs from nothing', () async {
+      // Talk forwards a federated room's preview without `id`, so the cached
+      // anchor is 0. The first history fetch then asks from 0 and the server
+      // answers with the newest page — measured live on 2026-09-03.
+      final roomJson =
+          jsonDecode(
+                File('test/fixtures_federated_room.json').readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      final room = ConversationRoom.fromJson(roomJson);
+      await database
+          .into(database.cachedConversations)
+          .insert(
+            CachedConversationsCompanion.insert(
+              accountId: 'account-a',
+              token: room.token.value,
+              displayName: room.displayName,
+              description: room.description,
+              lastActivity: room.lastActivity,
+              unreadMessages: room.unreadMessages,
+              favorite: room.isFavorite,
+              readOnly: Value(room.readOnly),
+              roomType: Value(room.type),
+              roomName: Value(room.name),
+              objectType: Value(room.objectType),
+              avatarVersion: Value(room.avatarVersion),
+              isCustomAvatar: Value(room.isCustomAvatar),
+              rawJson: jsonEncode(roomJson),
+            ),
+          );
+      final historyCursors = <String?>[];
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/cloud/capabilities')) {
+            return http.Response(jsonEncode(_chatCapabilities()), 200);
+          }
+          expect(
+            request.url.path,
+            endsWith('/apps/spreed/api/v1/chat/fedlocal1'),
+          );
+          if (request.url.queryParameters['lookIntoFuture'] == '0') {
+            historyCursors.add(
+              request.url.queryParameters['lastKnownMessageId'],
+            );
+            return http.Response(
+              jsonEncode(
+                readFixtureJson(
+                  'chat-messages/fixtures/chat-federated-history.response.json',
+                ),
+              ),
+              200,
+              headers: const <String, String>{'X-Chat-Last-Given': '70'},
+            );
+          }
+          return http.Response('', 304);
+        }),
+      );
+      addTearDown(api.close);
+      final service = ChatService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+
+      await service.syncRoom(accountId: 'account-a', roomToken: 'fedlocal1');
+
+      final messages = await chat
+          .watchMessages(accountId: 'account-a', roomToken: 'fedlocal1')
+          .first;
+      final scope = await chat.getRootScope(
+        accountId: 'account-a',
+        roomToken: 'fedlocal1',
+      );
+      expect(historyCursors, ['0']);
+      expect(messages.map((message) => message.messageId), [70, 71, 72]);
+      expect(scope?.historyCursor, '70');
+      expect(scope?.lastSyncError, isNull);
+    });
+
     test('sync stores history and future catch-up messages in Drift', () async {
       var historyRequests = 0;
       var futureRequests = 0;
