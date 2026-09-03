@@ -345,8 +345,13 @@ def classify_response(
         preview = room.get("lastMessage")
         preview_token = preview.get("token") if isinstance(preview, dict) else None
         remote_token = room.get("remoteToken") if room.get("remoteServer") else None
-        # A federated room's preview names the remote conversation.
-        if preview_token is not None and preview_token not in (token, remote_token):
+        # A federated room's preview is forwarded from the remote server: it
+        # names the remote conversation, or carries no token at all. A local
+        # preview must name its own room.
+        if isinstance(preview, dict) and (
+            (remote_token is None and preview_token != token)
+            or (remote_token is not None and preview_token not in (None, token, remote_token))
+        ):
             raise ResponseSemanticError(
                 f"Room {index} preview token does not match its room token"
             )

@@ -386,16 +386,18 @@ ConversationRoom parseConversationRoom(
   );
   final attributes = _optionalIntOr(room, 'attributes', path, 0, minimum: 0);
 
-  // A federated room's preview is the remote server's message, so it carries
-  // the remote token (measured on Talk 22 ↔ 24 on 2026-09-03); a local room's
-  // preview must name the room itself.
+  // A federated room's preview is the remote server's message: Talk 24
+  // forwards it without `token` and `id`, and when a token is there it is
+  // the remote one (measured on Talk 22 ↔ 24, 2026-09-03). A local room's
+  // preview must name the room itself; one without a token is rejected
+  // because nothing ties it to this room.
   final previewToken = lastMessage?.token;
+  final federated = remoteServer != null && remoteToken != null;
   final previewBelongsHere =
       lastMessage == null ||
       previewToken == token ||
-      (remoteServer != null &&
-          remoteToken != null &&
-          previewToken?.value == remoteToken);
+      (federated &&
+          (previewToken == null || previewToken.value == remoteToken));
   if (!previewBelongsHere) {
     protocolFailure(
       TalkProtocolErrorCode.previewConversationMismatch,
