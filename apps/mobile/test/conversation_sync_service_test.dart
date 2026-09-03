@@ -221,6 +221,73 @@ void main() {
     },
   );
 
+  test('the loop asks for the whole list again after five minutes', () async {
+    Map<String, Object?> response() =>
+        jsonDecode(
+              jsonEncode(
+                readFixtureJson(
+                  'conversation-list/fixtures/'
+                  'conversations-full.response.json',
+                ),
+              ),
+            )
+            as Map<String, Object?>;
+    final full = response();
+    final withoutFirst = response();
+    (withoutFirst['ocs']! as Map<String, Object?>)['data'] =
+        ((full['ocs']! as Map<String, Object?>)['data']! as List<Object?>)
+            .skip(1)
+            .toList();
+    var now = DateTime.utc(2026, 9, 3, 12);
+    var conversationRequests = 0;
+    final modifiedSinceValues = <String?>[];
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response(jsonEncode(capabilitiesJson()), 200);
+        }
+        conversationRequests++;
+        modifiedSinceValues.add(request.url.queryParameters['modifiedSince']);
+        // The delta never mentions the deleted room; only the full list
+        // shows it is gone.
+        final body = conversationRequests == 3 ? withoutFirst : full;
+        return http.Response.bytes(
+          utf8.encode(jsonEncode(body)),
+          200,
+          headers: <String, String>{
+            'X-Nextcloud-Talk-Hash': 'fixture-hash-a',
+            'X-Nextcloud-Talk-Modified-Before':
+                '${1724300000 + conversationRequests}',
+            'X-Nextcloud-Talk-Federation-Invites': '0',
+          },
+        );
+      }),
+    );
+    addTearDown(api.close);
+    final service = ConversationSyncService(
+      accounts: repository,
+      credentials: vault,
+      api: api,
+      clock: () => now,
+    );
+
+    await service.sync('account-a');
+    now = now.add(const Duration(minutes: 4));
+    await service.sync('account-a');
+    var tokens = (await repository.watchConversations('account-a').first).map(
+      (room) => room.token,
+    );
+    expect(tokens, contains('rooma123'));
+
+    now = now.add(const Duration(minutes: 2));
+    await service.sync('account-a');
+    tokens = (await repository.watchConversations('account-a').first).map(
+      (room) => room.token,
+    );
+    expect(tokens, isNot(contains('rooma123')));
+    expect(modifiedSinceValues, [null, '1724300001', null]);
+  });
+
   test(
     'status survives an absent delta and clears on an authoritative full',
     () async {

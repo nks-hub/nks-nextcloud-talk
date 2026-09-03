@@ -62,14 +62,25 @@ final class ConversationSyncService {
     AuthenticationLostCallback? onAuthenticationLost,
     Uuid? uuid,
     Future<void> Function(Duration)? delay,
+    DateTime Function()? clock,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
        _onAuthenticationLost = onAuthenticationLost,
        _uuid = uuid ?? const Uuid(),
-       _delay = delay ?? Future<void>.delayed;
+       _delay = delay ?? Future<void>.delayed,
+       _clock = clock ?? DateTime.now;
+
+  /// How long the loop may stay incremental before it asks for the whole
+  /// list again. The delta only carries rooms that changed; a room deleted
+  /// on the server, or one the account was removed from, is simply absent
+  /// from it and would sit in the list until the next start or manual
+  /// refresh. A full fetch every few minutes is what lets it go.
+  static const Duration fullRefreshInterval = Duration(minutes: 5);
 
   final Future<void> Function(Duration) _delay;
+  final DateTime Function() _clock;
+  final Map<String, DateTime> _lastFullFetch = <String, DateTime>{};
   final AccountRepository _accounts;
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
@@ -279,7 +290,13 @@ final class ConversationSyncService {
       for (var attempt = 0; attempt < 2; attempt++) {
         final state = await _accounts.loadConversationState(currentAccount);
         final typedAccountId = AccountId.parse(accountId);
-        final mode = forceFull || state.cursor == null
+        final lastFull = _lastFullFetch[accountId];
+        final now = _clock();
+        final mode =
+            forceFull ||
+                state.cursor == null ||
+                lastFull == null ||
+                now.difference(lastFull) >= fullRefreshInterval
             ? ConversationFetchMode.full
             : ConversationFetchMode.incremental;
         final request = ConversationListRequest(
@@ -310,6 +327,9 @@ final class ConversationSyncService {
           );
           await _accounts.applyConversationMerge(plan);
           if (plan.outcome == ConversationMergeOutcome.applied) {
+            if (mode == ConversationFetchMode.full) {
+              _lastFullFetch[accountId] = now;
+            }
             return;
           }
           currentAccount = (await _accounts.getAccount(accountId))!;
