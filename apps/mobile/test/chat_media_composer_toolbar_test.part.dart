@@ -435,6 +435,46 @@ void _registerChatMediaComposerToolbarTests(
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
     expect(bridge.sources, hasLength(1));
   });
+
+  testWidgets(
+    'a desktop window that is not key still admits the file',
+    (tester) async {
+      final bridge = _RecordingBridge();
+      addTearDown(bridge.close);
+      final voiceBackends = _VoiceBackendFactory();
+      addTearDown(voiceBackends.close);
+      final controller = ChatMediaComposerController();
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _composerApp(
+          sourceStore: sourceStore(),
+          bridge: bridge.bridge,
+          threadId: null,
+          voiceBackends: voiceBackends,
+          controller: controller,
+          showAttachmentButton: false,
+        ),
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+
+      late Future<bool> started;
+      await tester.runAsync(() async {
+        started = controller.pickAttachment(AttachmentPickerSource.gallery);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      // No resume ever comes: the window stays behind Finder.
+      expect(await tester.runAsync(() => started), isTrue);
+      await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+      expect(bridge.sources, hasLength(1));
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
 }
 
 Widget _aggregatedLeadingAction() => IconButton(

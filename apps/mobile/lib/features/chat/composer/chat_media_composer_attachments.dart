@@ -50,10 +50,17 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     }
   }
 
+  /// iOS hands the picked file over while the app is still `inactive` and
+  /// the network side must wait for the real `resumed`. A desktop window is
+  /// `inactive` whenever it is not key — after a drop from Finder or Explorer
+  /// it usually never becomes key again — so there the state means nothing
+  /// for admission.
   Future<void> _waitForResumedLifecycle() async {
     final binding = WidgetsBinding.instance;
     final state = binding.lifecycleState;
-    if (state == null || state == AppLifecycleState.resumed) {
+    if (state == null ||
+        state == AppLifecycleState.resumed ||
+        _desktopLifecycle) {
       return;
     }
     final resumed = Completer<void>();
@@ -77,6 +84,13 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
       listener.dispose();
     }
   }
+
+  static bool get _desktopLifecycle => switch (defaultTargetPlatform) {
+    TargetPlatform.macOS ||
+    TargetPlatform.windows ||
+    TargetPlatform.linux => true,
+    _ => false,
+  };
 
   Future<ImageAttachmentUploadRequest?> _prepareImage(
     AttachmentPickerSource pickerSource,
