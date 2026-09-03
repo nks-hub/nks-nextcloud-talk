@@ -12,6 +12,7 @@ import '../../network/nextcloud_api.dart';
 import '../../platform/media/durable_attachment_source_store.dart';
 import '../chat/composer/emoji_usage_store.dart';
 import '../chat/media/chat_attachment_opener.dart';
+import 'app_password_revocation_queue.dart';
 
 typedef AccountRemovalStarted = Future<void> Function(String accountId);
 typedef AccountPushRevocation = Future<bool> Function(String accountId);
@@ -68,6 +69,7 @@ final class AccountRemovalService {
     required Future<DurableAttachmentSourceStore> Function() attachmentSources,
     AccountRemovalStarted? onRemovalStarted,
     AccountPushRevocation? revokePush,
+    AppPasswordRevocationQueue? pendingRevocations,
   }) : _accounts = accounts,
        _credentials = credentials,
        _api = api,
@@ -79,7 +81,8 @@ final class AccountRemovalService {
        _chatAttachmentDirectory = chatAttachmentDirectory,
        _attachmentSources = attachmentSources,
        _onRemovalStarted = onRemovalStarted,
-       _revokePush = revokePush;
+       _revokePush = revokePush,
+       _pendingRevocations = pendingRevocations;
 
   final AccountRepository _accounts;
   final CredentialVault _credentials;
@@ -93,6 +96,7 @@ final class AccountRemovalService {
   final Future<DurableAttachmentSourceStore> Function() _attachmentSources;
   final AccountRemovalStarted? _onRemovalStarted;
   final AccountPushRevocation? _revokePush;
+  final AppPasswordRevocationQueue? _pendingRevocations;
 
   Future<AccountRemovalOutcome> removeAccount(String accountId) async {
     final account = await _accounts.getAccount(accountId);
@@ -134,12 +138,10 @@ final class AccountRemovalService {
           appPassword: appPassword,
         ),
       );
-      final passwordRevoked = await _bestEffort(
-        () => _api.revokeAppPassword(
-          server: server,
-          loginName: account.loginName,
-          appPassword: appPassword,
-        ),
+      final passwordRevoked = await _revokeOrRemember(
+        server: server,
+        loginName: account.loginName,
+        appPassword: appPassword,
       );
       appPasswordRevoked =
           pushRegistrationRevoked && webPushRevoked && passwordRevoked;
@@ -179,6 +181,57 @@ final class AccountRemovalService {
       accountExisted: true,
       pushRegistrationRevoked: pushRegistrationRevoked,
       appPasswordRevoked: appPasswordRevoked,
+    );
+  }
+
+  /// Revokes the password now, or leaves it in the bounded revocation queue
+  /// when the server was never reached. A server that answered — `401`
+  /// (already dead), an older server without the endpoint, an unexpected
+  /// body — is not retried: the queue is for a request that did not arrive.
+  Future<bool> _revokeOrRemember({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+  }) async {
+    const notReached = <NextcloudApiError>{
+      NextcloudApiError.network,
+      NextcloudApiError.timeout,
+      NextcloudApiError.cancelled,
+    };
+    try {
+      await _api.revokeAppPassword(
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      );
+      return true;
+    } on NextcloudApiException catch (error) {
+      if (notReached.contains(error.code)) {
+        await _remember(server, loginName, appPassword);
+      }
+      return false;
+    } on Object {
+      // Not one of the API's own answers: the request never completed.
+      await _remember(server, loginName, appPassword);
+      return false;
+    }
+  }
+
+  Future<void> _remember(
+    ServerBase server,
+    String loginName,
+    String appPassword,
+  ) async {
+    final queue = _pendingRevocations;
+    if (queue == null) {
+      return;
+    }
+    await _bestEffort(
+      () => queue.record(
+        server: server,
+        loginName: loginName,
+        appPassword: appPassword,
+      ),
     );
   }
 

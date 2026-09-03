@@ -9,6 +9,16 @@ abstract interface class CredentialVault {
   Future<void> deleteAppPassword(String accountId);
 }
 
+/// App passwords of removed accounts whose server-side revocation is still
+/// owed (the device was offline when the account left). One opaque JSON
+/// document, kept next to the live secrets because it is one; `null` when
+/// nothing is pending.
+abstract interface class PendingRevocationStore {
+  Future<String?> readPendingRevocations();
+
+  Future<void> writePendingRevocations(String? json);
+}
+
 /// The Apple credential store is intact but cannot be accessed in the current
 /// device state, for example during a dark wake or while authorization UI is
 /// unavailable. Callers may retry after the app returns to the foreground.
@@ -19,7 +29,8 @@ final class CredentialVaultTemporarilyUnavailable implements Exception {
   String toString() => 'CredentialVaultTemporarilyUnavailable()';
 }
 
-final class SecureCredentialVault implements CredentialVault {
+final class SecureCredentialVault
+    implements CredentialVault, PendingRevocationStore {
   SecureCredentialVault({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
@@ -62,6 +73,16 @@ final class SecureCredentialVault implements CredentialVault {
     await _ensureCurrent(accountId);
     await _delete(_currentKey(accountId));
   }
+
+  static const _pendingRevocationsKey = 'nks.pending_revocations';
+
+  @override
+  Future<String?> readPendingRevocations() => _read(_pendingRevocationsKey);
+
+  @override
+  Future<void> writePendingRevocations(String? json) => json == null
+      ? _delete(_pendingRevocationsKey)
+      : _write(_pendingRevocationsKey, json);
 
   Future<void> _ensureCurrent(String accountId) async {
     final running = _migrations[accountId];

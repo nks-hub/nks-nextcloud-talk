@@ -18,6 +18,7 @@ import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
 import 'package:nextcloudtalk/features/calls/hpb_socket_transport.dart';
 import 'package:nextcloudtalk/features/settings/account_removal_service.dart';
+import 'package:nextcloudtalk/features/settings/app_password_revocation_queue.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -81,7 +82,12 @@ void main() {
     AccountRemovalStarted? onRemovalStarted,
     AccountPushRevocation? revokePush,
   }) {
+    final pendingRevocations = AppPasswordRevocationQueue(
+      store: vault,
+      api: api,
+    );
     return AccountRemovalService(
+      pendingRevocations: pendingRevocations,
       accounts: accounts,
       credentials: vault,
       api: api,
@@ -336,6 +342,9 @@ void main() {
     final after = await _accountScopedRowCounts(database, 'account-a');
     expect(after.values.every((count) => count == 0), isTrue, reason: '$after');
     expect(vault.values.containsKey('account-a'), isFalse);
+    // The password is gone from the account slot but owed to the server: the
+    // bounded revocation queue holds it for the next drain.
+    expect(vault.pendingRevocations, contains(_serverA));
   });
 
   test(
@@ -351,6 +360,8 @@ void main() {
       expect(outcome.appPasswordRevoked, isFalse);
       expect(await accounts.getAccount('account-a'), isNull);
       expect(vault.values.containsKey('account-a'), isFalse);
+      // The server answered: there is nothing left to retry.
+      expect(vault.pendingRevocations, isNull);
     },
   );
 

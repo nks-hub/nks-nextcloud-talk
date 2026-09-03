@@ -30,6 +30,7 @@ final accountRemovalServiceProvider = Provider<AccountRemovalService>((ref) {
     voiceDirectory: ref.watch(chatVoiceCacheDirectoryProvider),
     chatAttachmentDirectory: getApplicationCacheDirectory,
     attachmentSources: () => ref.read(attachmentSourceProvider.future),
+    pendingRevocations: ref.watch(appPasswordRevocationQueueProvider),
     onRemovalStarted: (accountId) async {
       final attachment = ref.read(attachmentServiceProvider.future);
       await Future.wait<void>(<Future<void>>[

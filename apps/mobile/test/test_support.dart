@@ -13,7 +13,8 @@ AppDatabase openTestDatabase() {
   return AppDatabase.forTesting(NativeDatabase.memory());
 }
 
-final class MemoryCredentialVault implements CredentialVault {
+final class MemoryCredentialVault
+    implements CredentialVault, PendingRevocationStore {
   final Map<String, String> values = {};
 
   @override
@@ -27,6 +28,16 @@ final class MemoryCredentialVault implements CredentialVault {
   @override
   Future<void> writeAppPassword(String accountId, String appPassword) async {
     values[accountId] = appPassword;
+  }
+
+  String? pendingRevocations;
+
+  @override
+  Future<String?> readPendingRevocations() async => pendingRevocations;
+
+  @override
+  Future<void> writePendingRevocations(String? json) async {
+    pendingRevocations = json;
   }
 }
 

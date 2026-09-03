@@ -54,6 +54,7 @@ import 'features/onboarding/onboarding_coordinator.dart';
 import 'features/profile/profile_service.dart';
 import 'features/rooms/room_settings_service.dart';
 import 'features/settings/account_removal_service.dart';
+import 'features/settings/app_password_revocation_queue.dart';
 import 'features/settings/remote_wipe_service.dart';
 import 'features/conversations/list_pane_preference.dart';
 import 'features/settings/reply_layout_preference.dart';
@@ -163,6 +164,28 @@ final attachmentRepositoryProvider = Provider<AttachmentRepository>((ref) {
 final credentialVaultProvider = Provider<CredentialVault>((ref) {
   return SecureCredentialVault();
 });
+
+/// Revocations owed to servers that were unreachable when their account was
+/// removed; the outbox drain retries them alongside pending sends.
+final appPasswordRevocationQueueProvider = Provider<AppPasswordRevocationQueue>(
+  (ref) {
+    final vault = ref.watch(credentialVaultProvider);
+    return AppPasswordRevocationQueue(
+      store: vault is PendingRevocationStore
+          ? vault as PendingRevocationStore
+          : _NoPendingRevocationStore(),
+      api: ref.watch(nextcloudApiProvider),
+    );
+  },
+);
+
+final class _NoPendingRevocationStore implements PendingRevocationStore {
+  @override
+  Future<String?> readPendingRevocations() async => null;
+
+  @override
+  Future<void> writePendingRevocations(String? json) async {}
+}
 
 final emojiUsageStoreProvider = Provider<EmojiUsageStore>((ref) {
   return FileEmojiUsageStore();
@@ -478,6 +501,7 @@ final outboxDrainProvider = Provider<void>((ref) {
     running = true;
     try {
       await chat.drainPendingSends();
+      await ref.read(appPasswordRevocationQueueProvider).drain();
     } on Object {
       // A drain is best effort; the outbox keeps its rows for the next one.
     } finally {
