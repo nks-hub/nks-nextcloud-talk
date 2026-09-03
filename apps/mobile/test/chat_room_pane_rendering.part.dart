@@ -273,10 +273,9 @@ void _registerChatRoomPaneRenderingTests() {
       expect(tester.getSize(openImage).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(openImage).height, greaterThanOrEqualTo(48));
       expect(find.byKey(const Key('chat-open-attachment-20-0')), findsNothing);
-      expect(
-        tester.getSize(find.byKey(const Key('chat-attachment-20-0'))).height,
-        lessThanOrEqualTo(64),
-      );
+      // No declared dimensions: the bubble takes the fallback box instead of
+      // the one-pixel picture's size, so it cannot resize under the reader.
+      expect(tester.getSize(openImage), const Size(240, 180));
       await tester.ensureVisible(openImage);
       await tester.tap(openImage);
       await tester.pump();
@@ -297,6 +296,12 @@ void _registerChatRoomPaneRenderingTests() {
       await tester.tap(find.byKey(const Key('authenticated-image-close')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('chat-reaction-20-0')), findsOneWidget);
+      // The reserved image box pushes the oldest day above the lazy viewport.
+      await tester.drag(
+        find.byKey(const Key('chat-message-list')),
+        const Offset(0, 400),
+      );
+      await tester.pump();
       expect(find.byKey(_dayKey(firstTimestamp)), findsOneWidget);
       expect(
         find.byKey(_dayKey(firstTimestamp + (2 * Duration.secondsPerDay))),
@@ -349,6 +354,61 @@ void _registerChatRoomPaneRenderingTests() {
       await tester.pump(const Duration(milliseconds: 1));
     },
   );
+
+  testWidgets('an image bubble keeps the box Talk declared before and after '
+      'the preview lands', (tester) async {
+    final thumbnail = Completer<ChatMediaImage?>();
+    addTearDown(() {
+      if (!thumbnail.isCompleted) {
+        thumbnail.complete(null);
+      }
+    });
+    final message = _attachmentMessage(
+      id: 32,
+      fileId: 90,
+      name: 'tall.png',
+      mimeType: 'image/png',
+      previewAvailable: 'yes',
+      link: '/index.php/f/90',
+      extra: const <String, Object?>{'width': '600', 'height': '1200'},
+    );
+    await tester.pumpWidget(
+      app(
+        home: Scaffold(
+          body: ChatMessageContent(
+            account: account,
+            message: message,
+            fallbackText: '',
+            foregroundColor: Colors.black,
+          ),
+        ),
+        overrides: [
+          chatMediaProvider.overrideWith((ref, key) => thumbnail.future),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    // 600x1200 scaled into the 420x320 bound keeps its proportions.
+    final loading = find.byKey(const Key('chat-image-loading-32-0'));
+    expect(tester.getSize(loading), const Size(160, 320));
+
+    thumbnail.complete(
+      ChatMediaImage(
+        body: base64Decode(_onePixelGif),
+        contentType: 'image/gif',
+      ),
+    );
+    await tester.pump();
+    await _pumpUntil(tester, () => loading.evaluate().isEmpty);
+
+    // The decoded picture is one pixel, yet the bubble does not shrink: a
+    // bubble that changed height under the reader would move the list.
+    expect(
+      tester.getSize(find.byKey(const Key('chat-image-32-0'))),
+      const Size(160, 320),
+    );
+  });
 
   testWidgets('image attachment uses one surface while thumbnail is loading', (
     tester,

@@ -168,6 +168,7 @@ ChatMessage _attachmentMessage({
   required Object previewAvailable,
   required String link,
   String? path,
+  Map<String, Object?> extra = const <String, Object?>{},
 }) {
   return ChatMessage.fromJson(
     _messageJson(
@@ -186,6 +187,7 @@ ChatMessage _attachmentMessage({
           'path': path ?? 'Talk/$name',
           'mimetype': mimeType,
           'preview-available': previewAvailable,
+          ...extra,
         },
       },
     ),

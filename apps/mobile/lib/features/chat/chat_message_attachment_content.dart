@@ -573,10 +573,11 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           );
     final openAttachment = openImage ?? openFile;
+    final imageBox = _reservedImageBox(parameter);
     Widget loadingImage() => Container(
       key: Key('chat-image-loading-$messageId-$index'),
-      width: 240,
-      height: 120,
+      width: imageBox.width,
+      height: imageBox.height,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLowest,
@@ -608,13 +609,9 @@ final class _ChatAttachment extends ConsumerWidget {
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: openImage,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                        maxWidth: 420,
-                        maxHeight: 320,
-                      ),
+                    child: SizedBox(
+                      width: imageBox.width,
+                      height: imageBox.height,
                       child: Image.memory(
                         loadedImage.body,
                         key: Key('chat-image-$messageId-$index'),
@@ -642,8 +639,8 @@ final class _ChatAttachment extends ConsumerWidget {
         ] else if (imageFailed) ...[
           Container(
             key: Key('chat-image-error-$messageId-$index'),
-            width: 240,
-            constraints: const BoxConstraints(minHeight: 72),
+            width: imageBox.width,
+            constraints: BoxConstraints(minHeight: imageBox.height),
             padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLowest,
@@ -851,6 +848,47 @@ _DavAttachment? _davAttachment(
     ),
     vCardPath: path.segments.last.toLowerCase().endsWith('.vcf'),
   );
+}
+
+/// Bounds every inline image bubble fits into.
+const Size _imageBoxBound = Size(420, 320);
+const double _imageBoxMinEdge = 48;
+/// Box for pictures whose dimensions Talk did not send.
+const Size _imageBoxFallback = Size(240, 180);
+
+/// The bubble's size, fixed before the picture arrives.
+///
+/// The timeline is a reversed list anchored on the newest message. A bubble
+/// below the viewport that grows once its preview decodes moves the scroll
+/// range under the reader and drags them back down while they are reading
+/// history, so the loading placeholder, the picture and the error card all
+/// take the same box. Talk sends the picture's `width` and `height`; those
+/// scale into the bound, keeping the proportions. Without them a fixed box
+/// with `BoxFit.contain` still keeps the height stable.
+Size _reservedImageBox(ChatRichObjectParameter parameter) {
+  final width = _dimension(parameter.wire['width']);
+  final height = _dimension(parameter.wire['height']);
+  if (width == null || height == null) {
+    return _imageBoxFallback;
+  }
+  final scale = math.min(
+    1.0,
+    math.min(_imageBoxBound.width / width, _imageBoxBound.height / height),
+  );
+  return Size(
+    math.max(_imageBoxMinEdge, width * scale),
+    math.max(_imageBoxMinEdge, height * scale),
+  );
+}
+
+double? _dimension(Object? value) {
+  final parsed = switch (value) {
+    int() => value.toDouble(),
+    double() => value,
+    String() => double.tryParse(value),
+    _ => null,
+  };
+  return parsed != null && parsed.isFinite && parsed > 0 ? parsed : null;
 }
 
 /// Declared size of the shared file, when Talk sent one. Only a fallback for
