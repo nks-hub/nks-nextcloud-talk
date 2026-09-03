@@ -16,6 +16,24 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (50) — 3. 9. 2026
+
+Vydáno ze zdroje `BUILD50SHA`, tag `v0.1.0+50`.
+
+- Synchronizace seznamu konverzací už nestahuje každých 15 s znovu 13 kB
+  capabilities. Přerušitelné čtení, kterým sync jede, nikdy nenahradilo
+  prošlý záznam v paměťové cache, takže po pěti minutách běhu každý cyklus
+  šel na server dvakrát.
+- Krátké přerušení okna — výběr fotky, dialog oprávnění, panel oznámení —
+  už neshazuje a neobnovuje přítomnost v místnosti. Server dostával pro každé
+  klepnutí odhlášení a přihlášení session i nový signaling; přítomnost se
+  teď pouští až po dvou sekundách nečinnosti, což pro potlačení notifikací
+  nehraje roli.
+- Ověřeno živě: zaparkovaný účet na Windows se s buildem 49 sám uvolnil;
+  upload obrázku z pickeru trvá ~2 s; odmítnutý mikrofon nabídne nastavení;
+  rotace s otevřenou konverzací přepne dvoupanelový layout bez pádu;
+  „Poslat do Note to self" funguje i na iOS.
+
 ## 0.1.0 (49) — 3. 9. 2026
 
 Vydáno ze zdroje `1e1f4ca`, tag `v0.1.0+49`. Dávka vznikla ze Sentry nálezů
