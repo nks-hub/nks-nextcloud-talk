@@ -196,6 +196,7 @@ final class AppleDeepLinkDelivery {
         accountId: route.accountId,
         roomToken: route.roomToken,
         replyText: replyText,
+        notificationId: route.notificationId,
         completion: completionHandler
       )
     default:
