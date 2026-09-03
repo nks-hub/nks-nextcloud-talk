@@ -2023,7 +2023,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
-      'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.';
+      'Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Aplikace to po připojení k serveru ještě nějakou dobu zkouší znovu; můžete ho také odvolat sami na serveru v Nastavení, Zabezpečení.';
 
   @override
   String get roomDetailsGuestsLabel => 'Hosté';

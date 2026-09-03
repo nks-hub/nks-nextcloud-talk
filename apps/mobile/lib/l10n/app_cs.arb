@@ -709,7 +709,7 @@
   "settingsRemoveAccountDialogMessage": "Účet {loginName} na {serverUrl} bude z tohoto zařízení odebrán. Smažou se jeho konverzace, zprávy, rozepsané texty, čekající nahrávání, uložené náhledy i hlasové zprávy a uložené heslo. Aplikační heslo se odvolá na serveru.",
   "settingsRemoveAccountDialogConfirm": "Odebrat",
   "settingsRemoveAccountDone": "Účet byl odebrán.",
-  "settingsRemoveAccountDoneNotRevoked": "Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Odvolejte ho sami na serveru v Nastavení, Zabezpečení.",
+  "settingsRemoveAccountDoneNotRevoked": "Účet byl z tohoto zařízení odebrán, ale server nepotvrdil odvolání aplikačního hesla. Aplikace to po připojení k serveru ještě nějakou dobu zkouší znovu; můžete ho také odvolat sami na serveru v Nastavení, Zabezpečení.",
   "roomDetailsGuestsLabel": "Hosté",
   "roomDetailsGuestsAllowed": "Připojí se každý, kdo má odkaz",
   "roomDetailsGuestsBlocked": "Jen pozvaní lidé",

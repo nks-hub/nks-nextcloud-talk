@@ -2025,7 +2025,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsRemoveAccountDoneNotRevoked =>
-      'The account was removed from this device, but the server did not confirm the app password was revoked. Revoke it yourself under Settings, Security on the server.';
+      'The account was removed from this device, but the server did not confirm the app password was revoked. The app keeps retrying for a while once the server is reachable; you can also revoke it yourself under Settings, Security on the server.';
 
   @override
   String get roomDetailsGuestsLabel => 'Guests';
