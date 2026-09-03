@@ -179,6 +179,46 @@ void main() {
     expect(wire['reactionsSelf'], <String>['🔥']);
   });
 
+  test("someone else's deletion reaches the message it is about", () async {
+    // Live 2026-09-03: three messages the other side had deleted still showed
+    // their text and file bubbles, each followed by its "deleted a message"
+    // line. The notice's parent is the message in its deleted state and the
+    // original is never sent again.
+    await _insertScope(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+      scopeKey: 'root',
+      threadId: null,
+      cursor: 20,
+    );
+    await _insertMessage(
+      database,
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+
+    expect(
+      await repository.applyChatGetResponse(_deletionNoticeResponse()),
+      ChatMergeOutcome.applied,
+    );
+
+    final row =
+        await (database.select(database.cachedChatMessages)..where(
+              (r) =>
+                  r.accountId.equals('account-a') &
+                  r.roomToken.equals('rooma123') &
+                  r.messageId.equals(20),
+            ))
+            .getSingle();
+    expect(row.deleted, isTrue);
+    expect(row.messageType, 'comment_deleted');
+    // The cache keeps no text for a deleted row; the UI draws the placeholder.
+    expect(row.displayText, isEmpty);
+    final wire = jsonDecode(row.rawJson) as Map<String, Object?>;
+    expect(wire['deleted'], isTrue);
+  });
+
   test('a silent send stays silent across a process restart', () async {
     // The whole point of the durable column: the flag lives with the
     // operation, not in the composer, so an outbox replayed after process
@@ -510,6 +550,56 @@ ChatGetResponse _reactionCountsResponse() {
     ),
     headers: ChatResponseHeaders.fromMap(const {
       'X-Chat-Last-Given': '32',
+      'X-Chat-Last-Common-Read': '0',
+    }),
+  );
+}
+
+ChatGetResponse _deletionNoticeResponse() {
+  final request = ChatFetchRequest(
+    accountId: AccountId.parse('account-a'),
+    requestId: ChatRequestId.parse('projection-deletion-notice'),
+    server: ServerBase.parse('https://cloud.example.invalid'),
+    roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    profile: ChatCapabilityProfile.fromTalkFeatures(const <Object?>[
+      'chat-v2',
+      'chat-replies',
+    ], federated: false),
+    direction: ChatFetchDirection.future,
+    cursor: ChatCursor.parse('20'),
+    lastCommonRead: ChatCursor.parse('0'),
+    limit: 200,
+    includeLastKnown: false,
+    timeoutSeconds: 0,
+    interactive: true,
+  );
+  final deleted = _messageJson(id: 20, roomToken: 'rooma123', threadId: null)
+    ..['messageType'] = 'comment_deleted'
+    ..['message'] = 'Message deleted by author'
+    // Talk sends the deleted parent in full shape (`markdown` included);
+    // without it the protocol reads a bare deleted stub instead.
+    ..['markdown'] = true
+    ..['deleted'] = true;
+  final notice = _messageJson(id: 33, roomToken: 'rooma123', threadId: null)
+    ..['systemMessage'] = 'message_deleted'
+    ..['messageType'] = 'system'
+    ..['message'] = '{actor} deleted a message'
+    ..['parent'] = deleted;
+  return decodeChatGetResponse(
+    request: request,
+    statusCode: 200,
+    body: Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
+            'data': [notice],
+          },
+        }),
+      ),
+    ),
+    headers: ChatResponseHeaders.fromMap(const {
+      'X-Chat-Last-Given': '33',
       'X-Chat-Last-Common-Read': '0',
     }),
   );

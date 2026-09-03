@@ -458,6 +458,7 @@ extension _ChatRepositoryProjection on ChatRepository {
         threadReplyAccumulators,
       );
       await _applyReactionsFromNotice(account, message);
+      await _applyMutationFromNotice(account, message);
       await _persistMessage(account, message);
     }
   }
@@ -613,6 +614,57 @@ extension _ChatRepositoryProjection on ChatRepository {
               candidate.messageId.equals(parent.messageId),
         ))
         .write(CachedChatMessagesCompanion(rawJson: Value(jsonEncode(wire))));
+  }
+
+  /// Somebody else's edit or deletion arrives the same way a reaction does:
+  /// as a `message_edited` / `message_deleted` notice whose `parent` is the
+  /// message in its new state. The original is never sent again, so without
+  /// this the bubble kept its old text (or the deleted file) for as long as
+  /// the row lived in the cache — reproduced live 2026-09-03 with three
+  /// deleted messages still rendered next to their "deleted a message" lines.
+  Future<void> _applyMutationFromNotice(
+    ChatAccountState account,
+    ChatMessage message,
+  ) async {
+    const notices = <String>{'message_edited', 'message_deleted'};
+    if (!notices.contains(message.systemMessage)) {
+      return;
+    }
+    final parent = message.parent;
+    if (parent is! ChatFullParent || parent.roomToken != message.roomToken) {
+      return;
+    }
+    final accountId = account.accountId.value;
+    final mutated = parent.message;
+    final updated =
+        await (_database.update(_database.cachedChatMessages)..where(
+              (row) =>
+                  row.accountId.equals(accountId) &
+                  row.roomToken.equals(message.roomToken.value) &
+                  row.messageId.equals(mutated.messageId),
+            ))
+            .write(
+              CachedChatMessagesCompanion(
+                actorType: Value(mutated.actorType),
+                actorId: Value(mutated.actorId),
+                actorDisplayName: Value(mutated.actorDisplayName),
+                systemMessage: Value(mutated.systemMessage),
+                messageType: Value(mutated.messageType),
+                referenceId: Value(mutated.referenceId),
+                displayText: Value(_displayText(account.server, mutated)),
+                deleted: Value(mutated.deleted),
+                rawJson: Value(jsonEncode(mutated.wire)),
+              ),
+            );
+    if (updated == 0) {
+      // Not cached here: the message lives outside the loaded blocks and
+      // will arrive in its new state when history reaches it.
+      return;
+    }
+    await _projectMutationIntoCachedParents(
+      accountId: accountId,
+      message: mutated,
+    );
   }
 
   Future<void> _refreshThreadOriginalFromNamedSend(
