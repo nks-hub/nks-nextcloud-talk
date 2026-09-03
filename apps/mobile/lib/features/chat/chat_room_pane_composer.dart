@@ -243,6 +243,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
       return;
     }
     _update(() => _replyTo = message);
+    // Choosing a message to answer is the start of typing; without the focus
+    // the reply banner sat there and the keyboard had to be summoned by a
+    // second tap.
+    _composerFocusNode.requestFocus();
   }
 
   Future<void> _send() async {

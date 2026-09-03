@@ -998,6 +998,14 @@ void _registerChatRoomPaneRenderingTests() {
       expect(find.byKey(const Key('chat-reply-banner')), findsOneWidget);
       expect(find.text('Replying to Other person'), findsOneWidget);
       expect(find.text('Cached hello'), findsNWidgets(2));
+      // Answering starts typing: the composer takes the focus itself.
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('chat-composer')))
+            .focusNode
+            ?.hasFocus,
+        isTrue,
+      );
 
       await tester.tap(find.byKey(const Key('chat-cancel-reply')));
       await tester.pump();
