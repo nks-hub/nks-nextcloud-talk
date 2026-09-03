@@ -21,7 +21,7 @@ final Set<int> _richChatAllowedStatusCodes = Set.unmodifiable({
   ...Iterable<int>.generate(200, (index) => 400 + index),
 });
 
-const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 429, 503};
+const _chatGetAllowedStatusCodes = {200, 304, 401, 404, 412, 429, 503};
 const _sharedItemsAllowedStatusCodes = {200, 401, 404, 412, 429, 503};
 const _signalingSettingsAllowedStatusCodes = {200, 401, 404, 500, 503};
 const _participantsAllowedStatusCodes = {200, 401, 403, 404, 429, 503};

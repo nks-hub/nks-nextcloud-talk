@@ -82,6 +82,53 @@ extension _ChatServiceSyncCases on _ChatServiceIntegrationSuite {
       expect(scope?.lastSyncError, isNull);
     });
 
+    test(
+      'a lobby answer leaves the room quiet instead of failing the sync',
+      () async {
+        // Live 2026-09-03: a non-moderator's room in lobby answered every chat
+        // GET with 412 and the pane wore the red "response was rejected" banner
+        // next to the lobby notice. Closed is not broken.
+        var chatRequests = 0;
+        final api = HttpNextcloudApi(
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/cloud/capabilities')) {
+              return http.Response(jsonEncode(_chatCapabilities()), 200);
+            }
+            chatRequests++;
+            return http.Response(
+              jsonEncode({
+                'ocs': {
+                  'meta': {
+                    'status': 'failure',
+                    'statuscode': 412,
+                    'message': 'lobby',
+                  },
+                  'data': <Object?>[],
+                },
+              }),
+              412,
+            );
+          }),
+        );
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+
+        expect(chatRequests, greaterThan(0));
+        final scope = await chat.getRootScope(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        );
+        expect(scope?.lastSyncError, isNull);
+      },
+    );
+
     test('sync stores history and future catch-up messages in Drift', () async {
       var historyRequests = 0;
       var futureRequests = 0;
