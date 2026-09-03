@@ -236,7 +236,12 @@ ChatGetResponse decodeChatGetResponse({
   if (messages.isNotEmpty && cursor == null) {
     _responseFailure(r'$.headers.X-Chat-Last-Given');
   }
-  if (cursor != null) {
+  // Cursor `0` is "no position yet": a room whose preview carried no message
+  // id (a federated room, measured on Talk 24) starts its history from
+  // nothing, and the server answers with the newest page. Only a real
+  // cursor bounds which way the answer may go.
+  final openCursor = request.cursor.value == '0';
+  if (cursor != null && !openCursor) {
     final directionOrder = cursor.compareTo(request.cursor);
     if ((request.direction == ChatFetchDirection.history &&
             directionOrder > 0) ||
