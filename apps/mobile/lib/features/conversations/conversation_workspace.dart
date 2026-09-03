@@ -871,7 +871,7 @@ final class _EdgeSwipeBackState extends State<_EdgeSwipeBack> {
 /// takes width costs the conversation the very space the fold was added to
 /// give back. The hit area is wider than the visible line so it can be
 /// grabbed, and the cursor says so.
-final class _ListPaneSplitter extends StatelessWidget {
+final class _ListPaneSplitter extends StatefulWidget {
   const _ListPaneSplitter({
     required this.width,
     required this.onResize,
@@ -883,8 +883,21 @@ final class _ListPaneSplitter extends StatelessWidget {
   final VoidCallback? onResizeEnd;
 
   @override
+  State<_ListPaneSplitter> createState() => _ListPaneSplitterState();
+}
+
+final class _ListPaneSplitterState extends State<_ListPaneSplitter> {
+  // Measured from where the drag began, not from the last rebuilt width: the
+  // width comes back through the store a frame or more later, so adding each
+  // delta to whatever the widget happened to hold made the divider stutter
+  // and lag behind the pointer, and a clamped width swallowed movement the
+  // pointer then had to make up.
+  double _startWidth = 0;
+  double _startX = 0;
+
+  @override
   Widget build(BuildContext context) {
-    final resize = onResize;
+    final resize = widget.onResize;
     if (resize == null) {
       return const VerticalDivider();
     }
@@ -893,8 +906,13 @@ final class _ListPaneSplitter extends StatelessWidget {
       child: GestureDetector(
         key: const Key('conversation-list-splitter'),
         behavior: HitTestBehavior.translucent,
-        onHorizontalDragUpdate: (details) => resize(width + details.delta.dx),
-        onHorizontalDragEnd: (_) => onResizeEnd?.call(),
+        onHorizontalDragStart: (details) {
+          _startWidth = widget.width;
+          _startX = details.globalPosition.dx;
+        },
+        onHorizontalDragUpdate: (details) =>
+            resize(_startWidth + details.globalPosition.dx - _startX),
+        onHorizontalDragEnd: (_) => widget.onResizeEnd?.call(),
         child: const SizedBox(
           width: 9,
           child: Center(child: VerticalDivider()),

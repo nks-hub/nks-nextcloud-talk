@@ -132,8 +132,14 @@ void main() {
     final splitter = find.byKey(const Key('conversation-list-splitter'));
     expect(splitter, findsOneWidget);
 
+    // The widget's width does not move during the gesture (nothing feeds the
+    // drag back here), so a drag measured from the start lands exactly 60 px
+    // further; a drag adding deltas to a stale width would have jittered.
+    final before = tester.getSize(
+      find.byKey(const Key('conversation-list-pane')),
+    );
     await tester.drag(splitter, const Offset(60, 0));
-    expect(dragged, greaterThan(0), reason: 'the drag has to reach the pane');
+    expect(dragged, before.width + 60);
 
     // Folded away, there is no boundary left to drag - offering one would be
     // a handle for a pane that is not there.
