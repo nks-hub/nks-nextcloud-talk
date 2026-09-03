@@ -196,6 +196,10 @@
               }
             }
           },
+          "412": {
+            "description": "The conversation is in lobby and the participant is not a moderator",
+            "$ref": "#/components/responses/OcsError"
+          },
           "429": {
             "$ref": "#/components/responses/OcsError"
           },

@@ -15,6 +15,10 @@ enum ChatGetClassification {
   notModified,
   reauthenticationRequired,
   threadNotFound,
+
+  /// HTTP 412: the room is in lobby and this participant is not a moderator.
+  /// The chat is not broken, it is closed until a moderator opens it.
+  lobby,
   transientError,
   ocsError,
 }
@@ -193,6 +197,7 @@ ChatGetResponse decodeChatGetResponse({
   final errorClassification = switch (statusCode) {
     401 => ChatGetClassification.reauthenticationRequired,
     404 => ChatGetClassification.threadNotFound,
+    412 => ChatGetClassification.lobby,
     429 || 503 => ChatGetClassification.transientError,
     200 => null,
     _ => throw TalkProtocolException(

@@ -49,6 +49,7 @@ SCHEMA_PATH_MEMBER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 REQUIRED_FIXTURE_IDS = {
     "common-read-only",
+    "chat-lobby",
     "chat-rate-limited",
     "chat-unavailable",
     "duplicate-message-id",

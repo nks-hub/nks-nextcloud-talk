@@ -21,6 +21,10 @@ enum ChatMergeOutcome {
   /// The response answered a cursor the scope has already moved past, so it
   /// carries no new authority. Discarding it is correct and is not an error.
   stale,
+
+  /// The room is in lobby for this participant (HTTP 412). Nothing arrives
+  /// and nothing is wrong; the scope stays exactly as it was.
+  lobby,
   rejected,
 }
 
@@ -100,6 +104,9 @@ ChatMergeResult planChatGetMerge(
   }.contains(response.classification)) {
     return _rejected;
   }
+  if (response.classification == ChatGetClassification.lobby) {
+    return _lobby;
+  }
 
   final key = ChatScopeKey(
     roomToken: response.request.roomToken,
@@ -177,6 +184,7 @@ ChatMergeResult planChatGetMerge(
       }
     case ChatGetClassification.reauthenticationRequired:
     case ChatGetClassification.threadNotFound:
+    case ChatGetClassification.lobby:
     case ChatGetClassification.transientError:
     case ChatGetClassification.ocsError:
       return _rejected;
@@ -525,7 +533,10 @@ ChatForegroundPollCompletionPlan completeChatForegroundPollHttp(
     ),
     ChatGetClassification.reauthenticationRequired =>
       _reauthenticationPollCompletion(snapshot, session, merge),
-    ChatGetClassification.transientError => _retryPollCompletion(
+    // A lobby is waited out like a transient failure: the room will open
+    // when a moderator says so, and the backoff keeps the poll polite.
+    ChatGetClassification.transientError ||
+    ChatGetClassification.lobby => _retryPollCompletion(
       snapshot,
       session,
       nowMilliseconds: nowMilliseconds,
@@ -765,6 +776,11 @@ const ChatMergeResult _rejected = ChatMergeResult._(
 
 const ChatMergeResult _stale = ChatMergeResult._(
   outcome: ChatMergeOutcome.stale,
+  plan: null,
+);
+
+const ChatMergeResult _lobby = ChatMergeResult._(
+  outcome: ChatMergeOutcome.lobby,
   plan: null,
 );
 

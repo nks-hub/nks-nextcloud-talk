@@ -1,0 +1,10 @@
+{
+  "ocs": {
+    "meta": {
+      "status": "failure",
+      "statuscode": 412,
+      "message": "Synthetic lobby: not a moderator"
+    },
+    "data": []
+  }
+}

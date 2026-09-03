@@ -234,6 +234,8 @@ def apply_sync_step(
         return "rejected"
     if classification in {"ocs-error", "semantic-error", "thread-not-found"}:
         return "rejected"
+    if classification == "lobby":
+        return "lobby"
     if classification == "not-modified":
         if direction == "history":
             scope["hasHistory"] = False

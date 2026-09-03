@@ -885,6 +885,10 @@ final class ChatService {
       case ChatGetClassification.threadNotFound:
       case ChatGetClassification.ocsError:
         throw const ChatServiceException(ChatServiceError.invalidResponse);
+      case ChatGetClassification.lobby:
+        // Closed, not broken: the room pane already shows the lobby notice
+        // from the room state, so a 412 poll is simply nothing to merge.
+        return;
       case ChatGetClassification.messages:
       case ChatGetClassification.invisibleCursorAdvance:
       case ChatGetClassification.commonReadOnly:

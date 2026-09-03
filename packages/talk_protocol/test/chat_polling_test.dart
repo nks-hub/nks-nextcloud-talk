@@ -292,6 +292,51 @@ void main() {
       expect(committed.snapshot, same(snapshot));
     });
 
+    test('HTTP 412 lobby waits with the retry backoff and changes nothing', () {
+      // Measured live 2026-09-03: a lobby answered every poll with 412 and the
+      // pane showed "latest chat response was rejected" next to the lobby
+      // notice. The room is closed, not broken.
+      final snapshot = _snapshot();
+      var session = startChatForegroundPoll(
+        snapshot,
+        accountId: _accountA,
+        server: _serverA,
+        roomToken: _room,
+        threadId: null,
+        profile: _profile(),
+      );
+      final requestPlan = planNextChatForegroundPoll(
+        snapshot,
+        session,
+        requestId: ChatRequestId.parse('poll-412'),
+        nowMilliseconds: 2000,
+      )!;
+      session = requestPlan.commit(session);
+
+      final response = decodeChatGetResponse(
+        request: requestPlan.request,
+        statusCode: 412,
+        body: _ocsBody(const <Object?>[]),
+      );
+      expect(response.classification, ChatGetClassification.lobby);
+      expect(
+        planChatGetMerge(snapshot, response).outcome,
+        ChatMergeOutcome.lobby,
+      );
+
+      final completion = completeChatForegroundPollHttp(
+        snapshot,
+        session,
+        response: response,
+        nowMilliseconds: 2000,
+        jitterPermille: 1000,
+      );
+      final committed = completion.commit(snapshot, session);
+      expect(completion.outcome, ChatForegroundPollOutcome.retryScheduled);
+      expect(committed.session.phase, ChatForegroundPollPhase.waitingToRetry);
+      expect(committed.snapshot, same(snapshot));
+    });
+
     test('long-poll retry keeps the 30 second server timeout', () {
       final snapshot = _snapshot();
       var session = startChatForegroundPoll(

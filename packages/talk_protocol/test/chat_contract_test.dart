@@ -463,6 +463,7 @@ ChatGetClassification _getClassification(String value) => switch (value) {
   'reauth' => ChatGetClassification.reauthenticationRequired,
   'thread-not-found' => ChatGetClassification.threadNotFound,
   'transient-error' => ChatGetClassification.transientError,
+  'lobby' => ChatGetClassification.lobby,
   'ocs-error' => ChatGetClassification.ocsError,
   _ => throw StateError('Unknown GET classification'),
 };

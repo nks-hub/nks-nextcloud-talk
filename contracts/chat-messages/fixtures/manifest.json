@@ -199,6 +199,23 @@
       "expectedCursor": null
     },
     {
+      "id": "chat-lobby",
+      "file": "chat-lobby.response.json",
+      "direction": "response",
+      "operationId": "getChatMessages",
+      "status": "412",
+      "mediaType": "application/json",
+      "headerSet": "none",
+      "schemaValid": true,
+      "context": {
+        "roomToken": "rooma123",
+        "direction": "future"
+      },
+      "expectedClassification": "lobby",
+      "expectedMessageCount": 0,
+      "expectedCursor": null
+    },
+    {
       "id": "chat-rate-limited",
       "file": "chat-rate-limited.response.json",
       "direction": "response",

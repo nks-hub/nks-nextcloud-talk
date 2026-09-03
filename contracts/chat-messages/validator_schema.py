@@ -306,6 +306,13 @@ def classify_get_response(
             "cursor": None,
             "commonRead": None,
         }
+    if status == "412":
+        return {
+            "classification": "lobby",
+            "messages": [],
+            "cursor": None,
+            "commonRead": None,
+        }
     if status in {"429", "503"}:
         return {
             "classification": "transient-error",
