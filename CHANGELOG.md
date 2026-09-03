@@ -16,6 +16,53 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (52) — 3. 9. 2026
+
+Vydáno ze zdroje `81ea963`, tag `v0.1.0+52`.
+
+Android: release APK 90 917 560 B, SHA-256
+`a673d1466b88ddedf3ee15d2869ffc7634018384fb17741aa9d0ddfd95f27cce`,
+versionCode 52; na Android 14 emulátoru doručil po startu tři zprávy
+zafrontované offline v buildu 51 a odpověď z notifikace odešla jako reply
+(zpráva 78744, parent 78742). Play track: viz poznámka k vydání 51.
+
+Windows: instalátor `NKS-Talk-0.1.0-52-windows-x64-setup.exe` 35 445 402 B,
+SHA-256 `a49e2f84be83f132e0cb0e0259fba3f7c3a376a976c99c2ff8d65064ead68441`,
+nepodepsaný; tichá instalace na `windows-test-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+52` (PID 8448). Předchozí instalátor s tímto názvem (SHA
+`31044eb8…`) nesl exe z doby před bumpem a byl nahrazen.
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build nainstalován a
+spuštěn; po „Odpovědět" je banner odpovědi a kurzor v psacím řádku.
+TestFlight: build 51 nahrán (Delivery `ba8a770d-d5a9-42a8-a211-dd79c6ced135`,
+VALID) po opravě portálu; 52 se na TestFlight nenahrával (kadence).
+
+macOS: `nks-talk-macos-52.zip` 32 883 246 B, SHA-256
+`8e88f15e2c07f404b3314fc57bdf3c0c49f5b6d8f24adcbab5e8df8a92522c38`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID — ověřeno na souboru staženém zpět z
+Nextcloudu; běží na build-mac (PID 31592). Poslán do chatu Pimpula (share 8909,
+zpráva 78763). Past: entitlements podepsané přímo ze zdrojového souboru
+nesou nerozvinuté `$(APS_ENVIRONMENT)`/`$(AppIdentifierPrefix)` a amfid
+aplikaci nepustí („No matching profile found"); CRLF v `.entitlements` z
+Windows archivu shodí parser.
+
+- Konverzace s obrázky už při scrollování nahoru netáhne zpět dolů: bublina
+  obrázku má velikost podle rozměrů, které Talk posílá, ještě než se náhled
+  načte, takže se pod čtenářem nic nepřeskládá.
+- Odpověď z notifikace je skutečná odpověď na tu zprávu (citace v bublině),
+  ne nová zpráva — na Androidu, iOS, macOS i Windows.
+- Po „Odpovědět" dostane psací řádek rovnou focus.
+- Tažení oddělovače seznamu konverzací je plynulé — měří se od začátku
+  gesta, ne z poslední překreslené šířky.
+- Zprávy napsané bez připojení se odešlou hned po návratu sítě nebo po
+  startu aplikace i bez otevřené konverzace; příloha, které vypršely
+  automatické pokusy, se po návratu sítě zkusí znovu sama.
+- Akce zprávy fungují i offline z uložených capabilities.
+- Živé důkazy: stav přečtení u přílohy, hlasovky i polohy podle serverového
+  markeru; sdílené položky jako příjemce včetně druhé stránky (32 souborů);
+  karta odkazu na iOS; trvalý outbox po pádu procesu; odpověď na obrázek.
+
 ## 0.1.0 (51) — 3. 9. 2026
 
 Vydáno ze zdroje `24390c5`, tag `v0.1.0+51`.
