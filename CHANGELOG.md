@@ -16,6 +16,51 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (55) — 3. 9. 2026
+
+Vydáno ze zdroje `95d01a7`, tag `v0.1.0+55`.
+
+Android: release APK 91 097 916 B, SHA-256
+`8a5b8d179228769531596c132f158a7c30587f08ae82a4d8bd7340ac63dc255c`,
+versionCode 55; na Android 14 emulátoru živě: přeposlání přijaté přílohy do
+jiné místnosti, odmítnutí a odvolání federované pozvánky, zpráva smazaná
+protistranou se v otevřené konverzaci hned změní na „Message deleted".
+Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-55-windows-x64-setup.exe` 35 456 840 B,
+SHA-256 `7e781a3a7d3bb18387aa32dbe470819682286a163e67a6854997f3e0abe4b4b4`,
+nepodepsaný; tichá instalace na `windows-test-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+55` (PID 26480); deep link `nctalk://open?uri=…/call/<token>` přepnul
+běžící instanci na správnou místnost (screenshot).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build 55 nainstalován a
+spuštěn. TestFlight nenahrán (kadence, poslední je 51).
+
+macOS: `nks-talk-macos-55.zip` 32 916 541 B, SHA-256
+`9ffa883b7ca8375fb9f4af8e2eb31cc12b402022703aee5302abdb5c79a265a9`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID, `stapler validate` OK — ověřeno na souboru
+staženém zpět z Nextcloudu; běží na build-mac. Poslán do chatu Pimpula (share
+8928, zpráva 78856).
+
+- Přeposílání příloh: zpráva se souborem se do cílové konverzace přepošle
+  jako nové sdílení téhož souboru, ne jako holý název. Přeposlat lze text,
+  zmínky a jeden soubor; anketa, poloha a kontakt tlačítko nenabízejí,
+  protože pro ně Talk sdílení nemá.
+- Zprávy, které někdo jiný smazal nebo upravil, se v otevřené konverzaci
+  aktualizují hned z oznámení serveru — dosud zůstával starý text nebo
+  soubor vedle řádku „smazal zprávu". Platí od tohoto buildu dál; co bylo
+  smazáno dřív, zůstane v mezipaměti, dokud se konverzace nenačte znovu.
+- Desktop: příloha přetažená do okna, které není v popředí (po dropu
+  z Finderu/Exploreru), se už po 15 s neodmítne s „zkusit znovu" — čekání na
+  návrat do popředí platí jen na mobilech (Sentry NKS-TALK-11).
+- Windows: odkaz `nctalk://` předaný běžící aplikaci nyní opravdu otevře
+  místnost; dosud okno jen vyskočilo do popředí.
+- Federované pozvánky: odmítnutí a odvolání pozvánky druhou stranou ověřeno
+  živě, pruh zmizí bez zásahu.
+- Vlastní barva pozadí konverzace změřena v obou motivech a při 200 %
+  písma: kontrast textu 8,24:1 (světlý) a 10,10:1 (tmavý).
+
 ## 0.1.0 (54) — 3. 9. 2026
 
 Vydáno ze zdroje `8730973`, tag `v0.1.0+54`.
