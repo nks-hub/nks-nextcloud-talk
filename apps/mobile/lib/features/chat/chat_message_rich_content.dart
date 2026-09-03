@@ -413,6 +413,12 @@ final class _RichObjectPill extends StatelessWidget {
     }
     final pollScope = _PollViewerScope.maybeOf(context);
     final pollId = pollScope?.validatedPollId(parameter, node.parameterKey);
+    // Deck cards and other objects the server describes with a `link` open
+    // where they live; the link is validated here, never trusted as-is.
+    final objectLink =
+        pollId == null && node.objectKind == RichChatObjectKind.generic
+        ? _objectLink(parameter)
+        : null;
     final icon = switch (node.objectKind) {
       RichChatObjectKind.user ||
       RichChatObjectKind.guest ||
@@ -421,7 +427,10 @@ final class _RichObjectPill extends StatelessWidget {
       RichChatObjectKind.circle => Icons.groups_rounded,
       RichChatObjectKind.call => Icons.call_rounded,
       RichChatObjectKind.email => Icons.mail_outline_rounded,
-      RichChatObjectKind.generic || null => Icons.attachment_rounded,
+      RichChatObjectKind.generic || null =>
+        objectLink != null
+            ? Icons.open_in_new_rounded
+            : Icons.attachment_rounded,
     };
     final pill = Container(
       margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
@@ -449,6 +458,31 @@ final class _RichObjectPill extends StatelessWidget {
         ],
       ),
     );
+    if (objectLink != null) {
+      void openObject() {
+        unawaited(launchUrl(objectLink, mode: LaunchMode.externalApplication));
+      }
+
+      return Semantics(
+        container: true,
+        link: true,
+        label: label,
+        onTap: openObject,
+        excludeSemantics: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            key: Key('open-rich-object-${node.parameterKey}'),
+            onTap: openObject,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              child: Center(widthFactor: 1, heightFactor: 1, child: pill),
+            ),
+          ),
+        ),
+      );
+    }
     if (pollId == null || pollScope == null) {
       return pill;
     }
@@ -495,6 +529,23 @@ final class _RichObjectPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The `link` a rich object may carry, accepted only as an absolute HTTPS
+/// address with a host: the server relays what the sharing app put there.
+Uri? _objectLink(ChatRichObjectParameter parameter) {
+  final raw = parameter.wire['link'];
+  if (raw is! String || raw.isEmpty || raw.length > 2048) {
+    return null;
+  }
+  final uri = Uri.tryParse(raw);
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty) {
+    return null;
+  }
+  return uri;
 }
 
 final class _ReplyPreview extends StatelessWidget {

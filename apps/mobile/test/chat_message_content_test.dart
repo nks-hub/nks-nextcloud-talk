@@ -46,6 +46,35 @@ void main() {
     expect(find.text('Lunch?'), findsOneWidget);
   });
 
+  testWidgets('a rich object with an https link opens as a link', (
+    tester,
+  ) async {
+    // A Deck card shared into the room arrives as a generic object with the
+    // card's own `link`; the pill has to be a link, not just a label.
+    await tester.pumpWidget(_app(TextScaler.noScaling, message: _deckMessage));
+
+    final pill = find.byKey(const Key('open-rich-object-object'));
+    expect(pill, findsOneWidget);
+    expect(find.text('Sprint board card'), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new_rounded), findsOneWidget);
+    expect(
+      tester.getSemantics(pill),
+      matchesSemantics(isLink: true, hasTapAction: true),
+    );
+  });
+
+  testWidgets('a rich object whose link is not https stays a plain pill', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(TextScaler.noScaling, message: _plainObjectMessage),
+    );
+
+    expect(find.byKey(const Key('open-rich-object-object')), findsNothing);
+    expect(find.text('Sprint board card'), findsOneWidget);
+    expect(find.byIcon(Icons.attachment_rounded), findsOneWidget);
+  });
+
   testWidgets('poll metadata detached from its placeholder stays inert', (
     tester,
   ) async {
@@ -813,6 +842,40 @@ final _locationMessage = ChatMessage.fromJson(<String, Object?>{
       'latitude': '48.85837',
       'longitude': '2.29448',
       'link': 'https://attacker.example.invalid/forged-map.png',
+    },
+  },
+});
+
+final _deckMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._message.wire,
+  'id': 46,
+  'referenceId': 'reference-46',
+  'message': '{object}',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'deck-card',
+      'id': '4242',
+      'name': 'Sprint board card',
+      'boardname': 'Sprint',
+      'stackname': 'To do',
+      'link': 'https://cloud.example.invalid/apps/deck/board/1/card/4242',
+    },
+  },
+});
+
+final _plainObjectMessage = ChatMessage.fromJson(<String, Object?>{
+  ..._message.wire,
+  'id': 47,
+  'referenceId': 'reference-47',
+  'message': '{object}',
+  'messageParameters': <String, Object?>{
+    'object': <String, Object?>{
+      'type': 'deck-card',
+      'id': '4242',
+      'name': 'Sprint board card',
+      'boardname': 'Sprint',
+      'stackname': 'To do',
+      'link': 'http://cloud.example.invalid/apps/deck/board/1/card/4242',
     },
   },
 });
