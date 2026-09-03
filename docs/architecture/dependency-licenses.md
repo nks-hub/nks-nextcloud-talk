@@ -1,6 +1,6 @@
 # Audit závislostí a assetů
 
-Datum poslední kontroly: 27. srpna 2026.
+Datum poslední kontroly: 3. září 2026.
 
 Tento dokument je průběžná distribuční brána pro projekt licencovaný pod
 `GPL-3.0-or-later`. Evidence vychází z konkrétního lockfilu a licenčního souboru
@@ -20,8 +20,9 @@ staženého balíku; popis balíku nebo štítek na webu sám nestačí.
 
 ## Přímé Flutter runtime závislosti
 
-Následujících dvacet pět hostovaných balíků je přímo deklarovaných v
-`apps/mobile/pubspec.yaml`. Verze a archive SHA-256 jsou z
+Následující tabulka pokrývá přímé závislosti deklarované v
+`apps/mobile/pubspec.yaml`; `geolocator` a `pasteboard` v ní zatím chybí a je
+potřeba je doplnit. Verze a archive SHA-256 jsou z
 `apps/mobile/pubspec.lock`; licence a jejich SHA-256 byly ověřené v odpovídajícím
 staženém balíku v lokální Pub cache.
 
@@ -54,6 +55,8 @@ staženém balíku v lokální Pub cache.
 | [`gal`](https://pub.dev/packages/gal) | 2.3.3; archive SHA-256 `f71e79840fe023a21f2f949771375444b6efcd34b9e625d5f4f5504971380a77`; LICENSE SHA-256 `4a963156383f276c9214aed3beee1a57e12947c63b58dae134fdae6abd01b3da` | MIT; Copyright 2023 Midori Design Studio | Uložení přílohy do systémové galerie (MediaStore, PHPhotoLibrary) |
 | [`share_plus`](https://pub.dev/packages/share_plus) | 13.3.0; archive SHA-256 `34f00f9becd2743c1fb05363d624f9f70d37f7ccdcdda47450bc0b8c9d327b8c`; LICENSE SHA-256 `eb9741a672906ebd01fd9b3bef38f6c82eff250e91149cf404539ee7981079fd` | BSD-3-Clause; Copyright 2017, the Flutter project authors | Systémový share sheet (ACTION_SEND, UIActivityViewController) |
 | [`image_picker`](https://pub.dev/packages/image_picker) | 1.2.3; archive SHA-256 `d8402284df184bc05f4a2210c6c23983b0720f4cd87cbd05c5390a78af602667`; LICENSE SHA-256 `8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Pouze zdroj „fotoaparát“ (ACTION_IMAGE_CAPTURE, UIImagePickerController) |
+| [`camera`](https://pub.dev/packages/camera) | 0.12.1; archive SHA-256 `3f30ca0ff376f91534f23afa2a7aea06ebb6c889fd9e260642437b37e3d9f753`; LICENSE SHA-256 `420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Živý náhled a proud snímků pro QR onboarding skener; použitý jen na Androidu a iOS, video se nikdy nespouští |
+| [`zxing2`](https://pub.dev/packages/zxing2) | 0.2.4; archive SHA-256 `2677c49a3b9ca9457cb1d294fd4bd5041cac6aab8cdb07b216ba4e98945c684f`; LICENSE SHA-256 `d2bfc0fd9aae0a7d4cdab8ea024c75881c0ab38332683539f7f26ea88fec9ca2` | BSD-3-Clause; Copyright 2023 zxing-dart | Čistě dartovské dekódování QR kódu z luminance snímku; žádná nativní ani platformní část |
 | [`sentry_flutter`](https://pub.dev/packages/sentry_flutter) | 9.27.0; archive SHA-256 `ec89cc6ba939ca19155ea83900d9740a36544f50b3b6baf265518e3348fb0f50`; LICENSE SHA-256 `a324d0c2ce63dbdce9e77cbd06a13ad77006d6bf3f82ad3affe03b64e27e83d6` | MIT; Copyright 2019 Sentry | Hlášení pádů pouze v našich buildech; bez `SENTRY_DSN` se SDK vůbec neinicializuje |
 | [`rybbit_flutter_sdk`](https://pub.dev/packages/rybbit_flutter_sdk) | 0.3.0; archive SHA-256 `96581119b39b195690b4cd9a88283293d0bd7efc82aefce817750ec7924761fe`; LICENSE SHA-256 `e57f1c320b8cf8798a7d2ff83a6f9e06a33a03585f6e065fea97f1d86db84052` | GPL-3.0; Copyright Free Software Foundation text, vlastní kód nks-hub; shodná licence jako projekt | Anonymní použití obrazovek pouze v našich buildech; bez `RYBBIT_HOST` a `RYBBIT_SITE_ID` se SDK vůbec neinicializuje |
 
@@ -62,6 +65,16 @@ staženém balíku v lokální Pub cache.
 Všechny uvedené licence jsou permisivní a kompatibilní s distribucí aplikace
 pod `GPL-3.0-or-later`; jejich copyright notice a disclaimer musí zůstat ve
 výsledném third-party notice.
+
+QR skener onboardingu je záměrně `camera` + `zxing2`, ne `mobile_scanner`.
+Balík `mobile_scanner` 7.4.0 je sám BSD-3-Clause, ale na Androidu si přitáhne
+`com.google.mlkit:barcode-scanning`, `…:barcode-scanning-common`,
+`com.google.mlkit:common`, `…:vision-common`, `…:vision-interfaces` a
+`com.google.android.gms:play-services-mlkit-barcode-scanning`. Jejich POM
+deklaruje „ML Kit Terms of Service“ — proprietární licenci, pro kterou SPDX
+nemá identifikátor a kterou licenční brána zatím nezná (ověřeno 3. 9. 2026 z
+POM na `dl.google.com/dl/android/maven2`). Dvojice `camera` + `zxing2` řeší
+totéž a nepřidá do APK ani jeden proprietární artefakt navíc.
 
 Tabulka je úplná pro aktuální přímé hostované Flutter balíky. Android release
 artefakt je navíc pokrytý automatickou bránou popsanou níže. Pro iOS musí stejná

@@ -97,18 +97,24 @@ final class ConversationWorkspace extends StatelessWidget {
     // The same search the toolbar button opens, on the shortcut every desktop
     // uses for it. Both chords are bound: a phone never produces either, so
     // the only thing worth gating on is whether the server can search at all.
-    if (!talkFeaturesOf(account).contains('unified-search')) {
-      return _buildLayout(context);
-    }
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
+    final closeDetails = onCloseDetails;
+    final bindings = <ShortcutActivator, VoidCallback>{
+      if (talkFeaturesOf(account).contains('unified-search')) ...{
         const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
             openMessageSearch(context, account.id),
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
             openMessageSearch(context, account.id),
       },
-      child: _buildLayout(context),
-    );
+      // Escape closes the details pane, which otherwise only has a mouse
+      // target for it. The composer sees the key first and keeps it whenever
+      // it has a reply to back out of, so the two never fight over it.
+      if (detailsOpen && closeDetails != null)
+        const SingleActivator(LogicalKeyboardKey.escape): closeDetails,
+    };
+    if (bindings.isEmpty) {
+      return _buildLayout(context);
+    }
+    return CallbackShortcuts(bindings: bindings, child: _buildLayout(context));
   }
 
   Widget _buildLayout(BuildContext context) {

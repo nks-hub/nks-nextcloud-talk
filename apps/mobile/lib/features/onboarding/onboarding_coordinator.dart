@@ -24,6 +24,10 @@ enum OnboardingFailureCode {
   accountIdentityMismatch,
   localPersistence,
 
+  /// A scanned payload named a server but the credentials in it could not be
+  /// turned into a usable app password.
+  scannedLoginRejected,
+
   /// The server presented a certificate the device does not trust. The user
   /// has to see its fingerprint and confirm it before anything is sent there.
   untrustedCertificate,
@@ -164,6 +168,16 @@ final class OnboardingCoordinator {
     } on TalkProtocolException {
       throw const OnboardingFailure(OnboardingFailureCode.invalidServer);
     }
+    final status = await _requireReadyServer(server);
+    final initialization = await _api.initializeLogin(server);
+    return PendingLogin(
+      server: server,
+      serverStatus: status,
+      initialization: initialization,
+    );
+  }
+
+  Future<ServerStatus> _requireReadyServer(ServerBase server) async {
     final ServerStatus status;
     try {
       status = await _api.getServerStatus(server);
@@ -186,12 +200,69 @@ final class OnboardingCoordinator {
         serverBlockers: status.blockers,
       );
     }
-    final initialization = await _api.initializeLogin(server);
-    return PendingLogin(
-      server: server,
-      serverStatus: status,
-      initialization: initialization,
-    );
+    return status;
+  }
+
+  /// Commits an account straight from a scanned `nc://login/` payload.
+  ///
+  /// The secret was minted by the server before the QR code was drawn, so
+  /// there is no Login Flow v2 token to poll for: the server is still checked
+  /// for readiness and the credentials still have to authenticate against it,
+  /// but [waitForAccount]'s polling loop is skipped entirely.
+  Future<StoredAccount> commitScannedLogin(
+    QrLoginCredentials payload,
+    CancellationSignal cancellation, {
+    String? expectedAccountId,
+  }) async {
+    final server = payload.server;
+    final status = await _requireReadyServer(server);
+    cancellation.throwIfCancelled();
+
+    var credentials = payload.toLoginFlowCredentials();
+    if (payload.isOneTime) {
+      final String appPassword;
+      try {
+        appPassword = await _api.exchangeOneTimeAppPassword(
+          server: server,
+          loginName: payload.loginName,
+          oneTimeToken: payload.secret,
+        );
+      } on OnboardingFailure {
+        rethrow;
+      } on Object {
+        // A single-use token is spent on first use and expires on its own, so
+        // a failure here is nothing the user can retry with the same code.
+        throw const OnboardingFailure(
+          OnboardingFailureCode.scannedLoginRejected,
+        );
+      }
+      credentials = LoginFlowCredentials.scanned(
+        server: server,
+        loginName: payload.loginName,
+        appPassword: appPassword,
+      );
+    }
+    cancellation.throwIfCancelled();
+
+    try {
+      return await _commitAccount(
+        server: server,
+        serverStatus: status,
+        loginCredentials: credentials,
+        cancellation: cancellation,
+        expectedAccountId: expectedAccountId,
+      );
+    } on NextcloudApiException catch (error) {
+      // A scanned password is the only credential the app does not obtain from
+      // the server itself, so the server refusing it means the code was stale
+      // or already revoked. Saying that beats the generic transport message.
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        throw const OnboardingFailure(
+          OnboardingFailureCode.scannedLoginRejected,
+        );
+      }
+      rethrow;
+    }
   }
 
   CertificateEncounter? _pendingCertificate(ServerBase server) {
@@ -230,7 +301,8 @@ final class OnboardingCoordinator {
       cancellation.throwIfCancelled();
       if (result case LoginPollSucceeded(:final credentials)) {
         return _commitAccount(
-          pending: pending,
+          server: pending.server,
+          serverStatus: pending.serverStatus,
           loginCredentials: credentials,
           cancellation: cancellation,
           expectedAccountId: expectedAccountId,
@@ -246,7 +318,8 @@ final class OnboardingCoordinator {
   }
 
   Future<StoredAccount> _commitAccount({
-    required PendingLogin pending,
+    required ServerBase server,
+    required ServerStatus serverStatus,
     required LoginFlowCredentials loginCredentials,
     required CancellationSignal cancellation,
     required String? expectedAccountId,
@@ -256,11 +329,11 @@ final class OnboardingCoordinator {
         : await _accounts.getAccount(expectedAccountId);
     if (expectedAccountId != null &&
         (expected == null ||
-            expected.serverUrl != pending.server.value ||
+            expected.serverUrl != server.value ||
             expected.loginName != loginCredentials.loginName)) {
       try {
         await _api.revokeAppPassword(
-          server: pending.server,
+          server: server,
           loginName: loginCredentials.loginName,
           appPassword: loginCredentials.appPassword,
         );
@@ -274,7 +347,7 @@ final class OnboardingCoordinator {
     }
 
     final capabilities = await _api.getAuthenticatedCapabilities(
-      server: pending.server,
+      server: server,
       loginName: loginCredentials.loginName,
       appPassword: loginCredentials.appPassword,
     );
@@ -286,7 +359,7 @@ final class OnboardingCoordinator {
     final existing =
         expected ??
         await _accounts.findByIdentity(
-          serverUrl: pending.server.value,
+          serverUrl: server.value,
           loginName: loginCredentials.loginName,
         );
     final accountId = existing?.id ?? _uuid.v4();
@@ -307,13 +380,13 @@ final class OnboardingCoordinator {
       credentialWritten = true;
       return await _accounts.upsertAccount(
         accountId: accountId,
-        serverUrl: pending.server.value,
+        serverUrl: server.value,
         loginName: loginCredentials.loginName,
-        serverProductName: pending.serverStatus.productName,
+        serverProductName: serverStatus.productName,
         talkFeatures: capabilities.talkFeatures,
         serverThemeColor: capabilities.serverThemeColor,
         certificateFingerprint: _trust?.confirmedFor(
-          Uri.parse(pending.server.value).host,
+          Uri.parse(server.value).host,
         ),
         createdAt: existing == null
             ? DateTime.now().toUtc()

@@ -58,6 +58,11 @@ final class _CallSignalingLane {
   bool _disposed = false;
   bool _failed = false;
 
+  /// How many callers hold this lane. The typing indicator and the chat relay
+  /// share one signalling session per room, so the socket may only be torn
+  /// down once the last of them lets go.
+  int _leases = 1;
+
   CallSignalingKey get key => (
     accountId: authority.accountId.value,
     roomToken: authority.roomToken.value,
@@ -198,8 +203,13 @@ final class _CallSignalingLane {
     });
   }
 
+  void retain() => _leases++;
+
   Future<void> release() {
     return _enqueue(() async {
+      if (--_leases > 0) {
+        return;
+      }
       await _shutdownNow(deleteDurableState: true);
       onReleased();
     });
@@ -543,6 +553,7 @@ final class _CallSignalingLane {
     SignalingRuntimeOutcome outcome, {
     Iterable<SignalingPeerMessage> messages = const [],
     Iterable<HpbControlMessage> controls = const [],
+    Map<String, Object?>? chatRelay,
     CallSignalingFailure? failure,
   }) {
     final state = _state;
@@ -558,6 +569,9 @@ final class _CallSignalingLane {
       renegotiationRequired: state.renegotiationRequired,
       messages: messages,
       controls: controls,
+      chatRelay: chatRelay,
+      roomEpoch: state.roomEpoch,
+      chatRelaySupported: state.serverFeatures.supports('chat-relay'),
       failure: failure,
     );
   }
@@ -567,6 +581,7 @@ final class _CallSignalingLane {
       result.outcome,
       messages: result.messages,
       controls: result.controls,
+      chatRelay: result.chatRelay,
     );
     if (!_updates.isClosed) {
       _updates.add(_current);

@@ -6,11 +6,10 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
-import '../../app_providers.dart';
 import '../../data/app_database.dart';
-import '../../network/nextcloud_api.dart';
 import '../calls/call_signaling_session.dart';
 import '../rooms/participants_service.dart';
+import 'chat_room_signaling.dart';
 
 typedef ChatTypingRoomKey = ({
   String accountId,
@@ -123,116 +122,40 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         }
       });
 
-      // Presence is what silences the server. Holding a room session while
-      // the window sits behind another one told Talk the user was reading the
-      // conversation, so it suppressed every notification for it — the open
-      // conversation that never notified. Watched, not read once: losing focus
-      // has to tear the session down, and regaining it has to build one again.
-      if (!ref.watch(windowActiveProvider)) {
-        return ChatTypingController.disabled(key);
-      }
-
-      final accounts = ref.watch(accountRepositoryProvider);
-      final credentials = ref.watch(credentialVaultProvider);
-      final api = ref.watch(nextcloudApiProvider);
-      final account = await accounts.getAccount(key.accountId);
-      final password = await credentials.readAppPassword(key.accountId);
-      if (account == null || password == null) {
-        return ChatTypingController.disabled(key);
-      }
-
-      final ServerBase server;
-      final CapabilitySnapshot capabilities;
-      try {
-        server = ServerBase.parse(account.serverUrl);
-        capabilities = (await api.getAuthenticatedCapabilitiesWithSource(
-          server: server,
-          loginName: account.loginName,
-          appPassword: password,
-        )).snapshot;
-      } on Object {
-        return ChatTypingController.disabled(key);
-      }
-      if (!chatTypingAllowed(capabilities)) {
+      // The room's signalling session is shared, not owned here: the chat
+      // relay rides the same socket, and a second room activation would take
+      // this one's session id away.
+      final lease = await ref.watch(
+        chatRoomSignalingProvider((
+          accountId: key.accountId,
+          roomToken: key.roomToken,
+        )).future,
+      );
+      final session = lease.session;
+      final capabilities = lease.capabilities;
+      if (session == null ||
+          capabilities == null ||
+          !chatTypingAllowed(capabilities)) {
         return ChatTypingController.disabled(key);
       }
 
       final participants = ref.watch(participantsServiceProvider);
-      final coordinator = ref.watch(callSignalingCoordinatorProvider);
-      final chat = ref.watch(chatRepositoryProvider);
-
-      final activeRequest = ActiveRoomSessionRequest(
-        accountId: AccountId.parse(key.accountId),
-        server: server,
-        roomToken: ConversationToken.parse(key.roomToken, path: r'$.roomToken'),
-      );
-      final ActiveRoomSessionActivation activation;
-      try {
-        activation = await api.activateRoomSession(
-          activeRequest: activeRequest,
-          loginName: account.loginName,
-          appPassword: password,
-        );
-      } on Object {
-        await api.clearAccountSession(key.accountId);
-        return ChatTypingController.disabled(key);
-      }
-      final lease = activation.lease;
-      Future<void> deactivate() async {
-        if (lease == null) return;
-        try {
-          await api.deactivateRoomSession(
-            lease: lease,
-            loginName: account.loginName,
-            appPassword: password,
-          );
-        } on Object {
-          await api.clearAccountSession(key.accountId);
-        }
-      }
-
-      if (disposed) {
-        await deactivate();
-        return ChatTypingController.disabled(key);
-      }
-      final active = activation.response;
-      if (active is ActiveRoomSessionReauthenticationRequired) {
-        await chat.markReauthenticationRequired(key.accountId);
-      }
-      if (active is! ActiveRoomSessionSuccess ||
-          active.room.token.value != key.roomToken ||
-          active.room.sessionId.value == '0') {
-        await deactivate();
-        return ChatTypingController.disabled(key);
-      }
       final activeKey = (
         accountId: key.accountId,
         roomToken: key.roomToken,
-        nextcloudSessionId: active.room.sessionId.value,
+        nextcloudSessionId: lease.nextcloudSessionId!,
       );
-
       final participantsFuture = participants
           .fetchParticipants(accountId: key.accountId, roomToken: key.roomToken)
           .catchError((Object _) => const <Participant>[]);
       try {
-        final session = await coordinator.start(
-          accountId: activeKey.accountId,
-          roomToken: activeKey.roomToken,
-          nextcloudSessionId: activeKey.nextcloudSessionId,
-        );
         final controller = ChatTypingController(
           key: activeKey,
-          localLoginName: account.loginName,
+          localLoginName: lease.loginName!,
           initial: session.current,
           updates: session.updates,
           sendMessages: session.sendPeerMessages,
-          release: () async {
-            try {
-              await session.release();
-            } finally {
-              await deactivate();
-            }
-          },
+          release: () async {},
         );
         owned = controller;
         if (disposed) {
@@ -249,7 +172,6 @@ final chatTypingControllerProvider = FutureProvider.autoDispose
         );
         return controller;
       } on Object {
-        unawaited(deactivate());
         return ChatTypingController.disabled(key);
       }
     });

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -9,8 +10,17 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../network/account_http_client.dart';
 import '../../network/nextcloud_api.dart';
 import 'onboarding_coordinator.dart';
+import 'qr_login_scanner_screen.dart';
 
 enum _OnboardingPhase { entry, checking, openingLogin, waitingForLogin }
+
+/// The camera plugin also has a macOS and a web implementation, but only the
+/// two phone platforms declare a camera permission for this app, so the entry
+/// point stays where the permission exists.
+bool get _scanningSupported =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS);
 
 final class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({
@@ -132,6 +142,86 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  Future<void> _scan() async {
+    if (_busy) {
+      return;
+    }
+    _serverFocus.unfocus();
+    final payload = await QrLoginScannerScreen.push(
+      context,
+      onOpenSettings: ref.read(appSettingsOpenerProvider).open,
+    );
+    if (payload == null || !mounted) {
+      return;
+    }
+    switch (payload) {
+      case QrLoginServerOnly(:final server):
+        // Nothing secret was scanned, so this is just a typed-in address that
+        // the user did not have to type: run the ordinary Login Flow v2.
+        _serverController.text = server.value;
+        await _connect();
+      case QrLoginCredentials():
+        await _commitScanned(payload);
+    }
+  }
+
+  Future<void> _commitScanned(QrLoginCredentials payload) async {
+    setState(() {
+      _error = null;
+      _phase = _OnboardingPhase.checking;
+    });
+    final cancellation = CancellationSignal();
+    _cancellation = cancellation;
+    try {
+      final account = await ref
+          .read(onboardingCoordinatorProvider)
+          .commitScannedLogin(
+            payload,
+            cancellation,
+            expectedAccountId: widget.reauthenticateAccount?.id,
+          );
+      if (!mounted) {
+        return;
+      }
+      widget.onAccountAdded?.call(account);
+    } on OnboardingCancelled {
+      if (mounted) {
+        setState(() {
+          _phase = _OnboardingPhase.entry;
+          _cancellation = null;
+        });
+      }
+    } on OnboardingFailure catch (failure) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = null;
+        _phase = _OnboardingPhase.entry;
+        _cancellation = null;
+      });
+      final certificate = failure.certificate;
+      if (failure.code == OnboardingFailureCode.untrustedCertificate &&
+          certificate != null) {
+        if (await _confirmCertificate(certificate)) {
+          await _commitScanned(payload);
+        }
+        return;
+      }
+      setState(() => _error = failure);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          // The scanned secret is never part of this: the coordinator only
+          // ever throws its own failures or transport errors.
+          _error = error;
+          _phase = _OnboardingPhase.entry;
+          _cancellation = null;
+        });
+      }
+    }
+  }
+
   Future<bool> _confirmCertificate(CertificateEncounter encounter) async {
     final strings = AppLocalizations.of(context);
     final changed =
@@ -236,6 +326,7 @@ final class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     reauthentication: widget.reauthenticateAccount != null,
                     errorMessage: _errorMessage(strings, _error),
                     onConnect: _connect,
+                    onScan: _scanningSupported ? _scan : null,
                   ),
           ),
         ),
@@ -254,6 +345,7 @@ final class _OnboardingContent extends StatelessWidget {
     required this.reauthentication,
     required this.errorMessage,
     required this.onConnect,
+    required this.onScan,
   });
 
   final TextEditingController serverController;
@@ -263,6 +355,7 @@ final class _OnboardingContent extends StatelessWidget {
   final bool reauthentication;
   final String? errorMessage;
   final VoidCallback onConnect;
+  final VoidCallback? onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -292,6 +385,7 @@ final class _OnboardingContent extends StatelessWidget {
                       reauthentication: reauthentication,
                       errorMessage: errorMessage,
                       onConnect: onConnect,
+                      onScan: onScan,
                     ),
                   ),
                 ],
@@ -313,6 +407,7 @@ final class _OnboardingContent extends StatelessWidget {
                     reauthentication: reauthentication,
                     errorMessage: errorMessage,
                     onConnect: onConnect,
+                    onScan: onScan,
                   ),
                 ],
               );
@@ -431,6 +526,7 @@ final class _ServerCard extends StatelessWidget {
     required this.reauthentication,
     required this.errorMessage,
     required this.onConnect,
+    required this.onScan,
   });
 
   final TextEditingController controller;
@@ -440,6 +536,7 @@ final class _ServerCard extends StatelessWidget {
   final bool reauthentication;
   final String? errorMessage;
   final VoidCallback onConnect;
+  final VoidCallback? onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +588,15 @@ final class _ServerCard extends StatelessWidget {
                   : const Icon(Icons.arrow_forward_rounded),
               label: Text(_buttonLabel(strings)),
             ),
+            if (onScan != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const Key('onboarding-scan-login-code'),
+                onPressed: busy ? null : onScan,
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: Text(strings.scanLoginCode),
+              ),
+            ],
           ],
         ),
       ),
@@ -614,6 +720,8 @@ String? _errorMessage(AppLocalizations strings, Object? error) {
       OnboardingFailureCode.accountIdentityMismatch =>
         strings.reauthenticateAccountMismatch,
       OnboardingFailureCode.localPersistence => strings.localPersistenceFailed,
+      OnboardingFailureCode.scannedLoginRejected =>
+        strings.scannedLoginRejected,
       OnboardingFailureCode.untrustedCertificate =>
         strings.certificateUnverifiedTitle,
     },

@@ -480,6 +480,179 @@ void main() {
       expect(await repository.watchAccounts().first, isEmpty);
     },
   );
+
+  test('a scanned app password creates the account without any polling', () async {
+    var polls = 0;
+    final api = _onboardingApi(withTalk: true, onPoll: () => polls++);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final payload =
+        parseQrLoginPayload(
+              'nc://login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:fixture-app-password-never-use',
+            )!
+            as QrLoginCredentials;
+    final account = await coordinator.commitScannedLogin(
+      payload,
+      CancellationSignal(),
+    );
+
+    expect(polls, 0);
+    expect(launcher.openedUri, null);
+    expect(account.loginName, 'fixture-user');
+    expect(account.serverUrl, 'https://cloud.example.invalid');
+    expect(
+      await vault.readAppPassword(account.id),
+      'fixture-app-password-never-use',
+    );
+  });
+
+  test('a one-time token is exchanged before anything is stored', () async {
+    var exchanges = 0;
+    final api = _onboardingApi(
+      withTalk: true,
+      onOneTimeExchange: () => exchanges++,
+      oneTimeAppPassword: 'exchanged-app-password-never-use',
+    );
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final payload =
+        parseQrLoginPayload(
+              'nc://onetime-login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:single-use-token',
+            )!
+            as QrLoginCredentials;
+    final account = await coordinator.commitScannedLogin(
+      payload,
+      CancellationSignal(),
+    );
+
+    expect(exchanges, 1);
+    expect(
+      await vault.readAppPassword(account.id),
+      'exchanged-app-password-never-use',
+    );
+  });
+
+  test('a spent one-time token fails without storing anything', () async {
+    final api = _onboardingApi(withTalk: true);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final payload =
+        parseQrLoginPayload(
+              'nc://onetime-login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:already-spent-token',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>().having(
+          (error) => error.code,
+          'code',
+          OnboardingFailureCode.scannedLoginRejected,
+        ),
+      ),
+    );
+    expect(vault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+  });
+
+  test('a refused scanned password is named, not blamed on the server', () async {
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path == '/status.php') {
+          return http.Response(jsonEncode(readyStatusJson()), 200);
+        }
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          return http.Response('', 401);
+        }
+        return http.Response('', 404);
+      }),
+    );
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final payload =
+        parseQrLoginPayload(
+              'nc://login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:already-revoked-password',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>().having(
+          (error) => error.code,
+          'code',
+          OnboardingFailureCode.scannedLoginRejected,
+        ),
+      ),
+    );
+    expect(vault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+  });
+
+  test('a scanned account without Talk is refused', () async {
+    final api = _onboardingApi(withTalk: false);
+    final coordinator = OnboardingCoordinator(
+      api: api,
+      accounts: repository,
+      credentials: vault,
+      launcher: launcher,
+      pollInterval: Duration.zero,
+    );
+
+    final payload =
+        parseQrLoginPayload(
+              'nc://login/user:fixture-user'
+              '&server:https%3A//cloud.example.invalid'
+              '&password:fixture-app-password-never-use',
+            )!
+            as QrLoginCredentials;
+
+    await expectLater(
+      coordinator.commitScannedLogin(payload, CancellationSignal()),
+      throwsA(
+        isA<OnboardingFailure>().having(
+          (error) => error.code,
+          'code',
+          OnboardingFailureCode.talkUnavailable,
+        ),
+      ),
+    );
+    expect(vault.values, isEmpty);
+    expect(await repository.watchAccounts().first, isEmpty);
+  });
 }
 
 HttpNextcloudApi _onboardingApi({
@@ -489,6 +662,8 @@ HttpNextcloudApi _onboardingApi({
   VoidCallback? onCapabilities,
   Future<void>? capabilitiesGate,
   VoidCallback? onRevoke,
+  VoidCallback? onOneTimeExchange,
+  String? oneTimeAppPassword,
 }) {
   return HttpNextcloudApi(
     client: MockClient((request) async {
@@ -509,6 +684,26 @@ HttpNextcloudApi _onboardingApi({
         expect(request.headers['Authorization'], startsWith('Basic '));
         return http.Response(
           jsonEncode(capabilitiesJson(withTalk: withTalk)),
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/core/getapppassword-onetime')) {
+        onOneTimeExchange?.call();
+        if (oneTimeAppPassword == null) {
+          return http.Response('', 401);
+        }
+        expect(request.headers['Authorization'], startsWith('Basic '));
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'ocs': <String, Object?>{
+              'meta': <String, Object?>{
+                'status': 'ok',
+                'statuscode': 200,
+                'message': 'OK',
+              },
+              'data': <String, Object?>{'apppassword': oneTimeAppPassword},
+            },
+          }),
           200,
         );
       }

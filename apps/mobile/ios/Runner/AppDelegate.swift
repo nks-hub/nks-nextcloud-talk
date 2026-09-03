@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Flutter
 import UIKit
 import UserNotifications
@@ -105,6 +106,8 @@ final class AppleDeepLinkDelivery {
   static let messageCategoryIdentifier = "TALK_MESSAGE"
   static let replyActionIdentifier = "REPLY_ACTION"
   static let markReadActionIdentifier = "MARK_READ_ACTION"
+  /// Must match `BGTaskSchedulerPermittedIdentifiers` in Info.plist.
+  static let backgroundDrainIdentifier = "com.nkshub.nextcloudtalk.drain"
 
   let deepLinks = AppleDeepLinkDelivery()
   let pushOpens = ApplePushNotificationOpenDelivery()
@@ -116,6 +119,7 @@ final class AppleDeepLinkDelivery {
   private var contactPickerChannel: ContactPickerChannel?
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
   private var incomingShareChannel: AppleIncomingShareChannel?
+  private var backgroundDrainChannel: FlutterMethodChannel?
 
   override func application(
     _ application: UIApplication,
@@ -126,7 +130,62 @@ final class AppleDeepLinkDelivery {
     // listening for it — iOS holds it until a delegate exists.
     UNUserNotificationCenter.current().delegate = self
     registerNotificationCategories()
+    registerBackgroundDrainTask()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// The scheduled counterpart to the app's foreground wake-ups: iOS gives a
+  /// suspended app a short window every so often, and that is when queued text
+  /// and interrupted uploads get their turn without the user opening the app.
+  ///
+  /// `BGTaskScheduler` must have its handler registered before
+  /// `didFinishLaunchingWithOptions` returns, or iOS refuses the identifier
+  /// for the whole launch. The identifier itself is declared in Info.plist
+  /// under `BGTaskSchedulerPermittedIdentifiers`; no entitlement is involved.
+  private func registerBackgroundDrainTask() {
+    BGTaskScheduler.shared.register(
+      forTaskWithIdentifier: Self.backgroundDrainIdentifier,
+      using: nil
+    ) { [weak self] task in
+      self?.runBackgroundDrain(task)
+    }
+  }
+
+  /// Submits the next window. iOS collapses repeated submissions of the same
+  /// identifier onto one pending request, so asking again is not a duplicate,
+  /// and only the system decides when it actually runs.
+  private func scheduleBackgroundDrain() {
+    let request = BGAppRefreshTaskRequest(identifier: Self.backgroundDrainIdentifier)
+    request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+    try? BGTaskScheduler.shared.submit(request)
+  }
+
+  /// iOS only ever hands the task to a process it kept in memory, so the
+  /// engine that owns the outbox is the one already here; there is no headless
+  /// second engine on this platform and none is wanted. A launch that has no
+  /// engine yet has nothing to drain either, and says so rather than
+  /// reporting a success it did not have.
+  private func runBackgroundDrain(_ task: BGTask) {
+    scheduleBackgroundDrain()
+    guard let channel = backgroundDrainChannel else {
+      task.setTaskCompleted(success: false)
+      return
+    }
+    var completed = false
+    let complete: (Bool) -> Void = { success in
+      guard !completed else { return }
+      completed = true
+      task.setTaskCompleted(success: success)
+    }
+    task.expirationHandler = { complete(false) }
+    channel.invokeMethod("runDrain", arguments: nil) { response in
+      complete(!(response is FlutterError))
+    }
+  }
+
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    scheduleBackgroundDrain()
+    super.applicationDidEnterBackground(application)
   }
 
   /// Registering ahead of time (rather than only when permission is granted)
@@ -248,6 +307,20 @@ final class AppleDeepLinkDelivery {
     incomingShareChannel = AppleIncomingShareChannel(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+
+    let drain = FlutterMethodChannel(
+      name: "com.nkshub.nextcloudtalk/background_drain",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+    )
+    drain.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "ensureScheduled" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      self?.scheduleBackgroundDrain()
+      result(nil)
+    }
+    backgroundDrainChannel = drain
 
     let pushMethods = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/apple_push",

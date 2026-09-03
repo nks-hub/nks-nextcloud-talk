@@ -48,6 +48,17 @@ final class SignalingCapabilityProfile {
   }
 
   final bool enabled;
+
+  /// The Talk capability `chat-keep-notifications`, recorded here so a changed
+  /// capability set invalidates a recovered signaling session.
+  ///
+  /// NOT the gate for the HPB chat relay, despite the name — that one asks the
+  /// signaling server what it answered in hello
+  /// (`serverFeatures.supports('chat-relay')`), because the relay is a feature
+  /// of the standalone signaling server, not of Talk. The same capability is
+  /// called `backgroundCatchUp` on the chat profile, which is what it actually
+  /// means; the name here is kept only because it is also the stored column
+  /// `profileChatRelay` in the call session table.
   final bool chatRelay;
 
   @override

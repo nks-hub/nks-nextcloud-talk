@@ -18,6 +18,7 @@ import 'outgoing_message_status.dart';
 
 part 'chat_service_models.dart';
 part 'chat_service_private_reply.dart';
+part 'chat_service_relay.dart';
 part 'chat_service_runtime.dart';
 
 enum ChatServiceError {
@@ -75,6 +76,7 @@ final class ChatService {
   final Map<String, Future<void>> _syncInFlight = {};
   final Map<String, _SharedLivePoll> _liveNetworkPolls = {};
   final Set<ChatLiveRoomBinding> _liveBindings = {};
+  final Set<ChatRelayBinding> _relayBindings = {};
   final Set<String> _suspendedAccounts = {};
 
   Stream<List<OutgoingMessageStatus>> watchOutgoingMessageStatuses({
@@ -113,6 +115,25 @@ final class ChatService {
     return binding;
   }
 
+  /// Opens this room's HPB chat relay inlet. The caller feeds it the
+  /// signalling session's relay events; see [ChatRelayBinding] for why the
+  /// relay is trusted only after a catch-up and what drops that trust.
+  ChatRelayBinding bindRelay({
+    required String accountId,
+    required String roomToken,
+  }) {
+    final binding = ChatRelayBinding._(
+      service: this,
+      accountId: accountId,
+      roomToken: roomToken,
+    );
+    _relayBindings.add(binding);
+    if (_suspendedAccounts.contains(accountId)) {
+      binding.close();
+    }
+    return binding;
+  }
+
   /// Stops every root and thread poll for [accountId] before its credentials
   /// can be revoked. Once suspended, this service never admits more work for
   /// that account; a new login creates a new service lifetime.
@@ -133,6 +154,11 @@ final class ChatService {
     );
     for (final binding in bindings) {
       binding.close();
+    }
+    for (final relay in _relayBindings
+        .where((binding) => binding.accountId == accountId)
+        .toList(growable: false)) {
+      relay.close();
     }
     active.addAll(
       _roomTails.entries

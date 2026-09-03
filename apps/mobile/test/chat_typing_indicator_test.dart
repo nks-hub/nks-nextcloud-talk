@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import 'package:nextcloudtalk/data/call_session_repository.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
 import 'package:nextcloudtalk/features/calls/hpb_socket_transport.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/features/chat/chat_typing_indicator.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -18,9 +20,11 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'chat_typing_provider_lifecycle.part.dart';
+part 'chat_relay_provider_lifecycle.part.dart';
 
 void main() {
   _registerTypingProviderLifecycleTests();
+  _registerRelayProviderLifecycleTests();
   test('stale draft is not typing activity during a lifecycle sync', () {
     expect(
       chatTypingActivityUpdate(
@@ -382,6 +386,9 @@ CallSignalingUpdate _update({
   renegotiationRequired: false,
   messages: messages,
   controls: const <HpbControlMessage>[],
+  chatRelay: null,
+  roomEpoch: 1,
+  chatRelaySupported: false,
   failure: null,
 );
 

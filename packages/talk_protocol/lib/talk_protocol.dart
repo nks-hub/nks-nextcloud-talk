@@ -9,6 +9,7 @@ export 'src/bans/request.dart';
 export 'src/bans/response.dart';
 export 'src/bootstrap/capabilities.dart';
 export 'src/bootstrap/login_flow.dart';
+export 'src/bootstrap/qr_login.dart';
 export 'src/bootstrap/server_status.dart';
 export 'src/bots/request.dart';
 export 'src/bots/response.dart';

@@ -204,6 +204,20 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         expect(find.byType(RoomDetailsScreen), findsOneWidget);
+
+        // On the wide layout the pane is a column of the window and its only
+        // way out is a mouse target, so Escape closes it. The compact layout
+        // pushes a route instead, which the workspace binding sits under and
+        // has no business closing. Focus first: a shortcut is only reachable
+        // through the ancestors of the focused node.
+        if (layout.key == 'expanded') {
+          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+          await tester.pump();
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+          expect(find.byType(RoomDetailsScreen), findsNothing);
+        }
       },
     );
 
@@ -281,6 +295,83 @@ void main() {
       await tester.pump();
       expect(focusedToken(), first, reason: 'Up must come back');
     });
+
+    if (layout.key == 'expanded') {
+      testWidgets(
+        '${layout.key}: Tab walks the list, then a message, then the composer',
+        (tester) async {
+          // Reading order across the three panes, asserted as an order and not
+          // as "something got focus": a keyboard that lands in the composer
+          // before it has passed the list has skipped the whole window.
+          const message = CachedChatMessage(
+            accountId: 'account-a',
+            roomToken: 'roomone',
+            messageId: 10,
+            actorType: 'users',
+            actorId: 'someone-else',
+            actorDisplayName: 'Other person',
+            timestamp: 1724300000,
+            systemMessage: '',
+            messageType: 'comment',
+            referenceId: 'reference-10',
+            displayText: 'Cached hello',
+            deleted: false,
+            rawJson: '{}',
+          );
+          await pumpShell(
+            tester,
+            conversationsByAccount: {
+              'account-a': [_conversation('account-a', 'roomone')],
+            },
+            overrides: [
+              chatMessagesProvider.overrideWith(
+                (ref, key) => Stream.value(const [message]),
+              ),
+            ],
+          );
+          await tester.pump();
+
+          await tester.tap(find.byKey(const Key('conversation-tile-roomone')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 400));
+
+          const landmarks = <String>[
+            'conversation-tile-roomone',
+            'chat-message-affordance-10',
+            'chat-composer',
+          ];
+          final reached = <String>[];
+          for (var press = 0; press < 40; press++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+            await tester.pump();
+            final context = FocusManager.instance.primaryFocus?.context;
+            if (context == null) {
+              continue;
+            }
+            context.visitAncestorElements((element) {
+              final key = element.widget.key;
+              if (key is ValueKey<String> &&
+                  landmarks.contains(key.value) &&
+                  !reached.contains(key.value)) {
+                reached.add(key.value);
+                return false;
+              }
+              return true;
+            });
+            if (reached.length == landmarks.length) {
+              break;
+            }
+          }
+
+          expect(
+            reached,
+            landmarks,
+            reason: 'Tab must cross the panes left to right, top to bottom',
+          );
+        },
+        variant: TargetPlatformVariant.desktop(),
+      );
+    }
 
     testWidgets('${layout.key}: no search without unified-search', (
       tester,

@@ -181,6 +181,17 @@ final class LoginFlowCredentials {
     );
   }
 
+  /// Credentials read off a scanned `nc://login/` payload instead of a poll.
+  ///
+  /// The server is already canonical and there is no poll origin left to check
+  /// it against, so this only exists to let the scanner reuse the same commit
+  /// path as Login Flow v2.
+  const LoginFlowCredentials.scanned({
+    required this.server,
+    required this.loginName,
+    required this.appPassword,
+  });
+
   final ServerBase server;
   final String loginName;
   final String appPassword;

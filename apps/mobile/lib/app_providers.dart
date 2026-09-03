@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/services.dart' show MethodChannel, MissingPluginException;
 import 'package:flutter/widgets.dart'
     show AppLifecycleListener, NavigatorObserver, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'core/background_drain.dart';
 import 'core/giphy_reference_load_coordinator.dart';
 import 'core/connectivity_wake_source.dart';
 import 'core/window_activity.dart';
@@ -489,8 +491,26 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   );
 });
 
+/// Everything a wake-up owes the user: queued text in rooms nobody has open,
+/// revocations owed to servers that were unreachable, and uploads whose
+/// automatic retries ran out while the device had no network.
+///
+/// Shared by the foreground hints and by the headless isolate the platform's
+/// background scheduler starts, so both do exactly the same work.
+Future<void> drainForBackground(ProviderContainer container) async {
+  await container.read(chatServiceProvider).drainPendingSends();
+  await container.read(appPasswordRevocationQueueProvider).drain();
+  await (await container.read(attachmentServiceProvider.future)).resumeRetries();
+}
+
 /// Replays queued text sends for rooms that are not open, on start and on
 /// every hint that the network is back. The room pane covers its own room.
+///
+/// Also answers the platform's background scheduler. A wake that finds this
+/// process already alive is served by the app's own services rather than by a
+/// second engine: two [ChatService] instances in one process each hold their
+/// own outbox snapshot, and both would claim the same queued row and send the
+/// message twice.
 final outboxDrainProvider = Provider<void>((ref) {
   final chat = ref.watch(chatServiceProvider);
   var running = false;
@@ -516,12 +536,38 @@ final outboxDrainProvider = Provider<void>((ref) {
     ])
       events.listen((_) => unawaited(drain())),
   ];
+  final channel = ref.watch(backgroundDrainChannelProvider);
+  channel.setMethodCallHandler((call) async {
+    if (call.method != 'runDrain') {
+      throw MissingPluginException('${call.method} is not handled here');
+    }
+    await drain();
+    // The attachment service keeps its own wake sources; a scheduled wake
+    // reaches it here because the platform hint is not one of them.
+    await (await ref.read(attachmentServiceProvider.future)).resumeRetries();
+    return null;
+  });
   ref.onDispose(() {
+    channel.setMethodCallHandler(null);
     for (final wake in wakes) {
       unawaited(wake.cancel());
     }
   });
   unawaited(drain());
+  unawaited(ref.watch(backgroundDrainScheduleProvider).ensure());
+});
+
+/// Seam for tests, which must not talk to a real platform channel.
+final backgroundDrainChannelProvider = Provider<MethodChannel>(
+  (ref) => backgroundDrainChannel,
+);
+
+final backgroundDrainScheduleProvider = Provider<BackgroundDrainSchedule>((
+  ref,
+) {
+  return BackgroundDrainSchedule(
+    channel: ref.watch(backgroundDrainChannelProvider),
+  );
 });
 
 final threadManagementServiceProvider = Provider<ThreadManagementService>((

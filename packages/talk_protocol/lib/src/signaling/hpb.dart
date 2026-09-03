@@ -591,6 +591,7 @@ final class HpbEventServerFrame extends HpbServerFrame {
     required Iterable<SignalingPeerId> leavingPeerIds,
     required this.allParticipantsInCall,
     required this.federationResumed,
+    required this.chatRelay,
   }) : participants = List<SignalingParticipant>.unmodifiable(participants),
        leavingPeerIds = List<SignalingPeerId>.unmodifiable(leavingPeerIds),
        super(requestId: null);
@@ -627,7 +628,35 @@ final class HpbEventServerFrame extends HpbServerFrame {
     ConversationToken? roomToken;
     int? allParticipantsInCall;
     bool? federationResumed;
-    if (target == 'room' && (eventType == 'join' || eventType == 'change')) {
+    Map<String, Object?>? chatRelay;
+    if (target == 'room' && eventType == 'message') {
+      final message = requireObject(
+        event['message'],
+        path: r'$.event.message',
+        code: TalkProtocolErrorCode.invalidSignalingFrame,
+      );
+      roomToken = ConversationToken.parse(
+        message['roomid'],
+        path: r'$.event.message.roomid',
+        code: TalkProtocolErrorCode.invalidSignalingFrame,
+      );
+      final data = requireObject(
+        message['data'],
+        path: r'$.event.message.data',
+        code: TalkProtocolErrorCode.invalidSignalingFrame,
+      );
+      // Only the chat payload is claimed here. Recording status and any
+      // future room message type stay unparsed rather than rejected, so an
+      // unknown one is ignored instead of killing the connection.
+      if (data['type'] == 'chat') {
+        chatRelay = requireObject(
+          data['chat'],
+          path: r'$.event.message.data.chat',
+          code: TalkProtocolErrorCode.invalidSignalingFrame,
+        );
+      }
+    } else if (target == 'room' &&
+        (eventType == 'join' || eventType == 'change')) {
       final raw = requireList(
         event[eventType],
         path: '\$.event.$eventType',
@@ -708,6 +737,7 @@ final class HpbEventServerFrame extends HpbServerFrame {
       leavingPeerIds: leaving,
       allParticipantsInCall: allParticipantsInCall,
       federationResumed: federationResumed,
+      chatRelay: chatRelay,
     );
   }
 
@@ -718,6 +748,11 @@ final class HpbEventServerFrame extends HpbServerFrame {
   final List<SignalingPeerId> leavingPeerIds;
   final int? allParticipantsInCall;
   final bool? federationResumed;
+
+  /// The raw `data.chat` object of a room message event, or null when the
+  /// event carries no chat payload. Decoding it is the chat layer's job;
+  /// see `decodeChatRelayEvent`.
+  final Map<String, Object?>? chatRelay;
 
   @override
   String get type => 'event';

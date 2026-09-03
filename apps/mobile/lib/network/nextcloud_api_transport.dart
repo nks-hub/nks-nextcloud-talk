@@ -247,6 +247,13 @@ abstract class _HttpNextcloudApiBase {
     );
   }
 
+  Uri _oneTimeAppPasswordUri(ServerBase server) {
+    return server.uri.replace(
+      path: '${server.basePath}/ocs/v2.php/core/getapppassword-onetime',
+      queryParameters: const {'format': 'json'},
+    );
+  }
+
   Object? _webPushOcsData(
     _JsonPayload payload, {
     required Set<int> expectedStatusCodes,

@@ -15,6 +15,7 @@ enum SignalingRuntimeOutcome {
   peerFrameSending,
   messagesReceived,
   controlsReceived,
+  chatRelayReceived,
   frameAccepted,
   resumed,
   reconnectScheduled,
@@ -68,6 +69,7 @@ final class SignalingRuntimeResult {
     required Iterable<SignalingEffect> effects,
     required Iterable<SignalingPeerMessage> messages,
     required Iterable<HpbControlMessage> controls,
+    required this.chatRelay,
     required this.plan,
   }) : effects = List<SignalingEffect>.unmodifiable(effects),
        messages = List<SignalingPeerMessage>.unmodifiable(messages),
@@ -78,6 +80,11 @@ final class SignalingRuntimeResult {
   final List<SignalingEffect> effects;
   final List<SignalingPeerMessage> messages;
   final List<HpbControlMessage> controls;
+
+  /// The raw `data.chat` object relayed by the HPB for this account's room,
+  /// or null when the transition carried no chat relay payload. It is
+  /// transient like [messages]: nothing about it is kept in the snapshot.
+  final Map<String, Object?>? chatRelay;
   final SignalingRuntimePlan? plan;
 
   bool get canCommit => plan != null;
@@ -720,12 +727,14 @@ SignalingRuntimeResult _candidate(
   Iterable<SignalingEffect> effects = const <SignalingEffect>[],
   Iterable<SignalingPeerMessage> messages = const <SignalingPeerMessage>[],
   Iterable<HpbControlMessage> controls = const <HpbControlMessage>[],
+  Map<String, Object?>? chatRelay,
 }) => SignalingRuntimeResult._(
   outcome: outcome,
   request: request,
   effects: effects,
   messages: messages,
   controls: controls,
+  chatRelay: chatRelay,
   plan: SignalingRuntimePlan._(source, candidate),
 );
 
@@ -736,6 +745,7 @@ SignalingRuntimeResult _result(SignalingRuntimeOutcome outcome) =>
       effects: const <SignalingEffect>[],
       messages: const <SignalingPeerMessage>[],
       controls: const <HpbControlMessage>[],
+      chatRelay: null,
       plan: null,
     );
 

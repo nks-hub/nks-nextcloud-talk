@@ -9,11 +9,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
+import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
 import com.nkshub.nextcloudtalk.share.AndroidShareDelivery
 import com.nkshub.nextcloudtalk.share.AndroidShareInbox
+import com.nkshub.nextcloudtalk.shortcuts.ConversationShortcuts
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -29,6 +31,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var deviceKeyStore: AndroidPushDeviceKeyStore? = null
     private var fcmChannel: MethodChannel? = null
     private var contactPickerChannel: ContactPickerChannel? = null
+    private var backgroundDrainChannel: MethodChannel? = null
+    private var shortcutChannel: MethodChannel? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
@@ -38,6 +42,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         }
     }
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var pendingCameraPermissionResult: MethodChannel.Result? = null
+    private var cameraPermissionChannel: MethodChannel? = null
     private val notificationOpenDelivery = AndroidNotificationOpenDelivery { notification ->
         mainHandler.post {
             methodChannel?.invokeMethod("notificationOpened", notification)
@@ -113,6 +119,22 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             }
         }
         shareChannel = share
+
+        // The camera plugin never reports a refused camera back to Dart on
+        // Android, so the QR scanner asks the platform itself.
+        val cameraPermission = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            CAMERA_PERMISSION_CHANNEL_NAME,
+        )
+        cameraPermission.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "status" -> result.success(cameraPermissionStatus())
+                "request" -> requestCameraPermission(result)
+                else -> result.notImplemented()
+            }
+        }
+        cameraPermissionChannel = cameraPermission
+
         shareExecutor.execute {
             shareInbox.pending().forEach(shareDelivery::opened)
         }
@@ -146,6 +168,31 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+
+        // Both directions of the scheduled wake: Dart registers the job
+        // through this, and the job reaches Dart back through it while this
+        // engine is the one that exists.
+        val drain = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BackgroundDrain.CHANNEL,
+        )
+        drain.setMethodCallHandler { call, result ->
+            if (call.method == "ensureScheduled") {
+                BackgroundDrain.ensureScheduled(applicationContext)
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+        backgroundDrainChannel = drain
+        BackgroundDrain.attachForeground(drain)
+
+        val shortcuts = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ConversationShortcuts.CHANNEL_NAME,
+        )
+        shortcuts.setMethodCallHandler(ConversationShortcuts(applicationContext))
+        shortcutChannel = shortcuts
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -202,6 +249,36 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
     }
 
+    internal fun cameraPermissionStatus(): Map<String, String> {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            return mapOf("status" to "granted")
+        }
+        val asked = getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
+            .getBoolean(CAMERA_PERMISSION_ASKED, false)
+        return mapOf("status" to if (asked) "denied" else "notDetermined")
+    }
+
+    internal fun requestCameraPermission(result: MethodChannel.Result) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            result.success(mapOf("status" to "granted"))
+            return
+        }
+        if (pendingCameraPermissionResult != null) {
+            result.error(
+                "permission_request_in_progress",
+                "A camera permission request is already active.",
+                null,
+            )
+            return
+        }
+        pendingCameraPermissionResult = result
+        setCameraPermissionAsked(true)
+        requestPermissions(
+            arrayOf(Manifest.permission.CAMERA),
+            CAMERA_PERMISSION_REQUEST,
+        )
+    }
+
     internal fun takeLaunchNotification(): Map<String, Any?>? {
         return notificationOpenDelivery.markReadyAndTakeLaunch()
     }
@@ -216,6 +293,17 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_REQUEST) {
+            // An empty result means the request was interrupted, not refused,
+            // so the next attempt must be allowed to prompt again.
+            if (grantResults.isEmpty()) {
+                setCameraPermissionAsked(false)
+            }
+            val cameraResult = pendingCameraPermissionResult ?: return
+            pendingCameraPermissionResult = null
+            cameraResult.success(cameraPermissionStatus())
+            return
+        }
         if (requestCode != NOTIFICATION_PERMISSION_REQUEST) {
             return
         }
@@ -238,6 +326,14 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             null,
         )
         pendingPermissionResult = null
+        pendingCameraPermissionResult?.error(
+            "permission_request_cancelled",
+            "The camera permission request was cancelled.",
+            null,
+        )
+        pendingCameraPermissionResult = null
+        cameraPermissionChannel?.setMethodCallHandler(null)
+        cameraPermissionChannel = null
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
         deepLinkChannel?.setMethodCallHandler(null)
@@ -253,6 +349,11 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         fcmChannel = null
         contactPickerChannel?.dispose()
         contactPickerChannel = null
+        BackgroundDrain.attachForeground(null)
+        backgroundDrainChannel?.setMethodCallHandler(null)
+        backgroundDrainChannel = null
+        shortcutChannel?.setMethodCallHandler(null)
+        shortcutChannel = null
         disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()
@@ -312,6 +413,13 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         return mapOf("uri" to uri.toString())
     }
 
+    private fun setCameraPermissionAsked(asked: Boolean) {
+        getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putBoolean(CAMERA_PERMISSION_ASKED, asked)
+            .apply()
+    }
+
     private fun setPermissionAsked(asked: Boolean) {
         getSharedPreferences(PERMISSION_PREFERENCES, MODE_PRIVATE)
             .edit()
@@ -336,7 +444,11 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         private const val SHARE_CHANNEL_NAME = "com.nkshub.nextcloudtalk/share"
         internal const val PERMISSION_PREFERENCES = "android_web_push_permission"
         internal const val PERMISSION_ASKED = "asked"
+        internal const val CAMERA_PERMISSION_ASKED = "camera_asked"
+        private const val CAMERA_PERMISSION_CHANNEL_NAME =
+            "com.nkshub.nextcloudtalk/camera_permission"
         internal const val NOTIFICATION_PERMISSION_REQUEST = 4107
+        internal const val CAMERA_PERMISSION_REQUEST = 4108
     }
 }
 

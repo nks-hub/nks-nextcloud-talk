@@ -689,6 +689,20 @@ SignalingRuntimeResult _applyHpbEvent(
   if (event.roomToken != null && event.roomToken != account.roomToken) {
     return _result(SignalingRuntimeOutcome.rejected);
   }
+  if (event.target == 'room' && event.eventType == 'message') {
+    final chat = event.chatRelay;
+    if (chat == null) {
+      return _result(SignalingRuntimeOutcome.ignored);
+    }
+    // Relayed chat carries no signaling state: it is handed out transiently,
+    // exactly like a peer message, and the snapshot stays as it was.
+    return _candidate(
+      snapshot,
+      snapshot,
+      SignalingRuntimeOutcome.chatRelayReceived,
+      chatRelay: chat,
+    );
+  }
   if (event.target == 'room' &&
       (event.eventType == 'join' || event.eventType == 'change')) {
     final participants = Map<SignalingPeerId, SignalingParticipant>.of(

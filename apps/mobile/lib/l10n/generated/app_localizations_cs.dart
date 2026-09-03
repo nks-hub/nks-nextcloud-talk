@@ -141,6 +141,29 @@ class AppLocalizationsCs extends AppLocalizations {
       'Účet se nepodařilo bezpečně uložit do tohoto zařízení.';
 
   @override
+  String get scanLoginCode => 'Načíst přihlašovací kód';
+
+  @override
+  String get scanLoginCodeHint =>
+      'Namiřte fotoaparát na QR kód, který server ukáže v Nastavení, Zabezpečení, Vytvořit nové heslo aplikace.';
+
+  @override
+  String get scanLoginCodeCameraDenied =>
+      'Přístup k fotoaparátu je vypnutý. Povolte jej v nastavení systému, aby šlo kód načíst.';
+
+  @override
+  String get scanLoginCodeCameraUnavailable =>
+      'Toto zařízení nemá fotoaparát, kterým by šlo kód načíst.';
+
+  @override
+  String get scanLoginCodeUnreadable =>
+      'Tohle není přihlašovací kód Nextcloudu.';
+
+  @override
+  String get scannedLoginRejected =>
+      'Načtený přihlašovací kód se nepodařilo použít. Vytvořte na serveru nový.';
+
+  @override
   String get unexpectedError => 'Něco se nepodařilo. Data účtu nebyla změněna.';
 
   @override

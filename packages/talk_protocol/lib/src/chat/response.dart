@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../conversations/identifiers.dart';
 import '../identifiers.dart';
 import '../json_value.dart';
 import '../protocol_exception.dart';
@@ -284,6 +285,132 @@ ChatGetResponse decodeChatGetResponse({
     messages: List.unmodifiable(messages),
     cursor: cursor,
     lastCommonRead: commonRead,
+  );
+}
+
+/// The chat payload the High Performance Backend relays over the signaling
+/// websocket, decoded from the raw `data.chat` object of a room message event.
+///
+/// Measured against three sources for the same wire shape: `Listener::
+/// notifyMessageSent` in the Talk server (`chat.comment`, or a bare
+/// `chat.refresh` when the message is not visible), `processChatMessage
+/// WebSocketMessage` in talk-android (which also accepts a `chat.comments`
+/// array) and `processRoomMessageEvent` in talk-ios.
+final class ChatRelayEvent {
+  const ChatRelayEvent._({
+    required this.roomToken,
+    required this.refreshRequested,
+    required this.comments,
+  });
+
+  final ConversationToken roomToken;
+
+  /// The relay said the room changed without saying how. Nothing can be
+  /// merged from it; the caller has to fetch.
+  final bool refreshRequested;
+
+  /// Relayed messages, ascending by id.
+  final List<ChatMessage> comments;
+
+  @override
+  String toString() =>
+      'ChatRelayEvent(refreshRequested: $refreshRequested, '
+      'comments: ${comments.length})';
+}
+
+/// Decodes one relayed `data.chat` object for [roomToken].
+///
+/// A payload whose comments belong to another room is rejected rather than
+/// silently dropped: relaying a foreign room's message is a protocol fault,
+/// not an empty event.
+ChatRelayEvent decodeChatRelayEvent(
+  Map<String, Object?> chat, {
+  required ConversationToken roomToken,
+}) {
+  final rawComments = chat['comments'];
+  final rawComment = chat['comment'];
+  final entries = <Object?>[
+    if (rawComments != null)
+      ...requireList(
+        rawComments,
+        path: r'$.chat.comments',
+        code: TalkProtocolErrorCode.invalidChatResponse,
+      ),
+    ?rawComment,
+  ];
+  if (entries.length > 200) {
+    _responseFailure(r'$.chat.comments');
+  }
+  final comments = entries
+      .map(ChatMessage.fromJson)
+      .toList(growable: false)
+    ..sort((left, right) => left.messageId.compareTo(right.messageId));
+  final ids = <int>{};
+  for (final comment in comments) {
+    if (comment.roomToken != roomToken) {
+      _responseFailure(r'$.chat.comment.token');
+    }
+    if (!ids.add(comment.messageId)) {
+      _responseFailure(r'$.chat.comment.id');
+    }
+  }
+  final refresh = chat['refresh'];
+  if (refresh != null && refresh is! bool) {
+    _responseFailure(r'$.chat.refresh');
+  }
+  return ChatRelayEvent._(
+    roomToken: roomToken,
+    refreshRequested: comments.isEmpty && refresh == true,
+    comments: List.unmodifiable(comments),
+  );
+}
+
+/// Presents relayed comments as the future-direction response the long poll
+/// would have produced, so both transports reach the database through
+/// `planChatGetMerge` and the same chat blocks.
+///
+/// [request] must be the future request the scope would issue right now, so
+/// its cursor is the scope's confirmed future anchor. Comments at or below
+/// that anchor are already merged and are dropped here — deduplication is by
+/// the server-assigned message id, never by `referenceId`. Returns null when
+/// nothing above the anchor is left, which is not an error: it is the relay
+/// repeating what the scope already has.
+///
+/// The block this extends claims `[anchor, newest]`. That claim is only true
+/// while the caller can prove the relay has delivered every message created
+/// after the anchor was confirmed; establishing and dropping that proof is
+/// the caller's job, not this function's.
+ChatGetResponse? chatRelayGetResponse({
+  required ChatFetchRequest request,
+  required List<ChatMessage> comments,
+}) {
+  if (request.direction != ChatFetchDirection.future) {
+    protocolFailure(
+      TalkProtocolErrorCode.invalidChatRequest,
+      r'$.request.direction',
+    );
+  }
+  final anchor = int.tryParse(request.cursor.value);
+  if (anchor == null) {
+    _responseFailure(r'$.request.cursor');
+  }
+  final fresh = comments
+      .where((comment) => comment.messageId > anchor)
+      .toList(growable: false);
+  if (fresh.isEmpty) {
+    return null;
+  }
+  _validateMessages(request, fresh);
+  final cursor = ChatCursor.parse(
+    fresh.last.messageId.toString(),
+    code: TalkProtocolErrorCode.invalidChatResponse,
+  );
+  return ChatGetResponse._(
+    request: request,
+    classification: ChatGetClassification.messages,
+    messages: List.unmodifiable(fresh),
+    cursor: cursor,
+    lastCommonRead: null,
   );
 }
 

@@ -373,6 +373,52 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     _webPushOcsData(payload, expectedStatusCodes: const {200, 202});
   }
 
+  /// Exchanges a single-use `nc://onetime-login/` token for an app password.
+  ///
+  /// Nextcloud issues the token so it can be shown in a QR code without the
+  /// real secret ever being printed: the token authenticates exactly one
+  /// `GET /ocs/v2.php/core/getapppassword-onetime`, which answers with the app
+  /// password and burns the token. Upstream `talk-android`'s
+  /// `NetworkLoginDataSource.oneTimePasswordRequest` does the same call.
+  Future<String> exchangeOneTimeAppPassword({
+    required ServerBase server,
+    required String loginName,
+    required String oneTimeToken,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _authenticatedOcsRequest(
+      'GET',
+      _oneTimeAppPasswordUri(server),
+      loginName: loginName,
+      appPassword: oneTimeToken,
+      abortTrigger: abortTrigger,
+    );
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const {200},
+      maximumBytes: _appPasswordMaximumBytes,
+    );
+    final root = payload.json;
+    final ocs = root is Map<String, Object?> ? root['ocs'] : null;
+    final meta = ocs is Map<String, Object?> ? ocs['meta'] : null;
+    final data = ocs is Map<String, Object?> ? ocs['data'] : null;
+    final appPassword = data is Map<String, Object?>
+        ? data['apppassword']
+        : null;
+    if (meta is! Map<String, Object?> ||
+        meta['status'] != 'ok' ||
+        meta['statuscode'] != 200 ||
+        appPassword is! String ||
+        appPassword.isEmpty ||
+        appPassword.length > 4096) {
+      throw const NextcloudApiException(
+        NextcloudApiError.unexpectedStatus,
+        statusCode: 200,
+      );
+    }
+    return appPassword;
+  }
+
   /// Destroys the app password this request authenticates with.
   ///
   /// Nextcloud documents `DELETE /ocs/v2.php/core/apppassword` for exactly

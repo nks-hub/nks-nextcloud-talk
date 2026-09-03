@@ -332,6 +332,42 @@ abstract class AppLocalizations {
   /// **'The account could not be stored securely on this device.'**
   String get localPersistenceFailed;
 
+  /// Button that opens the camera to scan a Nextcloud login QR code
+  ///
+  /// In en, this message translates to:
+  /// **'Scan a login code'**
+  String get scanLoginCode;
+
+  /// No description provided for @scanLoginCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Point the camera at the QR code your server shows under Settings, Security, Create new app password.'**
+  String get scanLoginCodeHint;
+
+  /// No description provided for @scanLoginCodeCameraDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access is turned off. Allow it in system settings to scan a login code.'**
+  String get scanLoginCodeCameraDenied;
+
+  /// No description provided for @scanLoginCodeCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no camera that can read a login code.'**
+  String get scanLoginCodeCameraUnavailable;
+
+  /// No description provided for @scanLoginCodeUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'This is not a Nextcloud login code.'**
+  String get scanLoginCodeUnreadable;
+
+  /// No description provided for @scannedLoginRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The scanned login code could not be used. Create a new one on the server.'**
+  String get scannedLoginRejected;
+
   /// No description provided for @unexpectedError.
   ///
   /// In en, this message translates to:

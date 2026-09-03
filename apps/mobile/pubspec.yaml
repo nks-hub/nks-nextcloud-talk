@@ -16,7 +16,7 @@ publish_to: none
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.0+57
+version: 0.1.0+58
 
 environment:
   sdk: ^3.12.2
@@ -83,8 +83,17 @@ dependencies:
   rybbit_flutter_sdk: ^0.3.0
   geolocator: ^14.0.3
   local_auth: ^3.0.2
-
+  # Live preview plus a frame stream for the QR login scanner; used only on
+  # Android and iOS, and the video recorder is never started. Chosen over
+  # mobile_scanner because that one drags ML Kit, whose artefacts are licensed
+  # under the proprietary ML Kit Terms of Service.
+  camera: ^0.12.1
+  # Pure-Dart QR decoding from the camera's luminance plane (BSD-3-Clause);
+  # no native or platform part of its own.
+  zxing2: ^0.2.4
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   record_platform_interface: 2.1.0

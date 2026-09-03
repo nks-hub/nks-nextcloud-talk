@@ -141,6 +141,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'The account could not be stored securely on this device.';
 
   @override
+  String get scanLoginCode => 'Scan a login code';
+
+  @override
+  String get scanLoginCodeHint =>
+      'Point the camera at the QR code your server shows under Settings, Security, Create new app password.';
+
+  @override
+  String get scanLoginCodeCameraDenied =>
+      'Camera access is turned off. Allow it in system settings to scan a login code.';
+
+  @override
+  String get scanLoginCodeCameraUnavailable =>
+      'This device has no camera that can read a login code.';
+
+  @override
+  String get scanLoginCodeUnreadable => 'This is not a Nextcloud login code.';
+
+  @override
+  String get scannedLoginRejected =>
+      'The scanned login code could not be used. Create a new one on the server.';
+
+  @override
   String get unexpectedError =>
       'Something went wrong. No account data was changed.';
 

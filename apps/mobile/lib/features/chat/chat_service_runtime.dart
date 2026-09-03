@@ -203,6 +203,15 @@ extension _ChatServiceLiveRuntime on ChatService {
     _PreparedChat prepared,
     _SharedLivePoll poll,
   ) async {
+    // While the HPB relay is trusted for this room it delivers everything the
+    // long poll would, so holding an HTTP request open would only duplicate
+    // it. The wait ends as soon as the relay delivers or stops being trusted,
+    // and the next cycle then polls from the same confirmed anchor.
+    final relayWait = _relayIdleWait(prepared);
+    if (relayWait != null) {
+      await Future.any<void>(<Future<void>>[relayWait, poll.abort.future]);
+      return;
+    }
     final scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
       roomToken: prepared.conversation.token,

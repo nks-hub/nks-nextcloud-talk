@@ -43,6 +43,7 @@ import 'chat_posting_access.dart';
 import 'chat_service.dart';
 import '../settings/reply_layout_preference.dart';
 import 'chat_thread_context.dart';
+import 'chat_room_signaling.dart';
 import 'chat_typing_indicator.dart';
 import 'incoming_message_announcement.dart';
 import 'outgoing_message_status.dart';
@@ -432,6 +433,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       liveConversation,
     );
     final readOnly = !postingAccess.canPost;
+    // Opens the HPB chat relay for this room when the server has one. It
+    // delivers nothing to the widget tree: the messages reach the timeline
+    // through the same chat repository the long poll writes to.
+    ref.watch(
+      chatRelayProvider((
+        accountId: widget.account.id,
+        roomToken: widget.conversation.token,
+      )),
+    );
     final typingKey = chatTypingRoomKeyFor(
       account: widget.account,
       conversation: liveConversation,

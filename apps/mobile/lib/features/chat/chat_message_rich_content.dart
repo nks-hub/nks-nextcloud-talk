@@ -669,18 +669,8 @@ final class _ReactionSummary extends StatelessWidget {
               final foreground = selected
                   ? scheme.onPrimaryContainer
                   : scheme.onSurface;
-              final pill = Container(
-                key: Key('chat-reaction-${message.messageId}-$index'),
+              final label = Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? scheme.primaryContainer
-                      : scheme.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: selected ? scheme.primary : scheme.outlineVariant,
-                  ),
-                ),
                 // The emoji carries the meaning here and the count only
                 // qualifies it, so the glyph is set larger than the label it
                 // sits next to instead of sharing its size.
@@ -703,13 +693,26 @@ final class _ReactionSummary extends StatelessWidget {
                 label: '$emoji, ${reactions[index].value}',
                 selected: selected,
                 button: onTap != null,
-                child: onTap == null
-                    ? pill
-                    : InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () => onTap!(emoji),
-                        child: pill,
-                      ),
+                // The pill's colour belongs to the Material, not to a box
+                // inside the InkWell: ink paints between a Material and its
+                // child, so an opaque child swallows the hover highlight and
+                // the chip looks dead under a pointer.
+                child: Material(
+                  key: Key('chat-reaction-${message.messageId}-$index'),
+                  color: selected
+                      ? scheme.primaryContainer
+                      : scheme.surfaceContainerLowest,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: selected ? scheme.primary : scheme.outlineVariant,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: onTap == null
+                      ? label
+                      : InkWell(onTap: () => onTap!(emoji), child: label),
+                ),
               );
             },
           ),

@@ -54,6 +54,9 @@ final class CallSignalingUpdate {
     required this.renegotiationRequired,
     required Iterable<SignalingPeerMessage> messages,
     required Iterable<HpbControlMessage> controls,
+    required this.chatRelay,
+    required this.roomEpoch,
+    required this.chatRelaySupported,
     required this.failure,
   }) : participants = List<SignalingParticipant>.unmodifiable(participants),
        messages = List<SignalingPeerMessage>.unmodifiable(messages),
@@ -70,7 +73,29 @@ final class CallSignalingUpdate {
   final bool renegotiationRequired;
   final List<SignalingPeerMessage> messages;
   final List<HpbControlMessage> controls;
+
+  /// The raw `data.chat` object of a relayed chat event, or null when this
+  /// transition carried none. Decoding it belongs to the chat layer.
+  final Map<String, Object?>? chatRelay;
+
+  /// Increments on every full HPB hello. A resume keeps it, and with it the
+  /// promise that the relay replayed what the disconnect missed; a new epoch
+  /// means the relay stream restarted and may have a hole in it.
+  final int roomEpoch;
+
+  /// Whether the connected signalling backend answered the `chat-relay`
+  /// feature. Only an external HPB can, so this is false for internal
+  /// signalling and stays false until the hello response lands.
+  final bool chatRelaySupported;
   final CallSignalingFailure? failure;
+
+  /// Whether relayed chat may be trusted right now: an external HPB that
+  /// advertised `chat-relay` and has this room confirmed on a live session.
+  bool get chatRelayActive =>
+      chatRelaySupported &&
+      roomConfirmed &&
+      transport == SignalingTransportKind.externalHpb &&
+      phase == SignalingAccountPhase.signalingReady;
 
   bool get signalingReady =>
       phase == SignalingAccountPhase.signalingReady ||
@@ -80,7 +105,8 @@ final class CallSignalingUpdate {
   @override
   String toString() =>
       'CallSignalingUpdate(outcome: ${outcome.name}, phase: ${phase.name}, '
-      'participants: ${participants.length}, failure: ${failure?.name})';
+      'participants: ${participants.length}, '
+      'chatRelayActive: $chatRelayActive, failure: ${failure?.name})';
 }
 
 abstract interface class SignalingScheduledTask {
@@ -214,6 +240,7 @@ final class CallSignalingCoordinator {
       if (existing != null &&
           existing.key.roomToken == roomToken &&
           existing.authority.nextcloudSessionId == parsedSessionId) {
+        existing.retain();
         return existing.handle;
       }
       if (existing != null) {
