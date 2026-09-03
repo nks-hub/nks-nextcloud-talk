@@ -16,6 +16,39 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (53) — 3. 9. 2026
+
+Vydáno ze zdroje `fdbc3eb`, tag `v0.1.0+53`.
+
+Android: release APK 90 917 560 B, SHA-256
+`1ac61d2016a85606f0ae9312397557d73f656deee84c633b9f1bec72ebee0987`,
+versionCode 53; na Android 14 emulátoru se panel emoji po odeslání 😀 zavřel
+a zpráva dorazila na server. Play track nenahrán (kadence).
+
+Windows: instalátor `NKS-Talk-0.1.0-53-windows-x64-setup.exe` 35 436 443 B,
+SHA-256 `9ea6211b9110f3a5f8ccfa066ce67252f6484e82bbb8ce8a31cf6b6c3ca735e5`,
+nepodepsaný; tichá instalace na `windows-test-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+53` (PID 20348).
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build nainstalován a
+spuštěn; emoji z panelu odesláno a panel se zavřel. TestFlight nenahrán
+(kadence, poslední je 51).
+
+macOS: `nks-talk-macos-53.zip` 32 882 920 B, SHA-256
+`6a71b3e7a00f047832024b3aedb6d8854a718688fb98b15d1657c2dafd05dc0b`,
+Developer ID Application (TEAMID0000), notarizováno (Accepted), stapled,
+`spctl`: Notarized Developer ID — ověřeno na souboru staženém zpět z
+Nextcloudu; běží na build-mac (PID 47641). Poslán do chatu Pimpula (share 8911,
+zpráva 78812).
+
+- Panel emoji se po odeslání zprávy zavře sám.
+- Seznam konverzací si každých pět minut vyžádá celý přehled ze serveru,
+  takže místnost smazaná nebo opuštěná na serveru zmizí i bez ručního
+  obnovení (dosud zůstávala, dokud se aplikace nespustila znovu).
+- Živé důkazy: TalkBack vysloví příchozí zprávu („New activity. NCloudTalk
+  Test 2: …"), obrazovky při 200 % textu ve světlém i tmavém tématu bez
+  přetečení, macOS Developer ID + notarizace jako trvalý postup.
+
 ## 0.1.0 (52) — 3. 9. 2026
 
 Vydáno ze zdroje `81ea963`, tag `v0.1.0+52`.
