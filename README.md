@@ -70,6 +70,7 @@ Přesný stav vede
 
 ## Push bez per-server rebuildu
 
+Podporovaná řada serveru začíná Talkem 22 (Nextcloud 32), viz D-047.
 Android cílí na Notifications Web Push v Nextcloud 34+ přes UnifiedPush
 connector a vestavěný FCM distributor. Veřejný Android build proto nebude mít
 publisher Firebase projekt, `google-services.json`, vlastní mobilní gateway ani

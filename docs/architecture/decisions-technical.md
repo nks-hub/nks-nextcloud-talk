@@ -798,3 +798,27 @@ idempotentně dokončí.
 Dvě různé hodnoty, nečitelný marker nebo verze novější než klient zastaví
 přístup bez přepsání či smazání secretu. Souběžné první requesty stejného účtu
 sdílejí jeden migrační future; jiné účty zůstávají nezávislé.
+
+### D-047: Minimální podporovaná řada je Talk 22 (Nextcloud 32)
+
+Stav: Přijato 3. září 2026.
+
+Klient stojí na třech tvrdých branách: `conversation-v4` (Talk 12), `chat-v2`
+(Talk 3.2) a `threads` (Talk 22). Nejmladší z nich určuje minimum, takže
+podporovaná řada začíná Talkem 22, tedy Nextcloudem 32. Vše, co klient dál
+používá, existuje od starší řady než 22 — `chat-replies` 8, `chat-reference-id`
+9, `delete-messages` 11.1, `clear-history` 12.1, `reactions`, `unified-search`,
+`silent-send` a `message-expiration` 15, `avatar` 17, `media-caption` a
+`note-to-self` 18, `edit-messages` a `federation-v1` 19, `ban-v1` 20,
+`archived-conversations-v2` 20.1, `important-conversations` a
+`sensitive-conversations` 21.1 — a na Talku 22+ je tedy k dispozici vždy.
+Jediná mladší capability je `conversation-tags` (Talk 24); ta gatuje jen
+štítky a chybět smí.
+
+Zdroj: `docs/capabilities.md` v `nextcloud/spreed` (větev `main`, čteno
+3. 9. 2026), kde je každá capability zapsaná pod řadou, ve které vznikla.
+Server se starší řadou hlásí `conversationProfileUnsupported` (chybí
+`conversation-v4`) nebo chybí `threads`; obojí aplikace hlásí jako nepodporovaný
+server, ne jako chybu sítě. Ověřit měřením na starší řadě nelze bez druhého
+serveru; rozhodnutí proto vychází z dokumentace upstreamu, ne z běhu.
+
