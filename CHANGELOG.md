@@ -16,85 +16,6 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
-## 0.1.0 (47) — 2. 9. 2026
-
-Vydáno ze zdroje `4bfaf70`, tag `v0.1.0+47`.
-
-Play (uzavřené testování, track alpha): vydání `(47) 0.1.0` je `completed`
-s version code 47. AAB má 84 337 287 B a SHA-256
-`c9d0758420e061f1b27862197356749851d8e41bcf222e32a931f5e5870c5dd7`. Poznámky
-v šesti jazycích ověřeny zpětným dotazem na track.
-
-TestFlight: IPA 30 237 904 B nahrána z build-mac, `xcrun altool` hlásí „No errors
-uploading archive". Export dřív padal na tom, že provisioning profil nemá
-Associated Domains; entitlement byl odstraněn, protože hlásil natvrdo doménu
-jednoho serveru, což v multi-server klientovi nedává smysl, a žádný kód
-univerzální odkazy nepoužíval.
-
-macOS: ZIP 32 022 517 B, SHA-256
-`c55ab36ffdf544a40e701c3ea80cc8fa4364e6566611049ea96da170ba4ee6f3`, podepsáno
-Developer ID (team TEAMID0000), `app-sandbox` i `aps-environment`, `codesign
---verify` hlásí „satisfies its Designated Requirement".
-
-Windows: nasazeno na `windows-vm`, instalátor ohlásil `Installed 0.1.0+47`.
-Android ověřen na emulátoru `chatujmePixel` (`versionCode=47`), iOS na
-simulátoru iPhone 16 Pro Max.
-
-- macOS konečně dá vědět o nové zprávě, i se zvukem a s akcemi Odpovědět
-  a Označit jako přečtené. Nextcloud posílá Talk notifikace jen zařízením,
-  která se hlásí jako Android nebo iOS, takže desktopový klient z jeho proxy
-  nedostane nic, jakmile má účet registrovaný telefon. Windows si notifikaci
-  od dávky 45 zobrazuje sám nad živým kanálem; macOS neměl nic, takže se
-  aplikace poctivě synchronizovala, ale uživateli to nikdy neřekla.
-- Hledání v konverzaci zase vrací výsledky. Server na dotaz do jedné místnosti
-  odpoví i shodami odjinud — parametr `from` je nápověda pro řazení, ne filtr —
-  a aplikace kvůli jediné cizí položce zahodila celou odpověď a hlásila, že jí
-  nerozumí. Cizí výsledky se teď přeskočí a zbytek dorazí.
-- Seznam konverzací jde chytit za oddělovač a přetáhnout na jinou šířku; volba
-  přežije restart. Táhací je sám oddělovač, ne pruh navíc, aby splitter nebral
-  konverzaci místo, které jí má vracet.
-- Když na konverzaci zbývá málo místa, seznam se složí sám a po zvětšení okna
-  se vrátí. Uložené předvolby se to nedotkne — ta je volbou pro okna, která
-  místo mají.
-- Nadpis v hlavičce seznamu se přestal lámat uprostřed slova. V pruhu širokém
-  300 px se tloukl s avatarem a třemi tlačítky, takže z „Konverzace" zbylo
-  „Konverzac / e"; nadpis zmizel, čtečky obrazovky ho ale dál dostanou.
-
-## 0.1.0 (46) — 2. 9. 2026
-
-Vydáno ze zdroje `f9d2380`, tag `v0.1.0+46`, postaveno z čistého worktree.
-Poprvé na všechny tři platformy najednou.
-
-Play (uzavřené testování, track alpha): vydání `(46) 0.1.0` je `completed`
-s version code 46. AAB má 84 306 565 B a SHA-256
-`7fe346441b6c2e88408523060ff2d35ec3e498e13ea53e462de4d1d8ea73d37a`, SHA-1
-`d553b29fe37624008c892bff28ff4cc087340d36`. Poznámky v šesti jazycích ověřeny
-zpětným dotazem na track.
-
-Windows: ZIP má SHA-256
-`ef7508d85aefb2c6beaccf74698aee3f758239fa879e0755a478ef1d5200e600`, nasazený
-instalačním skriptem na `windows-test-vm` do `C:\Program Files\NKS Talk`. Ověřeno za
-běhu: jediná instance, `0.1.0+46`, okno „NKS Talk".
-
-macOS: postaveno na Codemagicu (build `<codemagic-app-id>`), ZIP má
-SHA-256 `df4cd128b1e2a1487430a7638c5cd21abe11a541013bb935b56c8c6d9841827b`,
-`CFBundleVersion` 46, minimum macOS 12.0. POZOR: balík je podepsaný AD-HOC a
-NEMÁ provisioning profil, takže na něm nemohou fungovat push notifikace —
-integrace App Store Connect nedodala CLI `ISSUER_ID`. Zbývá dořešit.
-
-TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběželo.
-
-
-- Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
-  čím přepínat. S jediným účtem zabírala svislá lišta vlevo 88 pixelů na celou
-  výšku okna pro logo, avatar, na který nešlo ani kliknout, a dvě tlačítka.
-  Lišta se teď objeví až u druhého účtu; její akce mezitím drží nabídka pod
-  avatarem v hlavičce seznamu, stejná jako na telefonu. Konverzace tím dostala
-  89 pixelů zpět — na notebooku s šířkou 1024 skoro devět procent obrazovky.
-- Seznam konverzací jde složit. V hlavičce otevřené konverzace přibylo
-  tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
-  je k dispozici celé okno. Volba přežije restart aplikace.
-
 ## 0.1.0 (49) — 3. 9. 2026
 
 Vydáno ze zdroje `1e1f4ca`, tag `v0.1.0+49`. Dávka vznikla ze Sentry nálezů
@@ -202,6 +123,85 @@ vyžaduje člověka u stroje, GUI důkaz chybí.
   jde poslat do vybraného účtu a konverzace, stejně jako na Androidu.
 - macOS: „Uložit jako" u přílohy dřív skončilo bez souboru, protože sandbox
   povoloval jen čtení vybraného umístění. Zápis je teď povolený.
+
+## 0.1.0 (47) — 2. 9. 2026
+
+Vydáno ze zdroje `4bfaf70`, tag `v0.1.0+47`.
+
+Play (uzavřené testování, track alpha): vydání `(47) 0.1.0` je `completed`
+s version code 47. AAB má 84 337 287 B a SHA-256
+`c9d0758420e061f1b27862197356749851d8e41bcf222e32a931f5e5870c5dd7`. Poznámky
+v šesti jazycích ověřeny zpětným dotazem na track.
+
+TestFlight: IPA 30 237 904 B nahrána z build-mac, `xcrun altool` hlásí „No errors
+uploading archive". Export dřív padal na tom, že provisioning profil nemá
+Associated Domains; entitlement byl odstraněn, protože hlásil natvrdo doménu
+jednoho serveru, což v multi-server klientovi nedává smysl, a žádný kód
+univerzální odkazy nepoužíval.
+
+macOS: ZIP 32 022 517 B, SHA-256
+`c55ab36ffdf544a40e701c3ea80cc8fa4364e6566611049ea96da170ba4ee6f3`, podepsáno
+Developer ID (team TEAMID0000), `app-sandbox` i `aps-environment`, `codesign
+--verify` hlásí „satisfies its Designated Requirement".
+
+Windows: nasazeno na `windows-vm`, instalátor ohlásil `Installed 0.1.0+47`.
+Android ověřen na emulátoru `chatujmePixel` (`versionCode=47`), iOS na
+simulátoru iPhone 16 Pro Max.
+
+- macOS konečně dá vědět o nové zprávě, i se zvukem a s akcemi Odpovědět
+  a Označit jako přečtené. Nextcloud posílá Talk notifikace jen zařízením,
+  která se hlásí jako Android nebo iOS, takže desktopový klient z jeho proxy
+  nedostane nic, jakmile má účet registrovaný telefon. Windows si notifikaci
+  od dávky 45 zobrazuje sám nad živým kanálem; macOS neměl nic, takže se
+  aplikace poctivě synchronizovala, ale uživateli to nikdy neřekla.
+- Hledání v konverzaci zase vrací výsledky. Server na dotaz do jedné místnosti
+  odpoví i shodami odjinud — parametr `from` je nápověda pro řazení, ne filtr —
+  a aplikace kvůli jediné cizí položce zahodila celou odpověď a hlásila, že jí
+  nerozumí. Cizí výsledky se teď přeskočí a zbytek dorazí.
+- Seznam konverzací jde chytit za oddělovač a přetáhnout na jinou šířku; volba
+  přežije restart. Táhací je sám oddělovač, ne pruh navíc, aby splitter nebral
+  konverzaci místo, které jí má vracet.
+- Když na konverzaci zbývá málo místa, seznam se složí sám a po zvětšení okna
+  se vrátí. Uložené předvolby se to nedotkne — ta je volbou pro okna, která
+  místo mají.
+- Nadpis v hlavičce seznamu se přestal lámat uprostřed slova. V pruhu širokém
+  300 px se tloukl s avatarem a třemi tlačítky, takže z „Konverzace" zbylo
+  „Konverzac / e"; nadpis zmizel, čtečky obrazovky ho ale dál dostanou.
+
+## 0.1.0 (46) — 2. 9. 2026
+
+Vydáno ze zdroje `f9d2380`, tag `v0.1.0+46`, postaveno z čistého worktree.
+Poprvé na všechny tři platformy najednou.
+
+Play (uzavřené testování, track alpha): vydání `(46) 0.1.0` je `completed`
+s version code 46. AAB má 84 306 565 B a SHA-256
+`7fe346441b6c2e88408523060ff2d35ec3e498e13ea53e462de4d1d8ea73d37a`, SHA-1
+`d553b29fe37624008c892bff28ff4cc087340d36`. Poznámky v šesti jazycích ověřeny
+zpětným dotazem na track.
+
+Windows: ZIP má SHA-256
+`ef7508d85aefb2c6beaccf74698aee3f758239fa879e0755a478ef1d5200e600`, nasazený
+instalačním skriptem na `windows-test-vm` do `C:\Program Files\NKS Talk`. Ověřeno za
+běhu: jediná instance, `0.1.0+46`, okno „NKS Talk".
+
+macOS: postaveno na Codemagicu (build `<codemagic-app-id>`), ZIP má
+SHA-256 `df4cd128b1e2a1487430a7638c5cd21abe11a541013bb935b56c8c6d9841827b`,
+`CFBundleVersion` 46, minimum macOS 12.0. POZOR: balík je podepsaný AD-HOC a
+NEMÁ provisioning profil, takže na něm nemohou fungovat push notifikace —
+integrace App Store Connect nedodala CLI `ISSUER_ID`. Zbývá dořešit.
+
+TestFlight: nevydáno, `build-mac` je stále mimo a iOS workflow zatím neběželo.
+
+
+- Na širokém okně už aplikace neplatí místem za přepínač účtů, který nemá mezi
+  čím přepínat. S jediným účtem zabírala svislá lišta vlevo 88 pixelů na celou
+  výšku okna pro logo, avatar, na který nešlo ani kliknout, a dvě tlačítka.
+  Lišta se teď objeví až u druhého účtu; její akce mezitím drží nabídka pod
+  avatarem v hlavičce seznamu, stejná jako na telefonu. Konverzace tím dostala
+  89 pixelů zpět — na notebooku s šířkou 1024 skoro devět procent obrazovky.
+- Seznam konverzací jde složit. V hlavičce otevřené konverzace přibylo
+  tlačítko, které seznam schová a zase vrátí, takže na čtení delší konverzace
+  je k dispozici celé okno. Volba přežije restart aplikace.
 
 ## 0.1.0 (45) — 2. 9. 2026
 
