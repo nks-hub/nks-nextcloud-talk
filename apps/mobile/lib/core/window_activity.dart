@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 /// Whether the app is the window the user is actually working in.
@@ -26,21 +28,53 @@ bool isWindowActive(AppLifecycleState? state) =>
 /// moment a conversation opens, not on the next focus event.
 final class WindowActivity extends ValueNotifier<bool>
     with WidgetsBindingObserver {
-  WindowActivity({required WidgetsBinding binding})
-    : _binding = binding,
-      super(isWindowActive(binding.lifecycleState)) {
+  WindowActivity({
+    required WidgetsBinding binding,
+    this.inactiveGrace = defaultInactiveGrace,
+  }) : _binding = binding,
+       super(isWindowActive(binding.lifecycleState)) {
     _binding.addObserver(this);
   }
 
+  /// How long a window may sit inactive before presence is released.
+  ///
+  /// A photo picker, a permission dialog or the notification shade makes the
+  /// app inactive for about a second; releasing the room session at once
+  /// and rebuilding it on resume cost a `DELETE`, a `POST`, a signaling
+  /// round trip and a presence flap for every such tap. A window that stays
+  /// inactive still loses presence, only two seconds later.
+  static const defaultInactiveGrace = Duration(seconds: 2);
+
   final WidgetsBinding _binding;
+  final Duration inactiveGrace;
+  Timer? _release;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    value = isWindowActive(state);
+    if (isWindowActive(state)) {
+      _release?.cancel();
+      _release = null;
+      value = true;
+      return;
+    }
+    if (!value || _release != null) {
+      return;
+    }
+    if (inactiveGrace == Duration.zero) {
+      value = false;
+      return;
+    }
+    _release = Timer(inactiveGrace, () {
+      _release = null;
+      if (!isWindowActive(_binding.lifecycleState)) {
+        value = false;
+      }
+    });
   }
 
   @override
   void dispose() {
+    _release?.cancel();
     _binding.removeObserver(this);
     super.dispose();
   }

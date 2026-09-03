@@ -32,7 +32,10 @@ void main() {
   testWidgets('the notifier reports every change to its listeners', (
     tester,
   ) async {
-    final activity = WindowActivity(binding: tester.binding);
+    final activity = WindowActivity(
+      binding: tester.binding,
+      inactiveGrace: Duration.zero,
+    );
     addTearDown(activity.dispose);
     final seen = <bool>[];
     activity.addListener(() => seen.add(activity.value));
@@ -42,6 +45,32 @@ void main() {
 
     expect(seen, <bool>[false, true]);
     expect(activity.value, isTrue);
+  });
+
+  testWidgets('a short inactive blip keeps presence, a long one releases it', (
+    tester,
+  ) async {
+    // A picker or a permission dialog makes the app inactive for about a
+    // second. Releasing the room session for that costs a DELETE, a POST and
+    // a signaling round trip per tap, so the release waits a moment.
+    final activity = WindowActivity(binding: tester.binding);
+    addTearDown(activity.dispose);
+    final seen = <bool>[];
+    activity.addListener(() => seen.add(activity.value));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(milliseconds: 800));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(seconds: 3));
+    expect(seen, isEmpty, reason: 'a blip never released presence');
+    expect(activity.value, isTrue);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump(const Duration(seconds: 3));
+    expect(seen, <bool>[false]);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    expect(seen, <bool>[false, true]);
   });
 
   testWidgets('disposal stops the notifier observing the binding', (
