@@ -407,12 +407,7 @@
           "unreadMessages",
           "isArchived",
           "isImportant",
-          "isSensitive",
-          "tagIds",
-          "lastPinnedId",
-          "hiddenPinnedId",
-          "hasScheduledMessages",
-          "attributes"
+          "isSensitive"
         ],
         "properties": {
           "actorId": {

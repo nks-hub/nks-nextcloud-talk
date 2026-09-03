@@ -23,6 +23,7 @@ SCHEMA_PATH_MEMBER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 REQUIRED_FIXTURE_IDS = {
     "compact",
+    "talk22",
     "duplicate-token",
     "empty",
     "full",

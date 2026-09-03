@@ -363,21 +363,28 @@ ConversationRoom parseConversationRoom(
   final isArchived = _requireBool(room, 'isArchived', path);
   final isImportant = _requireBool(room, 'isImportant', path);
   final isSensitive = _requireBool(room, 'isSensitive', path);
-  final tagIds = requireUniqueStringSet(
-    room['tagIds'],
-    path: '$path.tagIds',
-    code: _responseCode,
-  );
-  final lastPinnedId = _requireInt(room, 'lastPinnedId', path);
-  final hiddenPinnedId = _requireInt(room, 'hiddenPinnedId', path);
-  final hasScheduledMessages = _requireInt(
+  // Talk 22 (the supported floor, D-047) does not send these five fields;
+  // they arrived with conversation tags, pinned and scheduled messages in
+  // Talk 23–24. Absent means "none", present means validated as before —
+  // measured against a Talk 22.0.17 server, not assumed.
+  final tagIds = room.containsKey('tagIds')
+      ? requireUniqueStringSet(
+          room['tagIds'],
+          path: '$path.tagIds',
+          code: _responseCode,
+        )
+      : const <String>{};
+  final lastPinnedId = _optionalIntOr(room, 'lastPinnedId', path, 0);
+  final hiddenPinnedId = _optionalIntOr(room, 'hiddenPinnedId', path, 0);
+  final hasScheduledMessages = _optionalIntOr(
     room,
     'hasScheduledMessages',
     path,
+    0,
     minimum: 0,
     maximum: 1,
   );
-  final attributes = _requireInt(room, 'attributes', path, minimum: 0);
+  final attributes = _optionalIntOr(room, 'attributes', path, 0, minimum: 0);
 
   if (lastMessage != null && lastMessage.token != token) {
     protocolFailure(
@@ -588,6 +595,26 @@ String? _requireNullableString(
     return null;
   }
   return requireString(value, path: '$parentPath.$key', code: _responseCode);
+}
+
+int _optionalIntOr(
+  Map<String, Object?> object,
+  String key,
+  String parentPath,
+  int fallback, {
+  int? minimum,
+  int? maximum,
+}) {
+  if (!object.containsKey(key)) {
+    return fallback;
+  }
+  return _requireInt(
+    object,
+    key,
+    parentPath,
+    minimum: minimum,
+    maximum: maximum,
+  );
 }
 
 int _requireInt(

@@ -822,3 +822,12 @@ Server se starší řadou hlásí `conversationProfileUnsupported` (chybí
 server, ne jako chybu sítě. Ověřit měřením na starší řadě nelze bez druhého
 serveru; rozhodnutí proto vychází z dokumentace upstreamu, ne z běhu.
 
+Změřeno 3. 9. 2026 na druhém serveru `talk2.example.invalid` (Nextcloud 32.0.14,
+Talk 22.0.17): řada 22 neposílá v `v4/room` pole `tagIds`, `lastPinnedId`,
+`hiddenPinnedId`, `hasScheduledMessages` ani `attributes` a parser je do té
+doby vyžadoval, takže seznam konverzací odmítl celý. Od `275c039`/`talk22`
+fixture jsou tato pole volitelná s prázdnou/nulovou výchozí hodnotou; když
+přijdou, validují se stejně přísně jako dřív. Totéž platí pro Login Flow v2
+na serveru s pretty URL (bez `index.php`), který oficiální Docker image
+používá.
+

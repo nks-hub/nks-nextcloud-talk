@@ -83,6 +83,20 @@
       "expectLastMessageAbsent": true
     },
     {
+      "id": "talk22",
+      "name": "Talk 22 conversation list without tags, pins, scheduled and attributes",
+      "file": "conversations-talk22.response.json",
+      "operationId": "getConversationsV4",
+      "direction": "response",
+      "status": "200",
+      "mediaType": "application/json",
+      "headerSet": "compact",
+      "schemaValid": true,
+      "expectedClassification": "success",
+      "expectedRoomCount": 1,
+      "expectLastMessageAbsent": true
+    },
+    {
       "id": "empty",
       "name": "successful empty conversation list",
       "file": "conversations-empty.response.json",
