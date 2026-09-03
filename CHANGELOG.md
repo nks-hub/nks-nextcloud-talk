@@ -18,7 +18,22 @@ proto jen to, co je doložitelné z App Store Connect.
 
 ## 0.1.0 (50) — 3. 9. 2026
 
-Vydáno ze zdroje `BUILD50SHA`, tag `v0.1.0+50`.
+Vydáno ze zdroje `9a530d7`, tag `v0.1.0+50`.
+
+Android: release APK 89 115 320 B, SHA-256
+`78a316e3f53c59c7836e5070aaef986cfff3372f3d345f9fc2f998ffd2279b78`,
+versionCode 50; na Android 14 emulátoru běží, sync bez opakovaného
+stahování capabilities. Play track nenahrán.
+
+Windows: instalátor `NKS-Talk-0.1.0-50-windows-x64-setup.exe` 35 215 152 B,
+SHA-256 `735af5242196d460d2cf1f616d7427519228e271889fa5eac940e83ba05a8531`,
+nepodepsaný; tichá instalace na `windows-vm`, `nextcloudtalk.exe` hlásí
+`0.1.0+50` (PID 9608), účet přihlášený a synchronizuje.
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build nainstalován a
+spuštěn se seznamem konverzací. TestFlight NEVYDÁN (provisioning).
+
+macOS: debug build + ad-hoc podpis, 30 s bez pádu, bez účtu.
 
 - Synchronizace seznamu konverzací už nestahuje každých 15 s znovu 13 kB
   capabilities. Přerušitelné čtení, kterým sync jede, nikdy nenahradilo
