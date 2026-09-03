@@ -102,6 +102,73 @@ void main() {
     }
   });
 
+  test(
+    'offline, the profile comes from the features stored with the account',
+    () async {
+      // An app started without a network must still offer Reply, Edit and
+      // Delete; the server's features are already on the account row.
+      await accounts.updateCapabilities('account-a', const {
+        'chat-v2',
+        'chat-reference-id',
+        'chat-replies',
+        'edit-messages',
+        'delete-messages',
+        'reactions',
+        'react-permission',
+      }, serverThemeColor: null);
+      final room = _roomJson()
+        ..['permissions'] = 510
+        ..['attendeePermissions'] = 0;
+      await _insertRoom(database, room);
+      final api = _api(
+        (request) async => throw http.ClientException('offline'),
+      );
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+
+      final profile = await service.resolveProfile(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+
+      expect(profile.reply, isTrue);
+      expect(profile.edit, isTrue);
+      expect(profile.delete, isTrue);
+      expect(profile.canReact, isTrue);
+      expect(
+        profile.scheduled,
+        isFalse,
+        reason: 'local features need the server',
+      );
+    },
+  );
+
+  test(
+    'offline without stored features still reports the network error',
+    () async {
+      final api = _api(
+        (request) async => throw http.ClientException('offline'),
+      );
+      addTearDown(api.close);
+      final service = ChatMessageActionsService(
+        accounts: accounts,
+        chat: chat,
+        credentials: credentials,
+        api: api,
+      );
+
+      await expectLater(
+        service.resolveProfile(accountId: 'account-a', roomToken: 'rooma123'),
+        throwsA(isA<ChatMessageActionException>()),
+      );
+    },
+  );
+
   test('the default participant may react', () async {
     // PERMISSIONS_MAX_DEFAULT: every permission granted without an override.
     const maxDefaultPermissions = 510;

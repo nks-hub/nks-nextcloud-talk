@@ -609,7 +609,10 @@ final class ChatMessageActionsService {
         ChatMessageActionError.invalidResponse,
       );
     }
-    final CapabilitySnapshot capabilities;
+    List<String> talkFeatures = const <String>[];
+    Object? talkLocalFeatures = const <Object?>[];
+    var translationAvailable = false;
+    CapabilitySnapshot? capabilities;
     try {
       capabilities = await _api.getAuthenticatedCapabilities(
         server: server,
@@ -619,37 +622,57 @@ final class ChatMessageActionsService {
     } on NextcloudApiException catch (error) {
       if (error.statusCode == 401) {
         await _chat.markReauthenticationRequired(accountId);
+        throw ChatMessageActionException(_mapApiError(error));
       }
-      throw ChatMessageActionException(_mapApiError(error));
+      // Offline, the actions a message offers must not vanish: the profile
+      // is a read of what this server supports, and that is already stored
+      // with the account. Without the fallback an app started without a
+      // network showed no Reply, Edit or Delete at all, and kept showing
+      // none after the network came back (Android 14, build 51). Local
+      // features and translation are only known from the live read, so
+      // scheduling and translation stay off until the next online resolve —
+      // both need the server anyway.
+      final stored = _storedTalkFeatures(account);
+      if (stored == null) {
+        throw ChatMessageActionException(_mapApiError(error));
+      }
+      talkFeatures = stored;
+      talkLocalFeatures = const <Object?>[];
+      translationAvailable = false;
     }
-    if (!capabilities.hasTalk) {
-      throw const ChatMessageActionException(
-        ChatMessageActionError.talkUnavailable,
+    if (capabilities != null) {
+      if (!capabilities.hasTalk) {
+        throw const ChatMessageActionException(
+          ChatMessageActionError.talkUnavailable,
+        );
+      }
+      await _accounts.updateCapabilities(
+        accountId,
+        capabilities.talkFeatures,
+        serverThemeColor: capabilities.serverThemeColor,
       );
+      await _chat.recordCapabilities(
+        accountId: accountId,
+        talkFeatures: capabilities.talkFeatures,
+        observedAt: DateTime.now().toUtc(),
+      );
+      // `scheduled-messages` is only ever announced under `features-local`,
+      // so passing an empty local set here would gate scheduling away on
+      // every server that supports it.
+      final rawSpreed = capabilities.capabilities['spreed'];
+      final spreed = rawSpreed is Map<String, Object?>
+          ? rawSpreed
+          : const <String, Object?>{};
+      talkFeatures = capabilities.talkFeatures.toList();
+      talkLocalFeatures = spreed['features-local'] ?? const <Object?>[];
+      translationAvailable = capabilities.chatTranslationAvailable;
     }
-    await _accounts.updateCapabilities(
-      accountId,
-      capabilities.talkFeatures,
-      serverThemeColor: capabilities.serverThemeColor,
-    );
-    await _chat.recordCapabilities(
-      accountId: accountId,
-      talkFeatures: capabilities.talkFeatures,
-      observedAt: DateTime.now().toUtc(),
-    );
     final role = participantRoleFor(room.participantType);
-    // `scheduled-messages` is only ever announced under `features-local`, so
-    // passing an empty local set here would gate scheduling away on every
-    // server that supports it.
-    final rawSpreed = capabilities.capabilities['spreed'];
-    final spreed = rawSpreed is Map<String, Object?>
-        ? rawSpreed
-        : const <String, Object?>{};
     final RichChatCapabilityProfile profile;
     try {
       profile = RichChatCapabilityProfile.fromTalkFeatures(
-        talkFeatures: capabilities.talkFeatures.toList(),
-        talkLocalFeatures: spreed['features-local'] ?? const <Object?>[],
+        talkFeatures: talkFeatures,
+        talkLocalFeatures: talkLocalFeatures,
         federated: room.isFederated,
         moderator:
             role == ParticipantRole.owner ||
@@ -660,7 +683,7 @@ final class ChatMessageActionsService {
         // set, which is the normal case and would gate away every
         // permission-guarded action, reactions included.
         participantPermissions: room.permissions,
-        translationAvailable: capabilities.chatTranslationAvailable,
+        translationAvailable: translationAvailable,
       );
     } on TalkProtocolException {
       throw const ChatMessageActionException(
@@ -674,6 +697,21 @@ final class ChatMessageActionsService {
       profile: profile,
       readOnly: room.readOnly != 0,
     );
+  }
+}
+
+/// The Talk features stored with the account by the last successful read,
+/// or null when the row has never seen one or holds something unreadable.
+List<String>? _storedTalkFeatures(StoredAccount account) {
+  try {
+    final decoded = jsonDecode(account.talkFeaturesJson);
+    if (decoded is! List<Object?>) {
+      return null;
+    }
+    final features = decoded.whereType<String>().toList();
+    return features.isEmpty ? null : features;
+  } on FormatException {
+    return null;
   }
 }
 
