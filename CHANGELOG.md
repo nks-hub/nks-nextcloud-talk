@@ -16,6 +16,23 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (51) — 3. 9. 2026
+
+Vydáno ze zdroje `BUILD51SHA`, tag `v0.1.0+51`.
+
+- Výběr emoji zná česky celý katalog: 4 361 názvů a klíčových slov z Unicode
+  CLDR, takže „hlodavec" najde bobra a „tající" tající obličej. Ručně psaných
+  31 názvů zůstává a má přednost.
+- Rozhodnuto, od které řady serveru klient funguje: Talk 22 (Nextcloud 32) —
+  tam vznikla poslední povinná capability (`threads`); jediná mladší,
+  štítky konverzací, jen zapíná funkci (D-047).
+- Připraven spike volání: `flutter_webrtc` 1.6.1 se postaví a naváže spojení
+  na Windows, Androidu, macOS i v iOS simulátoru; podrobnosti a pasti
+  v `docs/TODO-notifications-calls.md`. Do aplikace se zatím nepřidává.
+- Úklid TODO: uzavřeno sedm položek, které byly buď duplicitní, překonané
+  funkční cestou (macOS ad-hoc běh, Windows build mimo VM), nebo zásady
+  místo úkolů; changelog na NKS IS je synchronizovaný s repozitářem.
+
 ## 0.1.0 (50) — 3. 9. 2026
 
 Vydáno ze zdroje `9a530d7`, tag `v0.1.0+50`.
