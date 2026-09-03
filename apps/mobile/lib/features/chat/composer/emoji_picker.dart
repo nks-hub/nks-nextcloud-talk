@@ -6,6 +6,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'emoji_usage_store.dart';
 
+part 'emoji_czech_names.g.dart';
+
 enum EmojiCategory {
   favorites,
   recent,
@@ -44,18 +46,26 @@ final class EmojiChoice {
 
   /// Display name for [locale], falling back to the English one.
   String nameFor(Locale? locale) =>
-      locale?.languageCode == 'cs' ? (_czechEmoji[glyph]?.name ?? name) : name;
+      locale?.languageCode == 'cs' ? _sentenceCase(_czech?.name ?? name) : name;
 
   /// Every name and keyword in every supported language, so search keeps
   /// working no matter which language the user types in.
   List<String> get searchTerms {
-    final czech = _czechEmoji[glyph];
+    final czech = _czech;
     return <String>[
       name,
       ...keywords,
       if (czech != null) ...<String>[czech.name, ...czech.keywords],
     ];
   }
+
+  /// The hand-written table wins, the CLDR table covers the rest. CLDR keys
+  /// some glyphs without the variation selector this catalog carries, so the
+  /// bare sequence is tried second.
+  EmojiTranslation? get _czech =>
+      _czechEmoji[glyph] ??
+      _cldrCzechEmoji[glyph] ??
+      _cldrCzechEmoji[glyph.replaceAll('️', '')];
 }
 
 /// Localized name and keywords for a single glyph.

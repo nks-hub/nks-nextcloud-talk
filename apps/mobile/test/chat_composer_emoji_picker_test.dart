@@ -196,6 +196,29 @@ void main() {
     expect(catalog.search('heart').map((c) => c.glyph), contains('❤️'));
   });
 
+  test('the whole Unicode catalog has Czech names and keywords from CLDR', () {
+    final catalog = EmojiCatalog.standard();
+    // Nothing in the hand-written table covers these; CLDR does.
+    final beaver = catalog.choices.firstWhere((choice) => choice.glyph == '🦫');
+    expect(beaver.nameFor(const Locale('cs')), 'Bobr');
+    expect(catalog.search('hlodavec').map((c) => c.glyph), contains('🦫'));
+    expect(catalog.search('tající').map((c) => c.glyph), contains('🫠'));
+
+    // Coverage, not a sample: every glyph the picker offers must translate.
+    final untranslated = catalog.choices
+        .where((choice) => choice.nameFor(const Locale('cs')) == choice.name)
+        .where((choice) => choice.category != EmojiCategory.flags)
+        .map((choice) => choice.glyph)
+        .toList();
+    // Cognates such as Pizza or Panda and the 26 regional indicators read
+    // the same in both languages, so the bar is 2 %, not zero.
+    expect(
+      untranslated.length,
+      lessThan(catalog.choices.length ~/ 50),
+      reason: 'more than 2 % of glyphs fall back to English: $untranslated',
+    );
+  });
+
   test('display name follows the locale, widget key does not', () {
     final heart = EmojiCatalog.standard().choices.firstWhere(
       (choice) => choice.glyph == '❤️',
