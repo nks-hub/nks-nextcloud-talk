@@ -40,6 +40,86 @@ void main() {
     },
   );
 
+  // The attachment button used to upload the moment a file was picked, so a
+  // file the user then thought better of was already in their Talk folder.
+  // Since 2026-09-03 a pick only prepares; the send button uploads.
+  test('a held pick uploads nothing until it is sent', () async {
+    var started = 0;
+    final controller = ImageAttachmentUploadController(
+      startUpload: (_) async {
+        started++;
+        return ImageAttachmentUploadSession(
+          events: const Stream<ImageAttachmentUploadEvent>.empty(),
+          cancel: () async {},
+        );
+      },
+    );
+    addTearDown(controller.dispose);
+
+    await controller.pickAndHold(() async => _request);
+    expect(controller.state.phase, ImageAttachmentUploadPhase.prepared);
+    expect(controller.state.isPrepared, isTrue);
+    expect(controller.state.isActive, isTrue, reason: 'no second pick');
+    expect(started, 0);
+
+    // A second pick is refused while one waits.
+    await controller.pickAndHold(() async => fail('must not pick again'));
+    expect(started, 0);
+
+    ImageAttachmentUploadRequest? sent;
+    final refreshed = ImageAttachmentUploadRequest(
+      accountId: _request.accountId,
+      server: _request.server,
+      roomToken: _request.roomToken,
+      source: _request.source,
+      metadata: AttachmentMetadata(
+        kind: AttachmentMessageKind.file,
+        caption: 'typed after the pick',
+        replyTo: null,
+        threadId: null,
+        silent: false,
+      ),
+      presentation: _request.presentation,
+      diagnosticSource: _request.diagnosticSource,
+    );
+    final sending = ImageAttachmentUploadController(
+      startUpload: (request) async {
+        sent = request;
+        return ImageAttachmentUploadSession(
+          events: const Stream<ImageAttachmentUploadEvent>.empty(),
+          cancel: () async {},
+        );
+      },
+    );
+    addTearDown(sending.dispose);
+    await sending.pickAndHold(() async => _request);
+    await sending.sendPrepared(refresh: (_) => refreshed);
+    expect(sent?.metadata.caption, 'typed after the pick');
+    expect(sending.state.phase, ImageAttachmentUploadPhase.queued);
+  });
+
+  test(
+    'removing a held pick goes back to idle without a network call',
+    () async {
+      var started = 0;
+      final controller = ImageAttachmentUploadController(
+        startUpload: (_) async {
+          started++;
+          throw StateError('not reached');
+        },
+      );
+      addTearDown(controller.dispose);
+
+      await controller.pickAndHold(() async => _request);
+      await controller.cancel();
+      expect(controller.state.phase, ImageAttachmentUploadPhase.idle);
+      expect(started, 0);
+      // Sending after the removal is a no-op: there is nothing to send.
+      await controller.sendPrepared();
+      expect(started, 0);
+    },
+  );
+
   test('cancels a session returned after cancellation was requested', () async {
     final pendingSession = Completer<ImageAttachmentUploadSession>();
     var cancellationCount = 0;

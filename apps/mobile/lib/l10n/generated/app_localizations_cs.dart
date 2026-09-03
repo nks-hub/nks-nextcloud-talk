@@ -644,6 +644,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get imageUploadQueued => 'Čeká na nahrání';
 
   @override
+  String get attachmentReadyToSend => 'Připraveno k odeslání se zprávou';
+
+  @override
+  String get remove => 'Odebrat';
+
+  @override
   String uploadingImage(int percent) {
     return 'Nahrávám… $percent %';
   }

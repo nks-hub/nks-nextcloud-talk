@@ -10,6 +10,7 @@ void _registerChatMediaComposerDesktopDropTests(
     addTearDown(bridge.close);
     final voiceBackends = _VoiceBackendFactory();
     addTearDown(voiceBackends.close);
+    final mediaController = ChatMediaComposerController();
 
     await tester.pumpWidget(
       DesktopAttachmentDrop(
@@ -18,6 +19,7 @@ void _registerChatMediaComposerDesktopDropTests(
           bridge: bridge.bridge,
           threadId: null,
           voiceBackends: voiceBackends,
+          controller: mediaController,
         ),
       ),
     );
@@ -34,8 +36,16 @@ void _registerChatMediaComposerDesktopDropTests(
         mimeType: 'application/pdf',
       ),
     ]);
-    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
+    await _pumpUntil(tester, () => mediaController.hasPreparedAttachment);
     final outcome = await submission;
+    // A drop prepares the file like the picker does; the send uploads it.
+    expect(mediaController.hasPreparedAttachment, isTrue);
+    expect(bridge.sessions, isEmpty);
+    expect(
+      await tester.runAsync(mediaController.sendPreparedAttachment),
+      isTrue,
+    );
+    await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     expect(outcome, DesktopAttachmentDropOutcome.accepted);
     expect(bridge.sources, hasLength(1));

@@ -475,12 +475,19 @@ void main() {
     currentReply = _replyTarget(messageId: 62);
     await tester.pumpWidget(app());
     await backend.complete();
+    final mediaController = tester
+        .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+        .controller!;
+    await _pumpUntil(tester, () => mediaController.hasPreparedAttachment);
+    // The pick survived the rebuild and now waits for the send. The send
+    // answers what the composer points at NOW, not at pick time: the reply
+    // target moved to 62 while the picker was open, and that is what goes out.
+    unawaited(mediaController.sendPreparedAttachment());
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     expect(bridge.metadata, hasLength(1));
-    expect(bridge.metadata.single.replyTo, 61);
-    expect(acceptedReplies, <int>[61]);
-    expect(currentReply.messageId, 62);
+    expect(bridge.metadata.single.replyTo, 62);
+    expect(acceptedReplies, <int>[62]);
     expect(bridge.sessions, hasLength(1));
   });
 

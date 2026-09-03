@@ -32,6 +32,9 @@ enum AttachmentUploadSource { unknown, gallery, camera, file, image, contact }
 enum AttachmentUploadUiPhase {
   none,
   preparing,
+
+  /// Picked and waiting for the send button; no network yet.
+  prepared,
   queued,
   uploading,
   awaitingConfirmation,

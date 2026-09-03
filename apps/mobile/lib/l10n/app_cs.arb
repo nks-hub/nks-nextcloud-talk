@@ -237,6 +237,8 @@
   "attachImage": "Připojit obrázek",
   "preparingImage": "Připravuji přílohu…",
   "imageUploadQueued": "Čeká na nahrání",
+  "attachmentReadyToSend": "Připraveno k odeslání se zprávou",
+  "remove": "Odebrat",
   "uploadingImage": "Nahrávám… {percent} %",
   "@uploadingImage": {
     "placeholders": {

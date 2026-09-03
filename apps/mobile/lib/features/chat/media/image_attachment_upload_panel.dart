@@ -149,7 +149,7 @@ final class ImageAttachmentPickerButton extends StatelessWidget {
     if (source == null || controller.state.isActive) {
       return;
     }
-    await controller.pickAndStart(() => prepare(source));
+    await controller.pickAndHold(() => prepare(source));
   }
 
   List<_SourceOption> _options(AppLocalizations strings) => <_SourceOption>[
@@ -291,7 +291,7 @@ final class _UploadCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (state.isActive) ...[
+              if (state.isActive && !state.isPrepared) ...[
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   key: const Key('image-attachment-upload-progress'),
@@ -363,6 +363,17 @@ final class _UploadCard extends StatelessWidget {
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           onPressed: onDismiss,
           icon: const Icon(Icons.close_rounded),
+        ),
+      ];
+    }
+    if (state.isPrepared) {
+      return [
+        TextButton.icon(
+          key: const Key('remove-prepared-attachment'),
+          onPressed: onCancel,
+          icon: const Icon(Icons.delete_outline_rounded),
+          label: Text(strings.remove),
+          style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
         ),
       ];
     }
@@ -447,6 +458,7 @@ String _statusText(AppLocalizations strings, ImageAttachmentUploadState state) {
   return switch (state.phase) {
     ImageAttachmentUploadPhase.idle => '',
     ImageAttachmentUploadPhase.preparing => strings.preparingImage,
+    ImageAttachmentUploadPhase.prepared => strings.attachmentReadyToSend,
     ImageAttachmentUploadPhase.queued => strings.imageUploadQueued,
     ImageAttachmentUploadPhase.uploading => strings.uploadingImage(
       ((state.progress ?? 0) * 100).round(),

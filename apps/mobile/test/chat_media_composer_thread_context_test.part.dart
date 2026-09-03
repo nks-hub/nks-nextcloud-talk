@@ -178,7 +178,7 @@ Widget _threadComposerApp({
         sourceStore: sourceStore,
         capabilityProfile: _profile(),
         submissionBridge: bridge,
-        controller: controller,
+        controller: controller ?? ChatMediaComposerController(),
         imageSelectionBackend: const _ImageBackend(),
         contactSelectionBackend: contactSelectionBackend,
         createVoiceCaptureBackend: voiceBackends?.createCapture,

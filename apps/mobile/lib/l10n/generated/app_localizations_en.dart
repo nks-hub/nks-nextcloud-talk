@@ -643,6 +643,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageUploadQueued => 'Waiting to upload';
 
   @override
+  String get attachmentReadyToSend => 'Ready to send with your message';
+
+  @override
+  String get remove => 'Remove';
+
+  @override
   String uploadingImage(int percent) {
     return 'Uploading… $percent%';
   }

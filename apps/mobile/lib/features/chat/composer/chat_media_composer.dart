@@ -109,6 +109,18 @@ final class ChatMediaComposerController {
   Future<bool> Function(LoadGiphyAttachmentPayload loader)? _submitGiphy;
   Future<bool> Function(AttachmentPickerSource source)? _pickAttachment;
   Future<bool> Function()? _pickContact;
+  bool Function()? _hasPreparedAttachment;
+  Future<bool> Function()? _sendPreparedAttachment;
+
+  /// True while a picked file waits in the composer for the send button.
+  bool get hasPreparedAttachment => _hasPreparedAttachment?.call() ?? false;
+
+  /// Uploads the waiting file with whatever the message field holds as its
+  /// caption. Returns false when nothing was waiting.
+  Future<bool> sendPreparedAttachment() async {
+    final send = _sendPreparedAttachment;
+    return send == null ? false : send();
+  }
 
   Future<bool> submitGiphyAttachment(LoadGiphyAttachmentPayload loader) async {
     final submit = _submitGiphy;
@@ -129,12 +141,16 @@ final class ChatMediaComposerController {
     Object owner,
     Future<bool> Function(LoadGiphyAttachmentPayload loader) submitGiphy,
     Future<bool> Function(AttachmentPickerSource source) pickAttachment,
-    Future<bool> Function() pickContact,
-  ) {
+    Future<bool> Function() pickContact, {
+    required bool Function() hasPreparedAttachment,
+    required Future<bool> Function() sendPreparedAttachment,
+  }) {
     _owner = owner;
     _submitGiphy = submitGiphy;
     _pickAttachment = pickAttachment;
     _pickContact = pickContact;
+    _hasPreparedAttachment = hasPreparedAttachment;
+    _sendPreparedAttachment = sendPreparedAttachment;
   }
 
   void _detach(Object owner) {
@@ -145,6 +161,8 @@ final class ChatMediaComposerController {
     _submitGiphy = null;
     _pickAttachment = null;
     _pickContact = null;
+    _hasPreparedAttachment = null;
+    _sendPreparedAttachment = null;
   }
 }
 
@@ -341,6 +359,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
       _submitGiphyAttachment,
       _pickAttachment,
       _pickContact,
+      hasPreparedAttachment: () => _imageController.state.isPrepared,
+      sendPreparedAttachment: _sendPreparedAttachment,
     );
   }
 
@@ -366,6 +386,8 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         _submitGiphyAttachment,
         _pickAttachment,
         _pickContact,
+        hasPreparedAttachment: () => _imageController.state.isPrepared,
+        sendPreparedAttachment: _sendPreparedAttachment,
       );
     }
     if (oldWidget.accountId == widget.accountId &&

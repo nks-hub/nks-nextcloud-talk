@@ -237,6 +237,8 @@
   "attachImage": "Attach image",
   "preparingImage": "Preparing attachment…",
   "imageUploadQueued": "Waiting to upload",
+  "attachmentReadyToSend": "Ready to send with your message",
+  "remove": "Remove",
   "uploadingImage": "Uploading… {percent}%",
   "@uploadingImage": {
     "placeholders": {

@@ -149,11 +149,36 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     return true;
   }
 
+  /// Sends the file that waits in the composer. The request is rebuilt from
+  /// the current admission so the caption is what the field holds now and the
+  /// reply target is the current one, not the state at pick time.
+  Future<bool> _sendPreparedAttachment() async {
+    if (_disposed || !_imageController.state.isPrepared) {
+      return false;
+    }
+    final admission = _captureAdmission(AttachmentMessageKind.file);
+    if (admission == null) {
+      return false;
+    }
+    await _imageController.sendPrepared(
+      refresh: (held) => ImageAttachmentUploadRequest(
+        accountId: admission.accountId,
+        server: admission.server,
+        roomToken: admission.roomToken,
+        source: held.source,
+        metadata: admission.metadata,
+        presentation: held.presentation,
+        diagnosticSource: held.diagnosticSource,
+      ),
+    );
+    return true;
+  }
+
   Future<bool> _pickAttachment(AttachmentPickerSource source) async {
     if (_disposed || !_imageSupported || _imageController.state.isActive) {
       return false;
     }
-    await _imageController.pickAndStart(() => _prepareImage(source));
+    await _imageController.pickAndHold(() => _prepareImage(source));
     return true;
   }
 
@@ -201,7 +226,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     if (_disposed || !_imageSupported || _imageController.state.isActive) {
       return false;
     }
-    await _imageController.pickAndStart(() => _prepareDroppedAttachment(item));
+    await _imageController.pickAndHold(() => _prepareDroppedAttachment(item));
     return true;
   }
 
@@ -357,7 +382,7 @@ extension _ChatMediaComposerAttachments on _ChatMediaComposerState {
     if (_disposed || !_imageSupported || _imageController.state.isActive) {
       return false;
     }
-    await _imageController.pickAndStart(_prepareContact);
+    await _imageController.pickAndHold(_prepareContact);
     return true;
   }
 }

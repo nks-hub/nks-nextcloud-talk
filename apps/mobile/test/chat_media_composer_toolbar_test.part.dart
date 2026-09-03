@@ -415,9 +415,18 @@ void _registerChatMediaComposerToolbarTests(
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     await tester.pump();
 
-    late Future<bool> started;
+    // The pick itself is local and finishes while inactive; it is the send
+    // (admission, network) that has to wait for the app to come back.
+    expect(
+      await tester.runAsync(
+        () => controller.pickAttachment(AttachmentPickerSource.gallery),
+      ),
+      isTrue,
+    );
+    expect(controller.hasPreparedAttachment, isTrue);
+    late Future<bool> sent;
     await tester.runAsync(() async {
-      started = controller.pickAttachment(AttachmentPickerSource.gallery);
+      sent = controller.sendPreparedAttachment();
       await Future<void>.delayed(const Duration(milliseconds: 20));
     });
 
@@ -431,7 +440,7 @@ void _registerChatMediaComposerToolbarTests(
     expect(bridge.sessions, isEmpty);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
-    expect(await tester.runAsync(() => started), isTrue);
+    expect(await tester.runAsync(() => sent), isTrue);
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
     expect(bridge.sources, hasLength(1));
   });
@@ -463,13 +472,19 @@ void _registerChatMediaComposerToolbarTests(
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
 
-      late Future<bool> started;
+      expect(
+        await tester.runAsync(
+          () => controller.pickAttachment(AttachmentPickerSource.gallery),
+        ),
+        isTrue,
+      );
+      late Future<bool> sent;
       await tester.runAsync(() async {
-        started = controller.pickAttachment(AttachmentPickerSource.gallery);
+        sent = controller.sendPreparedAttachment();
         await Future<void>.delayed(const Duration(milliseconds: 20));
       });
       // No resume ever comes: the window stays behind Finder.
-      expect(await tester.runAsync(() => started), isTrue);
+      expect(await tester.runAsync(() => sent), isTrue);
       await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
       expect(bridge.sources, hasLength(1));
     },

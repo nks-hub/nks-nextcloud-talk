@@ -12,6 +12,10 @@ typedef CreateImageUploadWatchdogTimer =
 enum ImageAttachmentUploadPhase {
   idle,
   preparing,
+
+  /// Picked and copied into app storage, shown in the composer, but not sent:
+  /// nothing has left the device yet. Sending starts the upload.
+  prepared,
   queued,
   uploading,
   awaitingConfirmation,
@@ -284,6 +288,16 @@ final class ImageAttachmentUploadState {
     retryAllowed: event.retryAllowed,
   );
 
+  factory ImageAttachmentUploadState.prepared(
+    ImageAttachmentUploadRequest request,
+  ) => ImageAttachmentUploadState._(
+    phase: ImageAttachmentUploadPhase.prepared,
+    request: request,
+    progress: null,
+    failureCode: null,
+    retryAllowed: false,
+  );
+
   factory ImageAttachmentUploadState.queued(
     ImageAttachmentUploadRequest request,
   ) => ImageAttachmentUploadState._(
@@ -322,8 +336,13 @@ final class ImageAttachmentUploadState {
   final String? failureCode;
   final bool retryAllowed;
 
+  /// A prepared attachment waits for the send button; it occupies the
+  /// composer like an active upload does, so a second pick is refused.
+  bool get isPrepared => phase == ImageAttachmentUploadPhase.prepared;
+
   bool get isActive => switch (phase) {
     ImageAttachmentUploadPhase.preparing ||
+    ImageAttachmentUploadPhase.prepared ||
     ImageAttachmentUploadPhase.queued ||
     ImageAttachmentUploadPhase.uploading ||
     ImageAttachmentUploadPhase.awaitingConfirmation ||
@@ -392,7 +411,38 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
 
   ImageAttachmentUploadState get state => _state;
 
-  Future<void> pickAndStart(PrepareImageAttachment prepare) async {
+  Future<void> pickAndStart(PrepareImageAttachment prepare) =>
+      _pick(prepare, holdForSend: false);
+
+  /// Picks the source and stops there: the request is shown as prepared and
+  /// nothing is uploaded until [sendPrepared]. This is what the attachment
+  /// button does — the user chose a file, not yet to send it.
+  Future<void> pickAndHold(PrepareImageAttachment prepare) =>
+      _pick(prepare, holdForSend: true);
+
+  /// Uploads the prepared attachment. [refresh] lets the caller rebuild the
+  /// request with what is true at send time — the caption typed since the
+  /// pick, the reply target — because the prepared one carries the state
+  /// from when the file was chosen.
+  Future<void> sendPrepared({
+    ImageAttachmentUploadRequest Function(ImageAttachmentUploadRequest)?
+    refresh,
+  }) async {
+    final held = _state.request;
+    if (!_state.isPrepared || _disposed || held == null) {
+      return;
+    }
+    final request = refresh == null ? held : refresh(held);
+    final generation = ++_generation;
+    _cancelRequested = false;
+    _lastRequest = request;
+    await _begin(request, generation);
+  }
+
+  Future<void> _pick(
+    PrepareImageAttachment prepare, {
+    required bool holdForSend,
+  }) async {
     if (_state.isActive || _disposed) {
       return;
     }
@@ -443,6 +493,10 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
       );
       return;
     }
+    if (holdForSend) {
+      _setState(ImageAttachmentUploadState.prepared(request));
+      return;
+    }
     await _begin(request, generation);
   }
 
@@ -475,6 +529,14 @@ final class ImageAttachmentUploadController extends ChangeNotifier {
     if (!_state.isActive ||
         _state.phase == ImageAttachmentUploadPhase.cancelling ||
         _disposed) {
+      return;
+    }
+    if (_state.isPrepared) {
+      // Nothing is in flight: dropping the prepared file is immediate, and
+      // the composer discards the local copy on the idle transition.
+      _generation++;
+      _lastRequest = null;
+      _setState(const ImageAttachmentUploadState.idle());
       return;
     }
     final generation = _generation;
@@ -843,6 +905,7 @@ AttachmentUploadUiPhase _diagnosticUiPhase(ImageAttachmentUploadPhase phase) =>
     switch (phase) {
       ImageAttachmentUploadPhase.idle => AttachmentUploadUiPhase.none,
       ImageAttachmentUploadPhase.preparing => AttachmentUploadUiPhase.preparing,
+      ImageAttachmentUploadPhase.prepared => AttachmentUploadUiPhase.prepared,
       ImageAttachmentUploadPhase.queued => AttachmentUploadUiPhase.queued,
       ImageAttachmentUploadPhase.uploading => AttachmentUploadUiPhase.uploading,
       ImageAttachmentUploadPhase.awaitingConfirmation =>

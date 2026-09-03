@@ -43,7 +43,9 @@ Widget _composerApp({
         captionSource: captionSource,
         onCaptionConsumed: onCaptionConsumed,
         openAppSettings: openAppSettings,
-        controller: controller,
+        // Every harness gets a controller so the pick helper can perform the
+        // send step a real user does with the send button.
+        controller: controller ?? ChatMediaComposerController(),
         leadingAction: leadingAction,
         showAttachmentButton: showAttachmentButton,
         idleActions: idleActions,
@@ -103,14 +105,42 @@ String? _waveformValue(WidgetTester tester) => tester
 
 /// Opens the attachment source sheet and chooses one of its entries, which is
 /// the only way the picker is reachable from the composer toolbar.
+/// Picks a source and, unless [send] is false, presses "send" on the prepared
+/// file the way the room pane does. A pick alone only prepares the file; the
+/// upload starts on the send.
 Future<void> _pickAttachmentSource(
   WidgetTester tester, {
   AttachmentPickerSource source = AttachmentPickerSource.gallery,
+  bool send = true,
 }) async {
   await tester.tap(find.byKey(const Key('pick-image-attachment')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(Key('attach-source-${source.name}')));
   await tester.pump();
+  if (!send) {
+    return;
+  }
+  final controller = tester
+      .widget<ChatMediaComposer>(find.byType(ChatMediaComposer))
+      .controller;
+  if (controller == null) {
+    return;
+  }
+  // A refused, dismissed or still-pending pick never becomes prepared; the
+  // bounded wait then simply runs out and nothing is sent.
+  for (var attempt = 0; attempt < 60; attempt++) {
+    await tester.pump();
+    if (controller.hasPreparedAttachment) {
+      // Not runAsync: the send has to run inside the test zone so the session
+      // events the test feeds later reach the panel through pumps.
+      unawaited(controller.sendPreparedAttachment());
+      await tester.pump();
+      return;
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+  }
 }
 
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {

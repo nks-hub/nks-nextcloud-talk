@@ -250,8 +250,17 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
   }
 
   Future<void> _send() async {
+    if (_sending || _isReadOnlyNow()) {
+      return;
+    }
+    // A file waiting in the composer goes out on this tap, with the field's
+    // text as its caption; the caption is cleared once admission took it.
+    if (_mediaComposerController.hasPreparedAttachment) {
+      await _mediaComposerController.sendPreparedAttachment();
+      return;
+    }
     final message = _composer.text.trim();
-    if (message.isEmpty || _sending || _isReadOnlyNow()) {
+    if (message.isEmpty) {
       return;
     }
     await _sendMessage(message, clearComposer: true);

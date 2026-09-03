@@ -26,6 +26,10 @@ void _registerChatMediaComposerContactTests(
     );
 
     expect(await tester.runAsync(controller.pickContact), isTrue);
+    // Picking only prepares; nothing reaches admission until the send.
+    expect(controller.hasPreparedAttachment, isTrue);
+    expect(bridge.sessions, isEmpty);
+    expect(await tester.runAsync(controller.sendPreparedAttachment), isTrue);
     await _pumpUntil(tester, () => bridge.sessions.isNotEmpty);
 
     expect(bridge.sources.single.mimeType, 'text/vcard');
@@ -103,6 +107,7 @@ void _registerChatMediaComposerContactTests(
     );
 
     expect(await tester.runAsync(controller.pickContact), isTrue);
+    expect(await tester.runAsync(controller.sendPreparedAttachment), isTrue);
 
     expect(bridge.metadata.single.kind, AttachmentMessageKind.file);
     expect(bridge.metadata.single.replyTo, isNull);

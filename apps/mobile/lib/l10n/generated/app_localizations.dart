@@ -1220,6 +1220,18 @@ abstract class AppLocalizations {
   /// **'Waiting to upload'**
   String get imageUploadQueued;
 
+  /// No description provided for @attachmentReadyToSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready to send with your message'**
+  String get attachmentReadyToSend;
+
+  /// No description provided for @remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get remove;
+
   /// No description provided for @uploadingImage.
   ///
   /// In en, this message translates to:
