@@ -204,10 +204,17 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       rethrow;
     }
     if (!shared) {
-      if (forceRefresh) {
+      // A private read may still publish its result, as long as it does not
+      // evict a snapshot another caller could be reading. An expired entry or
+      // one for another credential protects nobody: leaving it in place made
+      // every later cancellable read (the 15 s conversation sync) miss the
+      // cache for the rest of the run and fetch 13 kB of capabilities again.
+      final existing = _capabilityCache[cacheKey];
+      if (forceRefresh ||
+          existing == null ||
+          existing.credentialFingerprint != fingerprint ||
+          !now.isBefore(existing.expiresAt)) {
         _capabilityCache[cacheKey] = entry;
-      } else {
-        _capabilityCache[cacheKey] ??= entry;
       }
     }
     return AuthenticatedCapabilityRead(

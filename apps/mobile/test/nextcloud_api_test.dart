@@ -255,6 +255,41 @@ void main() {
     },
   );
 
+  test('a cancellable read replaces an expired snapshot', () async {
+    // The conversation sync reads with an abort trigger every 15 s. Once the
+    // shared snapshot expired, its private read used to leave the expired
+    // entry in place and every later cycle fetched capabilities again.
+    var requests = 0;
+    var now = DateTime.utc(2026, 8, 25, 12);
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        return http.Response(jsonEncode(capabilitiesJson()), 200);
+      }),
+      capabilityCacheTtl: const Duration(minutes: 5),
+      clock: () => now,
+    );
+    addTearDown(api.close);
+
+    await api.getAuthenticatedCapabilities(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+    );
+    expect(requests, 1);
+
+    now = now.add(const Duration(minutes: 6));
+    for (var cycle = 0; cycle < 3; cycle++) {
+      await api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+        abortTrigger: Completer<void>().future,
+      );
+    }
+    expect(requests, 2, reason: 'one refresh, then the cache serves again');
+  });
+
   test(
     'reports cache provenance and can require a fresh capability read',
     () async {
