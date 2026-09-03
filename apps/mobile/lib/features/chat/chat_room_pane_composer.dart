@@ -309,6 +309,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     final String? sentDraft = clearComposer ? _composer.text : null;
     if (clearComposer) {
       _composer.clear();
+      // The picker was a means of composing this message; keeping it open
+      // after the send left the timeline half-covered by a panel nobody asked
+      // for a second time.
+      _closeEmojiPicker();
     }
     _update(() => _sending = true);
     try {

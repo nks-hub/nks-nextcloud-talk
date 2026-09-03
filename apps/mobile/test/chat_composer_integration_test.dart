@@ -124,9 +124,24 @@ void main() {
     await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
     await _pumpTransition(tester);
     expect(_composer(tester).text, '👋');
-    // The picker stays open for a second pick; it is the close button that
-    // dismisses it.
+    // The picker stays open for a second pick; sending the message is what
+    // dismisses it (the close button does too).
     expect(find.byKey(const Key('emoji-close')), findsOneWidget);
+    await _pumpUntil(tester, () => _sendButtonEnabled(tester));
+    await tester.tap(find.byKey(const Key('send-message-gesture')));
+    await _pumpUntil(
+      tester,
+      () => harness.sentMessages.length == 1 && _composer(tester).text.isEmpty,
+    );
+    await _pumpTransition(tester);
+    expect(harness.sentMessages, <String>['👋']);
+    expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
+    await tester.tap(find.byKey(const Key('open-emoji-picker')));
+    await _pumpTransition(tester);
+    await tester.tap(find.byKey(const Key('emoji-category-people')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('emoji-choice-waving-hand')));
+    await _pumpTransition(tester);
     await tester.tap(find.byKey(const Key('emoji-close')));
     await _pumpTransition(tester);
     expect(find.byKey(const Key('inline-emoji-panel')), findsNothing);
@@ -152,11 +167,11 @@ void main() {
     await tester.pump();
     await tester.tap(gif);
     await _pumpTransition(tester);
-    await _pumpUntil(tester, () => harness.sentMessages.isNotEmpty);
+    await _pumpUntil(tester, () => harness.sentMessages.length == 2);
 
     // The GIF travels as a reference the bubble renders, so nothing is
     // uploaded into the user's own storage.
-    expect(harness.sentMessages, <String>['https://giphy.com/gifs/wave']);
+    expect(harness.sentMessages.last, 'https://giphy.com/gifs/wave');
     expect(harness.uploadedAttachments, isEmpty);
     expect(harness.finalizedFileNames, isEmpty);
     // Text already typed must survive sending a GIF.
@@ -166,7 +181,7 @@ void main() {
     await tester.tap(find.byKey(const Key('send-message-gesture')));
     await _pumpUntil(
       tester,
-      () => harness.sentMessages.length == 2 && _composer(tester).text.isEmpty,
+      () => harness.sentMessages.length == 3 && _composer(tester).text.isEmpty,
     );
 
     expect(harness.sentMessages.last, '👋');
