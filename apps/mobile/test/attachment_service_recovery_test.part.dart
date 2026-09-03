@@ -429,46 +429,50 @@ void _registerAttachmentServiceRecoveryTests() {
     },
   );
 
-  test('a network hint retries an upload whose automatic retries ran out', () async {
-    final fixture = await _Fixture.create();
-    addTearDown(fixture.close);
-    var probeCount = 0;
-    final service = fixture.service(
-      MockClient((request) async {
-        if (request.method == 'POST' && request.url.path.endsWith('/folder')) {
-          probeCount++;
-          if (probeCount <= 2) {
-            throw const SocketException('offline');
+  test(
+    'a network hint retries an upload whose automatic retries ran out',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.close);
+      var probeCount = 0;
+      final service = fixture.service(
+        MockClient((request) async {
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/folder')) {
+            probeCount++;
+            if (probeCount <= 2) {
+              throw const SocketException('offline');
+            }
+            return http.Response.bytes(_probeSuccess(), 200);
           }
-          return http.Response.bytes(_probeSuccess(), 200);
-        }
-        if (request.method == 'PUT') {
-          return http.Response('', 201);
-        }
-        if (request.method == 'POST' &&
-            request.url.path.endsWith('/attachment')) {
-          return http.Response.bytes(_finalizeSuccess(), 200);
-        }
-        fail('Unexpected request: ${request.method} ${request.url}');
-      }),
-      retryDelays: const [Duration.zero],
-    );
-    addTearDown(service.close);
+          if (request.method == 'PUT') {
+            return http.Response('', 201);
+          }
+          if (request.method == 'POST' &&
+              request.url.path.endsWith('/attachment')) {
+            return http.Response.bytes(_finalizeSuccess(), 200);
+          }
+          fail('Unexpected request: ${request.method} ${request.url}');
+        }),
+        retryDelays: const [Duration.zero],
+      );
+      addTearDown(service.close);
 
-    final session = await service.enqueue(fixture.request(normalMaximum: 32));
-    await session.events.firstWhere(
-      (event) =>
-          event.phase == AttachmentJobPhase.retryable &&
-          event.automaticRetryCount == 2,
-    );
-    expect(probeCount, 2);
+      final session = await service.enqueue(fixture.request(normalMaximum: 32));
+      await session.events.firstWhere(
+        (event) =>
+            event.phase == AttachmentJobPhase.retryable &&
+            event.automaticRetryCount == 2,
+      );
+      expect(probeCount, 2);
 
-    await service.resumeRetries();
-    await session.events.firstWhere(
-      (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
-    );
-    expect(probeCount, 3);
-  });
+      await service.resumeRetries();
+      await session.events.firstWhere(
+        (event) => event.phase == AttachmentJobPhase.awaitingConfirmation,
+      );
+      expect(probeCount, 3);
+    },
+  );
 
   test('voice attachment keeps its audio metadata through enqueue', () async {
     final fixture = await _Fixture.create();

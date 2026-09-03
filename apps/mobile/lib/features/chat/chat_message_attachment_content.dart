@@ -853,6 +853,7 @@ _DavAttachment? _davAttachment(
 /// Bounds every inline image bubble fits into.
 const Size _imageBoxBound = Size(420, 320);
 const double _imageBoxMinEdge = 48;
+
 /// Box for pictures whose dimensions Talk did not send.
 const Size _imageBoxFallback = Size(240, 180);
 
