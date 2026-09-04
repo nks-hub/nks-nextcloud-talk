@@ -1,843 +1,904 @@
-# Technická rozhodnutí
-
-[Zpět na rozhodnutí a otevřené volby](decisions.md)
-
-
-### D-007: Modulární klient
-
-Stav: Přijato pro první implementační baseline 22. srpna 2026.
-
-Pure Dart `talk_protocol` + Flutter app. Storage a sync zůstávají uvnitř app,
-dokud další skutečná implementace neodůvodní package. Android Web Push používá
-embedded distributor bez projektové gateway; budoucí iOS APNs/PushKit relay je
-samostatná Apple platformní hranice, ne součást klientského runtime.
-
-### D-008: Standardní Notifications app
-
-Stav: Přijato jako kompatibilní serverová hranice; Android transport zpřesňuje
-D-025.
-
-Android používá přímo standardní Notifications Web Push. Nový Talk event
-listener ani tenký bridge se nevytváří, protože by nepokryl úplnou notification
-a markProcessed/delete semantiku. Historický Notifications push-v2 gateway
-kontrakt zůstává výzkumným důkazem, ne povinnou službou.
-
-### D-009: Relační SQLite store
-
-Stav: Přijato pro první implementační baseline 22. srpna 2026.
-
-Message, thread, parent, room a read marker vyžadují atomické transakce.
-Použije se Drift. Lokální Flutter 3.44.4/Dart 3.12.2 a pub.dev metadata z
-22. srpna 2026 potvrzují kompatibilitu řad Drift 2.34 a `drift_flutter` 0.3.
-Flutter aplikace nyní uzamyká Drift 2.34.3 a `drift_flutter` 0.3.1, používá
-account-scoped tabulky a transakční conversation merge. Android a Windows
-debug build i repository testy prošly; message/outbox migrace a Apple/Linux
-build zůstávají povinným důkazem dalších řezů.
-
-Drift volá `onUpgrade` také při downgrade. Migrační strategie proto jako první
-odmítne `versionBefore > schemaVersion`; starší build nesmí přepsat
-`PRAGMA user_version` novější databáze ani nad neznámým schématem pokračovat.
-File-backed test kontroluje nejen chybu při open, ale také zachování původní
-verze a dat po odmítnutém rollbacku.
-
-Talk neposkytuje seznam identit čtenářů. `lastCommonReadMessage` je room-wide
-minimum markerů pouze public user actors; guesté do něj nevstupují. Klient smí
-agregovaný stav ukázat jen u vlastní serverem potvrzené zprávy, pokud současný
-account současně prokazuje capability `chat-read-status` a public
-`config.chat.read-privacy`. Private, chybějící nebo nevalidní policy marker
-explicitně zneplatní; absence hlavičky nesmí ponechat stale „přečteno“.
-Invalidace uloží sentinel 0 atomicky do chat scope i cached conversation a
-reprojektuje outgoing UI zpět na `sent`. Pozdější public snapshot bez nového
-serverového markeru nesmí historickou hodnotu obnovit.
-
-### D-010: Riverpod pro application/UI state
-
-Stav: Přijato pro první implementační baseline 22. srpna 2026.
-
-Chatujme poskytuje ověřený lokální vzor a Riverpod umožní account-scoped
-providery. Databázový stav však zůstává zdrojem pravdy; provider nesmí duplikovat
-sync store. První řez použije ručně definované providery bez code generation;
-generátor se přidá jen tehdy, když sníží skutečnou složitost.
-
-### D-019: Adaptivní navigace a form factors
-
-Stav: Přijato jako mobilní implementační baseline.
-
-Telefon používá stack `onboarding → conversations → chat → thread`. Bottom
-navigation se nepřidá bez alespoň tří rovnocenných top-level cílů. Tablet,
-foldable a desktop použijí nad stejným route modelem adaptivní list-detail.
-Od 720 logical px se zobrazí account rail, seznam a detail; onboarding přechází
-od 900 px do dvou sloupců. Deep link
-nejprve kryptograficky nebo lokálním account mappingem vybere `accountId` a až
-potom sestaví room/thread stack; nesmí implicitně použít právě aktivní účet.
-Unified-search výsledek stejně zachová vlastní account, room, message a
-canonical thread identitu. Root výsledek otevře room scope, reply otevře
-ordinary nebo named thread podle validního cached rootu a chybějící či neshodný
-root se fail-closed neotevře v jiném scope. Jump loader musí cíl zkontrolovat i
-po posledním povoleném history fetchi, ne jen před ním. Každé asynchronní
-dokončení je navíc svázané s route identitou, generací a účtem; výsledek starší
-search navigace nesmí ovládat novější route ani po opožděném history fetchi.
-
-iOS zachová edge-swipe back a Android systémový i predictive back. Gestures
-jsou pouze zkratky s viditelnou alternativou. Touch target má nejméně 44 pt na
-iOS a 48 dp na Androidu. Podrobný checkpoint je v
-[mobilním návrhu](../plans/2026-08-22-original-flutter-client-design.md).
-
-Windows, macOS a Linux nejsou samostatný klient. Stejná Flutter codebase musí
-navíc projít změnou velikosti okna, klávesovou navigací, focus/hover stavy a
-buildem na každém cílovém OS. Aktuální foundation prokazuje rozložení a Windows
-runtime, ne všechny desktop lifecycle funkce.
-
-### D-020: Rich chat jako typovaná online mutation hranice
-
-Stav: Přijato a implementováno v pure Dart runtime; Flutter transport, Drift a
-live serverový důkaz zůstávají součástí řezu 4.
-
-Mentions, threads, reactions, edit/delete, pin, reminders a schedule se volí
-výhradně z unikátních globálních a lokálních Talk features. Každý request i
-response je svázaný s účtem, kanonickým serverem a dostupným room/message/thread
-kontextem. Rich stav je account-scoped vrstva nad existujícím chat snapshotem a
-mění se jen přes single-use candidate plán.
-
-Nested `first` a `last` zprávy thread metadata jsou důvěryhodné jen při shodě
-room tokenu a canonical `threadId`. `first.id` musí být root threadu a
-`last.id` musí odpovídat `lastMessageId`; obě zprávy musí nést stejný canonical
-`threadId`. Metadata-only rename v jednom candidate reprojektuje nový title do
-cached first/last/root, všech jejich parent kopií a immutable wire reprezentací.
-
-Markdown se nepropouští přímo do Flutter widgetů. Balíček `markdown` vytvoří
-AST a vlastní renderer jej převede na bounded semantic tree s typovanými Rich
-Object Strings, neaktivním raw HTML a same-origin link policy. Plaintext i
-Markdown sdílí node budget, který se spotřebuje před konstrukcí semantic uzlu;
-pozdní kontrola již materializovaného stromu není bezpečnostní hranice.
-
-Autoritativní reaction/edit/delete odpověď se v jednom candidate plánu
-propaguje do kanonické zprávy, každé reply a scheduled parent kopie, thread
-first/last, room preview a jejich immutable wire reprezentace.
-
-Rich mutace jsou v tomto řezu pouze online. Nejednoznačný výsledek se
-automaticky neopakuje a nezapisuje se do text-send outboxu. Offline replay smí
-vzniknout až samostatným kontraktem pro každý operation kind podle D-006.
-
-### D-021: Příloha jako potvrzovaný durable dvoufázový job
-
-Stav: Přijato a implementováno v pure Dart runtime, Flutter HTTP transportu,
-Drift job store a orchestraci; kombinovaný live-server/process-death a
-platformní lifecycle důkaz zůstávají součástí řezu 5.
-
-Příloha používá jeden durable job pro Talk OCS Draft probe, WebDAV normal nebo
-chunk upload, Talk finalize a následné potvrzení chatem. Job smí držet pouze
-app-owned kopii nebo persistable URI grant a před každým uploadem či resume
-znovu ověří velikost a SHA-256. Source mismatch nesmí pod původním
-`referenceId` odeslat jiný obsah.
-
-Chunk v1 nepoužívá HTTP `Range`; byte rozsah je jen v názvu chunku a `MOVE`
-vždy posílá přesný `OC-Total-Length`. XML multistatus je UTF-8-only, odmítá DTD
-a entity a má průběžný byte, depth a node limit.
-
-Upload cílovou path nikdy nepřepisuje. Normal PUT používá
-`If-None-Match: *`, chunk MOVE `Overwrite: F` a HTTP 412 je typovaná kolize,
-po které job durable zvolí další z nejvýše 16 kandidátních názvů. Cizí
-kolidující path se nesmí mazat ani při pozdějším cancel nebo cleanupu.
-
-Finalize není atomický. Úspěšná response, 5xx, ztracená response, možná
-odeslané body i restart ve `finalizing` vedou do `awaitingConfirmation`, nikdy
-k blind POSTu. Job dokončí právě jedna account/server/room/reference-bound
-`file_shared` zpráva se správným `comment` nebo `voice-message` typem a file
-rich objektem. Nula shod není důkaz neprovedení a více shod zůstává ambiguous.
-
-Ordinary reply smí po ambiguous finalize nebo restartu přijmout compact deleted
-parent jen při přesném `parent.id == replyTo`, chybějících parent room/thread
-metadatech a kladném outer `threadId`. Named thread má oddělený deleted-root
-shape svázaný s canonical rootem. Klient po restartu neopakuje finalize POST;
-čeká na autoritativní catch-up a právě jedna shoda dokončí job i jednorázový
-cleanup jeho durable source.
-
-V jedné room platí FIFO a single-flight pro finalizaci. Cancel před finalize
-uklízí pouze jobem vlastněnou chunk session a Draft temp soubor; po zahájení
-finalize se možný finální soubor automaticky nemaže.
-
-Flutter transport otevře app-owned zdroj jednou, ověří celý snapshot a pro
-jednotlivé chunky vyžaduje efektivní bounded range read bez lineárního zahazování
-předchozích bytes. Cancel, timeout a close jsou odpojitelné a pozdě získaný lease
-se zavře. Cleanup má společný bounded budget, ale po selhání jedné akce pokračuje
-dalšími kroky; žádný tento transportní důkaz zatím neprokazuje Drift resume ani
-skutečný serverový upload.
-
-### D-022: Oddělené signaling transporty a ephemeral session epoch
-
-Stav: Přijato pro implementaci řezu 10.
-
-Internal OCS long poll a external HPB WebSocket mají samostatný wire profil a
-reconnect semantiku. Sdílejí account-scoped preparation coordinator,
-participant snapshot a topology model, ne společnou frontu JSON zpráv.
-
-HPB resume se používá pouze ve 30sekundovém serverovém okně a musí zachovat
-signaling session ID. Full hello vytvoří novou session epoch, zahodí staré
-participant/room potvrzení a všechny pending peer frame a vyžádá nový room
-join. Signaling frame jsou ephemeral a nikdy netvoří durable outbox.
-
-Stav `signalingReady` není `mediaReady`. Řez 10 nevystaví call REST mutaci ani
-uživatelské call ovládání; serverové in-call flags vzniknou až s reálným media
-enginem v řezu 11.
-
-### D-023: Per-account push key handle a společný Dart orchestrátor
-
-Stav: Nahrazeno pro Android rozhodnutím D-025. Implementovaný pure Dart
-Notifications push-v2 runtime zůstává historickým protokolovým důkazem a
-podkladem pro budoucí iOS relay, ale neřídí Android delivery.
-
-Jeden provider token vydaný Firebase/APNs projektem aplikace smí obsluhovat více
-účtů, ale není jejich identitou. Každý `accountId` má samostatný
-neexportovatelný RSA-2048 key handle, public key, generaci a registrační revizi.
-Private key neopouští Android Keystore nebo iOS Keychain; Dart dostává pouze
-handle a kryptograficky ověřený výsledek.
-
-Pure Dart runtime vlastní jednu deterministickou single-flight registrační
-frontu, authority/token/key binding, přesný retry, 409 recovery a revokaci.
-Příchozí obálku smí doroutovat jen právě jeden kandidát s platným podpisem a
-decryptem. Dokončení se před routováním znovu porovná s aktuálním provider
-tokenem, registered stavem, key handle/generací a registration revision. Nula,
-více nebo zastaralý kandidát nevybere účet ani nespustí OCS sync.
-
-Capability disable zachová account key pro případné znovuzapnutí. Odebrání účtu
-provede Nextcloud unregister, gateway unregister a teprve potom zničení klíče.
-Transientní vzdálený cleanup zůstává jako durable account-bound revocation
-tombstone; capability refresh nesmí změnit dříve vyžádaný logout na pouhé
-vypnutí push. Druhý účet ani společný provider token se nesmí odstranit.
-
-### D-024: At-least-once push delivery a idempotentní mobilní zpracování
-
-Stav: Nahrazeno pro Android na transportní hranici D-025. Obecný požadavek na
-idempotentní mobilní zpracování duplicit zůstává platný; gateway queue část se
-na Android Web Push nepřenáší.
-
-Opakovaný `/notifications` batch se deduplikuje před durable enqueue podle
-registrace a digestu opaque obálky. Provider worker používá bounded lease a
-at-least-once retry. FCM neposkytuje aplikační idempotency key, takže crash po
-provider ACK a před lokálním commitem může stejnou obálku doručit znovu;
-gateway nesmí deklarovat exactly-once.
-
-Gateway uzná položku jako přijatou až po DB commitu. Notifications na ověřeném
-SHA po transportní chybě stejný batch aplikačně neopakuje, takže in-memory nebo
-předčasně potvrzený enqueue by wake-up nevratně ztratil.
-
-Mobil po kryptografickém account routingu počítá SHA-256 přes přesné dešifrované
-payload bajty a ledger klíčuje dvojicí accountId + fingerprint ve stejném
-AES-GCM state commitu jako event frontu. Payload s `nid`, `nids` nebo activation
-tokenem má strong TTL 7 dní; delete-all a Message bez serverového ID jsou weak
-jen 60 sekund. Ledger je omezený na 128 položek na účet a 512 globálně. Starý
-state bez ledgeru se načte jako prázdný. Opakování může bezpečně spustit OCS
-catch-up, ale nesmí enqueueovat, zobrazit ani zmutovat druhou událost.
-
-### D-025: Android přes Notifications Web Push
-
-Stav: NAHRAZENO D-038 27. srpna 2026. Web Push zůstává jako přepínatelná
-záloha, ale výchozí transport na Androidu je od té doby vlastní proxy a FCM.
-Vše níže popisuje tu záložní větev, ne výchozí stav.
-
-Původní stav: Přijato po ověření Nextcloud Notifications 34.0.3 na SHA
-`2a62d472d31b97de522c897c979912cd49b820a9`; P1 platformní příjem a durable
-lifecycle jsou implementované, serverová P2 orchestrace a delivery E2E chybějí.
-
-Android používá capability `webpush`, UnifiedPush connector baseline 3.3.5 a
-embedded FCM distributor 3.1.0. Upgrade v `1250c44` zachoval stávající API,
-ověřenou Apache-2.0 licenci i oddělenou verzi distributoru a prošel Kotlin
-testy, compile, duplicate-classes kontrolou i `assembleDebug`. Server dodá
-VAPID public key, klient získá
-subscription endpoint a dokončí register → activation token → activate tok za
-běhu pro každý `accountId`.
-
-Správce Nextcloudu Web Push výslovně zapne přepínačem v Administration →
-Notifications; nezadává FCM credentials ani gateway. Klient každému účtu přidělí
-vlastní connector instance a subscription generation. Callback se přijme jen
-pro právě aktuální dvojici a poté spustí account-scoped OCS catch-up.
-
-Android platformní notification ID není serverové `nid` ani globální konstanta.
-Šifrovaný bounded ledger mapuje `(accountId, nid)` na stabilní kladné ID,
-vynechává rezervované hodnoty a při hash kolizi deterministicky hledá další.
-Tap, reply, read, delete-one i delete-all nejdřív resolveují stejnou account
-route; nikdy nesmí zrušit ani otevřít notifikaci jiného účtu. Upgrade starého
-state bez ledgeru začíná prázdnou mapou a zachová ostatní push stav.
-
-V záložní Web Push větvi nepotřebuje veřejný Android build publisher Firebase
-projekt, `google-services.json`, vlastní mobilní gateway ani per-server
-rebuild; výchozí proxy větev podle D-038 je naopak má. Embedded distributor je
-knihovna uvnitř APK, ne další aplikace. Nextcloud 34+ nepotřebuje addon;
-případný Nextcloud 33 backport musí být úplná samostatná AGPL implementace Web
-Push, nikoli tenký bridge.
-
-Duplicitní nebo opožděný payload smí pouze idempotentně probudit account-scoped
-OCS catch-up. Subscription endpoint, auth secret, activation token ani payload
-se nesmějí logovat. Přesný tok a testovací matice jsou v
-[push analýze](../research/push-fcm.md).
-
-Pokud přihlášené capabilities `webpush` neobsahují, klient nesmí číst VAPID,
-žádat notification permission ani zahájit registraci. Existující aktivní nebo
-rozpracovaná generace se durable převede do server-revoke-pending a credentialed
-OCS DELETE se smí opakovat pouze idempotentně. Lokální retire/unregister je
-povolen až po HTTP 200/202; transientní chyba ponechá credential i generaci pro
-bounded account retry.
-
-Nativní P1 adapter ukládá callback synchronně do AES-GCM obálky chráněné Android
-Keystore a až potom oznamuje Dartu dostupnou událost. Endpoint commit je
-oddělený od event `ack`. Náhrada subscription používá make-before-break:
-starou generaci lze nativně odregistrovat až po potvrzeném serverovém revoke.
-Samovolný distributor unregister nelze znovu otevřít pod stejnou generací.
-Pozdní endpoint ani jeho pozdní commit po `UNREGISTERED` proto nesmí obnovit
-generation nebo přepsat ID posledního serverem potvrzeného endpointu.
-Tyto invarianty mají focused Dart/Kotlin testy a dvoukrokovou instrumentaci po
-ukončení procesu; neprokazují zatím OCS aktivaci, lokální notifikaci ani
-background/killed payload ze skutečného Nextcloudu.
-
-Provider ACK není zdrojem pravdy pro obsah notifikací. Každý aktivní účet proto
-provede bounded OCS reconciliation po foreground/resume, po návratu connectivity
-a nejvýše po šesti hodinách. Wake-upy se coalescují globálně i per account;
-transientní sync chyba se retryuje, ale jedna chyba nesmí blokovat jiný účet.
-Odebrání účtu nejdřív zvýší epochu a suspenduje jeho lane. Pozdní lifecycle nebo
-notification-open callback se starou epochou pak nesmí znovu spustit registraci
-ani catch-up před dokončením revokace.
-
-Tato garance začíná až callbackem connectoru. Embedded FCM distributor 3.1.0
-potvrzuje provideru GMS broadcast/RPC dříve, než zprávu předá aplikačnímu
-receiveru; současný build proto neprokazuje durable commit před provider FCM
-ACK. Pád procesu v tomto okně může ztratit wake-up, nikdy však serverová OCS
-data. Klient musí při foreground/resume a v bounded periodické práci provést
-account-scoped OCS reconciliation. Vlastní fork distributoru není podmínkou P1;
-stal by se nutný jen při budoucím požadavku na silnější transportní garanci.
-
-### D-026: Minimální platformní baseline
-
-Stav: Aktualizováno po prvním skutečném macOS buildu 26. srpna 2026.
-
-- Android minSdk 24, targetSdk 36 a compileSdk 37 v ověřeném debug buildu;
+# Technical decisions
+
+[Back to decisions and open choices](decisions.md)
+
+
+### D-007: A modular client
+
+State: Accepted for the first implementation baseline on 22 August 2026.
+
+Pure Dart `talk_protocol` + the Flutter app. Storage and sync stay inside the app
+until another real implementation justifies a package. Android Web Push uses the
+embedded distributor without a project gateway; a future iOS APNs/PushKit relay
+is a separate Apple platform boundary, not part of the client runtime.
+
+### D-008: The standard Notifications app
+
+State: Accepted as a compatible server boundary; D-025 refines the Android
+transport.
+
+Android uses the standard Notifications Web Push directly. Neither a new Talk
+event listener nor a thin bridge is created, because it would not cover the
+complete notification and markProcessed/delete semantics. The historical
+Notifications push-v2 gateway contract remains research evidence, not a mandatory
+service.
+
+### D-009: A relational SQLite store
+
+State: Accepted for the first implementation baseline on 22 August 2026.
+
+A message, a thread, a parent, a room and a read marker require atomic
+transactions. Drift will be used. The local Flutter 3.44.4/Dart 3.12.2 and the
+pub.dev metadata of 22 August 2026 confirm compatibility of the Drift 2.34 and
+`drift_flutter` 0.3 lines. The Flutter application now pins Drift 2.34.3 and
+`drift_flutter` 0.3.1, uses account-scoped tables and a transactional
+conversation merge. The Android and Windows debug builds and the repository tests
+passed; the message/outbox migration and the Apple/Linux builds remain mandatory
+evidence of further slices.
+
+Drift calls `onUpgrade` on a downgrade too. The migration strategy therefore
+first rejects `versionBefore > schemaVersion`; an older build must neither
+overwrite the `PRAGMA user_version` of a newer database nor continue on top of an
+unknown schema. A file-backed test checks not only the error on open, but also
+that the original version and the data are preserved after a rejected rollback.
+
+Talk does not provide a list of reader identities. `lastCommonReadMessage` is the
+room-wide minimum of the markers of public user actors only; guests are not
+included. The client may show the aggregated state only for its own
+server-confirmed message, and only if the current account simultaneously proves
+the capability `chat-read-status` and a public `config.chat.read-privacy`. A
+private, missing or invalid policy explicitly invalidates the marker; a missing
+header must not leave a stale "read". The invalidation stores the sentinel 0
+atomically into both the chat scope and the cached conversation and reprojects
+the outgoing UI back to `sent`. A later public snapshot without a new server
+marker must not restore the historical value.
+
+### D-010: Riverpod for application/UI state
+
+State: Accepted for the first implementation baseline on 22 August 2026.
+
+Chatujme provides a verified local pattern and Riverpod allows account-scoped
+providers. The database state, however, stays the source of truth; a provider
+must not duplicate the sync store. The first slice uses hand-defined providers
+without code generation; the generator is added only when it reduces real
+complexity.
+
+### D-019: Adaptive navigation and form factors
+
+State: Accepted as the mobile implementation baseline.
+
+A phone uses the stack `onboarding → conversations → chat → thread`. Bottom
+navigation is not added without at least three equivalent top-level
+destinations. Tablet, foldable and desktop use an adaptive list-detail over the
+same route model. From 720 logical px onwards the account rail, the list and the
+detail are shown; the onboarding moves to two columns from 900 px. A deep link
+first selects the `accountId` cryptographically or through a local account
+mapping and only then builds the room/thread stack; it must not implicitly use
+the currently active account. A unified-search result likewise preserves its own
+account, room, message and canonical thread identity. A root result opens the
+room scope, a reply opens an ordinary or a named thread according to a valid
+cached root, and a missing or mismatched root fails closed instead of opening in
+a different scope. The jump loader has to check the target after the last allowed
+history fetch too, not only before it. Every asynchronous completion is
+additionally bound to the route identity, the generation and the account; the
+result of an older search navigation must not control a newer route, not even
+after a delayed history fetch.
+
+iOS preserves the edge-swipe back and Android both the system and the predictive
+back. Gestures are only shortcuts with a visible alternative. A touch target is
+at least 44 pt on iOS and 48 dp on Android. The detailed checkpoint is in the
+[mobile design](../plans/2026-08-22-original-flutter-client-design.md).
+
+Windows, macOS and Linux are not a separate client. The same Flutter codebase
+additionally has to pass a window resize, keyboard navigation, focus/hover states
+and a build on every target OS. The current foundation proves the layout and the
+Windows runtime, not all desktop lifecycle features.
+
+### D-020: Rich chat as a typed online mutation boundary
+
+State: Accepted and implemented in the pure Dart runtime; the Flutter transport,
+Drift and live server evidence remain part of slice 4.
+
+Mentions, threads, reactions, edit/delete, pin, reminders and schedule are
+selected exclusively from unique global and local Talk features. Every request
+and response is bound to the account, the canonical server and the available
+room/message/thread context. The rich state is an account-scoped layer over the
+existing chat snapshot and changes only through a single-use candidate plan.
+
+The nested `first` and `last` messages of thread metadata are trustworthy only
+when the room token and the canonical `threadId` match. `first.id` must be the
+root of the thread and `last.id` must match `lastMessageId`; both messages must
+carry the same canonical `threadId`. A metadata-only rename in one candidate
+reprojects the new title into the cached first/last/root, all their parent copies
+and their immutable wire representations.
+
+Markdown is not passed directly into Flutter widgets. The `markdown` package
+creates an AST and our own renderer converts it into a bounded semantic tree with
+typed Rich Object Strings, inactive raw HTML and a same-origin link policy. Both
+plaintext and Markdown share a node budget consumed before a semantic node is
+constructed; a late check of an already materialized tree is not a security
+boundary.
+
+An authoritative reaction/edit/delete response is propagated within one candidate
+plan into the canonical message, every reply and scheduled parent copy, the
+thread first/last, the room preview and their immutable wire representations.
+
+Rich mutations are online-only in this slice. An ambiguous result is not retried
+automatically and is not written into the text-send outbox. An offline replay may
+only arise through a separate contract for every operation kind per D-006.
+
+### D-021: An attachment as a confirmed durable two-phase job
+
+State: Accepted and implemented in the pure Dart runtime, the Flutter HTTP
+transport, the Drift job store and the orchestration; the combined
+live-server/process-death and platform lifecycle evidence remain part of slice 5.
+
+An attachment uses one durable job for the Talk OCS Draft probe, the WebDAV
+normal or chunk upload, the Talk finalize and the subsequent confirmation by
+chat. The job may hold only an app-owned copy or a persistable URI grant and
+before every upload or resume it re-verifies the size and the SHA-256. A source
+mismatch must not send different content under the original `referenceId`.
+
+Chunk v1 does not use an HTTP `Range`; the byte range is only in the chunk name
+and the `MOVE` always sends the exact `OC-Total-Length`. The XML multistatus is
+UTF-8-only, rejects DTDs and entities and has a continuous byte, depth and node
+limit.
+
+An upload never overwrites the target path. A normal PUT uses `If-None-Match: *`,
+a chunk MOVE `Overwrite: F`, and HTTP 412 is a typed collision after which the
+job durably picks the next of at most 16 candidate names. A foreign colliding
+path must not be deleted, not even during a later cancel or cleanup.
+
+The finalize is not atomic. A successful response, a 5xx, a lost response, a body
+that may have been sent and a restart in `finalizing` all lead to
+`awaitingConfirmation`, never to a blind POST. The job is completed by exactly
+one account/server/room/reference-bound `file_shared` message with the correct
+`comment` or `voice-message` type and a file rich object. Zero matches is not
+proof that nothing happened and several matches stays ambiguous.
+
+After an ambiguous finalize or a restart, an ordinary reply may accept a compact
+deleted parent only with an exact `parent.id == replyTo`, missing parent
+room/thread metadata and a positive outer `threadId`. A named thread has a
+separate deleted-root shape bound to the canonical root. After a restart the
+client does not repeat the finalize POST; it waits for an authoritative catch-up
+and exactly one match completes the job as well as the one-time cleanup of its
+durable source.
+
+Within one room, FIFO and single-flight apply to the finalization. A cancel
+before the finalize cleans up only the chunk session and the Draft temp file
+owned by the job; once the finalize has started, a possibly final file is not
+deleted automatically.
+
+The Flutter transport opens the app-owned source once, verifies the whole
+snapshot and, for the individual chunks, requires an efficient bounded range read
+without linearly discarding the preceding bytes. Cancel, timeout and close are
+detachable and a lease obtained late is closed. The cleanup has a shared bounded
+budget, but after one action fails it continues with the further steps; none of
+this transport evidence yet proves a Drift resume or a real server-side upload.
+
+### D-022: Separate signaling transports and an ephemeral session epoch
+
+State: Accepted for the implementation of slice 10.
+
+The internal OCS long poll and the external HPB WebSocket have a separate wire
+profile and reconnect semantics. They share the account-scoped preparation
+coordinator, the participant snapshot and the topology model, not a common queue
+of JSON messages.
+
+An HPB resume is used only within the 30-second server window and must preserve
+the signaling session ID. A full hello creates a new session epoch, discards the
+old participant/room confirmations and all pending peer frames, and requests a
+new room join. Signaling frames are ephemeral and never form a durable outbox.
+
+The state `signalingReady` is not `mediaReady`. Slice 10 exposes neither a call
+REST mutation nor user-facing call controls; server-side in-call flags will only
+arise with a real media engine in slice 11.
+
+### D-023: A per-account push key handle and a shared Dart orchestrator
+
+State: Superseded for Android by decision D-025. The implemented pure Dart
+Notifications push-v2 runtime remains historical protocol evidence and a basis
+for a future iOS relay, but does not drive Android delivery.
+
+One provider token issued by the application's Firebase/APNs project may serve
+several accounts, but it is not their identity. Every `accountId` has a separate
+non-exportable RSA-2048 key handle, public key, generation and registration
+revision. The private key never leaves the Android Keystore or the iOS Keychain;
+Dart receives only the handle and a cryptographically verified result.
+
+The pure Dart runtime owns one deterministic single-flight registration queue,
+the authority/token/key binding, the exact retry, 409 recovery and revocation. An
+incoming envelope may be routed by exactly one candidate with a valid signature
+and decrypt. Before routing, the completion is compared again with the current
+provider token, the registered state, the key handle/generation and the
+registration revision. Zero, several or a stale candidate select no account and
+start no OCS sync.
+
+Disabling the capability preserves the account key in case it is enabled again.
+Removing an account performs the Nextcloud unregister, the gateway unregister and
+only then destroys the key. A transient remote cleanup stays as a durable
+account-bound revocation tombstone; a capability refresh must not turn a
+previously requested logout into merely disabling push. Neither a second account
+nor the shared provider token may be removed.
+
+### D-024: At-least-once push delivery and idempotent mobile processing
+
+State: Superseded for Android at the transport boundary by D-025. The general
+requirement for idempotent mobile handling of duplicates remains valid; the
+gateway queue part does not carry over to Android Web Push.
+
+A repeated `/notifications` batch is deduplicated before the durable enqueue by
+the registration and the digest of the opaque envelope. The provider worker uses
+a bounded lease and an at-least-once retry. FCM provides no application
+idempotency key, so a crash after the provider ACK and before the local commit
+may deliver the same envelope again; the gateway must not declare exactly-once.
+
+The gateway acknowledges an item as accepted only after the DB commit. At the
+verified SHA, Notifications does not repeat the same batch at the application
+level after a transport error, so an in-memory or prematurely acknowledged
+enqueue would irreversibly lose the wake-up.
+
+After the cryptographic account routing, the phone computes the SHA-256 over the
+exact decrypted payload bytes and keys the ledger by the pair accountId +
+fingerprint within the same AES-GCM state commit as the event queue. A payload
+with `nid`, `nids` or an activation token has a strong TTL of 7 days; delete-all
+and a Message without a server ID are weak, only 60 seconds. The ledger is
+limited to 128 items per account and 512 globally. Old state without a ledger is
+loaded as empty. A repeat may safely start an OCS catch-up, but must not enqueue,
+display or mutate a second event.
+
+### D-025: Android over Notifications Web Push
+
+State: SUPERSEDED by D-038 on 27 August 2026. Web Push remains a switchable
+fallback, but since then the default transport on Android is our own proxy and
+FCM. Everything below describes that fallback branch, not the default state.
+
+The original state: Accepted after verifying Nextcloud Notifications 34.0.3 at
+SHA `2a62d472d31b97de522c897c979912cd49b820a9`; the P1 platform reception and the
+durable lifecycle are implemented, the server-side P2 orchestration and the
+delivery E2E are missing.
+
+Android uses the capability `webpush`, the UnifiedPush connector baseline 3.3.5
+and the embedded FCM distributor 3.1.0. The upgrade in `1250c44` preserved the
+existing API, the verified Apache-2.0 license and the separate version of the
+distributor, and passed the Kotlin tests, compile, the duplicate-classes check
+and `assembleDebug`. The server supplies the VAPID public key, the client obtains
+the subscription endpoint and completes the register → activation token →
+activate flow at runtime for every `accountId`.
+
+The Nextcloud administrator explicitly enables Web Push with a toggle in
+Administration → Notifications; they enter no FCM credentials and no gateway. The
+client assigns every account its own connector instance and subscription
+generation. A callback is accepted only for the currently valid pair and then
+starts an account-scoped OCS catch-up.
+
+The Android platform notification ID is neither the server `nid` nor a global
+constant. An encrypted bounded ledger maps `(accountId, nid)` onto a stable
+positive ID, skips reserved values and, on a hash collision, deterministically
+looks for the next one. A tap, reply, read, delete-one and delete-all all first
+resolve the same account route; they must never dismiss or open a notification of
+another account. An upgrade of old state without a ledger starts with an empty
+map and preserves the other push state.
+
+In the fallback Web Push branch, a public Android build needs no publisher
+Firebase project, no `google-services.json`, no own mobile gateway and no
+per-server rebuild; the default proxy branch per D-038, by contrast, has them.
+The embedded distributor is a library inside the APK, not another application.
+Nextcloud 34+ needs no addon; a possible Nextcloud 33 backport must be a complete
+standalone AGPL implementation of Web Push, not a thin bridge.
+
+A duplicate or delayed payload may only idempotently wake an account-scoped OCS
+catch-up. The subscription endpoint, the auth secret, the activation token and
+the payload must not be logged. The exact flow and the test matrix are in the
+[push analysis](../research/push-fcm.md).
+
+If the signed-in capabilities do not contain `webpush`, the client must not read
+the VAPID key, ask for the notification permission or start a registration. An
+existing active or in-progress generation is durably moved into
+server-revoke-pending and the credentialed OCS DELETE may only be repeated
+idempotently. A local retire/unregister is allowed only after HTTP 200/202; a
+transient error keeps both the credential and the generation for a bounded
+account retry.
+
+The native P1 adapter stores a callback synchronously into an AES-GCM envelope
+protected by the Android Keystore, and only then announces the available event to
+Dart. The endpoint commit is separate from the event `ack`. Replacing the
+subscription uses make-before-break: the old generation may be unregistered
+natively only after a confirmed server-side revoke. A spontaneous distributor
+unregister cannot be reopened under the same generation. A late endpoint and a
+late commit after `UNREGISTERED` therefore must not restore a generation or
+overwrite the ID of the last server-confirmed endpoint. These invariants have
+focused Dart/Kotlin tests and a two-step instrumentation after the process was
+terminated; they do not yet prove the OCS activation, a local notification or a
+background/killed payload from a real Nextcloud.
+
+The provider ACK is not the source of truth for the content of notifications.
+Every active account therefore performs a bounded OCS reconciliation after
+foreground/resume, after connectivity returns and at most every six hours.
+Wake-ups are coalesced globally as well as per account; a transient sync error is
+retried, but one error must not block another account. Removing an account first
+increases the epoch and suspends its lane. A late lifecycle or notification-open
+callback with the old epoch then must not restart the registration or a catch-up
+before the revocation completes.
+
+This guarantee only begins with the connector callback. The embedded FCM
+distributor 3.1.0 acknowledges the GMS broadcast/RPC to the provider before it
+hands the message to the application receiver; the current build therefore does
+not prove a durable commit before the provider FCM ACK. A process crash in that
+window may lose a wake-up, but never server-side OCS data. On foreground/resume
+and in bounded periodic work, the client has to perform an account-scoped OCS
+reconciliation. Forking the distributor is not a condition of P1; it would become
+necessary only with a future requirement for a stronger transport guarantee.
+
+### D-026: The minimum platform baseline
+
+State: Updated after the first real macOS build on 26 August 2026.
+
+- Android minSdk 24, targetSdk 36 and compileSdk 37 in the verified debug build;
 - iOS deployment target 13.0;
-- macOS deployment target 11.0; `gal 2.3.3`, používaný pro ukládání médií,
-  deklaruje stejné minimum v Swift Package i CocoaPods kontraktu;
-- Windows a Linux podle toolchain baseline Flutter 3.44.4.
-
-Zvýšení minima vyžaduje konkrétní dependency nebo OS API důvod. První vzdálený
-macOS build přesně doložil konflikt původních 10.15 s nativním minimem `gal`.
-Snížení minima vyžaduje reálný build a runtime test, ne pouze změnu čísla.
-
-### D-027: Desktop jako plnohodnotný produktový cíl
-
-Stav: Přijato uživatelem 23. srpna 2026.
-
-Windows, macOS a Linux používají stejný account, protocol, Drift a feature
-model jako mobil. Expanded shell je třípanelový a reaguje na změnu okna.
-Desktop-specific klávesnice, hover/focus, system tray, auto-start, file drop a
-background delivery vzniknou pouze jako ověřené platformní řezy; nesmí se
-předstírat existencí generated runneru.
-
-Auto-start je lokální preference aplikace, nikoli účtu. Windows ji vlastní v
-per-user `HKCU Run`, macOS 13+ přes `SMAppService.mainApp` a Linux přes XDG
-Autostart soubor v uživatelském config adresáři. Flutter po zápisu vždy znovu
-čte skutečný stav OS; neúplný zápis ani login item čekající na schválení se
-nesmí zobrazit jako zapnutý. macOS 11–12 zůstává explicitně unsupported místo
-legacy helperu nebo zápisu mimo sandbox.
-
-Windows důkaz ze source `0be4c88` prošel release buildem, 29/29 bundle
-manifestem a responsivním runtime na samostatné Windows 11 VM. Inspector capture
-prokazuje Flutter render, ne skutečné pixely release DirectComposition okna;
-přihlášený desktop E2E proto zůstává samostatná brána. Commit `1b1066a`
-zabalil stejný produkt jako per-user Inno Setup instalaci. Vyhrazená VM ověřila
-clean install, launch, upgrade za běhu, odmítnutí downgradu bez změny bajtů,
-zachování support dat a uninstall. Release signing zůstává otevřený.
-
-Apple důkaz ze source `83078cd` prošel na macOS 15.7.4 arm64 přes analyze,
-čistý debug i universal release build, codesign verify a živé okno 800×628.
-Skutečný Flutter inspector render prokazuje debug UI; nativní window capture
-selhal a není důkazem. Stejný source prošel čistým iOS Simulator buildem,
-instalací, spuštěním a framebuffer capture na iPhone 16 Pro s iOS 18.6. Ad-hoc
-podpis ani simulátor neprokazují distribuční signing, fyzické zařízení,
-Keychain login, APNs/PushKit nebo background lifecycle.
-
-### D-028: Giphy jako renderovaná reference
-
-Stav: Přepsáno 25. srpna 2026 výslovným uživatelským rozhodnutím. Předchozí
-attachment varianta je popsaná níže a už neplatí.
-
-GIF se neukládá do úložiště uživatele. Výběr v pickeru odešle `resourceUrl`
-jako zprávu a bublina ji vykreslí: klient si referenci vyřeší přes
-account-scoped Nextcloud References resolver a zobrazí animovaný GIF inline.
-Uživatel tedy nevidí URL, ale animaci.
-
-Důvodem změny je, že příloha zakládá soubor ve Files uživatele, což je pro
-odeslání GIFu nepřiměřené. Renderovaná reference odpovídá tomu, jak to řeší
-Chatujme.
-
-Bezpečnostní hranice zůstávají: klient přijme jen `integration_giphy_gif`,
-same-origin proxy konkrétního serveru a validní `image/gif` bajty. Loader je
-account-scoped, bounded a s LRU. Jediný viditelný externí odkaz je povinná
-GIPHY attribution v pickeru.
-
-Picker thumbnail repository sdílí souběžný request stejné URL a drží nejvýše
-32 ověřených obrázků nebo 16 MiB na instanci účtu. Cache se zahodí s repository;
-explicitně rušený load zůstává samostatný, aby jeden caller nerušil ostatní.
-
-Známé omezení: příjemce bez zapnuté Giphy integrace na svém serveru referenci
-nevyřeší a uvidí odkaz. To je cena zvolené varianty.
-
-### D-028a: Historická varianta Giphy jako Talk příloha
-
-Stav: Původní wire-reference varianta byla 25. srpna 2026 nahrazena výslovným
-uživatelským rozhodnutím. Commit `7ca580e` propojuje picker se skutečným
-attachment tokem a má automatizovaný důkaz; live serverový round trip zůstává
-otevřený.
-
-Vybraný `resourceUrl` slouží jen jako vstup do account-scoped Nextcloud
-References resolveru. Klient přijme pouze `integration_giphy_gif`, same-origin
-proxy a validní `image/gif` bajty. Bajty uloží do durable app-owned zdroje a
-odešle přes stejný Talk Draft/WebDAV/finalize tok jako jiný obrázkový attachment.
-Do `sendText`, composeru ani outboxu textových zpráv se Giphy URL nikdy nevloží.
-
-Původní renderer skryté wire URL zůstává pouze kvůli kompatibilitě se staršími
-zprávami. Historický Android test této varianty je platným důkazem tehdejšího
-chování, ale neprokazuje nový cílový attachment tok. Nový tok se nesmí při
-žádné chybě vrátit k URL textové zprávě.
-
-### D-029: Presence pouze ze serverového user status
-
-Stav: Přijato 25. srpna 2026, commit `85fdb44`. Live ověřeno proti referenční
-instanci na `emulator-5554`.
-
-Presence se odvozuje výhradně z pole `status` v conversation v4 room objektu,
-které server dodá po `includeStatus=true`. Klient nesmí presence odhadovat z
-lokální aktivity, doby posledního pollu, otevřeného websocketu ani z
-`lastActivity`. Badge se vykreslí jen pro one-to-one room (`type = 1`);
-`offline`, `invisible` a neznámá hodnota badge nevykreslí vůbec.
-
-`statusIcon` a `statusMessage` jsou vlastní status uživatele. Klient je
-zobrazí jen dokud `statusClearAt` neuplynulo; po expiraci zůstane pouze
-základní stav bez cizího textu.
-
-Inkrementální odpověď, která room vrátí bez klíče `status`, předchozí hodnotu
-zachová. Plná odpověď je autoritativní a hodnotu přepíše i na prázdnou.
-Důvodem je, že delta je částečný pohled, zatímco full fetch reprezentuje
-kompletní serverový stav účtu.
-
-Původní schema v8 přidalo projekční sloupce bez backfillu starého `raw_json`.
-Schema v13 proto jednorázově opraví databáze v8–v12 pouze tehdy, když je celá
-presence čtveřice NULL a `raw_json` obsahuje validní textový `status`. Nikdy
-nepřepisuje existující projekci a malformed nebo status-absent payload je
-bezpečný no-op; repair je idempotentní.
-
-`includeStatus=true` mění povahu inkrementálního fetchu: server v něm vrací
-všechny 1:1 rooms, aby mohl obnovit presence. Kompaktní refresh proto není
-zdarma a tato cena je vědomě přijatá výměnou za presence.
-
-Barvy badge jsou definované pro každý theme zvlášť a každý stav má vlastní
-glyph, aby stav nezávisel jen na barvě. Textová alternativa je povinná, protože
-samotná barevná tečka je pro čtečku obrazovky neviditelná.
-
-### D-030: Atomizace ručně udržovaných souborů
-
-Stav: Přijato uživatelem 26. srpna 2026.
-
-Ručně udržovaný zdrojový nebo testovací soubor má zůstat pod 1000 řádky. Větší
-celek se rozdělí podle odpovědností do menších souborů s úzkým veřejným
-rozhraním; samotné přesunutí řádků bez zmenšení odpovědnosti není dokončení.
-Generated soubory jsou z limitu vyňaté, ale nesmějí se ručně editovat.
-
-Výchozí audit evidoval 24 ručně udržovaných souborů nad limitem. Čerstvý audit
-na `83078cd` už nenašel žádný; největší ručně udržované soubory mají 977 řádků.
-Nad limitem zůstávají pouze generated `app_database.g.dart` a lokalizační
-`lib/l10n/generated/app_localizations*.dart`. Limit zůstává průběžnou bránou,
-aby další změny atomizaci nevrátily zpět.
-
-### D-031: Offline admission textové zprávy z persistentního snapshotu
-
-Stav: Přijato 26. srpna 2026, commity `47ec902` a `83078cd`.
-
-Pouze `sendText` smí při transientním selhání načtení capabilities použít
-persistentní account-scoped snapshot. Snapshot musí mít lane `ready`, jeho
-fingerprint se musí přesně shodovat s kanonickým `talkFeaturesJson` účtu a profil
-musí stále povolovat text send. Chybějící, poškozený nebo neshodný snapshot,
-401, cancellation a neplatná odpověď zůstávají fail-closed.
-
-Offline větev pouze připustí durable operaci ve stavu `queued`. Nesmí ji claimnout
-ani vydat POST, protože bez síťového důkazu by transport vytvořil falešný
-ambiguous stav. In-memory capability cache není online důkaz: API vrací
-provenanci `network` nebo `memoryCache` a send admission vynutí fresh request.
-Neúspěšný fresh read odstraní nahrazenou hot cache a teprve potom smí použít
-persistentní fallback. Fresh foreground sync znovu načte autoritativní
-capabilities; pouze při stále platné generation/replay autoritě operaci odešle
-právě jednou. Commit `924f44c` probudí room binding přes coalesced
-connectivity/lifecycle signál, zruší aktivní poll bez zavření bindingu a před
-claimem znovu vynutí fresh capability read. Falešný signál nic neclaimne.
-Android E2E potvrdilo bez restartu přechod z `queued`, attempt 0 do `completed`,
-attempt 1 s jedinou serverovou i cached zprávou. Rozhodnutí stále nezavádí
-background scheduler a neuzavírá live process-death/offline matici.
-
-### D-032: Desktop credential vault podle nativní platformy
-
-Stav: Přijato 26. srpna 2026, macOS řez `9695c9f`.
-
-Desktop nesmí nahrazovat platformní secure storage plaintextem v Drift ani
-v souboru. macOS používá nesynchronizovaný login Keychain s přístupností
-`AfterFirstUnlockThisDeviceOnly`; pro sandboxovaný ad-hoc runner nepoužívá Data
-Protection Keychain, protože ten bez odpovídajícího access-group entitlementu
-round trip odmítá. Nativní test ověřil add, read a delete skutečné generic
-password položky a po testu ji odstranil.
-
-Toto rozhodnutí neprokazuje přihlášený macOS E2E ani Linux. Linux musí dostat
-samostatný ověřený Secret Service/keyring backend; při jeho nedostupnosti se
-credential nesmí tiše uložit méně bezpečně.
-
-### D-033: Redigované bezpečnostní a migrační brány
-
-Stav: Přijato 26. srpna 2026, commity `5f91e37`, `f184f9d` a `73ce1fc`.
-
-Průběžný secret/log gate skenuje tracked zdrojové soubory a na požádání také
-explicitní build nebo runtime-log artefakty. Nález zveřejní pouze cestu, číslo
-řádku a stabilní rule ID; nikdy match, okolní řádek ani nalezenou hodnotu.
-Čistý běh vrací 0, nález 1 a chyba vstupu nebo Gitu 2. Syntetické testovací
-hodnoty nesmějí způsobit, že gate selže sama nad sebou.
-
-Podporované release vstupy databáze jsou Git-backed schema v7 až v13. Každý se
-otevře ze samostatného file-backed snapshotu, migruje do aktuální v14 a ověří
-zachování account/conversation dat, presence, archivace, nové tabulky,
-`user_version` a foreign-key integritu. Novější schema se nadále fail-closed
-odmítá bez změny verze nebo dat. Budoucí release schema musí do stejné matice
-přibýt současně se zvýšením `schemaVersion`.
-
-### D-037: Vybraná konverzace je jediný zdroj pravdy pro obě šířky okna
-
-Stav: Přijato 27. srpna 2026, commity `052a006` a `1b8687d`.
-
-Otevřenou konverzaci drží výhradně výběr v shellu. Úzké okno ji vykreslí na
-místě seznamu, široké okno v pravém panelu. Přepnutí mezi nimi je tím pádem
-čistě otázkou rozvržení a funguje obousměrně bez zvláštní logiky. Systémové
-tlačítko zpět a zpětné tlačítko v hlavičce ruší výběr, nezavírají aplikaci.
-
-Předchozí pokus předával konverzaci navigátoru jako pushnutou obrazovku.
-Zúžení okna fungovalo, rozšíření ne: aplikace zůstala v jednosloupcovém režimu
-i na maximalizovaném okně. Příčinou nebyl chybějící pop, ale to, že vznikly
-dva zdroje pravdy — výběr v shellu a stack navigátoru — a kopírovalo se jen
-jedním směrem.
-
-Opravit to zevnitř nešlo. Navigátor nebuduje route pod první neprůhlednou
-route, takže se nestaví ani workspace, ani shell a ani jeden z nich se
-o změnu velikosti okna nedozví; změřeno instrumentovaným testem, který
-napočítal nula postavených shellů a jednu route. Jakákoliv reakce na resize
-napsaná pod pushnutou obrazovkou je proto mrtvý kód.
-
-Deep link musí v tomto modelu nejdřív odstranit vše nad kořenovou obrazovkou
-a teprve pak nastavit výběr. Odkaz může přijít, když je uživatel kdekoliv,
-a samotné nastavení výběru by ho nechalo dívat se na to, co má navrchu.
-
-Poznámka k dohledatelnosti: shell část této změny nese commit `052a006`
-s hlavičkou o doplnění klíče widgetu, protože vznikla nechtěně stagenutím
-celého souboru s cizí rozpracovanou prací. Obsahově patří k `1b8687d`.
-
-### D-034: Desktopová hustota podle vstupního zařízení, ne podle šířky okna
-
-Stav: Přijato 27. srpna 2026, commity `7cde8ca`, `520c88e`, `289a6ee`
-a `539a776`.
-
-Rozměry ovládacích prvků se odvozují od `defaultTargetPlatform`. Windows, macOS
-a Linux dostávají hustotu pro myš a klávesnici, ostatní platformy zůstávají
-beze změny na dotykovém minimu 48 dp. Hranicí je platforma, protože zúžené okno
-na desktopu se pořád ovládá myší a rozšířený tablet prstem — šířka okna
-o vstupním zařízení nevypovídá.
-
-Změřeno widget testem při 1400×900 a `devicePixelRatio` 1: před opravou měl
-standardní interaktivní prvek 48 px proti 34 px v Nextcloudu, řádek konverzace
-80 px proti 53 px a hlavička panelu 76 px proti 44 px. Po opravě je na desktopu
-`IconButton` 36, `FilledButton` 38, `TextField` 40, řádek konverzace 56,
-avatar 40, hlavička 52 a šířka seznamu 300, což je `$navigation-width`
-z `nextcloud/server`.
-
-Příčinou NENÍ `ThemeData.visualDensity`. Flutter ho podle platformy dopočítá
-sám (`theme_data.dart:412`), na desktopu tedy compact hustota už platí — ale
-ubere jen 8 px u widgetů založených na `minimumSize` a na `contentPadding`,
-zaoblení ani typografii nedosáhne vůbec. Skutečné příčiny byly dvě: téma
-vnucovalo dotykové minimum všem platformám, a rozměry natvrdo zapsané ve
-widgetech, na které hustota nemá vliv.
-
-Dvě zjištění, která z návrhu neplynula a vyšla až z měření. `IconButton` na
-`minimumSize` nereaguje, protože se řídí paddingem kolem ikony a v Material 3
-si pinuje `VisualDensity.standard`; skutečným knoflíkem je `padding`
-a `tapTargetSize`. A `minimumSize` se musí zadávat o osm větší, než má být
-výsledek, protože desktopová compact hustota osm bodů odečte.
-
-Guard test `desktop_density_test.dart` drží mobilní minimum 48 dp i spodní mez
-24 px, aby se hustota nedala snižovat donekonečna.
-
-### D-035: Přerušená migrace databáze se zotavuje, neprovádí se atomicky
-
-Stav: Přijato 27. srpna 2026, commity `04528c3`, `0b3c201` a `5c7cd96`.
-
-Každý krok `onUpgrade` musí být idempotentní, aby ho šlo bezpečně zopakovat.
-Migrace se záměrně neobaluje do jedné transakce.
-
-Důvodem je stav doložený na vyhrazené Windows VM: `user_version` zůstalo 7,
-ale schéma bylo už po krok 10, takže každý další start replayoval kroky, které
-schéma mělo, a skončil na `duplicate column name: is_archived`. Aplikace se
-neotevřela, tlačítko pro nový pokus jen zopakovalo tutéž migraci a z UI
-nevedla cesta ven.
-
-Atomicita by tento stav nikdy neuzdravila, pouze zabránila vzniku nových.
-Navíc by sama o sobě nestačila: `user_version` zapisuje drift až po dokončení
-`onUpgrade`, takže pád v tom okně vyrobí tentýž rozejitý stav a bookkeeping by
-se musel obcházet ručně.
-
-Idempotentní musel být jediný krok. `migrator.createTable` drift generuje jako
-`CREATE TABLE IF NOT EXISTS`, indexy mají `IF NOT EXISTS` ručně a backfilly
-přepočítávají z `raw_json`. Neidempotentní byl pouze `migrator.addColumn`,
-který nyní prochází přes kontrolu `PRAGMA table_info`.
-
-Databáze také přestala vznikat v uživatelské složce Dokumenty. Nešlo o problém
-jediné platformy: `drift_flutter` má výchozí adresář
-`getApplicationDocumentsDirectory()` všude, takže na Windows šlo o složku
-synchronizovanou OneDrivem, na Linuxu o `~/Documents`, na macOS bez sandboxu
-totéž a na iOS o sandbox viditelný ve Files a zálohovaný do iCloud; jen Android
-mířil do app-private adresáře. Přesun stěhuje i `-wal` a `-shm`, protože
-samotný hlavní soubor by zahodil transakce ve write-ahead logu, a existující
-soubor v cíli nikdy nepřepíše.
-
-### D-036: Chat providery se uvolňují se zavřením místnosti
-
-Stav: Přijato 27. srpna 2026, commit `142d5c6`.
-
-Rodinné providery držící zprávy, stavy odeslání, outbox operace a scope jsou
-`autoDispose`. Bez toho si každá kdy otevřená místnost natrvalo držela živý
-drift subscription i poslední kompletní seznam zpráv a zavření místnosti
-neuvolnilo nic.
-
-Změřeno na produkční widget cestě: 2,9 kB rezidentní paměti na cachovanou
-zprávu, tedy zhruba 58 MB pro místnost s dvaceti tisíci zprávami. Průchod
-dvanácti místnostmi po dvou tisících zprávách vyrostl před opravou o 57,9 MB
-a po ní o 16,3 MB, což je o 72 % méně.
-
-Dvě související změny byly posouzeny a zamítnuty, obě s měřením. Okno nad
-dotazem na zprávy nemá co opravovat, protože místnost s dvaceti tisíci
-nacachovanými zprávami se otevře za 231 ms a po `autoDispose` se drží jen jedna
-otevřená; navíc by tiše rozbilo skok na zprávu, protože bloky popisují, co je
-stažené, a ne co dotaz vydává. Evikce nacachovaných zpráv nemá co odříznout,
-protože z 1 199 B na řádek je 714 B samotná zpráva — mazala by uživatelskou
-historii, ne režii.
-
-### D-038: Vlastní push proxy je výchozí transport na Androidu i Apple
-
-Stav: Přijato 27. srpna 2026, doručení prokázané naživo 28. srpna 2026.
-Nahrazuje androidí část D-025.
-
-Android i Apple platformy registrují push-v2 proti vlastní proxy
-`nks-talk-notify`, ta drží odesílací větev na FCM v1 a na APNs. Projekt tedy
-publisher Firebase projekt i vlastní gateway MÁ; starší tvrzení o opaku v
-D-025 a v okolních odstavcích platí jen pro záložní Web Push větev.
-Web Push přes UnifiedPush zůstává nesmazaný, přepínatelný za běhu.
-
-Nextcloud vybírá cílová zařízení podle sloupce `apptype`, který odvozuje
-výhradně z User-Agentu registračního požadavku, a Talk notifikaci pošle
-`talk` zařízením — na ostatní spadne jen tehdy, když účet žádné `talk`
-zařízení nemá. Klient se proto při registraci hlásí jako Talk klient
-(`f52a587`); bez toho účet, který používá i oficiální aplikaci Talk,
-nedostane v této aplikaci ani jednu notifikaci. Podrobné měření je
-v `TODO-notifications-calls.md`.
-
-Proxy obsah notifikace nedešifruje. Otevře ho až klientský RSA klíč, takže
-účet určuje ten klíč, který payload rozšifroval, ne hostitel ani aktivní účet.
-
-DVA DŮSLEDKY UZAVŘENÉ 3. ZÁŘÍ 2026 MAJITELEM, obojí jako rozhodnutí, ne jako
-odklad. (1) Embedded FCM distributor se NEBUDE forkovat. Jeho slabší záruka —
-ACK vůči GMS dřív než předání aplikaci — se týká už jen záložní Web Push
-větve, a ztracené probuzení stejně dohání autoritativní OCS catch-up; fork
-LGPL-2.1 knihovny by za to platil trvalou údržbou. (2) AGPL Web Push backport
-pro Nextcloud 33 se NEBUDE stavět. Na starších řadách jede výchozí cesta přes
-proxy na klasickém push-v2 `/devices`, což je živě ověřené i na Nextcloud 32;
-backport by vylepšil jen záložní větev na jedné serverové řadě a addon navíc
-nikdy nesmí být povinnou instalací.
-
-### D-039: Typing stav je transientní room session se zdroji per composer
-
-Stav: Přijato 30. srpna 2026, commit `9499288`.
-
-Indikátor se zapne pouze při autentizovaném `signaling-v3`, feature
-`typing-privacy`, veřejné `config.chat.typing-privacy=0` a external HPB
-transportu. Chybějící nebo privátní policy je fail-closed: klient nepřijímá ani
-neodesílá typing stav. Rozhodnutí odpovídá `talk-android@5428960` a
+- macOS deployment target 11.0; `gal 2.3.3`, used for saving media, declares the
+  same minimum in both the Swift Package and the CocoaPods contract;
+- Windows and Linux per the toolchain baseline of Flutter 3.44.4.
+
+Raising the minimum requires a specific dependency or OS API reason. The first
+remote macOS build documented exactly the conflict of the original 10.15 with the
+native minimum of `gal`. Lowering the minimum requires a real build and a runtime
+test, not merely a change of a number.
+
+### D-027: The desktop as a full product target
+
+State: Accepted by the user on 23 August 2026.
+
+Windows, macOS and Linux use the same account, protocol, Drift and feature model
+as mobile. The expanded shell is three-pane and responds to a window change.
+Desktop-specific keyboard handling, hover/focus, the system tray, auto-start,
+file drop and background delivery are created only as verified platform slices;
+they must not be faked by the existence of a generated runner.
+
+Auto-start is a local preference of the application, not of the account. Windows
+owns it in the per-user `HKCU Run`, macOS 13+ through `SMAppService.mainApp` and
+Linux through an XDG Autostart file in the user config directory. After a write,
+Flutter always reads the real OS state again; neither an incomplete write nor a
+login item awaiting approval may be shown as enabled. macOS 11–12 stays
+explicitly unsupported instead of a legacy helper or a write outside the sandbox.
+
+The Windows evidence from source `0be4c88` passed the release build, a 29/29
+bundle manifest and a responsive runtime on a dedicated Windows 11 VM. The
+Inspector capture proves the Flutter render, not the real pixels of the release
+DirectComposition window; a signed-in desktop E2E therefore stays a separate
+gate. Commit `1b1066a` packaged the same product as a per-user Inno Setup
+installation. A dedicated VM verified a clean install, launch, an upgrade while
+running, a rejected downgrade with no byte changed, preservation of the support
+data and uninstall. Release signing stays open.
+
+The Apple evidence from source `83078cd` passed on macOS 15.7.4 arm64 through
+analyze, a clean debug as well as universal release build, codesign verify and a
+live 800×628 window. The real Flutter inspector render proves the debug UI; the
+native window capture failed and is not evidence. The same source passed a clean
+iOS Simulator build, install, launch and framebuffer capture on an iPhone 16 Pro
+with iOS 18.6. Neither the ad-hoc signature nor the simulator prove distribution
+signing, a physical device, a Keychain login, APNs/PushKit or the background
+lifecycle.
+
+### D-028: Giphy as a rendered reference
+
+State: Rewritten on 25 August 2026 by an explicit user decision. The previous
+attachment variant is described below and no longer applies.
+
+The GIF is not stored in the user's storage. A selection in the picker sends the
+`resourceUrl` as a message and the bubble renders it: the client resolves the
+reference through the account-scoped Nextcloud References resolver and shows the
+animated GIF inline. The user therefore does not see a URL, but an animation.
+
+The reason for the change is that an attachment creates a file in the user's
+Files, which is disproportionate for sending a GIF. A rendered reference matches
+how Chatujme solves it.
+
+The security boundaries stay: the client accepts only `integration_giphy_gif`,
+the same-origin proxy of the specific server and valid `image/gif` bytes. The
+loader is account-scoped, bounded and with an LRU. The only visible external link
+is the mandatory GIPHY attribution in the picker.
+
+The picker thumbnail repository shares a concurrent request for the same URL and
+holds at most 32 verified images or 16 MiB per account instance. The cache is
+discarded together with the repository; an explicitly cancelled load stays
+separate, so that one caller does not cancel the others.
+
+A known limitation: a recipient without the Giphy integration enabled on their
+server will not resolve the reference and will see a link. That is the price of
+the chosen variant.
+
+### D-028a: The historical variant of Giphy as a Talk attachment
+
+State: The original wire-reference variant was replaced on 25 August 2026 by an
+explicit user decision. Commit `7ca580e` wires the picker to the real attachment
+flow and has automated evidence; a live server round trip stays open.
+
+The selected `resourceUrl` serves only as an input into the account-scoped
+Nextcloud References resolver. The client accepts only `integration_giphy_gif`,
+the same-origin proxy and valid `image/gif` bytes. It stores the bytes into a
+durable app-owned source and sends them through the same Talk
+Draft/WebDAV/finalize flow as any other image attachment. The Giphy URL is never
+inserted into `sendText`, the composer or the text message outbox.
+
+The original renderer of the hidden wire URL remains only for compatibility with
+older messages. The historical Android test of this variant is valid evidence of
+the behaviour of that time, but does not prove the new target attachment flow.
+The new flow must not fall back to a URL text message on any error.
+
+### D-029: Presence only from the server user status
+
+State: Accepted on 25 August 2026, commit `85fdb44`. Verified live against the
+reference instance on `emulator-5554`.
+
+Presence is derived exclusively from the `status` field of the conversation v4
+room object, which the server supplies after `includeStatus=true`. The client
+must not guess presence from local activity, the time of the last poll, an open
+websocket or from `lastActivity`. The badge is rendered only for a one-to-one
+room (`type = 1`); `offline`, `invisible` and an unknown value render no badge at
+all.
+
+`statusIcon` and `statusMessage` are the user's own status. The client shows them
+only until `statusClearAt` has passed; after it expires, only the basic state
+remains, without foreign text.
+
+An incremental response returning a room without the `status` key preserves the
+previous value. A full response is authoritative and overwrites the value even
+with an empty one. The reason is that a delta is a partial view, while a full
+fetch represents the complete server state of the account.
+
+The original schema v8 added the projection columns without backfilling the old
+`raw_json`. Schema v13 therefore repairs v8–v12 databases once, and only when the
+whole presence quadruple is NULL and `raw_json` contains a valid textual
+`status`. It never overwrites an existing projection and a malformed or
+status-absent payload is a safe no-op; the repair is idempotent.
+
+`includeStatus=true` changes the nature of an incremental fetch: in it the server
+returns all 1:1 rooms so that it can refresh presence. A compact refresh is
+therefore not free and that price is knowingly accepted in exchange for presence.
+
+The badge colors are defined per theme separately and every state has its own
+glyph, so that the state does not depend on color alone. A text alternative is
+mandatory, because a colored dot on its own is invisible to a screen reader.
+
+### D-030: Atomizing hand-maintained files
+
+State: Accepted by the user on 26 August 2026.
+
+A hand-maintained source or test file should stay under 1000 lines. A larger unit
+is split by responsibilities into smaller files with a narrow public interface;
+merely moving lines without reducing responsibility is not a completion.
+Generated files are exempt from the limit, but must not be edited by hand.
+
+The initial audit recorded 24 hand-maintained files over the limit. A fresh audit
+on `83078cd` found none; the largest hand-maintained files have 977 lines. Above
+the limit remain only the generated `app_database.g.dart` and the localization
+`lib/l10n/generated/app_localizations*.dart`. The limit stays a continuous gate
+so that further changes do not undo the atomization.
+
+### D-031: Offline admission of a text message from a persistent snapshot
+
+State: Accepted on 26 August 2026, commits `47ec902` and `83078cd`.
+
+Only `sendText` may, on a transient failure to load capabilities, use a
+persistent account-scoped snapshot. The snapshot must have the lane `ready`, its
+fingerprint must match the canonical `talkFeaturesJson` of the account exactly
+and the profile must still allow a text send. A missing, corrupted or mismatched
+snapshot, a 401, a cancellation and an invalid response all stay fail-closed.
+
+The offline branch only admits a durable operation in the `queued` state. It must
+neither claim it nor issue a POST, because without network evidence the transport
+would create a false ambiguous state. The in-memory capability cache is not
+online evidence: the API returns the provenance `network` or `memoryCache` and
+the send admission forces a fresh request. A failed fresh read removes the
+superseded hot cache and only then may the persistent fallback be used. A fresh
+foreground sync reloads the authoritative capabilities; only with a still valid
+generation/replay authority does it send the operation exactly once. Commit
+`924f44c` wakes the room binding through a coalesced connectivity/lifecycle
+signal, cancels an active poll without closing the binding and forces a fresh
+capability read again before a claim. A false signal claims nothing. The Android
+E2E confirmed, without a restart, the transition from `queued`, attempt 0, to
+`completed`, attempt 1, with a single server-side as well as cached message. The
+decision still introduces no background scheduler and does not close the live
+process-death/offline matrix.
+
+### D-032: A desktop credential vault per the native platform
+
+State: Accepted on 26 August 2026, macOS slice `9695c9f`.
+
+The desktop must not replace platform secure storage with plaintext in Drift or
+in a file. macOS uses the non-synchronized login Keychain with the accessibility
+`AfterFirstUnlockThisDeviceOnly`; for a sandboxed ad-hoc runner it does not use
+the Data Protection Keychain, because that rejects a round trip without a
+matching access-group entitlement. A native test verified adding, reading and
+deleting a real generic password item and removed it afterwards.
+
+This decision proves neither a signed-in macOS E2E nor Linux. Linux has to get a
+separate verified Secret Service/keyring backend; when it is unavailable, the
+credential must not be silently stored less securely.
+
+### D-033: Redacted security and migration gates
+
+State: Accepted on 26 August 2026, commits `5f91e37`, `f184f9d` and `73ce1fc`.
+
+The continuous secret/log gate scans tracked source files and, on request, also
+explicit build or runtime-log artifacts. A finding discloses only the path, the
+line number and a stable rule ID; never the match, the surrounding line or the
+value found. A clean run returns 0, a finding 1 and an input or Git error 2.
+Synthetic test values must not make the gate fail over itself.
+
+The supported release database inputs are the Git-backed schemas v7 to v13. Each
+is opened from a separate file-backed snapshot, migrated to the current v14, and
+the preservation of the account/conversation data, presence, archiving, the new
+tables, `user_version` and foreign-key integrity is verified. A newer schema
+continues to be rejected fail-closed without changing the version or the data. A
+future release schema has to be added to the same matrix at the same time as
+`schemaVersion` is raised.
+
+### D-037: The selected conversation is the single source of truth for both window widths
+
+State: Accepted on 27 August 2026, commits `052a006` and `1b8687d`.
+
+The open conversation is held exclusively by the selection in the shell. A narrow
+window renders it in place of the list, a wide window in the right pane.
+Switching between them is therefore purely a question of layout and works in both
+directions without special logic. The system back button and the back button in
+the header cancel the selection, they do not close the application.
+
+The previous attempt handed the conversation to the navigator as a pushed screen.
+Narrowing the window worked, widening it did not: the application stayed in
+single-column mode even in a maximized window. The cause was not a missing pop,
+but that two sources of truth arose — the selection in the shell and the
+navigator stack — and copying went only in one direction.
+
+It could not be fixed from the inside. The navigator does not build routes under
+the first opaque route, so neither the workspace nor the shell is built and
+neither of them learns about a window resize; measured by an instrumented test
+that counted zero shells built and one route. Any reaction to a resize written
+under a pushed screen is therefore dead code.
+
+In this model a deep link has to first remove everything above the root screen
+and only then set the selection. A link can arrive while the user is anywhere,
+and merely setting the selection would leave them looking at whatever is on top.
+
+A note on traceability: the shell part of this change is carried by commit
+`052a006` with a header about adding a widget key, because it arose accidentally
+by staging a whole file containing someone else's work in progress. By content it
+belongs to `1b8687d`.
+
+### D-034: Desktop density from the input device, not from the window width
+
+State: Accepted on 27 August 2026, commits `7cde8ca`, `520c88e`, `289a6ee` and
+`539a776`.
+
+The dimensions of the controls are derived from `defaultTargetPlatform`. Windows,
+macOS and Linux get the density for a mouse and a keyboard, the other platforms
+stay unchanged at the touch minimum of 48 dp. The boundary is the platform,
+because a narrowed window on the desktop is still operated with a mouse and a
+widened tablet with a finger — the window width says nothing about the input
+device.
+
+Measured by a widget test at 1400×900 and `devicePixelRatio` 1: before the fix, a
+standard interactive element was 48 px against 34 px in Nextcloud, a conversation
+row 80 px against 53 px and a pane header 76 px against 44 px. After the fix, on
+the desktop `IconButton` is 36, `FilledButton` 38, `TextField` 40, a conversation
+row 56, an avatar 40, the header 52 and the list width 300, which is
+`$navigation-width` from `nextcloud/server`.
+
+The cause is NOT `ThemeData.visualDensity`. Flutter computes it by platform on its
+own (`theme_data.dart:412`), so the compact density already applies on the
+desktop — but it only takes 8 px off widgets based on `minimumSize` and on
+`contentPadding`, and reaches neither the corner radii nor the typography. The
+real causes were two: the theme imposed the touch minimum on all platforms, and
+dimensions hardcoded in the widgets, which the density does not affect.
+
+Two findings that did not follow from the design and came only from the
+measurement. `IconButton` does not react to `minimumSize`, because it is governed
+by the padding around the icon and in Material 3 pins itself to
+`VisualDensity.standard`; the real knobs are `padding` and `tapTargetSize`. And
+`minimumSize` has to be given eight larger than the intended result, because the
+desktop compact density subtracts eight points.
+
+The guard test `desktop_density_test.dart` holds the mobile minimum of 48 dp as
+well as the lower bound of 24 px, so that the density cannot be reduced
+indefinitely.
+
+### D-035: An interrupted database migration recovers, it is not performed atomically
+
+State: Accepted on 27 August 2026, commits `04528c3`, `0b3c201` and `5c7cd96`.
+
+Every `onUpgrade` step has to be idempotent so that it can be safely repeated.
+The migration is deliberately not wrapped into a single transaction.
+
+The reason is a state documented on the dedicated Windows VM: `user_version`
+stayed at 7, but the schema was already past step 10, so every further start
+replayed steps the schema already had and ended with
+`duplicate column name: is_archived`. The application did not open, the retry
+button merely repeated the same migration and there was no way out from the UI.
+
+Atomicity would never have healed that state, it would only have prevented new
+ones. On top of that it would not have been enough by itself: drift writes
+`user_version` only after `onUpgrade` finishes, so a crash in that window
+produces the same divergent state and the bookkeeping would have to be worked
+around by hand.
+
+Only a single step had to be made idempotent. Drift generates
+`migrator.createTable` as `CREATE TABLE IF NOT EXISTS`, the indexes have
+`IF NOT EXISTS` by hand and the backfills recompute from `raw_json`. The only
+non-idempotent one was `migrator.addColumn`, which now goes through a
+`PRAGMA table_info` check.
+
+The database also stopped being created in the user's Documents folder. It was
+not a problem of a single platform: `drift_flutter` has the default directory
+`getApplicationDocumentsDirectory()` everywhere, so on Windows it was a folder
+synchronized by OneDrive, on Linux `~/Documents`, on macOS without a sandbox the
+same, and on iOS a sandbox visible in Files and backed up to iCloud; only Android
+pointed into an app-private directory. The move relocates `-wal` and `-shm` too,
+because the main file alone would discard transactions in the write-ahead log,
+and it never overwrites an existing file at the destination.
+
+### D-036: Chat providers are released when the room is closed
+
+State: Accepted on 27 August 2026, commit `142d5c6`.
+
+The family providers holding messages, send states, outbox operations and the
+scope are `autoDispose`. Without that, every room ever opened permanently held a
+live drift subscription and the last complete list of messages, and closing the
+room released nothing.
+
+Measured on the production widget path: 2.9 kB of resident memory per cached
+message, that is roughly 58 MB for a room with twenty thousand messages. A pass
+through twelve rooms of two thousand messages each grew by 57.9 MB before the fix
+and by 16.3 MB after it, which is 72% less.
+
+Two related changes were considered and rejected, both with measurements. A
+window over the message query has nothing to fix, because a room with twenty
+thousand cached messages opens in 231 ms and after `autoDispose` only one is held
+open; on top of that it would silently break the jump to a message, because the
+blocks describe what has been downloaded, not what the query emits. Evicting
+cached messages has nothing to cut, because of the 1199 B per row, 714 B is the
+message itself — it would delete user history, not overhead.
+
+### D-038: Our own push proxy is the default transport on both Android and Apple
+
+State: Accepted on 27 August 2026, delivery proven live on 28 August 2026.
+Supersedes the Android part of D-025.
+
+Both the Android and the Apple platforms register push-v2 against our own proxy
+`nks-talk-notify`, which holds the sending branch to FCM v1 and to APNs. The
+project therefore DOES have a publisher Firebase project and its own gateway; the
+older claims to the contrary in D-025 and the surrounding paragraphs hold only
+for the fallback Web Push branch. Web Push over UnifiedPush stays undeleted and
+switchable at runtime.
+
+Nextcloud selects the target devices by the `apptype` column, which it derives
+exclusively from the User-Agent of the registration request, and sends a Talk
+notification to `talk` devices — it falls back to the others only when the
+account has no `talk` device. During registration the client therefore identifies
+itself as a Talk client (`f52a587`); without that, an account that also uses the
+official Talk app receives not a single notification in this application. The
+detailed measurement is in `TODO-notifications-calls.md`.
+
+The proxy does not decrypt the content of a notification. It is opened only by
+the client RSA key, so the account is determined by the key that decrypted the
+payload, not by the host or the active account.
+
+TWO CONSEQUENCES CLOSED ON 3 SEPTEMBER 2026 BY THE OWNER, both as decisions, not
+as deferrals. (1) The embedded FCM distributor will NOT be forked. Its weaker
+guarantee — an ACK to GMS before handing over to the application — now concerns
+only the fallback Web Push branch, and a lost wake-up is caught up by the
+authoritative OCS catch-up anyway; forking an LGPL-2.1 library would pay for that
+with permanent maintenance. (2) An AGPL Web Push backport for Nextcloud 33 will
+NOT be built. On older lines the default path runs through the proxy on the
+classic push-v2 `/devices`, which is verified live on Nextcloud 32 as well; a
+backport would improve only the fallback branch on one server line, and an addon
+must never be a mandatory installation anyway.
+
+### D-039: Typing state is a transient room session with per-composer sources
+
+State: Accepted on 30 August 2026, commit `9499288`.
+
+The indicator turns on only with an authenticated `signaling-v3`, the feature
+`typing-privacy`, a public `config.chat.typing-privacy=0` and the external HPB
+transport. A missing or private policy is fail-closed: the client neither accepts
+nor sends typing state. The decision matches `talk-android@5428960` and
 `talk-ios@2d31eda`.
 
-Příchozí stav je account/room/peer-scoped a po 15 sekundách bez obnovy zmizí.
-Odchozí start se obnovuje po 10 sekundách souvislého psaní a po pěti sekundách
-nečinnosti se odešle stop. Nejde o durable data a nepatří do Drift databáze.
-Provider drží pouze non-secret signaling authority potřebnou k obnovení lane.
+Incoming state is account/room/peer-scoped and disappears after 15 seconds
+without a refresh. An outgoing start is refreshed after 10 seconds of continuous
+typing and a stop is sent after five seconds of inactivity. It is not durable
+data and does not belong in the Drift database. The provider holds only the
+non-secret signaling authority needed to restore the lane.
 
-Root a thread stejné místnosti sdílejí jednu signaling session, ale ne jediný
-boolean aktivity. Každý composer má identity source a controller agreguje
-jejich množinu; stop se odešle až po deaktivaci posledního zdroje. Tím vedlejší
-nefocusovaný root nezastaví aktivní thread v desktop split view.
+The root and a thread of the same room share one signaling session, but not a
+single activity boolean. Every composer has an identity source and the controller
+aggregates their set; a stop is sent only after the last source is deactivated.
+That keeps an adjacent unfocused root from stopping an active thread in a desktop
+split view.
 
-Live web → iOS round trip na referenční instanci prokázal start i stop bez
-odeslání zprávy. Pixelově změřený banner měl 4,72:1 ve světlém a 11,15:1 v
-tmavém režimu.
+A live web → iOS round trip on the reference instance proved both the start and
+the stop without sending a message. The pixel-measured banner had 4.72:1 in light
+and 11.15:1 in dark mode.
 
-Doplnění 1. září 2026, commity `a9e08f4`, `ea19395`, `3c89513`, `2760623` a
-`5c2df5d`: typing provider před
-HPB připojením aktivuje místnost přes `participants/active` a přijme pouze
-odpověď se stejným room tokenem a nenulovým session ID. Talk session cookie je
-jen v paměti, pod klíčem konkrétního `accountId` a přesného serveru. Aktivace a
-deaktivace mají serializovaný generation lease, takže opožděný cleanup starého
-provideru nesmí smazat novější session. Odebrání účtu před revokací credentials
-uzavře admission, serverovou session i HPB lane; opožděný active/settings/call
-response už nesmí zachytit cookie, vrátit úspěch ani obnovit DB stav. API close
-invaliduje generation, bounded zruší response stream a čeká na cleanup tail.
-401, invalidní odpověď, dispose a deaktivace mají bounded cleanup. Cookie path,
-domain, expiry, `Max-Age`, prázdná hodnota a ordering se vyhodnocují bez sdílení
-mezi účty. Živý web → Android průchod zobrazil start do 2 sekund a stop do 5
-sekund.
+An addition of 1 September 2026, commits `a9e08f4`, `ea19395`, `3c89513`,
+`2760623` and `5c2df5d`: before connecting to the HPB, the typing provider
+activates the room through `participants/active` and accepts only a response with
+the same room token and a non-zero session ID. The Talk session cookie is in
+memory only, under the key of the specific `accountId` and the exact server.
+Activation and deactivation have a serialized generation lease, so a late cleanup
+of an older provider must not delete a newer session. Removing an account closes
+the admission, the server session and the HPB lane before the credentials are
+revoked; a late active/settings/call response then must not capture a cookie,
+return a success or restore DB state. An API close invalidates the generation,
+cancels the response stream in a bounded way and waits for the cleanup tail. A
+401, an invalid response, dispose and deactivation all have a bounded cleanup.
+The cookie path, domain, expiry, `Max-Age`, an empty value and ordering are
+evaluated without sharing between accounts. A live web → Android pass showed the
+start within 2 seconds and the stop within 5 seconds.
 
-### D-040: Absence protistrany je transientní account-scoped DAV pohled
+### D-040: The other party's absence is a transient account-scoped DAV view
 
-Stav: Přijato 31. srpna 2026, commit `16101db`.
+State: Accepted on 31 August 2026, commit `16101db`.
 
-Aktuální absence se načítá pouze pro otevřenou 1:1 konverzaci a jen za
-`dav.absence-supported = true`. User ID pochází z account-bound roomu a GET
-používá origin, login i credential stejného účtu. Account mismatch, skupina,
-prázdné user ID nebo chybějící capability nesmí spustit žádný request.
+The current absence is loaded only for an open 1:1 conversation and only behind
+`dav.absence-supported = true`. The user ID comes from the account-bound room and
+the GET uses the origin, the login and the credential of the same account. An
+account mismatch, a group, an empty user ID or a missing capability must trigger
+no request at all.
 
-Absence není chat zpráva ani durable synchronizační stav. Neukládá se do Drift
-databáze a po otevření nebo změně konverzace se načte z autoritativního DAV
-endpointu. Vlastníkem requestu je banner; při změně scope nebo dispose zruší
-capability i navazující GET, aby starý výsledek nemohl přeskočit do jiné room.
+An absence is neither a chat message nor durable synchronization state. It is not
+stored in the Drift database and is loaded from the authoritative DAV endpoint
+after a conversation is opened or changed. The owner of the request is the
+banner; on a scope change or dispose it cancels both the capability and the
+follow-up GET, so that an old result cannot jump into a different room.
 
-Serverový text zůstává celý pro čtečku obrazovky, ale vizuální řádky jsou
-omezené. Tím validní bounded payload neznepřístupní chat při zvětšeném písmu.
+The server text stays whole for a screen reader, but the visual lines are
+limited. That keeps a valid bounded payload from making the chat inaccessible at
+an enlarged font size.
 
-### D-041: Kalendářový reminder patří k přesné call location
+### D-041: A calendar reminder belongs to the exact call location
 
-Stav: Přijato 31. srpna 2026, commit `be6cfe5`.
+State: Accepted on 31 August 2026, commit `be6cfe5`.
 
-Nadcházející událost se nehledá podle názvu místnosti ani účastníků. Klíčem je
-přesná absolutní location `{accountOrigin}/call/{roomToken}`, kterou používá i
-upstream Talk Android. Endpoint se volá jen za `upcoming-reminders` a se stejným
-account originem, loginem a credentialem jako otevřená room.
+An upcoming event is not searched for by the name of the room or by the
+participants. The key is the exact absolute location
+`{accountOrigin}/call/{roomToken}`, which upstream Talk Android uses too. The
+endpoint is called only behind `upcoming-reminders` and with the same account
+origin, login and credential as the open room.
 
-Reminder je transientní serverový pohled, ne chat zpráva ani durable cache.
-Zobrazuje se první použitelný event a zavření platí pro aktuálně otevřený pane.
-Při změně scope se request zruší a generation-bound widget zahodí stará data
-ještě před dokončením nové odpovědi.
+A reminder is a transient server view, neither a chat message nor a durable
+cache. The first usable event is displayed and dismissing it applies to the
+currently open pane. On a scope change the request is cancelled and the
+generation-bound widget discards the old data even before the new response
+completes.
 
-Location v odpovědi se musí přesně rovnat request filtru. Tím ani validní OCS
-payload nemůže přeskočit mezi dvěma rooms stejného účtu nebo mezi účty se
-shodným tokenem.
+The location in the response must exactly equal the request filter. That keeps
+even a valid OCS payload from jumping between two rooms of the same account or
+between accounts with an identical token.
 
-### D-042: Sdílený kontakt je vCard file attachment
+### D-042: A shared contact is a vCard file attachment
 
-Stav: Přijato 31. srpna 2026, commity `9d6b0fe` a `f743c45`.
+State: Accepted on 31 August 2026, commits `9d6b0fe` and `f743c45`.
 
-Upstream Android exportuje kontakt do `.vcf` a pošle jej standardním attachment
-tokem. Klient proto nepřidává nový rich object druh ani zvláštní download
-transport. Příjem zůstává v account-authenticated DAV file pipeline.
+Upstream Android exports a contact into `.vcf` and sends it through the standard
+attachment flow. The client therefore adds neither a new rich object kind nor a
+special download transport. Reception stays in the account-authenticated DAV file
+pipeline.
 
-Strong vCard MIME je autoritativní. Generic binární MIME smí použít contact UI
-jen tehdy, když poslední segment validovaného `DavRelativePath` končí `.vcf`.
-Display name není trust boundary a příponu nesmí dodat ani přepsat.
+A strong vCard MIME is authoritative. A generic binary MIME may use the contact
+UI only when the last segment of the validated `DavRelativePath` ends with
+`.vcf`. The display name is not a trust boundary and may neither supply nor
+overwrite the extension.
 
-Odeslání kontaktu z platformního adresáře je samostatná funkce s vlastními
-permission a privacy hranicemi. Příjem vCardu ji nepředstírá ani nevyžaduje
-přístup ke kontaktům zařízení.
+Sending a contact from the platform address book is a separate feature with its
+own permission and privacy boundaries. Receiving a vCard neither pretends to be
+it nor requires access to the device contacts.
 
-Android a iOS používají foreground systémový picker, který vrací právě jeden
-kontakt bez plošného oprávnění. Nativní hranice odstraní PHOTO, odmítne více
-karet nebo chybějící FN a vynutí 2MiB limit. App-owned vCard pokračuje beze
-změny přes stávající file attachment admission, takže zdědí account/room/thread
-binding, durable source a autoritativní serverové potvrzení.
+Android and iOS use a foreground system picker that returns exactly one contact
+without a blanket permission. The native boundary removes PHOTO, rejects several
+cards or a missing FN and enforces a 2 MiB limit. The app-owned vCard continues
+unchanged through the existing file attachment admission, so it inherits the
+account/room/thread binding, the durable source and the authoritative server
+confirmation.
 
-### D-043: Serverový accent je account-scoped capability state
+### D-043: The server accent is account-scoped capability state
 
-Stav: Přijato 31. srpna 2026, commit `75127b9`.
+State: Accepted on 31 August 2026, commit `75127b9`.
 
-Autentizovaný capability snapshot přijímá pouze opaque `#RRGGBB`. Barva se
-ukládá v samostatné tabulce vázané cizím klíčem na `accountId`; nesdílí se s
-Talk feature fingerprintem ani jiným serverem. Chybějící nebo neplatná hodnota
-starý accent odstraní a použije výchozí seed.
+The authenticated capability snapshot accepts only an opaque `#RRGGBB`. The color
+is stored in a separate table bound by a foreign key to the `accountId`; it is
+shared neither with the Talk feature fingerprint nor with another server. A
+missing or invalid value removes the old accent and uses the default seed.
 
-Theme se přegeneruje při změně vybraného účtu. Material color scheme zůstává
-odpovědný za light/dark kontrast, který hlídá výpočet minimálně 4,5:1.
+The theme is regenerated when the selected account changes. The Material color
+scheme stays responsible for the light/dark contrast, which is guarded by a
+computation of at least 4.5:1.
 
-### D-044: Živá mapa polohy vyžaduje výslovný souhlas
+### D-044: A live location map requires an explicit consent
 
-Stav: Přijato 31. srpna 2026, commity `4b0e659` a `b3c751e`.
+State: Accepted on 31 August 2026, commits `4b0e659` and `b3c751e`.
 
-Zobrazení zprávy nesmí samo poslat souřadnice třetí straně. Výchozí náhled je
-lokální schéma s markerem. OSM dlaždice se načtou až po samostatném přístupném
-klepnutí; serverem dodaný link není důvěryhodný síťový cíl.
+Displaying a message must not by itself send the coordinates to a third party.
+The default preview is a local diagram with a marker. OSM tiles are loaded only
+after a separate accessible tap; the link supplied by the server is not a trusted
+network target.
 
-Loader má pevný HTTPS origin, zakázané redirecty, limit čtyř requestů po
-256 KiB, souběh dva a timeout. Bajty zůstávají jen ve widget-local
-`Image.memory`; account switch nebo dispose zavře klienta a generation guard
-zahodí pozdní výsledek. Nevzniká globální cross-account image cache.
+The loader has a fixed HTTPS origin, redirects forbidden, a limit of four
+requests of 256 KiB, a concurrency of two and a timeout. The bytes stay only in a
+widget-local `Image.memory`; an account switch or dispose closes the client and
+the generation guard discards a late result. No global cross-account image cache
+arises.
 
-### D-045: Ankety jsou online-only serverové mutace
+### D-045: Polls are online-only server mutations
 
-Stav: Přijato 31. srpna 2026, commity `d714f70` a `5f48ca7`.
+State: Accepted on 31 August 2026, commits `d714f70` and `5f48ca7`.
 
-Poll create, show a vote používají exact upstream Talk v1 kontrakt a feature
-`talk-polls`. Create vyžaduje write oprávnění; show a vote zůstávají dostupné
-platnému účastníkovi read-only konverzace podle controller atributů upstreamu.
-Thread poll navíc vyžaduje canonical nesmazaný root.
+Poll create, show and vote use the exact upstream Talk v1 contract and the
+feature `talk-polls`. Create requires the write permission; show and vote stay
+available to a valid participant of a read-only conversation per the upstream
+controller attributes. A thread poll additionally requires a canonical, undeleted
+root.
 
-Create ani vote nemají idempotency key, proto se nezařazují do durable outboxu
-a po nejednoznačném výsledku se automaticky neopakují. Přijatý `talk-poll`
-rich object nese pouze validovaný poll ID; aktuální stav a hlasování se vždy
-načtou account/room-bound GETem ze serveru. Canonical serverová zpráva je běžný
-`comment` s prázdným `systemMessage`, textem `{object}` a přesně odpovídajícím
-`messageParameters.object`. Viewer proto váže parametr na placeholder, ne na
-historicky předpokládané `object_shared`; odpojené metadata zůstane inertní.
+Neither create nor vote has an idempotency key, so they are not enqueued into the
+durable outbox and are not retried automatically after an ambiguous result. A
+received `talk-poll` rich object carries only a validated poll ID; the current
+state and the voting are always loaded from the server with an account/room-bound
+GET. The canonical server message is an ordinary `comment` with an empty
+`systemMessage`, the text `{object}` and an exactly matching
+`messageParameters.object`. The viewer therefore binds the parameter to the
+placeholder, not to the historically assumed `object_shared`; detached metadata
+stays inert.
 
-### D-046: Secure store má vlastní account-scoped migrace
+### D-046: The secure store has its own account-scoped migrations
 
-Stav: Přijato 31. srpna 2026.
+State: Accepted on 31 August 2026.
 
-Verze credential vaultu není odvozená z Drift `schemaVersion` a žádný secure
-store zápis neběží v `onUpgrade`. Každý účet má durable marker přímo ve
-stejném platformním secure store jako jeho app password. Tím lze databázi
-otevřít, opravit nebo bezpečně odmítnout nezávisle na dostupnosti Keychainu či
-Keystore.
+The version of the credential vault is not derived from the Drift `schemaVersion`
+and no secure store write runs inside `onUpgrade`. Every account has a durable
+marker directly in the same platform secure store as its app password. That makes
+it possible to open, repair or safely reject the database independently of the
+availability of the Keychain or the Keystore.
 
-Migrace v1 na v2 je copy-verify-commit-cleanup. Neversionovaný klíč se nejdřív
-zkopíruje do versionovaného account-scoped klíče, kopie se zpětně ověří a až
-potom se zapíše marker `2`. Legacy klíč se smaže teprve po ověření markeru.
-Přerušení proto nechá nejméně jednu úplnou kopii a další přístup stejný krok
-idempotentně dokončí.
+The v1 to v2 migration is copy-verify-commit-cleanup. The unversioned key is
+first copied into a versioned account-scoped key, the copy is verified by reading
+it back, and only then is the marker `2` written. The legacy key is deleted only
+after the marker is verified. An interruption therefore leaves at least one
+complete copy and the next access completes the same step idempotently.
 
-Dvě různé hodnoty, nečitelný marker nebo verze novější než klient zastaví
-přístup bez přepsání či smazání secretu. Souběžné první requesty stejného účtu
-sdílejí jeden migrační future; jiné účty zůstávají nezávislé.
+Two different values, an unreadable marker or a version newer than the client
+stop the access without overwriting or deleting the secret. Concurrent first
+requests of the same account share a single migration future; other accounts stay
+independent.
 
-### D-047: Minimální podporovaná řada je Talk 22 (Nextcloud 32)
+### D-047: The minimum supported line is Talk 22 (Nextcloud 32)
 
-Stav: Přijato 3. září 2026.
+State: Accepted on 3 September 2026.
 
-Klient stojí na třech tvrdých branách: `conversation-v4` (Talk 12), `chat-v2`
-(Talk 3.2) a `threads` (Talk 22). Nejmladší z nich určuje minimum, takže
-podporovaná řada začíná Talkem 22, tedy Nextcloudem 32. Vše, co klient dál
-používá, existuje od starší řady než 22 — `chat-replies` 8, `chat-reference-id`
-9, `delete-messages` 11.1, `clear-history` 12.1, `reactions`, `unified-search`,
-`silent-send` a `message-expiration` 15, `avatar` 17, `media-caption` a
-`note-to-self` 18, `edit-messages` a `federation-v1` 19, `ban-v1` 20,
-`archived-conversations-v2` 20.1, `important-conversations` a
-`sensitive-conversations` 21.1 — a na Talku 22+ je tedy k dispozici vždy.
-Jediná mladší capability je `conversation-tags` (Talk 24); ta gatuje jen
-štítky a chybět smí.
+The client rests on three hard gates: `conversation-v4` (Talk 12), `chat-v2`
+(Talk 3.2) and `threads` (Talk 22). The youngest of them sets the minimum, so the
+supported line starts at Talk 22, that is Nextcloud 32. Everything else the
+client uses exists from a line older than 22 — `chat-replies` 8,
+`chat-reference-id` 9, `delete-messages` 11.1, `clear-history` 12.1, `reactions`,
+`unified-search`, `silent-send` and `message-expiration` 15, `avatar` 17,
+`media-caption` and `note-to-self` 18, `edit-messages` and `federation-v1` 19,
+`ban-v1` 20, `archived-conversations-v2` 20.1, `important-conversations` and
+`sensitive-conversations` 21.1 — and is therefore always available on Talk 22+.
+The only younger capability is `conversation-tags` (Talk 24); it gates only the
+tags and may be missing.
 
-Zdroj: `docs/capabilities.md` v `nextcloud/spreed` (větev `main`, čteno
-3. 9. 2026), kde je každá capability zapsaná pod řadou, ve které vznikla.
-Server se starší řadou hlásí `conversationProfileUnsupported` (chybí
-`conversation-v4`) nebo chybí `threads`; obojí aplikace hlásí jako nepodporovaný
-server, ne jako chybu sítě. Ověřit měřením na starší řadě nelze bez druhého
-serveru; rozhodnutí proto vychází z dokumentace upstreamu, ne z běhu.
+Source: `docs/capabilities.md` in `nextcloud/spreed` (branch `main`, read on
+3 September 2026), where every capability is recorded under the line in which it
+appeared. A server with an older line reports `conversationProfileUnsupported`
+(no `conversation-v4`) or lacks `threads`; the application reports both as an
+unsupported server, not as a network error. Verifying by measurement on an older
+line is not possible without a second server; the decision therefore follows the
+upstream documentation, not a run.
 
-Změřeno 3. 9. 2026 na druhém serveru `talk2.example.invalid` (Nextcloud 32.0.14,
-Talk 22.0.17): řada 22 neposílá v `v4/room` pole `tagIds`, `lastPinnedId`,
-`hiddenPinnedId`, `hasScheduledMessages` ani `attributes` a parser je do té
-doby vyžadoval, takže seznam konverzací odmítl celý. Od `275c039`/`talk22`
-fixture jsou tato pole volitelná s prázdnou/nulovou výchozí hodnotou; když
-přijdou, validují se stejně přísně jako dřív. Totéž platí pro Login Flow v2
-na serveru s pretty URL (bez `index.php`), který oficiální Docker image
-používá.
-
+Measured on 3 September 2026 on the second server `talk2.example.invalid` (Nextcloud
+32.0.14, Talk 22.0.17): line 22 does not send the fields `tagIds`,
+`lastPinnedId`, `hiddenPinnedId`, `hasScheduledMessages` or `attributes` in
+`v4/room`, and until then the parser required them, so it rejected the whole
+conversation list. Since `275c039`/the `talk22` fixture these fields are optional
+with an empty/zero default; when they do arrive, they are validated as strictly
+as before. The same applies to Login Flow v2 on a server with pretty URLs
+(without `index.php`), which the official Docker image uses.
