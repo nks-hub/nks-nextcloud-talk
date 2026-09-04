@@ -1,184 +1,198 @@
-# Kontrakt push gateway
+# Push gateway contract
 
-Datum ověření: 23. srpna 2026.
+Verification date: 23 August 2026.
 
-Stav produktu: historická, spustitelně ověřená varianta Notifications push-v2.
-Pro Android byla nahrazena přímým Notifications Web Push tokem podle
-[D-025](decisions-technical.md#d-025-android-přes-notifications-web-push) a
-[aktuální push analýzy](../research/push-fcm.md). Gateway se neimplementuje ani
-nenasazuje jako povinná součást Android aplikace. Dokument zůstává důkazem
-historické wire kompatibility. Budoucí iOS APNs relay a PushKit větev vyžadují
-samostatný kontrakt a nový výběr stacku; tento kontrakt automaticky nepřebírají.
+Product state: a historical, runnably verified variant of Notifications push-v2.
+For Android it was replaced by the direct Notifications Web Push flow per
+[D-025](decisions-technical.md#d-025-android-over-notifications-web-push) and the
+[current push analysis](../research/push-fcm.md). The gateway is neither
+implemented nor deployed as a mandatory part of the Android application. The
+document remains evidence of historical wire compatibility. A future iOS APNs
+relay and the PushKit branch require a separate contract and a new stack
+selection; they do not inherit this contract automatically.
 
-Stav kontraktu: gateway wire kontrakt, klientský wire kontrakt a pure Dart
-registrační a směrovací runtime jsou spustitelně ověřené. Produkční gateway,
-datastore, Firebase projekt, platformní crypto adapter a runtime doručení zatím
-neexistují.
+Contract state: the gateway wire contract, the client wire contract and the pure
+Dart registration and routing runtime are runnably verified. A production
+gateway, the datastore, a Firebase project, a platform crypto adapter and runtime
+delivery do not exist yet.
 
-## Historická odpověď původní push-v2 varianty
+## The historical answer of the original push-v2 variant
 
-Původní push-v2 varianta nepředpokládala Firebase projekt pro každý Nextcloud
-server. Počítala s jedním Firebase projektem a gateway vydavatele pro všechny
-podporované servery; tato topologie už neřídí Android implementaci.
+The original push-v2 variant did not assume a Firebase project for every
+Nextcloud server. It assumed one publisher Firebase project and gateway for all
+supported servers; that topology no longer drives the Android implementation.
 
-Aplikace si z připojeného Nextcloudu načte pouze capabilities. Firebase
-konfiguraci, service-account credential ani gateway URL ze serveru nestahuje.
-Pevný důvěryhodný gateway origin je součástí konfigurace podepsané aplikace a
-klient jej při registraci pošle do Notifications API v2 jako `proxyServer`.
-Přidání dalšího serveru proto nevyžaduje rebuild.
+The application reads only the capabilities from the connected Nextcloud. It
+downloads no Firebase configuration, no service-account credential and no gateway
+URL from the server. A fixed trusted gateway origin is part of the configuration
+of the signed application, and the client sends it to the Notifications API v2 as
+`proxyServer` during registration. Adding another server therefore requires no
+rebuild.
 
-Běžný správce Nextcloudu potřebuje aktivní standardní Notifications app,
-funkční background jobs a odchozí HTTPS na gateway. Vlastní Nextcloud companion
-app může později přidat diagnostiku a volitelné serverové funkce, ale pro tento
-push tok není nutná a nesmí vytvářet druhý notification engine.
+An ordinary Nextcloud administrator needs the standard Notifications app active,
+working background jobs and outgoing HTTPS to the gateway. A dedicated Nextcloud
+companion app may later add diagnostics and optional server-side features, but it
+is not necessary for this push flow and must not create a second notification
+engine.
 
-## Autoritativní kompatibilita
+## Authoritative compatibility
 
-Kontrakt je vázaný na:
+The contract is bound to:
 
 - Nextcloud Notifications
   [`f15413203a73eea7a42f454f6310ec5eca2735a0`](https://github.com/nextcloud/notifications/tree/f15413203a73eea7a42f454f6310ec5eca2735a0);
-- serverový push-v2 popis a `Push::sendNotificationsToProxies()` ze stejného
-  SHA;
+- the server-side push-v2 description and `Push::sendNotificationsToProxies()`
+  from the same SHA;
 - Nextcloud server
   [`d7c20b71e219461ff0c677b3846b9d1d723ff17f`](https://github.com/nextcloud/server/tree/d7c20b71e219461ff0c677b3846b9d1d723ff17f),
-  zejména převod pole `body` na URL-encoded `form_params` a veřejný
-  identity-proof endpoint;
+  in particular the conversion of the `body` array into URL-encoded `form_params`
+  and the public identity-proof endpoint;
 - Talk Android
   [`5428960f9d1eca708df1b39a0831141dcbba4729`](https://github.com/nextcloud/talk-android/tree/5428960f9d1eca708df1b39a0831141dcbba4729),
-  `NcApi.java` a `PushUtils.kt`;
+  `NcApi.java` and `PushUtils.kt`;
 - Talk iOS
   [`2d31eda5e2acbf3cef27aa289376942bdf0de25d`](https://github.com/nextcloud/talk-ios/tree/2d31eda5e2acbf3cef27aa289376942bdf0de25d),
   `NCAPIController.swift`.
 
-OpenAPI 3.1 je v
+The OpenAPI 3.1 is in
 [`contracts/push-gateway/openapi.json`](../../contracts/push-gateway/openapi.json).
-Klientská OCS/envelope hranice je v
+The client OCS/envelope boundary is in
 [`contracts/push-client`](../../contracts/push-client/README.md).
 
-## Skutečný wire formát
+## The real wire format
 
 <!-- markdownlint-disable MD013 -->
 
-| Operace | Primární formát | Důvod |
+| Operation | Primary format | Reason |
 | --- | --- | --- |
-| `POST /devices` | `application/x-www-form-urlencoded` | Oficiální Android používá Retrofit `@FormUrlEncoded`; iOS používá form serializer |
-| `DELETE /devices` | Úplná trojice v query; přijme se i form body | Android používá `@QueryMap`, iOS posílá parametry DELETE; push-v2 dokument ukazuje tělo |
-| `POST /notifications` | URL-encoded `notifications[0]`, `notifications[1]`, … | Nextcloud předává pole JSON řetězců přes HTTP klienta, který pole `body` převádí na `form_params` |
-| Odpověď `/notifications` | JSON `unknown` + celočíselné `failed` | `Push::handleProxyResponse()` podle těchto dvou klíčů odstraňuje neznámé registrace a hlásí dílčí chybu |
+| `POST /devices` | `application/x-www-form-urlencoded` | The official Android uses Retrofit `@FormUrlEncoded`; iOS uses a form serializer |
+| `DELETE /devices` | The full triple in the query; a form body is accepted too | Android uses `@QueryMap`, iOS sends DELETE parameters; the push-v2 document shows a body |
+| `POST /notifications` | URL-encoded `notifications[0]`, `notifications[1]`, … | Nextcloud passes an array of JSON strings through an HTTP client that converts the `body` array into `form_params` |
+| `/notifications` response | JSON `unknown` + an integer `failed` | `Push::handleProxyResponse()` removes unknown registrations and reports a partial error based on these two keys |
 
 <!-- markdownlint-enable MD013 -->
 
-JSON-only `/devices` nebo `/notifications` by vypadal čistěji, ale nebyl by
-kompatibilní se skutečnými klienty a Nextcloud serverem. Každá položka
-`notifications[N]` je samostatný JSON string s poli `deviceIdentifier`,
-`pushTokenHash`, `subject`, `signature`, `priority` a `type`.
+A JSON-only `/devices` or `/notifications` would look cleaner, but would not be
+compatible with the real clients and the Nextcloud server. Every
+`notifications[N]` item is a separate JSON string with the fields
+`deviceIdentifier`, `pushTokenHash`, `subject`, `signature`, `priority` and
+`type`.
 
-## Význam odpovědí
+## The meaning of the responses
 
-`POST /devices` ověří RSA/SHA-512 podpis a idempotentně zapíše registraci.
-Úspěch vrací `200` s prázdným tělem, protože právě to očekávají současní
-klienti.
+`POST /devices` verifies the RSA/SHA-512 signature and writes the registration
+idempotently. Success returns `200` with an empty body, because that is exactly
+what the current clients expect.
 
-Server nejprve podepíše privátní JSON preimage pomocí SHA-512 a potom zveřejní
-`deviceIdentifier` jako Base64 SHA-512 digestu stejného preimage. Gateway
-preimage nezná, proto ověřuje podpis proti Base64-dekódovanému digestu v
-prehashed režimu. Druhé SHA-512 hashování `deviceIdentifier` by platnou
-registraci chybně odmítlo. Naproti tomu podpis notification `subject` se
-ověřuje jako běžný SHA-512 podpis nad dekódovaným ciphertextem.
+The server first signs a private JSON preimage using SHA-512 and then publishes
+`deviceIdentifier` as the Base64 SHA-512 digest of the same preimage. The gateway
+does not know the preimage, so it verifies the signature against the
+Base64-decoded digest in prehashed mode. Hashing `deviceIdentifier` with SHA-512
+a second time would wrongly reject a valid registration. By contrast, the
+signature of the notification `subject` is verified as an ordinary SHA-512
+signature over the decoded ciphertext.
 
-`DELETE /devices` odstraní pouze přesnou kryptografickou identitu. Stejný
-fyzický FCM token smí zůstat navázaný na jiné accountId. Pokud query i body
-existují současně, musí být shodné; jinak gateway vrátí `400`.
+`DELETE /devices` removes only the exact cryptographic identity. The same
+physical FCM token may stay bound to a different accountId. If both the query and
+the body are present, they must be identical; otherwise the gateway returns
+`400`.
 
-`POST /notifications` klasifikuje každou položku zvlášť:
+`POST /notifications` classifies every item separately:
 
-- neznámý deviceIdentifier se přidá do `unknown` a nezvyšuje `failed`;
-- chybný token hash, podpis, formát nebo durable enqueue zvýší `failed`;
-- validní položka se před odpovědí zapíše do durable queue;
-- dílčí chyba stále vrací `200` s přesnými počty.
+- an unknown deviceIdentifier is added to `unknown` and does not increase
+  `failed`;
+- a wrong token hash, signature or format, or a failed durable enqueue increases
+  `failed`;
+- a valid item is written into the durable queue before the response;
+- a partial error still returns `200` with exact counts.
 
-Gateway nikdy nedešifruje `subject`. Ověří podpis ciphertextu a shodu SHA-512
-uloženého tokenu s `pushTokenHash`; plaintext doplní až mobil po dešifrování a
-následném OCS catch-up.
+The gateway never decrypts `subject`. It verifies the signature of the ciphertext
+and that the SHA-512 of the stored token matches `pushTokenHash`; the plaintext
+is only filled in by the phone after decryption and the subsequent OCS catch-up.
 
-## Konflikt 409 a cloudId
+## Conflict 409 and cloudId
 
-Stejný provider token se běžně objeví u více účtů jedné instalace. Gateway proto
-nesmí při konfliktu přepsat nebo smazat první účet. Vrátí `409`; klient může
-registraci opakovat s `cloudId`.
+The same provider token commonly appears on several accounts of one
+installation. The gateway must therefore not overwrite or delete the first
+account on a conflict. It returns `409`; the client may repeat the registration
+with `cloudId`.
 
-Nextcloud `IUser::getCloudId()` pro HTTPS server běžně vrací tvar
-`userid@host[/subpath]` bez schématu. Gateway použije ekvivalent přesného
-Nextcloud parseru, chybějící schéma doplní pouze jako HTTPS a explicitní HTTP
-odmítne. Uživatelské jméno může obsahovat `@`, takže prosté rozdělení na prvním
-zavináči není správně.
+For an HTTPS server, Nextcloud's `IUser::getCloudId()` usually returns the form
+`userid@host[/subpath]` without a scheme. The gateway uses an equivalent of the
+exact Nextcloud parser, fills in a missing scheme only as HTTPS and rejects an
+explicit HTTP. A username may contain `@`, so a plain split at the first at-sign
+is not correct.
 
-Po bezpečném rozdělení gateway načte bez credentials veřejný endpoint
-`/ocs/v2.php/identityproof/key/{url-encoded-user-id}` a porovná vrácený public
-key. Remote část je SSRF hranice:
+After a safe split the gateway loads the public endpoint
+`/ocs/v2.php/identityproof/key/{url-encoded-user-id}` without credentials and
+compares the returned public key. The remote part is an SSRF boundary:
 
-- pouze HTTPS, bez userinfo a fragmentu;
-- žádný loopback, private, link-local, reserved ani IPv4-mapped IPv6 cíl;
-- A/AAAA kontrola před requestem i při spojení;
-- žádné redirecty;
-- krátký timeout a omezené tělo i content type;
-- žádný app password, FCM token nebo interní header v requestu.
+- HTTPS only, without userinfo and without a fragment;
+- no loopback, private, link-local, reserved or IPv4-mapped IPv6 target;
+- an A/AAAA check both before the request and at connection time;
+- no redirects;
+- a short timeout and a limited body and content type;
+- no app password, FCM token or internal header in the request.
 
-LAN-only server proto nemusí 409 recovery na veřejné gateway dokončit. Vlastní
-interní gateway jej může povolit jen explicitní egress politikou.
+A LAN-only server therefore may not be able to complete the 409 recovery on a
+public gateway. An own internal gateway may allow it only through an explicit
+egress policy.
 
-## Spustitelné fixture
+## Runnable fixtures
 
-Fixture obsahují syntetický veřejný RSA klíč, validní podpisy, registraci,
-odhlášení, negativní request, 409 problem response a úplný i částečně chybný
-batch. Neobsahují privátní klíč, skutečný FCM token ani uživatelská data.
+The fixtures contain a synthetic public RSA key, valid signatures, a
+registration, an unregistration, a negative request, a 409 problem response and a
+full as well as a partially failing batch. They contain no private key, no real
+FCM token and no user data.
 
-Ověření z kořene repozitáře:
+Verification from the repository root:
 
 ```powershell
 python contracts\push-gateway\validate_contract.py
 ```
 
-Validátor provádí:
+The validator performs:
 
-1. OpenAPI 3.1 validaci.
-2. Draft 2020-12 validaci všech pozitivních i negativních fixtures.
-3. Reálný form/query/indexed-form encode-decode round trip.
-4. RSA-2048/SHA-512 ověření registračních a notification podpisů.
-5. SHA-512 token-hash kontrolu a deterministickou klasifikaci partial batch.
+1. OpenAPI 3.1 validation.
+2. Draft 2020-12 validation of all positive and negative fixtures.
+3. A real form/query/indexed-form encode-decode round trip.
+4. RSA-2048/SHA-512 verification of the registration and notification signatures.
+5. A SHA-512 token-hash check and deterministic classification of a partial
+   batch.
 
-Aktuální výsledek: 1 OpenAPI dokument, 10 fixtures, 3 registrační podpisy,
-4 notification obálky a 2 batch scénáře prošly.
+The current result: 1 OpenAPI document, 10 fixtures, 3 registration signatures,
+4 notification envelopes and 2 batch scenarios passed.
 
-## Klientský kontrakt a pure Dart runtime
+## The client contract and the pure Dart runtime
 
-Samostatný [`push-client` kontrakt](../../contracts/push-client/README.md)
-obsahuje 1 OpenAPI dokument a 8 fixtures: OCS request/response, mobilní obálku,
-normální wake-up, tři silent-delete varianty a jeden neplatný ambiguous payload.
-Python validátor při každém běhu vygeneruje RSA-2048 klíče jen v paměti a reálně
-ověří SHA512withRSA, OAEP SHA-1/MGF1 SHA-1 i PKCS#1 v1.5. Vygenerované obálky
-přímo projdou `MobilePushEnvelope`; uložená wire fixture není vydávána za
-encrypt/decrypt důkaz. Dart contract test načítá přímo stejný manifest a fixture.
+The separate [`push-client` contract](../../contracts/push-client/README.md)
+contains 1 OpenAPI document and 8 fixtures: the OCS request/response, the mobile
+envelope, a normal wake-up, three silent-delete variants and one invalid
+ambiguous payload. On every run the Python validator generates RSA-2048 keys in
+memory only and really verifies SHA512withRSA, OAEP SHA-1/MGF1 SHA-1 as well as
+PKCS#1 v1.5. The generated envelopes pass `MobilePushEnvelope` directly; the
+stored wire fixture is not presented as encrypt/decrypt evidence. The Dart
+contract test loads the same manifest and fixtures directly.
 
-`packages/talk_protocol/lib/src/push` implementuje jeden provider token pro více
-účtů, samostatný key handle pro každý `accountId`, deterministickou single-flight
-registrační frontu, přesný retry od selhané fáze, 409 recovery a exactly-one
-decrypt routing. Capability disable zachová account key. Logout provede
-Nextcloud unregister, gateway unregister a teprve potom zničení key handle;
-transientní cleanup zůstává jako retryable revocation tombstone. Starý effect
-po token nebo authority rotaci nemůže commitnout nový stav ani doroutovat push;
-crypto dokončení se znovu váže na aktuální account snapshot.
+`packages/talk_protocol/lib/src/push` implements one provider token for several
+accounts, a separate key handle for every `accountId`, a deterministic
+single-flight registration queue, an exact retry from the failed phase, 409
+recovery and exactly-one decrypt routing. Disabling the capability preserves the
+account key. Logout performs the Nextcloud unregister, the gateway unregister and
+only then destroys the key handle; a transient cleanup stays as a retryable
+revocation tombstone. An old effect after a token or authority rotation cannot
+commit new state or route a push through; the crypto completion is re-bound to
+the current account snapshot.
 
-Klientský řez prochází 42 Dart testy: 20 contract, 13 runtime, 8 security a 1
-skutečný release AOT test. Celý `talk_protocol` po jeho doplnění prochází 527
-testy.
+The client slice passes 42 Dart tests: 20 contract, 13 runtime, 8 security and 1
+real release AOT test. After it was added, the whole of `talk_protocol` passes
+527 tests.
 
-## Co tento důkaz ještě nepokrývá
+## What this evidence still does not cover
 
-Kontrakt neprokazuje datastore concurrency, skutečný cloudId request, FCM HTTP
-v1, retry queue, invalid-token cleanup, rate limit ani doručení na zařízení.
-Tyto důkazy by byly povinné pro původní push-v2 gateway, která se pro Android
-nebude implementovat. OpenAPI a fixture jsou historický wire důkaz, ne aktivní
-runtime brána. Budoucí iOS APNs/PushKit relay musí mít vlastní kontrakt a
-ověření.
+The contract does not prove datastore concurrency, a real cloudId request, FCM
+HTTP v1, the retry queue, invalid-token cleanup, rate limiting or delivery to a
+device. Those pieces of evidence would be mandatory for the original push-v2
+gateway, which will not be implemented for Android. The OpenAPI and the fixtures
+are historical wire evidence, not an active runtime gate. A future iOS
+APNs/PushKit relay must have its own contract and verification.

@@ -1,40 +1,40 @@
-# Apple distribuce
+# Apple distribution
 
-Podepsaný iOS build se staví na build-mac přes RemoteCmd. Tenhle dokument je
-záznam funkčního postupu a hlavně čtyř blokád, které cestou padly — každá
-z nich se tvářila jako něco jiného, než čím byla.
+The signed iOS build is produced on build-mac through RemoteCmd. This document is a
+record of the working procedure and, above all, of the four blockers that came up
+along the way — each of them looked like something other than what it was.
 
-## Účet a identita
+## Account and identity
 
-- Tým `TEAMID0000`. Na `developer.apple.com` je nutné přihlášení jako
-  **account holder**; běžný ASC Admin na portál týmu nevidí.
-- App ID `com.nkshub.nextcloudtalk` („NKS Talk") s capability Push
-  Notifications.
-- App Store Connect záznam id `6805831712`, platformy iOS i macOS.
-- `DEVELOPMENT_TEAM = TEAMID0000` je v `ios/Runner.xcodeproj` a
-  v `macos/Runner/Configs/AppInfo.xcconfig`.
-- Aktualizovanou Apple Developer Program License Agreement musí odsouhlasit
-  account holder ručně. Dokud to neudělá, nejde odeslat nic nového.
+- Team `TEAMID0000`. On `developer.apple.com` you have to sign in as the
+  **account holder**; an ordinary ASC Admin cannot see the team portal.
+- App ID `com.nkshub.nextcloudtalk` ("NKS Talk") with the Push Notifications
+  capability.
+- App Store Connect record id `6805831712`, platforms iOS and macOS.
+- `DEVELOPMENT_TEAM = TEAMID0000` is in `ios/Runner.xcodeproj` and in
+  `macos/Runner/Configs/AppInfo.xcconfig`.
+- An updated Apple Developer Program License Agreement has to be accepted by the
+  account holder manually. Until that happens, nothing new can be submitted.
 
 ## Universal Links
 
-Runner má `com.apple.developer.associated-domains` pro
-`applinks:cloud.example.invalid`. Autoritativní AASA dokument je verzovaný v
-`deploy/reference-server/apple-app-site-association`; povoluje pouze
-`/call/*` a `/index.php/call/*` pro
-`TEAMID0000.com.nkshub.nextcloudtalk`.
+The Runner has `com.apple.developer.associated-domains` for
+`applinks:cloud.example.invalid`. The authoritative AASA document is versioned in
+`deploy/reference-server/apple-app-site-association`; it allows only `/call/*`
+and `/index.php/call/*` for `TEAMID0000.com.nkshub.nextcloudtalk`.
 
-Referenční server jej servíruje exact-path Apache aliasem z Git checkoutu
-commitu `2f1d36f`, ne ručně vloženým souborem v Nextcloud webrootu. Veřejná
-kontrola 1. září 2026 vrátila 200, `application/json`, 419 B, žádný redirect a
-SHA-256 `0e3b890f8f0d38878f520fa63f8822a50ba31837e1a76a5cbab707d0c8f78e68`.
-Apple developer fetch vrací stejný dokument. Produkční Apple CDN v té chvíli
-ještě držela předchozí 404, následně ale obnovila 419B JSON se stavem 200.
-Aktualizačně přeinstalovaný iOS 18.6 build 33 pak z jiné otevřené místnosti
-přijal přímý `/index.php/call/...` HTTPS odkaz, otevřel „Tym NKS“ a AX root
-zůstal `NKS Talk`; Safari se nespustilo.
+The reference server serves it through an exact-path Apache alias from the Git
+checkout of commit `2f1d36f`, not from a file placed manually into the Nextcloud
+webroot. The public check on 1 September 2026 returned 200, `application/json`,
+419 B, no redirect and SHA-256
+`0e3b890f8f0d38878f520fa63f8822a50ba31837e1a76a5cbab707d0c8f78e68`. The Apple
+developer fetch returns the same document. At that moment the production Apple
+CDN still held the previous 404, but it later refreshed to the 419 B JSON with
+status 200. An update-installed iOS 18.6 build 33 then accepted a direct
+`/index.php/call/...` HTTPS link from another open room, opened "Tym NKS" and the
+AX root stayed `NKS Talk`; Safari did not launch.
 
-## Postup
+## Procedure
 
 ```sh
 flutter config --no-enable-swift-package-manager
@@ -45,153 +45,155 @@ flutter build ios --release --no-codesign --build-number <build> \
 
 xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
   -configuration Release -destination 'generic/platform=iOS' \
-  -archivePath <archiv> archive \
+  -archivePath <archive> archive \
   -allowProvisioningUpdates \
   -authenticationKeyPath <p8> -authenticationKeyID <id> \
   -authenticationKeyIssuerID <issuer> \
   DEVELOPMENT_TEAM=TEAMID0000
 
-xcodebuild -exportArchive -archivePath <archiv> \
-  -exportOptionsPlist <plist s method=app-store-connect> \
-  -exportPath <out> -allowProvisioningUpdates <klíč jako výše>
+xcodebuild -exportArchive -archivePath <archive> \
+  -exportOptionsPlist <plist with method=app-store-connect> \
+  -exportPath <out> -allowProvisioningUpdates <key as above>
 
 xcrun altool --upload-app -t ios -f "<out>/NKS Talk.ipa" \
   --apiKey <id> --apiIssuer <issuer>
 ```
 
-Celé to musí běžet jako přihlášený uživatel, ne jako root:
-`launchctl asuser <uid> sudo -u <user> <skript>`.
+All of it has to run as a signed-in user, not as root:
+`launchctl asuser <uid> sudo -u <user> <script>`.
 
-## Blokády, na které se dá narazit znovu
+## Blockers you can hit again
 
-1. **Cíle pluginů přes Swift Package Manager ignorují `DEVELOPMENT_TEAM`
-   z příkazové řádky.** Projeví se jako `Signing for "<plugin>" requires
-   a development team` pro každý plugin zvlášť. Řeší přepnutí na CocoaPods,
-   ty tým z příkazové řádky přebírají.
-2. **`conflicting code signing identity`.** Nepřipínat `CODE_SIGN_IDENTITY`
-   proti automatickému podepisování; předat jen tým.
-3. **`The specified item could not be found in the keychain`.** Build běžel
-   jako root, ale privátní klíč certifikátu je v login keychainu uživatele.
-4. **`Permission denied` při čtení `~/.pub-cache`.** Root tam předtím zapsal
-   soubory; vrátit vlastnictví uživateli.
-5. **Xcode ukazuje iOS SDK, ale `Any iOS Device` je ineligible.** Na Xcode
-   26.3 s macOS 15.7.4 po odebrání runtime 26.2 zůstal
-   `iphoneos26.2.sdk`, přesto archive hlásil `iOS 26.2 is not installed`.
-   `xcodebuild -downloadPlatform iOS` stáhl nejnovější 26.3.1, který tuto
-   přesnou závislost nenahradil, a historickou verzi už standardní katalog
-   nenabízel. Ověřená obnova používá `xcodes runtimes` a jednoznačný runtime
-   build: `xcodes runtimes install 23C54 --architecture arm64`. Po registraci
-   `xcodebuild -showdestinations` znovu nabídl `Any iOS Device`. Dočasný
-   `xcodes` i chybný runtime 26.3.1 se po buildu odstranily; 26.2 zůstává jako
-   nutná součást toolchainu.
+1. **Plugin targets built through the Swift Package Manager ignore
+   `DEVELOPMENT_TEAM` from the command line.** It shows up as
+   `Signing for "<plugin>" requires a development team` for every plugin
+   separately. Switching to CocoaPods fixes it, they do take the team from the
+   command line.
+2. **`conflicting code signing identity`.** Do not pin `CODE_SIGN_IDENTITY`
+   against automatic signing; pass only the team.
+3. **`The specified item could not be found in the keychain`.** The build ran as
+   root, but the private key of the certificate is in the user's login keychain.
+4. **`Permission denied` while reading `~/.pub-cache`.** Root wrote files there
+   earlier; return ownership to the user.
+5. **Xcode shows an iOS SDK, but `Any iOS Device` is ineligible.** On Xcode 26.3
+   with macOS 15.7.4, after removing runtime 26.2 the `iphoneos26.2.sdk`
+   remained, and yet archive reported `iOS 26.2 is not installed`.
+   `xcodebuild -downloadPlatform iOS` downloaded the newest 26.3.1, which did not
+   replace this exact dependency, and the standard catalog no longer offered the
+   historical version. The verified recovery uses `xcodes runtimes` and an
+   unambiguous runtime build:
+   `xcodes runtimes install 23C54 --architecture arm64`. After registration
+   `xcodebuild -showdestinations` offered `Any iOS Device` again. The temporary
+   `xcodes` and the wrong runtime 26.3.1 were removed after the build; 26.2 stays
+   as a necessary part of the toolchain.
 
-## Past, která stojí za samostatnou zmínku
+## A trap worth a separate mention
 
-`UPLOAD SUCCEEDED` z `altool` **není** důkaz, že build dorazil do
-TestFlightu. Znamená jen, že binárka doputovala k Apple. Validace běží až
-potom a její výsledek je vidět v App Store Connect pod *TestFlight → Build
-Uploads* jako `Processing`, `Failed` nebo `Valid`, případně v API jako
-`processingState`.
+`UPLOAD SUCCEEDED` from `altool` is **not** evidence that the build reached
+TestFlight. It only means the binary made it to Apple. Validation runs afterwards
+and its result is visible in App Store Connect under *TestFlight → Build Uploads*
+as `Processing`, `Failed` or `Valid`, or in the API as `processingState`.
 
-Dvě nahrání takhle skončila jako `Failed` s
+Two uploads ended this way as `Failed` with
 
-> `90683: Missing purpose string in Info.plist` — chybí
-> `NSPhotoLibraryUsageDescription`
+> `90683: Missing purpose string in Info.plist` —
+> `NSPhotoLibraryUsageDescription` is missing
 
-přestože upload hlásil úspěch. Proto `apps/mobile/test/ios_app_icon_metadata_test.dart`
-kontroluje všechny purpose stringy proti pluginům, které je potřebují,
-i `CFBundleIconName`: příští chybějící klíč má být padající test, ne
-zamítnutý upload.
+even though the upload reported success. That is why
+`apps/mobile/test/ios_app_icon_metadata_test.dart` checks all purpose strings
+against the plugins that need them, and `CFBundleIconName` as well: the next
+missing key should be a failing test, not a rejected upload.
 
-Hlásit „je to v TestFlightu" se smí až podle stavu záznamu, ne podle
-výstupu uploadu.
+Saying "it is in TestFlight" is only allowed based on the state of the record,
+not on the output of the upload.
 
-## Ověření buildu 25
+## Verification of build 25
 
-Build 25 vznikl 2026-08-31 z přesného commitu `175b721`. Archive i export
-prošly, IPA má SHA-256
-`9D8D42A57FF74F076FC82D2F64656683CBC6DFBCB9A1047CF7A5E091F1CDE485`.
-App Store Connect API následně potvrdilo `processingState=VALID`,
-`usesNonExemptEncryption=false` a minimum iOS 15.0. Build má české poznámky,
-beta review je schválené a interní i externí skupina hlásí
-`IN_BETA_TESTING`.
+Build 25 was produced on 2026-08-31 from the exact commit `175b721`. Both the
+archive and the export passed, the IPA has SHA-256
+`9D8D42A57FF74F076FC82D2F64656683CBC6DFBCB9A1047CF7A5E091F1CDE485`. The App Store
+Connect API then confirmed `processingState=VALID`,
+`usesNonExemptEncryption=false` and a minimum of iOS 15.0. The build has Czech
+release notes, the beta review is approved and both the internal and the external
+group report `IN_BETA_TESTING`.
 
-## Ověření buildu 26
+## Verification of build 26
 
-Build 26 vznikl 2026-08-31 z přesného commitu `3dd373e`. Android Publishing
-API přijalo `versionCode=26`, commitnulo uzavřený `alpha` track a nový edit
-vrací `(26) 0.1.0` ve stavu `completed`. AAB má SHA-256
+Build 26 was produced on 2026-08-31 from the exact commit `3dd373e`. The Android
+Publishing API accepted `versionCode=26`, committed the closed `alpha` track and
+a new edit returns `(26) 0.1.0` in the state `completed`. The AAB has SHA-256
 `034D499C55CA61BAAABCB1A46484094DBC3736843675781B90C5242AE7FEED49`.
 
-iOS archive i export prošly po obnovení runtime 26.2. IPA má SHA-256
-`40716A6719562217DE9F3798306C695E4F173BCDD28EB7EA53AEE6E87479801D`.
-App Store Connect API potvrdilo `processingState=VALID`, minimum iOS 15.0,
-`usesNonExemptEncryption=false`, české poznámky a
-`internalBuildState=externalBuildState=IN_BETA_TESTING`. Stejný bundle se
-spustil na zachovaném iPhone 16 Pro Max / iOS 18.6 simulátoru jako build 26;
-účet zůstal přihlášený a po serverovém refreshi zmizely všechny dočasné room
-fixture.
+The iOS archive and export passed after runtime 26.2 was restored. The IPA has
+SHA-256 `40716A6719562217DE9F3798306C695E4F173BCDD28EB7EA53AEE6E87479801D`. The
+App Store Connect API confirmed `processingState=VALID`, a minimum of iOS 15.0,
+`usesNonExemptEncryption=false`, Czech release notes and
+`internalBuildState=externalBuildState=IN_BETA_TESTING`. The same bundle launched
+on the preserved iPhone 16 Pro Max / iOS 18.6 simulator as build 26; the account
+stayed signed in and after a server refresh all temporary room fixtures
+disappeared.
 
-Po ověření se z build-mac odstranil 1,7GB build strom, dočasný nástroj `xcodes`,
-chybný runtime 26.3.1 a nepoužívané tvOS, watchOS a visionOS runtime. Zůstaly
-jen nutné iOS 18.6 a iOS 26.2 a 41 GiB volného místa.
+After the verification, the 1.7 GB build tree, the temporary `xcodes` tool, the
+wrong runtime 26.3.1 and the unused tvOS, watchOS and visionOS runtimes were
+removed from build-mac. Only the necessary iOS 18.6 and iOS 26.2 remained, with
+41 GiB of free space.
 
-## Ověření buildu 31
+## Verification of build 31
 
-Build 31 vznikl 2026-09-01 z přesného commitu `5c52469` s telemetrickými
-define pro Sentry i Rybbit. Archive, export a `altool` upload prošly; IPA má
-29 724 195 B a SHA-256
-`<fingerprint>`.
-App Store Connect API potvrdilo `processingState=VALID`, minimum iOS 15.0,
-`usesNonExemptEncryption=false`, české poznámky a interní i externí skupinu
-`IN_BETA_TESTING`; beta review je `APPROVED`.
+Build 31 was produced on 2026-09-01 from the exact commit `5c52469` with the
+telemetry defines for both Sentry and Rybbit. The archive, the export and the
+`altool` upload passed; the IPA is 29,724,195 B with SHA-256
+`<fingerprint>`. The App Store
+Connect API confirmed `processingState=VALID`, a minimum of iOS 15.0,
+`usesNonExemptEncryption=false`, Czech release notes and both the internal and
+the external group `IN_BETA_TESTING`; the beta review is `APPROVED`.
 
-Stejný commit prošel na zachovaném iOS 18.6 simulátoru s reálným PHPicker
-assetem i starším vyčerpaným `retryable` jobem bez timeru. Novější upload
-skončil `completed`, starší job zůstal pro ruční řešení a serverový context
-request potvrdil vytvořenou zprávu. Testovací zprávy a lokální fixture byly po
-důkazu odstraněné.
+The same commit passed on the preserved iOS 18.6 simulator with a real PHPicker
+asset as well as an older exhausted `retryable` job without a timer. The newer
+upload ended `completed`, the older job stayed for manual resolution and a
+server-side context request confirmed the created message. The test messages and
+the local fixtures were removed after the evidence was collected.
 
-## Ověření buildu 32
+## Verification of build 32
 
-Build 32 vznikl 2026-09-01 z přesného commitu `a2cd037` s telemetrickými
-define pro Sentry i Rybbit. Archive, export a `altool` upload prošly; IPA má
-29 760 109 B a SHA-256
-`<fingerprint>`.
-App Store Connect API potvrdilo `processingState=VALID`, minimum iOS 15.0,
-`usesNonExemptEncryption=false`, přesnou českou poznámku, obě skupiny
-`IN_BETA_TESTING` a beta review `APPROVED`.
+Build 32 was produced on 2026-09-01 from the exact commit `a2cd037` with the
+telemetry defines for both Sentry and Rybbit. The archive, the export and the
+`altool` upload passed; the IPA is 29,760,109 B with SHA-256
+`<fingerprint>`. The App Store
+Connect API confirmed `processingState=VALID`, a minimum of iOS 15.0,
+`usesNonExemptEncryption=false`, the exact Czech release note, both groups
+`IN_BETA_TESTING` and the beta review `APPROVED`.
 
-Stejný commit se aktualizačně nainstaloval na zachovaný iPhone 16 Pro Max /
-iOS 18.6 simulátor. Účet zůstal přihlášený; runtime ukázal sponku, Giphy,
-emoji, mikrofon a Odeslat od levého okraje, capability-bound Anketu, skutečný
-seznam konverzací pod interaktivním edge swipe a tři stejná vlákna po dvou
-pull-refresh gestech. Po ověření se odstranily archive, export, build,
-DerivedData, logy i screenshoty; data simulátoru zůstala zachovaná.
+The same commit was update-installed on the preserved iPhone 16 Pro Max /
+iOS 18.6 simulator. The account stayed signed in; the runtime showed the
+paperclip, Giphy, emoji, the microphone and Send from the left edge, the
+capability-bound Poll, a real conversation list under an interactive edge swipe
+and three identical threads after two pull-refresh gestures. After the
+verification the archive, the export, the build, DerivedData, the logs and the
+screenshots were removed; the simulator data were preserved.
 
 ## Export compliance
 
-Build s `usesNonExemptEncryption = null` visí v TestFlightu jako **Missing
-Compliance** a nejde předat testerovi. iOS build používá systémové HTTPS,
-Keychain a platformní push API, ne vlastní neosvobozenou kryptografii.
-Odpověď je tedy `false` a je natrvalo v `Info.plist` jako
-`ITSAppUsesNonExemptEncryption`, takže se otázka u dalších buildů neobjeví.
-Existující build se dá dorovnat i přes API:
+A build with `usesNonExemptEncryption = null` hangs in TestFlight as **Missing
+Compliance** and cannot be handed to a tester. The iOS build uses system HTTPS,
+the Keychain and the platform push APIs, not its own non-exempt cryptography. The
+answer is therefore `false` and it lives permanently in `Info.plist` as
+`ITSAppUsesNonExemptEncryption`, so the question does not come up for further
+builds. An existing build can be corrected through the API as well:
 
 ```http
 PATCH /v1/builds/<id>  {"data":{"type":"builds","id":"<id>",
   "attributes":{"usesNonExemptEncryption":false}}}
 ```
 
-Pokud aplikace někdy dostane vlastní šifrování (třeba E2EE hovorů), tohle
-tvrzení přestane platit a musí se přehodnotit.
+If the app ever gets its own encryption (E2EE calls, say), this claim stops being
+true and has to be reassessed.
 
-## Zbývá
+## Remaining
 
-- macOS distribuce: buď Mac App Store, nebo Developer ID Application
-  s notarizací přes `notarytool` a staplingem.
-- `macos/Runner/Release.entitlements` má jen
-  `files.user-selected.read-only`; ukládání příloh bude potřebovat
-  read-write.
-- PushKit, CallKit a ReplayKit pro plnou paritu hovorů zůstávají samostatný
-  otevřený řez.
+- macOS distribution: either the Mac App Store, or a Developer ID Application
+  with notarization through `notarytool` and stapling.
+- `macos/Runner/Release.entitlements` only has
+  `files.user-selected.read-only`; saving attachments will need read-write.
+- PushKit, CallKit and ReplayKit for full call parity remain a separate open
+  slice.
