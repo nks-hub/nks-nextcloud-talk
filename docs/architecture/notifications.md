@@ -1,232 +1,247 @@
-# Notifikace
+# Notifications
 
-Aplikace běží na Androidu, iOS, Windows a macOS a na každé z těch platforem
-doručuje notifikace jinudy. Tenhle dokument popisuje, kudy, proč zrovna tak,
-a hlavně co je pevně dané platformou a nedá se to obejít.
+The application runs on Android, iOS, Windows and macOS, and on each of those
+platforms it delivers notifications by a different route. This document describes
+which route, why that one, and above all what is fixed by the platform and cannot
+be worked around.
 
-## Tři kanály, ne jeden
+## Three channels, not one
 
-| kanál | platforma | probudí zavřenou aplikaci | co potřebuje |
+| channel | platform | wakes a closed app | what it needs |
 | --- | --- | --- | --- |
-| push v2 přes vlastní proxy | Android, iOS, macOS | ano | proxy a token od FCM/APNs |
-| Web Push přes UnifiedPush | Android | ano | VAPID na serveru |
-| Nextcloud Client Push (`notify_push`) | všechny | ne | `notify_push` na serveru |
+| push v2 through our own proxy | Android, iOS, macOS | yes | the proxy and a token from FCM/APNs |
+| Web Push through UnifiedPush | Android | yes | VAPID on the server |
+| Nextcloud Client Push (`notify_push`) | all | no | `notify_push` on the server |
 
-Na Androidu existují dvě cesty současně a uživatel mezi nimi přepíná
-v Nastavení → Push notifikace, bez nového buildu. Výchozí je proxy, Web Push
-zůstává jako záloha. Podrobnosti níž v „Dvě cesty na Androidu".
+On Android two paths exist at the same time and the user switches between them in
+Settings → Push notifications, without a new build. The default is the proxy, Web
+Push remains a fallback. Details below in "Two paths on Android".
 
-Nejsou to alternativy k výběru: doplňují se. Živý kanál doručuje okamžitě,
-dokud aplikace běží, a to úplně všude. Probudit ukončenou aplikaci umí jen
-Web Push na Androidu a APNs na Apple zařízeních.
+They are not alternatives to choose between: they complement each other. The live
+channel delivers immediately for as long as the application is running, and it
+does so everywhere. Waking a terminated application is only possible with Web
+Push on Android and APNs on Apple devices.
 
 ## Web Push (Android)
 
-Registrace jde na `/ocs/v2.php/apps/notifications/api/v2/webpush`, což je
-novější endpoint notifikační aplikace bez prostředníka. Klient si vyzvedne
-VAPID veřejný klíč a založí odběr; doručení obstarává UnifiedPush s
-distributorem zabaleným v aplikaci, takže uživatel nic dalšího neinstaluje.
-Šifrovaný obsah rozbaluje nativní vrstva.
+Registration goes to `/ocs/v2.php/apps/notifications/api/v2/webpush`, the newer
+endpoint of the notifications app without an intermediary. The client fetches the
+VAPID public key and creates a subscription; delivery is handled by UnifiedPush
+with a distributor bundled inside the application, so the user installs nothing
+else. The encrypted content is unpacked by the native layer.
 
-Kudy ta zpráva doopravdy teče, je ale potřeba říct přesně, protože zabalený
-distributor není totéž co přímé spojení. Knihovna
-`org.unifiedpush.android:embedded-fcm-distributor` nepoužívá Firebase SDK a
-nepotřebuje `google-services.json`; mluví s Google Play Services přes staré
-C2DM broadcasty (`com.google.android.c2dm.intent.RECEIVE`). Jako endpoint
-odběru registruje `https://fcm.distributor.unifiedpush.org/wpfcm`, veřejnou
-přepisovací bránu projektu UnifiedPush, která Web Push požadavek převede na
-FCM zprávu. V cestě tedy stojí dvě cizí infrastruktury, UnifiedPush a Google.
-Obsah je pro obě nečitelný — Web Push payload je šifrovaný `aes128gcm` klíči
-z odběru, které brána nemá — ale metadata (čas, cílové zařízení, frekvence)
-jim viditelná jsou. Kdo tohle nechce, musí si postavit vlastní bránu nebo
-sáhnout po samostatném distributoru.
+Where that message really flows, though, has to be said exactly, because a
+bundled distributor is not the same thing as a direct connection. The library
+`org.unifiedpush.android:embedded-fcm-distributor` does not use the Firebase SDK
+and needs no `google-services.json`; it talks to Google Play Services through the
+old C2DM broadcasts (`com.google.android.c2dm.intent.RECEIVE`). As the
+subscription endpoint it registers
+`https://fcm.distributor.unifiedpush.org/wpfcm`, a public rewriting gateway of
+the UnifiedPush project which converts a Web Push request into an FCM message.
+Two foreign infrastructures therefore stand in the path, UnifiedPush and Google.
+The content is unreadable to both — the Web Push payload is encrypted with
+`aes128gcm` using keys from the subscription, which the gateway does not have —
+but the metadata (time, target device, frequency) are visible to them. Anyone who
+does not want that has to build their own gateway or reach for a separate
+distributor.
 
-Probudit ukončenou aplikaci to umí, protože zprávu doručuje broadcast a
-transport drží Play Services, ne naše aplikace. Tři meze to ale má:
+It can wake a terminated application, because the message is delivered by a
+broadcast and the transport is held by Play Services, not by our application. It
+has three limits, though:
 
-- **Force stop** (Nastavení → Vynutit ukončení, agresivní OEM správci baterie
-  na Xiaomi, Huawei nebo Samsungu) uvede aplikaci do „stopped state" a Android
-  jí broadcasty nedoručí, dokud ji uživatel sám nespustí. Platformní pravidlo,
-  platí i pro oficiální Talk s FCM.
-- **Bez Google Play Services** zabalený distributor nefunguje —
-  `AndroidWebPushChannel.ensureEmbeddedDistributor()` vyhodí
-  `embedded_distributor_unavailable`. Na GrapheneOS bez sandboxed Play, na
-  Huawei nebo /e/OS je nutný samostatný distributor (ntfy).
-- **Doze** odloží zprávy s normální prioritou do údržbového okna. Vysoká
-  priorita, kterou `Push::getNotifTopicAndUrgency` nastavuje hovorům a
-  zmínkám, jím projde okamžitě.
+- **Force stop** (Settings → Force stop, aggressive OEM battery managers on
+  Xiaomi, Huawei or Samsung) puts the application into the "stopped state" and
+  Android delivers it no broadcasts until the user launches it themselves. A
+  platform rule, and it applies to the official Talk with FCM too.
+- **Without Google Play Services** the bundled distributor does not work —
+  `AndroidWebPushChannel.ensureEmbeddedDistributor()` throws
+  `embedded_distributor_unavailable`. On GrapheneOS without sandboxed Play, on
+  Huawei or /e/OS a separate distributor (ntfy) is necessary.
+- **Doze** defers normal-priority messages into a maintenance window. The high
+  priority that `Push::getNotifTopicAndUrgency` sets for calls and mentions goes
+  through it immediately.
 
-Na iOS se tahle cesta použít nedá: Web Push v nativní aplikaci neexistuje a
-UnifiedPush je Android-only, protože iOS nedovolí držet spojení na pozadí.
+On iOS this route cannot be used: Web Push does not exist in a native app and
+UnifiedPush is Android-only, because iOS does not allow holding a connection in
+the background.
 
-## Dvě cesty na Androidu a přepínač mezi nimi
+## Two paths on Android and the switch between them
 
-Nativní cestou Androidu je naše vlastní proxy, tedy přesně ten kontrakt, který
-používá iOS: `POST /ocs/v2.php/apps/notifications/api/v2/push` s
-`proxyServer: https://push.example.invalid` a pak registrace u proxy na
-`/devices`. Serverová strana se tím nemění vůbec — `Push.php` platformu
-nerozlišuje, seskupuje podle sloupce `proxyserver` a rozhodnutí, jestli
-notifikaci poslat do APNs nebo do FCM, dělá až proxy podle formátu tokenu.
-Tím se z cesty vyřadí `fcm.distributor.unifiedpush.org`.
+The native path on Android is our own proxy, that is exactly the contract iOS
+uses: `POST /ocs/v2.php/apps/notifications/api/v2/push` with
+`proxyServer: https://push.example.invalid` and then registration with the
+proxy at `/devices`. The server side does not change at all — `Push.php` does not
+distinguish platforms, it groups by the `proxyserver` column, and the decision of
+whether to send a notification to APNs or to FCM is made only by the proxy,
+according to the format of the token. That removes
+`fcm.distributor.unifiedpush.org` from the path.
 
-Web Push větev se nemaže. Zůstává jako záloha za přepínačem pro případ, že by
-proxy cesta dělala potíže.
+The Web Push branch is not deleted. It stays as a fallback behind a switch, in
+case the proxy path causes trouble.
 
-Kód je proto rozdělený takhle:
+The code is therefore split like this:
 
-| soubor | co dělá |
+| file | what it does |
 | --- | --- |
-| `push_registration_coordinator.dart` | platformně neutrální smyčka nad `talk_protocol` push-v2 automatem |
-| `android_push_device_key_store.dart` + `AndroidPushDeviceKeyStore.kt` | RSA-2048 klíč zařízení v Android Keystore, jeden na účet |
-| `android_push_coordinator.dart` | stávající Web Push cesta, beze změny až na `revokeAllRegistrations()` |
-| `android_push_transport.dart` | volba cesty, její uložení a čisté přepnutí |
+| `push_registration_coordinator.dart` | the platform-neutral loop over the `talk_protocol` push-v2 state machine |
+| `android_push_device_key_store.dart` + `AndroidPushDeviceKeyStore.kt` | the RSA-2048 device key in the Android Keystore, one per account |
+| `android_push_coordinator.dart` | the existing Web Push path, unchanged apart from `revokeAllRegistrations()` |
+| `android_push_transport.dart` | choosing the path, storing it and switching cleanly |
 
-Přepínač je soubor v adresáři aplikace, stejný mechanismus jako volba motivu,
-takže se mění za běhu bez nového buildu. Pořadí při přepnutí je to důležité:
-Nextcloud si registraci klíčuje podle zařízení, ne podle cesty, takže se
-**nejdřív odregistruje stará cesta** u Nextcloudu i u své brány a teprve
-potom se uloží nová volba. Když odregistrace selže, volba se nezmění a
-uživatel to uvidí; zařízení tak zůstane registrované postaru místo aby
-nezůstalo registrované nikde.
+The switch is a file in the application directory, the same mechanism as the
+theme choice, so it changes at runtime without a new build. The order during a
+switch is the important part: Nextcloud keys the registration by device, not by
+path, so **the old path is unregistered first** with both Nextcloud and its own
+gateway, and only then is the new choice stored. If the unregistration fails, the
+choice does not change and the user sees it; the device then stays registered the
+old way instead of ending up registered nowhere.
 
-Klíč zařízení je per účet: handle je SHA-256 z `accountId` a push automat
-odmítne klíč, který už drží jiný účet, takže jeden účet nikdy nemůže
-dešifrovat notifikaci druhého.
+The device key is per account: the handle is the SHA-256 of the `accountId` and
+the push state machine rejects a key already held by another account, so one
+account can never decrypt a notification belonging to another.
 
-Notifikaci na Androidu vyrábí **výhradně nativní vrstva** z push transportu.
-Aplikace nemá žádný balíček na lokální notifikace a v Dartu se notifikace
-neposílá nikde; Client Push po websocketu jen spouští synchronizaci. Běžící
-aplikace tedy nemůže dostat tutéž událost dvakrát viditelně, i když dorazí
-po websocketu i z FCM — není druhý zdroj, který by ji zobrazil. Opakované
-doručení téže zprávy druhou notifikaci nevytvoří: platformní ID je stabilní
-podle `(accountId, nid)`, takže se první přepíše.
+On Android the notification is produced **exclusively by the native layer** from
+the push transport. The application has no local notification package and no
+notification is ever posted from Dart; Client Push over the websocket only
+triggers a synchronization. A running application therefore cannot receive the
+same event visibly twice, even when it arrives both over the websocket and from
+FCM — there is no second source that would display it. A repeated delivery of the
+same message does not create a second notification: the platform ID is stable per
+`(accountId, nid)`, so the first one is overwritten.
 
-Nerozšifrovatelná zpráva se zahazuje beze stopy — nezobrazí se nic, nikam se
-to nezapisuje a nepočítá. Který klíč sedl je totiž samo o sobě informace
-o tom, komu zpráva patří, a zpráva, kterou neotevře žádný klíč, patří účtu,
-který na zařízení už není.
+An undecryptable message is discarded without a trace — nothing is shown, nothing
+is written anywhere and nothing is counted. Which key fitted is in itself
+information about whom the message belongs to, and a message no key opens belongs
+to an account that is no longer on the device.
 
-### Doručení
+### Delivery
 
-`NksFirebaseMessagingService` dostane od proxy `data`-only zprávu s jediným
-klíčem `nc-subject`, což je base64 RSA ciphertextu tak, jak ho vyrobil
-Nextcloud. Rozšifruje ho privátním klíčem z Android Keystore (RSA, PKCS#1 v1.5
-— Nextcloud má v appconfigu ten default) a výsledek pustí do **téhož**
-`AndroidWebPushPayloadParser` a `AndroidSystemNotifications.apply`, které
-používá Web Push. Druhá zobrazovací vrstva tedy neexistuje.
+`NksFirebaseMessagingService` receives a `data`-only message from the proxy with
+a single key `nc-subject`, which is the base64 of the RSA ciphertext exactly as
+Nextcloud produced it. It decrypts it with the private key from the Android
+Keystore (RSA, PKCS#1 v1.5 — Nextcloud has that default in its appconfig) and
+passes the result into the **same** `AndroidWebPushPayloadParser` and
+`AndroidSystemNotifications.apply` that Web Push uses. A second display layer
+therefore does not exist.
 
-Který účet zprávu dostane, se pozná podle toho, který klíč ji otevře — token
-je jeden na zařízení, klíče jsou per účet. Seznam přihlášených účtů posílá
-Dart nativní straně (`setAccounts`), protože doručení může probudit mrtvý
-proces.
+Which account receives the message is determined by which key opens it — there is
+one token per device, and the keys are per account. The list of signed-in
+accounts is sent to the native side by Dart (`setAccounts`), because a delivery
+may wake a dead process.
 
-Živý průchod 27. srpna 2026 na Androidu 14 prokázal celý primární řetěz
-Nextcloud → vlastní proxy → FCM → ukončený proces. Balíček nebyl ve stavu
-force-stop, ale proces neběžel. Notifikace zobrazila skutečný obsah, klepnutí
-otevřelo správný účet a místnost, Reply vytvořilo právě jednu serverovou
-zprávu a Mark as read posunulo serverový read marker. Web Push byl potom
-samostatně ověřen jako funkční záloha včetně přepnutí oběma směry.
+A live pass on 27 August 2026 on Android 14 proved the whole primary chain
+Nextcloud → our own proxy → FCM → terminated process. The package was not in the
+force-stop state, but the process was not running. The notification showed the
+real content, the tap opened the correct account and room, Reply created exactly
+one server-side message and Mark as read moved the server read marker. Web Push
+was then verified separately as a working fallback, including switching in both
+directions.
 
-Commit `18bb4f0` uzavírá chybové stavy předání mezi transporty: volba se načte
-před startem koordinátoru, souběžná přepnutí se serializují a selhaný zápis
-nové volby znovu obnoví už odregistrovanou původní cestu. Uživatel tak po
-neúspěšném přepnutí nezůstane bez registrace.
+Commit `18bb4f0` closes the error states of the handover between transports: the
+choice is loaded before the coordinator starts, concurrent switches are
+serialized, and a failed write of the new choice restores the already
+unregistered original path. After a failed switch the user is therefore not left
+without a registration.
 
-### Kdy notifikace dorazí okamžitě a kdy ne
+### When a notification arrives immediately and when it does not
 
-Talk má u Nextcloudu vždy vysokou naléhavost, i běžná zpráva —
-`Push.php` nastaví `urgency = high` pro `spreed`, `talk`
-i `admin_notification_talk`. Proxy to mapuje jedna ku jedné na
+In Nextcloud, Talk always has high urgency, even an ordinary message —
+`Push.php` sets `urgency = high` for `spreed`, `talk` and
+`admin_notification_talk`. The proxy maps that one to one onto
 `android.priority: high`.
 
-ZMĚŘENO 2026-08-27 na `chatujmePixel` (Android 14) přes
-`RemoteMessage.getOriginalPriority()` a `getPriority()`, dočasnou
-instrumentací, která ve stromě nezůstala. Obojí vrátilo `1`, tedy
-`PRIORITY_HIGH`, a to i ve stavu, který prioritu měl podle očekávání srazit:
-aplikace odebraná z výjimek úsporného režimu, standby bucket `RESTRICTED`
-(45) a zařízení ve `deviceidle` stavu `IDLE`. Zpráva dorazila za 471 ms od
-`sentTime`. **Vysokou prioritu tedy nese celý řetěz správně a Android ji
-nesnižuje ani v hlubokém úsporném režimu**; App Standby Buckets jako
-vysvětlení odpadají.
+MEASURED 2026-08-27 on `chatujmePixel` (Android 14) through
+`RemoteMessage.getOriginalPriority()` and `getPriority()`, with temporary
+instrumentation that did not stay in the tree. Both returned `1`, that is
+`PRIORITY_HIGH`, and they did so even in a state that was expected to lower the
+priority: the app removed from the battery optimization exceptions, the standby
+bucket `RESTRICTED` (45) and the device in the `deviceidle` state `IDLE`. The
+message arrived 471 ms after `sentTime`. **The whole chain therefore carries the
+high priority correctly and Android does not lower it even in deep power saving
+mode**; App Standby Buckets are ruled out as an explanation.
 
-Zdržení, které jsme přesto pozorovali, mělo jinou příčinu: na emulátoru po
-delší nečinnosti zvětrá spojení Play Services a zprávy se nakupí, dokud ho
-něco neprobudí. Nic se přitom neztratí — když se spojení obnovilo, dorazily
-i všechny odložené zprávy. Log proxy to potvrdil z druhé strany: šest
-odeslání, šest `200 OK` od Googlu.
+The delay we did observe had a different cause: on the emulator the Play Services
+connection goes stale after a longer period of inactivity and messages pile up
+until something wakes it. Nothing is lost in the process — once the connection
+was restored, all the deferred messages arrived too. The proxy log confirmed it
+from the other side: six sends, six `200 OK` from Google.
 
-Praktický důsledek: **hlášení „notifikace chodí pozdě" nehledejte v našem
-kódu.** Priorita je správně od Nextcloudu až po `getPriority()` na zařízení.
-Před testováním push na emulátoru ho vytáhněte z úsporného režimu
-(`adb shell cmd deviceidle unforce`, případně balíček na whitelist), jinak
-měříte Googlův plánovač, ne naši cestu. Fyzické zařízení se takhle nechová.
+The practical consequence: **do not look for a report of "notifications arrive
+late" in our code.** The priority is correct from Nextcloud all the way to
+`getPriority()` on the device. Before testing push on an emulator, pull it out of
+power saving mode (`adb shell cmd deviceidle unforce`, or whitelist the package),
+otherwise you are measuring Google's scheduler, not our path. A physical device
+does not behave this way.
 
-## Client Push (`notify_push`) — všechny platformy
+## Client Push (`notify_push`) — all platforms
 
-Nextcloudem navržený živý kanál. Server ho nabízí v capabilities:
+The live channel designed by Nextcloud. The server advertises it in capabilities:
 
 ```
 notify_push.type      → ["files", "activities", "notifications"]
 notify_push.endpoints → { websocket: "wss://…/push/ws", pre_auth: "https://…" }
 ```
 
-Že posílá i notifikace, ne jen změny souborů, plyne z toho, že
-`apps/notify_push/lib/Listener.php` implementuje `INotifier` a volá
+That it sends notifications too, not only file changes, follows from
+`apps/notify_push/lib/Listener.php` implementing `INotifier` and calling
 `$this->queue->push('notify_notification', …)`.
 
-Postup klienta:
+The client procedure:
 
-1. `POST` na `pre_auth` přes autentizované HTTPS → jednorázový token.
-   **Route je POST**; `GET` server odmítne s `405` a socket pak token nikdy
-   nedostane. Kanál se v takovém případě tiše nepřipojí a aplikace se tváří
-   normálně — proto to hlídá test.
-2. Připojit `wss://…/push/ws`, poslat **prázdné uživatelské jméno** a pak ten
-   token. Heslo aplikace po socketu necestuje.
-3. Server odpoví `authenticated`, pak posílá rámce. `notify_notification`
-   znamená „něco přišlo, synchronizuj".
+1. `POST` to `pre_auth` over authenticated HTTPS → a one-time token. **The route
+   is POST**; the server rejects a `GET` with `405` and the socket then never
+   gets a token. In that case the channel silently fails to connect and the
+   application looks normal — which is why a test guards it.
+2. Connect `wss://…/push/ws`, send an **empty user name** and then that token.
+   The app password never travels over the socket.
+3. The server answers `authenticated` and then sends frames.
+   `notify_notification` means "something arrived, synchronize".
 
-Implementace: protokol v `packages/talk_protocol/lib/src/client_push/`,
-spojení a koordinace v `apps/mobile/lib/features/push/client_push_*.dart`.
-Endpoint z capabilities musí patřit témuž hostu jako účet, jinak se token
-nikam neposílá; `ws` bez TLS se odmítá a rámce doručené před přijetím tokenu
-se zahazují.
+Implementation: the protocol in `packages/talk_protocol/lib/src/client_push/`,
+the connection and coordination in
+`apps/mobile/lib/features/push/client_push_*.dart`. The endpoint from the
+capabilities must belong to the same host as the account, otherwise the token is
+not sent anywhere; `ws` without TLS is rejected and frames delivered before the
+token is accepted are discarded.
 
-Ověření, že kanál skutečně běží, se dělá ze serveru, ne z logu aplikace:
+Verifying that the channel is really running is done from the server, not from
+the application log:
 
 ```sh
 occ notify_push:metrics   # Active connection count / Active user count
 ```
 
-## APNs (iOS, macOS) a proč k tomu je potřeba proxy
+## APNs (iOS, macOS) and why a proxy is needed for it
 
-Tohle je část, která překvapí, takže je popsaná podrobně.
+This is the part that surprises people, so it is described in detail.
 
-Nextcloud **do APNs neumí**. V `apps/notifications/lib/Push.php` není jediná
-zmínka o Apple; server jen seskupí notifikace podle sloupce `proxyserver` a
-udělá `POST <proxyServer>/notifications`. Doručení do APNs obstarává až ta
-adresa.
+Nextcloud **cannot talk to APNs**. There is not a single mention of Apple in
+`apps/notifications/lib/Push.php`; the server only groups notifications by the
+`proxyserver` column and does a `POST <proxyServer>/notifications`. Delivery to
+APNs is handled by that address.
 
-Oficiální aplikace Nextcloud Talk pro iOS proto míří na
-`https://push-notifications.nextcloud.com` — službu, kterou provozuje
-Nextcloud GmbH a která notifikaci podepíše **jejich** Apple certifikátem pro
-**jejich** bundle id. Dokumentace `nextcloud/notifications/docs/push-v2.md`
-to říká přímo: klíče a certifikáty nemohou být součástí serveru, jinak by je
-měl každý; proxy notifikaci ověří veřejným klíčem uživatele a pak ji
-„signs with Google or Apple Developer certificate".
+The official Nextcloud Talk app for iOS therefore points at
+`https://push-notifications.nextcloud.com` — a service operated by Nextcloud GmbH
+which signs the notification with **their** Apple certificate for **their**
+bundle id. The documentation `nextcloud/notifications/docs/push-v2.md` says so
+directly: the keys and certificates cannot be part of the server, otherwise
+everyone would have them; the proxy verifies the notification with the user's
+public key and then "signs with Google or Apple Developer certificate".
 
-Z toho plyne, co platí i pro nás:
+From that follows what applies to us as well:
 
-- Proxy **není součástí self-hosted Nextcloudu**. Váš server na ni jen posílá
-  odchozí požadavek.
-- Do aplikace s jiným bundle id přes ni notifikace nedorazí, protože ji
-  Nextcloud svým certifikátem podepsat nemůže.
-- Adresu si volí **klient** při registraci zařízení, ne administrátor.
-  `PushController::registerDevice` přijme parametr `proxyServer` a jen ho
-  zvaliduje (platná URL do 256 znaků, `https://`, pro test i `localhost` a
-  `*.internal` / `*.local`). V UI Nextcloudu se nenastavuje nikde — admin
-  sekce notifikací vystavuje jen `setting_batchtime`.
+- The proxy **is not part of a self-hosted Nextcloud**. Your server only sends an
+  outgoing request to it.
+- A notification never reaches an application with a different bundle id through
+  it, because Nextcloud cannot sign it with their certificate.
+- The address is chosen by the **client** at device registration, not by the
+  administrator. `PushController::registerDevice` accepts the parameter
+  `proxyServer` and only validates it (a valid URL up to 256 characters,
+  `https://`, and for testing also `localhost` and `*.internal` / `*.local`). It
+  is configured nowhere in the Nextcloud UI — the admin notifications section
+  only exposes `setting_batchtime`.
 
-Náš klient tedy posílá vlastní adresu; pole je v
+Our client therefore sends its own address; the field is in
 `packages/talk_protocol/lib/src/push/effects.dart`:
 
 ```dart
@@ -237,7 +252,7 @@ Map<String, String> get formFields => <String, String>{
 };
 ```
 
-Co server na tu adresu pošle:
+What the server sends to that address:
 
 ```
 POST <proxyServer>/notifications
@@ -245,154 +260,167 @@ POST <proxyServer>/notifications
                     signature, priority, type}, …]}
 ```
 
-`subject` je payload zašifrovaný veřejným klíčem zařízení. Proxy ho
-**nedešifruje a nemůže** — rozbalí ho až Notification Service Extension přímo
-v telefonu. `pushTokenHash` je SHA-512 skutečného push tokenu, takže proxy
-potřebuje vlastní registraci, kde si klient uloží dvojici hash → token.
+`subject` is the payload encrypted with the device public key. The proxy **does
+not and cannot decrypt it** — it is unpacked only by the Notification Service
+Extension inside the phone. `pushTokenHash` is the SHA-512 of the real push
+token, so the proxy needs its own registration in which the client stores the
+pair hash → token.
 
-Registrace u proxy navíc výslovně nese `pushProvider=apns|fcm`. Provider se
-ukládá k zařízení a proxy podle něj volí odesílací větev; tvar tokenu není
-autoritativní. APNs registrace musí nést také
-`pushEnvironment=development|production`, zatímco FCM tuto hodnotu odmítá.
-Debug Apple build používá development, Profile a Release production. Proxy
-drží oba APNs klienty současně a endpoint vybírá per zařízení, takže souběžný
-simulátorový a TestFlight provoz si navzájem nemaže platné registrace.
+The registration with the proxy additionally carries an explicit
+`pushProvider=apns|fcm`. The provider is stored with the device and the proxy
+chooses the sending branch by it; the shape of the token is not authoritative. An
+APNs registration must also carry `pushEnvironment=development|production`, while
+FCM rejects that value. A debug Apple build uses development, Profile and Release
+use production. The proxy holds both APNs clients at once and picks the endpoint
+per device, so concurrent simulator and TestFlight traffic do not erase each
+other's valid registrations.
 
-Na straně Apple je k tomu potřeba:
+On the Apple side this is what is needed:
 
-| položka | hodnota |
+| item | value |
 | --- | --- |
-| Tým | `TEAMID0000` |
-| App ID | `com.nkshub.nextcloudtalk` s capability Push Notifications |
-| App ID rozšíření | `com.nkshub.nextcloudtalk.NotificationService` |
+| Team | `TEAMID0000` |
+| App ID | `com.nkshub.nextcloudtalk` with the Push Notifications capability |
+| Extension App ID | `com.nkshub.nextcloudtalk.NotificationService` |
 | App Group | `group.com.nkshub.nextcloudtalk` |
-| APNs klíč | token-based `.p8`, Sandbox i Production |
+| APNs key | token-based `.p8`, both Sandbox and Production |
 
-Rozšíření má vlastní App ID a přes App Group se dostane k privátnímu klíči,
-kterým notifikaci dešifruje. Certifikáty potřeba nejsou, `.p8` je nahrazuje a
-nevyprší.
+The extension has its own App ID and, through the App Group, reaches the private
+key it uses to decrypt the notification. Certificates are not needed, the `.p8`
+replaces them and does not expire.
 
-Stejně jako na Androidu (výš) je i tady notifikaci schopen zobrazit jen jeden
-zdroj: `pubspec.yaml` neobsahuje balíček na lokální notifikace a Dart nikde
-nevolá nic, co by notifikaci vyrobilo — Client Push po websocketu jen spustí
-`ConversationSyncService.sync`. Banner na obrazovce vzniká výhradně z toho, co
-sestaví Notification Service Extension z APNs payloadu. Běžící aplikace tedy
-nemůže dostat tutéž zprávu viditelně dvakrát, i kdyby jí Client Push i APNs
-oznámily prakticky současně — druhý zobrazovací zdroj neexistuje, není co
-deduplikovat.
+Just as on Android (above), here too only one source is able to display a
+notification: `pubspec.yaml` contains no local notification package and Dart
+calls nothing anywhere that would produce a notification — Client Push over the
+websocket only starts `ConversationSyncService.sync`. The banner on the screen
+comes exclusively from what the Notification Service Extension builds out of the
+APNs payload. A running application therefore cannot receive the same message
+visibly twice, even if Client Push and APNs announced it practically
+simultaneously — there is no second display source, so there is nothing to
+deduplicate.
 
-### Stav implementace: iOS hotové a živě ověřené přes vlastní proxy
+### Implementation state: iOS finished and verified live through our own proxy
 
-HOTOVO A OVĚŘENO v `d75d0b8` (build přes `flutter run` + `xcodebuild test`,
-ne jen `analyze`), stav 2026-08-27/28:
+DONE AND VERIFIED in `d75d0b8` (built through `flutter run` + `xcodebuild test`,
+not just `analyze`), state as of 2026-08-27/28:
 
-- Notification Service Extension jako vlastní Xcode target (dva reálné
-  build-blocking bugy v ručně psaném `project.pbxproj` nalezené a opravené
-  skutečným buildem, ne čtením — chybějící `XCBuildConfiguration`/
-  `XCConfigurationList` a chybějící `PBXSourcesBuildPhase` objekt).
-- Dešifrování `nc-subject` (`PushEnvelopeDecryptor`, PKCS#1 v1.5 nejdřív,
-  OAEP-SHA1 jako Nextcloudova jediná alternativa), ciphertext se odmítne,
-  pokud není přesně 256 B (RSA-2048 modulus) — kontrola proběhne ještě před
-  prvním `SecKeyCreateDecryptedData`, ne až po něm. Payload musí nést `app`
-  jako neprázdný string, samotné „je to JSON objekt" nestačí.
-- Přepis title/body a `content.categoryIdentifier` pro Reply/Mark as Read.
-  Titulek je shodný s Androidem: `app == "spreed"` → lokalizovaný název
-  aplikace, jinak raw `app` id — přepnutí mezi zařízeními nesmí ukázat jiný
-  text pro tutéž zprávu.
-- Rozklik i notifikační akce nesou účet **přímo od dešifrujícího klíče**
-  (Keychain label, `PushDeviceKeyStore.setAccount`/`allKeys()`), ne
-  rekonstruovaný z hostitele serveru. Nezávislý audit (Codex) na tohle
-  upozornil jako na vážný nález: dva účty na stejném serveru by si jinak
-  mohly poslat rozklik nebo odpověď z notifikace pod cizí identitou.
-  `ApplePushNotificationOpenDelivery` nese `{accountId, roomToken}` stejným
-  tvarem fronty jako `AppleDeepLinkDelivery`, ale je to samostatný
-  mechanismus — zrcadlí Androidí `AndroidNotificationOpen`, který taky nejde
-  přes deep-link resolver.
-- `ApplePushRegistrationCoordinator.dispose()` čeká na rozdělaný `_drain()`
-  před zavřením gateway klienta — dřív mohl přerušit mid-flight
-  register/unregister a nechat zařízení zaregistrované jen na Nextcloudu,
-  nebo jen na proxy. Ověřeno i obráceně: test bez opravy padá přesně na
-  „dispose must wait for the in-flight drain".
-- Foreground dedup Client Push vs. APNs byl postavený a pak **zrušený** —
-  ověřeno (grep), že druhý zobrazovací zdroj vůbec neexistuje (viz odstavec
-  výš), takže nebylo co deduplikovat.
+- The Notification Service Extension as its own Xcode target (two real
+  build-blocking bugs in the hand-written `project.pbxproj` found and fixed by an
+  actual build, not by reading — a missing
+  `XCBuildConfiguration`/`XCConfigurationList` and a missing
+  `PBXSourcesBuildPhase` object).
+- Decryption of `nc-subject` (`PushEnvelopeDecryptor`, PKCS#1 v1.5 first,
+  OAEP-SHA1 as Nextcloud's only alternative); the ciphertext is rejected if it is
+  not exactly 256 B (the RSA-2048 modulus) — the check happens before the first
+  `SecKeyCreateDecryptedData`, not after it. The payload must carry `app` as a
+  non-empty string, "it is a JSON object" alone is not enough.
+- Rewriting the title/body and `content.categoryIdentifier` for Reply/Mark as
+  Read. The title is identical to Android: `app == "spreed"` → the localized
+  application name, otherwise the raw `app` id — switching between devices must
+  not show a different text for the same message.
+- Both the tap and the notification actions carry the account **directly from the
+  decrypting key** (the Keychain label,
+  `PushDeviceKeyStore.setAccount`/`allKeys()`), not reconstructed from the server
+  host. An independent audit (Codex) flagged this as a serious finding: two
+  accounts on the same server could otherwise send a tap or a reply from a
+  notification under a foreign identity. `ApplePushNotificationOpenDelivery`
+  carries `{accountId, roomToken}` in the same queue shape as
+  `AppleDeepLinkDelivery`, but it is a separate mechanism — it mirrors the
+  Android `AndroidNotificationOpen`, which also does not go through the deep-link
+  resolver.
+- `ApplePushRegistrationCoordinator.dispose()` waits for an in-progress `_drain()`
+  before closing the gateway client — previously it could interrupt an in-flight
+  register/unregister and leave the device registered only with Nextcloud, or
+  only with the proxy. Verified the other way round too: without the fix, the
+  test fails exactly on "dispose must wait for the in-flight drain".
+- Foreground dedup of Client Push vs. APNs was built and then **removed** — it
+  was verified (by grep) that a second display source does not exist at all (see
+  the paragraph above), so there was nothing to deduplicate.
 
-Živý APNs development průchod přes vlastní proxy prokázal doručení při
-ukončeném procesu, dešifrování v Notification Service Extension a studený
-Open do správného účtu a místnosti. Reply vytvořilo právě jednu zprávu pod
-účtem určeným dešifrujícím klíčem a Mark as read posunulo serverový marker.
-Účet se nikde nedohledává podle hostitele. Pod-wired iOS XCTest skončil
-`TEST SUCCEEDED`.
+The live APNs development pass through our own proxy proved delivery with the
+process terminated, decryption in the Notification Service Extension and a cold
+Open into the correct account and room. Reply created exactly one message under
+the account determined by the decrypting key, and Mark as read moved the server
+marker. The account is never looked up by the host. The pod-wired iOS XCTest
+ended with `TEST SUCCEEDED`.
 
-### Stav implementace: macOS production ověřeno
+### Implementation state: macOS production verified
 
-Podepsaný Universal Release z 28. srpna 2026 se přes vlastní proxy registroval
-jako `apns/production`. Při ukončeném procesu prošel celý tok Nextcloud → proxy
-→ APNs production → macOS Notification Service Extension. NSE dešifrovalo
-obsah a systém zobrazil skutečnou kartu NKS Talk. Cold Open otevřel správný účet
-a místnost, Reply vytvořilo právě jednu serverovou zprávu pod příjemcem a Mark
-as Read skončilo s `lastReadMessage == lastMessage.id` a nulovým počtem
-nepřečtených. Commity `9d8e7ac` a `5f8ee50` navíc hlídají, že NSE nelinkuje
-Runner pody a deklaruje macOS `NSExtensionService_Subsystem`.
+The signed Universal Release of 28 August 2026 registered through our own proxy
+as `apns/production`. With the process terminated, the whole flow Nextcloud →
+proxy → APNs production → macOS Notification Service Extension passed. The NSE
+decrypted the content and the system displayed a real NKS Talk card. The cold
+Open opened the correct account and room, Reply created exactly one server-side
+message under the recipient, and Mark as Read ended with
+`lastReadMessage == lastMessage.id` and a zero unread count. Commits `9d8e7ac`
+and `5f8ee50` additionally guard that the NSE does not link the Runner pods and
+that it declares the macOS `NSExtensionService_Subsystem`.
 
-## Windows: běžící aplikace ano, zavřená ne
+## Windows: a running application yes, a closed one no
 
-Na Windows notifikaci ukazuje sama aplikace, dokud běží. Client Push vyvolá
-synchronizaci a nová Talk zpráva se zobrazí jako WinRT `ToastGeneric`.
-Notifikace nabízí explicitní akce Open, Reply a Mark as read.
+On Windows the notification is shown by the application itself, for as long as it
+is running. Client Push triggers a synchronization and a new Talk message is
+displayed as a WinRT `ToastGeneric`. The notification offers explicit Open, Reply
+and Mark as read actions.
 
-**Současný nepackagovaný build neumí probudit ukončený proces.** Takové
-doručení vyžaduje Windows Notification Service, packaged identitu z Microsoft
-Store a out-of-process COM aktivátor. Dokud aplikaci distribuujeme mimo Store,
-je běžící proces záměrná platformní hranice, ne předstíraně hotová funkce.
+**The current unpackaged build cannot wake a terminated process.** Such delivery
+requires the Windows Notification Service, a packaged identity from the Microsoft
+Store and an out-of-process COM activator. As long as we distribute the
+application outside the Store, a running process is a deliberate platform
+boundary, not a feature falsely presented as done.
 
-Toast XML neobsahuje `accountId` ani room token. Nativní vrstva pro každou
-notifikaci vytvoří náhodný opaque GUID a drží bounded mapu nejvýše 64 tras.
-Aktivace předá do Dartu teprve odpovídající `{accountId, roomToken}`; fronta
-rozkliků v Dartu má nejvýše 32 položek. Reply se zařadí do stejného durable
-outboxu jako odpověď z aplikace a Mark as read používá stejný account-scoped
-read service. Dva účty na stejném serveru se proto nerozlišují hostitelem.
+The toast XML contains neither the `accountId` nor the room token. For every
+notification the native layer creates a random opaque GUID and holds a bounded
+map of at most 64 routes. The activation hands Dart only the corresponding
+`{accountId, roomToken}`; the tap queue in Dart holds at most 32 items. A Reply
+is enqueued into the same durable outbox as a reply from the application, and
+Mark as read uses the same account-scoped read service. Two accounts on the same
+server are therefore not distinguished by the host.
 
-Obsah se nikde nedotahuje znovu. Skládá se z řádků, které už zapsala
-synchronizace a které renderuje seznam konverzací, a spouštěčem je vzestup
-počtu nepřečtených. První načtení se jen zapamatuje: jinak by po každém startu
-vyletěla dávka notifikací na všechno dávno nepřečtené. Filtr na Talk je
-splněný konstrukcí — v `cachedConversations` jsou výhradně Talk konverzace,
-karta z Decku se do té tabulky nedostane.
+The content is never fetched again. It is composed of the rows the
+synchronization has already written and which the conversation list renders, and
+the trigger is a rise in the unread count. The first load is merely remembered:
+otherwise every start would fire a batch of notifications for everything long
+unread. The Talk filter is satisfied by construction — `cachedConversations`
+contains Talk conversations only, and a card from Deck never gets into that
+table.
 
-Živý průchod na Windows 11 nad commity `ef80b04` a `ea63609` prokázal release
-build, doručení do Notification Center, jednu serverovou zprávu po Reply,
-serverový `unreadMessages=0` po Mark as read a explicitní Open do správného
-účtu a místnosti. Focused Windows sada prošla 12/12, integrační testy 2/2 a
-`flutter analyze` bez nálezu.
+A live pass on Windows 11 on top of commits `ef80b04` and `ea63609` proved the
+release build, delivery into the Notification Center, one server-side message
+after Reply, a server-side `unreadMessages=0` after Mark as read and an explicit
+Open into the correct account and room. The focused Windows suite passed 12/12,
+the integration tests 2/2 and `flutter analyze` had no findings.
 
-## Jen Talk, nic jiného
+## Only Talk, nothing else
 
-Nextcloud posílá na registrované zařízení notifikace **všech** aplikací, ne
-jen Talku, takže karta z Decku dorazí na stejný kanál jako zpráva. Pole `app`
-v payloadu je proto brána: zobrazí se jen `spreed`. Payload bez `app` se za
-Talk nepovažuje — nehádá se.
+Nextcloud sends notifications of **all** applications to a registered device, not
+only Talk's, so a card from Deck arrives on the same channel as a message. The
+`app` field in the payload is therefore a gate: only `spreed` is displayed. A
+payload without `app` is not considered Talk — nothing is guessed.
 
-## VoIP push a proč tu zatím není
+## VoIP push and why it is not here yet
 
-Hovory potřebují na iOS druhý, oddělený kanál: PushKit s VoIP tokenem. Apple
-u něj vynucuje, že každý doručený VoIP push musí skončit voláním
-`reportNewIncomingCall`, jinak systém aplikaci zabije — takže se ten kanál
-nedá použít na běžné notifikace a naopak.
+On iOS, calls need a second, separate channel: PushKit with a VoIP token. Apple
+enforces that every delivered VoIP push must end with a call to
+`reportNewIncomingCall`, otherwise the system kills the application — so that
+channel cannot be used for ordinary notifications, and vice versa.
 
-Upstream to řeší způsobem, který je dobré znát dřív, než se to začne stavět:
-iOS klient posílá proxy **jeden řetězec se dvěma tokeny oddělenými mezerou**,
-`"<běžný hex> <voip hex>"`, a `pushTokenHash` pro Nextcloud počítá SHA-512
-právě z toho spojeného tvaru (`NCKeyChainController.m`). Naše proxy tenhle
-tvar dnes nepřijme: `token_kind()` uznává jen čistý hex nebo base64url a
-mezera neprojde ani jednou maskou, takže by registrace skončila na
-`INVALID_PUSH_TOKEN`. Databáze proxy má navíc jediný sloupec `push_token`,
-takže i kdyby prošla, není kam VoIP token uložit.
+Upstream solves it in a way worth knowing before this starts to be built: the iOS
+client sends the proxy **one string with two tokens separated by a space**,
+`"<ordinary hex> <voip hex>"`, and computes the `pushTokenHash` for Nextcloud as
+the SHA-512 of exactly that joined form (`NCKeyChainController.m`). Our proxy does
+not accept that form today: `token_kind()` only recognizes pure hex or base64url
+and a space passes neither mask, so the registration would end with
+`INVALID_PUSH_TOKEN`. On top of that, the proxy database has a single
+`push_token` column, so even if it passed, there is nowhere to store the VoIP
+token.
 
-Mapování `type: "voip"` na topic s příponou `.voip` v proxy hotové je,
-chybí tedy jen ta identita a schéma. Na straně Applu k tomu bude potřeba
-VoIP entitlement, který v tabulce výš není.
+The mapping of `type: "voip"` onto a topic with the `.voip` suffix is already
+done in the proxy, so only that identity and schema are missing. On the Apple
+side this will additionally require the VoIP entitlement, which is not in the
+table above.
 
-Nejsme vázaní upstream tvarem — proxy i klient jsou naše, takže dvojice
-tokenů může jít dvěma poli místo jednoho řetězce s mezerou. Rozhodne se to,
-až se budou stavět hovory; do té doby je tohle jen zapsaný nález, ne plán.
+We are not bound by the upstream shape — both the proxy and the client are ours,
+so the pair of tokens can go in two fields instead of one string with a space.
+That will be decided when calls are being built; until then this is only a
+recorded finding, not a plan.
