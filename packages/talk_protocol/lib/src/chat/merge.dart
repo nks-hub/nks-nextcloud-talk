@@ -541,6 +541,7 @@ ChatForegroundPollCompletionPlan completeChatForegroundPollHttp(
       session,
       nowMilliseconds: nowMilliseconds,
       jitterPermille: jitterPermille,
+      retryAfterSeconds: response.retryAfterSeconds,
     ),
     ChatGetClassification.threadNotFound || ChatGetClassification.ocsError =>
       _terminalPollCompletion(snapshot, session),
@@ -644,20 +645,40 @@ ChatForegroundPollCompletionPlan _reauthenticationPollCompletion(
   );
 }
 
+/// Longest pause a foreground poll will take on a server's say-so.
+///
+/// `Retry-After` is already clamped to a day when it is parsed, which is fine
+/// for the outbox but not for an open chat: a room that stops polling for
+/// hours looks broken. Beyond this the app waits the cap and tries again.
+const int chatForegroundPollRetryAfterCapMilliseconds = 300000;
+
 ChatForegroundPollCompletionPlan _retryPollCompletion(
   ChatRuntimeSnapshot snapshot,
   ChatForegroundPollSession session, {
   required int nowMilliseconds,
   required int jitterPermille,
+  int? retryAfterSeconds,
 }) {
   if (nowMilliseconds < 0) {
     _pollFailure(r'$.foregroundPoll.now');
   }
+  if (retryAfterSeconds != null && retryAfterSeconds < 0) {
+    _pollFailure(r'$.foregroundPoll.retryAfter');
+  }
   final failures = session.consecutiveFailures + 1;
-  final delay = chatForegroundPollBackoffMilliseconds(
+  final backoff = chatForegroundPollBackoffMilliseconds(
     failures,
     jitterPermille: jitterPermille,
   );
+  // Politer than asked is always allowed, sooner than asked is not: a server
+  // that wants a longer pause gets it, one that wants a shorter one does not
+  // undo the backoff earned by repeated failures.
+  final requested = retryAfterSeconds == null
+      ? 0
+      : retryAfterSeconds * 1000 > chatForegroundPollRetryAfterCapMilliseconds
+      ? chatForegroundPollRetryAfterCapMilliseconds
+      : retryAfterSeconds * 1000;
+  final delay = requested > backoff ? requested : backoff;
   return ChatForegroundPollCompletionPlan._(
     sourceSnapshot: snapshot,
     sourceSession: session,

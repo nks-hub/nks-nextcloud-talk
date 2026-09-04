@@ -70,7 +70,7 @@
   "syncCredentialMissing": "This account must be signed in again.",
   "syncTalkUnavailable": "Talk is no longer available on this server.",
   "syncUnsupported": "This server does not expose a supported conversation API.",
-  "syncRateLimited": "The server asked the app to wait before syncing again.",
+  "syncRateLimited": "The server asked the app to wait a moment. Syncing resumes on its own.",
   "syncUnavailable": "Conversation sync is temporarily unavailable.",
   "syncUpgradeRequired": "The server must be upgraded before conversations can sync.",
   "syncInvalidResponse": "Saved conversations are kept, but the latest server response was rejected.",

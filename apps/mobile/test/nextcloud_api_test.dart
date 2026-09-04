@@ -255,6 +255,159 @@ void main() {
     },
   );
 
+  test('a rate-limited capability read is not retried by every caller', () async {
+    // 4. 9. 2026 the reference server put the whole office IP behind a
+    // brute-force block. Because no failure was cached, each capability call
+    // site fetched again and the app went from ~50 requests an hour to ~900,
+    // holding the block open. A 429 now parks every caller for one window.
+    var requests = 0;
+    var status = 429;
+    var now = DateTime.utc(2026, 9, 4, 1);
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        return status == 429
+            ? http.Response('Too many requests', 429)
+            : http.Response(jsonEncode(capabilitiesJson()), 200);
+      }),
+      capabilityCacheTtl: const Duration(minutes: 5),
+      clock: () => now,
+    );
+    addTearDown(api.close);
+
+    Future<void> read({bool cancellable = false}) => api
+        .getAuthenticatedCapabilities(
+          server: server,
+          loginName: 'fixture-user',
+          appPassword: 'fixture-password',
+          abortTrigger: cancellable ? Completer<void>().future : null,
+        )
+        .then<void>((_) {});
+
+    Matcher rateLimited() => throwsA(
+      isA<NextcloudApiException>().having(
+        (error) => error.statusCode,
+        'statusCode',
+        429,
+      ),
+    );
+
+    await expectLater(read(), rateLimited());
+    expect(requests, 1);
+
+    for (var caller = 0; caller < 8; caller++) {
+      await expectLater(read(cancellable: caller.isEven), rateLimited());
+    }
+    expect(requests, 1, reason: 'the block is served from the snapshot cache');
+
+    now = now.add(const Duration(seconds: 61));
+    status = 200;
+    await read();
+    expect(requests, 2, reason: 'the pause expires and the app comes back');
+    await read();
+    expect(requests, 2, reason: 'the fresh snapshot caches normally again');
+  });
+
+  test('a capability 429 holds back every other path on that server', () async {
+    // Capabilities have no per-endpoint rate limit, so a 429 there means the
+    // whole origin is refusing. Measured 4. 9. 2026: rediscovering that once
+    // per endpoint cost 193 more requests a day on the room list alone.
+    var capabilityRequests = 0;
+    var roomRequests = 0;
+    var now = DateTime.utc(2026, 9, 4, 1);
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/cloud/capabilities')) {
+          capabilityRequests++;
+          return http.Response('Too many requests', 429);
+        }
+        roomRequests++;
+        return http.Response.bytes(
+          const [0x89, 0x50, 0x4e, 0x47],
+          200,
+          headers: const {
+            'content-type': 'image/png',
+            'cache-control': 'private, max-age=300',
+            'etag': '"fixture-avatar"',
+            'x-nc-iscustomavatar': '0',
+          },
+        );
+      }),
+      clock: () => now,
+    );
+    addTearDown(api.close);
+
+    await expectLater(
+      api.getAuthenticatedCapabilities(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      ),
+      throwsA(isA<NextcloudApiException>()),
+    );
+    expect(capabilityRequests, 1);
+
+    await expectLater(
+      api.getAvatar(
+        server: server,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+        avatarUri: server.uri.resolve('index.php/avatar/fixture-user/64'),
+      ),
+      throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          429,
+        ),
+      ),
+    );
+    expect(roomRequests, 0, reason: 'the breaker answers without a request');
+
+    now = now.add(const Duration(seconds: 61));
+    await api.getAvatar(
+      server: server,
+      loginName: 'fixture-user',
+      appPassword: 'fixture-password',
+      avatarUri: server.uri.resolve('index.php/avatar/fixture-user/64'),
+    );
+    expect(roomRequests, 1, reason: 'the pause expires and traffic resumes');
+  });
+
+  test('honours a Retry-After longer than the fallback pause', () async {
+    var requests = 0;
+    var now = DateTime.utc(2026, 9, 4, 1);
+    final api = HttpNextcloudApi(
+      client: MockClient((_) async {
+        requests++;
+        return http.Response(
+          'Too many requests',
+          429,
+          headers: const {'retry-after': '300'},
+        );
+      }),
+      clock: () => now,
+    );
+    addTearDown(api.close);
+
+    Future<void> read() => api
+        .getAuthenticatedCapabilities(
+          server: server,
+          loginName: 'fixture-user',
+          appPassword: 'fixture-password',
+        )
+        .then<void>((_) {});
+
+    await expectLater(read(), throwsA(isA<NextcloudApiException>()));
+    now = now.add(const Duration(seconds: 120));
+    await expectLater(read(), throwsA(isA<NextcloudApiException>()));
+    expect(requests, 1, reason: 'the server asked for five minutes');
+
+    now = now.add(const Duration(seconds: 181));
+    await expectLater(read(), throwsA(isA<NextcloudApiException>()));
+    expect(requests, 2);
+  });
+
   test('a cancellable read replaces an expired snapshot', () async {
     // The conversation sync reads with an abort trigger every 15 s. Once the
     // shared snapshot expired, its private read used to leave the expired

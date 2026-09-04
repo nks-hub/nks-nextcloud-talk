@@ -503,7 +503,7 @@ abstract class AppLocalizations {
   /// No description provided for @syncRateLimited.
   ///
   /// In en, this message translates to:
-  /// **'The server asked the app to wait before syncing again.'**
+  /// **'The server asked the app to wait a moment. Syncing resumes on its own.'**
   String get syncRateLimited;
 
   /// No description provided for @syncUnavailable.

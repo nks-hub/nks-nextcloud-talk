@@ -1,5 +1,18 @@
 part of 'nextcloud_api.dart';
 
+/// How long every capability caller stays away after a `429` that carried no
+/// `Retry-After` — which is every brute-force block Nextcloud issues. Long
+/// enough to stop a retry storm, short enough that the app comes back on its
+/// own once the block lifts.
+const _capabilityRateLimitBackoff = Duration(seconds: 60);
+
+Duration? _rateLimitBackoff(Object error) {
+  if (error is! NextcloudApiException || error.statusCode != 429) {
+    return null;
+  }
+  return error.retryAfter ?? _capabilityRateLimitBackoff;
+}
+
 mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
   Future<UpcomingTalkEvent?> getUpcomingConversationEvent({
     required ServerBase server,
@@ -195,11 +208,37 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     final CapabilitySnapshot snapshot;
     try {
       snapshot = await pending;
-    } on Object {
+    } on Object catch (error) {
       // No failure — network, 401, malformed payload — is ever cached, so the
-      // next read after an error always reaches the server again.
-      if (identical(_capabilityCache[cacheKey], entry)) {
-        _capabilityCache.remove(cacheKey);
+      // next read after an error always reaches the server again. The one
+      // exception is a 429: that is the server telling every caller to stop,
+      // and dropping it here made each of the ~30 capability call sites retry
+      // on its own. Measured against the reference server on 4. 9. 2026, that
+      // turned roughly 50 capability requests an hour into 900 — the app kept
+      // the block it was suffering from wide open, and downloaded 44 MB of
+      // error pages doing it.
+      final backoff = _rateLimitBackoff(error);
+      if (backoff == null) {
+        if (identical(_capabilityCache[cacheKey], entry)) {
+          _capabilityCache.remove(cacheKey);
+        }
+        rethrow;
+      }
+      final blocked = _CachedCapabilities(
+        server: server,
+        credentialFingerprint: fingerprint,
+        snapshot: pending,
+        expiresAt: now.add(backoff),
+        rateLimited: true,
+      );
+      // Same rule the success path follows: a cancellable read may publish its
+      // outcome, never overwrite a snapshot another caller could still read.
+      final existing = _capabilityCache[cacheKey];
+      if (identical(existing, entry) ||
+          existing == null ||
+          existing.credentialFingerprint != fingerprint ||
+          !now.isBefore(existing.expiresAt)) {
+        _capabilityCache[cacheKey] = blocked;
       }
       rethrow;
     }

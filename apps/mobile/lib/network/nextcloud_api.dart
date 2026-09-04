@@ -294,10 +294,17 @@ final class AvatarResponse {
 }
 
 final class NextcloudApiException implements Exception {
-  const NextcloudApiException(this.code, {this.statusCode});
+  const NextcloudApiException(this.code, {this.statusCode, this.retryAfter});
 
   final NextcloudApiError code;
   final int? statusCode;
+
+  /// How long the server asked the caller to wait, when it said so.
+  ///
+  /// Nextcloud's brute-force block answers `429` with no `Retry-After` at all,
+  /// so this stays null on the case that matters most and callers need a
+  /// fallback pause of their own.
+  final Duration? retryAfter;
 
   @override
   String toString() =>

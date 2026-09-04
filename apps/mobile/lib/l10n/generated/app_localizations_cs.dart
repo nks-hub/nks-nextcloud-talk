@@ -244,7 +244,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get syncRateLimited =>
-      'Server požádal aplikaci, aby před další synchronizací počkala.';
+      'Server požádal aplikaci, aby chvíli počkala. Synchronizace se obnoví sama.';
 
   @override
   String get syncUnavailable =>

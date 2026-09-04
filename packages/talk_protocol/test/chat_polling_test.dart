@@ -292,6 +292,64 @@ void main() {
       expect(committed.snapshot, same(snapshot));
     });
 
+    test('a 429 Retry-After lengthens the poll pause but stays capped', () {
+      // Nextcloud sends no Retry-After on any 429 (verified 4. 9. 2026 against
+      // the reference server: the only Retry-After in its whole tree is the
+      // maintenance 503). A proxy in front of one does, and honouring it used
+      // to be missing here while the outbox already did it.
+      int nextAttempt(String? retryAfter) {
+        final snapshot = _snapshot();
+        var session = startChatForegroundPoll(
+          snapshot,
+          accountId: _accountA,
+          server: _serverA,
+          roomToken: _room,
+          threadId: null,
+          profile: _profile(),
+        );
+        final requestPlan = planNextChatForegroundPoll(
+          snapshot,
+          session,
+          requestId: ChatRequestId.parse('poll-429'),
+          nowMilliseconds: 2000,
+        )!;
+        session = requestPlan.commit(session);
+        final plan = completeChatForegroundPollHttp(
+          snapshot,
+          session,
+          response: decodeChatGetResponse(
+            request: requestPlan.request,
+            statusCode: 429,
+            body: _ocsBody(const <Object?>[]),
+            headers: retryAfter == null
+                ? null
+                : ChatResponseHeaders.fromMap({'Retry-After': retryAfter}),
+          ),
+          nowMilliseconds: 2000,
+          jitterPermille: 1000,
+        );
+        expect(plan.outcome, ChatForegroundPollOutcome.retryScheduled);
+        return plan
+            .commit(snapshot, session)
+            .session
+            .nextAttemptAtMilliseconds!;
+      }
+
+      // No header: the first failure keeps the 1 s base backoff plus jitter.
+      expect(nextAttempt(null), 3200);
+      // Shorter than the earned backoff never shortens it.
+      expect(nextAttempt('0'), 3200);
+      expect(nextAttempt('1'), 3200);
+      // Longer is honoured.
+      expect(nextAttempt('45'), 2000 + 45000);
+      // A day is not a foreground pause: capped at five minutes.
+      expect(
+        nextAttempt('86400'),
+        2000 + chatForegroundPollRetryAfterCapMilliseconds,
+      );
+      expect(nextAttempt('999999999'), 2000 + 300000);
+    });
+
     test('HTTP 412 lobby waits with the retry backoff and changes nothing', () {
       // Measured live 2026-09-03: a lobby answered every poll with 412 and the
       // pane showed "latest chat response was rejected" next to the lobby

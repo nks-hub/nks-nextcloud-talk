@@ -244,7 +244,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get syncRateLimited =>
-      'The server asked the app to wait before syncing again.';
+      'The server asked the app to wait a moment. Syncing resumes on its own.';
 
   @override
   String get syncUnavailable => 'Conversation sync is temporarily unavailable.';

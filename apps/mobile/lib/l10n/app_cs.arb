@@ -70,7 +70,7 @@
   "syncCredentialMissing": "Tento účet se musí znovu přihlásit.",
   "syncTalkUnavailable": "Talk už na tomto serveru není dostupný.",
   "syncUnsupported": "Server neposkytuje podporované rozhraní konverzací.",
-  "syncRateLimited": "Server požádal aplikaci, aby před další synchronizací počkala.",
+  "syncRateLimited": "Server požádal aplikaci, aby chvíli počkala. Synchronizace se obnoví sama.",
   "syncUnavailable": "Synchronizace konverzací je dočasně nedostupná.",
   "syncUpgradeRequired": "Před synchronizací konverzací je nutné aktualizovat server.",
   "syncInvalidResponse": "Uložené konverzace zůstaly zachované, ale nová odpověď serveru byla odmítnuta.",

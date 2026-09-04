@@ -48,6 +48,7 @@ final class ChatGetResponse {
     required this.messages,
     required this.cursor,
     required this.lastCommonRead,
+    this.retryAfterSeconds,
   });
 
   final ChatFetchRequest request;
@@ -55,6 +56,12 @@ final class ChatGetResponse {
   final List<ChatMessage> messages;
   final ChatCursor? cursor;
   final ChatCursor? lastCommonRead;
+
+  /// `Retry-After` from a `429`/`503`, when the server sent one. Nextcloud
+  /// itself never does — neither its brute-force block nor its OCS rate limit
+  /// emits the header — so this is null against a bare Nextcloud and carries a
+  /// value only when a proxy or WAF in front of it answered.
+  final int? retryAfterSeconds;
 
   @override
   String toString() =>
@@ -213,6 +220,7 @@ ChatGetResponse decodeChatGetResponse({
       messages: const [],
       cursor: null,
       lastCommonRead: null,
+      retryAfterSeconds: responseHeaders.retryAfterSeconds,
     );
   }
   if (!envelope.isSuccess(200)) {

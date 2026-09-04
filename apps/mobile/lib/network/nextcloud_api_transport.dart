@@ -150,6 +150,21 @@ abstract class _HttpNextcloudApiBase {
   /// the snapshot is dropped before the caller can gate a feature on it. Basic
   /// auth can be byte-identical on multiple servers, so the fingerprint alone
   /// is never an invalidation scope.
+  /// The origin refused everything the last time capabilities were read, and
+  /// the pause has not run out. Every request is held back, not just the path
+  /// that happened to discover it: a blocked IP blocks the whole server, and
+  /// rediscovering that once per endpoint is what made this expensive.
+  bool _serverRateLimited(Uri requestUri) {
+    final now = _clock();
+    return _capabilityCache.values.any(
+      (entry) =>
+          entry.rateLimited &&
+          now.isBefore(entry.expiresAt) &&
+          entry.server.hasSameOrigin(requestUri) &&
+          _requestIsWithinServer(entry.server, requestUri),
+    );
+  }
+
   void _invalidateCapabilitiesForRequest(
     String? authorization,
     Uri requestUri,
@@ -305,6 +320,12 @@ abstract class _HttpNextcloudApiBase {
                 _roomSessionBlocked(sessionAccountId)))) {
       throw const NextcloudApiException(NextcloudApiError.cancelled);
     }
+    if (_serverRateLimited(request.url)) {
+      throw const NextcloudApiException(
+        NextcloudApiError.unexpectedStatus,
+        statusCode: 429,
+      );
+    }
     if (sessionAccountId != null && sessionServer != null) {
       _accountCookies.apply(request, sessionAccountId, sessionServer);
     }
@@ -361,6 +382,7 @@ abstract class _HttpNextcloudApiBase {
         throw NextcloudApiException(
           NextcloudApiError.unexpectedStatus,
           statusCode: response.statusCode,
+          retryAfter: _retryAfterDelay(response.headers['retry-after']),
         );
       }
       final shouldRead =
@@ -452,6 +474,18 @@ abstract class _HttpNextcloudApiBase {
   }
 }
 
+/// `Retry-After` in its delta-seconds form, clamped to a wait a foreground app
+/// can plausibly sit out. The HTTP-date form is not read: no Nextcloud route
+/// sends it, and a pause the app invents is better than one derived from a
+/// clock the device may not share.
+Duration? _retryAfterDelay(String? value) {
+  final seconds = int.tryParse(value?.trim() ?? '');
+  if (seconds == null || seconds <= 0) {
+    return null;
+  }
+  return Duration(seconds: seconds > 600 ? 600 : seconds);
+}
+
 bool? _optionalBooleanHeader(String? value) {
   return switch (value?.trim()) {
     '0' => false,
@@ -500,12 +534,19 @@ final class _CachedCapabilities {
     required this.credentialFingerprint,
     required this.snapshot,
     required this.expiresAt,
+    this.rateLimited = false,
   });
 
   final ServerBase server;
   final String credentialFingerprint;
   final Future<CapabilitySnapshot> snapshot;
   final DateTime expiresAt;
+
+  /// This entry is a `429`, not a snapshot. Capabilities carry no per-endpoint
+  /// rate limit of their own, so a `429` there can only mean the whole origin
+  /// is being refused — which makes it the one honest signal for holding every
+  /// other request back too.
+  final bool rateLimited;
 }
 
 bool _requestIsWithinServer(ServerBase server, Uri requestUri) {
