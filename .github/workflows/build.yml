@@ -137,6 +137,17 @@ jobs:
           EOF
       # `assembleRelease` is finalized by the license gate, which runs
       # `python3 tool/release_license_gate.py` over the assembled APK.
+      # Two full release builds plus the Gradle caches do not fit next to the
+      # preinstalled toolchains: the runner ran out of disk mid-`appbundle` and
+      # the job came back as cancelled rather than failed, which reads like an
+      # infrastructure hiccup instead of what it is. The Android SDK stays.
+      - name: Make room on the runner
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h / | tail -1
       - name: Build the release APK and AAB
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
