@@ -3,6 +3,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- WebRTC call audio. RECORD_AUDIO above already covers the microphone
+         for voice messages; a call additionally needs the audio mode and
+         routing changes libwebrtc makes, and org.webrtc.NetworkMonitor reads
+         the connectivity state on its native thread - without
+         ACCESS_NETWORK_STATE that thread aborts the process with SIGABRT. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Live preview for reading a Nextcloud login QR code during onboarding.
          Nothing else in the app opens the camera: a photo attachment is taken

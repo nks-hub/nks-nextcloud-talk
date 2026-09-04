@@ -70,6 +70,7 @@ androidx.window:window-java:1.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b
 androidx.window:window:1.2.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 com.abovevacant:epitaph:0.1.1	MIT	epitaph-mit.txt	ad69f0715c80c5550eefba7c177c99d014ca929a734df8764333b4ba2f6365f1
 com.getkeepsafe.relinker:relinker:1.4.5	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
+com.github.davidliu:audioswitch:039a35aefab7747c557242fa216c9ea11743b604	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 com.google.android.datatransport:transport-api:3.1.0	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 com.google.android.datatransport:transport-backend-cct:3.1.9	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
 com.google.android.datatransport:transport-runtime:3.1.9	Apache-2.0	apache-2.0.txt	65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa
@@ -107,6 +108,7 @@ io.flutter:arm64_v8a_release:1.0.0-a10d8ac38de835021c8d2f920dbf50a920ccc030	BSD-
 io.flutter:armeabi_v7a_release:1.0.0-a10d8ac38de835021c8d2f920dbf50a920ccc030	BSD-3-Clause	flutter-bsd-3-clause.txt	a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20
 io.flutter:flutter_embedding_release:1.0.0-a10d8ac38de835021c8d2f920dbf50a920ccc030	BSD-3-Clause	flutter-bsd-3-clause.txt	a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20
 io.flutter:x86_64_release:1.0.0-a10d8ac38de835021c8d2f920dbf50a920ccc030	BSD-3-Clause	flutter-bsd-3-clause.txt	a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20
+io.github.webrtc-sdk:android:150.7871.01	BSD-3-Clause AND MIT	webrtc-sdk-android-bsd-3-clause-and-mit.txt	a76b141e6bab5f2ac9872a8ad68b1239a1cc23934a4cbd7a9da117c81234fb66
 io.sentry:sentry-android-core:8.53.0	MIT	sentry-java-mit.txt	c90147c075a17f4aecfea27a56510ddf7c76508c8488df533623402008b9d052
 io.sentry:sentry-android-ndk:8.53.0	MIT	sentry-java-mit.txt	c90147c075a17f4aecfea27a56510ddf7c76508c8488df533623402008b9d052
 io.sentry:sentry-android-replay:8.53.0	MIT	sentry-java-mit.txt	c90147c075a17f4aecfea27a56510ddf7c76508c8488df533623402008b9d052

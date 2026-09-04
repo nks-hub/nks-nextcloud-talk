@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   file_selector_windows
   flutter_secure_storage_windows
+  flutter_webrtc
   gal
   geolocator_windows
   local_auth_windows
