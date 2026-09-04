@@ -7,14 +7,16 @@
 # Ubuntu-only run never executes them.
 #
 # Costs, because this repository is private and these minutes are billed:
-# Linux counts 1x, Windows 2x. One full run is roughly 30 + 12 + 15 minutes of
-# Ubuntu and 45 minutes of Windows, so about 145 billed minutes.
+# Linux counts 1x, Windows 2x. A push runs tests + android + linux, roughly 57
+# billed minutes. The Windows job is gated to manual runs and `v*` tags: on its
+# own it is 90 billed minutes, more than the other three together.
 name: build
 
 on:
   workflow_dispatch:
   push:
     branches: [main, ci/codemagic-matrix]
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -188,16 +190,18 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      # Three packages beyond Flutter's official Linux list, each for one
-      # dependency: gstreamer for audioplayers_linux and libcurl for
-      # sentry-native.
+      # Four packages beyond Flutter's official Linux list, each for one
+      # dependency: gstreamer for audioplayers_linux, libcurl for
+      # sentry-native, and libsecret for flutter_secure_storage_linux, whose
+      # CMakeLists does `pkg_check_modules(libsecret-1>=0.18.4)` and stops the
+      # build dead without it.
       - name: Install the Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libcurl4-openssl-dev
+            libcurl4-openssl-dev libsecret-1-dev libjsoncpp-dev
       - name: Build the Linux bundle
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -226,6 +230,10 @@ jobs:
 
   windows:
     name: windows
+    # Not on every push: Windows minutes bill at 2x and this job is 90 of the
+    # ~145 billed minutes a full run costs, for a target that builds locally in
+    # four minutes. It runs when someone asks for it, and on a release tag,
+    # which is when the installer is actually wanted.
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
@@ -275,11 +283,23 @@ jobs:
           dart pub get
           dart analyze lib test
           dart test --reporter expanded
-      - name: Test apps/mobile
+      # Gradle, warmed before the suite instead of inside it. The one test that
+      # shells out to the wrapper timed out after ten minutes here while
+      # finishing comfortably on Ubuntu: a cold Gradle on Windows spends that
+      # long fetching the wrapper, AGP and Kotlin onto NTFS with Defender
+      # watching every write. As its own step the wait is visible, and the test
+      # then hits a warm cache.
+      - name: Warm the Gradle cache
         working-directory: apps/mobile
         shell: bash
         run: |
           flutter pub get
+          cd android
+          ./gradlew :app:processDebugMainManifest --quiet
+      - name: Test apps/mobile
+        working-directory: apps/mobile
+        shell: bash
+        run: |
           flutter analyze lib test
           flutter test --reporter expanded
       - name: Build the Windows bundle
