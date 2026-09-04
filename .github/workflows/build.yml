@@ -1,0 +1,312 @@
+# Android, Linux and the Windows installer. The Apple half is on Codemagic
+# (`codemagic.yaml`) because that plan has Macs and this one does not have to.
+#
+# The suites run once on Ubuntu and gate both Linux builds. Windows runs them
+# again on purpose: two tests in `windows_notification_integration_test` drive
+# the native Windows notification channel and skip everywhere else, so an
+# Ubuntu-only run never executes them.
+#
+# Costs, because this repository is private and these minutes are billed:
+# Linux counts 1x, Windows 2x. One full run is roughly 30 + 12 + 15 minutes of
+# Ubuntu and 45 minutes of Windows, so about 145 billed minutes.
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, ci/codemagic-matrix]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned, not `stable`: a newer analyzer than the one this tree is developed
+  # against rejects three call sites in attachment_repository_test.dart.
+  FLUTTER_VERSION: 3.44.4
+
+jobs:
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # The Google Services plugin refuses to configure without this file and
+      # the real one is not in the repository, so the manifest-merge test would
+      # die on a Gradle configuration error rather than on what it tests. The
+      # placeholder carries no credential.
+      - name: Write a placeholder Firebase config
+        run: |
+          cat > apps/mobile/android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.nkshub.nextcloudtalk"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "ci-placeholder-key" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+      - name: Test talk_protocol
+        working-directory: packages/talk_protocol
+        run: |
+          dart pub get
+          dart analyze lib test
+          dart test --reporter expanded
+      # `flutter pub get` writes the gitignored android/local.properties that
+      # settings.gradle.kts requires, and `flutter test` includes a test that
+      # shells out to the Gradle wrapper - hence the JDK above.
+      - name: Test apps/mobile
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter analyze lib test
+          flutter test --reporter expanded
+
+  android:
+    name: android
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # The real config, not the placeholder: a release APK whose FCM project
+      # is `ci-placeholder` takes no push at all, and it looks exactly like a
+      # working build until someone waits for a notification.
+      - name: Restore the Firebase config
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          test -n "$GOOGLE_SERVICES_JSON_BASE64"
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d \
+            > apps/mobile/android/app/google-services.json
+      # Gradle refuses to fall back to the debug key on purpose: Play rejects a
+      # release signed with it, and a silent substitution surfaces at upload.
+      - name: Restore the upload keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        working-directory: apps/mobile/android
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > upload-keystore.jks
+          cat > key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+      # `assembleRelease` is finalized by the license gate, which runs
+      # `python3 tool/release_license_gate.py` over the assembled APK.
+      - name: Build the release APK and AAB
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          RYBBIT_HOST: ${{ secrets.RYBBIT_HOST }}
+          RYBBIT_SITE_ID: ${{ secrets.RYBBIT_SITE_ID }}
+          TELEMETRY_ENVIRONMENT: ${{ secrets.TELEMETRY_ENVIRONMENT }}
+        working-directory: apps/mobile
+        run: |
+          test -n "$SENTRY_DSN" && test -n "$RYBBIT_HOST"
+          for target in apk appbundle; do
+            flutter build $target --release \
+              --dart-define=SENTRY_DSN=$SENTRY_DSN \
+              --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+              --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+              --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          done
+      # Gradle can only refuse to fall back to the debug key; it cannot tell
+      # whether the file it was handed is the upload key. So it is read back.
+      - name: Check the APK carries the upload signature
+        run: |
+          APK=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | sort | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
+          if grep -qi "CN=Android Debug" certs.txt; then
+            echo "Signed with the debug key - Play would reject this."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+            apps/mobile/build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  linux:
+    name: linux
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # A JDK because the `jni` plugin's find_package(JNI) runs on Linux too
+      # and CMake stops without it.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # Three packages beyond Flutter's official Linux list, each for one
+      # dependency: gstreamer for audioplayers_linux and libcurl for
+      # sentry-native.
+      - name: Install the Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libcurl4-openssl-dev
+      - name: Build the Linux bundle
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          RYBBIT_HOST: ${{ secrets.RYBBIT_HOST }}
+          RYBBIT_SITE_ID: ${{ secrets.RYBBIT_SITE_ID }}
+          TELEMETRY_ENVIRONMENT: ${{ secrets.TELEMETRY_ENVIRONMENT }}
+        working-directory: apps/mobile
+        run: |
+          test -n "$SENTRY_DSN" && test -n "$RYBBIT_HOST"
+          flutter pub get
+          flutter build linux --release \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+      # Tarred rather than handed over as a directory, because the artifact
+      # upload drops the executable bit and the result would not run.
+      - name: Package the bundle
+        working-directory: apps/mobile/build/linux/x64/release
+        run: tar -czf nks-talk-linux-x64.tar.gz bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: apps/mobile/build/linux/x64/release/nks-talk-linux-x64.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Write a placeholder Firebase config
+        shell: bash
+        run: |
+          cat > apps/mobile/android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.nkshub.nextcloudtalk"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "ci-placeholder-key" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+      # Repeated here rather than reused from the `test` job: the two
+      # windows_notification_integration_test cases drive the native Windows
+      # channel and skip on every other platform.
+      - name: Test talk_protocol
+        working-directory: packages/talk_protocol
+        shell: bash
+        run: |
+          dart pub get
+          dart analyze lib test
+          dart test --reporter expanded
+      - name: Test apps/mobile
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          flutter pub get
+          flutter analyze lib test
+          flutter test --reporter expanded
+      - name: Build the Windows bundle
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          RYBBIT_HOST: ${{ secrets.RYBBIT_HOST }}
+          RYBBIT_SITE_ID: ${{ secrets.RYBBIT_SITE_ID }}
+          TELEMETRY_ENVIRONMENT: ${{ secrets.TELEMETRY_ENVIRONMENT }}
+        working-directory: apps/mobile
+        run: |
+          if (-not $env:SENTRY_DSN -or -not $env:RYBBIT_HOST) { exit 1 }
+          flutter build windows --release --dart-define=SENTRY_DSN=$env:SENTRY_DSN --dart-define=RYBBIT_HOST=$env:RYBBIT_HOST --dart-define=RYBBIT_SITE_ID=$env:RYBBIT_SITE_ID --dart-define=TELEMETRY_ENVIRONMENT=$env:TELEMETRY_ENVIRONMENT
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # build_installer.ps1 finds ISCC.exe in the default install location on
+      # its own, so nothing needs a path here.
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # The script hashes every file in the bundle into a manifest, refuses an
+      # incomplete or symlinked bundle, and prints the installer's SHA-256.
+      - name: Build the installer
+        run: |
+          & ./apps/mobile/windows/installer/build_installer.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: apps/mobile/build/windows/installer/*.exe
+          if-no-files-found: error
