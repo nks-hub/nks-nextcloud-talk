@@ -243,9 +243,15 @@ workflows:
       # the steps below expect it.
       - name: Build the app
         script: |
-          set -e
+          set -o pipefail
           cd apps/mobile
-          xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner             -configuration Release -derivedDataPath build/macos build
+          # Tee'd into an artifact because Codemagic does not expose step logs
+          # over its REST API - `logUrl` is null and `/builds/{id}/log` is a
+          # 404 - so a failed build is otherwise a bare exit code.
+          xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner             -configuration Release -derivedDataPath build/macos build             2>&1 | tee /tmp/macos-build.log
+          status=$?
+          tail -80 /tmp/macos-build.log
+          exit $status
       # A signature that came out ad-hoc anyway must not reach a tester, so it
       # is checked rather than trusted.
       - name: Verify the signature carries the sandbox
@@ -278,3 +284,4 @@ workflows:
             nks-talk-macos.zip --clobber --repo nks-hub/nks-nextcloud-talk
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
+      - /tmp/macos-build.log
