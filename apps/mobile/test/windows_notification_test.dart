@@ -68,7 +68,7 @@ void main() {
         );
   }
 
-  WindowsNotificationService build() {
+  Future<WindowsNotificationService> build() async {
     final service = WindowsNotificationService(
       accounts: accounts,
       // Named explicitly: the default resolves to the shared apple_push
@@ -77,7 +77,10 @@ void main() {
       channel: WindowsNotificationChannel(channel: channel),
     );
     addTearDown(() async => service.dispose());
-    service.follow('account-a');
+    // Awaited: until the first emission is recorded the service cannot tell a
+    // rise from a startup count, so asserting anything before that only says
+    // the query has not come back yet.
+    await service.follow('account-a');
     return service;
   }
 
@@ -99,10 +102,19 @@ void main() {
     }
   }
 
+  // Waits for the notification itself rather than for a stretch of quiet: an
+  // empty `shown` looks identical whether nothing was announced or the query
+  // has not landed yet, and `settle` returns happily on the second reading.
+  Future<void> waitForNotifications(int count) async {
+    for (var round = 0; round < 400 && shown.length < count; round++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(shown, hasLength(count));
+  }
+
   test('the first read is silent, a later rise is not', () async {
     await store(token: 'roomtoken1', unread: 3);
-    build();
-    await settle();
+    await build();
 
     // Announcing what was already unread at startup would be a burst of
     // notifications for messages the user has had all along.
@@ -114,7 +126,7 @@ void main() {
       lastMessage: 'a new one',
       lastMessageId: 4711,
     );
-    await settle();
+    await waitForNotifications(1);
 
     expect(shown, hasLength(1));
     expect(shown.single['body'], 'a new one');
@@ -127,8 +139,7 @@ void main() {
 
   test('an unchanged or falling count says nothing', () async {
     await store(token: 'roomtoken1', unread: 2);
-    build();
-    await settle();
+    await build();
 
     await store(token: 'roomtoken1', unread: 2);
     await settle();
@@ -140,8 +151,7 @@ void main() {
 
   test('a rise without any text to show is skipped', () async {
     await store(token: 'roomtoken1', unread: 1);
-    build();
-    await settle();
+    await build();
 
     await store(token: 'roomtoken1', unread: 2, lastMessage: null);
     await settle();

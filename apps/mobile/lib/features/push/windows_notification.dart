@@ -173,16 +173,33 @@ final class WindowsNotificationService {
   ///
   /// The first emission only records the current counts. Announcing them would
   /// mean a burst of notifications for everything unread at startup.
-  void follow(String accountId) {
+  ///
+  /// The future completes once that first emission has been recorded - the
+  /// point from which a rise counts as new. Drift delivers on wall-clock time,
+  /// so this is the only way a caller can tell a silent start from one that
+  /// has not read anything yet.
+  Future<void> follow(String accountId) {
     if (_watched.containsKey(accountId)) {
-      return;
+      return Future<void>.value();
     }
+    final baseline = Completer<void>();
+    void recordBaseline() {
+      if (!baseline.isCompleted) {
+        baseline.complete();
+      }
+    }
+
     _watched[accountId] = _accounts
         .watchConversations(accountId)
         .listen(
-          (conversations) => _apply(accountId, conversations),
-          onError: (Object _, StackTrace _) {},
+          (conversations) {
+            _apply(accountId, conversations);
+            recordBaseline();
+          },
+          onError: (Object _, StackTrace _) => recordBaseline(),
+          onDone: recordBaseline,
         );
+    return baseline.future;
   }
 
   Future<void> unfollow(String accountId) async {
