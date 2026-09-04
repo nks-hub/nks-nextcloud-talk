@@ -83,6 +83,9 @@ final class SecureCredentialVault
 
   static const _pendingRevocationsKey = 'nks.pending_revocations';
   static const _pendingRevocationsMarker = 'pending-revocations';
+  static const _pendingRevocationsReconciled = 'pending-revocations-reconciled';
+
+  var _reconciled = false;
 
   /// Says whether the queue holds anything, outside the platform keystore.
   ///
@@ -117,6 +120,30 @@ final class SecureCredentialVault
     // would hide a revocation the server is still waiting for.
     await marker.create(recursive: true);
     await _write(_pendingRevocationsKey, json);
+  }
+
+  /// Gives the marker to an installation that queued a revocation before the
+  /// marker existed, which would otherwise never be drained again and would
+  /// leave an app password alive on its server.
+  ///
+  /// Runs off the back of a keystore read that has already returned, so the
+  /// keyring is provably open and this cannot be the call that blocks. Once
+  /// per installation: the second file records that it happened.
+  Future<void> _reconcilePendingMarker() async {
+    if (_reconciled) {
+      return;
+    }
+    _reconciled = true;
+    final done = File(
+      '${(await _supportDirectory()).path}/$_pendingRevocationsReconciled',
+    );
+    if (await done.exists()) {
+      return;
+    }
+    if (await _read(_pendingRevocationsKey) != null) {
+      await (await _pendingRevocationsMarkerFile()).create(recursive: true);
+    }
+    await done.create(recursive: true);
   }
 
   Future<void> _ensureCurrent(String accountId) async {
@@ -182,8 +209,8 @@ final class SecureCredentialVault
     );
   }
 
-  Future<String?> _read(String key) {
-    return _translateTemporaryAppleFailure(
+  Future<String?> _read(String key) async {
+    final value = await _translateTemporaryAppleFailure(
       () => _storage.read(
         key: key,
         aOptions: _androidOptions,
@@ -191,6 +218,13 @@ final class SecureCredentialVault
         mOptions: _macOsOptions,
       ),
     );
+    try {
+      await _reconcilePendingMarker();
+    } on Object {
+      // A bookkeeping chore must never fail the credential read it rode in on;
+      // the next launch retries it, because nothing was written down.
+    }
+    return value;
   }
 
   Future<void> _delete(String key) {

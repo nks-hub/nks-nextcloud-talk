@@ -237,6 +237,72 @@ void main() {
     );
   });
 
+  test('a queue left over from before the marker is drained again', () async {
+    const queue = '[{"server":"https://example.invalid"}]';
+    final storage = _RecordingSecureStorage()
+      ..seed('nks.pending_revocations', queue)
+      ..seed('credential.v2.account.account-a.appPassword', 'app-password')
+      ..seed('credential.account.account-a.version', '2');
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    final vault = SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    // Any keystore read that returns proves the keyring is open, so the queue
+    // can be looked at without risking the block this marker exists to avoid.
+    expect(await vault.readAppPassword('account-a'), 'app-password');
+
+    expect(File('${support.path}/pending-revocations').existsSync(), isTrue);
+    expect(await vault.readPendingRevocations(), queue);
+  });
+
+  test('the leftover queue is looked for only once per installation', () async {
+    final storage = _RecordingSecureStorage()
+      ..seed('credential.v2.account.account-a.appPassword', 'app-password')
+      ..seed('credential.account.account-a.version', '2');
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    SecureCredentialVault vault() => SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    await vault().readAppPassword('account-a');
+    // A second launch on the same installation, not just a second read.
+    await vault().readAppPassword('account-a');
+
+    expect(
+      storage.calls.where(
+        (call) =>
+            call.operation == _Operation.read &&
+            call.key == 'nks.pending_revocations',
+      ),
+      hasLength(1),
+    );
+  });
+
+  test('a keystore write that fails still leaves the marker behind', () async {
+    final storage = _RecordingSecureStorage()
+      ..failNextWrite('nks.pending_revocations');
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    final vault = SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    await expectLater(
+      vault.writePendingRevocations('[{"server":"https://example.invalid"}]'),
+      throwsA(isA<StateError>()),
+    );
+
+    // The marker is written first on purpose: one left behind costs a single
+    // keystore read, one missing would hide a revocation the server still owes.
+    expect(File('${support.path}/pending-revocations').existsSync(), isTrue);
+  });
+
   test('draining the queue empty takes the marker with it', () async {
     final storage = _RecordingSecureStorage();
     final support = await Directory.systemTemp.createTemp('vault-support');
