@@ -1,422 +1,458 @@
-# Rozhodnutí a otevřené volby
+# Decisions and open choices
 
-Stavy:
+States:
 
-- **Přijato**: uživatel rozhodl, jde o nutnou invariantu nebo o ověřenou
-  technickou baseline pro implementaci.
-- **Doporučeno**: analýza má preferovanou variantu, čeká na potvrzení.
-- **Otevřeno**: bez volby se příslušný scaffold nebo feature nesmí uzamknout.
-- **Odloženo**: není v prvním release, ale architektura zachovává hranici.
-- **Nahrazeno**: rozhodnutí zůstává historicky dohledatelné, ale nový řez se
-  jím už neřídí.
+- **Accepted**: the user decided, it is a necessary invariant, or it is a
+  verified technical baseline for the implementation.
+- **Recommended**: the analysis has a preferred variant, awaiting confirmation.
+- **Open**: without a choice, the corresponding scaffold or feature must not be
+  locked in.
+- **Deferred**: not in the first release, but the architecture preserves the
+  boundary.
+- **Superseded**: the decision stays historically traceable, but a new slice no
+  longer follows it.
 
-## Přijatá rozhodnutí
+## Accepted decisions
 
-### D-001: Multi-server produkt
+### D-001: A multi-server product
 
-Stav: Přijato.
+State: Accepted.
 
-Klient není white-label pro jeden server. Referenční instance slouží pouze k
-testování.
+The client is not a white label for a single server. The reference instance
+serves only for testing.
 
-Důsledek: žádná produkční URL, capability nebo účet nesmí být globální
-konstanta.
+Consequence: no production URL, capability or account may be a global constant.
 
-### D-002: Multi-account izolace
+### D-002: Multi-account isolation
 
-Stav: Přijato jako nutný důsledek multi-server produktu.
+State: Accepted as a necessary consequence of the multi-server product.
 
-Credentials, cache, push identity, connections, badge a deep links se scopují
-accountId.
+Credentials, the cache, push identities, connections, the badge and deep links
+are scoped by accountId.
 
-Asynchronní UI akce zachytí accountId objektu při otevření a používají jej po
-celý request i následný sync. Pozdější změna globálně vybraného účtu nesmí akci
-přesměrovat; account-specific filtry pohledu se při přepnutí resetují.
+Asynchronous UI actions capture the accountId of the object when it is opened and
+use it for the whole request and the subsequent sync. A later change of the
+globally selected account must not redirect the action; account-specific view
+filters are reset on a switch.
 
-Conversation-list filtry na ověřeném Android upstream SHA `5428960` kombinují
-nepřečtené a zmínky jako AND. Archivovaný pohled je dostupný pouze za
-`archived-conversations-v2`; bez něj i bez aktivního filtru zůstávají
-archivované rooms skryté. Mention filtr přijme explicitní `unreadMention` a
-také každou nepřečtenou one-to-one nebo former-one-to-one room.
+At the verified Android upstream SHA `5428960`, the conversation-list filters
+combine unread and mentions as an AND. The archived view is available only behind
+`archived-conversations-v2`; without it, and without an active filter, archived
+rooms stay hidden. The mention filter accepts an explicit `unreadMention` and
+also every unread one-to-one or former-one-to-one room.
 
 ### D-003: Capability-first
 
-Stav: Přijato jako protokolová invarianta.
-
-Číslo Talk release není feature flag. Resolver kombinuje globální,
-features-local a room-scoped capabilities.
-
-Každá mutace musí ověřit přihlášený account-scoped snapshot v odpovědné service
-nebo protokolové vrstvě, ne jen skrýt tlačítko v UI. Archivace například nesmí
-vydat request bez jednoznačné capability `archived-conversations-v2`.
-
-Room settings respektují přesný upstream kontrakt, ne domyšlenou společnou
-bránu. `message-expiration` se povolí jen moderátorovi se stejnojmennou
-capability a používá nezáporné sekundy, kde 0 vypíná; serverem vynucená hodnota
-zůstává autoritativní. `notify-calls` na ověřeném upstream SHA samostatnou
-capability nemá a používá pouze absolutní level 0/1. Obě response znovu dekódují
-autoritativní room místo lokálního přepnutí optimistic stavem.
-
-`important` a `sensitive` nejsou moderátorská room metadata, ale osobní
-participant-scoped nastavení. Každé vyžaduje vlastní capability a absolutní
-POST/DELETE bez body; federované rooms jsou podporované. Classified room nesmí
-vypnout `sensitive` a serverový error `classified` se nesmí převést na lokální
-úspěch. I zde je zdrojem pravdy autoritativní room z response.
-
-Conversation tags jsou na ověřeném upstream SHA `f2958bb` také
-participant-scoped, nikoli moderator-only. Klient za capability
-`conversation-tags` načte definice, nabídne pouze custom tagy a při změně odešle
-úplnou výslednou množinu `tagIds`; lokální delta ani skryté predefined tagy
-nesmějí serverový stav přepsat.
-
-SIP room nastavení na ověřeném serverovém SHA `f2958bb` používá
-`PUT .../room/{token}/webinar/sip` a absolutní stavy 0 (vypnuto), 1 (osobní
-PIN) a 2 (bez PINu). UI vyžaduje `sip-support`, autoritativní room příznak
-`canEnableSIP` a neclassified room; stav 2 navíc `sip-support-nopin`. HTTP 412
-znamená chybějící serverový SIP bridge, nikoli úspěch ani obecnou síťovou chybu.
-Response room je autoritativní a prázdná success odpověď se odmítne, protože by
-klient neznal osobní `attendeePin`. Room-specific `sipDialinInfo` se načte z
-bounded signaling settings GET; instrukce ani PIN se nepersistují v call
-snapshotu a diagnostické řetězce je vždy redigují.
-
-`clear-history` je destruktivní moderator-only online operace bez klientského
-idempotency key. Po fresh authenticated capability snapshotu používá jediný
-DELETE bez body a nikdy nevstoupí do outboxu ani automatického retry. HTTP 200
-i 202 znamenají provedené smazání; 202 navíc vyžaduje varování, že federace či
-externí bridge mohou držet kopie. Lokální purge je account/room-scoped a nesmí
-smazat drafty, durable upload zdroje ani pending outbox. Selhání následného
-refresh nesmí uživatele vyzvat k opakování již provedeného DELETE.
-
-Thread request musí oddělit cílovou zprávu od identity canonical rootu.
-Notification-level request používá jako cíl výhradně canonical `threadId`, i
-když historický název route parametru na serveru zní `messageId`. Response
-wrapper musí nést `threadId` a legacy `messageId` se fail-closed odmítá. Decoder
-odmítá room/root mismatch a zachová původní request; merge planner odmítá
-account/server snapshot mismatch. Libovolný serverem vrácený root se nepřijímá.
-
-### D-004: Žádné fake subsystémy
-
-Stav: Přijato podle projektových pravidel.
-
-Call preparation znamená funkční signaling state machine a contract testy, ne
-neaktivní tlačítko nebo interface vracející OK.
-
-### D-005: Jedna veřejná aplikační identita
-
-Stav: Přijato jako důsledek veřejného multi-server produktu.
-
-Jeden distribuovaný build používá stabilní applicationId/bundle ID pro všechny
-podporované Nextcloud servery. Připojení dalšího serveru nesmí měnit binary,
-signing ani identitu aplikace.
-
-Push delivery se liší podle platformy. Podle D-038 registrují Android i Apple
-proti vlastní proxy `nks-talk-notify`, která drží FCM i APNs větev; Web Push
-podle D-025 zůstal jako přepínatelná androidí záloha a jen ta se obejde bez
-publisher Firebase projektu a vlastní gateway. Firebase nebo APNs credentials se nikdy nestahují z
-libovolného připojeného Nextcloudu.
-
-### D-006: Outbox jen s ověřeným replay kontraktem
-
-Stav: Přijato jako datová a bezpečnostní invarianta.
-
-Lokální operationId, referenceId ani HTTP metoda samy neprokazují serverovou
-idempotenci. Každý operationKind se smí zařadit do durable outboxu až po
-capability/SHA-bound kontraktu, který popíše bezpečný retry před odesláním,
-reconciliation nejednoznačného výsledku, terminální odpovědi, compensation a
-uživatelskou akci. Neověřená operace se nesmí vydávat za offline podporovanou.
-
-### D-013: Vlastní Talk-inspirovaná implementace
-
-Stav: Přijato uživatelem.
-
-Klient nebude pixelově věrná kopie ani překlad GPL Android/iOS zdrojového
-kódu. Vznikne vlastní Flutter implementace podle veřejných protokolů a vlastních
-specifikací. Zachová známou informační architekturu Talku, ale použije vlastní
-komponenty, vizuální variaci a doplní multi-server, offline a diagnostické
-stavy.
-
-Upstream se používá jako SHA-bound reference chování, wire kompatibility a
-testovacích scénářů. Licence je vyřešená v D-018; původní implementační proces
-zůstává zachovaný.
-
-### D-014: Identita aplikace
-
-Stav: Přijato uživatelem.
-
-Android applicationId, iOS a macOS bundle ID a Linux application ID jsou
-`com.nkshub.nextcloudtalk`. Windows používá stejný produktový název a publisher
-namespace v runner metadatech. Identita se nemění podle připojeného Nextcloud
-serveru a nestahuje se za běhu.
-
-Samostatně podepsaná fork distribuce může identitu změnit, ale jde o jiný
-binary a vlastní release/signing odpovědnost.
-
-### D-015: Bezpečný klientský bootstrap
-
-Stav: Přijato jako trust a multi-account invarianta.
-
-Uživatelem zadaný server se nejprve kanonizuje a ověří přes veřejný status.
-Login Flow v2 URL i credential `server` musí zachovat stejný origin a Nextcloud
-base path; v production musí být origin HTTPS. Cross-origin, base-path escape,
-userinfo, query, fragment, encoded nejednoznačnost a production HTTP se
-odmítají před otevřením URL nebo odesláním tokenu. Explicitní debug HTTP policy
-se musí zachovat přes normalizaci, Login Flow i credential validaci.
-
-Anonymní capabilities jsou pouze onboarding data. Po jednorázovém úspěchu se
-app password uloží přímo do platformního secure storage, vytvoří se náhodné
-lokální `accountId` a teprve přihlášený capability snapshot se uloží jako
-account-scoped autorita. HTTP 404 poll nerozlišuje pending, invalid, expired ani
-consumed stav a nesmí se interpretovat přesněji.
-
-Autentizační HTTP 401 se ukládá jako durable `reauthRequired` a zastaví další
-account requesty. Re-auth znovu používá Login Flow, ale server je uzamčený na
-původní origin a base path a výsledek musí mít stejný login i `accountId`.
-Cizí credential se nesmí uložit a best effort se odvolá. Teprve úspěšná shoda
-nahradí secure credential, zachová account cache, smaže chybu a obnoví live
-sync. Invalidace capability cache po 401 musí současně odpovídat credential
-fingerprintu, originu a nejkonkrétnější base path; shodný Basic Auth na jiném
-serveru nesmí ztratit svůj zdravý snapshot.
-
-### D-016: Account-scoped conversation merge
-
-Stav: Přijato a implementováno v pure Dart parseru, merge planneru i Flutter
-Drift transakčním adapteru. Zbývá úplná multi-server a process-death runtime
-matice.
-
-`conversation-v4` v přihlášeném capability snapshotu volí pouze kandidátní
-endpoint. Aktivní profil `cursor-v4` vznikne až po schema-validní full response
-s kanonickým cursorem a neprázdným Talk hashem. Legacy wire profil bez těchto
-hlaviček zůstává unsupported, dokud nevznikne samostatný adapter.
-HTTP 401 znamená re-auth, zatímco 426, 429, 503 a validní OCS failure pouze
-odkládají potvrzení profilu; samy nedokazují nekompatibilní wire formát.
-
-Request nese `accountId`, lokální request ID a kanonický serverový origin.
-Dekódovaná response zachová tentýž request a planner odvodí celý kontext pouze
-z ní. Uložený account stav nese očekávaný origin a odlišný server odmítne před
-výpočtem upsertů nebo mazání.
-
-Validovaný room model musí předat klientovi `objectType`, `avatarVersion`,
-`isCustomAvatar` a volitelný `remoteServer`; federovaný stav se odvodí pouze z
-neprázdného `remoteServer`. Talk/PHP může prázdné `messageParameters` a
-`reactions` serializovat jako `[]`. Parser tuto jedinou variantu normalizuje na
-prázdnou mapu, ale neprázdné pole odmítne, aby neskrylo schema drift.
-
-Store klíč je `(accountId, roomToken)`. Inkrementální response nikdy nemaže
-chybějící rooms; validní neprázdný full response je může odstranit. První
-full-empty response při existující cache pouze založí potvrzovací stav. Smazání
-smí potvrdit až jiný full request do 300 sekund. Starší důkaz expiruje a
-neprázdná mezilehlá delta jej okamžitě ruší.
-
-Room upsert, případné mazání, serverový cursor a Talk configuration hash se
-commitnou v jedné transakci. Chyba schema, OCS, semantiky nebo DB cursor
-neposune. Schema diagnostika smí obsahovat jen strukturální path a typ
-validatoru, nikdy hodnotu z response. Změna hash vyžádá account-scoped
-capability/settings refresh, nikoli smazání rooms. O typu merge rozhoduje
-explicitní režim requestu, ne samotná hodnota `modifiedSince`.
-
-Foreground loop používá po získání cursoru levný incremental režim. Ruční
-refresh explicitně požaduje full reconciliation, protože delta nemá removal
-tombstone a pouze full response smí odstranit room, kterou server už nevrací.
-Per-account single-flight je mode-aware: full intent za rozběhnutou deltou musí
-po jejím dokončení spustit nebo joinnout nový full request a nesmí být deltou
-považovaný za splněný. Full-empty ochrana udrží oba potvrzovací pokusy ve full
-režimu a s různými request ID. Odstranění stale conversation cache nesmí smazat
-pending outbox ani stejný room token jiného účtu.
-
-### D-017: Autoritativní chat cursor a bezpečný text-send outbox
-
-Stav: Přijato a implementováno v pure Dart planneru/outboxu i Flutter Drift
-repository. Live restart a vzdálená reconciliation matice zůstávají
-neprokázané.
-
-Chat history a future jsou dva směry stejného account/room/thread scope.
-`X-Chat-Last-Given` je autoritativní hranice i při prázdném viditelném body;
-history `304` ukončuje starší historii a future `304` potvrzuje konvergenci.
-Response se smí commitnout jen při shodě request anchoru s aktuálním cursorem.
-Message identity, intervaly, parent/thread, read hodnoty a outbox reconciliation
-se mění atomicky a schema diagnostika neobsahuje hodnoty zpráv.
-
-Autoritativní editace nebo smazání zprávy se nesmí uložit jen do samostatného
-řádku parentu. Ve stejné Drift transakci se promítne do každé full parent kopie
-v cached replies stejného accountu a roomu a případně do conversation preview.
-Full i compact deleted parent se v UI vykreslí jako smazaný bez původního
-autora, obsahu nebo interaktivního jump cíle.
-
-Read a mark-unread mutace se pořadově serializují pouze v lane
-`(accountId, roomToken)`. Zachová se tedy skutečné pořadí read → unread i
-unread → read v jedné room, zatímco jiné rooms a účty mohou pokračovat
-souběžně. Očekávané runtime a DB výjimky se na hranici služby mapují na
-`invalidResponse`, programátorský `StateError` se neskrývá a lane se po obou
-druzích chyby vždy uvolní. Žádná z těchto mutací nedostává blind replay.
-
-Ordinary reply view a named-thread network scope jsou oddělené projekce.
-Přechod z ordinary view do named threadu nesmí migrovat ordinary cursor ani
-posunout nový network scope. Root merge se smí promítnout jen do stejného
-accountu a roomu. Tyto hranice mají automatizované regresní testy.
-
-Otevřený thread route, včetně vstupu ze search, odvozuje kind a title průběžně
-z canonical cached rootu; snapshot z okamžiku navigace není autorita pro další
-send. Asynchronně připravený media request je immutable: resolver jej sváže s
-aktuálním rootem a durable repository ve stejné transakci těsně před insertem
-exact binding znovu ověří. Změna ordinary ↔ named, missing, deleted nebo invalid
-root admission fail-closed odmítne; repository metadata potichu nepřepisuje.
-Stejná autorita platí pro text: po asynchronním capability read se cached root
-znovu dekóduje a musí být nesmazaný, nesystémový a canonical. Named root navíc
-vyžaduje neprázdný bounded title a shodný `threadId`; jinak nevznikne outbox
-řádek ani HTTP POST. Validní ordinary ↔ named změna se naopak použije jako
-aktuální wire binding.
-
-Full embedded parent z thread response smí obnovit cached thread original jen
-při shodě room tokenu, parent/original ID a thread ID. Explicitní serverové
-`threadReplies` je autoritativní. Když chybí, Flutter repository odvodí počet z
-unikátních reply ID daného account/room/thread scope, vynechá original a replay
-a zachová vyšší uložený počet. Neshodný parent nesmí cached original přepsat.
-
-`referenceId` je korelace, ne idempotency key. První povolený durable registry
-kind je pouze `textSend` s revision
-`talk-chat-text-send-f2958bb-f9b9e947-r2`. Revize r2 přidává explicitní
-`threadId` pro named-thread send; obyčejná zpráva má `replyTo == null` i
-`threadId == null`, reply používá `replyTo` a named-thread zpráva používá pouze
-`threadId`. Named-thread admission a replay navíc vyžadují lokální capability
-`threads`; r1 operace se pod r2 autoritou nesmí automaticky replayovat.
-
-Request a response semantika nejsou totožné. Plain request nemá `threadId`, ale
-plain direct response je parentless a server vrací `threadId == messageId`.
-Same-room reply vrací topmost thread ID z immediate parentu. Cross-room private
-reply vrací lokální copied-parent ID a `parent.threadId == 0`; named-thread
-direct response zůstává parentless s požadovaným thread ID.
-
-Request prokazatelně zastavený před body může být retryable. Možná odeslané
-body, přerušený proces, `201 null` nebo identity mismatch přejdou do
-`awaitingConfirmation` a nesmějí se automaticky znovu odeslat. Jedna
-autoritativní shoda stejného plain/reply/thread kontextu dokončí operaci, více
-shod zůstane ambiguous a nula shod neprokazuje neprovedení. Ruční resend
-vyžaduje varování před duplicitou a nesmí pokračovat po nalezené serverové
-shodě. HTTP 400 `error=message` a 5xx jsou ambiguous; pouze doložený pre-save
-429 `error=mentions` je retryable podle `Retry-After` nebo lokálního backoffu.
-V jedné room platí FIFO a single-flight, různé rooms mohou pokračovat souběžně.
-Cross-room private-reply wire formát je známý, ale command admission zůstává bez
-plného eligibility snapshotu odmítnutý. Neznámý kind nebo revision admission
-odmítne.
-
-Pure Dart single-use plán dokládá společný candidate snapshot pro chat merge a
-outbox confirmation i úplný rollback zahozením plánu. Flutter `ChatRepository`
-načte snapshot, vytvoří plán a uloží message/scope/outbox změny uvnitř jedné
-Drift transakce. Fault-injection test potvrzuje úplný rollback zprávy i outboxu,
-když selže view projekce. Ordinary reply zůstává viditelná od pending stavu přes
-HTTP 201 a Reply UI vyžaduje vyřešený profil s capability `chat-replies`.
-
-Schema v5 ukládá nullable `threadId`; file-backed reopen zachová queued i
-sending named-thread operaci a restart recovery převede `sending` na
-`awaitingConfirmation`. Legacy schema migrace zachová a dokončí queued named
-send. Potvrzená named-thread zpráva, ať jde o parentless direct POST nebo
-autoritativní history/future shape s přesně svázaným full či compact deleted
-rootem, současně obnoví cached root `threadId`, `isThread` a `threadReplies`.
-Zbývá live process-death a vzdálená reconciliation.
-
-### D-018: Licence mobilního klienta
-
-Stav: Přijato uživatelem 22. srpna 2026.
-
-Mobilní aplikace a její vlastní zdrojový kód jsou licencované pod
-`GPL-3.0-or-later`. Úplný text je v kořenovém souboru `LICENSE`. Volba umožňuje
-GPL-kompatibilní převzetí z oficiálních Talk klientů, ale žádné takové převzetí
-nesmí být skryté: musí mít dohledatelný původ, zachované copyright notices a
-samostatný licenční audit.
-
-Přijatý vlastní Talk-inspirovaný směr z D-013 se nemění. Každý asset a závislost
-musí být před distribucí kompatibilní s GPL a zaznamenaný v průběžném auditu.
-
-## Přijatá technická rozhodnutí
-
-Přesunuto do [Technická rozhodnutí](decisions-technical.md): D-007 až D-010
-a D-019 a výš, aby tento soubor zůstal pod limitem D-030. Produktová
-rozhodnutí a otevřené volby zůstávají tady.
-
-## Vyřešené volby
-
-### Q-001: Licence
-
-Stav: Vyřešeno v D-018.
-
-Uživatel zvolil `GPL-3.0-or-later`. Audit původu kódu, assetů a závislostí je
-průběžná distribuční brána, nikoli otevřená volba licence.
-
-### Q-002: Minimální platformy
-
-Stav: Vyřešeno v D-026.
-
-### Q-004: Offline scope prvního release
-
-Stav: Vyřešeno 2026-09-02 podle toho, co kód už vynucuje.
-
-Zvolen scope: **cache historie + durable textový outbox + durable attachment
-runtime s obnovou po restartu**. Všechno ostatní je online-only a fail-closed.
-
-Rozhodnutí nevzniklo jako preference, ale jako popis stavu, který invarianty
-v kódu už drží:
-
-- Historie je cache-first a stránkuje se s detekcí mezer v chat blocks.
-- Textové odeslání má durable outbox s retry, cancel a ambiguous stavem; je to
-  jediný `operationKind` v celém stromu (`'textSend'`).
-- Přílohy nejedou přes ten outbox, ale přes vlastní durable runtime
-  (`AttachmentJob`) s obnovou nedokončených uploadů po restartu aplikace.
-  „Upload resume" z původní varianty 2 je tedy hotový, jen jinou cestou.
-- Zbývající mutace — editace, mazání, reakce, read/unread, favorite, archivace,
-  úroveň oznámení, připomínky, plánované zprávy, classic share — nemají replay
-  kontrakt a nesmějí se queueovat. Nabídnout je jako offline podporované by
-  znamenalo slíbit doručení, které nikdo negarantuje.
-
-Praktický důsledek: bez sítě aplikace ukáže historii, přijme text i přílohu do
-fronty a dotáhne je, jakmile je spojení zpátky. Ostatní akce se nabízet nebudou
-a chyba se ukáže hned, místo tichého odložení.
-
-Tohle je produktová volba: pokud ji chce vlastník produktu posunout (například
-přidat offline reakce), je to změna scope, ne oprava — a znamená nejdřív replay
-kontrakt pro každý další `operationKind`.
-
-### Q-005: Giphy režim
-
-Stav: Vyřešeno v D-028.
-
-### Q-007: Android gateway implementační stack
-
-Stav: Vyřešeno jako nepotřebné v D-025.
-
-Historické Go/Node porovnání se neimplementuje pro Android. Budoucí iOS relay
-projde novým výběrem až s APNs kontraktem a nemá předem zvolený stack.
-
-## Otevřené volby
-
-### Q-003: Release signing a Apple push
-
-Identita aplikace je vyřešená v D-014. Pro vývoj lze iOS podepsat pro vlastní
-zařízení. Před veřejnou distribucí zbývá Android release key workflow, Apple
-developer tým, store provisioning a APNs/PushKit relay credentials. Android
-publisher Firebase projekt není potřeba.
-
-### Q-006: Podporované serverové řady
-
-Je nutné určit minimální Nextcloud/Talk řadu. Multi-server neznamená automaticky
-podporu všech historických verzí.
-
-## Odložená rozhodnutí
-
-### D-011: Plná call parity
-
-Stav: Odloženo za chat a push parity.
-
-Architektura zachovává signaling, coordinator, platform a media hranice.
-Konkrétní WebRTC balík se vybere až po internal/HPB signaling prototypu a
-Android/iOS lifecycle spike.
-
-### D-012: Share Extension a App Intents
-
-Stav: Částečně přijato.
-
-Android přijímá `ACTION_SEND` přes persistentní nativní inbox. URI grant je
-jen krátkodobá trust boundary: před předáním do Flutteru vznikne bounded
-app-owned kopie a opakované cold/warm doručení se deduplikuje. Flutter vybírá
-účet a místnost a používá existující chat nebo attachment durable tok; nový
-share transport nevzniká. iOS Share Extension a App Intents zůstávají
-odložené a nesmějí se předstírat jako hotové.
+State: Accepted as a protocol invariant.
+
+The Talk release number is not a feature flag. The resolver combines the global,
+features-local and room-scoped capabilities.
+
+Every mutation must verify the signed-in account-scoped snapshot in the
+responsible service or protocol layer, not merely hide a button in the UI.
+Archiving, for example, must not issue a request without an unambiguous
+`archived-conversations-v2` capability.
+
+Room settings respect the exact upstream contract, not an invented common gate.
+`message-expiration` is enabled only for a moderator with the capability of the
+same name and uses non-negative seconds, where 0 turns it off; a value enforced
+by the server stays authoritative. At the verified upstream SHA, `notify-calls`
+has no capability of its own and uses only the absolute levels 0/1. Both
+responses decode the authoritative room again instead of a local toggle with
+optimistic state.
+
+`important` and `sensitive` are not moderator room metadata but personal
+participant-scoped settings. Each requires its own capability and an absolute
+POST/DELETE without a body; federated rooms are supported. A classified room must
+not turn `sensitive` off and the server error `classified` must not be turned
+into a local success. Here too, the source of truth is the authoritative room
+from the response.
+
+At the verified upstream SHA `f2958bb`, conversation tags are also
+participant-scoped, not moderator-only. Behind the capability
+`conversation-tags`, the client loads the definitions, offers only custom tags
+and on a change sends the complete resulting set of `tagIds`; neither a local
+delta nor hidden predefined tags may overwrite the server state.
+
+At the verified server SHA `f2958bb`, the SIP room setting uses
+`PUT .../room/{token}/webinar/sip` and the absolute states 0 (off), 1 (personal
+PIN) and 2 (no PIN). The UI requires `sip-support`, the authoritative room flag
+`canEnableSIP` and a non-classified room; state 2 additionally requires
+`sip-support-nopin`. HTTP 412 means a missing server-side SIP bridge, not a
+success and not a generic network error. The room in the response is
+authoritative and an empty success response is rejected, because the client would
+not know the personal `attendeePin`. The room-specific `sipDialinInfo` is loaded
+from the bounded signaling settings GET; neither the instructions nor the PIN are
+persisted in the call snapshot, and diagnostic strings always redact them.
+
+`clear-history` is a destructive moderator-only online operation without a client
+idempotency key. After a fresh authenticated capability snapshot it uses a single
+DELETE without a body and never enters the outbox or an automatic retry. Both
+HTTP 200 and 202 mean the deletion was performed; 202 additionally requires a
+warning that federation or an external bridge may hold copies. The local purge is
+account/room-scoped and must not delete drafts, durable upload sources or a
+pending outbox. A failure of the subsequent refresh must not prompt the user to
+repeat a DELETE that already happened.
+
+A thread request must separate the target message from the identity of the
+canonical root. The notification-level request uses only the canonical `threadId`
+as its target, even though the historical name of the route parameter on the
+server is `messageId`. The response wrapper must carry `threadId` and a legacy
+`messageId` is rejected fail-closed. The decoder rejects a room/root mismatch and
+preserves the original request; the merge planner rejects an account/server
+snapshot mismatch. An arbitrary root returned by the server is not accepted.
+
+### D-004: No fake subsystems
+
+State: Accepted per the project rules.
+
+Call preparation means a working signaling state machine and contract tests, not
+an inactive button or an interface returning OK.
+
+### D-005: One public application identity
+
+State: Accepted as a consequence of the public multi-server product.
+
+One distributed build uses a stable applicationId/bundle ID for all supported
+Nextcloud servers. Connecting another server must not change the binary, the
+signing or the identity of the application.
+
+Push delivery differs per platform. Per D-038, both Android and Apple register
+against our own proxy `nks-talk-notify`, which holds both the FCM and the APNs
+branch; per D-025, Web Push remained a switchable Android fallback and only that
+one works without a publisher Firebase project and an own gateway. Firebase or
+APNs credentials are never downloaded from an arbitrary connected Nextcloud.
+
+### D-006: An outbox only with a verified replay contract
+
+State: Accepted as a data and security invariant.
+
+Neither a local operationId, a referenceId nor the HTTP method proves server-side
+idempotency on its own. Every operationKind may be enqueued into the durable
+outbox only after a capability/SHA-bound contract describing a safe retry before
+sending, reconciliation of an ambiguous result, the terminal responses,
+compensation and the user action. An unverified operation must not be presented
+as offline supported.
+
+### D-013: An original Talk-inspired implementation
+
+State: Accepted by the user.
+
+The client will not be a pixel-faithful copy or a translation of the GPL
+Android/iOS source code. An original Flutter implementation will be created
+according to the public protocols and our own specifications. It will preserve
+Talk's familiar information architecture, but use its own components, a visual
+variation, and add multi-server, offline and diagnostic states.
+
+Upstream is used as an SHA-bound reference for behaviour, wire compatibility and
+test scenarios. The license is settled in D-018; the original implementation
+process stays as it is.
+
+### D-014: Application identity
+
+State: Accepted by the user.
+
+The Android applicationId, the iOS and macOS bundle IDs and the Linux application
+ID are `com.nkshub.nextcloudtalk`. Windows uses the same product name and
+publisher namespace in the runner metadata. The identity does not change with the
+connected Nextcloud server and is not downloaded at runtime.
+
+A separately signed fork distribution may change the identity, but it is a
+different binary with its own release/signing responsibility.
+
+### D-015: A safe client bootstrap
+
+State: Accepted as a trust and multi-account invariant.
+
+The server entered by the user is first canonicalized and verified through the
+public status. Both the Login Flow v2 URL and the credential `server` must
+preserve the same origin and Nextcloud base path; in production the origin must
+be HTTPS. Cross-origin, a base-path escape, userinfo, a query, a fragment,
+encoded ambiguity and production HTTP are rejected before a URL is opened or a
+token sent. An explicit debug HTTP policy has to be preserved through the
+normalization, the Login Flow and the credential validation.
+
+Anonymous capabilities are only onboarding data. After a one-time success the app
+password is stored directly in the platform secure storage, a random local
+`accountId` is created, and only the signed-in capability snapshot is stored as
+the account-scoped authority. An HTTP 404 poll does not distinguish the pending,
+invalid, expired and consumed states and must not be interpreted more precisely.
+
+An authentication HTTP 401 is stored as a durable `reauthRequired` and stops
+further account requests. Re-auth uses the Login Flow again, but the server is
+locked to the original origin and base path and the result must have the same
+login and `accountId`. A foreign credential must not be stored and is revoked on
+a best-effort basis. Only a successful match replaces the secure credential,
+preserves the account cache, clears the error and resumes the live sync.
+Invalidating the capability cache after a 401 must simultaneously match the
+credential fingerprint, the origin and the most specific base path; the same
+Basic Auth on a different server must not lose its healthy snapshot.
+
+### D-016: An account-scoped conversation merge
+
+State: Accepted and implemented in the pure Dart parser, the merge planner and
+the Flutter Drift transactional adapter. A complete multi-server and
+process-death runtime matrix is still missing.
+
+`conversation-v4` in the signed-in capability snapshot only selects a candidate
+endpoint. The active profile `cursor-v4` is created only after a schema-valid
+full response with a canonical cursor and a non-empty Talk hash. A legacy wire
+profile without those headers stays unsupported until a separate adapter is
+created. HTTP 401 means re-auth, while 426, 429, 503 and a valid OCS failure only
+defer the confirmation of the profile; they do not by themselves prove an
+incompatible wire format.
+
+The request carries the `accountId`, a local request ID and the canonical server
+origin. The decoded response preserves that same request and the planner derives
+the whole context only from it. The stored account state carries the expected
+origin and a different server is rejected before upserts or deletions are
+computed.
+
+The validated room model must pass `objectType`, `avatarVersion`,
+`isCustomAvatar` and an optional `remoteServer` to the client; the federated
+state is derived only from a non-empty `remoteServer`. Talk/PHP may serialize
+empty `messageParameters` and `reactions` as `[]`. The parser normalizes that
+single variant into an empty map, but rejects a non-empty array so that it does
+not hide a schema drift.
+
+The store key is `(accountId, roomToken)`. An incremental response never deletes
+missing rooms; a valid non-empty full response may remove them. The first
+full-empty response with an existing cache only establishes a confirmation state.
+A deletion may only be confirmed by another full request within 300 seconds.
+Older evidence expires and a non-empty intervening delta cancels it immediately.
+
+The room upsert, any deletions, the server cursor and the Talk configuration hash
+are committed in a single transaction. A schema, OCS, semantic or DB error does
+not move the cursor. Schema diagnostics may contain only the structural path and
+the validator type, never a value from the response. A change of the hash
+requests an account-scoped capability/settings refresh, not a deletion of rooms.
+The type of merge is decided by the explicit mode of the request, not by the
+value of `modifiedSince` alone.
+
+Once it has a cursor, the foreground loop uses the cheap incremental mode. A
+manual refresh explicitly requests a full reconciliation, because a delta has no
+removal tombstone and only a full response may remove a room the server no longer
+returns. Per-account single-flight is mode-aware: a full intent behind a running
+delta must, once the delta completes, start or join a new full request and must
+not be considered satisfied by the delta. The full-empty protection keeps both
+confirmation attempts in full mode and with different request IDs. Removing a
+stale conversation cache must not delete a pending outbox or the same room token
+of another account.
+
+### D-017: An authoritative chat cursor and a safe text-send outbox
+
+State: Accepted and implemented in the pure Dart planner/outbox and the Flutter
+Drift repository. A live restart and the remote reconciliation matrix remain
+unproven.
+
+Chat history and future are two directions of the same account/room/thread scope.
+`X-Chat-Last-Given` is the authoritative boundary even with an empty visible
+body; a history `304` ends the older history and a future `304` confirms
+convergence. A response may be committed only when the request anchor matches the
+current cursor. Message identities, intervals, parent/thread, read values and the
+outbox reconciliation change atomically, and schema diagnostics contain no
+message values.
+
+An authoritative edit or deletion of a message must not be stored only into the
+separate parent row. Within the same Drift transaction it is projected into every
+full parent copy in the cached replies of the same account and room, and possibly
+into the conversation preview. Both a full and a compact deleted parent are
+rendered in the UI as deleted, without the original author, content or an
+interactive jump target.
+
+Read and mark-unread mutations are serialized in order only within the lane
+`(accountId, roomToken)`. The real order read → unread as well as unread → read
+is therefore preserved within one room, while other rooms and accounts can
+continue concurrently. Expected runtime and DB exceptions are mapped at the
+service boundary onto `invalidResponse`, a programmer `StateError` is not hidden,
+and the lane is always released after both kinds of error. None of these
+mutations gets a blind replay.
+
+The ordinary reply view and the named-thread network scope are separate
+projections. A transition from the ordinary view into a named thread must not
+migrate the ordinary cursor or move the new network scope. A root merge may be
+projected only into the same account and room. These boundaries have automated
+regression tests.
+
+An open thread route, including entry from a search, derives the kind and the
+title continuously from the canonical cached root; the snapshot from the moment
+of navigation is not the authority for a further send. An asynchronously prepared
+media request is immutable: the resolver binds it to the current root and the
+durable repository re-verifies the exact binding within the same transaction just
+before the insert. A change of ordinary ↔ named, a missing, deleted or invalid
+root makes the admission fail closed; the repository does not silently rewrite
+the metadata. The same authority applies to text: after the asynchronous
+capability read, the cached root is decoded again and must be undeleted,
+non-system and canonical. A named root additionally requires a non-empty bounded
+title and a matching `threadId`; otherwise neither an outbox row nor an HTTP POST
+is created. A valid ordinary ↔ named change, on the other hand, is used as the
+current wire binding.
+
+A full embedded parent from a thread response may restore the cached thread
+original only when the room token, the parent/original ID and the thread ID all
+match. An explicit server-side `threadReplies` is authoritative. When it is
+missing, the Flutter repository derives the count from the unique reply IDs of
+that account/room/thread scope, leaves out the original and the replay, and
+preserves a higher stored count. A mismatched parent must not overwrite the
+cached original.
+
+`referenceId` is a correlation, not an idempotency key. The first allowed durable
+registry kind is only `textSend` with the revision
+`talk-chat-text-send-f2958bb-f9b9e947-r2`. Revision r2 adds an explicit
+`threadId` for a named-thread send; an ordinary message has both
+`replyTo == null` and `threadId == null`, a reply uses `replyTo` and a
+named-thread message uses only `threadId`. The named-thread admission and replay
+additionally require the local capability `threads`; an r1 operation must not be
+automatically replayed under r2 authority.
+
+The request and response semantics are not identical. A plain request has no
+`threadId`, but a plain direct response is parentless and the server returns
+`threadId == messageId`. A same-room reply returns the topmost thread ID from the
+immediate parent. A cross-room private reply returns the local copied-parent ID
+and `parent.threadId == 0`; a named-thread direct response stays parentless with
+the requested thread ID.
+
+A request demonstrably stopped before the body may be retryable. A possibly sent
+body, an interrupted process, a `201 null` or an identity mismatch move to
+`awaitingConfirmation` and must not be sent again automatically. A single
+authoritative match of the same plain/reply/thread context completes the
+operation, several matches stay ambiguous and zero matches does not prove that
+nothing happened. A manual resend requires a warning about duplication and must
+not continue once a server-side match is found. HTTP 400 `error=message` and 5xx
+are ambiguous; only a documented pre-save 429 `error=mentions` is retryable per
+`Retry-After` or a local backoff. Within one room FIFO and single-flight apply,
+different rooms may continue concurrently. The cross-room private-reply wire
+format is known, but the command admission stays rejected without a complete
+eligibility snapshot. An unknown kind or revision makes the admission fail.
+
+The pure Dart single-use plan provides a common candidate snapshot for the chat
+merge and the outbox confirmation, and a complete rollback by discarding the
+plan. The Flutter `ChatRepository` loads the snapshot, creates the plan and
+stores the message/scope/outbox changes inside a single Drift transaction. A
+fault-injection test confirms a complete rollback of both the message and the
+outbox when the view projection fails. An ordinary reply stays visible from the
+pending state through HTTP 201 and the Reply UI requires a resolved profile with
+the capability `chat-replies`.
+
+Schema v5 stores a nullable `threadId`; a file-backed reopen preserves both a
+queued and a sending named-thread operation, and restart recovery converts
+`sending` into `awaitingConfirmation`. A legacy schema migration preserves and
+completes a queued named send. A confirmed named-thread message — whether a
+parentless direct POST or an authoritative history/future shape with an exactly
+bound full or compact deleted root — simultaneously restores the cached root
+`threadId`, `isThread` and `threadReplies`. A live process death and remote
+reconciliation are still missing.
+
+### D-018: The license of the mobile client
+
+State: Accepted by the user on 22 August 2026.
+
+The mobile application and its own source code are licensed under
+`GPL-3.0-or-later`. The full text is in the root `LICENSE` file. The choice
+allows a GPL-compatible adoption from the official Talk clients, but no such
+adoption may be hidden: it must have a traceable origin, preserved copyright
+notices and a separate license audit.
+
+The accepted original Talk-inspired direction from D-013 does not change. Every
+asset and dependency must be GPL-compatible before distribution and recorded in
+the continuous audit.
+
+## Accepted technical decisions
+
+Moved to [Technical decisions](decisions-technical.md): D-007 to D-010 and D-019
+and up, so that this file stays under the limit from D-030. Product decisions and
+open choices stay here.
+
+## Settled choices
+
+### Q-001: License
+
+State: Settled in D-018.
+
+The user chose `GPL-3.0-or-later`. The audit of the origin of the code, assets
+and dependencies is a continuous distribution gate, not an open choice of
+license.
+
+### Q-002: Minimum platforms
+
+State: Settled in D-026.
+
+### Q-004: The offline scope of the first release
+
+State: Settled on 2026-09-02 according to what the code already enforces.
+
+The chosen scope: **a history cache + a durable text outbox + a durable
+attachment runtime with recovery after a restart**. Everything else is online-only
+and fail-closed.
+
+The decision did not arise as a preference, but as a description of the state the
+invariants in the code already hold:
+
+- History is cache-first and paginates with gap detection in the chat blocks.
+- Sending text has a durable outbox with retry, cancel and an ambiguous state; it
+  is the only `operationKind` in the whole tree (`'textSend'`).
+- Attachments do not go through that outbox, but through their own durable
+  runtime (`AttachmentJob`) with recovery of unfinished uploads after an
+  application restart. The "upload resume" from the original variant 2 is
+  therefore done, only by a different route.
+- The remaining mutations — editing, deleting, reactions, read/unread, favorite,
+  archiving, the notification level, reminders, scheduled messages, the classic
+  share — have no replay contract and must not be queued. Offering them as
+  offline supported would mean promising a delivery nobody guarantees.
+
+The practical consequence: without a network the application shows the history,
+accepts both text and an attachment into the queue and completes them as soon as
+the connection is back. The other actions will not be offered and an error is
+shown right away instead of a silent deferral.
+
+This is a product choice: if the product owner wants to move it (adding offline
+reactions, say), it is a change of scope, not a fix — and it means a replay
+contract for every additional `operationKind` first.
+
+### Q-005: Giphy mode
+
+State: Settled in D-028.
+
+### Q-007: The Android gateway implementation stack
+
+State: Settled as unnecessary in D-025.
+
+The historical Go/Node comparison is not implemented for Android. A future iOS
+relay will go through a new selection together with the APNs contract and has no
+pre-chosen stack.
+
+## Open choices
+
+### Q-003: Release signing and Apple push
+
+The application identity is settled in D-014. For development, iOS can be signed
+for one's own device. Before public distribution, the Android release key
+workflow, the Apple developer team, store provisioning and the APNs/PushKit relay
+credentials are still missing. An Android publisher Firebase project is not
+needed.
+
+### Q-006: Supported server lines
+
+The minimum Nextcloud/Talk line has to be determined. Multi-server does not
+automatically mean support for every historical version.
+
+## Deferred decisions
+
+### D-011: Full call parity
+
+State: Deferred behind chat and push parity.
+
+The architecture preserves the signaling, coordinator, platform and media
+boundaries. The specific WebRTC package will be chosen only after the
+internal/HPB signaling prototype and the Android/iOS lifecycle spike.
+
+### D-012: A Share Extension and App Intents
+
+State: Partially accepted.
+
+Android accepts `ACTION_SEND` through a persistent native inbox. The URI grant is
+only a short-lived trust boundary: a bounded app-owned copy is created before
+handing over to Flutter and a repeated cold/warm delivery is deduplicated.
+Flutter selects the account and the room and uses the existing chat or attachment
+durable flow; no new share transport is created. The iOS Share Extension and App
+Intents stay deferred and must not be pretended to be done.
