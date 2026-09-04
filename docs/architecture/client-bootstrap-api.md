@@ -1,222 +1,235 @@
-# Kontrakt přidání Nextcloud účtu
+# Nextcloud account addition contract
 
-Datum ověření: 25. srpna 2026.
+Verification date: 25 August 2026.
 
-Stav: OpenAPI, syntetické fixture, bezpečnostní scénáře, pure Dart parser a
-read-only živý smoke jsou spustitelně ověřené. Flutter vrstva nyní implementuje
-HTTP/UI onboarding, systémový browser, Login Flow v2, secure storage a atomické
-vytvoření account-scoped Drift záznamu. Aktuální Android APK dokončilo skutečný
-Login Flow v2 včetně druhého faktoru a schválení přístupu, načetlo přihlášené
-capabilities a po restartu procesu zachovalo účet v secure storage.
+State: the OpenAPI, the synthetic fixtures, the security scenarios, the pure Dart
+parser and a read-only live smoke test are runnably verified. The Flutter layer
+now implements the HTTP/UI onboarding, the system browser, Login Flow v2, secure
+storage and the atomic creation of an account-scoped Drift record. The current
+Android APK completed a real Login Flow v2 including a second factor and access
+approval, loaded the signed-in capabilities and preserved the account in secure
+storage across a process restart.
 
-## Rozsah
+## Scope
 
-Kontrakt popisuje první klientský řez:
+The contract describes the first client slice:
 
-1. normalizaci uživatelem zadaného serveru;
-2. veřejný `status.php`;
+1. normalization of the server entered by the user;
+2. the public `status.php`;
 3. browser-mediated Login Flow v2;
-4. anonymní a následně přihlášené OCS capabilities;
-5. bezpečný vznik lokálního `accountId`.
+4. anonymous and subsequently signed-in OCS capabilities;
+5. the safe creation of a local `accountId`.
 
-Nejde o nový serverový endpoint. OpenAPI zachycuje existující Nextcloud wire
-chování, zatímco validátor doplňuje klientské trust invarianty, které samotné
-JSON Schema neumí vyjádřit.
+This is not a new server endpoint. The OpenAPI captures existing Nextcloud wire
+behaviour, while the validator adds the client trust invariants that JSON Schema
+alone cannot express.
 
-Autoritativní zdroje:
+Authoritative sources:
 
 - Nextcloud server
   [`d7c20b71e219461ff0c677b3846b9d1d723ff17f`](https://github.com/nextcloud/server/tree/d7c20b71e219461ff0c677b3846b9d1d723ff17f),
-  zejména `status.php`, `ClientFlowLoginV2Controller.php`,
-  `LoginFlowV2Service.php` a `OCSController.php`;
+  in particular `status.php`, `ClientFlowLoginV2Controller.php`,
+  `LoginFlowV2Service.php` and `OCSController.php`;
 - Talk Android
   [`5428960f9d1eca708df1b39a0831141dcbba4729`](https://github.com/nextcloud/talk-android/tree/5428960f9d1eca708df1b39a0831141dcbba4729),
-  zejména `NetworkLoginDataSource.kt` a login response modely;
-- runtime baseline referenční instance z 22. srpna 2026; opakovatelný smoke
-  načítá jen status a anonymní capabilities, zatímco jednorázové ověření init
-  vytvořilo pouze expirovatelný nedokončený Login Flow.
+  in particular `NetworkLoginDataSource.kt` and the login response models;
+- the runtime baseline of the reference instance from 22 August 2026; the
+  repeatable smoke test loads only the status and the anonymous capabilities,
+  while the one-off verification of init created only an expirable, unfinished
+  Login Flow.
 
-OpenAPI 3.1 je v
+The OpenAPI 3.1 is in
 [`contracts/client-bootstrap/openapi.json`](../../contracts/client-bootstrap/openapi.json).
 
-## Normalizace serveru
+## Server normalization
 
-Výstup normalizace je kanonický server base URL, nikoli libovolná webová URL.
-Zachovává se legitimní Nextcloud subpath, například `/nextcloud`.
+The output of the normalization is a canonical server base URL, not an arbitrary
+web URL. A legitimate Nextcloud subpath, for example `/nextcloud`, is preserved.
 
 <!-- markdownlint-disable MD013 -->
 
-| Vstup | Výsledek |
+| Input | Result |
 | --- | --- |
 | `cloud.example.invalid` | `https://cloud.example.invalid` |
 | `HTTPS://Cloud.Example.Invalid/nextcloud/` | `https://cloud.example.invalid/nextcloud` |
 | `https://cloud.example.invalid:443` | `https://cloud.example.invalid` |
-| HTTP | Jen explicitní debug policy; production jej odmítne |
-| Userinfo, query, fragment nebo backslash | Odmítnout |
-| Control character, dot segment, encoded nebo dvojitý path separator | Odmítnout |
-| Neplatný port, trailing-dot host nebo nekanonický IPv4 | Odmítnout |
+| HTTP | Only under an explicit debug policy; production rejects it |
+| Userinfo, a query, a fragment or a backslash | Reject |
+| A control character, a dot segment, an encoded or a double path separator | Reject |
+| An invalid port, a trailing-dot host or a non-canonical IPv4 | Reject |
 
 <!-- markdownlint-enable MD013 -->
 
-Reference validátor používá záměrně konzervativní subpath segmenty. Rozšíření o
-další legitimní kódování vyžaduje nový pozitivní i kolizní fixture; nesmí vzniknout
-tichým `decode` a opětovným skládáním URL.
+The reference validator uses deliberately conservative subpath segments.
+Extending it with further legitimate encodings requires a new positive as well as
+collision fixture; it must not appear through a silent `decode` and a
+reassembly of the URL.
 
 ## Server readiness
 
-`GET /status.php` je veřejný a bez credentials. Klient nepokračuje, pokud platí
-alespoň jedna podmínka:
+`GET /status.php` is public and requires no credentials. The client does not
+continue if at least one of these holds:
 
-- `installed` je `false`;
-- `maintenance` je `true`;
-- `needsDbUpgrade` je `true`.
+- `installed` is `false`;
+- `maintenance` is `true`;
+- `needsDbUpgrade` is `true`.
 
-`version` a `versionstring` slouží pouze diagnostice. O povolení funkcí rozhodují
-capabilities po přihlášení.
+`version` and `versionstring` serve diagnostics only. Which features are enabled
+is decided by the capabilities after login.
 
 ## Login Flow v2
 
-Inicializace je prázdný `application/x-www-form-urlencoded` POST na
-`/index.php/login/v2`. Stabilní `User-Agent` nese lidský název a verzi produktu,
-protože správce může Login Flow omezit podle user-agent policy.
+Initialization is an empty `application/x-www-form-urlencoded` POST to
+`/index.php/login/v2`. A stable `User-Agent` carries a human name and the product
+version, because an administrator may restrict Login Flow by a user-agent policy.
 
-Odpověď vrací dva nezávislé opaque tokeny:
+The response returns two independent opaque tokens:
 
-- `login` je URL otevřená v systémovém browseru;
-- `poll.token` se posílá jako form-urlencoded `token` na `poll.endpoint`.
+- `login` is the URL opened in the system browser;
+- `poll.token` is sent as a form-urlencoded `token` to `poll.endpoint`.
 
-Před otevřením browseru nebo odesláním poll tokenu klient ověří:
+Before opening the browser or sending the poll token, the client verifies:
 
-- stejný origin jako ověřený server; v production vždy HTTPS;
-- stejný Nextcloud base path;
-- přesný poll path `/index.php/login/v2/poll`, nebo `/login/v2/poll` u
-  serveru s pretty URL (`htaccess.RewriteBase`, výchozí u oficiálního Docker
-  image) — oba endpointy musí používat tentýž tvar;
-- login path `/index.php/login/v2/flow/{opaque-token}` (resp.
+- the same origin as the verified server; in production always HTTPS;
+- the same Nextcloud base path;
+- the exact poll path `/index.php/login/v2/poll`, or `/login/v2/poll` on a server
+  with pretty URLs (`htaccess.RewriteBase`, the default in the official Docker
+  image) — both endpoints must use the same form;
+- the login path `/index.php/login/v2/flow/{opaque-token}` (or
   `/login/v2/flow/{opaque-token}`);
-- žádné userinfo, query, fragment, control character ani encoded path úniky.
+- no userinfo, query, fragment, control character or encoded path escapes.
 
-Cross-origin login URL se nikdy neotevře a cross-origin poll endpoint nikdy
-nedostane token. Totéž platí pro URL na stejném hostu, která unikla z ověřeného
-subpath. Explicitní debug HTTP policy se musí předat celým tokem; nesmí povolit
-jen první normalizaci a potom změnit trust pravidla u Login Flow nebo
-credentials.
+A cross-origin login URL is never opened and a cross-origin poll endpoint never
+receives a token. The same applies to a URL on the same host that escaped from
+the verified subpath. An explicit debug HTTP policy has to be passed through the
+whole flow; it must not enable only the first normalization and then change the
+trust rules for Login Flow or the credentials.
 
-Nedokončený poll vrací HTTP 404 a JSON `[]`. Stejný výsledek znamená také
-neplatný, expirovaný nebo již spotřebovaný token. Klient jej proto nesmí
-interpretovat jako jisté „uživatel ještě čeká“. Reaguje bounded pollingem,
-stavem browser toku a novou inicializací po skončení lokálního časového okna.
+An unfinished poll returns HTTP 404 and the JSON `[]`. The same result also means
+an invalid, expired or already consumed token. The client therefore must not
+interpret it as a certain "the user is still waiting". It responds with bounded
+polling, the state of the browser flow and a new initialization after the local
+time window ends.
 
-Úspěšný poll vrátí `server`, `loginName` a `appPassword` právě jednou. Serverová
-implementace v uvedeném SHA generuje 128znakové login/poll tokeny, 72znakový app
-password a záznam po 1 200 sekundách expiruje. Klient s nimi zachází jako s
-opaque hodnotami a nespoléhá na konkrétní délku mimo bezpečnostní limity.
+A successful poll returns `server`, `loginName` and `appPassword` exactly once.
+The server implementation in the SHA above generates 128-character login/poll
+tokens and a 72-character app password, and the record expires after 1200
+seconds. The client treats them as opaque values and does not rely on a specific
+length beyond the security limits.
 
-## Credential commit a accountId
+## Credential commit and accountId
 
-Pole `server` v úspěšné odpovědi se znovu normalizuje a musí být shodné s
-původně ověřeným base URL. Změna originu nebo subpath celý výsledek zneplatní.
+The `server` field of a successful response is normalized again and must be
+identical to the originally verified base URL. A change of the origin or the
+subpath invalidates the whole result.
 
-Po validaci klient:
+After validation the client:
 
-1. vytvoří nové náhodné lokální UUID `accountId`;
-2. uloží app password pod account-scoped klíčem přímo do Keystore nebo Keychain;
-3. v databázové transakci uloží účet, odkaz na secure-storage položku a stav
-   `capabilitiesPending`;
-4. načte capabilities s novými credentials a v další transakci uloží
-   account-scoped snapshot a přepne účet do ready stavu;
-5. při selhání prvního DB commitu smaže novou secure-storage položku, případně
-   vytvoří bounded lokální cleanup tombstone.
+1. creates a new random local UUID `accountId`;
+2. stores the app password under an account-scoped key directly in the Keystore
+   or the Keychain;
+3. in a database transaction stores the account, a reference to the
+   secure-storage item and the state `capabilitiesPending`;
+4. loads the capabilities with the new credentials and, in another transaction,
+   stores the account-scoped snapshot and switches the account into the ready
+   state;
+5. on a failure of the first DB commit deletes the new secure-storage item, or
+   creates a bounded local cleanup tombstone.
 
-App password se nikdy nezapisuje do běžné databáze, fixture výstupu ani logu.
-Když první lokální commit po spotřebování poll odpovědi selže, nelze credentials
-získat podruhé; klient bezpečně uklidí lokální secret a vyžádá nový Login Flow.
-Síťová chyba při následném capability requestu naopak ponechá zabezpečený účet
-ve viditelném `capabilitiesPending` stavu a request lze bezpečně opakovat bez
-nového loginu.
+The app password is never written into the ordinary database, into an output
+fixture or into a log. When the first local commit fails after the poll response
+was consumed, the credentials cannot be obtained a second time; the client safely
+cleans up the local secret and requests a new Login Flow. A network error during
+the subsequent capability request, by contrast, leaves the secured account in the
+visible `capabilitiesPending` state and the request can be safely retried without
+a new login.
 
-## Dvě capability fáze
+## Two capability phases
 
-`GET /ocs/v2.php/cloud/capabilities?format=json` používá hlavičku
+`GET /ocs/v2.php/cloud/capabilities?format=json` uses the header
 `OCS-APIRequest: true`.
 
-Anonymní odpověď je vhodná jen pro onboarding a základní diagnostiku. Na
-referenční instanci obsahovala 5 namespace a 105 Spreed features, ale například
-Notifications namespace chyběl a account-dependent attachment stav nebyl
-autoritativní.
+The anonymous response is suitable only for onboarding and basic diagnostics. On
+the reference instance it contained 5 namespaces and 105 Spreed features, but the
+Notifications namespace, for example, was missing and the account-dependent
+attachment state was not authoritative.
 
-Po získání app passwordu klient endpoint zopakuje s Basic auth. Teprve tato
-odpověď je account-scoped capability snapshot. Referenční odpověď měla 26
-namespace a Notifications `push` funkce `devices`, `object-data` a `delete`.
-Neznámé namespace a pole se bezpečně zachovají nebo ignorují; deserializace kvůli
-nové serverové capability nesmí selhat.
+After obtaining the app password the client repeats the endpoint with Basic auth.
+Only this response is an account-scoped capability snapshot. The reference
+response had 26 namespaces and the Notifications `push` features `devices`,
+`object-data` and `delete`. Unknown namespaces and fields are safely preserved or
+ignored; deserialization must not fail because of a new server capability.
 
-Snapshot patří výhradně konkrétnímu `accountId`. Anonymní a přihlášená odpověď
-se nesmějí sdílet ani přepsat globální cache.
+The snapshot belongs exclusively to the specific `accountId`. The anonymous and
+the signed-in response must not be shared and must not overwrite a global cache.
 
-## Spustitelné ověření
+## Runnable verification
 
-Lokální validace z kořene repozitáře:
+Local validation from the repository root:
 
 ```powershell
 rtk proxy python contracts\client-bootstrap\validate_contract.py
 ```
 
-Read-only živý smoke:
+The read-only live smoke test:
 
 ```powershell
 rtk proxy python contracts\client-bootstrap\validate_contract.py `
   --live-origin <NEXTCLOUD_ORIGIN>
 ```
 
-Validátor provádí:
+The validator performs:
 
-1. OpenAPI 3.1 validaci.
-2. Draft 2020-12 kontrolu pozitivních i negativních fixtures.
-3. Skutečný form encode/decode round trip.
-4. Dvacet dva origin normalizačních scénářů.
-5. Root, subpath, debug HTTP, oba cross-origin směry a oddělené login/poll
-   base-path-escape scénáře.
-6. Shodu credential serveru včetně subpath a syntetický-secret scan.
-7. Oddělenou klasifikaci anonymních a account capabilities.
-8. Úplnost manifestu a zákaz nevypsaného fixture.
+1. OpenAPI 3.1 validation.
+2. A Draft 2020-12 check of the positive as well as negative fixtures.
+3. A real form encode/decode round trip.
+4. Twenty-two origin normalization scenarios.
+5. Root, subpath, debug HTTP, both cross-origin directions and separate
+   login/poll base-path-escape scenarios.
+6. A match of the credential server including the subpath and a
+   synthetic-secret scan.
+7. Separate classification of anonymous and account capabilities.
+8. Manifest completeness and a ban on an unlisted fixture.
 
-Aktuální výsledek: 1 OpenAPI dokument, 22 fixtures, 22 origin případů,
-2 status klasifikace, 9 login trust scénářů, 5 credential scénářů a 2 capability
-snapshoty prošly. Živý smoke navíc potvrdil 5 anonymních namespace a 105 Talk
-features bez zápisu na server.
+The current result: 1 OpenAPI document, 22 fixtures, 22 origin cases, 2 status
+classifications, 9 login trust scenarios, 5 credential scenarios and 2 capability
+snapshots passed. The live smoke test additionally confirmed 5 anonymous
+namespaces and 105 Talk features without writing anything to the server.
 
-Stejných 22 fixtures a 22 origin případů nyní načítají testy produkčního pure
-Dart balíku [`talk_protocol`](../../packages/talk_protocol). Implementace navíc
-ověřuje IDN/Punycode host, subpath-aware endpointy, redigované výjimky,
-duplicitní feature a zákaz domýšlet význam neznámého poll HTTP statusu.
+The same 22 fixtures and 22 origin cases are now loaded by the tests of the
+production pure Dart package [`talk_protocol`](../../packages/talk_protocol). The
+implementation additionally verifies the IDN/Punycode host, subpath-aware
+endpoints, redacted exceptions, a duplicate feature and a ban on guessing the
+meaning of an unknown poll HTTP status.
 
-Ověření z adresáře `packages/talk_protocol`:
+Verification from the `packages/talk_protocol` directory:
 
 ```powershell
 dart analyze --fatal-infos
 dart test
 ```
 
-Na Flutteru 3.44.4 a Dartu 3.12.2 prošla statická analýza bez nálezu a všech 54
-Dart testů. Jeden sestaví a spustí release executable, druhý spustí VM s profile
-compile-time příznakem; oba prokazují, že ani volba debug policy nepovolí HTTP.
-Další testy omezují neznámé capability JSON na 64 úrovní a 10 000 uzlů. Runtime
-závislost `punycoder` je uzamčená lockfilem a její MIT licence je zaznamenaná v
-[auditu závislostí](dependency-licenses.md).
+On Flutter 3.44.4 and Dart 3.12.2 the static analysis passed with no findings and
+all 54 Dart tests passed. One builds and runs a release executable, another runs
+the VM with the profile compile-time flag; both prove that not even the debug
+policy choice allows HTTP. Further tests limit unknown capability JSON to 64
+levels and 10,000 nodes. The runtime dependency `punycoder` is pinned by the
+lockfile and its MIT license is recorded in the
+[dependency audit](dependency-licenses.md).
 
-## Co důkaz ještě nepokrývá
+## What the evidence still does not cover
 
-Flutter řez a jeho testy už pokrývají HTTP transport, systémový browser,
-account-scoped secure storage a transakční vytvoření účtu. Debug APK z commitu
-`5f6e2f4` má SHA-256
+The Flutter slice and its tests already cover the HTTP transport, the system
+browser, account-scoped secure storage and the transactional creation of an
+account. The debug APK from commit `5f6e2f4` has SHA-256
 `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`.
-Dne 25. srpna 2026 bylo aktualizačně nainstalované na `emulator-5554`; hash
-nainstalovaného `base.apk` je shodný. Skutečný Login Flow v2, druhý faktor,
-schválení přístupu, přihlášený seznam konverzací a otevření room prošly. Účet
-přežil další `adb install -r` i ukončení a nový start procesu.
+On 25 August 2026 it was update-installed on `emulator-5554`; the hash of the
+installed `base.apk` is identical. A real Login Flow v2, the second factor,
+access approval, the signed-in conversation list and opening a room all passed.
+The account survived another `adb install -r` as well as terminating and starting
+the process again.
 
-Stále není doložené vzdálené odvolání app passwordu, dva skutečné servery v jedné
-instalaci, úplná clean-install/upgrade matice, platformní crash-log redakce ani
-přihlášený runtime na iOS/macOS/Linux. Aktuální evidence je v
-[Flutter aplikačním základu](flutter-foundation.md).
+Remote revocation of the app password, two real servers in one installation, a
+complete clean-install/upgrade matrix, platform crash-log redaction and a
+signed-in runtime on iOS/macOS/Linux are still not documented. The current record
+is in the [Flutter application foundation](flutter-foundation.md).
