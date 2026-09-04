@@ -216,7 +216,7 @@ workflows:
           # (build 6a9b0268). Configure, attach the Developer ID profiles,
           # then build - the build step below finds them still in place.
           cd apps/mobile
-          flutter build macos --config-only --release
+          flutter build macos --config-only --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
           xcode-project use-profiles
       # There is deliberately NO ad-hoc fallback here. An ad-hoc macOS build
       # carries no entitlements, so it loses `com.apple.security.app-sandbox`,
@@ -226,10 +226,17 @@ workflows:
       # still sitting in the container nobody reads any more. Measured on build-mac
       # with build 46 on 2026-09-02. A build that loses the user's login is
       # worse than no build, so a failed signature must fail the workflow.
+      # xcodebuild, not `flutter build macos`: the latter regenerates the Xcode
+      # configuration on every invocation, so it would undo `use-profiles` a
+      # second time and ask for a Mac App Development profile again. The Dart
+      # AOT still happens - Flutter's own build phases run inside this
+      # xcodebuild - and `-derivedDataPath build/macos` keeps the product where
+      # the steps below expect it.
       - name: Build the app
         script: |
+          set -e
           cd apps/mobile
-          flutter build macos --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          xcodebuild -workspace macos/Runner.xcworkspace -scheme Runner             -configuration Release -derivedDataPath build/macos build
       # A signature that came out ad-hoc anyway must not reach a tester, so it
       # is checked rather than trusted.
       - name: Verify the signature carries the sandbox
