@@ -90,7 +90,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
-      flutter: stable
+      flutter: 3.44.4
       xcode: latest
       cocoapods: default
       java: 17
@@ -139,7 +139,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
-      flutter: stable
+      flutter: 3.44.4
       xcode: latest
       cocoapods: default
       java: 17
@@ -208,7 +208,7 @@ workflows:
       groups:
         - nks-talk-telemetry
         - nks-talk-android-signing
-      flutter: stable
+      flutter: 3.44.4
       java: 17
     scripts:
       - *placeholder_firebase
@@ -271,7 +271,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
-      flutter: stable
+      flutter: 3.44.4
       java: 17
     scripts:
       # Four packages beyond Flutter's official Linux list, each for one
@@ -318,7 +318,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
-      flutter: stable
+      flutter: 3.44.4
       java: 17
     scripts:
       - name: Write a placeholder Firebase config
