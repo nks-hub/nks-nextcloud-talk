@@ -62,7 +62,11 @@ final class WindowsNotificationChannel {
     int? messageId,
   }) {
     return _channel.invokeMethod<bool>(
-      Platform.isMacOS ? 'showLocalNotification' : 'show',
+      // Picked from the channel, not the host: the Apple side answers
+      // `showLocalNotification` on its shared channel, the Windows side
+      // answers `show` on its own. Deciding by `Platform.isMacOS` sent the
+      // Apple method down a Windows channel whenever a caller named one.
+      _sharesApplePushChannel ? 'showLocalNotification' : 'show',
       {
         'accountId': accountId,
         'roomToken': roomToken,

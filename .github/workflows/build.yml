@@ -336,6 +336,54 @@ jobs:
           path: apps/mobile/build/windows/installer/*.exe
           if-no-files-found: error
 
+  # One release per tag, with everything the three GitHub jobs produced. The
+  # macOS zip is not here: Codemagic builds it and uploads it to this same
+  # release itself (see `codemagic.yaml`). Polling Codemagic from here would
+  # mean guessing when someone started that build; letting the build push when
+  # it is done needs no guess.
+  # No iOS artefact by design - a store-signed IPA installs from TestFlight and
+  # nowhere else, so a download link would only mislead.
+  release:
+    name: github release
+    needs: [android, linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect the files and hash them
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.apk' -o -name '*.aab' \
+            -o -name '*.tar.gz' -o -name '*.exe' \) -exec cp {} release/ \;
+          version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
+          echo "RELEASE_NAME=NKS Talk ${version%+*} (${version#*+})" >> "$GITHUB_ENV"
+          # The changelog keeps SHA-256 for every artefact, so the release
+          # carries the same list rather than a different one.
+          ( cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS )
+      - name: Take the notes from the changelog
+        run: |
+          version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
+          # The section for this version, heading line dropped.
+          awk -v v="${version%+*} (${version#*+})" '
+            $0 ~ "^## .*" v {found=1; next}
+            found && /^## / {exit}
+            found {print}
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2 > notes.md
+          cat notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.RELEASE_NAME }}
+          body_path: notes.md
+          files: release/*
+          fail_on_unmatched_files: true
+
   # Publishing, on a release tag only. `v*` alone would let a stray tag ship to
   # testers, and pulling a build back off Play is not a clean operation, so the
   # tag has to match `v<pubspec version>` exactly - build number included.

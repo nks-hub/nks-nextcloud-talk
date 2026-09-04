@@ -181,6 +181,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
+        - nks-talk-github
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
@@ -236,5 +237,20 @@ workflows:
         script: |
           cd apps/mobile/build/macos/Build/Products/Release
           ditto -c -k --sequesterRsrc --keepParent *.app nks-talk-macos.zip
+      # Pushed from here rather than pulled by a GitHub job: that job would
+      # have to guess when a Codemagic build was started and how long it takes.
+      # Nothing to guess if the build uploads when it is done. Only on a tag
+      # build - a branch build has no release to attach to.
+      - name: Attach the zip to the GitHub release
+        script: |
+          set -e
+          if [ -z "$CM_TAG" ]; then
+            echo "Not a tag build - nothing to attach."
+            exit 0
+          fi
+          cd apps/mobile/build/macos/Build/Products/Release
+          shasum -a 256 nks-talk-macos.zip
+          GH_TOKEN=$GITHUB_RELEASE_TOKEN gh release upload "$CM_TAG" \
+            nks-talk-macos.zip --clobber --repo nks-hub/nks-nextcloud-talk
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
