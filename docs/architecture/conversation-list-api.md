@@ -1,381 +1,405 @@
-# Kontrakt seznamu konverzací
+# Conversation list contract
 
-Datum ověření: 31. srpna 2026.
+Verification date: 31 August 2026.
 
-Stav: OpenAPI, syntetické response fixture, capability a runtime wire scénáře,
-produkční pure Dart parser a merge planner, privacy guard i autentizovaný
-read-only live smoke jsou spustitelně ověřené. Flutter aplikace nyní obsahuje
-account-scoped Drift store, conversation sync service, cache-first seznam,
-avatar resolver a account-aware adaptivní UI. Aktuální Android APK po skutečném
-přihlášení načetlo živý seznam konverzací a otevřelo room detail.
+State: the OpenAPI, the synthetic response fixtures, the capability and runtime
+wire scenarios, the production pure Dart parser and merge planner, the privacy
+guard and an authenticated read-only live smoke test are all runnably verified.
+The Flutter application now contains an account-scoped Drift store, a conversation
+sync service, a cache-first list, an avatar resolver and an account-aware
+adaptive UI. After a real login, the current Android APK loaded a live
+conversation list and opened a room detail.
 
-## Rozsah
+## Scope
 
-Kontrakt popisuje `GET /ocs/v2.php/apps/spreed/api/v4/room` jako první
-read-only část řezu konverzací. Ověřuje:
+The contract describes `GET /ocs/v2.php/apps/spreed/api/v4/room` as the first
+read-only part of the conversation slice. It verifies:
 
-1. kandidátní API v4 podle account capability `conversation-v4` a jeho
-   následné runtime potvrzení přes cursor/hash wire profil;
-2. plný a inkrementální request bez background změny presence;
-3. OCS obálku, room read model a serverové response hlavičky;
-4. account-scoped merge a atomické uložení cursoru;
-5. ochranu cache před chybným prázdným plným seznamem;
-6. read-only live běh bez výpisu názvů, tokenů nebo zpráv.
+1. the candidate API v4 based on the account capability `conversation-v4` and its
+   subsequent runtime confirmation through the cursor/hash wire profile;
+2. a full and an incremental request without a background change of presence;
+3. the OCS envelope, the room read model and the server response headers;
+4. the account-scoped merge and the atomic storage of the cursor;
+5. protecting the cache against a wrong empty full list;
+6. a read-only live run without printing names, tokens or messages.
 
-Nejde o nový serverový endpoint ani o převzetí upstream modelu. OpenAPI
-zachycuje existující wire formát a Python validátor samostatně vyjadřuje
-klientské invarianty, které JSON Schema neumí popsat.
+This is not a new server endpoint and not an adoption of an upstream model. The
+OpenAPI captures the existing wire format and the Python validator separately
+expresses the client invariants JSON Schema cannot describe.
 
-OpenAPI 3.1 je v
+The OpenAPI 3.1 is in
 [`contracts/conversation-list/openapi.json`](../../contracts/conversation-list/openapi.json).
-Přijaté mapování kontraktu do pure Dart runtime popisuje
-[návrh Dart conversation runtime](../plans/2026-08-22-dart-conversation-runtime-design.md).
-Implementace je v
+The accepted mapping of the contract into the pure Dart runtime is described by
+the [Dart conversation runtime design](../plans/2026-08-22-dart-conversation-runtime-design.md).
+The implementation is in
 [`packages/talk_protocol/lib/src/conversations`](../../packages/talk_protocol/lib/src/conversations).
 
-## Ověřený serverový kontrakt
+## The verified server contract
 
-Serverové chování bylo porovnané na Talk master
+The server behaviour was compared on Talk master
 [`f2958bb25be6604240c58a3faf9a2033a30d20e5`](https://github.com/nextcloud/spreed/blob/f2958bb25be6604240c58a3faf9a2033a30d20e5/lib/Controller/RoomController.php#L243)
-a stable v24.0.4
+and stable v24.0.4
 [`f9b9e9474e3621b47f74bf8890c4642cb49eed97`](https://github.com/nextcloud/spreed/blob/f9b9e9474e3621b47f74bf8890c4642cb49eed97/lib/Controller/RoomController.php#L239).
-Tělo `getRooms()` je shodné; liší se jen posun řádků.
+The body of `getRooms()` is identical; only the line offsets differ.
 
-Samotný feature flag však existoval dřív než cursor varianta. Talk v15.0.8 na
-SHA
+The feature flag itself, however, existed before the cursor variant. Talk v15.0.8
+at SHA
 [`9c12a6414fc12d6bb81cea387efded16f0301fc5`](https://github.com/nextcloud/spreed/blob/9c12a6414fc12d6bb81cea387efded16f0301fc5/lib/Capabilities.php#L66)
-inzeruje `conversation-v4`, ale jeho
+advertises `conversation-v4`, but its
 [`getRooms()`](https://github.com/nextcloud/spreed/blob/9c12a6414fc12d6bb81cea387efded16f0301fc5/lib/Controller/RoomController.php#L176-L238)
-nemá `modifiedSince` a vrací Talk hash bez
-`X-Nextcloud-Talk-Modified-Before`. Proto flag určuje pouze kandidáta a cursor
-profil se potvrzuje z první full response.
+has no `modifiedSince` and returns the Talk hash without
+`X-Nextcloud-Talk-Modified-Before`. The flag therefore only designates a
+candidate and the cursor profile is confirmed from the first full response.
 
-Talk v16.0.0 na SHA
+Talk v16.0.0 at SHA
 [`a0ebfedbce625d43d0a05d72e96df3b0e5a3ef9e`](https://github.com/nextcloud/spreed/blob/a0ebfedbce625d43d0a05d72e96df3b0e5a3ef9e/lib/Controller/RoomController.php#L176-L247)
-už cursor profil má, ale ještě nezná `includeLastMessage`. Jde proto o optimalizační
-hint, ne podmínku korektnosti: klient musí bezpečně přijmout `lastMessage`, i
-když poslal `includeLastMessage=false`.
+already has the cursor profile, but does not know `includeLastMessage` yet. It is
+therefore an optimization hint, not a correctness condition: the client must
+safely accept `lastMessage` even when it sent `includeLastMessage=false`.
 
-Parametry endpointu:
+Endpoint parameters:
 
-- `noStatusUpdate`: `0` nebo `1`; background fetch vždy posílá `1`;
-- `includeStatus`: boolean; Flutter klient od commitu `85fdb44` posílá `true`,
-  protože presence 1:1 rooms nemá jiný zdroj pravdy;
-- `modifiedSince`: nezáporný timestamp; jeho absence znamená plný fetch;
-- `includeLastMessage`: boolean; kompaktní refresh posílá `false`;
-- `format=json` a `OCS-APIRequest: true` vynucují JSON OCS odpověď.
+- `noStatusUpdate`: `0` or `1`; a background fetch always sends `1`;
+- `includeStatus`: boolean; since commit `85fdb44` the Flutter client sends
+  `true`, because presence of 1:1 rooms has no other source of truth;
+- `modifiedSince`: a non-negative timestamp; its absence means a full fetch;
+- `includeLastMessage`: boolean; a compact refresh sends `false`;
+- `format=json` and `OCS-APIRequest: true` force a JSON OCS response.
 
-Při `includeStatus=true` vrací inkrementální fetch všechny 1:1 rooms, aby mohl
-obnovit presence. `includeLastMessage=false` šetří načtení posledních zpráv,
-share a thread preload; plný chat preview bude mít vlastní chat kontrakt.
+With `includeStatus=true` an incremental fetch returns all 1:1 rooms, so that it
+can refresh presence. `includeLastMessage=false` saves loading the last messages,
+shares and the thread preload; a full chat preview will have its own chat
+contract.
 
-Room objekt nese `status`, `statusClearAt`, `statusIcon` a `statusMessage`.
-Merge je zpracuje takto: inkrementální odpověď bez klíče `status` předchozí
-hodnotu zachová, plná odpověď je autoritativní a přepíše ji i na prázdnou.
-`offline` a `invisible` se nevykreslují jako presence. Vlastní status se
-prezentuje jen do `statusClearAt`. Detail rozhodnutí je v D-029.
+A room object carries `status`, `statusClearAt`, `statusIcon` and
+`statusMessage`. The merge handles them like this: an incremental response
+without the `status` key preserves the previous value, a full response is
+authoritative and overwrites it even with an empty one. `offline` and `invisible`
+are not rendered as presence. One's own status is presented only until
+`statusClearAt`. The detail of the decision is in D-029.
 
-### Aktuální absence v soukromé konverzaci
+### Current absence in a private conversation
 
-DAV kontrakt byl ověřen 31. srpna 2026 proti Nextcloud `stable34` na SHA
-`a32bcea9cb0e0dec3329d8d8b17be190cea1a767`. Klient se na absenci ptá pouze
-pro 1:1 room stejného účtu s neprázdným `roomName`, které je serverovým user ID
-protistrany. Nejdřív musí konkrétní account snapshot obsahovat přesné
-`dav.absence-supported = true`; missing nebo malformed capability je
+The DAV contract was verified on 31 August 2026 against Nextcloud `stable34` at
+SHA `a32bcea9cb0e0dec3329d8d8b17be190cea1a767`. The client asks about absence
+only for a 1:1 room of the same account with a non-empty `roomName`, which is the
+server-side user ID of the other party. First, the specific account snapshot must
+contain an exact `dav.absence-supported = true`; a missing or malformed
+capability is fail-closed.
+
+The GET goes to the account origin
+`/ocs/v2.php/apps/dav/api/v1/outOfOffice/{userId}/now?format=json` with the same
+login and credential. `404` means no current absence. A successful response must
+have OCS `ok/200`, exactly the requested `userId`, non-negative timestamps in a
+valid order and strings of at most 4096 Unicode code points. The body is limited
+to 64 KiB. A change of the room or the account, or closing the screen, cancels
+both the capability and the DAV request; a late result is not carried into a new
+conversation.
+
+`16101db` renders the period, the message and an optional replacement without a
+durable cache. The visual title has at most two lines, the message three and the
+replacement two; the whole bounded text stays inside a single leaf semantics
+label. The exact 200% test with an almost maximal multiline payload has no
+overflow. A live POST → GET → DELETE round trip on iOS 18.6 proved the banner in
+both themes and the accessibility-large layout; the pixel pair
+`#4F4061` / `#EDDCFF` has a contrast of 7.2739:1 in both light and dark. The
+follow-up `GET /now` after the cleanup returned 404.
+
+### An upcoming room event
+
+Talk Android `5428960` builds the location filter as the exact absolute address
+`{accountOrigin}/call/{roomToken}` and Nextcloud `stable34` at SHA
+`a32bcea9cb0e0dec3329d8d8b17be190cea1a767` accepts it through
+`GET /ocs/v2.php/apps/dav/api/v1/events/upcoming`. The client calls the endpoint
+only behind the feature `upcoming-reminders`; a missing capability is
 fail-closed.
 
-GET jde na account origin
-`/ocs/v2.php/apps/dav/api/v1/outOfOffice/{userId}/now?format=json` se stejným
-loginem a credentialem. `404` znamená žádnou aktuální absenci. Úspěšná odpověď
-musí mít OCS `ok/200`, přesně požadované `userId`, nezáporné timestampy v
-platném pořadí a řetězce nejvýše 4096 Unicode code points. Tělo je omezené na
-64 KiB. Změna roomu, účtu nebo zavření obrazovky zruší capability i DAV
-request; opožděný výsledek se do nové konverzace nepřenese.
+The request uses the origin, the login and the credential of the account of the
+open room. The location is built from the canonical `ServerBase` and the token of
+the same account-scoped conversation snapshot. The response is limited to 64 KiB
+and at most 100 events. The first displayable event must have a bounded `uri`,
+`calendarUri`, an optional non-negative `start`, a bounded summary and a location
+exactly matching the request. A different location rejects the whole response
+instead of showing an event of a foreign room.
 
-`16101db` vykresluje období, zprávu a volitelný zástup bez durable cache.
-Vizuální title má nejvýše dva řádky, zpráva tři a zástup dva; celý bounded text
-zůstává v jediném leaf semantics labelu. Přesný 200% test s téměř maximálním
-multiline payloadem nemá overflow. Živý POST → GET → DELETE round trip na iOS
-18.6 prokázal banner v obou tématech a accessibility-large layout; pixelový
-pár `#4F4061` / `#EDDCFF` má v light i dark kontrast 7,2739:1. Následný
-`GET /now` po úklidu vrátil 404.
+`be6cfe5` keeps the reminder only in the open pane. A change of the account or
+the room cancels the request and the generation key synchronously removes the
+previous `FutureBuilder` data; a late result of the old room is not rendered. The
+banner shows at most two lines of the title and two lines of the time, keeps the
+whole bounded text in a leaf semantics node, and dismissing it has its own 48dp
+accessible element.
 
-### Nadcházející událost místnosti
+A live CalDAV create → DAV filter → iOS 18.6 render → dismiss round trip passed
+in light, dark and accessibility-large mode; the exact 200% test covers a title
+of almost 4096 characters without overflow. The pixel pair `#394857` / `#D4E4F6`
+has a contrast of 7.2492:1 in both themes. All four temporary fixtures were
+deleted and the follow-up endpoint returned an empty list.
 
-Talk Android `5428960` staví location filtr jako přesnou absolutní adresu
-`{accountOrigin}/call/{roomToken}` a Nextcloud `stable34` na SHA
-`a32bcea9cb0e0dec3329d8d8b17be190cea1a767` ji přijímá přes
-`GET /ocs/v2.php/apps/dav/api/v1/events/upcoming`. Klient endpoint volá pouze
-za feature `upcoming-reminders`; missing capability je fail-closed.
+The server captures the value of `X-Nextcloud-Talk-Modified-Before` as the first
+operation of the method, that is before the event, the status update and loading
+the rooms. Another request with that cursor therefore does not create a time gap.
+The delta includes not only new activity, but also changes of the attendee state
+and active calls.
 
-Request používá origin, login a credential účtu otevřené room. Location vzniká
-z kanonického `ServerBase` a tokenu stejného account-scoped conversation
-snapshotu. Odpověď je omezená na 64 KiB a nejvýše 100 eventů. První zobrazitelný
-event musí mít bounded `uri`, `calendarUri`, volitelný nezáporný `start`,
-bounded summary a location přesně shodnou s requestem. Jiná location odmítne
-celou odpověď místo zobrazení události cizí room.
+## Response headers
 
-`be6cfe5` drží reminder pouze v otevřeném pane. Změna accountu nebo room zruší
-request a generation key synchronně odstraní předchozí `FutureBuilder` data;
-pozdní výsledek staré room se nevykreslí. Banner ukazuje nejvýše dva řádky
-názvu a dva řádky času, celý bounded text ponechá v leaf semantics a zavření
-má samostatný 48dp přístupný prvek.
+A successful response contains:
 
-Živý CalDAV create → DAV filter → iOS 18.6 render → dismiss round trip prošel
-ve světlém, tmavém i accessibility-large režimu; přesný 200% test pokrývá
-téměř 4096znakový název bez overflow. Pixelový pár `#394857` / `#D4E4F6` má v
-obou tématech kontrast 7,2492:1. Všechny čtyři dočasné fixture byly smazané a
-následný endpoint vrátil prázdný seznam.
+- `X-Nextcloud-Talk-Modified-Before`: the cursor of the next delta request;
+- `X-Nextcloud-Talk-Hash`: the configuration hash of the relevant server, Talk,
+  signaling, federation, theming and user settings;
+- optionally `X-Nextcloud-Talk-Federation-Invites`, when a non-zero number of
+  pending federated invitations exists.
 
-Server zachytí hodnotu `X-Nextcloud-Talk-Modified-Before` jako první operaci
-metody, tedy před eventem, status update i načtením rooms. Další request s tímto
-cursorem proto nevytváří časovou mezeru. Delta zahrnuje nejen novou aktivitu,
-ale také změny attendee stavu a aktivní hovory.
+A change of the Talk hash only sets an account-scoped request for new
+capabilities and settings. It is not a reason to delete rooms.
 
-## Response hlavičky
+## Capability, wire profile and the request builder
 
-Úspěšná odpověď obsahuje:
+The exact feature flag `conversation-v4` in the signed-in capability snapshot of
+a specific account enables only the candidate v4 path. It does not activate this
+contract by itself. Before the merge, the first valid full response must contain
+a successful OCS envelope, schema-valid rooms, the canonical cursor
+`X-Nextcloud-Talk-Modified-Before` and a non-empty `X-Nextcloud-Talk-Hash`. Only
+then does the account store the active profile `cursor-v4`.
 
-- `X-Nextcloud-Talk-Modified-Before`: cursor dalšího delta requestu;
-- `X-Nextcloud-Talk-Hash`: configuration hash relevantního serverového,
-  Talk, signaling, federation, theming a user nastavení;
-- volitelně `X-Nextcloud-Talk-Federation-Invites`, když existuje nenulový počet
-  čekajících federovaných pozvánek.
+A missing cursor, a missing hash or a non-canonical cursor leaves the active path
+empty and marks the profile as `unsupported-wire-profile`. Neither the cache nor
+the cursor may change. A legacy conversation-v4 without this profile stays
+explicitly unsupported until a separate adapter is created for it. Neither a high
+Talk release number nor `conversation-v3` alone is a substitute feature flag.
 
-Změna Talk hash pouze nastaví account-scoped požadavek na nové capabilities a
-settings. Není důvodem pro smazání rooms.
+The request builder carries an explicit `full` or `incremental` mode. Deleting
+local data is decided by that mode, not by the value of the cursor. That matters
+for the safe case `incremental + modifiedSince=0` too, which still must not
+delete anything. A full request sends no cursor; the server default is `0`.
 
-## Capability, wire profil a request builder
+Every request uses Basic auth and the origin of the specific `accountId`, a
+stable `User-Agent` with the Android identity `com.nkshub.nextcloudtalk` and the
+header `OCS-APIRequest: true`. The Authorization is not logged.
 
-Přesný feature flag `conversation-v4` v přihlášeném capability snapshotu
-konkrétního účtu povolí pouze kandidátní v4 cestu. Neaktivuje tento kontrakt
-sám. První validní full response musí před merge obsahovat úspěšnou OCS obálku,
-schema-validní rooms, kanonický cursor
-`X-Nextcloud-Talk-Modified-Before` a neprázdný
-`X-Nextcloud-Talk-Hash`. Teprve potom účet uloží aktivní profil `cursor-v4`.
+A pure Dart request additionally carries an immutable `accountId`, a local
+request ID and the canonical `ServerBase`; the URI is derived directly from that
+context. The decoder attaches the same request to every success as well as
+failure result. The merge planner therefore does not accept a separate account,
+request ID or request and cannot swap them between concurrent servers.
 
-Chybějící cursor, chybějící hash nebo nekanonický cursor ponechá aktivní cestu
-prázdnou a profil označí jako `unsupported-wire-profile`. Cache ani cursor se
-nesmějí změnit. Legacy conversation-v4 bez tohoto profilu zůstává explicitně
-nepodporovaná, dokud pro něj nevznikne samostatný adapter. Ani vysoké číslo Talk
-release, ani samotné `conversation-v3` nejsou náhradní feature flag.
+## Response and type invariants
 
-Request builder nese explicitní režim `full` nebo `incremental`. O mazání
-lokálních dat rozhoduje tento režim, nikoli hodnota cursoru. To je podstatné i
-pro bezpečný případ `incremental + modifiedSince=0`, který stále nesmí mazat.
-Full request cursor neposílá; serverový default je `0`.
+The schema preserves unknown future fields, but requires the stable room values
+needed for the list, the unread state, permissions and a future call indication.
+`lastMessage` is optional for a compact response.
 
-Každý request používá Basic auth a origin konkrétního `accountId`, stabilní
-`User-Agent` s Android identitou `com.nkshub.nextcloudtalk` a hlavičku
-`OCS-APIRequest: true`. Authorization se neloguje.
+Before the merge these are additionally checked:
 
-Pure Dart request navíc nese neměnný `accountId`, lokální request ID a
-kanonický `ServerBase`; URI se odvozuje přímo z tohoto kontextu. Decoder připojí
-tentýž request ke každému success i failure výsledku. Merge planner proto
-nepřijímá samostatný účet, request ID ani request a nemůže je zaměnit mezi
-souběžnými servery.
+- OCS `status=ok` and `statuscode=200`; a failure inside HTTP 200 is not an empty
+  list;
+- every room has a valid token;
+- the tokens in one response are unique;
+- the token of a present `lastMessage` matches the token of its room;
+- the cursor, the hash and the optional federation counter match the declared
+  format.
 
-## Response a typové invarianty
+Schema diagnostics contain only the structural JSON path and the validator type.
+They never take over the `jsonschema` text with the specific wrong value, so a
+live schema drift cannot print a room token, a name or the content of a message.
 
-Schema zachovává neznámá budoucí pole, ale vyžaduje stabilní room hodnoty
-potřebné pro seznam, unread stav, permissions a budoucí call indikaci.
-`lastMessage` je volitelná pro kompaktní response.
+HTTP 401 moves only the affected account into the re-auth state. HTTP 426, 429,
+503, a transport error or an invalid OCS response must neither delete the cache
+nor move the cursor.
 
-Před merge se navíc kontroluje:
+During the first profile probe, HTTP 401 returns a separate re-auth result. HTTP
+426, 429, 503 and a valid OCS failure only defer the confirmation. Only a
+structurally incompatible HTTP 200 response — a missing cursor/hash or a broken
+schema, say — counts as `unsupported-wire-profile`. A temporary error therefore
+cannot permanently disqualify a supported account. The HTTP/OCS state is
+classified before the full probe mode is checked, so a 401 stays re-auth even
+after an incremental request.
 
-- OCS `status=ok` a `statuscode=200`; failure uvnitř HTTP 200 není prázdný
-  seznam;
-- každý room má platný token;
-- tokeny v jedné response jsou unikátní;
-- token přítomného `lastMessage` se shoduje s tokenem jeho room;
-- cursor, hash a volitelný federation counter odpovídají deklarovanému formátu.
+## The pure Dart runtime
 
-Schema diagnostika obsahuje pouze strukturální JSON path a typ validatoru.
-Nikdy nepřebírá `jsonschema` text s konkrétní chybnou hodnotou, takže live schema
-drift nemůže vypsat room token, název ani obsah zprávy.
+The `talk_protocol` package now implements the whole platform-neutral boundary:
 
-HTTP 401 přesune pouze dotčený účet do re-auth stavu. HTTP 426, 429, 503,
-transportní chyba nebo neplatná OCS odpověď nesmějí smazat cache ani posunout
-cursor.
+- `ConversationListRequest` owns the account, the request ID, the server, the
+  explicit full/incremental mode, the canonical query string, the OCS header, the
+  User-Agent and a subpath-aware URI;
+- the response decoder distinguishes success, re-auth, an OCS failure and the
+  supported HTTP 426/429/503 without guessing an unknown status, and binds every
+  result to the original request;
+- headers are case-insensitive and their case variants must not repeat;
+- `ConversationRoom` and `ConversationPreview` type the list, unread, permission,
+  call and preview values and preserve a deeply immutable wire object. After
+  validation the room model also exposes `objectType`, `avatarVersion`,
+  `isCustomAvatar`, an optional `remoteServer`, a derived `isFederated`, the
+  authoritative `canEnableSip`, a bounded `sipEnabled` in the range 0 to 2 and a
+  redacted personal `attendeePin`;
+- `messageParameters` and `reactions` are maps. Because of PHP JSON
+  serialization, an empty array `[]` is also accepted and normalized into an
+  empty map; a non-empty array is rejected as an invalid conversation response;
+- one JSON freeze budget applies across all rooms of a response, the depth is
+  limited to 64 and the number of rooms to the OpenAPI maximum of 100,000;
+- diagnostic `toString()` methods never print the account ID, a token, a name or
+  a message;
+- the capability resolver accepts only a signed-in `conversation-v4` snapshot and
+  activates `cursor-v4` only after a valid full probe; the re-auth, deferred and
+  structurally unsupported results stay distinct types.
 
-Při prvním profile probe HTTP 401 vrací samostatný re-auth výsledek. HTTP 426,
-429, 503 a validní OCS failure potvrzení pouze odloží. Za
-`unsupported-wire-profile` se považuje jen strukturálně nekompatibilní HTTP 200
-odpověď, například chybějící cursor/hash nebo vadné schema. Dočasná chyba tak
-nemůže podporovaný účet trvale vyřadit. HTTP/OCS stav se klasifikuje před
-kontrolou full probe režimu, takže 401 zůstává re-auth i po incremental requestu.
+The HTTP transport deliberately stays outside the pure Dart package. Before the
+JSON decode it has to keep the already designed limit of 8 MiB, forbid redirects
+and use the credentials of the specific account.
 
-## Pure Dart runtime
+## The account-scoped transactional merge
 
-Balík `talk_protocol` nyní implementuje celou platformně neutrální hranici:
+The primary key of the store is `(accountId, roomToken)`. The pure Dart
+`ConversationMergePlanner` executes the same minimal algorithm whose DB
+operations the Flutter persistence layer performs atomically:
 
-- `ConversationListRequest` vlastní account, request ID, server, explicitní
-  full/incremental režim, kanonický query string, OCS hlavičku, User-Agent a
-  subpath-aware URI;
-- response decoder rozlišuje success, re-auth, OCS failure a podporované
-  HTTP 426/429/503 bez domýšlení neznámého statusu a každý výsledek váže na
-  původní request;
-- hlavičky jsou case-insensitive a jejich case varianty se nesmějí opakovat;
-- `ConversationRoom` a `ConversationPreview` typují list, unread, permission,
-  call a preview hodnoty a zachovávají hluboce neměnný wire objekt. Room model
-  po validaci zpřístupňuje také `objectType`, `avatarVersion`,
-  `isCustomAvatar`, volitelný `remoteServer`, odvozený `isFederated`,
-  autoritativní `canEnableSip`, bounded `sipEnabled` v rozsahu 0 až 2 a
-  redigovaný osobní `attendeePin`;
-- `messageParameters` a `reactions` jsou mapy. Kvůli PHP JSON serializaci se
-  přijme také pouze prázdné pole `[]` a normalizuje se na prázdnou mapu;
-  neprázdné pole se odmítne jako neplatná conversation response;
-- jeden JSON freeze budget platí přes všechny rooms odpovědi, hloubka je
-  omezená na 64 a počet rooms na OpenAPI maximum 100 000;
-- diagnostické `toString()` nevypisují account ID, token, název ani zprávu;
-- capability resolver přijme jen přihlášený `conversation-v4` snapshot a
-  aktivuje `cursor-v4` teprve po validním full probe; re-auth, deferred a
-  strukturálně unsupported výsledky zůstávají typově odlišné.
+- an incremental response only upserts the returned rooms;
+- a valid non-empty full response may remove missing rooms;
+- the cursor and the configuration hash are stored only within the same
+  successful transaction;
+- a schema, OCS or semantic error leaves both the room data and the cursor
+  unchanged;
+- a simulated transaction failure discards the candidate plan and preserves the
+  original state;
+- the same room token in two accounts stays two separate records.
+- a request of account or server origin B cannot be applied to the snapshot of
+  account A.
 
-HTTP transport zůstává záměrně mimo pure Dart balík. Musí před JSON decode
-udržet již navržený limit 8 MiB, zakázat redirecty a použít credentials
-konkrétního účtu.
+The planner returns immutable upserts, the exact tokens to remove and the new
+account state. It does not itself claim that the persistence happened. The
+transaction failure test discards the whole candidate plan and verifies the
+original snapshot and cursor; the current Drift adapter performs the same
+operations in a single real transaction.
 
-## Account-scoped transakční merge
+### The foreground delta and manual full reconciliation
 
-Primární klíč store je `(accountId, roomToken)`. Pure Dart
-`ConversationMergePlanner` vykonává stejný minimální algoritmus, jehož DB
-operace Flutter persistence vrstva atomicky provádí:
+Once a cursor exists, the Flutter foreground loop uses an incremental fetch so
+that it does not download the whole list every 15 seconds. A manual refresh calls
+the same account-scoped service with `forceFull=true`; the request then sends no
+`modifiedSince` and a valid full response may remove a local room the server no
+longer returns.
 
-- inkrementální response pouze upsertuje vrácené rooms;
-- validní neprázdný full response může odstranit chybějící rooms;
-- cursor a configuration hash se uloží až v téže úspěšné transakci;
-- schema, OCS nebo semantická chyba nechají room data i cursor beze změny;
-- simulované selhání transakce zahodí candidate plán a ponechá původní stav;
-- shodný room token ve dvou účtech zůstává dvěma oddělenými záznamy.
-- request účtu nebo serverového originu B nelze aplikovat do snapshotu účtu A.
+Single-flight is account-scoped and mode-aware. A full request that arrives
+behind a running incremental flight first waits for it to finish and then starts
+or joins a separate full flight. It therefore cannot settle for a delta result.
+An incremental caller, on the other hand, may join a stronger full flight.
+Cancelling one waiter does not interrupt the transport while another caller is
+waiting on it.
 
-Planner vrací neměnné upserty, přesné tokeny k odstranění a nový account stav.
-Sám netvrdí, že persistence proběhla. Test pádu transakce zahodí celý candidate
-plán a ověří původní snapshot i cursor; současný Drift adapter stejné operace
-provádí v jedné skutečné transakci.
+A regression test on a single service instance verifies the sequence full →
+incremental → manual full as `modifiedSince = null → cursor → null`. A missing
+room is removed only from account A; the same token of account B and a pending
+text-send outbox of account A are preserved. Another test blocks a running delta
+and proves the follow-up full request.
 
-### Foreground delta a ruční full reconciliation
-
-Flutter foreground loop po existenci cursoru používá inkrementální fetch, aby
-každých 15 sekund nestahoval celý seznam. Ruční refresh volá stejnou
-account-scoped službu s `forceFull=true`; request pak neposílá `modifiedSince`
-a validní full response může odstranit lokální room, kterou server už nevrací.
-
-Single-flight je account-scoped a mode-aware. Full požadavek, který přijde za
-probíhajícím incremental flightem, nejprve počká na jeho dokončení a potom
-spustí nebo joinne samostatný full flight. Nemůže se tedy spokojit s delta
-výsledkem. Incremental caller se naopak smí připojit k silnějšímu full flightu.
-Zrušení jednoho waiteru nepřeruší transport, dokud na něm čeká jiný caller.
-
-Regresní test na jedné instanci služby ověřuje sekvenci full → incremental →
-manual full jako `modifiedSince = null → cursor → null`. Chybějící room se
-odstraní pouze z účtu A; stejný token účtu B a pending text-send outbox účtu A
-zůstanou zachované. Další test blokuje rozběhnutou deltu a prokazuje navazující
-full request.
-
-Toto pravidlo odpovídá ověřenému iOS chování na SHA
+This rule matches the verified iOS behaviour at SHA
 [`2d31eda5e2acbf3cef27aa289376942bdf0de25d`](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk/Rooms/NCRoomsManager.swift#L178-L229):
-incrementální merge nemaže chybějící rooms a full merge mění room, messages,
-chat blocks, threads a federated capabilities v jedné Realm transakci. Cursor
-je uložený per account v
+an incremental merge does not delete missing rooms and a full merge changes
+rooms, messages, chat blocks, threads and federated capabilities within a single
+Realm transaction. The cursor is stored per account in
 [`TalkAccount.lastReceivedModifiedSince`](https://github.com/nextcloud/talk-ios/blob/2d31eda5e2acbf3cef27aa289376942bdf0de25d/NextcloudTalk/Database/TalkAccount.h#L41).
 
-## Dvoufázové potvrzení prázdného full seznamu
+## Two-phase confirmation of an empty full list
 
-První validní full-empty response při existující cache je destruktivně
-nejednoznačná. Store proto pouze uloží lokální ID a čas potvrzovacího requestu a
-nepohne cursorem. Až druhý samostatný validní full fetch do 300 sekund může
-odstranit všechny rooms a commitnout nový cursor.
+The first valid full-empty response with an existing cache is destructively
+ambiguous. The store therefore only records the local ID and the time of the
+confirming request and does not move the cursor. Only a second, separate valid
+full fetch within 300 seconds may remove all rooms and commit a new cursor.
 
-Opakované zpracování stejného request ID není nezávislý důkaz. Účet, který už
-žádné rooms nemá, může full-empty response přijmout hned. Tato ochrana neignoruje
-legitimní smazání všech rooms natrvalo, ale zabrání jediné transientní nebo
-vadné odpovědi zničit lokální historii.
+Reprocessing the same request ID is not independent evidence. An account that has
+no rooms already may accept a full-empty response immediately. This protection
+does not ignore a legitimate permanent deletion of all rooms, but it prevents a
+single transient or faulty response from destroying the local history.
 
-Po překročení 300 sekund starý důkaz expiruje a nový full-empty jej pouze
-nahradí. Jakákoli mezilehlá neprázdná inkrementální response jej vyvrátí a
-zruší; další full-empty je proto znovu prvním důkazem, ne potvrzením smazání.
+After 300 seconds the old evidence expires and a new full-empty merely replaces
+it. Any intervening non-empty incremental response refutes and cancels it;
+another full-empty is therefore the first piece of evidence again, not a
+confirmation of the deletion.
 
-`forceFull=true` zůstává full režimem i po prvním
-`confirmationRequired`. Druhý pokus proto používá nové request ID, znovu
-neposílá `modifiedSince` a teprve jeho validní empty response smí odstranit
-rooms a vyčistit potvrzovací stav. Regresní test ověřil tři full requesty v
-pořadí initial full → první empty důkaz → druhý empty důkaz.
+`forceFull=true` stays a full mode even after the first `confirmationRequired`.
+The second attempt therefore uses a new request ID, again sends no
+`modifiedSince`, and only its valid empty response may remove the rooms and clear
+the confirmation state. A regression test verified three full requests in the
+order initial full → first empty evidence → second empty evidence.
 
-## Spustitelné ověření
+## Runnable verification
 
-Lokální validace z kořene repozitáře:
+Local validation from the repository root:
 
 ```powershell
 rtk proxy python contracts\conversation-list\validate_contract.py
 ```
 
-Pure Dart ověření z `packages/talk_protocol`:
+Pure Dart verification from `packages/talk_protocol`:
 
 ```powershell
 dart analyze --fatal-infos
 dart test
 ```
 
-Volitelný live smoke načítá credentials pouze z proměnných
-`NEXTCLOUD_TALK_USERNAME` a `NEXTCLOUD_TALK_APP_PASSWORD`:
+The optional live smoke test loads credentials only from the variables
+`NEXTCLOUD_TALK_USERNAME` and `NEXTCLOUD_TALK_APP_PASSWORD`:
 
 ```powershell
 rtk proxy python contracts\conversation-list\validate_contract.py `
   --live-origin <NEXTCLOUD_ORIGIN>
 ```
 
-Validátor provádí:
+The validator performs:
 
-1. OpenAPI 3.1 a Draft 2020-12 validaci.
-2. Devět raw response fixtures včetně compact, empty, 401 a chyb.
-3. Sedm přesných query-builder scénářů a wire round trip.
-4. Dvanáct capability scénářů včetně candidate/active stavu, HTTP/OCS/schema
-   chyby, chybějícího cursoru, chybějícího hashe a nekanonického cursoru.
-5. Čtrnáct merge scénářů s devatenácti transakčními kroky.
-6. Rejekci duplicate tokenu, preview mismatch a chybějícího tokenu.
-7. Cursor rollback, account izolaci, hash refresh, expiraci a zrušení empty
-   důkazu neprázdnou deltou.
-8. Live-schema redaction guard s privátní marker hodnotou a IPv6 origin případ.
-9. Úplnost manifestu a secret scan všech fixtures.
+1. OpenAPI 3.1 and Draft 2020-12 validation.
+2. Nine raw response fixtures including compact, empty, 401 and errors.
+3. Seven exact query-builder scenarios and the wire round trip.
+4. Twelve capability scenarios including the candidate/active state, an
+   HTTP/OCS/schema error, a missing cursor, a missing hash and a non-canonical
+   cursor.
+5. Fourteen merge scenarios with nineteen transactional steps.
+6. Rejection of a duplicate token, a preview mismatch and a missing token.
+7. A cursor rollback, account isolation, a hash refresh, expiration and
+   cancellation of the empty evidence by a non-empty delta.
+8. The live-schema redaction guard with a private marker value and the IPv6
+   origin case.
+9. Manifest completeness and a secret scan of all fixtures.
 
-Aktuální lokální výsledek: 1 OpenAPI dokument, 9 response fixtures, 7 query
-případů, 12 capability případů a 14 merge případů s 19 kroky prošlo. Navíc
-prošel 1 live-schema redaction guard a 1 IPv6 origin případ. Stejné conversation
-fixtures přímo načítá 74 Dart testů; spolu s bootstrap testy jde o 128 testů.
-Patří mezi ně regrese pro export avatar/federation metadat, PHP prázdná pole,
-rejekci neprázdných polí, account/origin binding i re-auth a deferred profile
-probe. Cílená conversation sada 25. srpna 2026 čerstvě prošla 74/74, celý
-`talk_protocol` po named-thread rozšíření 569/569 a statická analýza je bez
-nálezu.
+The current local result: 1 OpenAPI document, 9 response fixtures, 7 query cases,
+12 capability cases and 14 merge cases with 19 steps passed. In addition, 1
+live-schema redaction guard and 1 IPv6 origin case passed. The same conversation
+fixtures are loaded directly by 74 Dart tests; together with the bootstrap tests
+that is 128 tests. Among them are regressions for exporting avatar/federation
+metadata, PHP empty arrays, rejecting non-empty arrays, the account/origin
+binding and the re-auth and deferred profile probes. The targeted conversation
+suite freshly passed 74/74 on 25 August 2026, the whole of `talk_protocol` passed
+569/569 after the named-thread extension, and the static analysis has no
+findings.
 
-Čerstvá scoped Flutter sada 25. srpna 2026 prošla 60 testy; 1 read-only live
-test se přeskočil pouze bez environment credentials. Zahrnuje account repository,
-onboarding, HTTP adaptér, databázové migrace, conversation sync, foreground
-loop, shell, avatary a adaptivní layout. Pokrývá manual full, full intent za
-rozběhnutou deltou, guarded-empty, resume a avatar cache/render.
+The fresh scoped Flutter suite of 25 August 2026 passed 60 tests; 1 read-only
+live test was skipped only for lack of environment credentials. It covers the
+account repository, onboarding, the HTTP adapter, database migrations, the
+conversation sync, the foreground loop, the shell, avatars and the adaptive
+layout. It covers a manual full, a full intent behind a running delta,
+guarded-empty, a resume and the avatar cache/render.
 
-Autentizovaný live smoke provedl přesně dva GET requesty s
-`noStatusUpdate=1`, `includeStatus=false` a `includeLastMessage=false`. Full
-response obsahovala 17 validních rooms a okamžitá delta 0 změn. Obě odpovědi
-obsahovaly cursor i Talk hash. Výstup neobsahoval názvy, room tokeny, zprávy ani
-credentials.
+The authenticated live smoke test performed exactly two GET requests with
+`noStatusUpdate=1`, `includeStatus=false` and `includeLastMessage=false`. The
+full response contained 17 valid rooms and the immediate delta 0 changes. Both
+responses contained the cursor as well as the Talk hash. The output contained no
+names, room tokens, messages or credentials.
 
-## Co důkaz ještě nepokrývá
+## What the evidence still does not cover
 
-Flutter repository a widget testy pokrývají SQLite migraci, account scope,
-full/delta merge, mode-aware single-flight, ruční stale-room reconciliation a
-cache-first seznam. Debug APK z commitu `5f6e2f4` se SHA-256
-`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
-bylo 25. srpna 2026 aktualizačně nainstalované na `emulator-5554`; po skutečném
-Login Flow zobrazilo živé konverzace, avatary a otevřelo room. Účet přežil
-ukončení a nový start procesu; samostatný důkaz offline conversation cache po
-process death z tohoto běhu nevznikl.
+The Flutter repository and widget tests cover the SQLite migration, the account
+scope, the full/delta merge, mode-aware single-flight, manual stale-room
+reconciliation and the cache-first list. The debug APK from commit `5f6e2f4` with
+SHA-256 `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf` was
+update-installed on `emulator-5554` on 25 August 2026; after a real Login Flow it
+displayed live conversations and avatars and opened a room. The account survived
+terminating and starting the process again; that run produced no separate
+evidence of the offline conversation cache after a process death.
 
-Zbývá live důkaz cross-device full/delta aktualizace bez ručního refresh,
-skutečné odstranění room z jiného zařízení, favorite/archive a participant
-mutace, dva účty na dvou serverech a odpovídající runtime důkaz na
-Apple/Linux platformách. Background a killed-process aktualizace mají
-samostatnou push bránu; connected Android test ji nenahrazuje. Aktuální stav je
-v [Flutter aplikačním základu](flutter-foundation.md).
+Still missing: live evidence of a cross-device full/delta update without a manual
+refresh, a real removal of a room from another device, favorite/archive and
+participant mutations, two accounts on two servers and the corresponding runtime
+evidence on the Apple/Linux platforms. Background and killed-process updates have
+a separate push gate; the connected Android test does not replace it. The current
+state is in the [Flutter application foundation](flutter-foundation.md).
