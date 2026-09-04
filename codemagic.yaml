@@ -222,7 +222,11 @@ workflows:
           # then build - the build step below finds them still in place.
           cd apps/mobile
           flutter build macos --config-only --release             --dart-define=SENTRY_DSN=$SENTRY_DSN             --dart-define=RYBBIT_HOST=$RYBBIT_HOST             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
-          xcode-project use-profiles
+          # `--project` is not optional here: without it `use-profiles` looks at
+          # the iOS project and leaves the macOS one on automatic signing, so
+          # the step still succeeds and xcodebuild then fails asking for a Mac
+          # App Development profile nobody fetched.
+          xcode-project use-profiles --project "$PWD/macos/Runner.xcodeproj"
       # There is deliberately NO ad-hoc fallback here. An ad-hoc macOS build
       # carries no entitlements, so it loses `com.apple.security.app-sandbox`,
       # and macOS then resolves Application Support to the real home directory
