@@ -234,6 +234,7 @@ jobs:
     # ~145 billed minutes a full run costs, for a target that builds locally in
     # four minutes. It runs when someone asks for it, and on a release tag,
     # which is when the installer is actually wanted.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
@@ -352,7 +353,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Full history: the notes are built from the commits since the previous
+      # tag, and a shallow clone has neither the tags nor the range.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -366,16 +371,27 @@ jobs:
           # The changelog keeps SHA-256 for every artefact, so the release
           # carries the same list rather than a different one.
           ( cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS )
-      - name: Take the notes from the changelog
+      # English, and from the commits rather than the changelog: CHANGELOG.md
+      # is written in Czech for the wiki and the store listings, while the
+      # repository - commits, code, this file - is English. A release page is
+      # repository-facing, so it follows the repository.
+      - name: Write the release notes
         run: |
           version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
-          # The section for this version, heading line dropped.
-          awk -v v="${version%+*} (${version#*+})" '
-            $0 ~ "^## .*" v {found=1; next}
-            found && /^## / {exit}
-            found {print}
-          ' CHANGELOG.md > notes.md
-          [ -s notes.md ] || awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2 > notes.md
+          previous=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            if [ -n "$previous" ]; then
+              echo "Changes since $previous."
+            else
+              echo "First tagged release of this line."
+            fi
+            echo
+            if [ -n "$previous" ]; then
+              git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"                 | grep -E '^- (feat|fix|perf)' || echo "- Maintenance only; see the commit log."
+            fi
+            echo
+            echo "Artifacts below are signed release builds; \`SHA256SUMS\` lists their checksums."
+          } > notes.md
           cat notes.md
       - uses: softprops/action-gh-release@v2
         with:

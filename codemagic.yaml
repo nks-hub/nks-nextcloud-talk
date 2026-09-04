@@ -209,7 +209,15 @@ workflows:
           app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk"             --platform MAC_OS --type MAC_APP_DIRECT --create
           app-store-connect fetch-signing-files "com.nkshub.nextcloudtalk.NotificationService"             --platform MAC_OS --type MAC_APP_DIRECT --create
           keychain add-certificates
-          cd apps/mobile && xcode-project use-profiles
+          # `--config-only` first, and the order is the whole point: a plain
+          # `flutter build macos` regenerates the Xcode configuration and
+          # overwrites what `use-profiles` wrote. Xcode then went back to
+          # asking for a Mac App Development profile that was never fetched
+          # (build 6a9b0268). Configure, attach the Developer ID profiles,
+          # then build - the build step below finds them still in place.
+          cd apps/mobile
+          flutter build macos --config-only --release
+          xcode-project use-profiles
       # There is deliberately NO ad-hoc fallback here. An ad-hoc macOS build
       # carries no entitlements, so it loses `com.apple.security.app-sandbox`,
       # and macOS then resolves Application Support to the real home directory
