@@ -1,31 +1,90 @@
-# Apple builds for this client, so a release does not depend on one Mac being
+# Build and test matrix for this client: iOS, macOS, Android, Linux and the
+# Windows installer, so a release does not depend on one machine being
 # reachable.
 #
 # The Mac this project normally builds on (`build-mac`, driven over the RemoteCmd
 # relay) was offline for builds 43 and 44, which is why both shipped to Google
 # Play with no TestFlight half at all. This file exists so that stops being a
-# single point of failure — not to move the whole release here.
+# single point of failure.
 #
-# Windows is deliberately NOT here. It builds locally in about four minutes
-# with Visual Studio 2022, and a Windows instance is the one machine type this
-# plan charges for; paying to replace a working local build would be silly.
+# Every workflow runs both suites before it builds anything. An artifact that
+# nobody tested is worth less than no artifact.
 #
-# Nothing secret is in this file. The telemetry values are read from Codemagic
-# environment groups, which is the same set `apps/mobile/telemetry.env` holds
-# locally — that file is gitignored and must stay that way.
+# No `triggering:` section on purpose. Builds are started deliberately
+# (`POST /builds`), because a Windows instance is the one machine type this
+# plan charges for and a push-triggered matrix would bill on every commit.
+#
+# Nothing secret is in this file. Telemetry, the upload keystore and the
+# Firebase config are read from Codemagic environment groups, which hold the
+# same values as `apps/mobile/telemetry.env`, `apps/mobile/android/
+# key.properties` and `apps/mobile/android/app/google-services.json` do
+# locally — all three are gitignored and must stay that way.
 
 definitions:
-  telemetry: &telemetry
-    - --dart-define=SENTRY_DSN=$SENTRY_DSN
-    - --dart-define=RYBBIT_HOST=$RYBBIT_HOST
-    - --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID
-    - --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+  scripts:
+    # The Google Services plugin refuses to configure without this file, and
+    # the real one is not in the repository. Without it the manifest-merge test
+    # fails on a Gradle configuration error instead of on what it tests. The
+    # placeholder carries no credential, and the Android workflow has already
+    # written the real file by the time this runs, so it leaves it alone.
+    - &placeholder_firebase
+      name: Write a placeholder Firebase config
+      script: |
+        set -e
+        cd apps/mobile/android/app
+        if [ -f google-services.json ]; then
+          echo "Firebase config already present - leaving it alone."
+          exit 0
+        fi
+        cat > google-services.json <<'JSON'
+        {
+          "project_info": {
+            "project_number": "000000000000",
+            "project_id": "ci-placeholder",
+            "storage_bucket": "ci-placeholder.appspot.com"
+          },
+          "client": [
+            {
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                "android_client_info": {
+                  "package_name": "com.nkshub.nextcloudtalk"
+                }
+              },
+              "oauth_client": [],
+              "api_key": [{ "current_key": "ci-placeholder-key" }],
+              "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+            }
+          ],
+          "configuration_version": "1"
+        }
+        JSON
+
+    - &test_protocol
+      name: Test talk_protocol
+      script: |
+        set -e
+        cd packages/talk_protocol
+        dart pub get
+        dart analyze lib test
+        dart test --reporter expanded
+
+    # `flutter test` includes the Android manifest-merge test, which shells out
+    # to the Gradle wrapper - hence the JDK and the placeholder config above.
+    - &test_app
+      name: Test apps/mobile
+      script: |
+        set -e
+        cd apps/mobile
+        flutter pub get
+        flutter analyze lib test
+        flutter test --reporter expanded
 
 workflows:
   ios-testflight:
     name: iOS TestFlight
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 90
     integrations:
       app_store_connect: chatujme-asc-key
     environment:
@@ -34,6 +93,7 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      java: 17
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.nkshub.nextcloudtalk
@@ -44,8 +104,9 @@ workflows:
       # way on two other apps in this account.
       - name: Pin dependency resolution to CocoaPods
         script: flutter config --no-enable-swift-package-manager
-      - name: Fetch packages
-        script: cd apps/mobile && flutter pub get
+      - *placeholder_firebase
+      - *test_protocol
+      - *test_app
       - name: Install pods
         script: cd apps/mobile/ios && pod install
       - name: Attach signing profiles
@@ -69,7 +130,7 @@ workflows:
   macos-release:
     name: macOS build
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 90
     # Without this the App Store Connect CLI has no credentials at all, and
     # `fetch-signing-files` fails with "argument --issuer-id: Missing value
     # ISSUER_ID". That was the whole reason macOS builds went out unsigned.
@@ -81,11 +142,13 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      java: 17
     scripts:
       - name: Pin dependency resolution to CocoaPods
         script: flutter config --no-enable-swift-package-manager
-      - name: Fetch packages
-        script: cd apps/mobile && flutter pub get
+      - *placeholder_firebase
+      - *test_protocol
+      - *test_app
       - name: Install pods
         script: cd apps/mobile/macos && pod install
       # The first run failed here, and the message was precise: Xcode wanted a
@@ -132,3 +195,191 @@ workflows:
           ditto -c -k --sequesterRsrc --keepParent *.app nks-talk-macos.zip
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
+
+  android:
+    name: Android release APK
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - nks-talk-telemetry
+        - nks-talk-android-signing
+      flutter: stable
+      java: 17
+    scripts:
+      # The real Firebase config, not the placeholder: a release APK whose FCM
+      # project is `ci-placeholder` receives no push at all, and it would look
+      # exactly like a working build until someone waited for a notification.
+      - name: Restore the Firebase config
+        script: |
+          set -e
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "GOOGLE_SERVICES_JSON_BASE64 is empty. A release APK built on"
+            echo "the placeholder config would take no push notifications, so"
+            echo "this build stops instead of shipping a silent one."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode \
+            > apps/mobile/android/app/google-services.json
+      - *placeholder_firebase
+      - *test_protocol
+      - *test_app
+      # Gradle refuses to fall back to the debug key on purpose: Play rejects a
+      # release signed with it, and a silent substitution would only be found
+      # at upload time.
+      - name: Restore the upload keystore
+        script: |
+          set -e
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is empty. Play rejects a release APK"
+            echo "signed with anything but the upload key, so there is nothing"
+            echo "useful this build could produce without it."
+            exit 1
+          fi
+          cd apps/mobile/android
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > upload-keystore.jks
+          cat > key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+      # `assembleRelease` is finalized by the license gate, which runs
+      # `python3 tool/release_license_gate.py` over the assembled APK.
+      - name: Build the release APK
+        script: |
+          set -e
+          cd apps/mobile
+          flutter build apk --release \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+    artifacts:
+      - apps/mobile/build/app/outputs/flutter-apk/*.apk
+      - apps/mobile/build/app/outputs/apk/release/*.apk
+
+  linux:
+    name: Linux bundle
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - nks-talk-telemetry
+      flutter: stable
+      java: 17
+    scripts:
+      # Four packages beyond Flutter's official Linux list, each for one
+      # dependency: gstreamer for `audioplayers_linux`, libcurl for
+      # sentry-native, and a JDK because the `jni` plugin's `find_package(JNI)`
+      # runs on Linux too and CMake stops without it.
+      - name: Install the Linux build dependencies
+        script: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libcurl4-openssl-dev default-jdk-headless
+      - *placeholder_firebase
+      - *test_protocol
+      - *test_app
+      - name: Build the Linux bundle
+        script: |
+          set -e
+          cd apps/mobile
+          flutter build linux --release \
+            --dart-define=SENTRY_DSN=$SENTRY_DSN \
+            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+      # Tarred rather than handed over as a directory, because an artifact
+      # download flattens the bundle and the result would not run.
+      - name: Package the bundle
+        script: |
+          set -e
+          cd apps/mobile/build/linux/x64/release
+          tar -czf nks-talk-linux-x64.tar.gz bundle
+    artifacts:
+      - apps/mobile/build/linux/x64/release/nks-talk-linux-x64.tar.gz
+
+  # Windows scripts run in PowerShell, not bash, so these steps are written out
+  # rather than sharing the anchors above. A native command that fails does not
+  # stop a PowerShell script by itself, hence the explicit exit-code checks.
+  windows:
+    name: Windows installer
+    instance_type: windows_x2
+    max_build_duration: 90
+    environment:
+      groups:
+        - nks-talk-telemetry
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Write a placeholder Firebase config
+        script: |
+          $config = 'apps/mobile/android/app/google-services.json'
+          if (Test-Path -LiteralPath $config) {
+            Write-Output 'Firebase config already present - leaving it alone.'
+            exit 0
+          }
+          $json = @'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.nkshub.nextcloudtalk"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "ci-placeholder-key" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          '@
+          # Written without a BOM: the Google Services plugin parses this with
+          # Gson, which reads a leading BOM as a syntax error.
+          [IO.File]::WriteAllText(
+            (Join-Path (Get-Location) $config),
+            $json,
+            [Text.UTF8Encoding]::new($false))
+      - name: Test talk_protocol
+        script: |
+          Set-Location packages/talk_protocol
+          dart pub get; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dart analyze lib test; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dart test --reporter expanded; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Test apps/mobile
+        script: |
+          Set-Location apps/mobile
+          flutter pub get; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          flutter analyze lib test; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          flutter test --reporter expanded; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build the Windows bundle
+        script: |
+          Set-Location apps/mobile
+          flutter build windows --release --dart-define=SENTRY_DSN=$env:SENTRY_DSN --dart-define=RYBBIT_HOST=$env:RYBBIT_HOST --dart-define=RYBBIT_SITE_ID=$env:RYBBIT_SITE_ID --dart-define=TELEMETRY_ENVIRONMENT=$env:TELEMETRY_ENVIRONMENT
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # Inno Setup is not on the image. `build_installer.ps1` finds ISCC.exe in
+      # the default install location on its own, so nothing needs a path here.
+      - name: Install Inno Setup
+        script: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # The script hashes every file in the bundle into a manifest, refuses an
+      # incomplete or symlinked bundle, and prints the installer's SHA-256.
+      - name: Build the installer
+        script: |
+          & ./apps/mobile/windows/installer/build_installer.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    artifacts:
+      - apps/mobile/build/windows/installer/*.exe
