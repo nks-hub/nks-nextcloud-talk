@@ -18,6 +18,23 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
+## 0.1.0 (60) — 4 September 2026
+
+The first release built and shipped entirely by CI: GitHub Actions builds
+Android, Linux and the Windows installer, Codemagic builds the Apple targets,
+the artifacts and their checksums are attached to this release, and the tag
+publishes the signed bundle to the Play alpha track and the IPA to TestFlight.
+
+- Fixed: on macOS a tap on a push notification could stop opening the
+  conversation. Tearing down the Windows notification service detached the
+  handler from the shared channel that belongs to the push coordinator on
+  Apple platforms.
+- Fixed: on macOS a local notification was sent under a method name derived
+  from the host instead of from the channel, so it could reach a receiver that
+  does not handle it.
+- Fixed: a live push registration started inside the test environment on
+  macOS, where it had no business running.
+
 ## 0.1.0 (59) — 4 September 2026
 
 Released from the source `1f3ff22`, tag `v0.1.0+59`. A short batch: two fixes,
