@@ -58,6 +58,7 @@ corresponding downloaded package in the local Pub cache.
 | [`image_picker`](https://pub.dev/packages/image_picker) | 1.2.3; archive SHA-256 `d8402284df184bc05f4a2210c6c23983b0720f4cd87cbd05c5390a78af602667`; LICENSE SHA-256 `8e22fae63e4e8ac897f0cb3018ed94ed730b3e5da5d42c6856a26ba524f0fd88` | BSD-3-Clause; Copyright 2013 The Flutter Authors | Only the "camera" source (ACTION_IMAGE_CAPTURE, UIImagePickerController) |
 | [`camera`](https://pub.dev/packages/camera) | 0.12.1; archive SHA-256 `3f30ca0ff376f91534f23afa2a7aea06ebb6c889fd9e260642437b37e3d9f753`; LICENSE SHA-256 `420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d` | BSD-3-Clause; Copyright 2013 The Flutter Authors | The live preview and frame stream for the QR onboarding scanner; used only on Android and iOS, video is never started |
 | [`zxing2`](https://pub.dev/packages/zxing2) | 0.2.4; archive SHA-256 `2677c49a3b9ca9457cb1d294fd4bd5041cac6aab8cdb07b216ba4e98945c684f`; LICENSE SHA-256 `d2bfc0fd9aae0a7d4cdab8ea024c75881c0ab38332683539f7f26ea88fec9ca2` | BSD-3-Clause; Copyright 2023 zxing-dart | Purely Dart decoding of a QR code from a luminance frame; no native or platform part |
+| [`flutter_webrtc`](https://pub.dev/packages/flutter_webrtc) | 1.6.1; archive SHA-256 `a2eb4a45bf741c4e3fb6731dbbe35daef5f366c3783645e091d03f205b70b733`; LICENSE SHA-256 `11a88e16f8841bf63a968da35e951edc8a27b2cfb6cdc2a49b00198678dd502b` | MIT; Copyright 2018 湖北捷智云技术有限公司 | WebRTC media for Talk calls: the local audio track, one peer connection per participant, and the SDP and ICE that the existing signalling carries |
 | [`sentry_flutter`](https://pub.dev/packages/sentry_flutter) | 9.27.0; archive SHA-256 `ec89cc6ba939ca19155ea83900d9740a36544f50b3b6baf265518e3348fb0f50`; LICENSE SHA-256 `a324d0c2ce63dbdce9e77cbd06a13ad77006d6bf3f82ad3affe03b64e27e83d6` | MIT; Copyright 2019 Sentry | Crash reporting only in our builds; without `SENTRY_DSN` the SDK is not initialized at all |
 | [`rybbit_flutter_sdk`](https://pub.dev/packages/rybbit_flutter_sdk) | 0.3.0; archive SHA-256 `96581119b39b195690b4cd9a88283293d0bd7efc82aefce817750ec7924761fe`; LICENSE SHA-256 `e57f1c320b8cf8798a7d2ff83a6f9e06a33a03585f6e065fea97f1d86db84052` | GPL-3.0; Copyright Free Software Foundation text, own code by nks-hub; the same license as the project | Anonymous screen usage only in our builds; without `RYBBIT_HOST` and `RYBBIT_SITE_ID` the SDK is not initialized at all |
 
@@ -139,6 +140,25 @@ of the complete source on request from whoever handed over the build
 the two, because a POM cannot broaden the license of the sources. The iOS build
 does not contain the distributor.
 
+## Direct Android runtime dependencies for WebRTC calls
+
+`flutter_webrtc` 1.6.1 adds exactly two Maven artifacts to the Android runtime
+classpath. Both are declared in `release-licenses/components.tsv` and were
+verified against the POM in the local Gradle cache, not guessed.
+
+<!-- markdownlint-disable MD013 -->
+
+| Component | Version and integrity | License and notice | Use | State |
+| --- | --- | --- | --- | --- |
+| [`io.github.webrtc-sdk:android`](https://github.com/webrtc-sdk/android) | 150.7871.01; AAR SHA-256 `0a1627b1a48c2bc17d9a40d62fc47bd45166f44a311e95917f147c402de379b0` from the artifact in the local Gradle cache; notice SHA-256 `a76b141e6bab5f2ac9872a8ad68b1239a1cc23934a4cbd7a9da117c81234fb66` | `BSD-3-Clause AND MIT`. The POM declares "The 3-Clause BSD License" and the AAR contains only `org.webrtc` and `org.jni_zero`, that is the compiled WebRTC and Chromium sources, which are BSD-3-Clause. The repository's own `LICENSE` is MIT and covers the build scripts that package them, so the notice carries both texts | The libwebrtc engine behind `flutter_webrtc` on Android | Compatible with GPL-3.0-or-later; both texts are in `notices/webrtc-sdk-android-bsd-3-clause-and-mit.txt` |
+| [`com.github.davidliu:audioswitch`](https://github.com/twilio/audioswitch) | commit `039a35aefab7747c557242fa216c9ea11743b604` resolved through JitPack; AAR SHA-256 `c8240221daa9a96d4ea01a4dc6f6f6b10b4903d2a71f9b57f838bdfeb6c3fcbc`; notice SHA-256 `65e7ce63d83ef0a5aa7b8a568f0524b7d0943179257f4ba086c4a126d57f08fa` | Apache-2.0; the POM points at the upstream `twilio/audioswitch` LICENSE.txt | Audio device routing pulled in by `flutter_webrtc`; the call layer does not call it directly yet | Compatible with GPL-3.0-or-later; the shared Apache-2.0 notice applies |
+
+<!-- markdownlint-enable MD013 -->
+
+JitPack (`https://jitpack.io`) is added to the repositories by the plugin's own
+`android/build.gradle`, not by this project. It is where `audioswitch` resolves
+from; nothing else in the graph uses it.
+
 ## The Android release artifact gate
 
 Commit `94a0987` added fail-closed generation from the exact
@@ -163,6 +183,12 @@ SBOM contains `pkg:maven/com.google.android.gms/play-services-location@21.2.0`.
 The gate is Android-only; it does not yet cover the iOS artifact and its native
 dependency graph.
 
+After `flutter_webrtc` was added, `flutter build apk --release` reported
+"release-license gate passed: 160 Flutter packages, 134 Android runtime
+components" and produced a 123.1 MB release APK. The two extra Maven components
+are the WebRTC ones above; the size is libwebrtc, which ships native code for
+every ABI in the fat APK.
+
 ## Transitive runtime dependencies
 
 <!-- markdownlint-disable MD013 -->
@@ -171,6 +197,8 @@ dependency graph.
 | --- | --- | --- | --- | --- |
 | [`petitparser`](https://pub.dev/packages/petitparser) | 7.0.2; archive SHA-256 `91bd59303e9f769f108f8df05e371341b15d59e995e6806aefab827b58336675` in `packages/talk_protocol/pubspec.lock`; local LICENSE SHA-256 `d2e8ffdbe89acbc10d5d1f2b03e7dbddf0a9f1742e809176682b62ef3d573b3e` | MIT; Copyright 2006–2024 Lukas Renggli; the notice must stay in all substantial copies | The parser runtime required by the `xml` package; the project does not call it directly | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
 | [`sentry`](https://pub.dev/packages/sentry) | 9.27.0; archive SHA-256 `c2ecd8abe82e63cdcb6947f71320612ced56e10ba94db7529d85cc02be47cb3b`; local LICENSE SHA-256 `9873d81def9cebb9598b4a2d0a1ad062b17781c35c25cc04b75a0f62fc8667fd` | BSD-3-Clause; Copyright 2014 The Chromium Authors | The Dart core required by the `sentry_flutter` package; the project calls it only through that | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
+| [`webrtc_interface`](https://pub.dev/packages/webrtc_interface) | 1.5.1; archive SHA-256 `c6f100eac5057d9a817a60473126f9828c796d42884d498af4f339c97b21014f`; local LICENSE SHA-256 `9a3ad869cb4e3bc3ae6a0150c52245aaba87ea047fe97e53e698a4a40d097b90` | MIT; Copyright 2021 Flutter WebRTC | The platform-neutral WebRTC API `flutter_webrtc` implements | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
+| [`dart_webrtc`](https://pub.dev/packages/dart_webrtc) | 1.8.2; archive SHA-256 `078e3c431500147e5cc52b3c6ea41ed538f30c7720cc2467d2186c9251e62716`; local LICENSE SHA-256 `c09fdb792d75d09680fd33e32f5ef73689e771e81c7456e2c1c68dd530fef271` | MIT; Copyright 2020 Flutter WebRTC | The web binding of `flutter_webrtc`; not reached by any of our targets, but resolved by the package | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
 | [`hive`](https://pub.dev/packages/hive) | 2.2.3; archive SHA-256 `8dcf6db979d7933da8217edcec84e9df1bdb4e4edc7fc77dbd5aa74356d6d941`; local LICENSE SHA-256 `343c59f5d64c33a9dad6c7a87d9b4b1c3c6ce628f41b85d9e25ef5f960b8f28e` | Apache-2.0; one-way compatible with GPL-3.0-or-later | The offline queue of the `rybbit_flutter_sdk` package for events sent without connectivity | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
 | [`device_info_plus`](https://pub.dev/packages/device_info_plus) | 13.2.0; archive SHA-256 `0891702f96b2e465fe567b7ec448380e6b1c14f60af552a8536d9f583b6b8442`; local LICENSE SHA-256 `3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c` | BSD-3-Clause; Copyright 2017 The Chromium Authors | The device model and the OS version in the analytics payload of the `rybbit_flutter_sdk` package | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
 | [`package_info_plus`](https://pub.dev/packages/package_info_plus) | 10.2.1; archive SHA-256 `127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481`; local LICENSE SHA-256 `3b38d48befd0af70b892e13d10c9e34679416c24a9277f962629951c64d71f4c` | BSD-3-Clause; Copyright 2017 The Chromium Authors | The application version in the analytics payload; the version is forced by `dependency_overrides` in `apps/mobile/pubspec.yaml`, because `rybbit_flutter_sdk` 0.3.0 caps major 9 and with it `win32` below 6, which `share_plus` 13.3 requires. The SDK from the package only calls `PackageInfo.fromPlatform()`, unchanged across majors 8–10 | Compatible with GPL-3.0-or-later; the source package and the local LICENSE verified |
