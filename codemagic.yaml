@@ -186,6 +186,7 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
+        - appstore_credentials
         - nks-talk-github
       flutter: 3.44.4
       xcode: latest
@@ -262,24 +263,25 @@ workflows:
       # profile found", so they are expanded first.
       - name: Sign with Developer ID
         script: |
-          set -e
+          set -o pipefail
           cd apps/mobile
-          APP=build/macos/Build/Products/Release/nextcloudtalk.app
-          python3 - macos/Runner/Release.entitlements /tmp/release.entitlements <<'PYEOF'
-          import sys
-          src, dst = sys.argv[1], sys.argv[2]
-          text = open(src).read()
-          text = text.replace("$(APS_ENVIRONMENT)", "production")
-          text = text.replace("$(AppIdentifierPrefix)", "TEAMID0000.")
-          open(dst, "w").write(text)
-          PYEOF
-          ID="Developer ID Application"
-          find "$APP/Contents/Frameworks" \( -name '*.framework' -o -name '*.dylib' \) -maxdepth 1 2>/dev/null | while read -r f; do
-            codesign --force --options runtime --timestamp --sign "$ID" "$f"
-          done
-          codesign --force --options runtime --timestamp \
-            --entitlements /tmp/release.entitlements --sign "$ID" "$APP"
-          codesign --verify --strict --verbose=2 "$APP"
+          {
+            echo "--- identities the keychain offers:"
+            security find-identity -v -p codesigning || true
+            APP=build/macos/Build/Products/Release/nextcloudtalk.app
+            echo "--- app: $APP"
+            ls -d "$APP"
+            python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)','TEAMID0000.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
+            echo "--- resolved entitlements:"
+            cat /tmp/release.entitlements
+            ID="Developer ID Application"
+            for f in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.dylib; do
+              [ -e "$f" ] || continue
+              codesign --force --options runtime --timestamp --sign "$ID" "$f"
+            done
+            codesign --force --options runtime --timestamp --entitlements /tmp/release.entitlements --sign "$ID" "$APP"
+            codesign --verify --strict --verbose=2 "$APP"
+          } 2>&1 | tee /tmp/macos-sign.log
       - name: Verify the signature carries the sandbox
         script: |
           APP=apps/mobile/build/macos/Build/Products/Release/nextcloudtalk.app
@@ -311,3 +313,4 @@ workflows:
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
       - /tmp/macos-build.log
+      - /tmp/macos-sign.log
