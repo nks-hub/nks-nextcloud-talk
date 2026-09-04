@@ -118,6 +118,11 @@ workflows:
     environment:
       groups:
         - nks-talk-telemetry
+        # Holds CERTIFICATE_PRIVATE_KEY. Without it `fetch-signing-files
+        # --create` has no private key for any existing distribution
+        # certificate and tries to issue a new one - and Apple caps those at
+        # three, which this team has already used.
+        - appstore_credentials
       flutter: 3.44.4
       xcode: latest
       cocoapods: default
