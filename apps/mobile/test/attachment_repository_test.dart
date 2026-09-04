@@ -205,9 +205,12 @@ void main() {
       addTearDown(subscription.cancel);
       await pumpEventQueue();
 
-      await database.transaction(() async {
-        await _insertCachedConfirmation(database, messageId: 102);
-        await _insertCachedConfirmation(database, messageId: 101);
+      // Captured before the closure: a nullable local does not stay promoted
+      // inside one, and newer analyzers reject the use outright.
+      final open = database;
+      await open.transaction(() async {
+        await _insertCachedConfirmation(open, messageId: 102);
+        await _insertCachedConfirmation(open, messageId: 101);
       });
       for (final row
           in await database.select(database.cachedChatMessages).get()) {
@@ -395,9 +398,10 @@ void main() {
           enqueueSequence: 2,
           threadId: 84,
         );
-        await database.transaction(() async {
+        final open = database;
+        await open.transaction(() async {
           await _insertCachedConfirmation(
-            database!,
+            open,
             messageId: 541,
             parentMessageId: 41,
             parentRoomToken: 'rooma123',
@@ -405,7 +409,7 @@ void main() {
             threadId: 77,
           );
           await _insertCachedConfirmation(
-            database,
+            open,
             messageId: 542,
             parentMessageId: 42,
             parentRoomToken: 'rooma123',
@@ -413,7 +417,7 @@ void main() {
             threadId: 77,
           );
           await _insertCachedConfirmation(
-            database,
+            open,
             messageId: 683,
             referenceId: '22222222-2222-4222-8222-222222222222',
             parentMessageId: 84,
@@ -422,7 +426,7 @@ void main() {
             threadId: 84,
           );
           await _insertCachedConfirmation(
-            database,
+            open,
             messageId: 684,
             referenceId: '22222222-2222-4222-8222-222222222222',
             parentMessageId: 84,
@@ -514,24 +518,25 @@ void main() {
         jobId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
         referenceId: '33333333-3333-4333-8333-333333333333',
       );
-      await database.transaction(() async {
+      final open = database;
+      await open.transaction(() async {
         await _insertCachedConfirmation(
-          database,
+          open,
           accountId: 'account-b',
           messageId: 401,
         );
         await _insertCachedConfirmation(
-          database,
+          open,
           messageId: 402,
           roomToken: 'wrongroom',
         );
         await _insertCachedConfirmation(
-          database,
+          open,
           messageId: 403,
           referenceId: '99999999-9999-4999-8999-999999999999',
         );
         await _insertCachedConfirmation(
-          database,
+          open,
           accountId: 'account-c',
           messageId: 404,
           referenceId: '33333333-3333-4333-8333-333333333333',
