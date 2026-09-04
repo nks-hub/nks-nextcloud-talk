@@ -65,6 +65,28 @@ definitions:
         }
         JSON
 
+    # The macOS build of 2026-09-02 went out with every telemetry define empty
+    # and nothing said so - the app just reported nowhere. Existing in the
+    # variable group is not the same as arriving in the build, so this checks
+    # arrival. Lengths only; the values are secure and never printed.
+    - &assert_telemetry
+      name: Check the telemetry values arrived
+      script: |
+        set -e
+        missing=
+        for name in SENTRY_DSN RYBBIT_HOST RYBBIT_SITE_ID TELEMETRY_ENVIRONMENT; do
+          eval "value=\${$name}"
+          if [ -z "$value" ]; then
+            missing="$missing $name"
+          else
+            echo "$name arrived (${#value} characters)"
+          fi
+        done
+        if [ -n "$missing" ]; then
+          echo "Empty telemetry values:$missing - this build would report nowhere."
+          exit 1
+        fi
+
     - &test_protocol
       name: Test talk_protocol
       script: |
@@ -109,6 +131,7 @@ workflows:
       # way on two other apps in this account.
       - name: Pin dependency resolution to CocoaPods
         script: flutter config --no-enable-swift-package-manager
+      - *assert_telemetry
       - *placeholder_firebase
       - *test_protocol
       - *test_app
@@ -151,6 +174,7 @@ workflows:
     scripts:
       - name: Pin dependency resolution to CocoaPods
         script: flutter config --no-enable-swift-package-manager
+      - *assert_telemetry
       - *placeholder_firebase
       - *test_protocol
       - *test_app
@@ -216,6 +240,7 @@ workflows:
       flutter: 3.44.4
       java: 17
     scripts:
+      - *assert_telemetry
       - *placeholder_firebase
       - *test_protocol
       - *test_app
@@ -256,18 +281,45 @@ workflows:
           EOF
       # `assembleRelease` is finalized by the license gate, which runs
       # `python3 tool/release_license_gate.py` over the assembled APK.
-      - name: Build the release APK
+      # Both artefacts: the APK is what a tester sideloads, the AAB is what
+      # Play accepts. `assembleRelease` is finalized by the license gate, which
+      # runs `python3 tool/release_license_gate.py` over the assembled APK.
+      - name: Build the release APK and AAB
         script: |
           set -e
           cd apps/mobile
-          flutter build apk --release \
-            --dart-define=SENTRY_DSN=$SENTRY_DSN \
-            --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
-            --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
-            --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          for target in apk appbundle; do
+            flutter build $target --release \
+              --dart-define=SENTRY_DSN=$SENTRY_DSN \
+              --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
+              --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
+              --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          done
+      # A release signed with the debug key is rejected by Play, and Gradle
+      # only refuses to *fall back* to it - it cannot tell whether the file it
+      # was handed is the upload key. So the signature is read back.
+      - name: Check the APK carries the upload signature
+        script: |
+          set -e
+          APK=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER=$(command -v apksigner \
+            || ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "apksigner not found - cannot tell a signed APK from an unsigned one."
+            exit 1
+          fi
+          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            echo "Signed with the debug key - Play would reject this."
+            exit 1
+          fi
+          if ! grep -q "Signer #1 certificate SHA-256 digest" /tmp/certs.txt; then
+            echo "No signer certificate in the APK."
+            exit 1
+          fi
     artifacts:
       - apps/mobile/build/app/outputs/flutter-apk/*.apk
-      - apps/mobile/build/app/outputs/apk/release/*.apk
+      - apps/mobile/build/app/outputs/bundle/release/*.aab
 
   # Written and valid, but unrunnable on the current plan: it offers
   # `mac_mini_m2` and nothing else. Both `linux` and `linux_x2` come straight
@@ -296,6 +348,7 @@ workflows:
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libcurl4-openssl-dev default-jdk-headless
+      - *assert_telemetry
       - *placeholder_firebase
       - *test_protocol
       - *test_app
@@ -336,6 +389,18 @@ workflows:
       flutter: 3.44.4
       java: 17
     scripts:
+      - name: Check the telemetry values arrived
+        script: |
+          $missing = @()
+          foreach ($name in 'SENTRY_DSN', 'RYBBIT_HOST', 'RYBBIT_SITE_ID', 'TELEMETRY_ENVIRONMENT') {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ([string]::IsNullOrEmpty($value)) { $missing += $name }
+            else { Write-Output "$name arrived ($($value.Length) characters)" }
+          }
+          if ($missing) {
+            Write-Output "Empty telemetry values: $($missing -join ', ') - this build would report nowhere."
+            exit 1
+          }
       - name: Write a placeholder Firebase config
         script: |
           $config = 'apps/mobile/android/app/google-services.json'
