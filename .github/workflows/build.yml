@@ -304,6 +304,11 @@ jobs:
           flutter test --reporter expanded
       - name: Build the Windows bundle
         env:
+          # local_auth_windows still includes <experimental/coroutine>, which
+          # MSVC 14.51 on this runner turns into a hard error (STL1011). The
+          # compiler reads CL for extra switches, so the plugin builds without
+          # patching third-party sources. Local VS 2022 never hits it.
+          CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           RYBBIT_HOST: ${{ secrets.RYBBIT_HOST }}
           RYBBIT_SITE_ID: ${{ secrets.RYBBIT_SITE_ID }}
@@ -330,3 +335,83 @@ jobs:
           name: windows-installer
           path: apps/mobile/build/windows/installer/*.exe
           if-no-files-found: error
+
+  # Publishing, on a release tag only. `v*` alone would let a stray tag ship to
+  # testers, and pulling a build back off Play is not a clean operation, so the
+  # tag has to match `v<pubspec version>` exactly - build number included.
+  play:
+    name: play alpha
+    needs: android
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag names this build
+        run: |
+          tag=${GITHUB_REF#refs/tags/}
+          version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
+          if [ "$tag" != "v$version" ]; then
+            echo "Tag $tag does not match pubspec version $version - refusing to publish."
+            exit 1
+          fi
+          echo "VERSION_CODE=${version#*+}" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: android
+          path: artifacts
+      - name: Install the Play client
+        run: pip install --quiet google-api-python-client google-auth
+      # Play rejects a version code it already has, but only after the whole
+      # AAB has been uploaded. Asking first turns a late upload error into an
+      # immediate one.
+      - name: Check the version code is new
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          printf '%s' "$PLAY_SERVICE_ACCOUNT_JSON" > key.json
+          python - <<'PY'
+          import os
+          from google.oauth2.service_account import Credentials
+          from googleapiclient.discovery import build
+
+          pkg, want = "com.nkshub.nextcloudtalk", int(os.environ["VERSION_CODE"])
+          svc = build("androidpublisher", "v3", cache_discovery=False,
+                      credentials=Credentials.from_service_account_file("key.json"))
+          edit = svc.edits().insert(packageName=pkg, body={}).execute()["id"]
+          try:
+              taken = {c for t in svc.edits().tracks().list(packageName=pkg, editId=edit)
+                       .execute().get("tracks", [])
+                       for r in t.get("releases", []) for c in r.get("versionCodes", [])}
+          finally:
+              svc.edits().delete(packageName=pkg, editId=edit).execute()
+          if str(want) in {str(c) for c in taken}:
+              raise SystemExit(f"version code {want} is already on Play: {sorted(taken)}")
+          print(f"version code {want} is free; Play has {sorted(taken)}")
+          PY
+      # Committed notes win when they exist - the six locales earlier releases
+      # shipped were written by hand. Otherwise the changelog's top section
+      # goes out as Czech only; inventing translations here would be worse than
+      # shipping one honest locale.
+      - name: Collect the release notes
+        run: |
+          mkdir -p whatsnew
+          if [ -d apps/mobile/release-notes ]; then
+            cp apps/mobile/release-notes/whatsnew-* whatsnew/
+          else
+            awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2 > whatsnew/whatsnew-cs-CZ
+          fi
+          for f in whatsnew/whatsnew-*; do
+            # Play caps each locale at 500 characters and fails the whole edit
+            # on the first one over, so they are cut here rather than there.
+            head -c 500 "$f" > "$f.cut" && mv "$f.cut" "$f"
+            echo "$f: $(wc -c < "$f") bytes"
+          done
+      - uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.nkshub.nextcloudtalk
+          releaseFiles: artifacts/bundle/release/*.aab
+          track: alpha
+          status: completed
+          whatsNewDirectory: whatsnew
