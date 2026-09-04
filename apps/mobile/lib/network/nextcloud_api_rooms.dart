@@ -116,11 +116,18 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
 
   /// Resolves how a room's call would be signalled. It is the first step of
   /// any call and is deliberately separate from media handling.
+  /// [bindRoomSession] ties the read to the account's current room session, so
+  /// a session that is replaced mid-flight invalidates the settings a
+  /// signalling lane would open a socket with. A caller that only asks *how*
+  /// a room would be signalled opens nothing and must pass false: activating a
+  /// room session bumps that generation, and opening a chat does exactly that
+  /// at the same moment the banner asks, which cancelled the answer every time.
   Future<SignalingSettingsResponse> getSignalingSettings({
     required SignalingSettingsRequest settingsRequest,
     required String loginName,
     required String appPassword,
     Future<void>? abortTrigger,
+    bool bindRoomSession = true,
   }) async {
     final request = _request('GET', settingsRequest.uri, abortTrigger)
       ..headers.addAll({
@@ -133,8 +140,10 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
       allowedStatusCodes: _signalingSettingsAllowedStatusCodes,
       maximumBytes: maximumSignalingWireBytes,
       timeout: const Duration(seconds: 20),
-      sessionAccountId: settingsRequest.context.accountId,
-      sessionServer: settingsRequest.context.server,
+      sessionAccountId: bindRoomSession
+          ? settingsRequest.context.accountId
+          : null,
+      sessionServer: bindRoomSession ? settingsRequest.context.server : null,
     );
     return decodeSignalingSettingsResponse(
       request: settingsRequest,

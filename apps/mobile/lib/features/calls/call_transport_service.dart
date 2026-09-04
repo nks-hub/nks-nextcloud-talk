@@ -91,6 +91,9 @@ final class CallTransportService {
         settingsRequest: request,
         loginName: account.loginName,
         appPassword: appPassword,
+        // Answering "how would this be signalled" opens no socket and needs no
+        // room session, so it must not be cancelled when one is replaced.
+        bindRoomSession: false,
       );
     } on NextcloudApiException {
       return CallTransport.unavailable;
