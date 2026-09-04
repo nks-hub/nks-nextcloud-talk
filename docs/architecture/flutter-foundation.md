@@ -1,374 +1,396 @@
-# Flutter aplikační základ
+# Flutter application foundation
 
-Datum aktualizace: 26. srpna 2026.
+Update date: 26 August 2026.
 
-## Stav
+## State
 
-V `apps/mobile` existuje spustitelná Flutter aplikace, ne pouze scaffold.
-Implementuje řez od přidání serveru po lokálně uložený účet, account-scoped
-seznam konverzací a první cache-first chat/thread obrazovku s foreground
-pollingem, textovým durable outboxem, emoji a Giphy composerem, obrázkovými a
-hlasovými médii i nativní Android Web Push delivery hranicí. Aktuální APK má
-ověřený build a aktualizační instalaci. Skutečný Login Flow, živý seznam
-konverzací, otevření room a inline animovaný Giphy send patří historickému APK.
-Tento Giphy běh používal nyní nahrazenou wire-reference variantu; nový skutečný
-`image/gif` attachment tok je od `7ca580e` implementovaný a automatizovaně
-ověřený, ale zatím nemá live serverový důkaz.
+`apps/mobile` contains a runnable Flutter application, not just scaffolding. It
+implements the slice from adding a server to a locally stored account, an
+account-scoped conversation list and the first cache-first chat/thread screen
+with foreground polling, a durable text outbox, an emoji and Giphy composer,
+image and voice media and the native Android Web Push delivery boundary. The
+current APK has a verified build and update install. The real Login Flow, the
+live conversation list, opening a room and an inline animated Giphy send belong
+to a historical APK. That Giphy run used the wire-reference variant that has
+since been replaced; the new real `image/gif` attachment flow has been
+implemented and verified by automation since `7ca580e`, but has no live server
+evidence yet.
 
-Celý Nextcloud Talk klient tím ještě hotový není. Aktuální root/thread
-cross-device refresh, živá příloha a voice matice, skutečné background/killed
-FCM doručení, live read přechod, doložené delivered, presence, dva účty na dvou
-serverech a hovory zůstávají otevřené funkční brány.
+This does not make the whole Nextcloud Talk client finished. The current
+root/thread cross-device refresh, the live attachment and voice matrix, real
+background/killed FCM delivery, a live read transition, a documented delivered,
+presence, two accounts on two servers and calls all remain open feature gates.
 
-## Platformy a identita
+## Platforms and identity
 
-Jeden Flutter projekt obsahuje targety pro Android, iOS, Windows, macOS a Linux.
-Android namespace/applicationId, iOS a macOS bundle ID i Linux application ID
-jsou `com.nkshub.nextcloudtalk`. Android build má efektivní minSdk 24; iOS
-deployment target je 13.0 a macOS target 11.0.
+One Flutter project contains targets for Android, iOS, Windows, macOS and Linux.
+The Android namespace/applicationId, the iOS and macOS bundle IDs and the Linux
+application ID are all `com.nkshub.nextcloudtalk`. The Android build has an
+effective minSdk of 24; the iOS deployment target is 13.0 and the macOS target
+11.0.
 
-Aktuální Android debug build se sestavil, aktualizačně nainstaloval a spustil na
-`emulator-5554`. Na Windows dříve prošel release build i živý onboarding smoke.
-Na macOS 15.7.4 arm64 se z přesného commitu `f0d33c2` (base `b2676ab`)
-sestavil debug bundle a běžel jako běžný uživatel s viditelným oknem 800×628.
-Deployment test 1/1, analyze, codesign a bundle ID prošly; executable SHA-256
-je `0a4861b9974e7a1600cbbae2aa8e719e7fcaefd8b0a554debf41d11a17d3d5be`.
-RemoteCmd proces neměl Screen Recording oprávnění, proto zachycená plocha není
-UI screenshotový důkaz. Platformní projekty pro iOS a Linux existují, ale jejich
-build na odpovídajícím hostu zatím runtime důkaz nemá.
+The current Android debug build was built, update-installed and launched on
+`emulator-5554`. On Windows a release build and a live onboarding smoke test
+passed earlier. On macOS 15.7.4 arm64 a debug bundle was built from the exact
+commit `f0d33c2` (base `b2676ab`) and ran as an ordinary user with a visible
+800×628 window. The deployment test 1/1, analyze, codesign and the bundle ID
+passed; the executable SHA-256 is
+`0a4861b9974e7a1600cbbae2aa8e719e7fcaefd8b0a554debf41d11a17d3d5be`. The RemoteCmd
+process did not have the Screen Recording permission, so the captured desktop is
+not UI screenshot evidence. The platform projects for iOS and Linux exist, but
+their build on the corresponding host has no runtime evidence yet.
 
-## Implementovaný tok
+## The implemented flow
 
-1. Uživatel zadá Nextcloud URL.
-2. Klient ji kanonizuje a načte veřejný `status.php`.
-3. Login Flow v2 se otevře v systémovém prohlížeči a poll zůstává svázaný s
-   původním originem a base path.
-4. Přihlášené capabilities musí potvrdit Talk a `conversation-v4`.
-5. App password se uloží do platformního secure storage; Drift drží jen
+1. The user enters the Nextcloud URL.
+2. The client canonicalizes it and loads the public `status.php`.
+3. Login Flow v2 opens in the system browser and the poll stays bound to the
+   original origin and base path.
+4. The signed-in capabilities must confirm Talk and `conversation-v4`.
+5. The app password is stored in the platform secure storage; Drift holds only
    account-scoped metadata.
-6. Conversation sync používá mode-aware per-account single-flight a atomický
-   full/delta merge z `talk_protocol`; foreground loop je incremental a ruční
-   refresh vynutí full reconciliation.
-7. UI pozoruje Drift a nikdy nepoužije aktivní účet jako globální autoritu pro
-   jiný account scope.
-8. Otevřený chat nebo thread spustí scope-bound foreground binding; přijatá
-   response se nejdřív commitne do Drift a teprve pak přes Riverpod překreslí
-   `ChatRoomPane`.
-9. Vybraná Giphy URL je pouze vstup account-scoped References resolveru. Klient
-   přijme validní `image/gif` bajty, uloží je do durable app-owned zdroje a
-   odešle standardním Talk Draft/WebDAV/finalize attachment tokem. URL nevstoupí
-   do textového composeru, `sendText` ani textového outboxu.
-10. Android UnifiedPush callback validuje wake-up payload, uloží ho do šifrované
-    account-scoped fronty a tap předá do Flutteru přes jednorázový token. Zdroj
-    pravdy po probuzení zůstává OCS, ne push payload.
+6. The conversation sync uses a mode-aware per-account single-flight and the
+   atomic full/delta merge from `talk_protocol`; the foreground loop is
+   incremental and a manual refresh forces a full reconciliation.
+7. The UI observes Drift and never uses the active account as a global authority
+   for a different account scope.
+8. An open chat or thread starts a scope-bound foreground binding; a received
+   response is committed into Drift first and only then repaints `ChatRoomPane`
+   through Riverpod.
+9. The selected Giphy URL is only an input to the account-scoped References
+   resolver. The client accepts valid `image/gif` bytes, stores them in a durable
+   app-owned source and sends them through the standard Talk
+   Draft/WebDAV/finalize attachment flow. The URL never enters the text composer,
+   `sendText` or the text outbox.
+10. The Android UnifiedPush callback validates the wake-up payload, stores it in
+    an encrypted account-scoped queue and a tap hands it to Flutter through a
+    one-time token. After a wake-up, the source of truth stays OCS, not the push
+    payload.
 
-Drift schema v4 ukládá u room `avatarVersion` a `isCustomAvatar` a drží avatar
-bytes pod `(accountId, URI)`. Verzované URL se považují za immutable, neverzované
-se po expiraci revalidují přes ETag a při offline chybě zůstane dostupná stale
-cache. Metadata z `X-NC-IsCustomAvatar` rozhodují, zda se vykreslí vlastní image,
-nebo lokální fallback ikona/iniciály. Migrace v2 → v4 backfilluje room metadata;
-v3 → v4 zahodí cache, u které custom původ nebylo možné bezpečně určit.
+Drift schema v4 stores `avatarVersion` and `isCustomAvatar` on a room and keeps
+the avatar bytes under `(accountId, URI)`. Versioned URLs are treated as
+immutable, unversioned ones are revalidated through an ETag after they expire,
+and on an offline error the available stale cache stays. The metadata from
+`X-NC-IsCustomAvatar` decide whether a custom image or a local fallback
+icon/initials are rendered. The v2 → v4 migration backfills the room metadata;
+v3 → v4 discards a cache whose custom origin could not be safely determined.
 
-Ruční refresh posílá full conversation request bez `modifiedSince`, takže může
-odstranit stale room chybějící v autoritativním seznamu. Periodický foreground
-loop po získání cursoru zůstává incremental. Pokud manual full přijde za
-rozběhnutou deltou, počká a následně spustí nebo joinne vlastní full flight.
-Smazání je account-scoped a nesmí odstranit pending outbox ani stejný token
-jiného účtu; full-empty stále vyžaduje dva různé full requesty v ochranném okně.
+A manual refresh sends a full conversation request without `modifiedSince`, so it
+can remove a stale room missing from the authoritative list. The periodic
+foreground loop stays incremental once it has a cursor. If a manual full arrives
+behind a running delta, it waits and then starts or joins its own full flight. A
+deletion is account-scoped and must not remove a pending outbox or the same token
+of another account; a full-empty still requires two different full requests
+within the protective window.
 
-Chyba před dokončením secure a databázového commitu nezanechá napůl vytvořený
-účet. Chybějící credential, Talk nebo conversation-v4 se projeví explicitním
-stavem a nespustí nepodporovaný endpoint.
+An error before the secure and database commit completes leaves no half-created
+account. A missing credential, Talk or conversation-v4 surfaces as an explicit
+state and does not call an unsupported endpoint.
 
-## Chat a thread UI
+## Chat and thread UI
 
-Telefonní route i expanded detail používají stejný `ChatRoomPane`. Produkční
-widget zobrazuje cache-first timeline, GFM/Rich Object obsah, obrázky, reakce,
-reply preview, participant avatary, stav outboxu a composer pro text, emoji,
-Giphy, obrázek a voice. Nový Giphy výběr se po resolve a validaci předá do
-stejného durable attachment toku jako `image/gif`; wire URL se nesmí vytvořit
-jako nová zpráva. Historický URL renderer zůstává pouze pro kompatibilní čtení
-starších zpráv. Root a každý thread mají samostatný
-`(accountId, roomToken, threadId|null)` scope. Platné nové vlákno lze otevřít i
-před první odpovědí.
+Both the phone route and the expanded detail use the same `ChatRoomPane`. The
+production widget shows a cache-first timeline, GFM/Rich Object content, images,
+reactions, a reply preview, participant avatars, the outbox state and a composer
+for text, emoji, Giphy, an image and voice. A new Giphy selection is handed,
+after the resolve and validation, into the same durable attachment flow as
+`image/gif`; the wire URL must not be created as a new message. The historical
+URL renderer remains only for compatible reading of older messages. The root and
+every thread have a separate `(accountId, roomToken, threadId|null)` scope. A
+valid new thread can be opened even before the first reply.
 
-Dva widget-integration testy používají produkční `ChatService`, HTTP adapter,
-Drift repository a Riverpod projekci s deterministickým `MockClient`. Pro root
-i thread ověřují future requesty `timeout=0 → 30 → 0`, přijetí cursoru 120,
-konvergentní stav po následném `304`, zobrazení externí zprávy a prázdný opačný
-scope. Jde o automatizovaný wire-adapter důkaz, ne o skutečný serverový socket
-nebo web↔emulátor E2E.
+Two widget-integration tests use the production `ChatService`, the HTTP adapter,
+the Drift repository and the Riverpod projection with a deterministic
+`MockClient`. For the root as well as a thread they verify the future requests
+`timeout=0 → 30 → 0`, accepting cursor 120, the convergent state after a
+subsequent `304`, displaying an external message and an empty opposite scope.
+This is automated wire-adapter evidence, not a real server socket or a
+web↔emulator E2E.
 
-Thread-scoped merge zároveň obnovuje cached original z úplného embedded parentu
-jen při přesné shodě room/thread identity. Chybí-li serverové `threadReplies`,
-repository odvodí počet z unikátních scoped reply ID, vynechá original a replay
-a nesníží vyšší cached počet. Explicitní serverový počet zůstává autoritativní.
-Repository test prošel 7/7 a zachoval reply mimo root timeline.
+The thread-scoped merge also restores a cached original from a complete embedded
+parent only on an exact match of the room/thread identity. If the server-side
+`threadReplies` is missing, the repository derives the count from unique scoped
+reply IDs, leaves out the original and the replay, and does not lower a higher
+cached count. An explicit server count stays authoritative. The repository test
+passed 7/7 and kept the reply out of the root timeline.
 
-Composer rozlišuje obyčejný reply thread a serverový named thread. Reply
-odesílá `replyTo`; named thread pod lokální capability `threads` odesílá pouze
-`threadId`. Text-send replay contract r2, HTTP adapter a Drift schema v5 tuto
-vazbu zachovají. File-backed reopen test drží queued i sending `threadId`,
-restart recovery převádí přerušený `sending` na `awaitingConfirmation` a
-správně svázaná named-thread confirmation atomicky aktualizuje cached root
-`threadId`, `isThread` a `threadReplies`. Přímá response je parentless;
-history/future confirmation smí nést přesně svázaný full root nebo compact
-deleted root. Tento řez zatím nemá live serverový ani aktuální APK důkaz.
+The composer distinguishes an ordinary reply thread from a server-side named
+thread. A reply sends `replyTo`; a named thread under the local capability
+`threads` sends only `threadId`. The text-send replay contract r2, the HTTP
+adapter and Drift schema v5 preserve this binding. A file-backed reopen test
+holds the `threadId` of both a queued and a sending operation, restart recovery
+converts an interrupted `sending` into `awaitingConfirmation`, and a correctly
+bound named-thread confirmation atomically updates the cached root `threadId`,
+`isThread` and `threadReplies`. A direct response is parentless; a history/future
+confirmation may carry an exactly bound full root or a compact deleted root. This
+slice has no live server or current APK evidence yet.
 
-## Historický Android Giphy wire-reference runtime
+## Historical Android Giphy wire-reference runtime
 
-Debug APK v
-`apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` má SHA-256
-`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`
-a velikost 203 683 536 B. Artefakt odpovídá commitu `5f6e2f4`. Dne 25. srpna
-2026 bylo aktualizačně nainstalované na
-`emulator-5554` přes `adb install -r`; SHA-256 nainstalovaného `base.apk` je
-shodný.
+The debug APK in
+`apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` has SHA-256
+`0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf` and a size of
+203,683,536 B. The artifact corresponds to commit `5f6e2f4`. On 25 August 2026 it
+was update-installed on `emulator-5554` through `adb install -r`; the SHA-256 of
+the installed `base.apk` is identical.
 
-Na tomto hashi skutečně prošel Login Flow v2 včetně druhého faktoru a schválení
-přístupu, načetl se přihlášený seznam konverzací a otevřel room detail. Účet
-přežil další aktualizační instalaci i ukončení a nový start procesu. Dva měřené
-cold starty skončily za 5 094 ms a 4 587 ms.
+On this hash, Login Flow v2 including a second factor and access approval really
+passed, the signed-in conversation list was loaded and a room detail was opened.
+The account survived another update install as well as terminating and starting
+the process again. Two measured cold starts finished in 5094 ms and 4587 ms.
 
-Giphy wire-reference send v otevřené room zobrazil animovaný GIF inline bez
-viditelné nebo klikací URL. Dva časově oddělené cropy měly rozdílné hashe, takže
-nešlo o statický náhled. Po ukončení procesu zůstala wire-reference zpráva
-uložená a znovu se vykreslila. Po cold startu trvalo načtení vzdáleného média
-přibližně osm sekund; krátký banner o dočasně nedostupném chatu po retry zmizel.
-To je známý runtime signál pro další diagnostiku, ne ztráta zprávy.
+A Giphy wire-reference send in an open room displayed an animated GIF inline
+without a visible or clickable URL. Two crops taken at different times had
+different hashes, so it was not a static preview. After the process was
+terminated, the wire-reference message stayed stored and was rendered again.
+After a cold start, loading the remote media took roughly eight seconds; a short
+banner about a temporarily unavailable chat disappeared after a retry. That is a
+known runtime signal for further diagnostics, not a lost message.
 
-Tento běh je důkazem historického rendereru, nikoli nového Giphy attachment
-toku. Nové odeslání musí skončit skutečnou `image/gif` přílohou přes
-Draft/WebDAV/finalize; commity `5d49cbb` a `9de5727` zatím dokazují pouze
-přípravu bajtů a admission do media composeru.
+This run is evidence of the historical renderer, not of the new Giphy attachment
+flow. A new send has to end with a real `image/gif` attachment through
+Draft/WebDAV/finalize; commits `5d49cbb` and `9de5727` so far prove only the
+preparation of the bytes and the admission into the media composer.
 
-Tento běh ještě neprokazuje živý Giphy/image/voice attachment send a viewer,
-cross-device root/thread refresh ani skutečný Nextcloud → FCM tok v
-background/killed procesu.
+This run does not yet prove a live Giphy/image/voice attachment send and viewer,
+a cross-device root/thread refresh or a real Nextcloud → FCM flow in a
+background/killed process.
 
-## Historický post-review Windows release runtime smoke
+## Historical post-review Windows release runtime smoke
 
-Flutter 3.44.4 sestavil 24. srpna 2026 Windows x64 release bundle za 76,7 s nad
-source snapshotem se 150 vstupy SHA-256
-`847e81f27311e5ce1ae37169e989a3dab497825aa21f3c53f1c722b1bd98030d`, který
-zůstal před i po buildu shodný. Spuštěný `nextcloudtalk.exe` měl SHA-256
-`5339f4f0d8caf04da2152a2ca5ddf32cd2ff9f26e259a24660e764c84a43af9e`
-a Dart AOT `data/app.so` SHA-256
-`01a4cb3cf65bc4f4147e741a9deb1fd584c169ff275105d6eae4da64dfeffa62`.
-Proces v okně `NKS Talk` zobrazil tmavý expanded onboarding „Všechny konverzace
-v jedné aplikaci“ a po 356,7 s byl stále živý a responsivní. Manifest 17 souborů
-release bundlu byl znovu ověřený 17/17 bez chyb; redigované runtime metadata a
-screenshot jsou v ignorované složce
-`.artifacts/windows-smoke-post-review-20260824-142126`. Všech 10 JSON evidence
-souborů se parsuje, screenshot je platný 1920×1032 PNG a build log neobsahuje
-warning, error, failed ani exception. Scan deseti textových důkazů proti sedmi
-secret/path vzorům měl 0 nálezů.
+On 24 August 2026 Flutter 3.44.4 built a Windows x64 release bundle in 76.7 s on
+top of a source snapshot with 150 inputs, SHA-256
+`847e81f27311e5ce1ae37169e989a3dab497825aa21f3c53f1c722b1bd98030d`, which stayed
+identical before and after the build. The launched `nextcloudtalk.exe` had SHA-256
+`5339f4f0d8caf04da2152a2ca5ddf32cd2ff9f26e259a24660e764c84a43af9e` and the Dart
+AOT `data/app.so` SHA-256
+`01a4cb3cf65bc4f4147e741a9deb1fd584c169ff275105d6eae4da64dfeffa62`. The process
+in the `NKS Talk` window displayed the dark expanded onboarding "Všechny
+konverzace v jedné aplikaci" and after 356.7 s it was still alive and responsive.
+The manifest of the 17 files of the release bundle was verified again 17/17
+without errors; the redacted runtime metadata and the screenshot are in the
+ignored folder `.artifacts/windows-smoke-post-review-20260824-142126`. All 10
+JSON evidence files parse, the screenshot is a valid 1920×1032 PNG and the build
+log contains no warning, error, failed or exception. A scan of ten text pieces of
+evidence against seven secret/path patterns had 0 findings.
 
-Tento smoke neměl uložený účet ani credentials. Neověřuje proto Login Flow,
-secure storage, chat, dva servery, restart/upgrade, installer ani signing.
-Windows UI Automation viděla jen kořen Flutter okna a žádné potomky, takže z
-tohoto běhu nelze tvrdit Windows screen-reader nebo keyboard accessibility.
+This smoke test had no stored account and no credentials. It therefore does not
+verify the Login Flow, secure storage, chat, two servers, restart/upgrade, the
+installer or signing. Windows UI Automation only saw the root of the Flutter
+window and no children, so nothing about Windows screen-reader or keyboard
+accessibility can be claimed from this run.
 
-## Historický reálný thread smoke
+## Historical real thread smoke
 
-Předchozí debug APK SHA-256
-`<fingerprint>`
-bylo 24. srpna 2026 aktualizačně nainstalované na `chatujmePixel`. Cold start
-zachoval autentizovaný účet. Existující thread se otevřel z root timeline přes
-`Open thread` a anonymizovaný scénář prokázal:
+The previous debug APK SHA-256
+`<fingerprint>` was
+update-installed on `chatujmePixel` on 24 August 2026. The cold start preserved
+the authenticated account. An existing thread was opened from the root timeline
+through `Open thread` and an anonymized scenario proved:
 
-- jedna nová webová thread reply se ve foreground Flutteru zobrazila za 2,3 s;
-- thread root byl vykreslen právě jednou;
-- redundantní parent preview se nevykreslilo ani jednou;
-- nová reply se neobjevila v root timeline;
-- počítadlo odpovědí u kořene se aktualizovalo na 4.
+- one new web thread reply appeared in the foreground Flutter in 2.3 s;
+- the thread root was rendered exactly once;
+- a redundant parent preview was not rendered at all;
+- the new reply did not appear in the root timeline;
+- the reply counter on the root updated to 4.
 
-Tento historický smoke neprokazuje stejné chování na novém post-review APK,
-opačný směr z Flutter composeru do webového Talk ani celý obousměrný E2E.
+This historical smoke test does not prove the same behaviour on the new
+post-review APK, the reverse direction from the Flutter composer into the web
+Talk, or the whole bidirectional E2E.
 
-## Historické UI, kontrast a avatary
+## Historical UI, contrast and avatars
 
-Installed `base.apk` načtené ze zařízení má podle `sha256sum` přesně stejný
-SHA-256 jako tehdejší lokální build:
+The installed `base.apk` read back from the device has, per `sha256sum`, exactly
+the same SHA-256 as the local build of the time:
 `<fingerprint>`.
 
-Harness pro tento hash vytvořil light, dark a light-200-percent capture. Všechny
-tři snímky vizuálně zobrazují thread, datum, root, 4 odpovědi a composer bez layout
-vady. Explicitní pixelový report prošel 24/24:
+For this hash the harness produced a light, a dark and a light-200-percent
+capture. All three screenshots visually show the thread, the date, the root, 4
+replies and the composer without a layout defect. The explicit pixel report
+passed 24/24:
 
-- minimum textu 7,2725:1 při limitu 4,5:1;
-- minimum UI 3,252078:1 při limitu 3:1.
+- a text minimum of 7.2725:1 against a limit of 4.5:1;
+- a UI minimum of 3.252078:1 against a limit of 3:1.
 
-Redigovaný process-scoped logcat nemá warning, error, fatal ani známou UI
-diagnostiku. Harness po běhu skutečně obnovil původní stav zařízení:
-`night=yes`, `font_scale` znovu unset/null a proces aplikace běží.
+The redacted process-scoped logcat has no warning, error, fatal or known UI
+diagnostic. After the run, the harness really restored the original state of the
+device: `night=yes`, `font_scale` unset/null again, and the application process
+running.
 
-Runtime seznam konverzací zobrazil 9 viditelných tiles a 9 avatarů: 3 síťové
-obrázky, 4 fallback ikony a 2 iniciály. Skutečná příchozí skupinová zpráva měla
-participant avatar; outgoing-only testovací thread správně avatary nezobrazuje.
-Samostatný avatar pixelový report prošel 4/4 s minimem UI ikony 7,2725:1 a
-textu iniciály 7,2739:1.
+The runtime conversation list displayed 9 visible tiles and 9 avatars: 3 network
+images, 4 fallback icons and 2 sets of initials. A real incoming group message
+had a participant avatar; an outgoing-only test thread correctly displays no
+avatars. A separate avatar pixel report passed 4/4 with a minimum UI icon of
+7.2725:1 and initials text of 7.2739:1.
 
-## Historický obousměrný thread baseline
+## Historical bidirectional thread baseline
 
-Starší debug APK SHA-256
-`1c4372cad3bbf3f7b1d56664c5da9f353be24bb2b456a919b2393cd6879ba861`
-24. srpna 2026 prokázalo dvě webové replies v různých polling cyklech, jejich
-nepřítomnost v root timeline a reply z Flutter thread composeru doručenou do
-webového Talk. Tento běh zůstává historickým transportním baseline; změny v
-předchozím runtime APK ani v aktuálním buildu jím nejsou znovu ověřené.
+On 24 August 2026 the older debug APK SHA-256
+`1c4372cad3bbf3f7b1d56664c5da9f353be24bb2b456a919b2393cd6879ba861` proved two web
+replies in different polling cycles, their absence from the root timeline and a
+reply from the Flutter thread composer delivered into the web Talk. That run
+remains a historical transport baseline; it does not re-verify the changes in the
+previous runtime APK or in the current build.
 
-Testovací room token ani texty zpráv se do dokumentace neukládají. Dočasná room
-byla 2026-08-24 přes trvalou webovou E2E relaci odstraněná; následný snapshot
-ověřil její nepřítomnost v seznamu a zachování přihlášené relace.
+Neither the test room token nor the message texts are stored in the
+documentation. The temporary room was removed on 2026-08-24 through the
+persistent web E2E session; a follow-up snapshot verified its absence from the
+list and that the signed-in session was preserved.
 
-## Adaptivní rozložení
+## Adaptive layout
 
-Telefon pod 720 logical px používá kompaktní stack. Od 720 px se zobrazí tři
-panely v pořadí account rail, seznam konverzací a detail. Seznam má 330 px a od
-1100 px 390 px; detail spotřebuje zbývající prostor. Onboarding přechází od
-900 px z vertikálního toku na úvod a serverovou kartu vedle sebe.
+A phone below 720 logical px uses the compact stack. From 720 px onwards, three
+panes are shown in the order account rail, conversation list and detail. The list
+is 330 px, and from 1100 px onwards 390 px; the detail consumes the remaining
+space. From 900 px onwards, the onboarding moves from a vertical flow to the
+intro and the server card side by side.
 
-Stejný widget strom slouží tabletu, foldable i desktopu. Desktop není druhá
-aplikace a nesdílí data přes další serverovou službu. Klávesové zkratky,
-system tray, auto-start a doručování při úplně ukončené desktop aplikaci zatím
-nejsou implementované a nesmějí být vydávány za hotové.
+The same widget tree serves a tablet, a foldable and a desktop. The desktop is
+not a second application and does not share data through another server service.
+Keyboard shortcuts, the system tray, auto-start and delivery while the desktop
+application is fully terminated are not implemented yet and must not be presented
+as done.
 
-## Runtime a testovací důkaz
+## Runtime and test evidence
 
-- Flutter analyze na commitu `5f6e2f4`: 0 nálezů.
-- Souhrnný Flutter gate na commitu `3c74165`: 354 úspěšných testů, 1 read-only
-  live test přeskočený pouze bez environment credentials a 0 selhání.
-- Historická přesná Giphy wire oprava `5f6e2f4`: 11/11 cílených a 75/75 širších
-  chat/Giphy testů. Nejde o důkaz nového attachment toku.
-- Nové Giphy attachment propojení `7ca580e`: celý
-  `chat_composer_integration_test.dart` 4/4, loader/media composer 15/15 a
-  scoped analyze změněných souborů bez nálezu. Test ověřuje nulový Giphy
-  text-send, přesné uploadované bajty a Talk finalize hashovaného `.gif` názvu.
-- Server-backed read a silent background polling `e4840e5` + `02b79eb`:
-  status/live-sync sada 11/11 a scoped analyze pěti změněných souborů bez
-  nálezu. `read` vyžaduje server-confirmed message a common-read cursor;
-  `delivered` se nevytváří.
-- Android Web Push koordinátor `c37bf66`: coordinator 21/21, push/API 39/39,
-  celý Flutter analyze a debug APK build prošly. Retry je account-scoped,
-  exponenciálně omezený a jen pro doložené transientní chyby; skutečný provider
-  delivery tím není prokázaný.
-- Celý `talk_protocol`: 569/569; čerstvá cílená conversation sada 25. srpna
-  2026: 74/74.
-- Čerstvá scoped Flutter foundation/conversation sada: 60 PASS, 1 read-only
-  live SKIP pouze bez environment credentials. Zahrnuje onboarding, account
-  repository, HTTP adaptér, Drift migrace, full/delta sync, foreground loop,
-  avatary a adaptivní shell.
-- Android Web Push native gate na commitu `3c74165`: Kotlin unit 16/16 a
-  connected test na `emulator-5554` 15/15. Callback je v testu injektovaný;
-  nejde o důkaz skutečného provider delivery.
-- Avatar repository/widget a migrace navíc ověřují immutable versioned cache,
-  ETag revalidaci, offline stale fallback, izolaci stejné URL mezi účty,
-  generated/custom vykreslení a upgrady v2/v3 → v4.
-- Aktuální Android debug APK build a `adb install -r`: úspěšné. Lokální i
-  nainstalovaný artefakt mají SHA-256
+- Flutter analyze at commit `5f6e2f4`: 0 findings.
+- The aggregate Flutter gate at commit `3c74165`: 354 passing tests, 1 read-only
+  live test skipped only without environment credentials and 0 failures.
+- The historical exact Giphy wire fix `5f6e2f4`: 11/11 targeted and 75/75 broader
+  chat/Giphy tests. It is not evidence of the new attachment flow.
+- The new Giphy attachment wiring `7ca580e`: the whole
+  `chat_composer_integration_test.dart` 4/4, loader/media composer 15/15 and a
+  scoped analyze of the changed files with no findings. The test verifies zero
+  Giphy text-sends, the exact uploaded bytes and a Talk finalize of the hashed
+  `.gif` name.
+- Server-backed read and silent background polling `e4840e5` + `02b79eb`: the
+  status/live-sync suite 11/11 and a scoped analyze of five changed files with no
+  findings. `read` requires a server-confirmed message and the common-read
+  cursor; `delivered` is not created.
+- The Android Web Push coordinator `c37bf66`: coordinator 21/21, push/API 39/39,
+  the whole Flutter analyze and the debug APK build passed. The retry is
+  account-scoped, exponentially bounded and only for documented transient errors;
+  that does not prove real provider delivery.
+- The whole of `talk_protocol`: 569/569; the fresh targeted conversation suite of
+  25 August 2026: 74/74.
+- The fresh scoped Flutter foundation/conversation suite: 60 PASS, 1 read-only
+  live SKIP only without environment credentials. It covers onboarding, the
+  account repository, the HTTP adapter, Drift migrations, full/delta sync, the
+  foreground loop, avatars and the adaptive shell.
+- The Android Web Push native gate at commit `3c74165`: Kotlin unit 16/16 and the
+  connected test on `emulator-5554` 15/15. The callback is injected in the test;
+  this is not evidence of real provider delivery.
+- The avatar repository/widget and the migrations additionally verify the
+  immutable versioned cache, ETag revalidation, the offline stale fallback,
+  isolation of the same URL between accounts, generated/custom rendering and the
+  v2/v3 → v4 upgrades.
+- The current Android debug APK build and `adb install -r`: successful. The local
+  and the installed artifact both have SHA-256
   `0d38d4ab2a665883d0ee0de7426f201c107cefc6b5f7e701b1c856255f6195cf`.
-- Na historickém APK prošel skutečný Login Flow, seznam konverzací, otevření
-  room, inline Giphy wire-reference send a process-death návrat. Dva cold starty
-  trvaly 5 094 ms a 4 587 ms.
-- Historický Windows x64 release build a onboarding runtime: úspěšné; EXE
-  SHA-256
-  `5339f4f0d8caf04da2152a2ca5ddf32cd2ff9f26e259a24660e764c84a43af9e`,
-  Dart AOT SHA-256
-  `01a4cb3cf65bc4f4147e741a9deb1fd584c169ff275105d6eae4da64dfeffa62`,
-  17/17 bundle hashů a 356,7 s responsivního procesu.
-- Předchozí APK hash
+- On the historical APK a real Login Flow, the conversation list, opening a room,
+  an inline Giphy wire-reference send and a process-death return all passed. Two
+  cold starts took 5094 ms and 4587 ms.
+- The historical Windows x64 release build and onboarding runtime: successful;
+  the EXE SHA-256
+  `5339f4f0d8caf04da2152a2ca5ddf32cd2ff9f26e259a24660e764c84a43af9e`, the Dart AOT
+  SHA-256 `01a4cb3cf65bc4f4147e741a9deb1fd584c169ff275105d6eae4da64dfeffa62`,
+  17/17 bundle hashes and 356.7 s of a responsive process.
+- The previous APK hash
   `<fingerprint>`
-  historicky prokázal cold start, otevření threadu,
-  příjem nové webové reply za 2,3 s a root/thread izolaci. Obousměrný web round
-  trip je doložený jen ještě starším APK uvedeným výše.
-- Předchozí hash
-  `<fingerprint>` má
-  historický light/dark/200% thread pixelový report 24/24 PASS, avatar report
-  4/4 PASS a redigovaný process logcat bez
-  varování, chyb a UI diagnostik. Aktuální hash tento historický důkaz nepřebírá.
-- Historický Windows debug `kernel_blob.bin`: SHA-256
+  historically proved a cold start, opening a thread, receiving a new web reply
+  in 2.3 s and root/thread isolation. The bidirectional web round trip is
+  documented only by the even older APK listed above.
+- The previous hash
+  `<fingerprint>` has a
+  historical light/dark/200% thread pixel report of 24/24 PASS, an avatar report
+  of 4/4 PASS and a redacted process logcat without warnings, errors and UI
+  diagnostics. The current hash does not inherit this historical evidence.
+- The historical Windows debug `kernel_blob.bin`: SHA-256
   `78fc9e2a9b104eb3ac4da54887e9741c15be1d524b89edd5ff11c9f0473432a0`.
 
-Debug cold start není release výkonový benchmark. Skutečné Nextcloud → FCM
-doručení v background/killed procesu, změny reálného rádia a dlouhodobá spotřeba
-musí projít fyzickým Android zařízením.
+A debug cold start is not a release performance benchmark. Real Nextcloud → FCM
+delivery in a background/killed process, real radio changes and long-term
+consumption have to pass on a physical Android device.
 
-Widget a11y kontrakty ověřují, že vybraný room je jediný označený semantic
-button se stavem selected, hodnotou preview/čas/unread a cílem nejméně 48 dp.
-Chat header a composer rostou při 200% textu, avatar vedle viditelného autora
-nevytváří duplicitní image uzel a inline odkaz je jediný semantic link s tap
-akcí, cílem nejméně 48×48 dp a zalomením při 200% textu. Composer má právě jeden
-pojmenovaný editovatelný semantics node se `setText` a tap akcí. Tyto testy
-nenahrazují skutečně vyslovený TalkBack ani runtime screenshot.
+The widget a11y contracts verify that the selected room is the only labelled
+semantic button with the selected state, a value of preview/time/unread and a
+target of at least 48 dp. The chat header and the composer grow at 200% text, an
+avatar next to a visible author does not create a duplicate image node, and an
+inline link is the only semantic link with a tap action, a target of at least
+48×48 dp and wrapping at 200% text. The composer has exactly one named editable
+semantics node with `setText` and a tap action. These tests do not replace an
+actually spoken TalkBack or a runtime screenshot.
 
-## Historický thread kontrast, 200% text a TalkBack
+## Historical thread contrast, 200% text and TalkBack
 
-Následující důkaz patří ke staršímu APK SHA-256
-`1c4372cad3bbf3f7b1d56664c5da9f353be24bb2b456a919b2393cd6879ba861`.
-Reálné screenshoty `nctalk-thread-light-final.png` a
-`nctalk-thread-dark-final.png` jsou v ignorované lokální `.artifacts` složce;
-kvůli testovacím datům se necommitují. PIL výpočet nad skutečnými pixely naměřil:
+The following evidence belongs to the older APK SHA-256
+`1c4372cad3bbf3f7b1d56664c5da9f353be24bb2b456a919b2393cd6879ba861`. The real
+screenshots `nctalk-thread-light-final.png` and `nctalk-thread-dark-final.png`
+are in the ignored local `.artifacts` folder; because of the test data they are
+not committed. A PIL computation over the real pixels measured:
 
-| Prvek | Světlý motiv | Tmavý motiv |
+| Element | Light theme | Dark theme |
 | --- | ---: | ---: |
-| text zprávy | 7,27:1 | 7,27:1 |
-| čas | 5,03:1 | 5,55:1 |
-| autor reply | 9,40:1 | 11,63:1 |
-| text reply | 9,36:1 | 11,61:1 |
-| systémová zpráva a datum | 8,88:1 | 11,15:1 |
-| primární prvek | 6,16:1 | 11,17:1 |
-| send ikona | 6,50:1 | 7,77:1 |
-| header | 16,24:1 | 14,62:1 |
-| separator | 3,25:1 | 3,36:1 |
+| message text | 7.27:1 | 7.27:1 |
+| time | 5.03:1 | 5.55:1 |
+| reply author | 9.40:1 | 11.63:1 |
+| reply text | 9.36:1 | 11.61:1 |
+| system message and date | 8.88:1 | 11.15:1 |
+| primary element | 6.16:1 | 11.17:1 |
+| send icon | 6.50:1 | 7.77:1 |
+| header | 16.24:1 | 14.62:1 |
+| separator | 3.25:1 | 3.36:1 |
 
-Světlý composer border měl 6,50:1. Měřený thread tedy splnil minimum 4,5:1
-pro text a 3:1 pro UI prvky v obou motivech na tomto starším APK.
+The light composer border had 6.50:1. The measured thread therefore met the
+minimum of 4.5:1 for text and 3:1 for UI elements in both themes on that older
+APK.
 
-Screenshot `nctalk-thread-light-font200.png` zachycuje skutečný font scale 2,0.
-Zprávy se zalomily, header i composer zůstaly dostupné a logcat neobsahoval
-RenderFlex ani jinou layout chybu.
+The screenshot `nctalk-thread-light-font200.png` captures a real font scale of
+2.0. The messages wrapped, the header and the composer stayed available and the
+logcat contained no RenderFlex or other layout error.
 
-TalkBack služba byla skutečně bound a `touchExplorationEnabled=true`. Flutter
-semantics test potvrzuje právě jeden pojmenovaný editovatelný composer node se
-`setText` a tap akcí. Flutter Android AccessibilityBridge mapuje label/hint
-textového pole do `AccessibilityNodeInfo.hintText`, zatímco uiautomator XML
-`hintText` neserializuje; jeho `NAF=true` je proto false positive. Následná
-dočasná UiAutomator JAR sonda mimo repo četla přímo `AccessibilityNodeInfo` a
-prošla 1/1: `editorCount=1`, `hintMatchesExpected=true`, hint měl délku 15
-(`Write a message`), `editable=true` a click akci. Text i `contentDescription`
-byly podle bridge prázdné. Před a po sondě byly accessibility hodnoty přesně
-`0/null/0/null`; APK ani app data se neměnily a host/device temp artefakty byly
-odstraněné. Runtime platformní název composeru je tedy PASS. Zvukové vyslovení
-TalkBack nebylo odposlechnuté a širší screen-reader navigace zůstává otevřená.
+The TalkBack service was really bound and `touchExplorationEnabled=true`. The
+Flutter semantics test confirms exactly one named editable composer node with
+`setText` and a tap action. The Flutter Android AccessibilityBridge maps the
+label/hint of a text field into `AccessibilityNodeInfo.hintText`, while the
+uiautomator XML does not serialize `hintText`; its `NAF=true` is therefore a
+false positive. A subsequent temporary UiAutomator JAR probe outside the repo
+read `AccessibilityNodeInfo` directly and passed 1/1: `editorCount=1`,
+`hintMatchesExpected=true`, the hint had a length of 15 (`Write a message`),
+`editable=true` and a click action. Both the text and the `contentDescription`
+were empty per the bridge. Before and after the probe the accessibility values
+were exactly `0/null/0/null`; neither the APK nor the app data changed and the
+host/device temp artifacts were removed. The runtime platform name of the
+composer is therefore PASS. Audible TalkBack speech was not listened to and
+broader screen-reader navigation stays open.
 
-`mobile_audit.py` vrátil 48 heuristických regex shod. Manuální kontrola proti
-widgetům, semantics dumpům a runtime výsledku je potvrdila jako false positives.
-Skript zůstává podpůrný signál, nikoli pass/fail brána; rozhoduje kombinace
-testů, ručního auditu, runtime a pixelového měření.
+`mobile_audit.py` returned 48 heuristic regex matches. A manual check against the
+widgets, the semantics dumps and the runtime result confirmed them as false
+positives. The script remains a supporting signal, not a pass/fail gate; the
+decision is made by the combination of tests, a manual audit, the runtime and the
+pixel measurement.
 
-## Foundation kontrastní důkaz
+## Foundation contrast evidence
 
-Světlý i tmavý onboarding prošel screenshotem reálného Android běhu. Windows
-release smoke samostatně zachytil tmavý expanded onboarding, ale neobsahoval
-pixelové WCAG měření ani accessibility tree potomků. Následující pixelový
-výpočet po složení skutečných barev patří Android důkazu:
+Both the light and the dark onboarding passed a screenshot of a real Android run.
+The Windows release smoke separately captured the dark expanded onboarding, but
+contained no pixel WCAG measurement and no accessibility tree children. The
+following pixel computation after compositing the real colors belongs to the
+Android evidence:
 
-| Prvek | Světlý motiv | Tmavý motiv |
+| Element | Light theme | Dark theme |
 | --- | ---: | ---: |
-| hlavní text | 16,24:1 | 14,62:1 |
-| sekundární text | 8,88:1 | 11,15:1 |
-| obrys karty | 3,43:1 | 3,50:1 |
-| obrys pole | 4,97:1 | 4,36:1 |
-| text tlačítka | 6,50:1 | 7,77:1 |
+| main text | 16.24:1 | 14.62:1 |
+| secondary text | 8.88:1 | 11.15:1 |
+| card outline | 3.43:1 | 3.50:1 |
+| field outline | 4.97:1 | 4.36:1 |
+| button text | 6.50:1 | 7.77:1 |
 
-Jednopixelový obrys se na reálném rasteru skládal do dvou polovičních pixelů a
-nedosáhl 3:1. Produkční motiv proto používá dvoupixelový obrys pro pole, karty a
-outlined tlačítka a test tento minimální width hlídá. Předchozí runtime APK má
-vlastní light/dark a 200% thread runtime i pixelový důkaz výše. Aktuální APK ani
-další obrazovky tento historický důkaz nepřebírají.
-Historický
-runtime `getHintText` důkaz
-composeru prošel;
-screen-reader brána dál čeká na zvukové vyslovení a širší TalkBack/VoiceOver
-navigaci, ne na opravu composer semantics.
+On a real raster, a one-pixel outline composited into two half pixels and did not
+reach 3:1. The production theme therefore uses a two-pixel outline for fields,
+cards and outlined buttons, and a test guards this minimum width. The previous
+runtime APK has its own light/dark and 200% thread runtime and pixel evidence
+above. Neither the current APK nor further screens inherit this historical
+evidence. The historical runtime `getHintText` evidence of the composer passed;
+the screen-reader gate is still waiting for audible speech and broader
+TalkBack/VoiceOver navigation, not for a fix of the composer semantics.
