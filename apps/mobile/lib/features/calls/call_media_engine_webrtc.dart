@@ -18,10 +18,8 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       stream = await rtc.navigator.mediaDevices.getUserMedia(
         const <String, dynamic>{'audio': true, 'video': false},
       );
-    } on PlatformException catch (error) {
+    } on Object catch (error) {
       throw CallMediaException(_microphoneError(error));
-    } on Object {
-      throw const CallMediaException(CallMediaError.microphoneUnavailable);
     }
     if (stream.getAudioTracks().isEmpty) {
       await stream.dispose();
@@ -85,10 +83,16 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
   }
 }
 
-CallMediaError _microphoneError(PlatformException error) {
-  // Both the Android and the Apple side of the plugin report a refused
-  // permission as the DOMException name from the getUserMedia algorithm.
-  final detail = '${error.code} ${error.message ?? ''}';
+/// Both the Android and the Apple side of the plugin report a refused
+/// permission as the `NotAllowedError` DOMException name from the getUserMedia
+/// algorithm. The type it arrives as is not dependable: the plugin catches the
+/// platform exception and rethrows a bare String
+/// (`Unable to getUserMedia: DOMException, NotAllowedError`), which is what a
+/// live refusal on Android actually produced, so the text is what is matched.
+CallMediaError _microphoneError(Object error) {
+  final detail = error is PlatformException
+      ? '${error.code} ${error.message ?? ''}'
+      : error.toString();
   return detail.contains('NotAllowedError')
       ? CallMediaError.microphonePermissionDenied
       : CallMediaError.microphoneUnavailable;
