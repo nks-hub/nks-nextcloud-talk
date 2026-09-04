@@ -1,154 +1,169 @@
-# Synchronizace a lokální data
+# Synchronization and local data
 
-## Databázová volba
+## Database choice
 
-Požadované atomické vztahy jsou relační. Autoritativní lokální store proto je
-SQLite s foreign keys, transakcemi a verzovanými migracemi. Flutter aplikace
-používá Drift; aktuální schema v10 drží účty, konverzace, avatary, chat scope,
-zprávy, text-send operace, drafty a durable attachment joby. Otevření databáze
-zapíná a kontroluje foreign keys. Novější `user_version` se před jakoukoli
-migrací fail-closed odmítne, takže rollback aplikace neoznačí neznámé schema
-svou starší verzí.
+The required atomic relations are relational. The authoritative local store is
+therefore SQLite with foreign keys, transactions and versioned migrations. The
+Flutter application uses Drift; the current schema v10 holds accounts,
+conversations, avatars, chat scopes, messages, text-send operations, drafts and
+durable attachment jobs. Opening the database enables and checks foreign keys. A
+newer `user_version` is rejected fail-closed before any migration, so an
+application rollback does not stamp its older version onto an unknown schema.
 
-Hive může zůstat pouze pro jednoduché neautoritativní preference. Není vhodný
-jako hlavní Talk store, protože message, parent, thread, room a read marker se
-musí měnit v jedné transakci.
+Hive may stay only for simple non-authoritative preferences. It is not suitable
+as the main Talk store, because a message, a parent, a thread, a room and a read
+marker have to change within one transaction.
 
-## Identita
+## Identity
 
-### Server origin
+### The server origin
 
-Před uložením:
+Before storing:
 
-- pouze podporované schéma;
-- lowercase host;
-- normalizovaný port;
-- odstraněný trailing slash;
-- zachovaný případný Nextcloud subpath;
-- žádné credentials v URL.
+- only a supported scheme;
+- a lowercase host;
+- a normalized port;
+- the trailing slash removed;
+- any Nextcloud subpath preserved;
+- no credentials in the URL.
 
-Redirect a discovery výsledek se ukládá odděleně od uživatelem zadané hodnoty.
+The redirect and discovery result is stored separately from the value entered by
+the user.
 
 ### accountId
 
-Lokální náhodné UUID vytvořené po úspěšném loginu. Není odvozené pouze z userId,
-protože stejný uživatel může mít více app-password instalací a více serverů.
+A local random UUID created after a successful login. It is not derived from the
+userId alone, because the same user may have several app-password installations
+and several servers.
 
-Každý primární nebo unikátní klíč synchronizačních dat začíná accountId.
+Every primary or unique key of synchronization data starts with the accountId.
 
-## Logický model
+## The logical model
 
 <!-- markdownlint-disable MD013 -->
 
-| Entita | Klíč | Účel |
+| Entity | Key | Purpose |
 | --- | --- | --- |
-| Account | accountId | Server, login identity, credential reference a lifecycle |
-| CapabilitySnapshot | accountId + scope + revision | Raw a normalizované feature/config hodnoty |
-| Conversation | accountId + roomToken | Room metadata, permission, counters a poslední message |
-| Participant | accountId + roomToken + actor key | Účastník, role, session a federation data |
-| Message | accountId + roomToken + messageId nebo localId | Autor, text, state, parentMessageId, parentRoomToken a thread vazby |
-| MessageParameter | accountId + roomToken + message key + placeholder | Rich Object String parameter bez ztrát |
-| ReactionSummary | accountId + roomToken + message key + reaction | Count, self flag a volitelně zvlášť načtení actors |
-| Thread | accountId + roomToken + threadId | Original message, title, counts a subscription |
-| ChatBlock | accountId + roomToken + thread scope + start/end | Souvislý potvrzený interval historie |
-| ReadMarker | accountId + roomToken | lastRead, lastCommonRead a explicit unread state |
-| OutboxOperation | accountId + operationId | Perzistentní lokální mutace, korelace a outcome certainty |
-| UploadJob | accountId + uploadId | Lokální media, WebDAV a Talk share fáze |
-| PushRegistration | accountId + channel | Connector instance, aktuální subscription generation, activation a revocation stav |
-| PushEndpoint | accountId + channel + generation | Reference na Android Web Push subscription secrets nebo iOS APNs/PushKit token |
-| NotificationRoute | accountId + platform tag/id | Server nid, roomToken, messageId a threadId |
-| RevocationTombstone | revocationId | Minimální secure cleanup data po lokálním odebrání účtu |
-| CallSession | accountId + call id | Pouze nutný perzistentní recovery stav, ne media objekty |
+| Account | accountId | The server, the login identity, the credential reference and the lifecycle |
+| CapabilitySnapshot | accountId + scope + revision | Raw and normalized feature/config values |
+| Conversation | accountId + roomToken | Room metadata, permissions, counters and the last message |
+| Participant | accountId + roomToken + actor key | The participant, the role, the session and federation data |
+| Message | accountId + roomToken + messageId or localId | The author, the text, the state, parentMessageId, parentRoomToken and thread bindings |
+| MessageParameter | accountId + roomToken + message key + placeholder | A Rich Object String parameter without losses |
+| ReactionSummary | accountId + roomToken + message key + reaction | The count, the self flag and optionally separately loaded actors |
+| Thread | accountId + roomToken + threadId | The original message, the title, counts and the subscription |
+| ChatBlock | accountId + roomToken + thread scope + start/end | A contiguous confirmed interval of history |
+| ReadMarker | accountId + roomToken | lastRead, lastCommonRead and the explicit unread state |
+| OutboxOperation | accountId + operationId | A persistent local mutation, the correlation and the outcome certainty |
+| UploadJob | accountId + uploadId | The local media, WebDAV and Talk share phases |
+| PushRegistration | accountId + channel | The connector instance, the current subscription generation, the activation and revocation state |
+| PushEndpoint | accountId + channel + generation | A reference to the Android Web Push subscription secrets or the iOS APNs/PushKit token |
+| NotificationRoute | accountId + platform tag/id | The server nid, roomToken, messageId and threadId |
+| RevocationTombstone | revocationId | Minimal secure cleanup data after a local account removal |
+| CallSession | accountId + call id | Only the necessary persistent recovery state, not media objects |
 
 <!-- markdownlint-enable MD013 -->
 
-Raw server JSON se může uchovat jen jako diagnostická nebo forward-compatible
-část modelu s jasnou migrací. Doménová logika nesmí pokaždé číst dynamickou mapu.
+Raw server JSON may be kept only as a diagnostic or forward-compatible part of
+the model with a clear migration. Domain logic must not read a dynamic map every
+time.
 
-## Bootstrap stav účtu
+## The bootstrap state of an account
 
-Account po prvním durable commitu začíná jako `capabilitiesPending`. Credentials
-už jsou bezpečně uložené, ale room sync, push registrace ani feature UI se ještě
-nesmějí spustit. Úspěšný přihlášený capability snapshot jej přepne do `ready`.
+After the first durable commit an Account starts as `capabilitiesPending`. The
+credentials are already stored safely, but the room sync, the push registration
+and the feature UI must not start yet. A successful signed-in capability snapshot
+switches it to `ready`.
 
-Síťová nebo 5xx chyba ponechá `capabilitiesPending` a dovolí bezpečný retry.
-HTTP 401 přepne účet do `reauthRequired`; anonymní capabilities jej nikdy
-nesmějí přepnout do `ready`. Stav je durable a další sync nesmí provést nový
-síťový request, dokud uživatel explicitně nedokončí re-auth. Nový Login Flow je
-svázaný s původním `accountId`, kanonickým server originem, base path a loginem.
-Jiná identita nesmí přepsat credential ani cache; nově vydaný cizí app password
-se best effort odvolá. Úspěšná shoda nahradí secure credential, zachová
-account-scoped cache, smaže sync error a znovu spustí live sync.
+A network or 5xx error leaves `capabilitiesPending` and allows a safe retry. HTTP
+401 switches the account into `reauthRequired`; anonymous capabilities must never
+switch it to `ready`. The state is durable and a further sync must not perform a
+new network request until the user explicitly completes the re-auth. A new Login
+Flow is bound to the original `accountId`, the canonical server origin, the base
+path and the login. A different identity must not overwrite the credential or the
+cache; a newly issued foreign app password is revoked on a best-effort basis. A
+successful match replaces the secure credential, preserves the account-scoped
+cache, clears the sync error and restarts the live sync.
 
 ## Message identity
 
-Serverová zpráva má messageId. Lokální pending zpráva má localId a referenceId.
-Upstream dovoluje více serverových zpráv se stejným referenceId. Hodnota je
-proto korelace, ne serverová idempotency key.
+A server message has a messageId. A local pending message has a localId and a
+referenceId. Upstream allows several server messages with the same referenceId.
+The value is therefore a correlation, not a server-side idempotency key.
 
-Pravidla:
+The rules:
 
-- referenceId je UUID a nemění se;
-- localId je unikátní pouze lokálně, ale vždy pod accountId;
-- server response nebo relay může spojit messageId s právě čekající lokální
-  operací přes referenceId;
-- dvě různá serverová messageId se stejným referenceId se nesmějí tiše sloučit;
-- pokud server nevrátí referenceId ve staré variantě, používá se opatrná
-  kombinace response vazby a server id, nikdy text + timestamp;
-- update a delete cílí server messageId;
-- temporary message se nemaže před atomickým vložením server identity.
+- the referenceId is a UUID and does not change;
+- the localId is unique only locally, but always under an accountId;
+- a server response or a relay may connect a messageId with exactly one waiting
+  local operation through the referenceId;
+- two different server messageIds with the same referenceId must not be silently
+  merged;
+- if the server does not return the referenceId in an old variant, a cautious
+  combination of the response binding and the server id is used, never text +
+  timestamp;
+- update and delete target the server messageId;
+- a temporary message is not deleted before the server identity is inserted
+  atomically.
 
-Cross-room reply vždy uchovává `replyTo`, `replyToToken` a normalizovaný
-`parentRoomToken`. Outbox i UploadJob musí po restartu rekonstruovat stejný
-request, ne odvodit parent room z právě otevřené konverzace.
+A cross-room reply always keeps `replyTo`, `replyToToken` and a normalized
+`parentRoomToken`. After a restart, both the outbox and an UploadJob must
+reconstruct the same request, not derive the parent room from the currently open
+conversation.
 
-Named-thread text send je samostatná větev: ukládá `threadId`, ale žádné
-`replyTo`, `replyToToken` ani `parentRoomToken`. Plain text send nemá ani reply,
-ani thread vazbu. Confirmation a restart recovery musí toto rozlišení zachovat,
-protože stejné serverové ID nesmí převést reply na named thread nebo naopak.
+A named-thread text send is a separate branch: it stores `threadId`, but no
+`replyTo`, `replyToToken` or `parentRoomToken`. A plain text send has neither a
+reply nor a thread binding. The confirmation and restart recovery must preserve
+this distinction, because the same server ID must not turn a reply into a named
+thread or vice versa.
 
-Nový Giphy send nepoužívá textový outbox. Vybranou URL použije pouze
-account-scoped resolver ke stažení validních GIF bajtů. Bajty se před admission
-zkopírují do durable app-owned zdroje a attachment job uloží handle, SHA-256,
-MIME `image/gif`, stabilní `giphy-<sha16>.gif`, account, room a případný thread.
-Další průběh je totožný s obrázkovou přílohou: Draft, WebDAV upload, finalize a
-autoritativní chat confirmation. URL se do serverové textové historie neukládá.
+A new Giphy send does not use the text outbox. The selected URL is used only by
+the account-scoped resolver to download valid GIF bytes. Before the admission,
+the bytes are copied into a durable app-owned source and the attachment job
+stores the handle, the SHA-256, the MIME type `image/gif`, a stable
+`giphy-<sha16>.gif`, the account, the room and any thread. What follows is
+identical to an image attachment: the Draft, the WebDAV upload, the finalize and
+the authoritative chat confirmation. The URL is not stored in the server-side text
+history.
 
-Starší zprávy mohou stále obsahovat původní skrytou wire URL. Jejich renderer ji
-account-scoped vyřeší a skryje, ale tento compatibility read path se nesmí znovu
-použít pro nové odeslání.
+Older messages may still contain the original hidden wire URL. Their renderer
+resolves it account-scoped and hides it, but this compatibility read path must
+not be reused for a new send.
 
 ## Chat blocks
 
-ChatBlock reprezentuje interval, u kterého klient ví, že je souvislý.
+A ChatBlock represents an interval the client knows to be contiguous.
 
-Operace:
+Operations:
 
-- initial page vytvoří první potvrzený interval;
-- backward page rozšíří nebo spojí sousední interval;
-- lookIntoFuture rozšíří horní hranici;
-- delete neznamená automaticky mezeru, pokud server poskytl delete event;
-- neplatný/chybějící pagination anchor nebo expirovaný kontext označí gap;
-- číselná nespojitost message id sama o sobě gap není, protože id nemusí být v
-  jedné room souvislá;
-- thread history má vlastní scope, aby se nemíchala s hlavním room streamem.
+- an initial page creates the first confirmed interval;
+- a backward page extends or joins an adjacent interval;
+- lookIntoFuture extends the upper boundary;
+- a delete does not automatically mean a gap, provided the server supplied a
+  delete event;
+- an invalid/missing pagination anchor or an expired context marks a gap;
+- a numeric discontinuity of message ids is not a gap in itself, because ids need
+  not be contiguous within one room;
+- thread history has its own scope, so that it does not mix with the main room
+  stream.
 
-Pouhý nejvyšší messageId není dostatečný důkaz, že mezi zprávami nic nechybí.
+The highest messageId alone is not sufficient proof that nothing is missing
+between messages.
 
-Chat GET navíc nesmí odvozovat hranici intervalu jen z viditelných messages.
-`X-Chat-Last-Given` je autoritativní anchor i pro `200 []`, pokud server
-zpracoval neviditelnou nebo expirovanou zprávu. History `304` ukončuje starší
-historii, future `304` potvrzuje konvergenci. Samostatná změna
-`X-Chat-Last-Common-Read` neposouvá žádný message cursor.
+A chat GET must additionally not derive the boundary of the interval only from
+the visible messages. `X-Chat-Last-Given` is the authoritative anchor even for a
+`200 []`, if the server processed an invisible or expired message. A history
+`304` ends the older history, a future `304` confirms convergence. A change of
+`X-Chat-Last-Common-Read` alone moves no message cursor.
 
-Každý HTTP request nese anchor, ze kterého vyšel. Merge jej před commitem
-porovná s aktuálním `historyCursor` nebo `futureCursor`; opožděný future výsledek
-se starým anchorem se celý odmítne. Přesný executable model je v
-[kontraktu chat zpráv](chat-messages-api.md).
+Every HTTP request carries the anchor it started from. Before the commit, the
+merge compares it with the current `historyCursor` or `futureCursor`; a late
+future result with an old anchor is rejected entirely. The exact executable model
+is in the [chat message contract](chat-messages-api.md).
 
-## Merge transakce
+## The merge transaction
 
-Každý vstup se nejdřív normalizuje na SyncEvent:
+Every input is first normalized into a SyncEvent:
 
 - accountId;
 - roomToken;
@@ -157,307 +172,325 @@ Každý vstup se nejdřív normalizuje na SyncEvent:
 - server ids/referenceId;
 - payload;
 - receivedAt;
-- případný anchor/header context.
+- any anchor/header context.
 
-V jedné DB transakci:
+Within one DB transaction:
 
-1. Ověřit account a room scope.
-2. Deduplikovat event.
-3. Upsertnout nebo tombstonovat message.
-4. Sloučit message parameters a reactions.
-5. Opravit parent a thread original.
-6. Aktualizovat thread summary.
-7. Aktualizovat room last message a counters.
-8. Aplikovat read marker pravidla.
-9. Rozšířit nebo označit chat blocks.
-10. Potvrdit odpovídající outbox operaci.
+1. Verify the account and the room scope.
+2. Deduplicate the event.
+3. Upsert or tombstone the message.
+4. Merge the message parameters and reactions.
+5. Fix the parent and the thread original.
+6. Update the thread summary.
+7. Update the room last message and the counters.
+8. Apply the read marker rules.
+9. Extend or mark the chat blocks.
+10. Confirm the corresponding outbox operation.
 
-UI notification se publikuje až po commitu.
+The UI notification is published only after the commit.
 
-## Outbox
+## The outbox
 
-### Stavy
+### States
 
 <!-- markdownlint-disable MD013 -->
 
-| Stav | Význam | Povolený další stav |
+| State | Meaning | Allowed next state |
 | --- | --- | --- |
-| queued | Bezpečně uložené, ještě neclaimnuté | sending, cancelled |
-| sending | Jedna account lane operaci provádí | awaitingConfirmation, retryable, failed |
-| awaitingConfirmation | Odpověď je nejednoznačná; čeká se na catch-up/relay | completed, retryable, failed |
-| retryable | Přechodná chyba a vypočtený nextAttemptAt | sending, cancelled |
-| failed | Automatický retry skončil nebo server operaci odmítl | queued po ručním retry, cancelled |
-| completed | Serverový stav atomicky potvrzen | terminální a následně retence/cleanup |
-| cancelled | Uživatel operaci zrušil, pokud to fáze dovoluje | terminální |
+| queued | Safely stored, not yet claimed | sending, cancelled |
+| sending | One account lane is performing the operation | awaitingConfirmation, retryable, failed |
+| awaitingConfirmation | The response is ambiguous; waiting for a catch-up/relay | completed, retryable, failed |
+| retryable | A transient error and a computed nextAttemptAt | sending, cancelled |
+| failed | The automatic retry ended or the server rejected the operation | queued after a manual retry, cancelled |
+| completed | The server state is atomically confirmed | terminal and then retention/cleanup |
+| cancelled | The user cancelled the operation, where the phase allows it | terminal |
 
 <!-- markdownlint-enable MD013 -->
 
-Retry policy je data, ne Timer v UI:
+The retry policy is data, not a Timer in the UI:
 
-- operationKind a payload schema version;
-- replayContractRevision vázaná na capabilities a ověřený upstream contract;
+- the operationKind and the payload schema version;
+- the replayContractRevision bound to the capabilities and the verified upstream
+  contract;
 - attemptCount;
 - nextAttemptAt;
 - errorClass;
-- poslední redigovaný status;
-- server Retry-After;
-- závislost na jiné operaci.
+- the last redacted status;
+- the server Retry-After;
+- a dependency on another operation.
 
-Po pádu procesu se operace nalezená ve `sending` přesune do
-`awaitingConfirmation`, nikoli do `queued`. Klient neví, zda server request
-přijal. Automaticky se znovu odešle pouze operace s důkazem, že request
-neopustil klienta.
+After a process crash, an operation found in `sending` is moved to
+`awaitingConfirmation`, not to `queued`. The client does not know whether the
+server accepted the request. Only an operation with proof that the request never
+left the client is sent again automatically.
 
-Permanentní chyba se nemaže. Uživatel musí vidět, co nebylo odeslané.
+A permanent error is not deleted. The user has to see what was not sent.
 
-### Replay contract gate
+### The replay contract gate
 
-Durable outbox přijímá pouze operationKind z verzovaného registru. Lokální
-operationId slouží pro plánování a deduplikaci workeru; nedělá serverový request
-idempotentní. Totéž platí pro referenceId.
+The durable outbox accepts only an operationKind from a versioned registry. The
+local operationId serves for scheduling and deduplication in the worker; it does
+not make the server request idempotent. The same holds for the referenceId.
 
-Každý replay contract musí být vázaný na požadované capabilities, ověřený
-upstream SHA nebo contract fixture a musí definovat:
+Every replay contract must be bound to the required capabilities, a verified
+upstream SHA or a contract fixture, and must define:
 
-- kanonický serverový cíl a požadovaný výsledný stav;
-- důkaz, že request neopustil klienta a lze jej bezpečně poslat;
-- autoritativní dotaz nebo event pro reconciliation po nejednoznačném výsledku;
-- jednoznačný důkaz completed, permanent failure a případné compensation;
-- zacházení s 401, 403, 404, 409, 429, 5xx, timeoutem a ztracenou odpovědí;
-- ruční akci uživatele včetně varování před duplicitou nebo přepsáním stavu;
-- verzi a redakční pravidla uloženého payloadu.
+- the canonical server target and the required resulting state;
+- proof that the request never left the client and can be safely sent;
+- the authoritative query or event for reconciliation after an ambiguous result;
+- unambiguous proof of completed, of a permanent failure and of any compensation;
+- the handling of 401, 403, 404, 409, 429, 5xx, a timeout and a lost response;
+- the manual user action including a warning about duplication or overwriting
+  state;
+- the version and the redaction rules of the stored payload.
 
-První admission matice je ověřená proti Talk master
-`f2958bb25be6604240c58a3faf9a2033a30d20e5` a stable v24.0.4
-`f9b9e9474e3621b47f74bf8890c4642cb49eed97`. Posuzované implementace jsou mezi
-těmito SHA shodné. Nová podporovaná řada přesto vyžaduje nový contract fixture.
+The first admission matrix is verified against Talk master
+`f2958bb25be6604240c58a3faf9a2033a30d20e5` and stable v24.0.4
+`f9b9e9474e3621b47f74bf8890c4642cb49eed97`. The implementations under review are
+identical between these SHAs. A newly supported line nevertheless requires a new
+contract fixture.
 
 <!-- markdownlint-disable MD013 -->
 
-| operationKind | Identita a autoritativní reconciliation | Politika po ambiguous výsledku |
+| operationKind | Identity and authoritative reconciliation | Policy after an ambiguous result |
 | --- | --- | --- |
-| textSend | roomToken + referenceId; chat catch-up/relay a konkrétní messageId | `awaitingConfirmation`; žádný blind POST, ruční resend varuje před duplicitou |
-| messageEdit | roomToken + messageId + cílový text; message context/chat refresh | Potvrdit viditelný cílový text, jinak čekat; replay může zdvojit system message |
-| messageDelete | roomToken + messageId; ověřený deleted verb/tombstone | Reconcile před retry; 404/405 samy neprokazují výsledek a souběh není bezpečný |
-| reactionAdd / reactionRemove | roomToken + messageId + actor + emoji; GET reaction/message | Sériově konvergentní, souběh neprokázaný; nejdřív reconcile, jinak čekat |
-| read | roomToken + explicitní lastReadMessage; refetch room/read marker | Retry-safe pouze s uloženým explicitním messageId, nikdy s „aktuálně poslední“ |
-| markUnread | roomToken + explicitně odvozený cílový marker; refetch room/read marker | DELETE znovu počítá předchozí zprávu, proto se blind replay zakazuje |
-| favorite / archive / notificationLevel | roomToken + absolutní hodnota; refetch conversation | Retry-safe setter; archive navíc vyžaduje `archived-conversations-v2` |
-| reminderSet / reminderDelete | user + roomToken + messageId; GET reminder | Retry-safe update-or-insert/delete, po unique race rozhodne autoritativní GET |
-| scheduledCreate | obsah + sendAt bez klientského/serverového id; schedule list | `awaitingConfirmation`; replay by vytvořil druhý řádek |
-| scheduledEdit | scheduledMessageId + absolutní hodnoty; schedule list | Retry-safe jen dokud položka existuje a ještě nebyla odeslaná |
-| scheduledDelete | scheduledMessageId; schedule list | Retry-safe jen před sendAt; po něm absence nerozliší delete od send |
-| draftFolderProbe | user + room + folder; WebDAV PROPFIND | Retry-safe get-or-create; rename návrh se po každém běhu znovu ověří |
-| uploadBytes | náhodná temp URI + checksum/session; WebDAV remote state | Resume z ověřeného offsetu jen před finalize; poté by PUT vytvořil nový draft |
-| attachmentFinalize | draft file + room + referenceId; chat scan a WebDAV draft/final stav | `awaitingConfirmation`; move může uspět před selháním chat message |
-| classicShare | WebDAV node + OCS share + chat scan | Zakázaný automatic replay, dokud samostatný Nextcloud core audit neprokáže kontrakt |
-| unknown | žádná | Odmítnout na command hranici; nequeueovat ani fake replayovat |
+| textSend | roomToken + referenceId; the chat catch-up/relay and the specific messageId | `awaitingConfirmation`; no blind POST, a manual resend warns about duplication |
+| messageEdit | roomToken + messageId + the target text; the message context/chat refresh | Confirm the visible target text, otherwise wait; a replay can duplicate the system message |
+| messageDelete | roomToken + messageId; the verified deleted verb/tombstone | Reconcile before a retry; 404/405 do not by themselves prove the outcome and concurrency is not safe |
+| reactionAdd / reactionRemove | roomToken + messageId + actor + emoji; GET reaction/message | Serially convergent, concurrency unproven; reconcile first, otherwise wait |
+| read | roomToken + an explicit lastReadMessage; refetch the room/read marker | Retry-safe only with a stored explicit messageId, never with "the currently last one" |
+| markUnread | roomToken + an explicitly derived target marker; refetch the room/read marker | The DELETE recomputes the previous message, so a blind replay is forbidden |
+| favorite / archive / notificationLevel | roomToken + an absolute value; refetch the conversation | A retry-safe setter; archive additionally requires `archived-conversations-v2` |
+| reminderSet / reminderDelete | user + roomToken + messageId; GET reminder | A retry-safe update-or-insert/delete; after a unique race the authoritative GET decides |
+| scheduledCreate | the content + sendAt without a client/server id; the schedule list | `awaitingConfirmation`; a replay would create a second row |
+| scheduledEdit | scheduledMessageId + absolute values; the schedule list | Retry-safe only while the item exists and has not been sent yet |
+| scheduledDelete | scheduledMessageId; the schedule list | Retry-safe only before sendAt; afterwards its absence does not distinguish a delete from a send |
+| draftFolderProbe | user + room + folder; the WebDAV PROPFIND | A retry-safe get-or-create; the rename proposal is re-verified after every run |
+| uploadBytes | a random temp URI + the checksum/session; the WebDAV remote state | A resume from a verified offset only before the finalize; afterwards the PUT would create a new draft |
+| attachmentFinalize | the draft file + the room + the referenceId; the chat scan and the WebDAV draft/final state | `awaitingConfirmation`; the move can succeed before the chat message fails |
+| classicShare | the WebDAV node + the OCS share + a chat scan | Automatic replay forbidden until a separate Nextcloud core audit proves the contract |
+| unknown | none | Reject at the command boundary; neither queue nor fake-replay it |
 
 <!-- markdownlint-enable MD013 -->
 
-Podrobný zdrojový důkaz je v
-[protokolové matici](../research/protocol-parity.md#ověřená-replay-semantika).
-Contract registry musí vedle kind ukládat i revision; změna capability nebo
-podporované serverové řady nesmí starou queued operaci tiše přehrát podle nové
-semantiky.
+The detailed source evidence is in the
+[protocol matrix](../research/protocol-parity.md#verified-replay-semantics). Next
+to the kind, the contract registry must also store the revision; a change of a
+capability or of the supported server line must not silently replay an old queued
+operation under the new semantics.
 
-### Pořadí
+### Ordering
 
-- Operace v jedné room se provádějí deterministicky podle dependencies a času.
-- Edit/delete pending message závisí na potvrzení jejího send.
-- Attachment share závisí na úspěšném WebDAV uploadu.
-- Různé rooms lze zpracovávat souběžně s per-server limitem.
-- Scheduler musí být férový mezi účty; jeden nedostupný server nesmí blokovat
-  ostatní.
+- Operations within one room are performed deterministically by dependencies and
+  time.
+- An edit/delete of a pending message depends on the confirmation of its send.
+- An attachment share depends on a successful WebDAV upload.
+- Different rooms may be processed concurrently with a per-server limit.
+- The scheduler has to be fair between accounts; one unavailable server must not
+  block the others.
 
-## Text send failure matrix
+## The text send failure matrix
 
 <!-- markdownlint-disable MD013 -->
 
-| Situace | Akce |
+| Situation | Action |
 | --- | --- |
-| Offline, DNS nebo connect chyba před odesláním body | retryable se stejným referenceId |
-| Timeout/reset po možném odeslání body | awaitingConfirmation a autoritativní catch-up/relay; žádný blind POST |
-| HTTP 400 `error=message` | awaitingConfirmation; stejný kód může vzniknout i po uložení commentu |
-| HTTP 400/403 `error=reply-to`, 404 `error=actor`, 413 `error=message` | failed; jde o doložené pre-save rejection větve |
-| HTTP 429 `error=mentions` | retryable podle Retry-After nebo lokálního bounded backoff; větev je před save |
-| HTTP 5xx | awaitingConfirmation, pokud contract důkaz neprokáže, že request nebyl commitnutý |
-| HTTP/OCS 401 | durable přepnout účet do `reauthRequired`, zastavit další requesty a zachovat stav operace; obnovit lane až po explicitním Login Flow se shodným accountId, originem, base path a loginem |
-| Jiná OCS business chyba | awaitingConfirmation, dokud není doložená pre-save větev |
-| Relay dorazí dřív než HTTP response | pending operace se koreluje přes referenceId; HTTP potvrdí konkrétní messageId |
+| Offline, a DNS or connect error before sending | retryable with the same referenceId |
+| A timeout/reset after the body may have been sent | awaitingConfirmation and an authoritative catch-up/relay; no blind POST |
+| HTTP 400 `error=message` | awaitingConfirmation; the same code can also arise after the comment was saved |
+| HTTP 400/403 `error=reply-to`, 404 `error=actor`, 413 `error=message` | failed; these are documented pre-save rejection branches |
+| HTTP 429 `error=mentions` | retryable per Retry-After or a local bounded backoff; the branch is before the save |
+| HTTP 5xx | awaitingConfirmation, unless contract evidence proves the request was not committed |
+| HTTP/OCS 401 | durably switch the account into `reauthRequired`, stop further requests and preserve the state of the operation; restore the lane only after an explicit Login Flow with a matching accountId, origin, base path and login |
+| Another OCS business error | awaitingConfirmation until a pre-save branch is documented |
+| The relay arrives before the HTTP response | the pending operation is correlated through the referenceId; the HTTP confirms the specific messageId |
 
 <!-- markdownlint-enable MD013 -->
 
-Pokud catch-up zprávu najde, operace se dokončí bez dalšího POST. Pokud ji
-nenajde, samotná absence ještě nedokazuje, že server request nepřijal. Operace
-zůstane `awaitingConfirmation`. Uživatel může zvolit explicitní resend s
-upozorněním, že Talk nevynucuje unikátní referenceId a server může vytvořit
-duplicitu, ale pouze dokud není známá žádná serverová shoda.
+If the catch-up finds the message, the operation is completed without another
+POST. If it does not find it, that absence alone still does not prove the server
+did not accept the request. The operation stays `awaitingConfirmation`. The user
+may choose an explicit resend with a warning that Talk does not enforce a unique
+referenceId and the server may create a duplicate, but only while no server-side
+match is known.
 
-První executable registry položka je pouze `textSend` revision
-`talk-chat-text-send-f2958bb-f9b9e947-r2`. Admission, claim, chyba před body,
-ambiguous transport, restart, autoritativní nula/jedna/více shod, relay před
-HTTP response, transakční rollback, re-auth, per-room FIFO/single-flight a
-account izolace mají executable fixture. R2 přidává named-thread `threadId` a
-vyžaduje pro něj aktuální lokální `threads` capability; r1 operace se pod r2
-autoritou nereplayuje. Flutter schema v5 zavedlo nullable `threadId`; aktuální
-schema v7 jej zachovává. File-backed reopen zachová queued i sending operaci a
-restart recovery převádí přerušený `sending` na `awaitingConfirmation`. Chat
-message/scope/outbox confirmation se commitují jednou Drift transakcí. Ostatní
-operation kinds v tabulce zůstávají návrhem a nesmějí se queueovat, dokud
-nedostanou vlastní stejně silný kontrakt.
+The first executable registry item is only `textSend` revision
+`talk-chat-text-send-f2958bb-f9b9e947-r2`. The admission, the claim, an error
+before the body, an ambiguous transport, a restart, the authoritative
+zero/one/several matches, a relay before the HTTP response, a transactional
+rollback, re-auth, per-room FIFO/single-flight and account isolation all have
+executable fixtures. R2 adds a named-thread `threadId` and requires a current
+local `threads` capability for it; an r1 operation is not replayed under r2
+authority. Flutter schema v5 introduced the nullable `threadId`; the current
+schema v7 preserves it. A file-backed reopen preserves both a queued and a
+sending operation, and restart recovery converts an interrupted `sending` into
+`awaitingConfirmation`. The chat message/scope/outbox confirmation are committed
+in a single Drift transaction. The other operation kinds in the table remain a
+design and must not be queued until they get their own equally strong contract.
 
-## Read marker
+## The read marker
 
-Běžné čtení posouvá lastRead dopředu. Explicitní mark-unread je jiný příkaz a
-vrací marker na předchozí message id; pokud žádná předchozí zpráva není, Talk
-používá `ChatManager::UNREAD_FIRST_MESSAGE`, tedy sentinel -2.
+An ordinary read moves lastRead forward. An explicit mark-unread is a different
+command and returns the marker to the previous message id; if there is no
+previous message, Talk uses `ChatManager::UNREAD_FIRST_MESSAGE`, that is the
+sentinel -2.
 
-Proto:
+Therefore:
 
-- obecný merge nesmí mechanicky použít max pro explicit unread event;
-- lokální pending marker má operation kind read nebo markUnread;
-- serverový lastCommonRead se neodvozuje z lokálního lastRead;
-- odchozí `read` projekce je povolená pouze pro vlastní dokončenou operaci se
-  skutečnou cached server confirmation a `messageId <= lastCommonRead` ve
-  stejném account/room/thread scope;
-- nepotvrzený nebo ambiguous send zůstává `sending` a lokální model nevytváří
-  nedoložený stav `delivered`;
-- notification clear se provede až po serverem potvrzeném nebo bezpečně
-  odvozeném read stavu.
+- a generic merge must not mechanically use max for an explicit unread event;
+- a local pending marker has the operation kind read or markUnread;
+- the server lastCommonRead is not derived from the local lastRead;
+- the outgoing `read` projection is allowed only for one's own completed
+  operation with a real cached server confirmation and
+  `messageId <= lastCommonRead` within the same account/room/thread scope;
+- an unconfirmed or ambiguous send stays `sending` and the local model does not
+  create an undocumented `delivered` state;
+- the notification clear is performed only after a server-confirmed or safely
+  derived read state.
 
-## Attachment job
+## The attachment job
 
-### Fáze
+### Phases
 
-1. selected nebo recorded;
+1. selected or recorded;
 2. localPrepared;
 3. draftResolved;
 4. uploading;
 5. uploaded;
 6. sharing;
 7. completed;
-8. retryable nebo failed;
-9. cancelled a cleanup.
+8. retryable or failed;
+9. cancelled and cleanup.
 
-UploadJob uchovává:
+An UploadJob keeps:
 
-- accountId a roomToken;
-- lokální app-owned sandbox cestu nebo content URI s ověřeným persistable
-  grantem;
-- MIME, velikost, checksum a bezpečný display name;
-- Draft folder a remote path;
-- upload session/chunk state;
-- referenceId;
-- caption, replyTo, replyToToken, parentRoomToken a thread metadata;
-- server file/share identity;
-- cleanup state.
+- the accountId and the roomToken;
+- the local app-owned sandbox path or a content URI with a verified persistable
+  grant;
+- the MIME type, the size, the checksum and a safe display name;
+- the Draft folder and the remote path;
+- the upload session/chunk state;
+- the referenceId;
+- the caption, replyTo, replyToToken, parentRoomToken and thread metadata;
+- the server file/share identity;
+- the cleanup state.
 
-Pokud upload uspěje a share selže, job nesmí nahrávat stejný soubor znovu.
-Pokud uživatel zruší chunk upload, klient uklidí dočasnou serverovou session
-podle podporovaného WebDAV toku.
+If the upload succeeds and the share fails, the job must not upload the same file
+again. If the user cancels a chunk upload, the client cleans up the temporary
+server session according to the supported WebDAV flow.
 
-Voice message používá stejný job s messageType=voice-message. Recorder lifecycle
-a dočasný soubor jsou platformní zdroj, nikoli zvláštní chat transport.
+A voice message uses the same job with messageType=voice-message. The recorder
+lifecycle and the temporary file are a platform resource, not a special chat
+transport.
 
-Přechod do `localPrepared` je povolen jen po durable app-owned kopii nebo po
-úspěšném získání persistable URI oprávnění. Před resume po restartu klient znovu
-otevře zdroj a ověří velikost i checksum. Picker temp path nebo dočasný grant
-nesmí být jediným zdrojem pending uploadu.
+The transition into `localPrepared` is allowed only after a durable app-owned
+copy or after successfully obtaining a persistable URI permission. Before a
+resume after a restart, the client reopens the source and verifies both the size
+and the checksum. The picker temp path or a temporary grant must not be the only
+source of a pending upload.
 
-Flutter HTTP transport je napojený na account-scoped `AttachmentRepository`,
-`AttachmentService` a Drift joby. Chunk používá efektivní bounded seek, nikoli
-nové čtení od byte nula; cancel/timeout/close zavřou i pozdě získaný lease a
-cleanup pokračuje dalšími akcemi v jednom bounded budgetu. Restart obnoví
-rozpracované uploady a nejednoznačné finalize zůstane viditelné pro
-reconciliation. Obrázková příloha s validním preview se od commitu `8724281`
-otevírá v interním autentizovaném vieweru ve success, loading i error stavu;
-externí fallback zůstává jen pro non-image nebo chybějící preview. Automatizace
-neprokazuje aktuální live Nextcloud upload ani tap vieweru na zařízení.
+The Flutter HTTP transport is wired into the account-scoped
+`AttachmentRepository`, `AttachmentService` and the Drift jobs. A chunk uses an
+efficient bounded seek, not a new read from byte zero; a cancel/timeout/close
+closes even a lease obtained late, and the cleanup continues with the other
+actions within one bounded budget. A restart resumes the uploads in progress and
+an ambiguous finalize stays visible for reconciliation. Since commit `8724281`,
+an image attachment with a valid preview opens in the internal authenticated
+viewer in the success, loading and error states; the external fallback stays only
+for non-images or a missing preview. The automation does not prove a current live
+Nextcloud upload or a tap of the viewer on a device.
 
 ## Multi-account concurrency
 
-- Každý account má vlastní sync lane a cancellation scope.
-- Globální scheduler omezuje souběžné HTTP/upload operace.
-- DB transakce vždy filtruje accountId i při znalosti globálně vypadajícího
-  messageId.
-- Android Web Push callback se routuje přes aplikací zvolenou connector instance
-  svázanou s `accountId` a právě aktuální subscription generation. Neznámá nebo
-  nahrazená instance/generation se odmítne; payload pouze probudí account-scoped
-  OCS catch-up.
-- Budoucí iOS relay callback nemá důvěryhodný `deviceIdentifier`. Account router
-  nejdřív ověří signature proti omezené sadě user public keys a poté zkusí
-  decrypt odpovídajícími per-account device keys s výchozím OAEP a doloženým
-  legacy PKCS#1 v1.5 paddingem. Právě jeden validní kandidát určí `accountId`;
-  route hint je pouze předvýběr a chyby nesmějí tvořit oracle ani citlivé logy.
-- Deep link nese accountId.
-- Logout nejdřív zastaví lane, aby po smazání partition nepřišel opožděný write.
+- Every account has its own sync lane and cancellation scope.
+- A global scheduler limits concurrent HTTP/upload operations.
+- A DB transaction always filters by accountId, even when a seemingly global
+  messageId is known.
+- The Android Web Push callback is routed through the connector instance chosen
+  by the application, bound to the `accountId` and the current subscription
+  generation. An unknown or replaced instance/generation is rejected; the payload
+  only wakes an account-scoped OCS catch-up.
+- A future iOS relay callback has no trustworthy `deviceIdentifier`. The account
+  router first verifies the signature against a limited set of user public keys
+  and then tries to decrypt with the corresponding per-account device keys using
+  the default OAEP and the documented legacy PKCS#1 v1.5 padding. Exactly one
+  valid candidate determines the `accountId`; the route hint is only a
+  preselection and errors must not form an oracle or sensitive logs.
+- A deep link carries the accountId.
+- Logout first stops the lane, so that no late write arrives after the partition
+  is deleted.
 
-NotificationRoute se vždy klíčuje přes accountId. Stejné serverové `nid` nebo
-platformní notification id na dvou serverech nesmí kolidovat. `delete-all`
-maže pouze systémové notifikace vybraného accountId.
+A NotificationRoute is always keyed by accountId. The same server `nid` or
+platform notification id on two servers must not collide. `delete-all` deletes
+only the system notifications of the selected accountId.
 
-## Odebrání účtu a revokace
+## Account removal and revocation
 
-Odebrání účtu nesmí tiše smazat queued, retryable, awaitingConfirmation,
-failed outbox ani rozpracovaný upload. UI nabídne:
+Removing an account must not silently delete a queued, retryable,
+awaitingConfirmation or failed outbox entry, or an upload in progress. The UI
+offers:
 
-1. odebrání odložit a operace dokončit;
-2. exportovat diagnostický seznam bez secretů a explicitně operace zahodit;
-3. zrušit odebrání.
+1. postpone the removal and complete the operations;
+2. export a diagnostic list without secrets and explicitly discard the
+   operations;
+3. cancel the removal.
 
-Online tok nejprve zastaví lane, odstraní per-account Web Push nebo APNs
-registraci z Nextcloudu a případný iOS relay mapping, odvolá app password a
-teprve potom odstraní secret a account partition.
+The online flow first stops the lane, removes the per-account Web Push or APNs
+registration from Nextcloud and any iOS relay mapping, revokes the app password
+and only then removes the secret and the account partition.
 
-Při offline odebrání může UI účet skrýt až po explicitním zahození lokálních
-operací. Samostatný RevocationTombstone v secure storage drží jen credential
-reference a podepsaná data nutná pro cleanup. Má pevnou retenční lhůtu,
-viditelný stav a retry. Po vypršení se secret odstraní a uživatel dostane
-konkrétní pokyn k ručnímu odvolání app passwordu na serveru; neúspěch se nesmí
-vydávat za dokončenou revokaci.
+For an offline removal, the UI may hide the account only after the local
+operations are explicitly discarded. A separate RevocationTombstone in secure
+storage holds only the credential reference and the signed data needed for the
+cleanup. It has a fixed retention period, a visible state and a retry. After it
+expires, the secret is removed and the user gets a specific instruction to revoke
+the app password on the server manually; a failure must not be presented as a
+completed revocation.
 
-## Migrace
+## Migrations
 
-Každá DB verze obsahuje:
+Every DB version contains:
 
-- forward migraci;
-- validaci foreign keys a unikátních indexů;
-- restart-safe postup pro velké tabulky;
-- test upgradu z každé podporované release verze;
-- export diagnostiky bez message contentu;
-- rollback aplikace nesmí otevřít novější schema a tiše poškodit data.
+- a forward migration;
+- validation of the foreign keys and the unique indexes;
+- a restart-safe procedure for large tables;
+- a test of the upgrade from every supported release version;
+- a diagnostic export without message content;
+- an application rollback must not open a newer schema and silently corrupt the
+  data.
 
-Lokální diagnostika neodvozuje stav migrace z compile-time konstanty.
-Read-only načte `PRAGMA user_version`, porovná je s očekávanou verzí buildu a
-zobrazí, zda je schéma aktuální, starší nebo novější. `foreign_key_check` se
-redukuje na počet porušení; názvy tabulek, řádky ani uživatelský obsah se do
-diagnostiky nedostanou.
+Local diagnostics do not derive the migration state from a compile-time
+constant. They read `PRAGMA user_version` read-only, compare it with the expected
+version of the build and show whether the schema is current, older or newer.
+`foreign_key_check` is reduced to a count of violations; table names, rows and
+user content never reach the diagnostics.
 
-Secret-store migrace je oddělená od DB migrace. Starý secret se odstraní až po
-ověřeném zápisu nového a aktualizaci credential reference.
+The secret-store migration is separate from the DB migration. The old secret is
+removed only after a verified write of the new one and an update of the
+credential reference.
 
-## Povinné testy
+## Mandatory tests
 
-- dvě zprávy vytvořené ve stejné milisekundě;
-- ztracená HTTP odpověď a následný relay;
-- ztracená odpověď bez relay zůstane awaitingConfirmation a neprovede blind
-  resend;
-- dvě serverové zprávy se stejným referenceId zůstanou dvě zprávy;
-- relay před HTTP odpovědí;
-- dvě souběžná catch-up volání;
-- mezera mezi dvěma chat blocks;
-- message edit/delete/reaction během otevřeného threadu;
-- mark-unread po nově přečtené zprávě;
-- restart v každé outbox a upload fázi;
-- restart/reboot otevře durable sandbox copy nebo persistable URI grant;
-- dva účty se stejným server userId;
-- stejný roomToken na dvou serverech;
-- logout během long pollu a uploadu;
-- offline odebrání účtu s pending/failed daty a revocation tombstone;
-- push pro neaktivní účet;
-- push pro stejný server/user ve dvou accountId s různými device keys;
-- push decrypt s výchozím OAEP i legacy PKCS#1 v1.5 paddingem a bez oracle;
-- kolidující platform notification id a `delete-all` na dvou účtech;
-- DB upgrade s pending outboxem;
-- prázdné pole versus objekt u známých upstream JSON variant.
+- two messages created in the same millisecond;
+- a lost HTTP response and a subsequent relay;
+- a lost response without a relay stays awaitingConfirmation and performs no
+  blind resend;
+- two server messages with the same referenceId stay two messages;
+- a relay before the HTTP response;
+- two concurrent catch-up calls;
+- a gap between two chat blocks;
+- a message edit/delete/reaction while a thread is open;
+- mark-unread after a newly read message;
+- a restart in every outbox and upload phase;
+- a restart/reboot opens the durable sandbox copy or the persistable URI grant;
+- two accounts with the same server userId;
+- the same roomToken on two servers;
+- a logout during a long poll and an upload;
+- an offline account removal with pending/failed data and a revocation tombstone;
+- a push for an inactive account;
+- a push for the same server/user in two accountIds with different device keys;
+- a push decrypt with the default OAEP as well as the legacy PKCS#1 v1.5 padding
+  and without an oracle;
+- a colliding platform notification id and `delete-all` across two accounts;
+- a DB upgrade with a pending outbox;
+- an empty array versus an object in the known upstream JSON variants.
