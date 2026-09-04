@@ -233,9 +233,18 @@ workflows:
           curl -fsSL -o /tmp/AppleRoot.cer https://www.apple.com/appleca/AppleIncRootCertificate.cer
           security import /tmp/DeveloperIDG2CA.cer -k "$KC" -T /usr/bin/codesign
           security import /tmp/AppleRoot.cer -k "$KC" -T /usr/bin/codesign
-          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/devid.p12
-          security import /tmp/devid.p12 -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
+          # `security import` answers "MAC verification failed during PKCS12
+          # import (wrong password?)" for a CORRUPTED archive exactly as it does
+          # for a wrong password, and that ambiguity cost three builds. The two
+          # are now told apart before it runs: the digest proves the transfer
+          # arrived intact, openssl judges the password on its own. Neither line
+          # reveals either secret - a length and a digest of a secret are not the
+          # secret, and the digest is the one recorded next to the file itself.
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/devid.p12
+          echo "p12 bytes $(wc -c < /tmp/devid.p12), password length ${#MACOS_CERTIFICATE_PASSWORD}"
+          echo "a6dadc8c8ad968cee0fc973ae5546fa7e7231edd491c62d8756bba2499d9aa92  /tmp/devid.p12" | shasum -a 256 -c -
+          openssl pkcs12 -in /tmp/devid.p12 -passin "pass:$MACOS_CERTIFICATE_PASSWORD" -nokeys -clcerts -noout
+          security import /tmp/devid.p12 -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           rm -f /tmp/devid.p12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-temp "$KC"
           security list-keychains -d user -s "$KC" login.keychain-db
