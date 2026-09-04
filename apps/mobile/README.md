@@ -1,54 +1,58 @@
 # NKS Talk Flutter client
 
-Původní multi-server a multi-account Flutter klient kompatibilní s Nextcloud
-Talk. Jeden zdrojový strom vytváří aplikaci pro Android, iOS, Windows, macOS a
-Linux pod identitou `com.nkshub.nextcloudtalk`.
+An original multi-server and multi-account Flutter client compatible with
+Nextcloud Talk. One source tree builds the application for Android, iOS, Windows,
+macOS and Linux under the identity `com.nkshub.nextcloudtalk`.
 
-## Aktuálně implementováno
+## Currently implemented
 
-- normalizace Nextcloud URL, status, Login Flow v2 a authenticated capabilities;
-- uložení app passwordu přes platformní secure storage;
-- account-scoped Drift databáze a přepínání více účtů;
-- capability-first synchronizace seznamu konverzací přes conversation v4;
-- cache-first root chat a vlákna přes produkční cestu
+- Nextcloud URL normalization, status, Login Flow v2 and authenticated
+  capabilities;
+- app password storage through the platform secure storage;
+- an account-scoped Drift database and switching between multiple accounts;
+- capability-first synchronization of the conversation list through conversation
+  v4;
+- cache-first root chat and threads through the production path
   `ChatRoomPane → ChatService → HTTP → Drift → Riverpod → UI`;
-- account/room/thread-scoped history a future synchronizace s izolací rootu a
-  vláken a foreground pollingem `0 → 30 → 0`;
-- textový composer a send s `referenceId`, potvrzeným výsledkem a explicitním
-  stavem pro nejednoznačné odeslání s rizikem duplicity;
-- otevření existujícího i zatím prázdného vlákna, GFM/Rich Object obsah,
-  odkazy, obrázky, reakce a náhled odpovědi;
-- účastnické avatary ze stejného server originu s bezpečným lokálním fallbackem;
-- jediný editovatelný composer semantics node a přímo v Android runtime
-  ověřený platformní název přes `AccessibilityNodeInfo.getHintText`; XML
-  `NAF=true` je false positive, protože `hintText` neserializuje;
-- česká a anglická lokalizace, světlý a tmavý motiv;
-- kompaktní telefonní shell a adaptivní tablet/desktop shell;
-- Android a Windows debug build; aktuální APK má příchozí Android thread smoke,
-  starší APK oddělený historický obousměrný thread E2E a aktuální runtime
-  ověření threadu v obou motivech i při 200% velikosti textu.
+- account/room/thread-scoped history and future synchronization with isolation of
+  the root and the threads and foreground polling `0 → 30 → 0`;
+- a text composer and send with `referenceId`, a confirmed result and an explicit
+  state for an ambiguous send that risks a duplicate;
+- opening an existing as well as a still empty thread, GFM/Rich Object content,
+  links, images, reactions and a reply preview;
+- participant avatars from the same server origin with a safe local fallback;
+- a single editable composer semantics node and a platform name verified directly
+  in the Android runtime through `AccessibilityNodeInfo.getHintText`; the XML
+  `NAF=true` is a false positive, because `hintText` does not serialize;
+- Czech and English localization, light and dark theme;
+- a compact phone shell and an adaptive tablet/desktop shell;
+- Android and Windows debug builds; the current APK has an incoming Android
+  thread smoke test, an older APK a separate historical bidirectional thread E2E,
+  and the current runtime verification of the thread in both themes and at 200%
+  text size.
 
-Celý Talk klient ještě hotový není. Samostatný runtime důkaz stále potřebují
-root history/read-unread, restart outboxu, přílohy, voice, Giphy, push, hovory,
-iOS/macOS/Linux, zvukové ověření TalkBacku a širší screen-reader audit.
-Přítomnost tlačítka nebo platformní složky se nepovažuje za dokončenou funkci.
+The whole Talk client is not finished yet. Root history/read-unread, an outbox
+restart, attachments, voice, Giphy, push, calls, iOS/macOS/Linux, an audible
+TalkBack verification and a broader screen-reader audit still need separate
+runtime evidence. The presence of a button or a platform folder does not count as
+a finished feature.
 
-## Adaptivní rozložení
+## Adaptive layout
 
 <!-- markdownlint-disable MD013 -->
 
-| Šířka | Rozložení |
+| Width | Layout |
 | --- | --- |
-| méně než 720 logical px | horní lišta, přepínač účtu a seznam konverzací; detail se otevírá jako další route |
-| 720 až 1099 logical px | 88px account rail, 330px seznam a samostatný detail |
-| 1100 logical px a více | 88px account rail, 390px seznam a rozšířený detail |
+| less than 720 logical px | top bar, account switcher and conversation list; the detail opens as a further route |
+| 720 to 1099 logical px | 88px account rail, 330px list and a separate detail |
+| 1100 logical px and more | 88px account rail, 390px list and a wider detail |
 
 <!-- markdownlint-enable MD013 -->
 
-Onboarding se od 900 logical px skládá do dvou sloupců. Změna velikosti okna
-přepočítá rozložení bez změny datového nebo navigačního modelu.
+From 900 logical px onwards the onboarding folds into two columns. Resizing the
+window recomputes the layout without changing the data or navigation model.
 
-## Lokální ověření
+## Local verification
 
 ~~~console
 flutter pub get
@@ -58,15 +62,16 @@ flutter build apk --debug
 flutter build windows --debug
 ~~~
 
-Build macOS a iOS vyžaduje macOS/Xcode. Linux build se ověřuje na Linux hostu.
-Android nepoužívá `google-services.json`; cílový Web Push tok se registruje za
-běhu podle capabilities konkrétního Nextcloud serveru.
+Building macOS and iOS requires macOS/Xcode. The Linux build is verified on a
+Linux host. Android does not use `google-services.json`; the target Web Push flow
+is registered at runtime according to the capabilities of the specific Nextcloud
+server.
 
-Podrobná evidence je v
-[dokumentu Flutter foundation](../../docs/architecture/flutter-foundation.md)
-a v [auditu dokončení](../../docs/architecture/completion-audit.md).
+The detailed record is in the
+[Flutter foundation document](../../docs/architecture/flutter-foundation.md) and
+in the [completion audit](../../docs/architecture/completion-audit.md).
 
-## Licence
+## License
 
-Zdrojový kód je dostupný pod `GPL-3.0-or-later`; kanonický text je v kořenovém
-souboru [LICENSE](../../LICENSE).
+The source code is available under `GPL-3.0-or-later`; the canonical text is in
+the root [LICENSE](../../LICENSE) file.

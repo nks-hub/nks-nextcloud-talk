@@ -1,34 +1,36 @@
-# Klientský push kontrakt
+# Client push contract
 
-Tento adresář je spustitelná hranice mezi Nextcloud Notifications v2,
-Notifications-compatible gateway a mobilním klientem. Popisuje klientskou
-registraci, přijatou šifrovanou obálku a všechny podporované wake-up payloady.
-Serverová gateway má samostatný kontrakt v
+This directory is the runnable boundary between Nextcloud Notifications v2, a
+Notifications-compatible gateway and the mobile client. It describes the client
+registration, the received encrypted envelope and every supported wake-up
+payload. The server gateway has a separate contract in
 [`contracts/push-gateway`](../push-gateway/).
 
-## Obsah
+## Contents
 
-- `openapi.json` obsahuje OpenAPI 3.1 schémata OCS registrace, mobilní obálky a
-  wake-up payloadů;
-- `fixtures/manifest.json` eviduje 8 fixtures, z toho 7 platných a 1 záměrně
-  neplatnou;
-- `validate_contract.py` validuje OpenAPI, schémata a skutečné kryptografické
-  operace;
-- `test_validate_contract.py` ověřuje pozitivní i negativní chování validátoru;
-- `requirements.txt` fixuje Python závislosti kontraktu.
+- `openapi.json` holds the OpenAPI 3.1 schemas of the OCS registration, the
+  mobile envelope and the wake-up payloads;
+- `fixtures/manifest.json` records 8 fixtures, of which 7 are valid and 1 is
+  deliberately invalid;
+- `validate_contract.py` validates the OpenAPI, the schemas and real
+  cryptographic operations;
+- `test_validate_contract.py` verifies both the positive and the negative
+  behaviour of the validator;
+- `requirements.txt` pins the Python dependencies of the contract.
 
-Validátor při každém běhu vytvoří pouze v paměti nové RSA-2048 identity. Ověří
-SHA512withRSA podpisy, OAEP SHA-1/MGF1 SHA-1 i kompatibilní PKCS#1 v1.5
-encrypt/decrypt, poškozený podpis a cizí klíč. Každou takto vytvořenou obálku
-navíc přímo validuje proti `MobilePushEnvelope`. Jde o ephemeral crypto proof;
-uložená `mobile-envelope.json` dokládá pouze wire tvar a sama neprokazuje vztah
-mezi podpisem, ciphertextem a klíči. Private key se nezapisuje do fixture ani na
-disk. Scanner odmítá běžné PKCS#8, šifrované PKCS#8, RSA, DSA, EC i OpenSSH
-private-key hlavičky.
+On every run the validator creates fresh RSA-2048 identities in memory only. It
+verifies SHA512withRSA signatures, OAEP SHA-1/MGF1 SHA-1 as well as compatible
+PKCS#1 v1.5 encrypt/decrypt, a corrupted signature and a foreign key. Every
+envelope created this way is additionally validated directly against
+`MobilePushEnvelope`. This is an ephemeral crypto proof; the stored
+`mobile-envelope.json` only documents the wire shape and does not by itself prove
+the relation between the signature, the ciphertext and the keys. The private key
+is never written into a fixture or to disk. The scanner rejects the usual PKCS#8,
+encrypted PKCS#8, RSA, DSA, EC and OpenSSH private-key headers.
 
-## Ověření
+## Verification
 
-Z kořene repozitáře:
+From the repository root:
 
 ```powershell
 rtk proxy python contracts\push-client\validate_contract.py
@@ -36,7 +38,7 @@ rtk proxy python -m unittest discover -s contracts\push-client -p test_*.py
 rtk proxy python -m ruff check contracts\push-client
 ```
 
-Očekávaný souhrn validátoru:
+The expected validator summary:
 
 ```text
 1 OpenAPI
@@ -49,13 +51,14 @@ Očekávaný souhrn validátoru:
 4 negative crypto checks
 ```
 
-Dart test `packages/talk_protocol/test/push_contract_test.dart` načítá přímo
-stejný manifest a všech 8 fixtures. Tím se odděleně neudržuje druhá kopie
-registračních nebo payload dat.
+The Dart test `packages/talk_protocol/test/push_contract_test.dart` loads the
+same manifest and all 8 fixtures directly. That way no second copy of the
+registration or payload data is maintained separately.
 
-## Hranice důkazu
+## Boundary of the evidence
 
-Kontrakt neprokazuje Firebase delivery, Android Keystore, iOS Keychain,
-platformní background lifecycle, produkční gateway ani lokální notifikaci. Tyto
-důkazy vyžadují skutečný Flutter build, `chatujmePixel` E2E a pro
-background/killed FCM také fyzické Android zařízení.
+The contract does not prove Firebase delivery, the Android Keystore, the iOS
+Keychain, the platform background lifecycle, a production gateway or a local
+notification. Those pieces of evidence require a real Flutter build, a
+`chatujmePixel` E2E, and for background/killed FCM also a physical Android
+device.
