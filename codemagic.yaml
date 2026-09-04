@@ -211,9 +211,13 @@ workflows:
       flutter: stable
       java: 17
     scripts:
-      # The real Firebase config, not the placeholder: a release APK whose FCM
-      # project is `ci-placeholder` receives no push at all, and it would look
-      # exactly like a working build until someone waited for a notification.
+      - *placeholder_firebase
+      - *test_protocol
+      - *test_app
+      # The real Firebase config, not the placeholder the tests ran on: a
+      # release APK whose FCM project is `ci-placeholder` receives no push at
+      # all, and it would look exactly like a working build until someone
+      # waited for a notification.
       - name: Restore the Firebase config
         script: |
           set -e
@@ -225,9 +229,6 @@ workflows:
           fi
           printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode \
             > apps/mobile/android/app/google-services.json
-      - *placeholder_firebase
-      - *test_protocol
-      - *test_app
       # Gradle refuses to fall back to the debug key on purpose: Play rejects a
       # release signed with it, and a silent substitution would only be found
       # at upload time.
