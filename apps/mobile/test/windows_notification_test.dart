@@ -147,6 +147,16 @@ void main() {
     await settle();
 
     expect(shown, isEmpty);
+    // Proves the silence was a decision and not a query that never landed:
+    // a rise after it has to come through, and it has to be the only one.
+    await store(
+      token: 'roomtoken1',
+      unread: 1,
+      lastMessage: 'after the quiet',
+      lastMessageId: 99,
+    );
+    await waitForNotifications(1);
+    expect(shown.single['body'], 'after the quiet');
   });
 
   test('a rise without any text to show is skipped', () async {
@@ -157,6 +167,16 @@ void main() {
     await settle();
 
     expect(shown, isEmpty);
+    // Same barrier as above: the textless rise has to be skipped for lack of
+    // text, not because the stream never delivered it.
+    await store(
+      token: 'roomtoken1',
+      unread: 3,
+      lastMessage: 'now there is text',
+      lastMessageId: 77,
+    );
+    await waitForNotifications(1);
+    expect(shown.single['body'], 'now there is text');
   });
 
   test('native open preserves the exact account and room route', () async {
