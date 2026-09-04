@@ -78,9 +78,21 @@ void main() {
     return service;
   }
 
+  // Waits for the conversation stream to go quiet instead of sleeping a fixed
+  // 30 ms. Drift delivers on wall-clock time, so a loaded runner can still be
+  // mid-query when the old budget ran out - `shown` was empty on a macOS CI
+  // machine and full on every developer machine.
   Future<void> settle() async {
-    for (var round = 0; round < 6; round++) {
+    var stable = 0;
+    var last = shown.length;
+    for (var round = 0; round < 400 && stable < 6; round++) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
+      if (shown.length == last) {
+        stable++;
+      } else {
+        last = shown.length;
+        stable = 0;
+      }
     }
   }
 
