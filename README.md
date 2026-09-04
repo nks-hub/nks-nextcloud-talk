@@ -1,131 +1,140 @@
 # NKS Nextcloud Talk
 
-Původní Flutter klient kompatibilní s Nextcloud Talk. Jeden build umí připojit
-více účtů na více Nextcloud serverech a používá jednu codebase pro Android,
-iOS, Windows, macOS a Linux.
+An original Flutter client compatible with Nextcloud Talk. A single build can
+connect multiple accounts on multiple Nextcloud servers and uses one codebase
+for Android, iOS, Windows, macOS and Linux.
 
-Nejde o pixelovou kopii oficiálních klientů. Upstream Android a iOS aplikace
-slouží jako SHA-bound reference chování a kompatibility; UI, datový model a
-implementace jsou vlastní a licencované pod
-[`GPL-3.0-or-later`](LICENSE). České názvy emoji v
-`apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` jsou
-odvozené z anotací Unicode CLDR pod licencí Unicode
+This is not a pixel copy of the official clients. The upstream Android and iOS
+apps serve as an SHA-bound reference for behaviour and compatibility; the UI,
+the data model and the implementation are our own and licensed under
+[`GPL-3.0-or-later`](LICENSE). The Czech emoji names in
+`apps/mobile/lib/features/chat/composer/emoji_czech_names.g.dart` are derived
+from the Unicode CLDR annotations under the Unicode license
 (https://www.unicode.org/license.txt).
 
-## Aktuální stav
+## Current state
 
-Repozitář už obsahuje spustitelnou aplikaci v [`apps/mobile`](apps/mobile):
+The repository already contains a runnable application in
+[`apps/mobile`](apps/mobile):
 
-- Nextcloud status, Login Flow v2 a authenticated capabilities;
-- secure uložení app passwordu a account-scoped Drift databázi;
-- více účtů, conversation-v4 full/delta sync a cache-first seznam;
-- českou a anglickou lokalizaci, světlý a tmavý motiv;
-- telefonní stack a adaptivní třípanelové rozložení pro tablet a desktop;
-- Android debug build a nativní runnery pro Android, iOS, Windows, macOS a
-  Linux. Runnery uzavírá commit `cf13cce`.
+- Nextcloud status, Login Flow v2 and authenticated capabilities;
+- secure storage of the app password and an account-scoped Drift database;
+- multiple accounts, conversation-v4 full/delta sync and a cache-first list;
+- Czech and English localization, light and dark theme;
+- the phone stack and an adaptive three-pane layout for tablet and desktop;
+- an Android debug build and native runners for Android, iOS, Windows, macOS and
+  Linux. Commit `cf13cce` closes the runners.
 
-Čerstvý automatizovaný stav je `flutter analyze` bez nálezu, 354 úspěšných
-Flutter testů s jedním credential-gated live skipem a 569/569 testů balíku
-`talk_protocol` po opravě `d0660cc`. Attachment runtime a jeho dokumentovaný
-stav uzavírá commit `61decfb`. Nativní Android Web Push uzavírá commit
-`3c74165`; Kotlin unit gate prošel 16/16 a connected gate na emulátoru
-`chatujmePixel` 15/15.
+The freshest automated state is `flutter analyze` with no findings, 354 passing
+Flutter tests with one credential-gated live skip and 569/569 tests of the
+`talk_protocol` package after the `d0660cc` fix. Commit `61decfb` closes the
+attachment runtime and its documented state. Commit `3c74165` closes native
+Android Web Push; the Kotlin unit gate passed 16/16 and the connected gate on
+the `chatujmePixel` emulator 15/15.
 
-Finální debug APK této session je v
-`apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` se SHA-256
+The final debug APK of this session is at
+`apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` with SHA-256
 `ce6d29b5c5748454f9b23df5d5cc034432a754e90eee647e3cdb12ac749ab924`.
-Stejný hash má aktuálně nainstalovaný `base.apk` na `emulator-5554`. Instalace a
-instrumentace ale nejsou přihlášený live Talk smoke: čerstvé přihlášení,
-conversations a otevření room na tomto APK zatím nejsou prokázané.
+The `base.apk` currently installed on `emulator-5554` has the same hash.
+Installation and instrumentation are, however, not a signed-in live Talk smoke
+test: a fresh login, conversations and opening a room on this APK are not yet
+proven.
 
-Windows release EXE má SHA-256
+The Windows release EXE has SHA-256
 `afe945cbce39151ae44761c88bbe76938e0c80eca71057ca35e3d514e2110afd`.
-Vývojový počítač je ale ve Visual Studio pending-reboot stavu, takže tento
-artefakt není důkazem opakovatelného čistého buildu přes výchozí toolchain před
-restartem počítače.
+The development machine is in a Visual Studio pending-reboot state, though, so
+this artifact is not evidence of a repeatable clean build through the default
+toolchain before the machine is restarted.
 
-Windows build navíc potřebuje JDK a nastavené `JAVA_HOME`. Není to kvůli
-Androidu: `sentry_flutter` závisí na balíčku `jni`, ten se registruje jako FFI
-plugin i na Windows a jeho `find_package(JNI)` bez JDK shodí CMake hláškou
-`FindJNI.cmake`, ve které se Java nikde nezmiňuje.
+The Windows build additionally needs a JDK and a configured `JAVA_HOME`. This is
+not because of Android: `sentry_flutter` depends on the `jni` package, which
+registers itself as an FFI plugin on Windows too, and its `find_package(JNI)`
+without a JDK fails CMake with a `FindJNI.cmake` message that never mentions
+Java.
 
-Linux build potřebuje totéž JDK a k tomu čtyři balíčky nad oficiálním seznamem
-Flutteru — změřeno 3. září 2026 na čisté instalaci Linux Mintu, kde build padal
-postupně na každém z nich: `libgstreamer1.0-dev` a
-`libgstreamer-plugins-base1.0-dev` (kvůli `audioplayers_linux`),
-`libcurl4-openssl-dev` (sentry-native) a `default-jdk-headless` (tentýž balíček
-`jni`). Past navrch: po neúspěšném configure zůstane v CMake cache
-`CMAKE_INSTALL_PREFIX=/usr/local` a další pokus padne na `Permission denied`
-při instalaci — řeší to `flutter clean`, ne úprava `linux/CMakeLists.txt`.
+The Linux build needs the same JDK plus four packages beyond Flutter's official
+list — measured on 3 September 2026 on a clean Linux Mint installation where the
+build failed on each of them in turn: `libgstreamer1.0-dev` and
+`libgstreamer-plugins-base1.0-dev` (because of `audioplayers_linux`),
+`libcurl4-openssl-dev` (sentry-native) and `default-jdk-headless` (the same `jni`
+package). An extra trap: after a failed configure, `CMAKE_INSTALL_PREFIX=/usr/local`
+stays in the CMake cache and the next attempt fails on `Permission denied` during
+install — `flutter clean` fixes that, not an edit of `linux/CMakeLists.txt`.
 
-Pure Dart balík [`talk_protocol`](packages/talk_protocol) navíc implementuje a
-testuje bootstrap, conversations, chat, rich chat, attachment, signaling
-preparation a původní Notifications push-v2 wire modely. Tyto protokolové řezy
-neznamenají, že jejich Flutter UI nebo platformní lifecycle už jsou hotové.
+The pure Dart package [`talk_protocol`](packages/talk_protocol) additionally
+implements and tests bootstrap, conversations, chat, rich chat, attachment,
+signaling preparation and the original Notifications push-v2 wire models. These
+protocol slices do not mean that their Flutter UI or platform lifecycle are
+already finished.
 
-Chat a thread obrazovka, persistentní plain/reply/named-thread text send, Rich
-Object renderer, obrázky, reakce a avatary už v aplikaci jsou. Attachment má
-bezpečný OCS/WebDAV transport, durable Drift service, image picker/viewer a
-voice record/preview/submit tok; jejich aktuální live server E2E ještě chybí.
-Příchozí live thread aktualizaci a obousměrný send prokazují starší APK;
-named-thread send zatím nemá zařízení round trip. Giphy trending/search, výběr,
-serverový send a inline animované vykreslení jsou také prokázané na starším
-Android live APK. Aplikace vykresluje skutečný animovaný GIF přímo ve zprávě.
-Odesílaná URL je pouze interní Talk wire reference: nesmí se zobrazit jako text
-zprávy, není klikací a GIF se neposílá jako attachment. Jediný viditelný externí
-GIPHY odkaz je attribution v pickeru. Root history/read-unread, live
-process-death outboxu, přílohy, voice, skutečný push delivery a hovory zůstávají
-samostatnými nedokončenými řezy.
-Přesný stav vede
-[průběžný stav vývoje](docs/architecture/development-status-2026-08-25.md) a
-[audit dokončení](docs/architecture/completion-audit.md).
+The chat and thread screen, persistent plain/reply/named-thread text send, the
+Rich Object renderer, images, reactions and avatars are already in the app. The
+attachment path has a safe OCS/WebDAV transport, a durable Drift service, an
+image picker/viewer and a voice record/preview/submit flow; their current live
+server E2E is still missing. An incoming live thread update and a bidirectional
+send are proven by an older APK; a named-thread send has no device round trip
+yet. Giphy trending/search, selection, server-side send and inline animated
+rendering are also proven on an older Android live APK. The app renders a real
+animated GIF directly in the message. The URL that gets sent is only an internal
+Talk wire reference: it must not appear as the message text, it is not clickable
+and the GIF is not sent as an attachment. The only visible external GIPHY link is
+the attribution in the picker. Root history/read-unread, live outbox
+process-death, attachments, voice, real push delivery and calls remain separate
+unfinished slices.
+The exact state is tracked by the
+[development status](docs/architecture/development-status-2026-08-25.md) and the
+[completion audit](docs/architecture/completion-audit.md).
 
-## Push bez per-server rebuildu
+## Push without a per-server rebuild
 
-Podporovaná řada serveru začíná Talkem 22 (Nextcloud 32), viz D-047.
+The supported server line starts at Talk 22 (Nextcloud 32), see D-047.
 
-Výchozí androidí cesta je od 27. srpna 2026 **vlastní push proxy** — viz D-038.
-Android i Apple registrují push-v2 proti `nks-talk-notify`, ta drží odesílací
-větev na FCM v1 a na APNs. Projekt tedy publisher Firebase projekt i vlastní
-gateway MÁ; `google-services.json` je gitignorovaný. Per-server rebuild ale
-odpadá dál, protože adresu proxy volí klient při registraci, ne správce serveru.
+Since 27 August 2026 the default Android path is our **own push proxy** — see
+D-038. Both Android and Apple register push-v2 against `nks-talk-notify`, which
+holds the sending branch to FCM v1 and to APNs. The project therefore DOES have
+a publisher Firebase project and its own gateway; `google-services.json` is
+gitignored. The per-server rebuild still goes away, because the proxy address is
+chosen by the client at registration time, not by the server administrator.
 
-Web Push přes UnifiedPush connector a vestavěný FCM distributor zůstává jako
-**přepínatelná záloha** pro Nextcloud 34+, ovladatelná v Nastavení → Push
-notifikace za běhu bez nového buildu. Právě a jen tahle záložní větev se obejde
-bez publisher Firebase projektu a vlastní gateway; VAPID klíč a Web Push
-subscription se v ní vyjednají za běhu s konkrétním serverem.
+Web Push over the UnifiedPush connector and the embedded FCM distributor remains
+a **switchable fallback** for Nextcloud 34+, controllable in Settings → Push
+notifications at runtime without a new build. This fallback branch, and only
+this one, works without a publisher Firebase project and an own gateway; in it
+the VAPID key and the Web Push subscription are negotiated at runtime with the
+specific server.
 
-Nativní Android push implementaci v commitu `3c74165` uzavřelo bezpečnostní
-review, striktní parser, account-bound one-time tap token a čerstvé Kotlin testy.
-Jde o implementovaný a automatizovaný platformní řez, ne o hotové live push
-doručení. Skutečný Nextcloud → FCM → background/killed tok na fyzickém zařízení
-je stále otevřený.
+The native Android push implementation in commit `3c74165` was closed by a
+security review, a strict parser, an account-bound one-time tap token and fresh
+Kotlin tests. It is an implemented and automated platform slice, not finished
+live push delivery. The real Nextcloud → FCM → background/killed flow on a
+physical device is still open.
 
-Na všech platformách navíc běží **Nextcloud Client Push** (`notify_push`) —
-websocket, který Nextcloud sám nabízí v capabilities. Doručí zprávu okamžitě,
-dokud aplikace běží, a nepotřebuje k tomu nic navíc.
+On top of that, **Nextcloud Client Push** (`notify_push`) runs on every platform —
+a websocket that Nextcloud itself advertises in capabilities. It delivers a
+message immediately for as long as the app is running, and needs nothing else.
 
-iOS je odlišná platformní hranice a stojí za to říct proč přesně. Nextcloud do
-APNs neumí; `apps/notifications/lib/Push.php` jen seskupí notifikace podle
-sloupce `proxyserver` a pošle je na tu adresu. Doručení do APNs obstarává až
-ona. Oficiální aplikace Talk míří na `push-notifications.nextcloud.com`, což
-je služba Nextcloud GmbH podepisující **jejich** Apple certifikátem pro
-**jejich** bundle id — do klienta třetí strany přes ni nedorazí nic. Ta adresa
-tedy **není součástí self-hosted Nextcloudu** a v jeho administraci se
-nenastavuje; volí ji klient při registraci zařízení parametrem `proxyServer`.
+iOS is a different platform boundary and it is worth saying exactly why.
+Nextcloud cannot talk to APNs; `apps/notifications/lib/Push.php` only groups
+notifications by the `proxyserver` column and posts them to that address.
+Delivery to APNs is done by that address. The official Talk app points at
+`push-notifications.nextcloud.com`, a Nextcloud GmbH service signing with
+**their** Apple certificate for **their** bundle id — nothing gets through it to
+a third-party client. That address therefore **is not part of a self-hosted
+Nextcloud** and is not configured in its administration; the client picks it at
+device registration through the `proxyServer` parameter.
 
-Kompletní popis všech tří kanálů, kontraktu s Nextcloudem a toho, co je pevně
-dané platformou, je v [dokumentu o notifikacích](docs/architecture/notifications.md).
-Starší analýza je v [push analýze](docs/research/push-fcm.md).
+A full description of all three channels, of the contract with Nextcloud and of
+what is fixed by the platform is in the
+[notifications document](docs/architecture/notifications.md). The older analysis
+is in the [push analysis](docs/research/push-fcm.md).
 
-## Dokumentace
+## Documentation
 
-- [Rozcestník dokumentace](docs/README.md)
-- [Flutter aplikační základ](docs/architecture/flutter-foundation.md)
-- [Požadavky a důkaz dokončení](docs/architecture/requirements.md)
-- [Systémový návrh](docs/architecture/system-design.md)
-- [Notifikace na všech platformách](docs/architecture/notifications.md)
-- [Implementační řezy a testovací brány](docs/architecture/delivery-plan.md)
-- [Rozhodnutí a otevřené volby](docs/architecture/decisions.md)
-- [Výzkum oficiálních klientů](docs/research/README.md)
+- [Documentation index](docs/README.md)
+- [Flutter application foundation](docs/architecture/flutter-foundation.md)
+- [Requirements and completion evidence](docs/architecture/requirements.md)
+- [System design](docs/architecture/system-design.md)
+- [Notifications on all platforms](docs/architecture/notifications.md)
+- [Delivery slices and test gates](docs/architecture/delivery-plan.md)
+- [Decisions and open choices](docs/architecture/decisions.md)
+- [Research on the official clients](docs/research/README.md)
