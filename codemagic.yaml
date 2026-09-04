@@ -198,7 +198,11 @@ workflows:
 
   android:
     name: Android release APK
-    instance_type: linux_x2
+    # A Mac, for an Android build, on purpose: this plan offers no Linux
+    # instance ("The selected instance type is not available with the current
+    # billing plan", build 6a9a75a5), and the macOS image carries the Android
+    # SDK and a JDK, so the APK comes out the same.
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       groups:
@@ -261,7 +265,7 @@ workflows:
 
   linux:
     name: Linux bundle
-    instance_type: linux_x2
+    instance_type: linux
     max_build_duration: 60
     environment:
       groups:
