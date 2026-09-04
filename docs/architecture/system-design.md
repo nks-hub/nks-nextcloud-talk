@@ -1,31 +1,32 @@
-# Systémový návrh
+# System design
 
-## Hodnocené varianty
+## Evaluated variants
 
-### Varianta A: jeden Flutter projekt
+### Variant A: a single Flutter project
 
-Všechny API klienty, modely, storage a UI jsou v jednom aplikačním projektu.
+All API clients, models, storage and the UI live in one application project.
 
-Výhoda je nejrychlejší začátek. Nevýhodou je silné riziko, že OCS, WebDAV,
-signaling a platformní lifecycle prorostou do UI. Pure Dart contract testy a
-pozdější CLI diagnostika by závisely na Flutter runtime.
+The advantage is the fastest start. The disadvantage is a strong risk that OCS,
+WebDAV, signaling and the platform lifecycle grow into the UI. Pure Dart contract
+tests and later CLI diagnostics would depend on the Flutter runtime.
 
-### Varianta B: modulární klient a platformní push hranice
+### Variant B: a modular client and a platform push boundary
 
-Flutter app používá malý pure Dart balík pro wire protokol. Storage a sync
-zůstávají uvnitř aplikace v jasných modulech. Android používá přímo
-Notifications Web Push; iOS APNs relay vznikne samostatně až v příslušném řezu.
+The Flutter app uses a small pure Dart package for the wire protocol. Storage and
+sync stay inside the application in clear modules. Android uses Notifications Web
+Push directly; an iOS APNs relay is created separately, only in its own slice.
 
-To je doporučená varianta. Odděluje skutečné trust a runtime hranice bez
-vytváření balíčku pro každou třídu.
+This is the recommended variant. It separates the real trust and runtime
+boundaries without creating a package for every class.
 
-### Varianta C: mnoho Dart balíků a federované pluginy od začátku
+### Variant C: many Dart packages and federated plugins from the start
 
-Každá feature, signaling, storage i platformní funkce mají vlastní package.
-To usnadňuje izolaci, ale před existencí druhé implementace vytváří velkou
-konfigurační a release režii. Pro první implementaci je to předčasné.
+Every feature, signaling, storage and platform capability has its own package.
+That makes isolation easier, but before a second implementation exists it creates
+a large configuration and release overhead. For the first implementation it is
+premature.
 
-## Doporučená topologie
+## Recommended topology
 
 ~~~mermaid
 flowchart LR
@@ -47,78 +48,79 @@ flowchart LR
     PLATFORM --> MEDIA[Future WebRTC media engine]
 ~~~
 
-## Repozitářové hranice
+## Repository boundaries
 
-Po schválení návrhu:
+Once the design is approved:
 
 ~~~text
 apps/
-  mobile/                 Flutter aplikace a platformní targety
+  mobile/                 The Flutter application and the platform targets
 packages/
-  talk_protocol/          Pure Dart OCS, Talk, WebDAV a wire modely
+  talk_protocol/          Pure Dart OCS, Talk, WebDAV and wire models
 docs/
   research/
   architecture/
   adr/
 ~~~
 
-Další package vznikne jen tehdy, když má vlastní release/test hranici nebo dvě
-reálné implementace. Call signaling může začít jako modul v aplikaci; oddělí se
-až při skutečné implementaci internal i HPB transportu. Budoucí iOS relay
-dostane vlastní službu nebo repozitářovou hranici až po ověření APNs kontraktu;
-Android ji nepotřebuje.
+Another package is created only when it has its own release/test boundary or two
+real implementations. Call signaling may start as a module inside the
+application; it is separated only when both the internal and the HPB transport
+are really implemented. A future iOS relay gets its own service or repository
+boundary only after the APNs contract is verified; Android does not need it.
 
-## Zodpovědnosti
+## Responsibilities
 
 ### talk_protocol
 
-- kanonizace server origin a bezpečné skládání URL;
-- OCS request headers, envelope a error mapping;
-- Login Flow v2 wire modely;
-- capability resolver;
-- rooms, chat, threads, reactions, polls a call API;
-- WebDAV path encoding, upload session a Files share payload;
-- Rich Object String transportní modely;
-- interní a HPB signaling wire zprávy až ve fázi call přípravy.
+- canonicalization of the server origin and safe URL composition;
+- OCS request headers, the envelope and error mapping;
+- Login Flow v2 wire models;
+- the capability resolver;
+- the rooms, chat, threads, reactions, polls and call APIs;
+- WebDAV path encoding, the upload session and the Files share payload;
+- Rich Object String transport models;
+- internal and HPB signaling wire messages, only in the call preparation phase.
 
-Balík nesmí importovat Flutter, UI, secure storage ani konkrétní databázi.
+The package must not import Flutter, the UI, secure storage or a specific
+database.
 
 ### Account runtime
 
-Každý accountId vlastní:
+Every accountId owns:
 
-- kanonický server origin a uživatelskou identitu;
-- referenci na app password v secure storage;
-- capability snapshot;
-- HTTP session a cancel scope;
-- long-poll nebo websocket lifecycle;
-- sync lane;
-- push registration a key references;
-- lokální datový partition.
+- the canonical server origin and the user identity;
+- a reference to the app password in secure storage;
+- the capability snapshot;
+- the HTTP session and the cancel scope;
+- the long-poll or websocket lifecycle;
+- the sync lane;
+- push registration and key references;
+- the local data partition.
 
-Aktivní UI účet je pouze prezentace. Background push a sync nesmějí používat
-globální activeAccount jako autorizační zdroj.
+The active UI account is only presentation. Background push and sync must not use
+a global activeAccount as an authorization source.
 
 ### Sync engine
 
-Jediný vlastník převodu serverových a lokálních událostí do databázového stavu.
-UI controller nesmí ručně přepisovat message, thread nebo room tabulky.
+The sole owner of turning server and local events into database state. A UI
+controller must not manually rewrite the message, thread or room tables.
 
-Vstupy:
+Inputs:
 
-- initial/catch-up HTTP page;
-- chat long poll;
-- HPB chat relay;
-- push wake-up;
-- outbox response;
-- explicitní refresh;
-- změna credentials nebo capabilities.
+- the initial/catch-up HTTP page;
+- the chat long poll;
+- the HPB chat relay;
+- a push wake-up;
+- an outbox response;
+- an explicit refresh;
+- a change of credentials or capabilities.
 
-Výstupem je atomicky commitnutý lokální stav, který UI pouze pozoruje.
+The output is atomically committed local state that the UI only observes.
 
 ### Flutter features
 
-Feature moduly skládají application use cases a UI:
+The feature modules compose the application use cases and the UI:
 
 - onboarding/accounts;
 - conversations;
@@ -126,198 +128,216 @@ Feature moduly skládají application use cases a UI:
 - composer/media/voice/Giphy;
 - search/shared items;
 - notifications/settings;
-- calls až po signaling řezu.
+- calls, after the signaling slice.
 
-Kompaktní telefonní a expanded tablet/desktop shell používají stejné use cases
-a route modely. Rozložení nesmí vytvořit druhý desktop repository nebo jiný
-account scope.
+The compact phone and the expanded tablet/desktop shell use the same use cases
+and route models. The layout must not create a second desktop repository or a
+different account scope.
 
-Transportní DTO se nevystavuje widgetům. UI dostává doménový read model s
-explicitními loading, stale, pending a failed stavy.
+Transport DTOs are not exposed to widgets. The UI receives a domain read model
+with explicit loading, stale, pending and failed states.
 
-### Platformní vrstva
+### Platform layer
 
 Android:
 
-- UnifiedPush connector a embedded FCM distributor pro Web Push entry point;
-- notification actions a channels;
+- the UnifiedPush connector and the embedded FCM distributor as the Web Push
+  entry point;
+- notification actions and channels;
 - secure key storage;
-- foreground service pro budoucí call;
-- audio focus, Bluetooth, PiP a screen capture až při call řezu.
+- a foreground service for future calls;
+- audio focus, Bluetooth, PiP and screen capture, only in the call slice.
 
 iOS:
 
-- Keychain a App Group;
-- Notification Service Extension;
-- APNs token lifecycle a budoucí publisher relay;
-- PushKit token lifecycle až v call řezu;
-- později PushKit, CallKit a ReplayKit Broadcast Extension.
+- the Keychain and the App Group;
+- the Notification Service Extension;
+- the APNs token lifecycle and the future publisher relay;
+- the PushKit token lifecycle, only in the call slice;
+- later PushKit, CallKit and the ReplayKit Broadcast Extension.
 
 Desktop:
 
-- bezpečné uložení credentials podle OS;
-- resize, focus, hover, klávesové zkratky a file picker/drop;
-- system tray, auto-start a background delivery až v samostatném řezu;
-- žádné použití Android embedded distributoru.
+- safe credential storage according to the OS;
+- resize, focus, hover, keyboard shortcuts and the file picker/drop;
+- the system tray, auto-start and background delivery, only in a separate slice;
+- no use of the Android embedded distributor.
 
-Platformní modul neimplementuje Talk business pravidla. Předává typované
-události do account routeru nebo call coordinatoru.
+A platform module implements no Talk business rules. It passes typed events into
+the account router or the call coordinator.
 
 ### Push delivery
 
 Android:
 
-- authenticated capability `webpush` je jediná feature autorita;
-- server poskytne VAPID public key;
-- connector a embedded distributor vytvoří per-account subscription;
-- klient dokončí register, activation token, activate a unregister lifecycle;
-- Notifications posílá standardní a delete payload přímo na Web Push endpoint;
-- payload pouze probudí account-scoped OCS catch-up.
+- the authenticated capability `webpush` is the only feature authority;
+- the server provides the VAPID public key;
+- the connector and the embedded distributor create a per-account subscription;
+- the client completes the register, activation token, activate and unregister
+  lifecycle;
+- Notifications sends the standard and the delete payload directly to the Web
+  Push endpoint;
+- the payload only wakes an account-scoped OCS catch-up.
 
-Android build nemá publisher Firebase projekt, `google-services.json` ani
-projektovou gateway. Správce Nextcloudu neinstaluje bridge. Nextcloud 33 může
-dostat pouze úplný samostatný AGPL Web Push backport, ne zjednodušený Talk
-listener.
+The Android build has no publisher Firebase project, no `google-services.json`
+and no project gateway. The Nextcloud administrator installs no bridge. Nextcloud
+33 may only get a complete standalone AGPL Web Push backport, not a simplified
+Talk listener.
 
 iOS:
 
-- APNs token je svázaný s bundle ID, Apple týmem a entitlementem;
-- provider credential zůstává pouze u vydavatele;
-- jeden budoucí publisher relay obslouží podporované servery bez předání Apple
-  klíče jejich správcům;
-- PushKit VoIP používá oddělený token a delivery lifecycle.
+- the APNs token is bound to the bundle ID, the Apple team and the entitlement;
+- the provider credential stays only with the publisher;
+- a single future publisher relay serves the supported servers without handing
+  the Apple key to their administrators;
+- PushKit VoIP uses a separate token and delivery lifecycle.
 
-Podrobná platformní hranice a testovací matice jsou v
-[push analýze](../research/push-fcm.md). Historický push-v2 gateway kontrakt se
-neimplementuje jako Android služba.
+The detailed platform boundary and the test matrix are in the
+[push analysis](../research/push-fcm.md). The historical push-v2 gateway contract
+is not implemented as an Android service.
 
-## Dependency pravidla
+## Dependency rules
 
-Povolený směr:
+The allowed direction:
 
-UI → application → sync/store/protocol → platformní nebo síťová hranice.
+UI → application → sync/store/protocol → the platform or network boundary.
 
-Zakázané směry:
+Forbidden directions:
 
 - protocol → Flutter UI;
-- push callback → cizí account partition;
-- widget → Dio/HTTP;
-- platformní notification callback → activeAccount;
-- repository → konkrétní obrazovka;
-- feature controller → přímý zápis několika synchronizačních tabulek.
+- a push callback → a foreign account partition;
+- a widget → Dio/HTTP;
+- a platform notification callback → activeAccount;
+- a repository → a specific screen;
+- a feature controller → a direct write into several synchronization tables.
 
-## Runtime toky
+## Runtime flows
 
-### Přidání účtu
+### Adding an account
 
-1. Uživatel zadá server origin.
-2. Klient jej normalizuje, ověří status a anonymní onboarding capabilities.
-3. Login Flow vrátí app password a klient znovu ověří credential server.
-4. Vznikne náhodné accountId a secret se zapíše do Keystore/Keychain.
-5. Lokální transakce vytvoří Account a credential reference ve stavu
-   capabilitiesPending.
-6. Přihlášený capability request uloží account-scoped snapshot a přepne účet
-   do ready.
-7. Spustí se initial room sync.
-8. Push registrace běží samostatně a její selhání neznefunkční chat.
+1. The user enters the server origin.
+2. The client normalizes it, verifies the status and the anonymous onboarding
+   capabilities.
+3. The Login Flow returns the app password and the client verifies the credential
+   server again.
+4. A random accountId is created and the secret is written into the
+   Keystore/Keychain.
+5. A local transaction creates the Account and the credential reference in the
+   capabilitiesPending state.
+6. The signed-in capability request stores the account-scoped snapshot and
+   switches the account to ready.
+7. The initial room sync starts.
+8. Push registration runs separately and its failure does not break chat.
 
-Síťová chyba v kroku 6 ponechá zabezpečený účet v capabilitiesPending a request
-lze opakovat bez nového Login Flow. Přesný wire a trust kontrakt popisuje
-[přidání Nextcloud účtu](client-bootstrap-api.md).
+A network error in step 6 leaves the secured account in capabilitiesPending and
+the request can be retried without a new Login Flow. The exact wire and trust
+contract is described by
+[adding a Nextcloud account](client-bootstrap-api.md).
 
-### Zámek aplikace
+### App lock
 
-Globální Android/iOS preference je ve výchozím stavu vypnutá a zapnout ji lze
-jen po úspěšném systémovém device authentication. Při zapnutí root gate před
-odemčením vůbec nestaví `_AppHome`, takže se nezobrazí account data ani
-nespustí push, deep-link a account koordinátory. Chyba čtení preference je
-fail-closed; cancel nebo chyba autentizace zůstane na lock screen a jediný
-unlock běží single-flight. `hidden` nebo `paused` znovu zamkne odemčenou relaci,
-ale lifecycle systémového biometrického dialogu rekurzivní lock nespustí.
-Biometrická data ani device credential aplikace nečte ani neukládá.
+The global Android/iOS preference is off by default and can only be turned on
+after a successful system device authentication. When it is on, the root gate
+does not build `_AppHome` at all before unlocking, so no account data is shown
+and the push, deep-link and account coordinators do not start. A failure to read
+the preference is fail-closed; a cancel or an authentication error stays on the
+lock screen and the only unlock runs single-flight. `hidden` or `paused` locks an
+unlocked session again, but the lifecycle of the system biometric dialog does not
+trigger a recursive lock. The application neither reads nor stores biometric data
+or the device credential.
 
-### Otevření místnosti
+### Opening a room
 
-1. UI čte lokální room a dostupné chat blocks.
-2. Sync engine vybere anchor a provede catch-up.
-3. Merge transakce opraví messages, threads, room preview a read markers.
-4. Long poll nebo HPB relay pokračuje od potvrzeného anchoru.
-5. UI zobrazuje stale indikaci, dokud server catch-up není potvrzený.
+1. The UI reads the local room and the available chat blocks.
+2. The sync engine picks an anchor and performs a catch-up.
+3. The merge transaction fixes the messages, threads, room preview and read
+   markers.
+4. The long poll or the HPB relay continues from the confirmed anchor.
+5. The UI shows a stale indication until the server catch-up is confirmed.
 
-History a future mají samostatné cursory. Response se smí commitnout jen tehdy,
-když její request anchor stále odpovídá uloženému scope. Autoritativní hranici
-určuje `X-Chat-Last-Given`, nikoli poslední viditelná message; history a future
-`304` mají odlišný význam. Podrobný wire a merge model je v
-[kontraktu chat zpráv](chat-messages-api.md).
+History and future have separate cursors. A response may be committed only when
+its request anchor still matches the stored scope. The authoritative boundary is
+set by `X-Chat-Last-Given`, not by the last visible message; a history `304` and
+a future `304` have different meanings. The detailed wire and merge model is in
+the [chat message contract](chat-messages-api.md).
 
-### Odeslání textu
+### Sending text
 
-1. Databázová transakce vytvoří temporary message a OutboxOperation se
-   stabilním referenceId.
-2. Account sync lane operaci označí sending.
-3. talk_protocol odešle POST chat.
-4. HTTP odpověď nebo relay koreluje pending operaci přes referenceId.
-5. Jedna transakce nahradí temporary identitu server message id a dokončí
-   outbox.
-6. Ztracená odpověď přejde do awaitingConfirmation a spustí catch-up.
-7. Bez potvrzení se POST automaticky neopakuje; Talk referenceId není unikátní
-   a uživatelský resend může vytvořit druhou serverovou zprávu.
+1. A database transaction creates a temporary message and an OutboxOperation with
+   a stable referenceId.
+2. The account sync lane marks the operation as sending.
+3. talk_protocol sends the chat POST.
+4. The HTTP response or the relay correlates the pending operation through the
+   referenceId.
+5. One transaction replaces the temporary identity with the server message id and
+   completes the outbox.
+6. A lost response moves to awaitingConfirmation and triggers a catch-up.
+7. Without a confirmation the POST is not repeated automatically; the Talk
+   referenceId is not unique and a user resend can create a second server-side
+   message.
 
-Outbox admission před krokem 1 ověří capability a přesnou revision replay
-kontraktu. První povolený kind je pouze `textSend`. Relay může operaci dokončit
-dřív než HTTP response; pozdější shodná response je idempotentní. Nula shod v
-jednom catch-up okně operaci nevrací do queued a více shod se neslučuje do jedné
-serverové identity. Jedna room používá FIFO a single-flight, jiné rooms mohou
-běžet souběžně. Cross-room private-reply wire payload umíme normalizovat, ale
-nový command admission zůstává bez plného eligibility snapshotu odmítnutý.
+Before step 1 the outbox admission verifies the capability and the exact revision
+of the replay contract. The first allowed kind is only `textSend`. The relay can
+complete an operation before the HTTP response; a later matching response is
+idempotent. Zero matches in one catch-up window does not return the operation to
+queued and several matches are not merged into one server identity. One room uses
+FIFO and single-flight, other rooms may run concurrently. We can normalize the
+cross-room private-reply wire payload, but a new command admission stays rejected
+without a complete eligibility snapshot.
 
-### Příchozí push
+### An incoming push
 
-1. Android connector předá zprávu spolu s lokální subscription identitou.
-2. Router ověří aktuální account/subscription generaci; aktivní UI účet není
-   autorizační zdroj.
-3. Activation token smí dokončit pouze pending registraci stejného účtu a
-   generace.
-4. Delete payload upraví pouze account-scoped systémovou notifikaci.
-5. Běžný payload probudí account sync lane a deduplikuje lokální zobrazení.
-6. OCS/chat API dodá autoritativní stav.
+1. The Android connector hands over the message together with the local
+   subscription identity.
+2. The router verifies the current account/subscription generation; the active UI
+   account is not an authorization source.
+3. An activation token may complete only a pending registration of the same
+   account and generation.
+4. A delete payload modifies only an account-scoped system notification.
+5. An ordinary payload wakes the account sync lane and deduplicates the local
+   display.
+6. The OCS/chat API supplies the authoritative state.
 
-iOS callback později použije stejný account-scoped výstup, ale vlastní APNs
-registraci a relay wire. Historický RSA push-v2 decrypt runtime není Android
-delivery cesta.
+The iOS callback will later use the same account-scoped output, but its own APNs
+registration and relay wire. The historical RSA push-v2 decrypt runtime is not the
+Android delivery path.
 
-### Odhlášení
+### Signing out
 
-1. Account se nejdřív suspenduje v account runtime gate. Všechny jeho root a thread
-   chat bindingy ukončí sdílené long polly; attachment lane se před abortem
-   requestů trvale uloží jako `suspended`. Bounded drain nečeká neomezeně na
-   vadný transport, ale account gate i potom odmítá pozdní commit, retry a nový
-   enqueue. In-flight upload zůstane restart-safe: recovery jej klasifikuje
-   konzervativně podle uloženého requestu, suspended lane jej však neodešle.
-2. Klient zkontroluje queued, ambiguous, failed outbox a upload jobs. Bez
-   explicitní volby uživatele je nesmaže.
-3. Online odstraní konkrétní Web Push nebo APNs registraci z Nextcloudu.
-4. iOS později odstraní také konkrétní relay mapping; Android další projektový
-   mapping nemá.
-5. Odvolá app password, pokud to server podporuje a uživatel odstraňuje účet.
-6. Až po vzdáleném cleanup smaže secure secrets.
-7. V jedné lokální transakci odstraní account partition a notification routing.
+1. The account is first suspended in the account runtime gate. All of its root and
+   thread chat bindings end the shared long polls; the attachment lane is
+   durably stored as `suspended` before the requests are aborted. A bounded drain
+   does not wait indefinitely for a faulty transport, but even afterwards the
+   account gate rejects a late commit, a retry and a new enqueue. An in-flight
+   upload stays restart-safe: recovery classifies it conservatively according to
+   the stored request, but a suspended lane does not send it.
+2. The client checks the queued, ambiguous and failed outbox and upload jobs.
+   Without an explicit choice by the user it does not delete them.
+3. Online, it removes the specific Web Push or APNs registration from Nextcloud.
+4. iOS will later also remove the specific relay mapping; Android has no further
+   project mapping.
+5. It revokes the app password if the server supports it and the user is removing
+   the account.
+6. Only after the remote cleanup does it delete the secure secrets.
+7. In a single local transaction it removes the account partition and the
+   notification routing.
 
-Při offline odebrání musí uživatel výslovně zahodit neodeslaná data. Minimální
-RevocationTombstone uchová credential reference a podepsaná cleanup data v
-secure storage po pevně omezenou dobu. Po úspěchu se smaže. Po vypršení se secret
-odstraní a UI přizná nutnost ruční revokace na serveru; nesmí hlásit falešné OK.
+For an offline removal the user has to explicitly discard the unsent data. A
+minimal RevocationTombstone keeps the credential reference and the signed cleanup
+data in secure storage for a strictly limited time. After a success it is
+deleted. After it expires, the secret is removed and the UI admits that a manual
+revocation on the server is necessary; it must not report a false OK.
 
-## Call-ready hranice
+## The call-ready boundary
 
-Příprava na hovory znamená reálný návrh, ne prázdné implementace:
+Preparing for calls means a real design, not empty implementations:
 
-- CallCoordinator vlastní stavový automat.
-- InternalSignalingTransport a HpbSignalingTransport jsou skutečné dvě varianty.
-- MediaEngine se přidá až při WebRTC implementaci.
-- CallPlatformBridge odděluje Android/iOS lifecycle.
+- CallCoordinator owns the state machine.
+- InternalSignalingTransport and HpbSignalingTransport are two real variants.
+- MediaEngine is added only with the WebRTC implementation.
+- CallPlatformBridge separates the Android/iOS lifecycle.
 
-Minimální stavy:
+The minimum states:
 
 - idle;
 - joining;
@@ -329,45 +349,47 @@ Minimální stavy:
 - ended;
 - failed.
 
-Signaling contract testy musí ověřit hello, resume, room join/leave, session
-ztrátu, reconnect a MCU/no-MCU odlišnosti ještě před zapojením kamery.
+The signaling contract tests have to verify hello, resume, room join/leave,
+session loss, reconnect and the MCU/no-MCU differences before the camera is
+wired in at all.
 
-## Bezpečnostní hranice
+## Security boundaries
 
-- Server origin se validuje proti HTTPS; explicitní dev výjimka nesmí existovat
-  v release buildu.
-- Redirect nesmí tiše změnit origin a odnést Authorization na jiný host.
-- WebDAV path segmenty se kódují odděleně; nikdy se neskládají prostou
-  interpolací uživatelského názvu souboru.
-- OCS envelope i HTTP status se validují.
-- App password a privátní RSA klíč se neukládají do běžné DB.
-- VAPID public key a Web Push endpoint se vážou na authenticated capability a
-  konkrétní account subscription generaci.
-- Logovací kontext smí obsahovat accountId hash, endpoint template, request id a
-  status, nikoli URL s uživatelem, token nebo payload.
-- Android build ani server nedrží publisher FCM service account.
-- Budoucí APNs provider key zůstává jen v relay secret store a nikdy na
-  Nextcloud serveru nebo v mobilní aplikaci.
-- Custom certificate trust je per server/account a vyžaduje zobrazení
-  fingerprintu; nesmí se řešit globálním vypnutím TLS.
+- The server origin is validated against HTTPS; an explicit dev exception must
+  not exist in a release build.
+- A redirect must not silently change the origin and carry the Authorization to a
+  different host.
+- WebDAV path segments are encoded separately; they are never composed by plain
+  interpolation of a user-supplied file name.
+- Both the OCS envelope and the HTTP status are validated.
+- The app password and the private RSA key are not stored in the ordinary DB.
+- The VAPID public key and the Web Push endpoint are bound to the authenticated
+  capability and to a specific account subscription generation.
+- The logging context may contain an accountId hash, an endpoint template, a
+  request id and a status, but not a URL with the user, a token or a payload.
+- Neither the Android build nor the server holds a publisher FCM service account.
+- The future APNs provider key stays only in the relay secret store and never on
+  a Nextcloud server or in the mobile application.
+- Custom certificate trust is per server/account and requires the fingerprint to
+  be shown; it must not be handled by disabling TLS globally.
 
-## Pozorovatelnost
+## Observability
 
-Lokální diagnostika:
+Local diagnostics:
 
-- anonymizovaný account scope;
-- sync lane a poslední potvrzený anchor;
-- počet pending/failed outbox operací;
-- poslední capability refresh;
-- push registration stav;
-- websocket resume/reconnect stav;
-- upload fáze bez lokální cesty a názvu souboru.
+- the anonymized account scope;
+- the sync lane and the last confirmed anchor;
+- the number of pending/failed outbox operations;
+- the last capability refresh;
+- the push registration state;
+- the websocket resume/reconnect state;
+- the upload phase without the local path and the file name.
 
-Budoucí iOS relay metriky:
+Future iOS relay metrics:
 
-- accepted/rejected APNs registrace;
-- APNs latency a status class;
-- queue depth a retry age;
-- invalid token count;
+- accepted/rejected APNs registrations;
+- APNs latency and the status class;
+- queue depth and retry age;
+- the invalid token count;
 - rate-limit rejects;
-- žádné labely s tokenem, user id nebo room id.
+- no labels with a token, a user id or a room id.
