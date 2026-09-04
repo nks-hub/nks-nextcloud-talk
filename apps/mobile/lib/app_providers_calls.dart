@@ -87,3 +87,16 @@ final callLifecycleStatusProvider = FutureProvider.autoDispose
         ref.invalidate(callLifecyclePersistedProvider(key));
       }
     });
+
+/// The WebRTC engine behind call media. Overridden in tests so negotiation can
+/// be driven without a platform channel.
+final callMediaEngineProvider = Provider<CallMediaEngine>((ref) {
+  return const WebRtcCallMediaEngine();
+});
+
+/// Joining and leaving one room's call with audio.
+final callJoinControllerProvider = AutoDisposeNotifierProviderFamily<
+  CallJoinController,
+  CallJoinState,
+  CallRoomKey
+>(CallJoinController.new);

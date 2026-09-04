@@ -1770,9 +1770,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerJoin => 'Join call';
 
   @override
-  String callBannerJoinUnsupported(String transport) {
-    return 'Joining is not implemented yet ($transport signalling).';
+  String get callBannerLeave => 'Leave call';
+
+  @override
+  String get callBannerJoining => 'Joining the call…';
+
+  @override
+  String callBannerTransportReady(String transport) {
+    return 'Signalled through $transport.';
   }
+
+  @override
+  String get callBannerAudioNegotiating => 'Connecting audio…';
+
+  @override
+  String get callBannerAudioConnected => 'Audio connected';
+
+  @override
+  String get callBannerAudioWaiting => 'Waiting for the other participants…';
+
+  @override
+  String get callBannerMicrophoneDenied =>
+      'The microphone was refused. Allow it in the system settings and join again.';
+
+  @override
+  String get callBannerMicrophoneUnavailable =>
+      'The microphone could not be opened.';
+
+  @override
+  String get callBannerAudioFailed =>
+      'The call audio could not be established.';
+
+  @override
+  String get callBannerAudioSignalingLost =>
+      'The call signalling ended, so the audio stopped.';
+
+  @override
+  String get callBannerMcuUnsupported =>
+      'This server relays calls through an MCU, which this client cannot join yet.';
+
+  @override
+  String get callBannerJoinFailed => 'Joining the call failed.';
+
+  @override
+  String get callBannerSignalingUnavailable =>
+      'This conversation has no signalling session, so its call cannot be joined.';
 
   @override
   String get callBannerTransportChecking =>

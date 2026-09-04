@@ -163,9 +163,7 @@ void main() {
     expect(find.byKey(const Key('call-banner-duration')), findsNothing);
   });
 
-  testWidgets('a resolved transport offers an explicitly disabled join', (
-    tester,
-  ) async {
+  testWidgets('a resolved transport offers a live join', (tester) async {
     var lifecycleReads = 0;
     await tester.pumpWidget(
       banner(
@@ -182,13 +180,36 @@ void main() {
     expect(join, findsOneWidget);
     expect(
       tester.widget<FilledButton>(join).onPressed,
-      isNull,
-      reason: 'media is not implemented, so the button must not pretend',
+      isNotNull,
+      reason: 'media exists, so the button must act',
     );
+    expect(find.text('Signalled through external HPB.'), findsOneWidget);
+  });
+
+  testWidgets('a join without a signalling session says so and stays idle', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      banner(
+        room: conversation(),
+        transport: CallTransport.externalHpb,
+        now: () => callStart,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('call-banner-join')));
+    await tester.pump();
+    await tester.pump();
+
     expect(
-      find.text('Joining is not implemented yet (external HPB signalling).'),
+      find.text(
+        'This conversation has no signalling session, '
+        'so its call cannot be joined.',
+      ),
       findsOneWidget,
     );
+    expect(find.text('Join call'), findsOneWidget);
   });
 
   testWidgets('an unresolved transport offers no join at all', (tester) async {

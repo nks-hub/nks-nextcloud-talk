@@ -6,16 +6,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'call_join_controller.dart';
 import 'call_lifecycle_service.dart';
+import 'call_media_engine.dart';
+import 'call_media_session.dart';
 import 'call_state.dart';
 import 'call_transport_service.dart';
 
 /// Banner shown above a chat while the server reports a running call.
 ///
 /// The banner recovers and reads the room's durable call REST state before it
-/// exposes any call action. The join button remains inert until WebRTC media
-/// exists; registering a server-side participant without media would create a
-/// false presence in the call.
+/// exposes any call action. Joining registers a server-side participant and
+/// negotiates audio over the room's signalling session; the button is only
+/// offered once the transport is known, because a call whose signalling cannot
+/// be resolved has nothing to negotiate over.
 final class OngoingCallBanner extends ConsumerStatefulWidget {
   const OngoingCallBanner({
     super.key,
@@ -93,11 +97,11 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
           )
         : switch (resolved) {
             CallTransport.internal => (
-              strings.callBannerJoinUnsupported(strings.callTransportInternal),
+              strings.callBannerTransportReady(strings.callTransportInternal),
               true,
             ),
             CallTransport.externalHpb => (
-              strings.callBannerJoinUnsupported(
+              strings.callBannerTransportReady(
                 strings.callTransportExternalHpb,
               ),
               true,
@@ -120,6 +124,14 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
             ),
             null => (strings.callBannerTransportChecking, false),
           };
+
+    final join = ref.watch(callJoinControllerProvider(key));
+    final joined =
+        join.phase == CallJoinPhase.joined ||
+        join.phase == CallJoinPhase.leaving;
+    final statusText = joinable
+        ? (_callJoinStatusText(join, strings) ?? status)
+        : status;
 
     return Container(
       key: const Key('call-banner'),
@@ -165,7 +177,7 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  status,
+                  statusText,
                   key: const Key('call-banner-transport'),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: scheme.onPrimaryContainer,
@@ -178,10 +190,19 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
             const SizedBox(width: 12),
             FilledButton(
               key: const Key('call-banner-join'),
-              // Enabled once media exists; a button that does nothing would
-              // lie about the app's state.
-              onPressed: null,
-              child: Text(strings.callBannerJoin),
+              onPressed: join.isBusy
+                  ? null
+                  : () {
+                      final controller = ref.read(
+                        callJoinControllerProvider(key).notifier,
+                      );
+                      unawaited(
+                        joined ? controller.leave() : controller.join(),
+                      );
+                    },
+              child: Text(
+                joined ? strings.callBannerLeave : strings.callBannerJoin,
+              ),
             ),
           ] else if (lifecycleFailed) ...[
             const SizedBox(width: 4),
@@ -223,4 +244,37 @@ String formatCallDuration(Duration elapsed) {
   final seconds = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
   final hours = elapsed.inHours;
   return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+}
+
+/// The join line replaces the transport line only while joining actually has
+/// something to say; otherwise the transport keeps the line.
+String? _callJoinStatusText(CallJoinState join, AppLocalizations strings) {
+  if (join.signalingUnavailable) {
+    return strings.callBannerSignalingUnavailable;
+  }
+  if (join.lifecycleError != null) {
+    return strings.callBannerJoinFailed;
+  }
+  final mediaError = join.mediaError;
+  if (mediaError != null) {
+    return switch (mediaError) {
+      CallMediaError.microphonePermissionDenied =>
+        strings.callBannerMicrophoneDenied,
+      CallMediaError.microphoneUnavailable =>
+        strings.callBannerMicrophoneUnavailable,
+      CallMediaError.topologyUnsupported => strings.callBannerMcuUnsupported,
+      CallMediaError.signalingLost => strings.callBannerAudioSignalingLost,
+      CallMediaError.engineFailure => strings.callBannerAudioFailed,
+    };
+  }
+  return switch (join.phase) {
+    CallJoinPhase.idle => null,
+    CallJoinPhase.joining || CallJoinPhase.leaving => strings.callBannerJoining,
+    CallJoinPhase.joined || CallJoinPhase.failed => switch (join.media.phase) {
+      CallMediaPhase.connected => strings.callBannerAudioConnected,
+      CallMediaPhase.negotiating => strings.callBannerAudioNegotiating,
+      CallMediaPhase.preparing => strings.callBannerAudioWaiting,
+      CallMediaPhase.idle || CallMediaPhase.failed => null,
+    },
+  };
 }

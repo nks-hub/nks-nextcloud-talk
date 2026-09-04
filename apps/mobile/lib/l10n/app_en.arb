@@ -635,14 +635,26 @@
     }
   },
   "callBannerJoin": "Join call",
-  "callBannerJoinUnsupported": "Joining is not implemented yet ({transport} signalling).",
-  "@callBannerJoinUnsupported": {
+  "callBannerLeave": "Leave call",
+  "callBannerJoining": "Joining the call…",
+  "callBannerTransportReady": "Signalled through {transport}.",
+  "@callBannerTransportReady": {
     "placeholders": {
       "transport": {
         "type": "String"
       }
     }
   },
+  "callBannerAudioNegotiating": "Connecting audio…",
+  "callBannerAudioConnected": "Audio connected",
+  "callBannerAudioWaiting": "Waiting for the other participants…",
+  "callBannerMicrophoneDenied": "The microphone was refused. Allow it in the system settings and join again.",
+  "callBannerMicrophoneUnavailable": "The microphone could not be opened.",
+  "callBannerAudioFailed": "The call audio could not be established.",
+  "callBannerAudioSignalingLost": "The call signalling ended, so the audio stopped.",
+  "callBannerMcuUnsupported": "This server relays calls through an MCU, which this client cannot join yet.",
+  "callBannerJoinFailed": "Joining the call failed.",
+  "callBannerSignalingUnavailable": "This conversation has no signalling session, so its call cannot be joined.",
   "callBannerTransportChecking": "Checking how this call is signalled…",
   "callBannerTransportUnavailable": "The call transport could not be resolved.",
   "callBannerTransportReauth": "Sign in again to see how this call is signalled.",

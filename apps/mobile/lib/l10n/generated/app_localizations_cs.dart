@@ -1770,9 +1770,50 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerJoin => 'Připojit se k hovoru';
 
   @override
-  String callBannerJoinUnsupported(String transport) {
-    return 'Připojení zatím není implementované (signalizace: $transport).';
+  String get callBannerLeave => 'Odpojit se z hovoru';
+
+  @override
+  String get callBannerJoining => 'Připojuji k hovoru…';
+
+  @override
+  String callBannerTransportReady(String transport) {
+    return 'Signalizováno přes $transport.';
   }
+
+  @override
+  String get callBannerAudioNegotiating => 'Navazuji zvuk…';
+
+  @override
+  String get callBannerAudioConnected => 'Zvuk je propojený';
+
+  @override
+  String get callBannerAudioWaiting => 'Čekám na ostatní účastníky…';
+
+  @override
+  String get callBannerMicrophoneDenied =>
+      'Mikrofon byl odepřen. Povolte ho v nastavení systému a připojte se znovu.';
+
+  @override
+  String get callBannerMicrophoneUnavailable =>
+      'Mikrofon se nepodařilo otevřít.';
+
+  @override
+  String get callBannerAudioFailed => 'Zvuk hovoru se nepodařilo navázat.';
+
+  @override
+  String get callBannerAudioSignalingLost =>
+      'Signalizace hovoru skončila, zvuk se zastavil.';
+
+  @override
+  String get callBannerMcuUnsupported =>
+      'Tento server přenáší hovory přes MCU, k takovému hovoru se tento klient zatím neumí připojit.';
+
+  @override
+  String get callBannerJoinFailed => 'Připojení k hovoru se nezdařilo.';
+
+  @override
+  String get callBannerSignalingUnavailable =>
+      'Tato konverzace nemá signalizační relaci, hovor v ní tedy nejde připojit.';
 
   @override
   String get callBannerTransportChecking =>

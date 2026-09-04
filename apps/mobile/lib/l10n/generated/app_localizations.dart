@@ -3266,11 +3266,83 @@ abstract class AppLocalizations {
   /// **'Join call'**
   String get callBannerJoin;
 
-  /// No description provided for @callBannerJoinUnsupported.
+  /// No description provided for @callBannerLeave.
   ///
   /// In en, this message translates to:
-  /// **'Joining is not implemented yet ({transport} signalling).'**
-  String callBannerJoinUnsupported(String transport);
+  /// **'Leave call'**
+  String get callBannerLeave;
+
+  /// No description provided for @callBannerJoining.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining the call…'**
+  String get callBannerJoining;
+
+  /// No description provided for @callBannerTransportReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Signalled through {transport}.'**
+  String callBannerTransportReady(String transport);
+
+  /// No description provided for @callBannerAudioNegotiating.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting audio…'**
+  String get callBannerAudioNegotiating;
+
+  /// No description provided for @callBannerAudioConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio connected'**
+  String get callBannerAudioConnected;
+
+  /// No description provided for @callBannerAudioWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the other participants…'**
+  String get callBannerAudioWaiting;
+
+  /// No description provided for @callBannerMicrophoneDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'The microphone was refused. Allow it in the system settings and join again.'**
+  String get callBannerMicrophoneDenied;
+
+  /// No description provided for @callBannerMicrophoneUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The microphone could not be opened.'**
+  String get callBannerMicrophoneUnavailable;
+
+  /// No description provided for @callBannerAudioFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The call audio could not be established.'**
+  String get callBannerAudioFailed;
+
+  /// No description provided for @callBannerAudioSignalingLost.
+  ///
+  /// In en, this message translates to:
+  /// **'The call signalling ended, so the audio stopped.'**
+  String get callBannerAudioSignalingLost;
+
+  /// No description provided for @callBannerMcuUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This server relays calls through an MCU, which this client cannot join yet.'**
+  String get callBannerMcuUnsupported;
+
+  /// No description provided for @callBannerJoinFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Joining the call failed.'**
+  String get callBannerJoinFailed;
+
+  /// No description provided for @callBannerSignalingUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation has no signalling session, so its call cannot be joined.'**
+  String get callBannerSignalingUnavailable;
 
   /// No description provided for @callBannerTransportChecking.
   ///
