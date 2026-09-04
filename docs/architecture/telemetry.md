@@ -1,139 +1,146 @@
-# Telemetrie
+# Telemetry
 
-Klient hlásí pády a anonymní použití obrazovek do vlastní self-hosted Sentry
-a Rybbit instance. Rozsah je záměrně užší, než co obě SDK umí; tento dokument
-je závazný popis toho, co smí opustit zařízení.
+The client reports crashes and anonymous screen usage to our own self-hosted
+Sentry and Rybbit instances. The scope is deliberately narrower than what both
+SDKs can do; this document is a binding description of what may leave the device.
 
-## Zapnuto jen v našich buildech
+## Enabled only in our builds
 
-Konfigurace přichází výhradně přes `--dart-define`, nikdy ze souboru, který
-aplikace čte za běhu, a nikdy z repozitáře — DSN i Rybbit host jsou interní
-adresy a tento repozitář je veřejný.
+The configuration arrives exclusively through `--dart-define`, never from a file
+the app reads at runtime, and never from the repository — both the DSN and the
+Rybbit host are internal addresses and this repository is public.
 
 ```sh
 cp apps/mobile/telemetry.env.example apps/mobile/telemetry.env
 flutter build apk --dart-define-from-file=telemetry.env
 ```
 
-`telemetry.env` je v `.gitignore`. Build bez tohoto souboru dostane prázdné
-hodnoty a pak se **žádné SDK vůbec neinicializuje**: `TelemetryConfig`
-v `apps/mobile/lib/core/telemetry.dart` vyžaduje u Sentry DSN ve tvaru URL
-a u Rybbitu zároveň host i site id. To je výchozí stav pro kohokoli, kdo si
-klient sestaví proti vlastnímu Nextcloudu — jde o obecného multi-server
-klienta, ne o white-label aplikaci, takže cizí build nesmí hlásit k nám.
+`telemetry.env` is in `.gitignore`. A build without that file gets empty values
+and then **no SDK is initialized at all**: `TelemetryConfig` in
+`apps/mobile/lib/core/telemetry.dart` requires a Sentry DSN in URL form and, for
+Rybbit, both the host and the site id. That is the default state for anyone who
+builds the client against their own Nextcloud — this is a general multi-server
+client, not a white-label application, so a foreign build must not report to us.
 
-| Proměnná | Význam | Prázdná hodnota |
+| Variable | Meaning | Empty value |
 | --- | --- | --- |
-| `SENTRY_DSN` | DSN self-hosted Sentry | bez hlášení pádů |
-| `RYBBIT_HOST` | adresa Rybbit instance | bez analytiky |
-| `RYBBIT_SITE_ID` | site id v Rybbitu | bez analytiky |
-| `TELEMETRY_ENVIRONMENT` | odliší testovací build od produkce | `development` |
-| `TELEMETRY_RELEASE_GATE` | před vydáním odešle error a diagnostic probe | `false` |
+| `SENTRY_DSN` | DSN of the self-hosted Sentry | no crash reporting |
+| `RYBBIT_HOST` | address of the Rybbit instance | no analytics |
+| `RYBBIT_SITE_ID` | site id in Rybbit | no analytics |
+| `TELEMETRY_ENVIRONMENT` | distinguishes a test build from production | `development` |
+| `TELEMETRY_RELEASE_GATE` | sends an error and a diagnostic probe before a release | `false` |
 
-## Co se posílá
+## What is sent
 
-- **Pády a chyby bez obsahu.** Stack trace a typ výjimky. Každý text projde
-  `TelemetryScrubber`: absolutní URL se zkrátí na `schéma://<host>`, takže
-  zmizí i server i room token v `…/call/<token>`, a cokoli ve tvaru
-  `Authorization:`, `Bearer …` nebo `Basic …` se nahradí `<redacted>`.
-  `SentryEvent.request` se zahazuje celý.
-- **Anonymní použití obrazovek.** Jen jména rout (`/settings`,
-  `/conversation/details`, …) z `RouteSettings`. Žádné id účtu, room token ani
-  název konverzace se do jména routy nedostane.
-- **Náhodné id instalace.** 128 bitů z `Random.secure()` v souboru
-  `telemetry_installation_id.txt` vedle ostatních lokálních předvoleb. Není
-  odvozené z účtu, serveru ani vlastnosti zařízení, takže ho nelze spojit
-  s osobou ani s tím, jaký Nextcloud kdo používá. Přežije restart, ne
-  přeinstalaci.
+- **Crashes and errors without content.** The stack trace and the exception type.
+  Every text goes through `TelemetryScrubber`: an absolute URL is truncated to
+  `scheme://<host>`, so both the server and the room token in `…/call/<token>`
+  disappear, and anything in the form `Authorization:`, `Bearer …` or `Basic …`
+  is replaced with `<redacted>`. `SentryEvent.request` is dropped entirely.
+- **Anonymous screen usage.** Only route names (`/settings`,
+  `/conversation/details`, …) from `RouteSettings`. No account id, room token or
+  conversation name ever gets into a route name.
+- **A random installation id.** 128 bits from `Random.secure()` in the file
+  `telemetry_installation_id.txt` next to the other local preferences. It is not
+  derived from the account, the server or a device property, so it cannot be
+  linked to a person or to which Nextcloud someone uses. It survives a restart,
+  not a reinstall.
 
-### Diagnostika nahrávání příloh
+### Attachment upload diagnostics
 
-Výběr a upload přílohy mohou skončit v čekajícím stavu bez výjimky, proto mají
-vlastní omezené Sentry události. Zaznamenávají pouze předem dané enumy a
-ořezané hodnoty: hranici pickeru a durable kopie, UI a durable fázi, zda už
-vznikla durable session, bucket průběhu a času, počet pokusů nejvýše jako
-`4+`, informaci o naplánovaném retry, lifecycle a platformu.
+Picking and uploading an attachment can end in a pending state without an
+exception, so they have their own limited Sentry events. They record only
+predefined enums and trimmed values: the boundary of the picker and the durable
+copy, the UI and durable phase, whether a durable session already exists, the
+progress and time bucket, the attempt count at most as `4+`, information about a
+scheduled retry, the lifecycle and the platform.
 
-Picker, kopie, admission a každá durable změna přidají breadcrumb. Zachycená
-chyba a fronta, která zůstane 45 sekund ve fázi `queued`, vytvoří warning event
-s pevným fingerprintem. Event používá vyčištěný izolovaný scope bez usera,
-zděděných breadcrumbs, tagů a extras. Nikdy do něj nevstupuje výjimka ani její
-text, název či cesta souboru, source handle nebo hash, účet, room token, server,
-URL, popisek, zpráva, credential ani job ID. Build bez platného `SENTRY_DSN`
-volá jen neaktivní SDK hub a nic neodesílá.
+The picker, the copy, the admission and every durable change add a breadcrumb. A
+caught error and a queue that stays in the `queued` phase for 45 seconds create a
+warning event with a fixed fingerprint. The event uses a cleaned isolated scope
+without a user, inherited breadcrumbs, tags and extras. It never receives an
+exception or its text, a file name or path, a source handle or hash, an account,
+a room token, a server, a URL, a caption, a message, a credential or a job ID. A
+build without a valid `SENTRY_DSN` only calls an inactive SDK hub and sends
+nothing.
 
-Dočasně nedostupný Apple Keychain se hlásí jako pevný checkpoint
-`credentialUnavailable` s durable/resume fází, bucketem credential retry a
-naplánovaným zpožděním. První výskyt vytvoří event; další pokusy stejného
-výpadku jej nezaplavují. Po úspěšném čtení se čítač zahodí, po vyčerpání se job
-durable přesune do reautentizace.
+A temporarily unavailable Apple Keychain is reported as the fixed checkpoint
+`credentialUnavailable` with the durable/resume phase, the credential retry
+bucket and the scheduled delay. The first occurrence creates an event; further
+attempts of the same outage do not flood it. After a successful read the counter
+is discarded, and once exhausted the job is durably moved to reauthentication.
 
 ### Release gate
 
-`TELEMETRY_RELEASE_GATE=true` je explicitní předvydávací režim. Po inicializaci
-SDK odešle jednu pevnou `TelemetryReleaseGateError` se stackem aplikace a jeden
-`attachment-upload-releaseGate` event se strukturovanými tagy. Běžně je vypnutý
-a bez define nevytvoří žádný probe. Spouštěcí nástroj
-`apps/mobile/tool/sentry_release_gate_test.dart` je mimo běžnou test discovery.
+`TELEMETRY_RELEASE_GATE=true` is an explicit pre-release mode. After
+initialization the SDK sends one fixed `TelemetryReleaseGateError` with the
+application stack and one `attachment-upload-releaseGate` event with structured
+tags. It is normally off and without the define creates no probe. The launcher
+tool `apps/mobile/tool/sentry_release_gate_test.dart` is outside the usual test
+discovery.
 
-Rybbit navíc sám doplňuje model zařízení, verzi OS, verzi aplikace a přibližnou
-polohu odvozenou z IP adresy. Nic z toho neposílá klient a nedá se to vypnout
-na naší straně; je to standardní chování serveru.
+Rybbit additionally adds the device model, the OS version, the application
+version and an approximate location derived from the IP address on its own. None
+of that is sent by the client and it cannot be turned off on our side; it is
+standard server behaviour.
 
-## Co se neposílá
+## What is not sent
 
-`sendDefaultPii`, `attachScreenshot` i performance tracing jsou vypnuté. Obsah
-zpráv, jména konverzací, přihlašovací údaje, push identita ani adresa serveru
-se neodesílají. `Rybbit.init` běží s `autoTrackErrors: false` — chyby patří
-Sentry, které je nejdřív pročistí, a vlastní handler Rybbitu by navíc převzal
-`FlutterError.onError` pod Sentry integrací.
+`sendDefaultPii`, `attachScreenshot` and performance tracing are all off. Message
+contents, conversation names, credentials, the push identity and the server
+address are not sent. `Rybbit.init` runs with `autoTrackErrors: false` — errors
+belong to Sentry, which scrubs them first, and Rybbit's own handler would
+additionally take over `FlutterError.onError` from under the Sentry integration.
 
-Ani jedno SDK nesmí shodit start aplikace: telemetrie je diagnostika, ne
-funkce, o kterou uživatel žádal. Selhání `Rybbit.init` se spolkne a aplikace
-běží dál bez analytiky.
+Neither SDK may bring down the application start: telemetry is diagnostics, not a
+feature the user asked for. A failure of `Rybbit.init` is swallowed and the app
+keeps running without analytics.
 
-## Ověření
+## Verification
 
-Build 36 z přesného `da84214` ověřil celý Sentry tok:
+Build 36 from the exact `da84214` verified the whole Sentry flow:
 
-- **Android 14 release:** error event `ce2cdb8984d641ee9db81dc64dba1baa`
-  a diagnostic `492f9f5cea9d463f9af94e3137dd4ec1` dorazily jako
+- **Android 14 release:** the error event `ce2cdb8984d641ee9db81dc64dba1baa` and
+  the diagnostic `492f9f5cea9d463f9af94e3137dd4ec1` arrived as
   `com.nkshub.nextcloudtalk@0.1.0+36`, `dist=36`, `production`.
-- **iOS 18.6 Simulator:** Flutter nepodporuje simulator release mode, proto byl
-  použit nejbližší instalovatelný ad-hoc debug artefakt se stejným source,
-  production telemetry a build numberem. Error
-  `9ca434526e00422e9e5372a0910a61b9` a diagnostic
-  `fa615f4dea4447b0bd25fed4fbd2167f` dorazily s `attachment.platform=iOS`;
-  diagnostic neměl user, request ani breadcrumbs.
-- Pět iOS cold launch/terminate cyklů mělo maximum 671 712 KiB RSS a 309 MB
-  physical footprint; release 36 nevytvořil žádný `WatchdogTermination`.
-- Po uzavření historických a syntetických probe issues vrací Sentry dotaz
-  `is:unresolved` pro projekt NKS Talk prázdný seznam.
+- **iOS 18.6 Simulator:** Flutter does not support simulator release mode, so the
+  closest installable ad-hoc debug artifact with the same source, production
+  telemetry and build number was used. The error
+  `9ca434526e00422e9e5372a0910a61b9` and the diagnostic
+  `fa615f4dea4447b0bd25fed4fbd2167f` arrived with `attachment.platform=iOS`; the
+  diagnostic had no user, request or breadcrumbs.
+- Five iOS cold launch/terminate cycles peaked at 671,712 KiB RSS and a 309 MB
+  physical footprint; release 36 produced no `WatchdogTermination`.
+- After closing the historical and synthetic probe issues, the Sentry query
+  `is:unresolved` for the NKS Talk project returns an empty list.
 
-Původní ověření na Android emulátoru proti `com.nkshub.nextcloudtalk`, build
-`e5f893d` s `--dart-define-from-file=telemetry.env`:
+The original verification on the Android emulator against
+`com.nkshub.nextcloudtalk`, build `e5f893d` with
+`--dart-define-from-file=telemetry.env`:
 
-- **Rybbit ověřen (L).** Site `com.nkshub.nextcloudtalk` (org NKS Apps) přijal
-  `app_open` s `environment=development` a pageviews `/` → `/search/messages`
-  → `/`. Žádný token, id účtu ani název konverzace v payloadu není. Soubor
-  `telemetry_installation_id.txt` (32 znaků) vznikl v `files/` aplikace.
-- **Historické omezení tehdejšího testu.** SDK i sentry-native nastartovaly
-  (`sentry-native: starting backend` v logcatu), ale event z instance
-  nedorazil: Relay na `sentry.example.invalid` v tu dobu nedokázal načíst
-  project config (`error fetching project state …: deadline exceeded`) pro
-  ~230 klíčů, tedy pro celou instanci. `POST /api/43/store/` vrací HTTP 200,
-  přesto nevznikne issue. Je to provozní stav instance, ne chyba integrace —
-  Ověření end-to-end je nyní nahrazené build-36 důkazem výše.
+- **Rybbit verified (L).** The site `com.nkshub.nextcloudtalk` (org NKS Apps)
+  accepted `app_open` with `environment=development` and the pageviews `/` →
+  `/search/messages` → `/`. There is no token, account id or conversation name in
+  the payload. The file `telemetry_installation_id.txt` (32 characters) was
+  created in the app's `files/`.
+- **Historical limitation of that test.** Both the SDK and sentry-native started
+  (`sentry-native: starting backend` in logcat), but no event from the instance
+  arrived: at that time the Relay at `sentry.example.invalid` could not load the
+  project config (`error fetching project state …: deadline exceeded`) for ~230
+  keys, that is for the whole instance. `POST /api/43/store/` returns HTTP 200 and
+  yet no issue is created. That is an operational state of the instance, not an
+  integration bug — the end-to-end verification is now replaced by the build-36
+  evidence above.
 
-Testy:
+Tests:
 
-- `apps/mobile/test/telemetry_test.dart` — brána konfigurace, scrubber
-  a formát id instalace.
-- `apps/mobile/test/telemetry_bootstrap_test.dart` — zahození
-  `SentryEvent.request` a pročištění zpráv, výjimek a breadcrumbs.
-- `apps/mobile/test/attachment_upload_telemetry_test.dart` — pevný event bez
-  requestu, usera, breadcrumbs, výjimky a volného textového payloadu.
+- `apps/mobile/test/telemetry_test.dart` — the configuration gate, the scrubber
+  and the format of the installation id.
+- `apps/mobile/test/telemetry_bootstrap_test.dart` — dropping
+  `SentryEvent.request` and scrubbing messages, exceptions and breadcrumbs.
+- `apps/mobile/test/attachment_upload_telemetry_test.dart` — a fixed event
+  without a request, a user, breadcrumbs, an exception and a free-text payload.
 - `apps/mobile/test/platform/media/image_attachment_picker_test.dart`,
-  `image_attachment_upload_controller_test.dart` a
-  `attachment_submission_test.dart` — pořadí picker/kopie, watchdog před a po
-  durable admission a bezpečný přenos fáze a retry metadat.
+  `image_attachment_upload_controller_test.dart` and
+  `attachment_submission_test.dart` — the picker/copy order, the watchdog before
+  and after durable admission and the safe transfer of phase and retry metadata.
