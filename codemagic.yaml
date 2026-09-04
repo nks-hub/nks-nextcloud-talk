@@ -14,6 +14,11 @@
 # (`POST /builds`), because a Windows instance is the one machine type this
 # plan charges for and a push-triggered matrix would bill on every commit.
 #
+# `flutter` is pinned rather than tracking `stable`: a newer analyzer than the
+# one this tree is developed against rejects three call sites in
+# `apps/mobile/test/attachment_repository_test.dart`, and CI drifting ahead of
+# the working tree turns every Flutter release into a red build.
+#
 # Nothing secret is in this file. Telemetry, the upload keystore and the
 # Firebase config are read from Codemagic environment groups, which hold the
 # same values as `apps/mobile/telemetry.env`, `apps/mobile/android/
@@ -264,6 +269,11 @@ workflows:
       - apps/mobile/build/app/outputs/flutter-apk/*.apk
       - apps/mobile/build/app/outputs/apk/release/*.apk
 
+  # Written and valid, but unrunnable on the current plan: it offers
+  # `mac_mini_m2` and nothing else. Both `linux` and `linux_x2` come straight
+  # back with "The selected instance type is not available with the current
+  # billing plan" (builds 6a9a7597 and 6a9a75fe258876, 2026-09-04). Starting
+  # it needs a plan with Linux machines, not a change here.
   linux:
     name: Linux bundle
     instance_type: linux
@@ -308,6 +318,11 @@ workflows:
     artifacts:
       - apps/mobile/build/linux/x64/release/nks-talk-linux-x64.tar.gz
 
+  # Unrunnable on the current plan for the same reason as `linux`: `windows_x2`
+  # is refused with "The selected instance type is not available with the
+  # current billing plan" (build 6a9a75fe62559f, 2026-09-04). It is also the
+  # one machine type this account would be charged for.
+  #
   # Windows scripts run in PowerShell, not bash, so these steps are written out
   # rather than sharing the anchors above. A native command that fails does not
   # stop a PowerShell script by itself, hence the explicit exit-code checks.
