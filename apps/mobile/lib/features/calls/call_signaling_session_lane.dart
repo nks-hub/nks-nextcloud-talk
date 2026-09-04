@@ -572,8 +572,26 @@ final class _CallSignalingLane {
       chatRelay: chatRelay,
       roomEpoch: state.roomEpoch,
       chatRelaySupported: state.serverFeatures.supports('chat-relay'),
+      localPeerId: _localPeerId(state),
+      iceServers: <IceServerConfiguration>[
+        ...?state.settings?.stunServers,
+        ...?state.settings?.turnServers,
+      ],
       failure: failure,
     );
+  }
+
+  /// The peer id this client is known by inside [SignalingAccountState.participants].
+  static SignalingPeerId? _localPeerId(SignalingAccountState state) {
+    return switch (state.transport) {
+      SignalingTransportKind.externalHpb => state.hpbSessionId == null
+          ? null
+          : SignalingPeerId.parse(state.hpbSessionId!.value),
+      SignalingTransportKind.internal => SignalingPeerId.parse(
+        state.nextcloudSessionId.value,
+      ),
+      null => null,
+    };
   }
 
   void _publish(SignalingRuntimeResult result) {

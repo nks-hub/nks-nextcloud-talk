@@ -389,6 +389,8 @@ CallSignalingUpdate _update({
   chatRelay: null,
   roomEpoch: 1,
   chatRelaySupported: false,
+  localPeerId: null,
+  iceServers: const <IceServerConfiguration>[],
   failure: null,
 );
 

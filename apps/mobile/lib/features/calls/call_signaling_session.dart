@@ -57,10 +57,13 @@ final class CallSignalingUpdate {
     required this.chatRelay,
     required this.roomEpoch,
     required this.chatRelaySupported,
+    required this.localPeerId,
+    required Iterable<IceServerConfiguration> iceServers,
     required this.failure,
   }) : participants = List<SignalingParticipant>.unmodifiable(participants),
        messages = List<SignalingPeerMessage>.unmodifiable(messages),
-       controls = List<HpbControlMessage>.unmodifiable(controls);
+       controls = List<HpbControlMessage>.unmodifiable(controls),
+       iceServers = List<IceServerConfiguration>.unmodifiable(iceServers);
 
   final CallSignalingKey key;
   final SignalingRuntimeOutcome outcome;
@@ -87,6 +90,19 @@ final class CallSignalingUpdate {
   /// feature. Only an external HPB can, so this is false for internal
   /// signalling and stays false until the hello response lands.
   final bool chatRelaySupported;
+
+  /// This client's own session id in the same namespace as the peer ids of
+  /// [participants]: the signalling session with an HPB, the Nextcloud
+  /// session with internal signalling. Mixing the two namespaces is what
+  /// makes the offerer comparison in a mesh call agree with itself, so media
+  /// must never substitute one for the other. Null until a session exists.
+  final SignalingPeerId? localPeerId;
+
+  /// STUN and TURN servers exactly as this room's signalling settings gave
+  /// them. TURN credentials are short-lived, so they are read per session and
+  /// never persisted.
+  final List<IceServerConfiguration> iceServers;
+
   final CallSignalingFailure? failure;
 
   /// Whether relayed chat may be trusted right now: an external HPB that

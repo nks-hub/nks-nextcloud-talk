@@ -1,0 +1,417 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
+import 'package:nextcloudtalk/features/calls/call_media_session.dart';
+import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
+import 'package:talk_protocol/talk_protocol.dart';
+
+/// The mesh offerer role is decided by the ordered pair of session ids, so the
+/// fixtures deliberately sit on both sides of `alice`.
+const _local = 'zulu-session';
+const _remote = 'alice-session';
+
+void main() {
+  late _FakeEngine engine;
+  late StreamController<CallSignalingUpdate> updates;
+  late List<SignalingPeerMessage> sent;
+
+  setUp(() {
+    engine = _FakeEngine();
+    updates = StreamController<CallSignalingUpdate>.broadcast(sync: true);
+    sent = <SignalingPeerMessage>[];
+  });
+
+  tearDown(() => updates.close());
+
+  CallMediaSession session(CallSignalingUpdate initial) => CallMediaSession(
+    initial: initial,
+    updates: updates.stream,
+    sendMessage: (message) async {
+      sent.add(message);
+      return true;
+    },
+    engine: engine,
+  );
+
+  test('the higher session id offers, takes the answer and trades ICE', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    expect(engine.microphoneOpens, 1);
+    expect(engine.connections, hasLength(1));
+    final connection = engine.connections.single;
+    expect(connection.createdOffers, 1);
+    expect(connection.localDescriptions.single.type, 'offer');
+
+    final offer = sent.single;
+    expect(offer.type, 'offer');
+    expect(offer.roomType, 'video');
+    expect(offer.recipient?.value, _remote);
+    expect(offer.payload?.wire['type'], 'offer');
+    expect(offer.payload?.wire['sdp'], 'sdp-offer-1');
+
+    // A candidate that overtakes the answer must not be dropped.
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'candidate', <String, Object?>{
+            'candidate': <String, Object?>{
+              'candidate': 'candidate:early',
+              'sdpMid': 'audio',
+              'sdpMLineIndex': 0,
+            },
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(connection.remoteCandidates, isEmpty);
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'answer', <String, Object?>{
+            'type': 'answer',
+            'sdp': 'sdp-answer-remote',
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(connection.remoteDescriptions.single.type, 'answer');
+    expect(connection.remoteDescriptions.single.sdp, 'sdp-answer-remote');
+    expect(
+      connection.remoteCandidates.map((candidate) => candidate.candidate),
+      ['candidate:early'],
+    );
+
+    // A local candidate leaves as its own signalling message.
+    connection.emitIceCandidate(
+      const CallIceCandidate(
+        candidate: 'candidate:local',
+        sdpMid: 'audio',
+        sdpMLineIndex: 0,
+      ),
+    );
+    await pumpEventQueue();
+    final candidate = sent.last;
+    expect(candidate.type, 'candidate');
+    expect(candidate.recipient?.value, _remote);
+    final wire = candidate.payload?.wire['candidate']! as Map<String, Object?>;
+    expect(wire['candidate'], 'candidate:local');
+    expect(wire['sdpMid'], 'audio');
+    expect(wire['sdpMLineIndex'], 0);
+
+    connection.emitConnectionState(CallMediaConnectionState.connected);
+    await pumpEventQueue();
+    expect(media.state.phase, CallMediaPhase.connected);
+    expect(media.state.connectedPeers, 1);
+  });
+
+  test('the lower session id waits for the offer and answers it', () async {
+    // Reversed roles: this client is `alice`, the peer is `zulu`.
+    final media = session(
+      _update(localPeerId: _remote, participants: [_participant(_local)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    expect(engine.connections, hasLength(1));
+    expect(engine.connections.single.createdOffers, 0);
+    expect(sent, isEmpty, reason: 'the other side owns the offer');
+
+    updates.add(
+      _update(
+        localPeerId: _remote,
+        participants: [_participant(_local)],
+        messages: [
+          _message(_local, 'offer', <String, Object?>{
+            'type': 'offer',
+            'sdp': 'sdp-offer-remote',
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+
+    final connection = engine.connections.single;
+    expect(connection.remoteDescriptions.single.sdp, 'sdp-offer-remote');
+    expect(connection.createdAnswers, 1);
+    expect(sent.single.type, 'answer');
+    expect(sent.single.payload?.wire['sdp'], 'sdp-answer-1');
+  });
+
+  test('losing the signalling session closes the peer connection', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections.single.closed, isFalse);
+
+    await updates.close();
+    await pumpEventQueue();
+
+    expect(engine.connections.single.closed, isTrue);
+    expect(engine.audio.single.disposed, isTrue);
+    expect(media.state.phase, CallMediaPhase.failed);
+    expect(media.state.error, CallMediaError.signalingLost);
+  });
+
+  test('a peer that leaves the call loses its connection', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections, hasLength(1));
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote, inCall: 0)],
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(engine.connections.single.closed, isTrue);
+    expect(media.state.peers, 0);
+  });
+
+  test('an MCU room is refused without asking for the microphone', () async {
+    final media = session(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        topology: SignalingTopology.externalMcu,
+      ),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    expect(engine.microphoneOpens, 0);
+    expect(engine.connections, isEmpty);
+    expect(media.state.error, CallMediaError.topologyUnsupported);
+  });
+
+  test('a refused microphone stops before any peer connection', () async {
+    engine.microphoneError = CallMediaError.microphonePermissionDenied;
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    expect(engine.connections, isEmpty);
+    expect(sent, isEmpty);
+    expect(media.state.phase, CallMediaPhase.failed);
+    expect(media.state.error, CallMediaError.microphonePermissionDenied);
+  });
+
+  test('signalling that is not ready yet builds nothing', () async {
+    final media = session(
+      _update(
+        localPeerId: null,
+        participants: [_participant(_remote)],
+        phase: SignalingAccountPhase.fetchingSettings,
+        roomConfirmed: false,
+      ),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    expect(engine.connections, isEmpty);
+    expect(media.state.phase, CallMediaPhase.preparing);
+  });
+
+  test('a required renegotiation stops media instead of pretending', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections, hasLength(1));
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        renegotiationRequired: true,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(engine.connections.single.closed, isTrue);
+    expect(media.state.error, CallMediaError.signalingLost);
+  });
+}
+
+CallSignalingUpdate _update({
+  required String? localPeerId,
+  List<SignalingParticipant> participants = const [],
+  List<SignalingPeerMessage> messages = const [],
+  SignalingTopology topology = SignalingTopology.externalPeerToPeer,
+  SignalingAccountPhase phase = SignalingAccountPhase.signalingReady,
+  bool roomConfirmed = true,
+  bool renegotiationRequired = false,
+}) => CallSignalingUpdate(
+  key: const (accountId: 'account-a', roomToken: 'rooma123'),
+  outcome: SignalingRuntimeOutcome.unchanged,
+  phase: phase,
+  transport: SignalingTransportKind.externalHpb,
+  topology: topology,
+  participants: participants,
+  roomConfirmed: roomConfirmed,
+  federationInterrupted: false,
+  renegotiationRequired: renegotiationRequired,
+  messages: messages,
+  controls: const <HpbControlMessage>[],
+  chatRelay: null,
+  roomEpoch: 1,
+  chatRelaySupported: false,
+  localPeerId: localPeerId == null
+      ? null
+      : SignalingPeerId.parse(localPeerId),
+  iceServers: <IceServerConfiguration>[
+    IceServerConfiguration(
+      urls: const ['stun:stun.example.invalid:19302'],
+      username: null,
+      credential: null,
+    ),
+  ],
+  failure: null,
+);
+
+SignalingParticipant _participant(String peerId, {int inCall = 7}) =>
+    SignalingParticipant(
+      peerId: SignalingPeerId.parse(peerId),
+      nextcloudSessionId: null,
+      userId: 'user-$peerId',
+      inCall: inCall,
+      permissions: 255,
+      actorType: 'users',
+      actorId: 'user-$peerId',
+      federated: false,
+      features: const <String>[],
+    );
+
+SignalingPeerMessage _message(
+  String sender,
+  String type,
+  Map<String, Object?> payload,
+) => SignalingPeerMessage(
+  type: type,
+  roomType: 'video',
+  sid: null,
+  recipient: SignalingPeerId.parse(_local),
+  sender: SignalingPeerId.parse(sender),
+  payload: SignalingOpaquePayload.fromJson(payload),
+);
+
+final class _FakeEngine implements CallMediaEngine {
+  int microphoneOpens = 0;
+  CallMediaError? microphoneError;
+  final List<_FakeAudio> audio = <_FakeAudio>[];
+  final List<_FakeConnection> connections = <_FakeConnection>[];
+
+  @override
+  Future<CallLocalAudio> openMicrophone() async {
+    final error = microphoneError;
+    if (error != null) {
+      throw CallMediaException(error);
+    }
+    microphoneOpens++;
+    final opened = _FakeAudio();
+    audio.add(opened);
+    return opened;
+  }
+
+  @override
+  Future<CallPeerConnection> createPeerConnection({
+    required List<CallIceServer> iceServers,
+    required CallLocalAudio audio,
+    required void Function(CallIceCandidate candidate) onIceCandidate,
+    required void Function(CallMediaConnectionState state) onConnectionState,
+  }) async {
+    final connection = _FakeConnection(
+      iceServers: iceServers,
+      onIceCandidate: onIceCandidate,
+      onConnectionState: onConnectionState,
+      index: connections.length + 1,
+    );
+    connections.add(connection);
+    return connection;
+  }
+}
+
+final class _FakeAudio implements CallLocalAudio {
+  bool disposed = false;
+
+  @override
+  Future<void> dispose() async => disposed = true;
+}
+
+final class _FakeConnection implements CallPeerConnection {
+  _FakeConnection({
+    required this.iceServers,
+    required this.onIceCandidate,
+    required this.onConnectionState,
+    required this.index,
+  });
+
+  final List<CallIceServer> iceServers;
+  final void Function(CallIceCandidate candidate) onIceCandidate;
+  final void Function(CallMediaConnectionState state) onConnectionState;
+  final int index;
+
+  int createdOffers = 0;
+  int createdAnswers = 0;
+  bool closed = false;
+  final List<CallSessionDescription> localDescriptions = [];
+  final List<CallSessionDescription> remoteDescriptions = [];
+  final List<CallIceCandidate> remoteCandidates = [];
+
+  void emitIceCandidate(CallIceCandidate candidate) =>
+      onIceCandidate(candidate);
+
+  void emitConnectionState(CallMediaConnectionState state) =>
+      onConnectionState(state);
+
+  @override
+  Future<CallSessionDescription> createOffer() async {
+    createdOffers++;
+    return (type: 'offer', sdp: 'sdp-offer-$index');
+  }
+
+  @override
+  Future<CallSessionDescription> createAnswer() async {
+    createdAnswers++;
+    return (type: 'answer', sdp: 'sdp-answer-$index');
+  }
+
+  @override
+  Future<void> setLocalDescription(CallSessionDescription description) async {
+    localDescriptions.add(description);
+  }
+
+  @override
+  Future<void> setRemoteDescription(CallSessionDescription description) async {
+    remoteDescriptions.add(description);
+  }
+
+  @override
+  Future<void> addIceCandidate(CallIceCandidate candidate) async {
+    remoteCandidates.add(candidate);
+  }
+
+  @override
+  Future<void> close() async => closed = true;
+}
