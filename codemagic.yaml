@@ -213,14 +213,30 @@ workflows:
       # and its private key lives only in one login keychain, so the CI had no
       # identity to sign with. A second certificate was issued against a CSR
       # built from the key the CI already holds; this installs that pair.
+      # A raw .p12 is not enough on its own. Two things bit here, both visible
+      # in the signing log of build 18: `unable to build chain to self-signed
+      # root`, because Apple's Developer ID intermediate is not on the machine,
+      # and `errSecInternalComponent`, which is what codesign says when it can
+      # reach the key but is not allowed to use it without a prompt. The
+      # partition list grants that permission; the two CA certificates complete
+      # the chain.
       - name: Set up signing
         script: |
           set -e
-          keychain initialize
+          KC=/Users/builder/Library/Keychains/nks-build.keychain-db
+          security create-keychain -p ci-temp "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p ci-temp "$KC"
+          curl -fsSL -o /tmp/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          curl -fsSL -o /tmp/AppleRoot.cer https://www.apple.com/appleca/AppleIncRootCertificate.cer
+          security import /tmp/DeveloperIDG2CA.cer -k "$KC" -T /usr/bin/codesign
+          security import /tmp/AppleRoot.cer -k "$KC" -T /usr/bin/codesign
           echo "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/devid.p12
-          keychain add-certificates --certificate /tmp/devid.p12 \
-            --certificate-password "$MACOS_CERTIFICATE_PASSWORD"
+          security import /tmp/devid.p12 -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
           rm -f /tmp/devid.p12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-temp "$KC"
+          security list-keychains -d user -s "$KC" /Users/builder/Library/Keychains/login.keychain-db
           security find-identity -v -p codesigning
           cd apps/mobile
           flutter build macos --config-only --release \
@@ -245,18 +261,19 @@ workflows:
           set -o pipefail
           cd apps/mobile
           {
-            echo "--- identities the keychain offers:"
-            security find-identity -v -p codesigning || true
+            security unlock-keychain -p ci-temp /Users/builder/Library/Keychains/nks-build.keychain-db
             APP=build/macos/Build/Products/Release/nextcloudtalk.app
-            echo "--- app: $APP"
-            ls -d "$APP"
             python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)','TEAMID0000.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
-            echo "--- resolved entitlements:"
-            cat /tmp/release.entitlements
-            ID="Developer ID Application"
+            ID="${MACOS_SIGNING_IDENTITY}"
+            # Inside out: a nested bundle signed after its container invalidates
+            # the container's seal.
             for f in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.dylib; do
               [ -e "$f" ] || continue
               codesign --force --options runtime --timestamp --sign "$ID" "$f"
+            done
+            for ext in "$APP"/Contents/PlugIns/*.appex; do
+              [ -e "$ext" ] || continue
+              codesign --force --options runtime --timestamp --sign "$ID" "$ext"
             done
             codesign --force --options runtime --timestamp --entitlements /tmp/release.entitlements --sign "$ID" "$APP"
             codesign --verify --strict --verbose=2 "$APP"
