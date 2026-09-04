@@ -24,8 +24,9 @@ final class WindowsNotificationChannel {
     // macOS shares the push channel, whose handler belongs to
     // ApplePushCoordinator: taps and actions on a local notification arrive
     // through the same route store as a push one, so installing a second
-    // handler here would only unhook the first.
-    if (!Platform.isMacOS) {
+    // handler here would only unhook the first. The channel decides that, not
+    // the host: a caller that names its own channel owns it on every platform.
+    if (!_sharesApplePushChannel) {
       _channel.setMethodCallHandler(_handleNativeCall);
     }
   }
@@ -40,6 +41,9 @@ final class WindowsNotificationChannel {
       Platform.isMacOS ? macosChannelName : channelName;
 
   final MethodChannel _channel;
+
+  bool get _sharesApplePushChannel => _channel.name == macosChannelName;
+
   final WindowsNotificationActionHandler? _onNotificationAction;
   final List<WindowsNotificationOpen> _pendingOpens = [];
   final StreamController<void> _notificationOpenedController =
@@ -111,7 +115,11 @@ final class WindowsNotificationChannel {
   }
 
   Future<void> dispose() async {
-    _channel.setMethodCallHandler(null);
+    // Only ever unhook a handler this channel installed - clearing the shared
+    // Apple push channel would take ApplePushCoordinator's routing with it.
+    if (!_sharesApplePushChannel) {
+      _channel.setMethodCallHandler(null);
+    }
     _pendingOpens.clear();
     await _notificationOpenedController.close();
   }

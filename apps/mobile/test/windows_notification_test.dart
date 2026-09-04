@@ -71,7 +71,10 @@ void main() {
   WindowsNotificationService build() {
     final service = WindowsNotificationService(
       accounts: accounts,
-      channel: WindowsNotificationChannel(),
+      // Named explicitly: the default resolves to the shared apple_push
+      // channel on a macOS host, and the mock below listens on the Windows
+      // one, so the test would watch a channel nothing ever posts to.
+      channel: WindowsNotificationChannel(channel: channel),
     );
     addTearDown(() async => service.dispose());
     service.follow('account-a');

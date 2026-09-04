@@ -373,6 +373,12 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
   if (!Platform.isIOS && !Platform.isMacOS) {
     return null;
   }
+  // Same gate as `clientPushEnabledProvider`: a widget test on a macOS host
+  // would otherwise ask the notification centre for permission and start
+  // registering the tree's accounts for push.
+  if (!ref.watch(clientPushEnabledProvider)) {
+    return null;
+  }
   final registration = ref.watch(applePushRegistrationCoordinatorProvider);
   final coordinator = ApplePushCoordinator(
     onToken: registration?.installToken,
@@ -421,6 +427,12 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
 final applePushRegistrationCoordinatorProvider =
     Provider<PushRegistrationCoordinator?>((ref) {
       if (!Platform.isIOS && !Platform.isMacOS) {
+        return null;
+      }
+      // Same gate as `clientPushEnabledProvider`: without it a widget test on
+      // a macOS host follows every account in the tree, reads capabilities
+      // over the test's own client and leaves a credential-retry timer behind.
+      if (!ref.watch(clientPushEnabledProvider)) {
         return null;
       }
       final deviceKeyChannel = ApplePushDeviceKeyChannel();
