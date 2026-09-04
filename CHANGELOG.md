@@ -16,6 +16,44 @@ TestFlight. Jejich obsah se nedá rozepsat po položkách: v té době se čísl
 buildu nezvedalo commitem, takže k nim nevede hranice v historii. Uvedené je
 proto jen to, co je doložitelné z App Store Connect.
 
+## 0.1.0 (59) — 4. 9. 2026
+
+Vydáno ze zdroje `1f3ff22`, tag `v0.1.0+59`. Krátká dávka: dvě opravy, obě
+z terénu — jednu nahlásil uživatel, druhá vyšla najevo při prvním skutečném
+spuštění na Linuxu.
+
+Android: release APK 93 577 502 B, SHA-256
+`381143f880260f74a82cd81093bd4953fe0258c6734ba51a22b5d855b4dde267`,
+versionCode 59.
+
+Windows: instalátor `NKS-Talk-0.1.0-59-windows-x64-setup.exe` 35 492 620 B,
+SHA-256 `9f9f7fae0209d03eb6422eb3a1be9321f18affd3685612d14c76ddf760b9c401`,
+nepodepsaný.
+
+iOS: simulátor iPhone 16 Pro Max / iOS 18.6, debug build 59 nainstalován
+a spuštěn, `Runner.app` ~227,7 MiB, zip 72 533 511 B, SHA-256
+`dcf3d7e8370d90eed508ddc8ee601f8b7df8b01cd71d11385a29e4383275fe41`,
+`CFBundleVersion` 59; na obrazovce vykreslený český onboarding.
+
+macOS: `nextcloudtalk.app` ~176,4 MiB, zip 55 588 774 B, SHA-256
+`fb62d81fd43ca5eb7490129b4108b8f8f74797ab78eb56b55041edf07c8b7d2a`,
+ad-hoc podpis (`codesign --verify --strict` OK), běžel 3 min 40 s.
+Snímek obrazovky se pořídit nedal, protože Mac má zamčenou obrazovku; běh
+je doložený přes Dart VM service (živá isolate, strom widgetů
+s namountovaným onboardingem, `FlutterView` 1040×672).
+
+Linux: samostatně se pro tento build nestavěl. Oprava klíčenky níže je ale
+ověřená přímo na Linuxu — na testovací VM byl doložený stav před opravou
+i po ní.
+
+- Opraveno: na serveru, který aplikaci dočasně odmítá, se aplikace ptala
+  pořád dokola. Když server řekne „počkejte", počká teď opravdu, a to na
+  celý server místo aby to každá část aplikace zjišťovala zvlášť. Do
+  hlášky se doplnilo, že se synchronizace obnoví sama.
+- Opraveno: na Linuxu se aplikace se zamčenou systémovou klíčenkou vůbec
+  neotevřela — okno nevzniklo a proces jen stál. Přihlašovací údaje se
+  teď při startu otevírají jen tehdy, když je opravdu co číst.
+
 ## 0.1.0 (58) — 4. 9. 2026
 
 Vydáno ze zdroje `52aecdd`, tag `v0.1.0+58`.
