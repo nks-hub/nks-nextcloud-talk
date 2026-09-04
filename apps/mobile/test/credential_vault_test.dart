@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -198,6 +200,61 @@ void main() {
       expect(await vault.readAppPassword('account-a'), 'app-password');
     },
   );
+
+  test('an empty queue is answered without opening the keystore', () async {
+    final storage = _RecordingSecureStorage();
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    final vault = SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    // Linux unlocks the keyring synchronously on the platform thread, so a
+    // read here costs the app its window when the keyring is locked.
+    expect(await vault.readPendingRevocations(), isNull);
+    expect(storage.calls, isEmpty);
+  });
+
+  test('a queued revocation is marked outside the keystore', () async {
+    final storage = _RecordingSecureStorage();
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    final vault = SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    await vault.writePendingRevocations('[{"server":"https://example.invalid"}]');
+
+    expect(
+      File('${support.path}/pending-revocations').existsSync(),
+      isTrue,
+    );
+    expect(
+      await vault.readPendingRevocations(),
+      '[{"server":"https://example.invalid"}]',
+    );
+  });
+
+  test('draining the queue empty takes the marker with it', () async {
+    final storage = _RecordingSecureStorage();
+    final support = await Directory.systemTemp.createTemp('vault-support');
+    addTearDown(() => support.delete(recursive: true));
+    final vault = SecureCredentialVault(
+      storage: storage,
+      supportDirectory: () async => support,
+    );
+
+    await vault.writePendingRevocations('[{"server":"https://example.invalid"}]');
+    await vault.writePendingRevocations(null);
+
+    expect(File('${support.path}/pending-revocations').existsSync(), isFalse);
+    expect(storage.valueFor('nks.pending_revocations'), isNull);
+    storage.calls.clear();
+    expect(await vault.readPendingRevocations(), isNull);
+    expect(storage.calls, isEmpty);
+  });
 }
 
 enum _Operation { read, write, delete }

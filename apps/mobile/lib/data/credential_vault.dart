@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart' show PlatformException;
+import 'package:path_provider/path_provider.dart';
 
 abstract interface class CredentialVault {
   Future<void> writeAppPassword(String accountId, String appPassword);
@@ -31,8 +34,11 @@ final class CredentialVaultTemporarilyUnavailable implements Exception {
 
 final class SecureCredentialVault
     implements CredentialVault, PendingRevocationStore {
-  SecureCredentialVault({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+  SecureCredentialVault({
+    FlutterSecureStorage? storage,
+    Future<Directory> Function()? supportDirectory,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
 
   static const _androidOptions = AndroidOptions(
     resetOnError: false,
@@ -52,6 +58,7 @@ final class SecureCredentialVault
   );
 
   final FlutterSecureStorage _storage;
+  final Future<Directory> Function() _supportDirectory;
   final Map<String, Future<void>> _migrations = {};
 
   static const _currentVersion = 2;
@@ -75,14 +82,42 @@ final class SecureCredentialVault
   }
 
   static const _pendingRevocationsKey = 'nks.pending_revocations';
+  static const _pendingRevocationsMarker = 'pending-revocations';
+
+  /// Says whether the queue holds anything, outside the platform keystore.
+  ///
+  /// Every drain — start, connectivity, resume — reads the queue, and on Linux
+  /// the keystore unlocks the keyring synchronously on the platform thread.
+  /// A locked keyring whose prompt nobody answers never returns, and that is
+  /// the thread that shows the window, so the app ends up with no window at
+  /// all. The queue is empty on almost every device, and this file answers
+  /// that without opening the keystore.
+  Future<File> _pendingRevocationsMarkerFile() async =>
+      File('${(await _supportDirectory()).path}/$_pendingRevocationsMarker');
 
   @override
-  Future<String?> readPendingRevocations() => _read(_pendingRevocationsKey);
+  Future<String?> readPendingRevocations() async {
+    if (!await (await _pendingRevocationsMarkerFile()).exists()) {
+      return null;
+    }
+    return _read(_pendingRevocationsKey);
+  }
 
   @override
-  Future<void> writePendingRevocations(String? json) => json == null
-      ? _delete(_pendingRevocationsKey)
-      : _write(_pendingRevocationsKey, json);
+  Future<void> writePendingRevocations(String? json) async {
+    final marker = await _pendingRevocationsMarkerFile();
+    if (json == null) {
+      await _delete(_pendingRevocationsKey);
+      if (await marker.exists()) {
+        await marker.delete();
+      }
+      return;
+    }
+    // Marker first: one left behind costs a single keystore read, one missing
+    // would hide a revocation the server is still waiting for.
+    await marker.create(recursive: true);
+    await _write(_pendingRevocationsKey, json);
+  }
 
   Future<void> _ensureCurrent(String accountId) async {
     final running = _migrations[accountId];
