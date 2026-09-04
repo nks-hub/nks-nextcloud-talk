@@ -50,7 +50,11 @@ void main() {
       _expectBackupDisabled(mergedManifest);
       _expectPredictiveBackEnabled(mergedManifest);
     },
-    timeout: const Timeout(Duration(minutes: 2)),
+    // Ten, not two: this is the only test that runs Gradle, and on a fresh CI
+    // machine that first invocation downloads the wrapper, AGP and Kotlin
+    // before it merges anything. Two minutes is a warm-cache budget and timed
+    // out on both the Ubuntu and the Windows runner.
+    timeout: const Timeout(Duration(minutes: 10)),
   );
 }
 

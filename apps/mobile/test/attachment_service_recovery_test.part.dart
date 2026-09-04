@@ -591,7 +591,20 @@ void _registerAttachmentServiceRecoveryTests() {
     final jobId = await fixture.seedInFlight(AttachmentRequestStep.normalPut);
     await fixture.credentials.deleteAppPassword('account-a');
 
-    final first = fixture.service(_unexpectedClient());
+    // The missing password is what stops the scheduler from uploading, but it
+    // also starts the credential ladder, and the fixture's default ladder is a
+    // single zero-delay step. That escalates to `reauthentication-required`
+    // after two event-loop turns and overwrites the `process-interrupted` this
+    // test is reading - whichever gets there first. It did on a CI runner and
+    // never on a developer machine. A ladder that cannot expire during the
+    // assertions removes the race without weakening them: no password, no
+    // upload, and `_unexpectedClient` still fails on any request.
+    const noEscalation = <Duration>[Duration(minutes: 5)];
+
+    final first = fixture.service(
+      _unexpectedClient(),
+      credentialRetryDelays: noEscalation,
+    );
     await first.ready;
     final recovered = await fixture.repository.getStoredJob(
       accountId: 'account-a',
@@ -605,7 +618,10 @@ void _registerAttachmentServiceRecoveryTests() {
     expect(await fixture.sourceFile.exists(), isTrue);
     await first.close();
 
-    final reopened = fixture.service(_unexpectedClient());
+    final reopened = fixture.service(
+      _unexpectedClient(),
+      credentialRetryDelays: noEscalation,
+    );
     await reopened.ready;
     final stable = await fixture.repository.getStoredJob(
       accountId: 'account-a',
