@@ -222,8 +222,10 @@ workflows:
       # the chain.
       - name: Set up signing
         script: |
+          set -o pipefail
+          {
           set -e
-          KC=/Users/builder/Library/Keychains/nks-build.keychain-db
+          KC=nks-build.keychain
           security create-keychain -p ci-temp "$KC"
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p ci-temp "$KC"
@@ -236,7 +238,7 @@ workflows:
             -T /usr/bin/codesign -T /usr/bin/security
           rm -f /tmp/devid.p12
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci-temp "$KC"
-          security list-keychains -d user -s "$KC" /Users/builder/Library/Keychains/login.keychain-db
+          security list-keychains -d user -s "$KC" login.keychain-db
           security find-identity -v -p codesigning
           cd apps/mobile
           flutter build macos --config-only --release \
@@ -244,6 +246,7 @@ workflows:
             --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
             --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \
             --dart-define=TELEMETRY_ENVIRONMENT=$TELEMETRY_ENVIRONMENT
+          } 2>&1 | tee /tmp/macos-setup.log
       - name: Build the app
         script: |
           set -o pipefail
@@ -261,7 +264,7 @@ workflows:
           set -o pipefail
           cd apps/mobile
           {
-            security unlock-keychain -p ci-temp /Users/builder/Library/Keychains/nks-build.keychain-db
+            security unlock-keychain -p ci-temp nks-build.keychain
             APP=build/macos/Build/Products/Release/nextcloudtalk.app
             python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)','TEAMID0000.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
             ID="${MACOS_SIGNING_IDENTITY}"
@@ -310,3 +313,4 @@ workflows:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
       - /tmp/macos-build.log
       - /tmp/macos-sign.log
+      - /tmp/macos-setup.log
