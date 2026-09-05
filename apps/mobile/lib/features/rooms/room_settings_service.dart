@@ -647,6 +647,7 @@ final class RoomSettingsService {
     required String roomToken,
     required int amount,
     BreakoutRoomMode mode = BreakoutRoomMode.automatic,
+    String? attendeeMap,
   }) {
     return _administer(
       accountId: accountId,
@@ -657,6 +658,31 @@ final class RoomSettingsService {
         roomToken: ids.roomToken,
         mode: mode,
         amount: amount,
+        attendeeMap: attendeeMap,
+      ),
+    );
+  }
+
+  /// Moves this account from its breakout room into [target].
+  ///
+  /// `roomToken` is the PARENT's, not either room's: the server looks the
+  /// target up among the parent's children and refuses the move unless the
+  /// parent is in free mode with the session started — and unless the caller
+  /// is NOT a moderator, since a moderator is already in every room
+  /// (`BreakoutRoomService::switchBreakoutRoom`).
+  Future<ConversationRoom?> switchBreakoutRoom({
+    required String accountId,
+    required String roomToken,
+    required String target,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SwitchBreakoutRoomRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        target: ConversationToken.parse(target, path: r'$.target'),
       ),
     );
   }

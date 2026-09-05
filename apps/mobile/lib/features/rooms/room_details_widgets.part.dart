@@ -780,8 +780,12 @@ final class _BreakoutActionsSheet extends StatelessWidget {
   }
 }
 
-/// How many breakout rooms to create — Talk allows 1 to 20, attendees are
-/// spread automatically.
+/// How the breakout rooms are to be filled, and how many there are.
+typedef _BreakoutPlan = ({BreakoutRoomMode mode, int amount});
+
+/// How many breakout rooms to create — Talk allows 1 to 20 — and how people
+/// end up in them: spread by the server, assigned by the moderator, or picked
+/// by the attendees themselves.
 final class _BreakoutAmountDialog extends StatefulWidget {
   const _BreakoutAmountDialog({required this.strings});
 
@@ -793,6 +797,7 @@ final class _BreakoutAmountDialog extends StatefulWidget {
 
 final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
   int _amount = 2;
+  BreakoutRoomMode _mode = BreakoutRoomMode.automatic;
 
   @override
   Widget build(BuildContext context) {
@@ -800,9 +805,57 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
     return AlertDialog(
       key: const Key('room-details-breakout-create-dialog'),
       title: Text(strings.roomDetailsBreakoutCreateDialogTitle),
-      content: Row(
+      content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: _amountControls(context),
+          ),
+          const SizedBox(height: 12),
+          RadioGroup<BreakoutRoomMode>(
+            groupValue: _mode,
+            onChanged: (picked) => setState(() => _mode = picked ?? _mode),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final mode in BreakoutRoomMode.values)
+                  RadioListTile<BreakoutRoomMode>(
+                    key: Key('room-details-breakout-mode-${mode.name}'),
+                    contentPadding: EdgeInsets.zero,
+                    value: mode,
+                    title: Text(switch (mode) {
+                      BreakoutRoomMode.automatic =>
+                        strings.roomDetailsBreakoutModeAutomatic,
+                      BreakoutRoomMode.manual =>
+                        strings.roomDetailsBreakoutModeManual,
+                      BreakoutRoomMode.free =>
+                        strings.roomDetailsBreakoutModeFree,
+                    }),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(
+          key: const Key('room-details-breakout-create-confirm'),
+          onPressed: () =>
+              Navigator.of(context).pop((mode: _mode, amount: _amount)),
+          child: Text(strings.roomDetailsBreakoutCreate),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _amountControls(BuildContext context) {
+    return [
           IconButton(
             onPressed: _amount > breakoutRoomsMinimum
                 ? () => setState(() => _amount--)
@@ -820,7 +873,76 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
                 : null,
             icon: const Icon(Icons.add_rounded),
           ),
-        ],
+    ];
+  }
+}
+
+/// Who goes into which breakout room, in manual mode.
+///
+/// The answer travels as attendee id to a zero-based room number; anybody the
+/// moderator leaves alone is absent from it, which is how the server is told
+/// to put them nowhere.
+final class _BreakoutAssignDialog extends StatefulWidget {
+  const _BreakoutAssignDialog({
+    required this.strings,
+    required this.participants,
+    required this.amount,
+  });
+
+  final AppLocalizations strings;
+  final List<Participant> participants;
+  final int amount;
+
+  @override
+  State<_BreakoutAssignDialog> createState() => _BreakoutAssignDialogState();
+}
+
+final class _BreakoutAssignDialogState extends State<_BreakoutAssignDialog> {
+  final Map<int, int> _assignment = <int, int>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    return AlertDialog(
+      key: const Key('room-details-breakout-assign-dialog'),
+      title: Text(strings.roomDetailsBreakoutAssignTitle),
+      content: SizedBox(
+        width: 400,
+        height: 360,
+        child: ListView.builder(
+          itemCount: widget.participants.length,
+          itemBuilder: (context, index) {
+            final participant = widget.participants[index];
+            final id = participant.attendeeId;
+            return ListTile(
+              key: Key('room-details-breakout-assign-\$id'),
+              title: Text(participant.displayName),
+              trailing: DropdownButton<int?>(
+                key: Key('room-details-breakout-assign-room-\$id'),
+                value: _assignment[id],
+                onChanged: (room) => setState(() {
+                  if (room == null) {
+                    _assignment.remove(id);
+                  } else {
+                    _assignment[id] = room;
+                  }
+                }),
+                items: [
+                  DropdownMenuItem<int?>(
+                    child: Text(strings.roomDetailsBreakoutAssignUnassigned),
+                  ),
+                  for (var room = 0; room < widget.amount; room++)
+                    DropdownMenuItem<int?>(
+                      value: room,
+                      child: Text(
+                        strings.roomDetailsBreakoutAssignRoom(room + 1),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
       actions: [
         TextButton(
@@ -828,9 +950,47 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
           child: Text(strings.cancel),
         ),
         FilledButton(
-          key: const Key('room-details-breakout-create-confirm'),
-          onPressed: () => Navigator.of(context).pop(_amount),
-          child: Text(strings.roomDetailsBreakoutCreate),
+          key: const Key('room-details-breakout-assign-confirm'),
+          onPressed: () =>
+              Navigator.of(context).pop(Map<int, int>.of(_assignment)),
+          child: Text(strings.roomDetailsBreakoutAssignConfirm),
+        ),
+      ],
+    );
+  }
+}
+
+/// The breakout room to move into, in free mode.
+final class _BreakoutSwitchDialog extends StatelessWidget {
+  const _BreakoutSwitchDialog({required this.strings, required this.rooms});
+
+  final AppLocalizations strings;
+  final List<ConversationRoom> rooms;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const Key('room-details-breakout-switch-dialog'),
+      title: Text(strings.roomDetailsBreakoutSwitchTitle),
+      content: SizedBox(
+        width: 400,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final room in rooms)
+              ListTile(
+                key: Key('room-details-breakout-switch-${room.token.value}'),
+                leading: const Icon(Icons.meeting_room_outlined),
+                title: Text(room.displayName),
+                onTap: () => Navigator.of(context).pop(room),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
         ),
       ],
     );

@@ -2295,6 +2295,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsBreakoutCreateDialogTitle => 'How many breakout rooms?';
 
   @override
+  String get roomDetailsBreakoutModeAutomatic => 'Spread everyone evenly';
+
+  @override
+  String get roomDetailsBreakoutModeManual => 'Assign people myself';
+
+  @override
+  String get roomDetailsBreakoutModeFree => 'Let people pick a room';
+
+  @override
+  String get roomDetailsBreakoutAssignTitle => 'Who goes where';
+
+  @override
+  String roomDetailsBreakoutAssignRoom(int number) {
+    return 'Room $number';
+  }
+
+  @override
+  String get roomDetailsBreakoutAssignUnassigned => 'Not assigned';
+
+  @override
+  String get roomDetailsBreakoutAssignConfirm => 'Create';
+
+  @override
+  String get roomDetailsBreakoutSwitch => 'Move to another room';
+
+  @override
+  String get roomDetailsBreakoutSwitchTitle => 'Which room?';
+
+  @override
+  String get roomDetailsBreakoutSwitchEmpty =>
+      'No breakout room is open right now.';
+
+  @override
+  String roomDetailsBreakoutSwitched(String name) {
+    return 'You are now in $name.';
+  }
+
+  @override
   String get roomDetailsBreakoutStart => 'Start the breakout rooms';
 
   @override

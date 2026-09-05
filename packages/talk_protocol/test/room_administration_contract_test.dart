@@ -952,6 +952,47 @@ void breakoutRoomsTests() {
       'attendeeMap': '[]',
     });
 
+    // Manual mode carries who goes where: attendee id to a ZERO-BASED room
+    // number, and anybody absent from the map is placed nowhere. Read out of
+    // `BreakoutRoomService::parseAttendeeForm`, which refuses a room number
+    // at or above `amount`, a negative one, and an attendee id of 0 or less.
+    final manual = ConfigureBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: BreakoutRoomMode.manual,
+      amount: 2,
+      attendeeMap: '{"7":0,"9":1}',
+    );
+    expect(manual.formBody, {
+      'mode': '2',
+      'amount': '2',
+      'attendeeMap': '{"7":0,"9":1}',
+    });
+
+    // Free mode is what lets an attendee move themselves afterwards. The
+    // switch is asked for on the PARENT and names the target room; the server
+    // refuses it outside free mode, before the session starts, and for a
+    // moderator, who is in every room already.
+    final switched = SwitchBreakoutRoomRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      target: ConversationToken.parse('childb45', path: r'$.target'),
+    );
+    expect(switched.httpMethod, 'POST');
+    expect(switched.uri.toString(), '$base/switch?format=json');
+    expect(switched.formBody, {'target': 'childb45'});
+
+    final free = ConfigureBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: BreakoutRoomMode.free,
+      amount: 4,
+    );
+    expect(free.formBody!['mode'], '3');
+
     final run = RunBreakoutRoomsRequest(
       accountId: _accountId(),
       server: _server(),

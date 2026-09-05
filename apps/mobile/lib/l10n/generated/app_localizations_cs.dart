@@ -2294,6 +2294,44 @@ class AppLocalizationsCs extends AppLocalizations {
       'Kolik oddělených místností?';
 
   @override
+  String get roomDetailsBreakoutModeAutomatic => 'Rozdělit všechny rovnoměrně';
+
+  @override
+  String get roomDetailsBreakoutModeManual => 'Přiřadit lidi ručně';
+
+  @override
+  String get roomDetailsBreakoutModeFree => 'Nechat lidi vybrat si místnost';
+
+  @override
+  String get roomDetailsBreakoutAssignTitle => 'Kdo kam patří';
+
+  @override
+  String roomDetailsBreakoutAssignRoom(int number) {
+    return 'Místnost $number';
+  }
+
+  @override
+  String get roomDetailsBreakoutAssignUnassigned => 'Bez přiřazení';
+
+  @override
+  String get roomDetailsBreakoutAssignConfirm => 'Vytvořit';
+
+  @override
+  String get roomDetailsBreakoutSwitch => 'Přejít do jiné místnosti';
+
+  @override
+  String get roomDetailsBreakoutSwitchTitle => 'Do které místnosti?';
+
+  @override
+  String get roomDetailsBreakoutSwitchEmpty =>
+      'Žádná vedlejší místnost teď není otevřená.';
+
+  @override
+  String roomDetailsBreakoutSwitched(String name) {
+    return 'Jsi teď v místnosti $name.';
+  }
+
+  @override
   String get roomDetailsBreakoutStart => 'Spustit oddělené místnosti';
 
   @override

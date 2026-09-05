@@ -105,6 +105,18 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       _room?.objectType == _breakoutObjectType &&
       _talkFeatures.contains(_breakoutCapability);
 
+  /// Only a NON-moderator switches, and only in free mode with the session
+  /// started — a moderator is already in every breakout room and the server
+  /// refuses their switch outright
+  /// (`BreakoutRoomService::switchBreakoutRoom`). The move is asked for on the
+  /// PARENT, which is where this tile sits.
+  bool get _canSwitchBreakoutRoom =>
+      !_isModerator &&
+      _room?.objectType != _breakoutObjectType &&
+      _breakoutMode == 3 &&
+      _breakoutStatus == 1 &&
+      _talkFeatures.contains(_breakoutCapability);
+
   int get _breakoutMode => _wireInt('breakoutRoomMode');
   int get _breakoutStatus => _wireInt('breakoutRoomStatus');
 
@@ -178,13 +190,20 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     }
     switch (action) {
       case _BreakoutAction.create:
-        final amount = await showDialog<int>(
+        final plan = await showDialog<_BreakoutPlan>(
           context: context,
           builder: (dialogContext) =>
               _BreakoutAmountDialog(strings: AppLocalizations.of(context)),
         );
-        if (amount == null || !mounted) {
+        if (plan == null || !mounted) {
           return;
+        }
+        String? attendeeMap;
+        if (plan.mode == BreakoutRoomMode.manual) {
+          attendeeMap = await _askAttendeeMap(plan.amount);
+          if (attendeeMap == null || !mounted) {
+            return;
+          }
         }
         await _administer(
           () => ref
@@ -192,9 +211,14 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
               .configureBreakoutRooms(
                 accountId: widget.account.id,
                 roomToken: widget.conversation.token,
-                amount: amount,
+                amount: plan.amount,
+                mode: plan.mode,
+                attendeeMap: attendeeMap,
               ),
-          fallback: () => {'breakoutRoomMode': 1, 'breakoutRoomStatus': 0},
+          fallback: () => {
+            'breakoutRoomMode': plan.mode.wireValue,
+            'breakoutRoomStatus': 0,
+          },
         );
       case _BreakoutAction.start:
       case _BreakoutAction.stop:
@@ -248,6 +272,94 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
               ),
           fallback: () => {'breakoutRoomMode': 0, 'breakoutRoomStatus': 0},
         );
+    }
+  }
+
+  /// Asks who goes into which room and encodes the answer the way the server
+  /// reads it: a JSON object of attendee id to a ZERO-BASED room number
+  /// (`BreakoutRoomService::parseAttendeeForm`). Anybody left unassigned is
+  /// simply absent from the map — the server puts them nowhere, which is what
+  /// "not assigned" means.
+  Future<String?> _askAttendeeMap(int amount) async {
+    final List<Participant> participants;
+    try {
+      participants = await _load();
+    } on Object {
+      if (mounted) {
+        _showMessage(
+          AppLocalizations.of(context).roomDetailsActionErrorGeneric,
+        );
+      }
+      return null;
+    }
+    if (!mounted) {
+      return null;
+    }
+    final assignment = await showDialog<Map<int, int>>(
+      context: context,
+      builder: (dialogContext) => _BreakoutAssignDialog(
+        strings: AppLocalizations.of(context),
+        participants: participants,
+        amount: amount,
+      ),
+    );
+    if (assignment == null) {
+      return null;
+    }
+    return jsonEncode(
+      assignment.map((attendeeId, room) => MapEntry('$attendeeId', room)),
+    );
+  }
+
+  Future<void> _switchBreakoutRoom() async {
+    final strings = AppLocalizations.of(context);
+    final List<ConversationRoom> rooms;
+    try {
+      rooms = await ref
+          .read(roomSettingsServiceProvider)
+          .listBreakoutRooms(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+          );
+    } on RoomSettingsException catch (error) {
+      if (mounted) {
+        _showMessage(_actionErrorMessage(strings, error.code));
+      }
+      return;
+    } on Object {
+      if (mounted) {
+        _showMessage(strings.roomDetailsActionErrorGeneric);
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    if (rooms.isEmpty) {
+      _showMessage(strings.roomDetailsBreakoutSwitchEmpty);
+      return;
+    }
+    final target = await showDialog<ConversationRoom>(
+      context: context,
+      builder: (dialogContext) =>
+          _BreakoutSwitchDialog(strings: strings, rooms: rooms),
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+    var switched = false;
+    await _runAction(() async {
+      await ref
+          .read(roomSettingsServiceProvider)
+          .switchBreakoutRoom(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            target: target.token.value,
+          );
+      switched = true;
+    }, errorMessage: _actionErrorMessage);
+    if (switched && mounted) {
+      _showMessage(strings.roomDetailsBreakoutSwitched(target.displayName));
     }
   }
 

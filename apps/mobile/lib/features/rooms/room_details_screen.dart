@@ -408,6 +408,13 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               onTap: _busy ? null : _manageBreakoutRooms,
             ),
+          if (_canSwitchBreakoutRoom)
+            ListTile(
+              key: const Key('room-details-breakout-switch'),
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: Text(strings.roomDetailsBreakoutSwitch),
+              onTap: _busy ? null : _switchBreakoutRoom,
+            ),
           if (_isBreakoutRoom)
             ListTile(
               key: const Key('room-details-breakout-assistance'),

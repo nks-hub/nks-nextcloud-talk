@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New: breakout rooms can be filled three ways, not one. When a moderator
+  creates them they choose whether the server spreads everyone evenly, whether
+  they assign each person to a room themselves, or whether people pick a room
+  for themselves. In that last case anyone in the conversation can move to
+  another room from its details while the session runs.
 - New: an incoming call rings on iOS even when the app is not running. The
   call arrives as a VoIP push and the system's own call screen answers or
   declines it; answering joins the room straight away. Needs the push proxy

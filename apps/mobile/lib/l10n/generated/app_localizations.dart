@@ -4190,6 +4190,72 @@ abstract class AppLocalizations {
   /// **'How many breakout rooms?'**
   String get roomDetailsBreakoutCreateDialogTitle;
 
+  /// No description provided for @roomDetailsBreakoutModeAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Spread everyone evenly'**
+  String get roomDetailsBreakoutModeAutomatic;
+
+  /// No description provided for @roomDetailsBreakoutModeManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign people myself'**
+  String get roomDetailsBreakoutModeManual;
+
+  /// No description provided for @roomDetailsBreakoutModeFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Let people pick a room'**
+  String get roomDetailsBreakoutModeFree;
+
+  /// No description provided for @roomDetailsBreakoutAssignTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Who goes where'**
+  String get roomDetailsBreakoutAssignTitle;
+
+  /// No description provided for @roomDetailsBreakoutAssignRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Room {number}'**
+  String roomDetailsBreakoutAssignRoom(int number);
+
+  /// No description provided for @roomDetailsBreakoutAssignUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not assigned'**
+  String get roomDetailsBreakoutAssignUnassigned;
+
+  /// No description provided for @roomDetailsBreakoutAssignConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get roomDetailsBreakoutAssignConfirm;
+
+  /// No description provided for @roomDetailsBreakoutSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to another room'**
+  String get roomDetailsBreakoutSwitch;
+
+  /// No description provided for @roomDetailsBreakoutSwitchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Which room?'**
+  String get roomDetailsBreakoutSwitchTitle;
+
+  /// No description provided for @roomDetailsBreakoutSwitchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No breakout room is open right now.'**
+  String get roomDetailsBreakoutSwitchEmpty;
+
+  /// No description provided for @roomDetailsBreakoutSwitched.
+  ///
+  /// In en, this message translates to:
+  /// **'You are now in {name}.'**
+  String roomDetailsBreakoutSwitched(String name);
+
   /// No description provided for @roomDetailsBreakoutStart.
   ///
   /// In en, this message translates to:
