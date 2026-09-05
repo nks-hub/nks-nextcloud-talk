@@ -22,6 +22,72 @@ void main() {
       expect(profile(federated: true).enabled, isFalse);
     });
 
+    test('an older server that never heard of subfolders is off', () {
+      // The shape below is not invented: it is what a Talk 22 server answers,
+      // measured on 5 September 2026. The key is ABSENT rather than false,
+      // and the endpoint the upload contract starts with
+      // (`…/chat/{token}/attachment/folder`) does not exist there either, so
+      // offering attachments would only fail later, in front of the user.
+      // Every other test in the tree sets the key to a literal true or false,
+      // so this shape had nothing holding it.
+      CapabilitySnapshot older(Map<String, Object?> attachments) =>
+          CapabilitySnapshot.fromJson(<String, Object?>{
+            'ocs': <String, Object?>{
+              'meta': <String, Object?>{
+                'status': 'ok',
+                'statuscode': 200,
+                'message': 'OK',
+              },
+              'data': <String, Object?>{
+                'version': <String, Object?>{
+                  'major': 32,
+                  'minor': 0,
+                  'micro': 14,
+                  'string': '32.0.14',
+                  'edition': '',
+                },
+                'capabilities': <String, Object?>{
+                  'spreed': <String, Object?>{
+                    'features': const <String>[
+                      'chat-reference-id',
+                      'media-caption',
+                      'voice-message-sharing',
+                      'chat-replies',
+                      'threads',
+                      'silent-send',
+                    ],
+                    'config': <String, Object?>{'attachments': attachments},
+                  },
+                },
+              },
+            },
+          }, context: CapabilityContext.authenticated);
+
+      // Exactly the live answer: allowed, a folder, and nothing else.
+      final live = AttachmentCapabilityProfile.fromSnapshot(
+        older(<String, Object?>{'allowed': true, 'folder': '/Talk'}),
+        federated: false,
+      );
+      expect(live.enabled, isFalse);
+      // And with it, everything that hangs off it — which is what the
+      // composer greys out.
+      expect(live.voice, isFalse);
+      expect(live.caption, isFalse);
+      expect(live.reply, isFalse);
+      expect(live.threads, isFalse);
+      expect(live.silent, isFalse);
+      expect(live.supports(metadata()), isFalse);
+
+      // A server that sends no attachment config at all is the same answer.
+      expect(
+        AttachmentCapabilityProfile.fromSnapshot(
+          older(const <String, Object?>{}),
+          federated: false,
+        ).enabled,
+        isFalse,
+      );
+    });
+
     test('rejects anonymous capability snapshots', () {
       expect(
         () => AttachmentCapabilityProfile.fromSnapshot(
