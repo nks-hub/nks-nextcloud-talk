@@ -459,6 +459,41 @@ void main() {
       expect(result.effects.single, isA<CloseHpbSocketEffect>());
       expect(result.outcome, SignalingRuntimeOutcome.authorityRefreshed);
     });
+
+    // The flag stops the runtime carrying anything but typing, so a media
+    // session that sees it reports a lost signalling and gives up. It used to
+    // survive a fresh authority, which made it permanent: once a batch of
+    // unknown delivery or a process restart set it, every later call refused
+    // to negotiate. A new authority bumps the room epoch, and a new room epoch
+    // tears down every peer connection, so the inconsistency it guards cannot
+    // outlive it. Confirming a room within one epoch still preserves it.
+    test('a fresh authority clears a required renegotiation', () {
+      final ready = externalReadySignalingSnapshot();
+      final snapshot = SignalingRuntimeSnapshot(
+        accounts: <AccountId, SignalingAccountState>{
+          signalingAccountA: ready.accounts[signalingAccountA]!.copyWith(
+            renegotiationRequired: true,
+          ),
+        },
+      );
+      final before = snapshot.accounts[signalingAccountA]!;
+
+      final result = refreshSignalingAuthority(
+        snapshot,
+        authority: signalingAuthority(
+          credentialGeneration: 4,
+          settingsRevision: 'signaling-revision-b',
+        ),
+        closeEffectId: signalingEffectId(110),
+      );
+      final after = commitSignaling(
+        snapshot,
+        result,
+      ).accounts[signalingAccountA]!;
+
+      expect(after.renegotiationRequired, isFalse);
+      expect(after.roomEpoch, before.roomEpoch + 1);
+    });
   });
 
   group('signaling HTTP replay boundary', () {

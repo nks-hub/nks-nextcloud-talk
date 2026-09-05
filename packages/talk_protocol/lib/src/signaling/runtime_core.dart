@@ -477,6 +477,19 @@ SignalingRuntimeResult refreshSignalingAuthority(
         settings: null,
         connectionEpoch: account.connectionEpoch + 1,
         roomEpoch: account.roomEpoch + 1,
+        // A NEW ROOM EPOCH IS THE RENEGOTIATION. The flag records that the peer
+        // state may be inconsistent — a batch whose delivery is unknown, or a
+        // process that restarted — and it is honoured by refusing to carry
+        // anything but typing, which stops media dead. Bumping the room epoch
+        // tears every peer connection down by construction (the media session
+        // closes them all when it sees a new epoch), so there is no
+        // inconsistent peer state left for the flag to protect. Carrying it
+        // across a fresh authority made it permanent: once set it survived
+        // every restart, and a call joined afterwards reported a lost
+        // signalling before it ever offered anything. Confirming a room WITHIN
+        // an epoch still preserves it — that is a different thing and has its
+        // own test.
+        renegotiationRequired: false,
       );
   return _replaceAccount(
     snapshot,
