@@ -154,11 +154,16 @@ final class CallMediaSession {
     required Stream<CallSignalingUpdate> updates,
     required Future<bool> Function(SignalingPeerMessage message) sendMessage,
     required CallMediaEngine engine,
+
+    /// Control messages to the signalling server itself — `requestoffer` to
+    /// an MCU. Absent on the internal transport, which has no server to ask.
+    Future<bool> Function(HpbControlMessage control)? sendControl,
     CallAudioInterruptions interruptions = const SilentCallAudioInterruptions(),
     this.reactionDisplay = const Duration(seconds: 4),
   }) : _initial = initial,
        _updates = updates,
        _sendMessage = sendMessage,
+       _sendControl = sendControl,
        _engine = engine,
        _interruptions = interruptions;
 
@@ -194,6 +199,16 @@ final class CallMediaSession {
   final CallSignalingUpdate _initial;
   final Stream<CallSignalingUpdate> _updates;
   final Future<bool> Function(SignalingPeerMessage message) _sendMessage;
+  final Future<bool> Function(HpbControlMessage control)? _sendControl;
+
+  /// With an MCU every stream goes through the media server: this side
+  /// publishes ONCE, on a connection whose offer is addressed to its own
+  /// session id, and every other participant arrives as an offer FROM their
+  /// session id that the server makes on their behalf once it is asked with
+  /// `requestoffer`. The mesh's "one side offers" rule does not apply.
+  bool _mcu = false;
+  _MediaPeer? _publisher;
+  final Map<String, Timer> _offerRequests = <String, Timer>{};
   final CallMediaEngine _engine;
   final CallAudioInterruptions _interruptions;
   final Map<String, _MediaPeer> _peers = {};
@@ -232,9 +247,10 @@ final class CallMediaSession {
         return;
       }
       _started = true;
-      // Asked before the microphone is, so a call this client cannot join does
-      // not raise a permission prompt for nothing.
-      if (_initial.topology == SignalingTopology.externalMcu) {
+      // An MCU needs the server to ask for offers on this side's behalf;
+      // without that channel the call would only ever hear itself.
+      if (_initial.topology == SignalingTopology.externalMcu &&
+          _sendControl == null) {
         _emit(
           const CallMediaState(
             phase: CallMediaPhase.failed,
@@ -324,10 +340,12 @@ final class CallMediaSession {
       await _failAndStop(CallMediaError.signalingLost);
       return;
     }
-    if (update.topology == SignalingTopology.externalMcu) {
+    if (update.topology == SignalingTopology.externalMcu &&
+        _sendControl == null) {
       await _failAndStop(CallMediaError.topologyUnsupported);
       return;
     }
+    _mcu = update.topology == SignalingTopology.externalMcu;
     if (!update.signalingReady || !update.roomConfirmed) {
       await _closeAllPeers();
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
@@ -372,8 +390,15 @@ final class CallMediaSession {
     for (final gone in _peers.keys.toSet().difference(expected)) {
       await _closePeer(gone);
     }
+    if (_mcu) {
+      await _ensurePublisher(localPeerId.value, iceServers);
+    }
     for (final peerId in expected) {
       if (_peers.containsKey(peerId)) {
+        continue;
+      }
+      if (_mcu) {
+        await _subscribe(peerId);
         continue;
       }
       await _openPeer(
@@ -393,6 +418,106 @@ final class CallMediaSession {
       );
     }
     _publish();
+  }
+
+  /// The one connection that carries this side's media to the MCU. Offered
+  /// to this side's own session id; the server answers from the same id.
+  Future<void> _ensurePublisher(
+    String localPeerId,
+    List<CallIceServer> iceServers,
+  ) async {
+    if (_publisher != null || _audio == null) {
+      return;
+    }
+    final publisher = _MediaPeer(localPeerId, publisher: true);
+    _publisher = publisher;
+    try {
+      final connection = await _engine.createPeerConnection(
+        iceServers: iceServers,
+        audio: _audio,
+        sendOnly: true,
+        onIceCandidate: (candidate) =>
+            unawaited(_enqueue(() => _sendCandidate(publisher, candidate))),
+        onConnectionState: (state) => unawaited(
+          _enqueue(() async {
+            if (identical(_publisher, publisher)) {
+              publisher.state = state;
+              _publish();
+              if (state == CallMediaConnectionState.failed) {
+                await _offer(publisher, iceRestart: true);
+              }
+            }
+          }),
+        ),
+        onRemoteVideo: (video) => unawaited(video?.dispose()),
+      );
+      if (_disposed || !identical(_publisher, publisher)) {
+        await connection.close();
+        return;
+      }
+      publisher.connection = connection;
+      final video = _video;
+      if (video != null) {
+        try {
+          await connection.setLocalVideo(video);
+        } on CallMediaException {
+          // Audio still publishes.
+        }
+      }
+    } on CallMediaException {
+      _publisher = null;
+      return;
+    }
+    debugPrint('[call] publisher → $localPeerId sid=${publisher.sid}');
+    await _offer(publisher);
+  }
+
+  /// Asks the MCU for the participant's stream. The server answers with an
+  /// offer FROM that participant's session id, which the ordinary offer path
+  /// then takes; until it does, the request is repeated every ten seconds,
+  /// the way the web client does, because a participant who has not
+  /// published yet is simply not there to be offered.
+  Future<void> _subscribe(String peerId) async {
+    if (_peers.containsKey(peerId)) {
+      return;
+    }
+    _peers[peerId] = _MediaPeer(peerId);
+    await _requestOffer(peerId);
+    _offerRequests[peerId]?.cancel();
+    _offerRequests[peerId] = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(
+        _enqueue(() async {
+          final peer = _peers[peerId];
+          if (_disposed || peer == null || peer.connection != null) {
+            _offerRequests.remove(peerId)?.cancel();
+            return;
+          }
+          await _requestOffer(peerId);
+        }),
+      );
+    });
+  }
+
+  Future<void> _requestOffer(String peerId) async {
+    final send = _sendControl;
+    if (send == null) {
+      return;
+    }
+    debugPrint('[call] requestoffer → $peerId');
+    try {
+      await send(
+        HpbControlMessage(
+          recipient: SignalingPeerId.parse(peerId),
+          sender: null,
+          data: SignalingOpaquePayload.fromJson(<String, Object?>{
+            'type': 'requestoffer',
+            'roomType': _roomType,
+          }),
+        ),
+      );
+    } on TalkProtocolException {
+      // Nothing to subscribe to under that id.
+    }
   }
 
   Future<void> _openPeer({
@@ -479,7 +604,11 @@ final class CallMediaSession {
       if (!enabled) {
         _video = null;
       }
-      for (final peer in _peers.values.toList(growable: false)) {
+      final publisher = _publisher;
+      for (final peer in <_MediaPeer>[
+        ?publisher,
+        if (!_mcu) ..._peers.values,
+      ]) {
         final connection = peer.connection;
         if (connection == null) {
           continue;
@@ -526,7 +655,9 @@ final class CallMediaSession {
     try {
       final connection = await _engine.createPeerConnection(
         iceServers: iceServers,
-        audio: audio,
+        // Through an MCU this side's microphone travels on the publisher
+        // only; a participant's connection just listens.
+        audio: _mcu ? null : audio,
         onIceCandidate: (candidate) => unawaited(
           _enqueue(() => _sendLocalCandidate(peer.peerId, candidate)),
         ),
@@ -554,7 +685,26 @@ final class CallMediaSession {
     required List<CallIceServer> iceServers,
   }) async {
     final sender = message.sender;
-    if (sender == null || sender.value == localPeerId) {
+    if (sender == null) {
+      return;
+    }
+    if (sender.value == localPeerId) {
+      // Only an MCU ever talks back from this side's own session id: the
+      // answer to the publisher's offer and the candidates for it.
+      final publisher = _publisher;
+      if (publisher == null ||
+          message.sid == null ||
+          message.sid != publisher.sid) {
+        return;
+      }
+      switch (message.type) {
+        case 'answer':
+          await _receiveAnswerOn(publisher, message.payload);
+        case 'candidate':
+          await _receiveCandidateFor(publisher, message.payload);
+        default:
+          return;
+      }
       return;
     }
     if (message.roomType == _screenRoomType) {
@@ -867,6 +1017,14 @@ final class CallMediaSession {
     // would leave both sides waiting.
     if (peer != null && peer.localOfferPending) {
       return;
+    }
+    if (peer != null && peer.connection == null) {
+      // A subscriber the MCU is now offering: the connection is built for
+      // the offer, and the request timer has done its job.
+      _offerRequests.remove(senderId)?.cancel();
+      if (await _createConnection(peer, iceServers) == null) {
+        return;
+      }
     }
     if (peer == null) {
       // The server relays a peer message only from a current participant, so a
@@ -1194,9 +1352,13 @@ final class CallMediaSession {
     for (final peerId in _peers.keys.toList(growable: false)) {
       await _closePeer(peerId);
     }
+    final publisher = _publisher;
+    _publisher = null;
+    await publisher?.connection?.close();
   }
 
   Future<void> _closePeer(String peerId) async {
+    _offerRequests.remove(peerId)?.cancel();
     await _closeScreen(peerId);
     final share = _shares.remove(peerId);
     await share?.connection?.close();
@@ -1421,7 +1583,11 @@ final class _MediaPeer {
     this.peerId, {
     this.roomType = CallMediaSession._roomType,
     this.ownScreen = false,
+    this.publisher = false,
   });
+
+  /// The connection that carries this side's media to an MCU.
+  final bool publisher;
 
   final String peerId;
 

@@ -17,22 +17,33 @@ void main() {
   late _FakeEngine engine;
   late StreamController<CallSignalingUpdate> updates;
   late List<SignalingPeerMessage> sent;
+  late List<HpbControlMessage> controls;
 
   setUp(() {
     engine = _FakeEngine();
     updates = StreamController<CallSignalingUpdate>.broadcast(sync: true);
     sent = <SignalingPeerMessage>[];
+    controls = <HpbControlMessage>[];
   });
 
   tearDown(() => updates.close());
 
-  CallMediaSession session(CallSignalingUpdate initial) => CallMediaSession(
+  CallMediaSession session(
+    CallSignalingUpdate initial, {
+    bool withControl = false,
+  }) => CallMediaSession(
     initial: initial,
     updates: updates.stream,
     sendMessage: (message) async {
       sent.add(message);
       return true;
     },
+    sendControl: withControl
+        ? (control) async {
+            controls.add(control);
+            return true;
+          }
+        : null,
     engine: engine,
   );
 
@@ -570,6 +581,103 @@ void main() {
       expect(media.state.audioRoute, isNull);
     },
   );
+
+  test(
+    'through an MCU this side publishes once and subscribes per participant',
+    () async {
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+
+      // One publisher: the microphone on a send-only connection, offered to
+      // this side's OWN session id, and no connection to the participant yet.
+      expect(engine.connections, hasLength(1));
+      final publisher = engine.connections.single;
+      expect(publisher.audio, isNotNull);
+      expect(publisher.sendOnly, isTrue);
+      final offer = sent.singleWhere((message) => message.type == 'offer');
+      expect(offer.recipient?.value, _local);
+      expect(offer.roomType, 'video');
+      final publisherSid = offer.sid;
+      expect(publisherSid, isNotNull);
+      // The participant is asked for through the server, not offered to.
+      expect(controls, hasLength(1));
+      expect(controls.single.recipient?.value, _remote);
+      expect(controls.single.data.wire, {
+        'type': 'requestoffer',
+        'roomType': 'video',
+      });
+      expect(media.state.participants.single.connected, isFalse);
+
+      // The server answers the publisher from this side's own session id.
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          topology: SignalingTopology.externalMcu,
+          messages: [
+            _message(_local, 'answer', <String, Object?>{
+              'type': 'answer',
+              'sdp': 'mcu-answer',
+            }, sid: publisherSid),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(publisher.remoteDescriptions.single.sdp, 'mcu-answer');
+
+      // The MCU offers the participant's stream from THEIR session id: a
+      // listening connection of its own, answered back to them.
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          topology: SignalingTopology.externalMcu,
+          messages: [
+            _message(_remote, 'offer', <String, Object?>{
+              'type': 'offer',
+              'sdp': 'remote-publisher',
+            }, sid: 'mcu-remote'),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(engine.connections, hasLength(2));
+      final subscriber = engine.connections.last;
+      expect(subscriber.audio, isNull);
+      expect(subscriber.remoteDescriptions.single.sdp, 'remote-publisher');
+      final answer = sent.lastWhere((message) => message.type == 'answer');
+      expect(answer.recipient?.value, _remote);
+      expect(answer.sid, 'mcu-remote');
+
+      subscriber.emitConnectionState(CallMediaConnectionState.connected);
+      await pumpEventQueue();
+      expect(media.state.participants.single.connected, isTrue);
+      expect(media.state.phase, CallMediaPhase.connected);
+    },
+  );
+
+  test('an MCU without a control channel is still refused', () async {
+    final media = session(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        topology: SignalingTopology.externalMcu,
+      ),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(media.state.phase, CallMediaPhase.failed);
+    expect(media.state.error, CallMediaError.topologyUnsupported);
+    expect(engine.microphoneOpens, 0);
+  });
 
   test('a shared screen is a second, receive-only connection', () async {
     final media = session(
@@ -1110,6 +1218,7 @@ final class _FakeEngine implements CallMediaEngine {
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
     CallLocalVideo? video,
+    bool sendOnly = false,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
@@ -1117,6 +1226,7 @@ final class _FakeEngine implements CallMediaEngine {
     final connection = _FakeConnection(
       audio: audio,
       video: video,
+      sendOnly: sendOnly,
       iceServers: iceServers,
       onIceCandidate: onIceCandidate,
       onConnectionState: onConnectionState,
@@ -1190,6 +1300,7 @@ final class _FakeConnection implements CallPeerConnection {
   _FakeConnection({
     required this.audio,
     required this.video,
+    this.sendOnly = false,
     required this.iceServers,
     required this.onIceCandidate,
     required this.onConnectionState,
@@ -1199,6 +1310,7 @@ final class _FakeConnection implements CallPeerConnection {
 
   final CallLocalAudio? audio;
   final CallLocalVideo? video;
+  final bool sendOnly;
   final List<CallIceServer> iceServers;
   final void Function(CallIceCandidate candidate) onIceCandidate;
   final void Function(CallMediaConnectionState state) onConnectionState;

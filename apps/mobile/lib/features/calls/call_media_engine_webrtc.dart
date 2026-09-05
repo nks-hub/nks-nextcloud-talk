@@ -96,11 +96,13 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
     CallLocalVideo? video,
+    bool sendOnly = false,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     final stream = (audio as _WebRtcLocalAudio?)?.stream;
+    final oneWay = sendOnly || video != null;
     final rtc.RTCPeerConnection connection;
     try {
       connection = await rtc.createPeerConnection(<String, dynamic>{
@@ -134,10 +136,14 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       // Hoisted: the flag outlives the block that builds the transceiver.
       local = video as _WebRtcLocalVideo?;
       if (local == null) {
+        // A publisher's video line starts empty and send-only: the camera
+        // fills it later, and nothing ever comes back on it.
         await connection.addTransceiver(
           kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
           init: rtc.RTCRtpTransceiverInit(
-            direction: rtc.TransceiverDirection.RecvOnly,
+            direction: sendOnly
+                ? rtc.TransceiverDirection.SendOnly
+                : rtc.TransceiverDirection.RecvOnly,
           ),
         );
       } else {
@@ -191,7 +197,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         onRemoteVideo(null);
       }
     };
-    return _WebRtcPeerConnection(connection, stream, sendOnly: local != null);
+    return _WebRtcPeerConnection(connection, stream, sendOnly: oneWay);
   }
 }
 
@@ -503,8 +509,12 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
     }
     await line.setDirection(
       video == null
-          ? rtc.TransceiverDirection.RecvOnly
-          : rtc.TransceiverDirection.SendRecv,
+          ? (_sendOnly
+                ? rtc.TransceiverDirection.Inactive
+                : rtc.TransceiverDirection.RecvOnly)
+          : (_sendOnly
+                ? rtc.TransceiverDirection.SendOnly
+                : rtc.TransceiverDirection.SendRecv),
     );
   }
 

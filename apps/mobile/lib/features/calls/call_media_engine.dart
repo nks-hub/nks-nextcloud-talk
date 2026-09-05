@@ -211,6 +211,11 @@ abstract interface class CallMediaEngine {
     /// A picture the connection sends from the start, on a send-only video
     /// line: a screen share, which never receives one back.
     CallLocalVideo? video,
+
+    /// Nothing comes back on this connection: an MCU publisher, which sends
+    /// the microphone (and the camera when it is on) to the media server and
+    /// receives every other participant on connections of their own.
+    bool sendOnly = false,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
 

@@ -151,6 +151,7 @@ final class _RecordingEngine implements CallMediaEngine {
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
     CallLocalVideo? video,
+    bool sendOnly = false,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,

@@ -787,6 +787,7 @@ final class HpbMessageServerFrame extends HpbServerFrame {
         recipient: parsed.recipient,
         sender: sender ?? parsed.sender,
         payload: parsed.payload,
+        broadcaster: parsed.broadcaster,
       ),
     );
   }

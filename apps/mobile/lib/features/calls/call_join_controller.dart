@@ -119,6 +119,7 @@ base class CallJoinController
       initial: signaling.current,
       updates: signaling.updates,
       sendMessage: signaling.sendPeerMessage,
+      sendControl: signaling.sendControl,
       engine: ref.read(callMediaEngineProvider),
       interruptions: ref.read(callAudioInterruptionsProvider),
     );
