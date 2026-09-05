@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.RemoteInput
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -11,6 +12,7 @@ import android.os.Looper
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
+import com.nkshub.nextcloudtalk.calls.CallPictureInPicture
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
@@ -36,6 +38,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var backgroundDrainChannel: MethodChannel? = null
     private var shortcutChannel: MethodChannel? = null
     private var callAudioFocusChannel: EventChannel? = null
+    private var callPictureInPicture: CallPictureInPicture? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
@@ -205,6 +208,29 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         audioFocus.setStreamHandler(CallAudioFocus(applicationContext))
         callAudioFocusChannel = audioFocus
+
+        callPictureInPicture?.detach()
+        val pictureInPicture = CallPictureInPicture(this)
+        pictureInPicture.attach(
+            MethodChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                CallPictureInPicture.CHANNEL_NAME,
+            ),
+        )
+        callPictureInPicture = pictureInPicture
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        callPictureInPicture?.onUserLeaveHint()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        callPictureInPicture?.onPictureInPictureModeChanged(isInPictureInPictureMode)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -368,6 +394,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         shortcutChannel = null
         callAudioFocusChannel?.setStreamHandler(null)
         callAudioFocusChannel = null
+        callPictureInPicture?.detach()
+        callPictureInPicture = null
         disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()

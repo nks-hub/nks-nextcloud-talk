@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +8,7 @@ import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_session.dart';
 import 'package:nextcloudtalk/features/calls/call_participants_sheet.dart';
+import 'package:nextcloudtalk/features/calls/call_picture_in_picture.dart';
 import 'package:nextcloudtalk/features/calls/call_screen.dart';
 import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 
@@ -31,6 +34,21 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
 
   @override
   Future<void> dispose() async {}
+}
+
+/// A platform whose window can be entered and left from the test.
+final class _FakePictureInPicture implements CallPictureInPicture {
+  final modes = StreamController<bool>.broadcast();
+  final armed = <bool>[];
+
+  @override
+  Future<bool> setAvailable(bool available) async {
+    armed.add(available);
+    return true;
+  }
+
+  @override
+  Stream<bool> get active => modes.stream;
 }
 
 CallJoinState _joined() => CallJoinState(
@@ -64,29 +82,36 @@ CallJoinState _joined() => CallJoinState(
   ),
 );
 
+Future<_FakePictureInPicture> _pumpCallScreen(WidgetTester tester) async {
+  // A phone-sized surface: on the default test window the third tile of
+  // the grid is below the fold and is not built at all.
+  tester.view.physicalSize = const Size(1080, 2340);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final pictureInPicture = _FakePictureInPicture();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        callJoinControllerProvider.overrideWith(
+          () => _FrozenJoinController(_joined()),
+        ),
+        callParticipantNamesProvider.overrideWith(
+          (ref, key) async => {'actor:users:alice': 'Alice Example'},
+        ),
+        callPictureInPictureProvider.overrideWithValue(pictureInPicture),
+      ],
+      child: localizedTestApp(home: const CallScreen(roomKey: _key)),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return pictureInPicture;
+}
+
 void main() {
   testWidgets('the call screen shows one tile per participant and the controls', (
     tester,
   ) async {
-    // A phone-sized surface: on the default test window the third tile of
-    // the grid is below the fold and is not built at all.
-    tester.view.physicalSize = const Size(1080, 2340);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          callJoinControllerProvider.overrideWith(
-            () => _FrozenJoinController(_joined()),
-          ),
-          callParticipantNamesProvider.overrideWith(
-            (ref, key) async => {'actor:users:alice': 'Alice Example'},
-          ),
-        ],
-        child: localizedTestApp(home: const CallScreen(roomKey: _key)),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await _pumpCallScreen(tester);
 
     expect(find.byKey(const Key('call-screen')), findsOneWidget);
     expect(find.byKey(const Key('call-tile-self')), findsOneWidget);
@@ -106,5 +131,29 @@ void main() {
     expect(find.byKey(const Key('call-screen-raise-hand')), findsOneWidget);
     expect(find.byKey(const Key('call-screen-react')), findsOneWidget);
     expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+  });
+
+  testWidgets('in the small window only the tiles are drawn', (tester) async {
+    final pictureInPicture = await _pumpCallScreen(tester);
+    // The screen arms the window while it shows.
+    expect(pictureInPicture.armed, [true]);
+
+    pictureInPicture.modes.add(true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen-pip')), findsOneWidget);
+    expect(find.byKey(const Key('call-tile-self')), findsOneWidget);
+    expect(find.byKey(const Key('call-tile-peer-a')), findsOneWidget);
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const Key('call-screen-mute')), findsNothing);
+    expect(find.byKey(const Key('call-screen-leave')), findsNothing);
+
+    pictureInPicture.modes.add(false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen')), findsOneWidget);
+    expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+
+    // Leaving the screen disarms it, so a conversation never shrinks.
+    await tester.pumpWidget(const SizedBox());
+    expect(pictureInPicture.armed, [true, false]);
   });
 }

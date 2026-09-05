@@ -9,6 +9,7 @@ import 'call_controls.dart';
 import 'call_join_controller.dart';
 import 'call_media_session.dart';
 import 'call_participants_sheet.dart';
+import 'call_picture_in_picture.dart';
 import 'call_transport_service.dart';
 
 /// Opens the full-screen view of a joined call.
@@ -25,13 +26,45 @@ Future<void> showCallScreen(BuildContext context, CallRoomKey key) {
 /// their initial otherwise), this side's preview among them, the controls
 /// underneath. It shows the same state the banner does and leaves when the
 /// call does — the banner remains the place a call is joined from.
-final class CallScreen extends ConsumerWidget {
+///
+/// While it is showing, leaving the app shrinks the call into a small window
+/// (where the platform has one); in that window only the tiles are drawn.
+final class CallScreen extends ConsumerStatefulWidget {
   const CallScreen({super.key, required this.roomKey});
 
   final CallRoomKey roomKey;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CallScreen> createState() => _CallScreenState();
+}
+
+final class _CallScreenState extends ConsumerState<CallScreen> {
+  CallRoomKey get roomKey => widget.roomKey;
+  late final CallPictureInPicture _pictureInPicture;
+  StreamSubscription<bool>? _pictureInPictureModes;
+  bool _inPictureInPicture = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pictureInPicture = ref.read(callPictureInPictureProvider);
+    _pictureInPictureModes = _pictureInPicture.active.listen((active) {
+      if (mounted && active != _inPictureInPicture) {
+        setState(() => _inPictureInPicture = active);
+      }
+    });
+    unawaited(_pictureInPicture.setAvailable(true));
+  }
+
+  @override
+  void dispose() {
+    unawaited(_pictureInPictureModes?.cancel());
+    unawaited(_pictureInPicture.setAvailable(false));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final join = ref.watch(callJoinControllerProvider(roomKey));
     final names =
@@ -52,6 +85,38 @@ final class CallScreen extends ConsumerWidget {
         _PeerTile(peer: peer, names: names, strings: strings),
     ];
     final columns = tiles.length <= 1 ? 1 : 2;
+    final gap = _inPictureInPicture ? 2.0 : 8.0;
+    if (_inPictureInPicture) {
+      // The window is small: the tiles share it exactly, whatever its shape.
+      final rows = (tiles.length + columns - 1) ~/ columns;
+      return Scaffold(
+        key: const Key('call-screen-pip'),
+        backgroundColor: Colors.black,
+        body: LayoutBuilder(
+          builder: (context, constraints) => GridView.count(
+            key: const Key('call-grid'),
+            padding: EdgeInsets.all(gap),
+            crossAxisCount: columns,
+            mainAxisSpacing: gap,
+            crossAxisSpacing: gap,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio:
+                ((constraints.maxWidth - gap * (columns + 1)) / columns) /
+                ((constraints.maxHeight - gap * (rows + 1)) / rows),
+            children: tiles,
+          ),
+        ),
+      );
+    }
+    final grid = GridView.count(
+      key: const Key('call-grid'),
+      padding: EdgeInsets.all(gap),
+      crossAxisCount: columns,
+      mainAxisSpacing: gap,
+      crossAxisSpacing: gap,
+      childAspectRatio: 3 / 4,
+      children: tiles,
+    );
     return Scaffold(
       key: const Key('call-screen'),
       backgroundColor: Colors.black,
@@ -63,17 +128,7 @@ final class CallScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: GridView.count(
-                key: const Key('call-grid'),
-                padding: const EdgeInsets.all(8),
-                crossAxisCount: columns,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: columns == 1 ? 3 / 4 : 3 / 4,
-                children: tiles,
-              ),
-            ),
+            Expanded(child: grid),
             if (media.reaction != null)
               Padding(
                 key: const Key('call-screen-reaction'),

@@ -101,9 +101,19 @@ final callAudioInterruptionsProvider = Provider<CallAudioInterruptions>((ref) {
   return const PlatformCallAudioInterruptions();
 });
 
+/// The small window a call shrinks into when the user leaves the app. Armed
+/// only while the call screen is showing.
+final callPictureInPictureProvider = Provider<CallPictureInPicture>((ref) {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return PlatformCallPictureInPicture();
+  }
+  return const UnavailableCallPictureInPicture();
+});
+
 /// Joining and leaving one room's call with audio.
-final callJoinControllerProvider = AutoDisposeNotifierProviderFamily<
-  CallJoinController,
-  CallJoinState,
-  CallRoomKey
->(CallJoinController.new);
+final callJoinControllerProvider =
+    AutoDisposeNotifierProviderFamily<
+      CallJoinController,
+      CallJoinState,
+      CallRoomKey
+    >(CallJoinController.new);

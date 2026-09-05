@@ -17,6 +17,7 @@ void main() {
       );
       _expectBackupDisabled(sourceManifest);
       _expectPredictiveBackEnabled(sourceManifest);
+      _expectCallPictureInPicture(sourceManifest);
 
       final wrapper = File(
         '${android.path}${Platform.pathSeparator}'
@@ -49,6 +50,7 @@ void main() {
       );
       _expectBackupDisabled(mergedManifest);
       _expectPredictiveBackEnabled(mergedManifest);
+      _expectCallPictureInPicture(mergedManifest);
     },
     // Ten, not two: this is the only test that runs Gradle, and on a fresh CI
     // machine that first invocation downloads the wrapper, AGP and Kotlin
@@ -82,4 +84,26 @@ void _expectBackupDisabled(File manifest) {
     contains('android:allowBackup="false"'),
     reason: '${manifest.path} must disable backup explicitly',
   );
+}
+
+/// The launcher activity must allow the small window a call shrinks into,
+/// and it must survive the size change without being recreated — otherwise
+/// the Flutter engine, and with it the call, restarts on the way in.
+void _expectCallPictureInPicture(File manifest) {
+  final activity = RegExp(
+    r'<activity\s[^>]*AndroidWebPushActivity[^>]*>',
+  ).firstMatch(manifest.readAsStringSync())?.group(0);
+  expect(activity, isNotNull, reason: 'Launcher activity is missing');
+  expect(
+    activity,
+    contains('android:supportsPictureInPicture="true"'),
+    reason: '${manifest.path} must allow picture-in-picture for calls',
+  );
+  for (final change in ['screenSize', 'smallestScreenSize', 'screenLayout']) {
+    expect(
+      activity,
+      contains(change),
+      reason: '${manifest.path} must handle $change without a restart',
+    );
+  }
 }

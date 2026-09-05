@@ -30,6 +30,10 @@ from the commit log. Nothing here has reached testers yet.
   longer name the owner's machines, addresses, accounts or test servers; roles
   and `example.invalid` hosts stand in for them ahead of the repository going
   public. No code path changed.
+- Fixed: leaving the app during a call (the home gesture, a switch to another
+  app) no longer ends the call. The room session that carries the call used to
+  be released together with the conversation's presence the moment the window
+  lost focus.
 - Fixed: a call no longer dies, and later calls no longer refuse to negotiate,
   after one signalling batch whose delivery was unknown. The signalling now
   opens a new room epoch instead of raising a flag nothing cleared, the peer
@@ -45,6 +49,10 @@ from the commit log. Nothing here has reached testers yet.
   participant with their video or initial, their name, whether they are muted
   or have a hand up, and your own preview among them; the same controls as the
   banner plus a Leave button. It closes on its own when the call ends.
+- New: on Android, leaving the app while the call view is open keeps the call
+  on screen as a small picture-in-picture window with just the participants'
+  tiles; coming back restores the full view. Only the call view does this, a
+  conversation never shrinks.
 - New: a participant who mutes their microphone is shown muted in the call
   view and the participant list (the web client's mute/unmute messages).
 - New: turn your camera on in a call from the banner. Your picture goes to

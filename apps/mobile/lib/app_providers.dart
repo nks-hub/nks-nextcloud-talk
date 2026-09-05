@@ -27,6 +27,7 @@ import 'data/credential_vault.dart';
 import 'data/conversation_avatar_repository.dart';
 import 'data/thread_repository.dart';
 import 'features/calls/call_audio_interruptions.dart';
+import 'features/calls/call_picture_in_picture.dart';
 import 'features/calls/call_join_controller.dart';
 import 'features/calls/call_lifecycle_controller.dart';
 import 'features/calls/call_lifecycle_service.dart';
