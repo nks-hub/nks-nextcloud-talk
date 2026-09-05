@@ -406,7 +406,8 @@ final class CallMediaSession {
         localPeerId: localPeerId.value,
         iceServers: iceServers,
       );
-      // Someone who joins while the screen is up gets it too.
+      // Someone who joins while the screen is up gets it too. Through an MCU
+      // the one publisher already reaches them, so there is nothing to open.
       await _openShare(peerId);
     }
 
@@ -824,14 +825,25 @@ final class CallMediaSession {
         return;
       }
       _screen = screen;
-      for (final peerId in _peers.keys.toList(growable: false)) {
-        await _openShare(peerId);
+      if (_mcu) {
+        final localPeerId = _localPeerId;
+        if (localPeerId != null) {
+          await _openShare(localPeerId);
+        }
+      } else {
+        for (final peerId in _peers.keys.toList(growable: false)) {
+          await _openShare(peerId);
+        }
       }
       _publish();
     });
   }
 
-  /// One outgoing screen connection to one participant, offered right away.
+  /// One outgoing screen connection.
+  ///
+  /// Through an MCU there is exactly one, offered to this side's own session
+  /// id the way the publisher is — the media server fans it out. In the mesh
+  /// there is one per participant. [peerId] is the recipient either way.
   Future<void> _openShare(String peerId) async {
     final screen = _screen;
     if (screen == null || _shares.containsKey(peerId)) {

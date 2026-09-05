@@ -668,6 +668,35 @@ void main() {
     },
   );
 
+  test(
+    'through an MCU the screen is published once, not per participant',
+    () async {
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote), _participant('carol-session')],
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final before = engine.connections.length;
+
+      await media.setScreenSharing(true);
+      await pumpEventQueue();
+      // One connection more, not one per participant, and it is offered to this
+      // side's own session id — the media server fans it out from there.
+      expect(engine.connections.length, before + 1);
+      final share = engine.connections.last;
+      expect(share.video, same(engine.screens.single));
+      final offer = sent.lastWhere((message) => message.type == 'offer');
+      expect(offer.roomType, 'screen');
+      expect(offer.recipient?.value, _local);
+      expect(offer.broadcaster, _local);
+    },
+  );
+
   test('an MCU without a control channel is still refused', () async {
     final media = session(
       _update(
