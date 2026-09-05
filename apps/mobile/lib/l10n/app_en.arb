@@ -650,6 +650,7 @@
   "callParticipantConnecting": "Connecting…",
   "callParticipantMuted": "Muted",
   "callParticipantHandRaised": "Hand raised",
+  "callParticipantNotResponding": "Not responding",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {

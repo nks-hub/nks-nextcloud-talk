@@ -1814,6 +1814,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callParticipantHandRaised => 'Hand raised';
 
   @override
+  String get callParticipantNotResponding => 'Not responding';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override

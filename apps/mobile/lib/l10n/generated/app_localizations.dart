@@ -3350,6 +3350,12 @@ abstract class AppLocalizations {
   /// **'Hand raised'**
   String get callParticipantHandRaised;
 
+  /// No description provided for @callParticipantNotResponding.
+  ///
+  /// In en, this message translates to:
+  /// **'Not responding'**
+  String get callParticipantNotResponding;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

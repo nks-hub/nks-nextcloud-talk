@@ -1814,6 +1814,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callParticipantHandRaised => 'Zvednutá ruka';
 
   @override
+  String get callParticipantNotResponding => 'Neodpovídá';
+
+  @override
   String get callBannerJoining => 'Připojuji k hovoru…';
 
   @override

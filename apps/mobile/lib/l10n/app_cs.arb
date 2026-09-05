@@ -628,6 +628,7 @@
   "callParticipantConnecting": "Připojování…",
   "callParticipantMuted": "Ztlumeno",
   "callParticipantHandRaised": "Zvednutá ruka",
+  "callParticipantNotResponding": "Neodpovídá",
   "callBannerJoining": "Připojuji k hovoru…",
   "callBannerTransportReady": "Signalizováno přes {transport}.",
   "callBannerAudioNegotiating": "Navazuji zvuk…",

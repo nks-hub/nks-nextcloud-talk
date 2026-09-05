@@ -84,6 +84,7 @@ final class CallPeerState {
     required this.actorId,
     required this.connected,
     required this.handRaised,
+    required this.since,
   });
 
   final String peerId;
@@ -91,6 +92,11 @@ final class CallPeerState {
   final String actorId;
   final bool connected;
   final bool handRaised;
+
+  /// When this side first saw the peer in the call. A peer still connecting
+  /// long after that is most likely a departed session the server has not
+  /// timed out yet (measured on 5 September 2026 after a browser re-joined).
+  final DateTime since;
 }
 
 /// A reaction another participant sent into the call.
@@ -793,6 +799,7 @@ final class CallMediaSession {
               actorId: _participantsByPeer[peer.peerId]?.actorId ?? '',
               connected: peer.state == CallMediaConnectionState.connected,
               handRaised: _raisedHands.contains(peer.peerId),
+              since: peer.openedAt,
             ),
         ],
       ),
@@ -827,6 +834,7 @@ final class _MediaPeer {
   _MediaPeer(this.peerId);
 
   final String peerId;
+  final DateTime openedAt = DateTime.now();
   CallPeerConnection? connection;
   bool localOfferPending = false;
   bool remoteDescriptionSet = false;

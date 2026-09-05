@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -91,7 +93,12 @@ final class CallParticipantsSheet extends ConsumerWidget {
   }
 }
 
-final class _PeerTile extends StatelessWidget {
+/// A peer still connecting after this long is shown as not responding: the
+/// usual cause is a session that left the call and has not timed out on the
+/// server yet, and "Connecting…" forever would be a lie.
+const _notRespondingAfter = Duration(seconds: 20);
+
+final class _PeerTile extends StatefulWidget {
   const _PeerTile({
     required this.peer,
     required this.names,
@@ -103,7 +110,39 @@ final class _PeerTile extends StatelessWidget {
   final AppLocalizations strings;
 
   @override
+  State<_PeerTile> createState() => _PeerTileState();
+}
+
+final class _PeerTileState extends State<_PeerTile> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only a connecting peer needs the clock; the tile is rebuilt anyway when
+    // the connection state changes.
+    if (!widget.peer.connected) {
+      _ticker = Timer.periodic(
+        const Duration(seconds: 5),
+        (_) => setState(() {}),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final peer = widget.peer;
+    final names = widget.names;
+    final strings = widget.strings;
+    final notResponding =
+        !peer.connected &&
+        DateTime.now().difference(peer.since) > _notRespondingAfter;
     final name =
         names['actor:${peer.actorType}:${peer.actorId}'] ??
         (peer.actorId.isEmpty ? peer.peerId : peer.actorId);
@@ -115,7 +154,9 @@ final class _PeerTile extends StatelessWidget {
       subtitle: Text(
         peer.connected
             ? strings.callParticipantConnected
-            : strings.callParticipantConnecting,
+            : (notResponding
+                  ? strings.callParticipantNotResponding
+                  : strings.callParticipantConnecting),
       ),
       trailing: peer.handRaised
           ? Icon(
