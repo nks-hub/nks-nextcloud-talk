@@ -693,7 +693,9 @@ void main() {
       final offer = sent.lastWhere((message) => message.type == 'offer');
       expect(offer.roomType, 'screen');
       expect(offer.recipient?.value, _local);
-      expect(offer.broadcaster, _local);
+      // Through an MCU the server adds the broadcaster on the way out; a
+      // client that puts it on its own publish got no answer at all.
+      expect(offer.broadcaster, isNull);
     },
   );
 

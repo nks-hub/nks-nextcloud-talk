@@ -1333,8 +1333,13 @@ final class CallMediaSession {
         roomType: target?.roomType ?? _roomType,
         sid: target?.sid,
         // Every message of an outgoing share says whose screen it is; the
-        // web reads it on the offer and ignores it elsewhere.
-        broadcaster: target != null && target.ownScreen ? _localPeerId : null,
+        // web client reads it on the offer to tell a remote screen from a
+        // request to share its own. Through an MCU the server is the one
+        // that adds it on the way out, and it is not part of what a client
+        // publishes, so it is left off there.
+        broadcaster: target != null && target.ownScreen && !_mcu
+            ? _localPeerId
+            : null,
         recipient: SignalingPeerId.parse(peerId),
         sender: null,
         payload: payload == null
