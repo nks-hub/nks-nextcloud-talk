@@ -71,3 +71,11 @@ service-account*.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Signing material and login files that must never enter the tree.
+*.netrc
+.netrc
+*.provisionprofile
+*.cer
+*.csr
+*.pfx
