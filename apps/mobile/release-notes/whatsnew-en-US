@@ -1,0 +1,8 @@
+Calls now carry audio. Join from the call banner and the app opens your
+microphone and connects you to the other participants. A server running an
+MCU is reported as unsupported instead of failing quietly, and it is
+recognised before the microphone is requested. Video and the call controls
+are not in this build yet.
+
+Also fixed: the banner could never offer "Join call"; a refused microphone
+was reported as unavailable; and three macOS notification faults.

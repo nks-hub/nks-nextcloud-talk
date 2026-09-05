@@ -18,13 +18,26 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## 0.1.0 (60) — 4 September 2026
+## 0.1.0 (60) — 5 September 2026
 
 The first release built and shipped entirely by CI: GitHub Actions builds
 Android, Linux and the Windows installer, Codemagic builds the Apple targets,
 the artifacts and their checksums are attached to this release, and the tag
 publishes the signed bundle to the Play alpha track and the IPA to TestFlight.
 
+- New: calls carry audio. The app negotiates a peer-to-peer call over the
+  signalling session it already holds, and the join button in the call banner
+  joins the call and opens the microphone. A server that runs an MCU is
+  reported as unsupported instead of being offered a connection nobody would
+  answer, and it is recognised before the microphone is ever asked for, so a
+  call this build cannot join raises no permission prompt. Video, the call
+  grid, the controls and reactions are not in this build.
+- Fixed: the call banner could never offer "Join call". Opening the
+  conversation and the banner asking for the call transport raced each other,
+  and the banner's own answer was thrown away as cancelled; the banner then
+  reported that the transport could not be resolved.
+- Fixed: a microphone the user had refused was reported as unavailable rather
+  than as refused, so the message named the wrong cause.
 - Fixed: on macOS a tap on a push notification could stop opening the
   conversation. Tearing down the Windows notification service detached the
   handler from the shared channel that belongs to the push coordinator on
@@ -34,6 +47,10 @@ publishes the signed bundle to the Play alpha track and the IPA to TestFlight.
   does not handle it.
 - Fixed: a live push registration started inside the test environment on
   macOS, where it had no business running.
+
+Not visible in the app, but part of this build: every document in the
+repository is now in English, and the four crash reports that build 47 raised
+have been confirmed fixed and closed rather than left open as known noise.
 
 ## 0.1.0 (59) — 4 September 2026
 

@@ -1,0 +1,7 @@
+Hovory už přenášejí zvuk. Připojte se z proužku hovoru a aplikace otevře
+mikrofon a spojí vás s ostatními. Server s MCU se ohlásí jako nepodporovaný
+místo aby tiše selhal, a pozná se dřív, než si aplikace řekne o mikrofon.
+Video a ovládání hovoru zatím nejsou.
+
+Dále opraveno: proužek nikdy nenabídl „Připojit se"; odepřený mikrofon se
+hlásil jako nedostupný; a tři chyby notifikací na macOS.

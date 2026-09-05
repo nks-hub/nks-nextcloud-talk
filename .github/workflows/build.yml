@@ -464,10 +464,13 @@ jobs:
               raise SystemExit(f"version code {want} is already on Play: {sorted(taken)}")
           print(f"version code {want} is free; Play has {sorted(taken)}")
           PY
-      # Committed notes win when they exist - the six locales earlier releases
-      # shipped were written by hand. Otherwise the changelog's top section
-      # goes out as Czech only; inventing translations here would be worse than
-      # shipping one honest locale.
+      # Committed notes win when they exist - the ones earlier releases shipped
+      # were written by hand, and `apps/mobile/release-notes` holds them again.
+      # The fallback below is now a last resort and no longer honest on its own:
+      # it labels the changelog's top section `cs-CZ`, and since every document
+      # in this repository was translated the changelog is English. It also cuts
+      # at 500 BYTES, which can split a multi-byte character in half. Keep the
+      # committed files under the cap and the fallback never runs.
       - name: Collect the release notes
         run: |
           mkdir -p whatsnew
