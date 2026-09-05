@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_session.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
@@ -252,6 +253,44 @@ void main() {
     expect(engine.connections.single.closed, isTrue);
     expect(media.state.error, CallMediaError.signalingLost);
   });
+
+  // Measured on 5 September 2026: with a connected call, an incoming telephone
+  // call made Android report AUDIOFOCUS_LOSS_TRANSIENT and the WebRTC audio
+  // carried on — the microphone kept capturing while the phone rang and the
+  // other participants kept hearing the room. The call now hands the
+  // microphone back for the length of the interruption and takes it again
+  // afterwards, without closing the track: closing it would force a
+  // renegotiation with every peer for something that lasts seconds.
+  test('an interruption mutes the microphone and giving it back unmutes', () async {
+    final interruptions = StreamController<CallAudioInterruption>.broadcast();
+    addTearDown(interruptions.close);
+    final media = CallMediaSession(
+      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
+      updates: updates.stream,
+      sendMessage: (message) async {
+        sent.add(message);
+        return true;
+      },
+      engine: engine,
+      interruptions: _FakeInterruptions(interruptions.stream),
+    );
+    addTearDown(media.dispose);
+
+    await media.start();
+    final audio = engine.audio.single;
+    expect(audio.muted, isFalse, reason: 'a call starts unmuted');
+
+    interruptions.add(CallAudioInterruption.began);
+    await pumpEventQueue();
+    expect(audio.muted, isTrue, reason: 'the system took the audio away');
+    expect(audio.disposed, isFalse, reason: 'the track has to survive it');
+
+    interruptions.add(CallAudioInterruption.ended);
+    await pumpEventQueue();
+    expect(audio.muted, isFalse, reason: 'the audio belongs to the call again');
+    expect(audio.muteCalls, <bool>[true, false]);
+  });
+
 }
 
 CallSignalingUpdate _update({
@@ -316,6 +355,13 @@ SignalingPeerMessage _message(
   payload: SignalingOpaquePayload.fromJson(payload),
 );
 
+final class _FakeInterruptions implements CallAudioInterruptions {
+  _FakeInterruptions(this.events);
+
+  @override
+  final Stream<CallAudioInterruption> events;
+}
+
 final class _FakeEngine implements CallMediaEngine {
   int microphoneOpens = 0;
   CallMediaError? microphoneError;
@@ -354,6 +400,14 @@ final class _FakeEngine implements CallMediaEngine {
 
 final class _FakeAudio implements CallLocalAudio {
   bool disposed = false;
+  bool muted = false;
+  final List<bool> muteCalls = <bool>[];
+
+  @override
+  Future<void> setMuted(bool value) async {
+    muted = value;
+    muteCalls.add(value);
+  }
 
   @override
   Future<void> dispose() async => disposed = true;

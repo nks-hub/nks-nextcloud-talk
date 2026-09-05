@@ -94,6 +94,13 @@ final callMediaEngineProvider = Provider<CallMediaEngine>((ref) {
   return const WebRtcCallMediaEngine();
 });
 
+/// Where a call hears that the system took its audio — an incoming telephone
+/// call, an alarm. Without this the microphone keeps capturing through the
+/// interruption, which the other participants hear.
+final callAudioInterruptionsProvider = Provider<CallAudioInterruptions>((ref) {
+  return const PlatformCallAudioInterruptions();
+});
+
 /// Joining and leaving one room's call with audio.
 final callJoinControllerProvider = AutoDisposeNotifierProviderFamily<
   CallJoinController,

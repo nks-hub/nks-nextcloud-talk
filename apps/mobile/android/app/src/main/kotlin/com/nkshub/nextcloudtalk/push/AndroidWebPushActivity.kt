@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
+import com.nkshub.nextcloudtalk.calls.CallAudioFocus
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
@@ -18,6 +19,7 @@ import com.nkshub.nextcloudtalk.share.AndroidShareInbox
 import com.nkshub.nextcloudtalk.shortcuts.ConversationShortcuts
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
@@ -33,6 +35,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var contactPickerChannel: ContactPickerChannel? = null
     private var backgroundDrainChannel: MethodChannel? = null
     private var shortcutChannel: MethodChannel? = null
+    private var callAudioFocusChannel: EventChannel? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
@@ -193,6 +196,15 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         shortcuts.setMethodCallHandler(ConversationShortcuts(applicationContext))
         shortcutChannel = shortcuts
+
+        // Only streams while a call is listening; the handler takes audio focus
+        // on subscribe and gives it back on cancel.
+        val audioFocus = EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            CallAudioFocus.CHANNEL_NAME,
+        )
+        audioFocus.setStreamHandler(CallAudioFocus(applicationContext))
+        callAudioFocusChannel = audioFocus
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -354,6 +366,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         backgroundDrainChannel = null
         shortcutChannel?.setMethodCallHandler(null)
         shortcutChannel = null
+        callAudioFocusChannel?.setStreamHandler(null)
+        callAudioFocusChannel = null
         disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()

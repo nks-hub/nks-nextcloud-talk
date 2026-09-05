@@ -116,6 +116,7 @@ final class CallJoinController
       updates: signaling.updates,
       sendMessage: signaling.sendPeerMessage,
       engine: ref.read(callMediaEngineProvider),
+      interruptions: ref.read(callAudioInterruptionsProvider),
     );
     _session = session;
     _mediaStates = session.states.listen((media) {

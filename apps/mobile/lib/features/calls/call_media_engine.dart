@@ -77,6 +77,11 @@ final class CallMediaException implements Exception {
 
 /// The local microphone capture. Held for the whole call and closed once.
 abstract interface class CallLocalAudio {
+  /// Stops or resumes capture without tearing the track down, so a call can
+  /// give the microphone back to the system for the length of an interruption
+  /// and pick it up again afterwards without renegotiating.
+  Future<void> setMuted(bool muted);
+
   Future<void> dispose();
 }
 

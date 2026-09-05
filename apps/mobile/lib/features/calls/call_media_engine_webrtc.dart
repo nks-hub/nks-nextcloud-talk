@@ -121,6 +121,19 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
   bool _disposed = false;
 
   @override
+  Future<void> setMuted(bool muted) async {
+    if (_disposed) {
+      return;
+    }
+    // `enabled` rather than `stop`: a stopped track cannot be restarted and the
+    // peer connection would have to renegotiate. Disabled, it stays in the
+    // sender and transmits silence.
+    for (final track in stream.getAudioTracks()) {
+      track.enabled = !muted;
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) {
       return;

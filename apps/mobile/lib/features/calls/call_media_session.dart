@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'call_audio_interruptions.dart';
 import 'call_media_engine.dart';
 import 'call_signaling_session.dart';
 
@@ -60,10 +61,12 @@ final class CallMediaSession {
     required Stream<CallSignalingUpdate> updates,
     required Future<bool> Function(SignalingPeerMessage message) sendMessage,
     required CallMediaEngine engine,
+    CallAudioInterruptions interruptions = const SilentCallAudioInterruptions(),
   }) : _initial = initial,
        _updates = updates,
        _sendMessage = sendMessage,
-       _engine = engine;
+       _engine = engine,
+       _interruptions = interruptions;
 
   /// Talk labels an audio/video peer connection `video` and a screen share
   /// `screen`; an audio-only call is still the `video` kind.
@@ -73,11 +76,13 @@ final class CallMediaSession {
   final Stream<CallSignalingUpdate> _updates;
   final Future<bool> Function(SignalingPeerMessage message) _sendMessage;
   final CallMediaEngine _engine;
+  final CallAudioInterruptions _interruptions;
   final Map<String, _MediaPeer> _peers = {};
   final StreamController<CallMediaState> _states =
       StreamController<CallMediaState>.broadcast(sync: true);
 
   StreamSubscription<CallSignalingUpdate>? _subscription;
+  StreamSubscription<CallAudioInterruption>? _interruptionEvents;
   CallLocalAudio? _audio;
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
@@ -110,6 +115,9 @@ final class CallMediaSession {
         return;
       }
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
+      // Armed before the microphone so an interruption that lands during the
+      // permission prompt is not missed.
+      _interruptionEvents = _interruptions.events.listen(_onInterruption);
       try {
         _audio = await _engine.openMicrophone();
       } on CallMediaException catch (error) {
@@ -466,6 +474,19 @@ final class CallMediaSession {
     );
   }
 
+  /// Hands the microphone back for the length of a system interruption.
+  ///
+  /// Muting rather than closing: a closed track cannot be reopened without
+  /// renegotiating with every peer, and an interruption is over in seconds.
+  /// The call stays up throughout, which is what the other participants see.
+  Future<void> _onInterruption(CallAudioInterruption event) async {
+    final audio = _audio;
+    if (_disposed || audio == null) {
+      return;
+    }
+    await audio.setMuted(event == CallAudioInterruption.began);
+  }
+
   void _recordConnectionState(String peerId, CallMediaConnectionState state) {
     final peer = _peers[peerId];
     if (peer == null) {
@@ -505,6 +526,9 @@ final class CallMediaSession {
   }
 
   Future<void> _stopMedia() async {
+    final interruptions = _interruptionEvents;
+    _interruptionEvents = null;
+    await interruptions?.cancel();
     await _closeAllPeers();
     final audio = _audio;
     _audio = null;

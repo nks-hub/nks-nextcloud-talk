@@ -18,6 +18,29 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased — the next build after 60
+
+Collected as the work lands so the next release notes are not reconstructed
+from the commit log. Nothing here has reached testers yet.
+
+- New: a telephone call now mutes the Talk call's microphone for as long as
+  it lasts. Before, an incoming phone call left the microphone capturing and
+  the other participants kept hearing the room. Android only for now; the
+  Apple side is not implemented yet.
+- Fixed: two people could not connect a call at all. Opening a conversation
+  activated and dropped its room session twice inside a second, the first
+  signalling pull was answered 409, and the signalling lane stopped for good
+  — so the call joined, opened the microphone and then waited forever. The
+  room session is now shared between its readers instead of replaced, and a
+  short grace bridges the gap between them.
+- Fixed: once a call had failed to negotiate, every later call on the same
+  account refused to negotiate too. A "renegotiation required" flag survived a
+  fresh room session and was never cleared; a new room epoch now clears it.
+- Fixed: a call whose audio failed left the user as a participant of a call
+  they could not hear or leave, for as long as an hour, and only a moderator
+  could get them out. The seat is now given back the moment the audio fails;
+  the reason stays on screen.
+
 ## 0.1.0 (60) — 5 September 2026
 
 The first release built and shipped entirely by CI: GitHub Actions builds
