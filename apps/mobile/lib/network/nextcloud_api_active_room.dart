@@ -12,13 +12,16 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
     return _serializeAccountSession(parsed, () async {
       final lease = _activeRoomSessions[parsed];
       if (lease != null) {
-        await _deactivateRoomSessionOwned(
+        // A shutdown is not a holder letting go of its share; it ends the
+        // session for everyone, so the count is dropped before the release.
+        _activeRoomSessionHolders.remove(parsed);
+        await _releaseRoomSession(
           lease: lease,
           loginName: loginName,
           appPassword: appPassword,
         );
       }
-      _activeRoomSessions.remove(parsed);
+      _forgetRoomSession(parsed);
       _accountCookies.clear(parsed);
     });
   }
@@ -33,8 +36,20 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
       throw const NextcloudApiException(NextcloudApiError.cancelled);
     }
     final previous = _activeRoomSessions[activeRequest.accountId];
+    final held = _activeRoomSessionRooms[activeRequest.accountId];
+    if (previous != null &&
+        held != null &&
+        previous.roomToken.value == activeRequest.roomToken.value &&
+        previous.server.uri == activeRequest.server.uri) {
+      // Already holding exactly what was asked for. Join it instead of
+      // replacing it: the replacement would invalidate the session id every
+      // current holder is already using.
+      _activeRoomSessionHolders[activeRequest.accountId] =
+          (_activeRoomSessionHolders[activeRequest.accountId] ?? 1) + 1;
+      return ActiveRoomSessionActivation(response: held, lease: previous);
+    }
     if (previous != null) {
-      await _deactivateRoomSessionOwned(
+      await _releaseRoomSession(
         lease: previous,
         loginName: loginName,
         appPassword: appPassword,
@@ -60,7 +75,7 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
         body: payload.body,
       );
       if (_roomSessionBlocked(activeRequest.accountId)) {
-        await _deactivateRoomSessionOwned(
+        await _releaseRoomSession(
           lease: lease,
           loginName: loginName,
           appPassword: appPassword,
@@ -68,15 +83,19 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
         throw const NextcloudApiException(NextcloudApiError.cancelled);
       }
       if (response is ActiveRoomSessionSuccess) {
+        if (_ownsRoomSession(lease)) {
+          _activeRoomSessionRooms[lease.accountId] = response;
+          _activeRoomSessionHolders[lease.accountId] = 1;
+        }
         return ActiveRoomSessionActivation(response: response, lease: lease);
       }
       if (_ownsRoomSession(lease)) {
-        _activeRoomSessions.remove(lease.accountId);
+        _forgetRoomSession(lease.accountId);
         _accountCookies.clear(lease.accountId);
       }
       return ActiveRoomSessionActivation(response: response);
     } on Object {
-      await _deactivateRoomSessionOwned(
+      await _releaseRoomSession(
         lease: lease,
         loginName: loginName,
         appPassword: appPassword,
@@ -97,7 +116,33 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
     );
   });
 
+  /// One holder letting go. The session outlives every release but the last.
   Future<void> _deactivateRoomSessionOwned({
+    required ActiveRoomSessionLease lease,
+    required String loginName,
+    required String appPassword,
+  }) async {
+    if (!_ownsRoomSession(lease)) return;
+    final holders = _activeRoomSessionHolders[lease.accountId] ?? 1;
+    if (holders > 1) {
+      _activeRoomSessionHolders[lease.accountId] = holders - 1;
+      return;
+    }
+    await _releaseRoomSession(
+      lease: lease,
+      loginName: loginName,
+      appPassword: appPassword,
+    );
+  }
+
+  void _forgetRoomSession(AccountId accountId) {
+    _activeRoomSessions.remove(accountId);
+    _activeRoomSessionRooms.remove(accountId);
+    _activeRoomSessionHolders.remove(accountId);
+  }
+
+  /// Ends the session outright, whoever else still holds it.
+  Future<void> _releaseRoomSession({
     required ActiveRoomSessionLease lease,
     required String loginName,
     required String appPassword,
@@ -125,7 +170,7 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
       );
     } finally {
       if (_ownsRoomSession(lease)) {
-        _activeRoomSessions.remove(lease.accountId);
+        _forgetRoomSession(lease.accountId);
         _accountCookies.clear(lease.accountId);
       }
     }

@@ -98,6 +98,18 @@ abstract class _HttpNextcloudApiBase {
   final Map<AccountId, Future<void>> _accountSessionTails = {};
   final Map<AccountId, int> _accountSessionGenerations = {};
   final Map<AccountId, ActiveRoomSessionLease> _activeRoomSessions = {};
+
+  /// The room the live lease was activated for, and how many holders share it.
+  ///
+  /// Activating is exclusive — a second activation deactivates whatever the
+  /// account held — so re-activating the SAME room is pure churn, and churn is
+  /// what broke calls: a rebuild of the provider that owns the lease sent
+  /// DELETE, POST, DELETE inside one second, the signalling pull that followed
+  /// was answered 409, and 409 terminates the lane for good. A session belongs
+  /// to the room, not to whichever holder happens to ask first, so holders are
+  /// counted and only the last one releases it.
+  final Map<AccountId, ActiveRoomSessionSuccess> _activeRoomSessionRooms = {};
+  final Map<AccountId, int> _activeRoomSessionHolders = {};
   final Set<AccountId> _suspendedAccountSessions = {};
   bool _closed = false;
 
