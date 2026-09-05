@@ -320,7 +320,13 @@ workflows:
             exit 0
           fi
           cd apps/mobile/build/macos/Build/Products/Release
-          shasum -a 256 nks-talk-macos.zip
+          # Its own checksum file rather than a line in `SHA256SUMS`. That file
+          # is written by the GitHub Actions `release` job over the artifacts
+          # THAT job produced, and the two sides finish in an order neither can
+          # predict - appending to it from here would sometimes be overwritten
+          # by the other side's upload and the line would vanish without a word.
+          # A separate file for a separately built artefact cannot race.
+          shasum -a 256 nks-talk-macos.zip | tee nks-talk-macos.zip.sha256
           export GH_TOKEN=$GITHUB_RELEASE_TOKEN
           # WHICHEVER SIDE GETS HERE FIRST CREATES THE RELEASE. The GitHub
           # Actions `release` job waits for the Windows installer, which takes
@@ -334,8 +340,8 @@ workflows:
             gh release create "$CM_TAG" --repo nks-hub/nks-nextcloud-talk \
               --title "$CM_TAG" --notes "The other artifacts are still building."
           fi
-          gh release upload "$CM_TAG" nks-talk-macos.zip --clobber \
-            --repo nks-hub/nks-nextcloud-talk
+          gh release upload "$CM_TAG" nks-talk-macos.zip nks-talk-macos.zip.sha256 \
+            --clobber --repo nks-hub/nks-nextcloud-talk
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
       - /tmp/macos-build.log

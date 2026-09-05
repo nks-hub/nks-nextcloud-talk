@@ -401,7 +401,7 @@ jobs:
               git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"                 | grep -E '^- (feat|fix|perf)' || echo "- Maintenance only; see the commit log."
             fi
             echo
-            echo "Artifacts below are signed release builds; \`SHA256SUMS\` lists their checksums."
+            echo "Artifacts below are signed release builds. \`SHA256SUMS\` lists the checksums of the ones built here; the macOS zip is built on Codemagic and carries its own \`nks-talk-macos.zip.sha256\`."
           } > notes.md
           cat notes.md
       - uses: softprops/action-gh-release@v2
