@@ -270,6 +270,56 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  /// Adds one person, group, circle or address to a conversation.
+  /// Moderator-only on the server, which answers 400 for a source it does not
+  /// know and 501 for one it has switched off.
+  Future<void> addParticipant({
+    required AddParticipantRequest addRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(addRequest.httpMethod, addRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...addRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          })
+          ..bodyFields = <String, String>{
+            for (final entry in addRequest.formFields.entries)
+              entry.key: entry.value.single,
+          };
+    await _sendBody(
+      request,
+      allowedStatusCodes: _participantModerationAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+  }
+
+  /// Who may still be added to this conversation. The server's own
+  /// autocomplete, which — unlike the mentions endpoint — returns people who
+  /// are NOT in the room yet.
+  Future<List<ParticipantCandidate>> searchParticipantCandidates({
+    required ParticipantSearchRequest searchRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', searchRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...searchRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _participantsAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeParticipantCandidates(payload.body);
+  }
+
   /// Renames a conversation. Moderator-only on the server.
   Future<UpdateRoomNameResponse> updateRoomName({
     required UpdateRoomNameRequest updateRequest,

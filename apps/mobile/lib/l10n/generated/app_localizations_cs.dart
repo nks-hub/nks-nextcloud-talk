@@ -947,6 +947,23 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsParticipantsHeader => 'Účastníci';
 
   @override
+  String get roomDetailsAddParticipant => 'Přidat';
+
+  @override
+  String get roomDetailsAddParticipantTitle => 'Přidat do konverzace';
+
+  @override
+  String get roomDetailsAddParticipantSearch => 'Hledat osoby a skupiny';
+
+  @override
+  String get roomDetailsAddParticipantEmpty => 'Nikdo neodpovídá';
+
+  @override
+  String roomDetailsAddParticipantAdded(String name) {
+    return '$name byl přidán';
+  }
+
+  @override
   String roomDetailsParticipantsCount(int count) {
     return '$count účastníků';
   }

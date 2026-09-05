@@ -911,6 +911,47 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     }
   }
 
+  /// Lets a moderator add somebody to the conversation.
+  ///
+  /// The search is the server's own autocomplete for this room, which returns
+  /// people, groups and circles NOT already in it — the mentions endpoint
+  /// cannot do this, it only knows the room's own members.
+  Future<void> _addParticipant() async {
+    final strings = AppLocalizations.of(context);
+    final candidate = await showDialog<ParticipantCandidate>(
+      context: context,
+      builder: (context) => _AddParticipantDialog(
+        accountId: widget.account.id,
+        roomToken: widget.conversation.token,
+        search: (query) => ref
+            .read(participantsServiceProvider)
+            .searchCandidates(
+              accountId: widget.account.id,
+              roomToken: widget.conversation.token,
+              query: query,
+            ),
+      ),
+    );
+    if (candidate == null || !mounted) {
+      return;
+    }
+    var added = false;
+    await _runAction(() async {
+      await ref
+          .read(participantsServiceProvider)
+          .addParticipant(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            candidate: candidate,
+          );
+      added = true;
+    }, participantErrorMessage: _participantActionErrorMessage);
+    if (added && mounted) {
+      _showMessage(strings.roomDetailsAddParticipantAdded(candidate.label));
+      _retry();
+    }
+  }
+
   Future<void> _showBans() async {
     await showDialog<void>(
       context: context,

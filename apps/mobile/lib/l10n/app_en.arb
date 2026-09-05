@@ -344,6 +344,12 @@
   },
   "roomDetailsMessageExpirationRejected": "The server rejected this expiration setting.",
   "roomDetailsParticipantsHeader": "Participants",
+  "roomDetailsAddParticipant": "Add",
+  "roomDetailsAddParticipantTitle": "Add to the conversation",
+  "roomDetailsAddParticipantSearch": "Search for people and groups",
+  "roomDetailsAddParticipantEmpty": "Nobody matches",
+  "roomDetailsAddParticipantAdded": "{name} was added",
+  "@roomDetailsAddParticipantAdded": {"placeholders": {"name": {"type": "String"}}},
   "roomDetailsParticipantsCount": "{count} participants",
   "@roomDetailsParticipantsCount": {
     "placeholders": {

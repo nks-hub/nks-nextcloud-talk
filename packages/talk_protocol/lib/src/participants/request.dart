@@ -57,6 +57,159 @@ final class ParticipantsRequest {
       'ParticipantsRequest(includeStatus: $includeStatus)';
 }
 
+/// Where someone being added to a conversation comes from. Talk calls this
+/// the `source` and refuses anything it does not know.
+///
+/// Contract source: spreed `docs/participant.md`, "Add a participant to a
+/// conversation".
+enum AddParticipantSource {
+  users('users'),
+  groups('groups'),
+  emails('emails'),
+  circles('circles'),
+  federatedUsers('federated_users'),
+  phones('phones');
+
+  const AddParticipantSource(this.wireValue);
+
+  final String wireValue;
+
+  static AddParticipantSource? fromWire(String value) {
+    for (final source in values) {
+      if (source.wireValue == value) {
+        return source;
+      }
+    }
+    return null;
+  }
+}
+
+/// Adds one person, group, circle or address to a conversation.
+///
+/// `POST .../room/{token}/participants` with `newParticipant` and `source`.
+/// The server answers 200 with the room `type` when a one-to-one turned into
+/// a group, 400 for an unknown source, 403 when the caller is not a
+/// moderator, 404 for an unknown room or person, and 501 when the source is
+/// not enabled on that server.
+final class AddParticipantRequest {
+  AddParticipantRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.newParticipant,
+    required this.source,
+    this.userAgent = participantsContractUserAgent,
+  }) {
+    if (newParticipant.isEmpty || newParticipant.length > 4096) {
+      protocolFailure(_requestCode, r'$.body.newParticipant');
+    }
+    _validateUserAgent(userAgent);
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+
+  /// The user id, group id, circle id, e-mail address or federated cloud id,
+  /// as the search result gave it.
+  final String newParticipant;
+  final AddParticipantSource source;
+  final String userAgent;
+
+  String get httpMethod => 'POST';
+
+  Map<String, String> get queryParameters =>
+      UnmodifiableMapView({'format': 'json'});
+
+  Map<String, List<String>> get formFields => UnmodifiableMapView({
+    'newParticipant': <String>[newParticipant],
+    'source': <String>[source.wireValue],
+  });
+
+  Map<String, String> get headers => UnmodifiableMapView({
+    'OCS-APIRequest': 'true',
+    'User-Agent': userAgent,
+    'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+  });
+
+  Uri get uri => server.uri.replace(
+    path:
+        '${server.basePath}$participantsV4Path/'
+        '${roomToken.value}/participants',
+    queryParameters: queryParameters,
+  );
+
+  @override
+  String toString() =>
+      'AddParticipantRequest(source: ${source.name}, '
+      'newParticipant: <redacted>)';
+}
+
+/// Who may still be added to a conversation, as the server's own autocomplete
+/// answers it.
+///
+/// `GET /ocs/v2.php/core/autocomplete/get` with `itemType=call` and
+/// `itemId={token}` — the endpoint talk-web's participant picker uses. The
+/// mentions endpoint is NOT a substitute: it only returns people who are
+/// already in the room.
+final class ParticipantSearchRequest {
+  ParticipantSearchRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    required this.search,
+    this.limit = 20,
+    this.userAgent = participantsContractUserAgent,
+  }) {
+    if (search.length > 512 || limit < 1 || limit > 100) {
+      protocolFailure(_requestCode, r'$.query.search');
+    }
+    _validateUserAgent(userAgent);
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String search;
+  final int limit;
+  final String userAgent;
+
+  Map<String, String> get queryParameters => UnmodifiableMapView({
+    'format': 'json',
+    'search': search,
+    'itemType': 'call',
+    'itemId': roomToken.value,
+    'limit': limit.toString(),
+  });
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+
+  Uri get uri => server.uri.replace(
+    path: '${server.basePath}/ocs/v2.php/core/autocomplete/get',
+    queryParameters: queryParameters,
+  );
+
+  @override
+  String toString() => 'ParticipantSearchRequest(limit: $limit)';
+}
+
+/// One candidate the autocomplete returned.
+final class ParticipantCandidate {
+  const ParticipantCandidate({
+    required this.id,
+    required this.label,
+    required this.source,
+  });
+
+  final String id;
+  final String label;
+  final AddParticipantSource source;
+
+  @override
+  String toString() => 'ParticipantCandidate(source: ${source.name})';
+}
+
 /// The three moderation changes this contract can make to a single attendee.
 /// All of them are moderator-only on the server and all of them address the
 /// attendee by `attendeeId`.

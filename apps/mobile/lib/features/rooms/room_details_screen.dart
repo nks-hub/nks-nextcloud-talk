@@ -495,9 +495,25 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              strings.roomDetailsParticipantsHeader,
-              style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    strings.roomDetailsParticipantsHeader,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                // Adding someone was missing entirely until 5 September 2026:
+                // the list could be read and its attendees moderated, but
+                // nobody could be let in.
+                if (_isModerator)
+                  TextButton.icon(
+                    key: const Key('room-details-add-participant'),
+                    onPressed: _busy ? null : _addParticipant,
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: Text(strings.roomDetailsAddParticipant),
+                  ),
+              ],
             ),
           ),
           FutureBuilder<List<Participant>>(

@@ -892,3 +892,146 @@ final class _BreakoutBroadcastDialogState
     );
   }
 }
+
+/// Search for somebody to add, and pick them.
+///
+/// Debounced by hand rather than through a package: one field, one request in
+/// flight, and a query that changed while a request was out wins over its
+/// answer.
+final class _AddParticipantDialog extends StatefulWidget {
+  const _AddParticipantDialog({
+    required this.accountId,
+    required this.roomToken,
+    required this.search,
+  });
+
+  final String accountId;
+  final String roomToken;
+  final Future<List<ParticipantCandidate>> Function(String query) search;
+
+  @override
+  State<_AddParticipantDialog> createState() => _AddParticipantDialogState();
+}
+
+final class _AddParticipantDialogState extends State<_AddParticipantDialog> {
+  final TextEditingController _controller = TextEditingController();
+  Timer? _debounce;
+  int _generation = 0;
+  bool _searching = false;
+  List<ParticipantCandidate> _results = const <ParticipantCandidate>[];
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onChanged);
+    unawaited(_run(''));
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(
+      const Duration(milliseconds: 300),
+      () => unawaited(_run(_controller.text.trim())),
+    );
+  }
+
+  Future<void> _run(String query) async {
+    final generation = ++_generation;
+    setState(() {
+      _searching = true;
+      _failed = false;
+    });
+    List<ParticipantCandidate> found;
+    var failed = false;
+    try {
+      found = await widget.search(query);
+    } on Object {
+      found = const <ParticipantCandidate>[];
+      failed = true;
+    }
+    if (!mounted || generation != _generation) {
+      return;
+    }
+    setState(() {
+      _results = found;
+      _searching = false;
+      _failed = failed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    return AlertDialog(
+      key: const Key('add-participant-dialog'),
+      title: Text(strings.roomDetailsAddParticipantTitle),
+      content: SizedBox(
+        width: 400,
+        height: 360,
+        child: Column(
+          children: [
+            TextField(
+              key: const Key('add-participant-search'),
+              controller: _controller,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: strings.roomDetailsAddParticipantSearch,
+                prefixIcon: const Icon(Icons.search_rounded),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _searching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                  ? Center(
+                      child: Text(
+                        _failed
+                            ? strings.roomDetailsAddParticipantEmpty
+                            : strings.roomDetailsAddParticipantEmpty,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _results.length,
+                      itemBuilder: (context, index) {
+                        final candidate = _results[index];
+                        return ListTile(
+                          key: Key('add-participant-${candidate.id}'),
+                          leading: Icon(switch (candidate.source) {
+                            AddParticipantSource.groups => Icons.group_rounded,
+                            AddParticipantSource.circles =>
+                              Icons.circle_outlined,
+                            AddParticipantSource.emails =>
+                              Icons.mail_outline_rounded,
+                            AddParticipantSource.federatedUsers =>
+                              Icons.cloud_outlined,
+                            AddParticipantSource.phones => Icons.phone_rounded,
+                            AddParticipantSource.users => Icons.person_rounded,
+                          }),
+                          title: Text(candidate.label),
+                          onTap: () => Navigator.of(context).pop(candidate),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(AppLocalizations.of(context).cancel),
+        ),
+      ],
+    );
+  }
+}

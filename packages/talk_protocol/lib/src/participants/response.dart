@@ -349,3 +349,65 @@ Object? _decodeJsonBytes(Uint8List bytes) {
     protocolFailure(_responseCode, r'$');
   }
 }
+
+/// The autocomplete's answer, reduced to what a picker needs.
+///
+/// Talk wraps it in the usual OCS envelope; each entry carries `id`, `label`
+/// and a `source` this contract knows. An entry whose source is unknown is
+/// dropped rather than guessed at — adding someone through a source the
+/// server would refuse is worse than not offering them.
+List<ParticipantCandidate> decodeParticipantCandidates(Uint8List body) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(utf8.decode(body));
+  } on FormatException {
+    protocolFailure(
+      TalkProtocolErrorCode.invalidParticipantsResponse,
+      r'$.body',
+    );
+  }
+  if (decoded is! Map<String, Object?>) {
+    protocolFailure(
+      TalkProtocolErrorCode.invalidParticipantsResponse,
+      r'$.body',
+    );
+  }
+  final ocs = decoded['ocs'];
+  if (ocs is! Map<String, Object?>) {
+    protocolFailure(
+      TalkProtocolErrorCode.invalidParticipantsResponse,
+      r'$.ocs',
+    );
+  }
+  final data = ocs['data'];
+  if (data is! List<Object?>) {
+    protocolFailure(
+      TalkProtocolErrorCode.invalidParticipantsResponse,
+      r'$.ocs.data',
+    );
+  }
+  final candidates = <ParticipantCandidate>[];
+  for (final entry in data) {
+    if (entry is! Map<String, Object?>) {
+      continue;
+    }
+    final id = entry['id'];
+    final label = entry['label'];
+    final source = entry['source'];
+    if (id is! String || id.isEmpty || source is! String) {
+      continue;
+    }
+    final parsed = AddParticipantSource.fromWire(source);
+    if (parsed == null) {
+      continue;
+    }
+    candidates.add(
+      ParticipantCandidate(
+        id: id,
+        label: label is String && label.isNotEmpty ? label : id,
+        source: parsed,
+      ),
+    );
+  }
+  return List<ParticipantCandidate>.unmodifiable(candidates);
+}

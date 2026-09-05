@@ -947,6 +947,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsParticipantsHeader => 'Participants';
 
   @override
+  String get roomDetailsAddParticipant => 'Add';
+
+  @override
+  String get roomDetailsAddParticipantTitle => 'Add to the conversation';
+
+  @override
+  String get roomDetailsAddParticipantSearch => 'Search for people and groups';
+
+  @override
+  String get roomDetailsAddParticipantEmpty => 'Nobody matches';
+
+  @override
+  String roomDetailsAddParticipantAdded(String name) {
+    return '$name was added';
+  }
+
+  @override
   String roomDetailsParticipantsCount(int count) {
     return '$count participants';
   }

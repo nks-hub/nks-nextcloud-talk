@@ -1772,6 +1772,36 @@ abstract class AppLocalizations {
   /// **'Participants'**
   String get roomDetailsParticipantsHeader;
 
+  /// No description provided for @roomDetailsAddParticipant.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get roomDetailsAddParticipant;
+
+  /// No description provided for @roomDetailsAddParticipantTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to the conversation'**
+  String get roomDetailsAddParticipantTitle;
+
+  /// No description provided for @roomDetailsAddParticipantSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for people and groups'**
+  String get roomDetailsAddParticipantSearch;
+
+  /// No description provided for @roomDetailsAddParticipantEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody matches'**
+  String get roomDetailsAddParticipantEmpty;
+
+  /// No description provided for @roomDetailsAddParticipantAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was added'**
+  String roomDetailsAddParticipantAdded(String name);
+
   /// No description provided for @roomDetailsParticipantsCount.
   ///
   /// In en, this message translates to:

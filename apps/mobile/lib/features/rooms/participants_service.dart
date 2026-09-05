@@ -107,6 +107,73 @@ final class ParticipantsService {
 
   /// Promotes, demotes or removes one attendee. Moderator-only on the server;
   /// the caller is responsible for not offering the action to anyone else.
+  /// Who may still be added to this conversation.
+  Future<List<ParticipantCandidate>> searchCandidates({
+    required String accountId,
+    required String roomToken,
+    required String query,
+  }) async {
+    final (account, appPassword) = await _authContext(accountId);
+    final ParticipantSearchRequest request;
+    try {
+      request = ParticipantSearchRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        search: query,
+      );
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+    try {
+      return await _api.searchParticipantCandidates(
+        searchRequest: request,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      );
+    } on NextcloudApiException catch (error) {
+      throw ParticipantsServiceException(_mapApiError(error));
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+  }
+
+  /// Adds one of them. Moderator-only on the server.
+  Future<void> addParticipant({
+    required String accountId,
+    required String roomToken,
+    required ParticipantCandidate candidate,
+  }) async {
+    final (account, appPassword) = await _authContext(accountId);
+    final AddParticipantRequest request;
+    try {
+      request = AddParticipantRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        newParticipant: candidate.id,
+        source: candidate.source,
+      );
+    } on TalkProtocolException {
+      throw const ParticipantsServiceException(
+        ParticipantsServiceError.invalidResponse,
+      );
+    }
+    try {
+      await _api.addParticipant(
+        addRequest: request,
+        loginName: account.loginName,
+        appPassword: appPassword,
+      );
+    } on NextcloudApiException catch (error) {
+      throw ParticipantsServiceException(_mapApiError(error));
+    }
+  }
+
   Future<void> moderateParticipant({
     required String accountId,
     required String roomToken,

@@ -55,6 +55,8 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- New: add people and groups to a conversation from its details, with a
+  search that only offers those who are not in it yet.
 - New: start a call from the conversation header, with or without video.
   Until now a call could only be joined once somebody else had started it.
 - Fixed: the entries about joining and leaving a call now show their time,
