@@ -94,6 +94,7 @@ final class CallPeerState {
     required this.handRaised,
     required this.since,
     this.video,
+    this.screen,
     this.audioMuted = false,
   });
 
@@ -105,6 +106,9 @@ final class CallPeerState {
 
   /// The peer's video while they send one; owned by the session.
   final CallRemoteVideo? video;
+
+  /// The peer's shared screen while they share one; owned by the session.
+  final CallRemoteVideo? screen;
 
   /// Whether the peer said their microphone is off (`mute {name: audio}`).
   final bool audioMuted;
@@ -152,6 +156,12 @@ final class CallMediaSession {
   /// Talk labels an audio/video peer connection `video` and a screen share
   /// `screen`; an audio-only call is still the `video` kind.
   static const _roomType = 'video';
+
+  /// Talk shares a screen on a SECOND connection per participant, whose
+  /// messages carry `roomType: screen` and their own `sid`. This side only
+  /// ever receives one: the sharer offers, we answer.
+  static const _screenRoomType = 'screen';
+  final Map<String, _MediaPeer> _screens = <String, _MediaPeer>{};
 
   final CallSignalingUpdate _initial;
   final Stream<CallSignalingUpdate> _updates;
@@ -503,9 +513,18 @@ final class CallMediaSession {
     required List<CallIceServer> iceServers,
   }) async {
     final sender = message.sender;
-    if (sender == null ||
-        sender.value == localPeerId ||
-        (message.roomType.isNotEmpty && message.roomType != _roomType)) {
+    if (sender == null || sender.value == localPeerId) {
+      return;
+    }
+    if (message.roomType == _screenRoomType) {
+      await _receiveScreen(
+        senderId: sender.value,
+        message: message,
+        iceServers: iceServers,
+      );
+      return;
+    }
+    if (message.roomType.isNotEmpty && message.roomType != _roomType) {
       return;
     }
     switch (message.type) {
@@ -528,6 +547,8 @@ final class CallMediaSession {
         _receiveRaiseHand(senderId: sender.value, payload: message.payload);
       case 'reaction':
         _receiveReaction(senderId: sender.value, payload: message.payload);
+      case 'unshareScreen':
+        await _closeScreen(sender.value);
       case 'mute':
       case 'unmute':
         // The peer's own word on its microphone, the same message this side
@@ -542,6 +563,132 @@ final class CallMediaSession {
         }
       default:
         return;
+    }
+  }
+
+  Future<void> _receiveScreen({
+    required String senderId,
+    required SignalingPeerMessage message,
+    required List<CallIceServer> iceServers,
+  }) async {
+    switch (message.type) {
+      case 'offer':
+        await _receiveScreenOffer(
+          senderId: senderId,
+          payload: message.payload,
+          sid: message.sid,
+          iceServers: iceServers,
+        );
+      case 'candidate':
+        await _receiveCandidateFor(_screens[senderId], message.payload);
+      case 'unshareScreen':
+        await _closeScreen(senderId);
+      default:
+        return;
+    }
+  }
+
+  /// A participant started sharing their screen: a receive-only connection of
+  /// its own, answered on the sharer's sid. A second offer on a known screen
+  /// (the sharer's ICE restart, or a new share) renegotiates it in place.
+  Future<void> _receiveScreenOffer({
+    required String senderId,
+    required SignalingOpaquePayload? payload,
+    required String? sid,
+    required List<CallIceServer> iceServers,
+  }) async {
+    final sdp = _readSdp(payload, expectedType: 'offer');
+    if (sdp == null) {
+      return;
+    }
+    var screen = _screens[senderId];
+    debugPrint(
+      '[call] screen offer ← $senderId sid=$sid known=${screen != null} '
+      'lines=${_mediaLines(sdp.sdp)}',
+    );
+    if (screen == null) {
+      screen = _MediaPeer(senderId, roomType: _screenRoomType);
+      _screens[senderId] = screen;
+      final opened = screen;
+      try {
+        final connection = await _engine.createPeerConnection(
+          iceServers: iceServers,
+          audio: null,
+          onIceCandidate: (candidate) =>
+              unawaited(_enqueue(() => _sendCandidate(opened, candidate))),
+          onConnectionState: (state) => unawaited(
+            _enqueue(() async {
+              if (identical(_screens[senderId], opened)) {
+                opened.state = state;
+                _publish();
+              }
+            }),
+          ),
+          onRemoteVideo: (video) =>
+              unawaited(_enqueue(() => _recordScreenVideo(opened, video))),
+        );
+        if (_disposed || !identical(_screens[senderId], opened)) {
+          await connection.close();
+          return;
+        }
+        opened.connection = connection;
+      } on CallMediaException {
+        await _closeScreen(senderId);
+        return;
+      }
+    }
+    if (sid != null && sid.isNotEmpty) {
+      screen.sid = sid;
+    }
+    final connection = screen.connection;
+    if (connection == null) {
+      return;
+    }
+    try {
+      await connection.setRemoteDescription(sdp);
+      screen.remoteDescriptionSet = true;
+      await _drainRemoteCandidates(screen);
+      final answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      debugPrint(
+        '[call] screen answer → $senderId sid=${screen.sid} '
+        'lines=${_mediaLines(answer.sdp)}',
+      );
+      await _send(
+        peerId: senderId,
+        type: 'answer',
+        payload: _sdpPayload(answer),
+        via: screen,
+      );
+    } on CallMediaException {
+      await _closeScreen(senderId);
+    }
+  }
+
+  Future<void> _recordScreenVideo(
+    _MediaPeer screen,
+    CallRemoteVideo? video,
+  ) async {
+    if (_disposed || !identical(_screens[screen.peerId], screen)) {
+      await video?.dispose();
+      return;
+    }
+    final previous = screen.video;
+    screen.video = video;
+    await previous?.dispose();
+    _publish();
+  }
+
+  Future<void> _closeScreen(String senderId) async {
+    final screen = _screens.remove(senderId);
+    if (screen == null) {
+      return;
+    }
+    await screen.video?.dispose();
+    screen.video = null;
+    await screen.connection?.close();
+    if (!_disposed) {
+      _publish();
     }
   }
 
@@ -645,8 +792,12 @@ final class CallMediaSession {
   Future<void> _receiveCandidate({
     required String senderId,
     required SignalingOpaquePayload? payload,
-  }) async {
-    final peer = _peers[senderId];
+  }) => _receiveCandidateFor(_peers[senderId], payload);
+
+  Future<void> _receiveCandidateFor(
+    _MediaPeer? peer,
+    SignalingOpaquePayload? payload,
+  ) async {
     if (peer == null) {
       return;
     }
@@ -694,11 +845,22 @@ final class CallMediaSession {
     String peerId,
     CallIceCandidate candidate,
   ) async {
-    if (_disposed || !_peers.containsKey(peerId)) {
+    final peer = _peers[peerId];
+    if (_disposed || peer == null) {
+      return;
+    }
+    await _sendCandidate(peer, candidate);
+  }
+
+  Future<void> _sendCandidate(
+    _MediaPeer via,
+    CallIceCandidate candidate,
+  ) async {
+    if (_disposed) {
       return;
     }
     await _send(
-      peerId: peerId,
+      peerId: via.peerId,
       type: 'candidate',
       payload: <String, Object?>{
         'candidate': <String, Object?>{
@@ -707,6 +869,7 @@ final class CallMediaSession {
           'sdpMLineIndex': candidate.sdpMLineIndex,
         },
       },
+      via: via,
     );
   }
 
@@ -781,20 +944,24 @@ final class CallMediaSession {
     }
   }
 
+  /// Sends to the peer's call connection, or — with [via] — on that
+  /// connection's own room type and sid (a screen share).
   Future<void> _send({
     required String peerId,
     required String type,
     required Map<String, Object?> payload,
+    _MediaPeer? via,
   }) async {
     if (_disposed) {
       return;
     }
+    final target = via ?? _peers[peerId];
     final SignalingPeerMessage message;
     try {
       message = SignalingPeerMessage(
         type: type,
-        roomType: _roomType,
-        sid: _peers[peerId]?.sid,
+        roomType: target?.roomType ?? _roomType,
+        sid: target?.sid,
         recipient: SignalingPeerId.parse(peerId),
         sender: null,
         payload: SignalingOpaquePayload.fromJson(payload),
@@ -830,6 +997,7 @@ final class CallMediaSession {
   }
 
   Future<void> _closePeer(String peerId) async {
+    await _closeScreen(peerId);
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
@@ -1011,6 +1179,7 @@ final class CallMediaSession {
               handRaised: _raisedHands.contains(peer.peerId),
               since: peer.openedAt,
               video: peer.video,
+              screen: _screens[peer.peerId]?.video,
               audioMuted: _peerAudioMuted.contains(peer.peerId),
             ),
         ],
@@ -1043,9 +1212,12 @@ final class CallMediaSession {
 const _maximumPendingCandidates = 128;
 
 final class _MediaPeer {
-  _MediaPeer(this.peerId);
+  _MediaPeer(this.peerId, {this.roomType = CallMediaSession._roomType});
 
   final String peerId;
+
+  /// `video` for the call itself, `screen` for a shared screen.
+  final String roomType;
   final DateTime openedAt = DateTime.now();
 
   /// The web client pairs every message with a peer connection by `sid`: an

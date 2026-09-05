@@ -141,7 +141,7 @@ final class _RecordingEngine implements CallMediaEngine {
   @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
-    required CallLocalAudio audio,
+    required CallLocalAudio? audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,

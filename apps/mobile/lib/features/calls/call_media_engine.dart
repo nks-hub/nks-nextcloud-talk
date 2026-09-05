@@ -150,9 +150,12 @@ abstract interface class CallMediaEngine {
   /// [CallMediaError.cameraUnavailable]; the call is not affected either way.
   Future<CallLocalVideo> openCamera();
 
+  /// A connection to one peer. With [audio] `null` it sends nothing and only
+  /// receives — the shape of a screen share, which Talk carries on a second
+  /// connection per participant (`roomType: screen`).
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
-    required CallLocalAudio audio,
+    required CallLocalAudio? audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
 

@@ -651,6 +651,8 @@
   "callParticipantsTitle": "In the call ({count})",
   "@callParticipantsTitle": {"placeholders": {"count": {"type": "int"}}},
   "callParticipantsYou": "You",
+  "callScreenSharedBy": "{name} is sharing their screen",
+  "@callScreenSharedBy": {"placeholders": {"name": {"type": "String"}}},
   "callParticipantConnected": "Audio connected",
   "callParticipantConnecting": "Connecting…",
   "callParticipantMuted": "Muted",

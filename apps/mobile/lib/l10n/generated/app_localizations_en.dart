@@ -1816,6 +1816,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callParticipantsYou => 'You';
 
   @override
+  String callScreenSharedBy(String name) {
+    return '$name is sharing their screen';
+  }
+
+  @override
   String get callParticipantConnected => 'Audio connected';
 
   @override

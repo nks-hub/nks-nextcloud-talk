@@ -84,6 +84,11 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       for (final peer in media.participants)
         _PeerTile(peer: peer, names: names, strings: strings),
     ];
+    // A shared screen is worth the whole width; the participants share the
+    // space below it.
+    final sharing = media.participants
+        .where((peer) => peer.screen != null)
+        .toList(growable: false);
     final columns = tiles.length <= 1 ? 1 : 2;
     final gap = _inPictureInPicture ? 2.0 : 8.0;
     if (_inPictureInPicture) {
@@ -128,6 +133,24 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            for (final peer in sharing)
+              Padding(
+                key: Key('call-screen-shared-${peer.peerId}'),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _Tile(
+                    name: strings.callScreenSharedBy(
+                      _PeerTile.nameOf(peer, names),
+                    ),
+                    initial: '',
+                    video: peer.screen!.build(context),
+                    muted: false,
+                    handRaised: false,
+                    subtitle: null,
+                  ),
+                ),
+              ),
             Expanded(child: grid),
             if (media.reaction != null)
               Padding(
@@ -220,11 +243,13 @@ final class _PeerTile extends StatelessWidget {
   final Map<String, String> names;
   final AppLocalizations strings;
 
+  static String nameOf(CallPeerState peer, Map<String, String> names) =>
+      names['actor:${peer.actorType}:${peer.actorId}'] ??
+      (peer.actorId.isEmpty ? peer.peerId : peer.actorId);
+
   @override
   Widget build(BuildContext context) {
-    final name =
-        names['actor:${peer.actorType}:${peer.actorId}'] ??
-        (peer.actorId.isEmpty ? peer.peerId : peer.actorId);
+    final name = nameOf(peer, names);
     return _Tile(
       key: Key('call-tile-${peer.peerId}'),
       name: name,

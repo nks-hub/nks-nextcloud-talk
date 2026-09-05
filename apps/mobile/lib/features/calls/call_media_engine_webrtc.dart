@@ -54,12 +54,12 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
   @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
-    required CallLocalAudio audio,
+    required CallLocalAudio? audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
-    final stream = (audio as _WebRtcLocalAudio).stream;
+    final stream = (audio as _WebRtcLocalAudio?)?.stream;
     final rtc.RTCPeerConnection connection;
     try {
       connection = await rtc.createPeerConnection(<String, dynamic>{
@@ -78,8 +78,10 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
     try {
-      for (final track in stream.getAudioTracks()) {
-        await connection.addTrack(track, stream);
+      if (stream != null) {
+        for (final track in stream.getAudioTracks()) {
+          await connection.addTrack(track, stream);
+        }
       }
       // One video line per connection. It starts receive-only, so a peer
       // that sends video (the web client does by default) is seen without a
@@ -298,7 +300,7 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   /// stream id never reaches the element it renders (measured on 5 September
   /// 2026: the answer said `video:recvonly`, the frames were encoded, the
   /// web's stream still had no video track).
-  final rtc.MediaStream _localStream;
+  final rtc.MediaStream? _localStream;
   bool _closed = false;
 
   /// The transceiver handed back by `addTransceiver` must not be kept: the
@@ -341,9 +343,10 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
     await line.sender.replaceTrack(
       video == null ? null : (video as _WebRtcLocalVideo).track,
     );
-    if (video != null) {
+    final localStream = _localStream;
+    if (video != null && localStream != null) {
       try {
-        await line.sender.setStreams([_localStream]);
+        await line.sender.setStreams([localStream]);
       } on Object {
         // Best effort: without it the track travels with its own stream id,
         // which some receivers do not attach to the participant's stream.

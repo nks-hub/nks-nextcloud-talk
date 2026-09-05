@@ -464,6 +464,9 @@ final class _CallSignalingLane {
       return;
     }
     if (error is! NextcloudApiException) {
+      // The one line that names the frame a batch died on; without it a
+      // rejected peer message is indistinguishable from a dead server.
+      debugPrint('[call] signalling protocol failure: $error');
       await _fail(CallSignalingFailure.protocol);
       return;
     }

@@ -628,6 +628,7 @@
   "callBannerCameraOff": "Vypnout kameru",
   "callParticipantsTitle": "V hovoru ({count})",
   "callParticipantsYou": "Vy",
+  "callScreenSharedBy": "{name} sdílí obrazovku",
   "callParticipantConnected": "Zvuk spojen",
   "callParticipantConnecting": "Připojování…",
   "callParticipantMuted": "Ztlumeno",

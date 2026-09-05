@@ -437,6 +437,75 @@ void main() {
     expect(connection.iceRestarts, 2);
   });
 
+  test('a shared screen is a second, receive-only connection', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections, hasLength(1));
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(
+            _remote,
+            'offer',
+            <String, Object?>{'type': 'offer', 'sdp': 'screen-offer'},
+            sid: 'screen-sid',
+            roomType: 'screen',
+          ),
+          _message(
+            _remote,
+            'candidate',
+            <String, Object?>{
+              'candidate': <String, Object?>{
+                'candidate': 'candidate:screen',
+                'sdpMid': '0',
+                'sdpMLineIndex': 0,
+              },
+            },
+            sid: 'screen-sid',
+            roomType: 'screen',
+          ),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(engine.connections, hasLength(2));
+    final screen = engine.connections.last;
+    // Nothing of ours travels on it, and it stays out of the call's own
+    // connection.
+    expect(screen.audio, isNull);
+    expect(engine.connections.first.remoteDescriptions, isEmpty);
+    expect(screen.remoteDescriptions.single.sdp, 'screen-offer');
+    expect(screen.remoteCandidates.single.candidate, 'candidate:screen');
+    final answer = sent.lastWhere((message) => message.type == 'answer');
+    expect(answer.roomType, 'screen');
+    expect(answer.sid, 'screen-sid');
+
+    final video = _FakeRemoteVideo();
+    screen.onRemoteVideo(video);
+    await pumpEventQueue();
+    expect(media.state.participants.single.screen, same(video));
+    expect(media.state.participants.single.video, isNull);
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [_message(_remote, 'unshareScreen', <String, Object?>{})],
+      ),
+    );
+    await pumpEventQueue();
+    expect(media.state.participants.single.screen, isNull);
+    expect(screen.closed, isTrue);
+    expect(video.disposed, isTrue);
+    expect(engine.connections.first.closed, isFalse);
+  });
+
   test('the state lists every peer with its connection and hand', () async {
     final media = session(
       _update(localPeerId: _local, participants: [_participant(_remote)]),
@@ -836,9 +905,10 @@ SignalingPeerMessage _message(
   String type,
   Map<String, Object?> payload, {
   String? sid,
+  String roomType = 'video',
 }) => SignalingPeerMessage(
   type: type,
-  roomType: 'video',
+  roomType: roomType,
   sid: sid,
   recipient: SignalingPeerId.parse(_local),
   sender: SignalingPeerId.parse(sender),
@@ -887,12 +957,13 @@ final class _FakeEngine implements CallMediaEngine {
   @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
-    required CallLocalAudio audio,
+    required CallLocalAudio? audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     final connection = _FakeConnection(
+      audio: audio,
       iceServers: iceServers,
       onIceCandidate: onIceCandidate,
       onConnectionState: onConnectionState,
@@ -950,6 +1021,7 @@ final class _FakeAudio implements CallLocalAudio {
 
 final class _FakeConnection implements CallPeerConnection {
   _FakeConnection({
+    required this.audio,
     required this.iceServers,
     required this.onIceCandidate,
     required this.onConnectionState,
@@ -957,6 +1029,7 @@ final class _FakeConnection implements CallPeerConnection {
     required this.index,
   });
 
+  final CallLocalAudio? audio;
   final List<CallIceServer> iceServers;
   final void Function(CallIceCandidate candidate) onIceCandidate;
   final void Function(CallMediaConnectionState state) onConnectionState;

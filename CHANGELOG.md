@@ -52,6 +52,11 @@ from the commit log. Nothing here has reached testers yet.
   participant with their video or initial, their name, whether they are muted
   or have a hand up, and your own preview among them; the same controls as the
   banner plus a Leave button. It closes on its own when the call ends.
+- New: a participant's shared screen shows in the call view, full width above
+  the participant tiles, and goes away when they stop sharing.
+- Fixed: a participant stopping their screen share no longer ends the call for
+  everyone else. The web client announces it with a message that carries no
+  payload, which the app used to treat as a broken signalling frame.
 - New: on Android, leaving the app while the call view is open keeps the call
   on screen as a small picture-in-picture window with just the participants'
   tiles; coming back restores the full view. Only the call view does this, a

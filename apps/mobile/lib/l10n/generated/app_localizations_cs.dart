@@ -1816,6 +1816,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callParticipantsYou => 'Vy';
 
   @override
+  String callScreenSharedBy(String name) {
+    return '$name sdílí obrazovku';
+  }
+
+  @override
   String get callParticipantConnected => 'Zvuk spojen';
 
   @override
