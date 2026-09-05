@@ -290,7 +290,9 @@ workflows:
             security unlock-keychain -p ci-temp nks-build.keychain
             APP=build/macos/Build/Products/Release/nextcloudtalk.app
             python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)','TEAMID0000.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
-            ID="${MACOS_SIGNING_IDENTITY}"
+            # The full signing identity string ("Developer ID Application: … (TEAM)")
+            # lives in the secure environment group, not in this file.
+            ID="${MACOS_SIGNING_IDENTITY:?MACOS_SIGNING_IDENTITY is not set}"
             # Inside out: a nested bundle signed after its container invalidates
             # the container's seal.
             for f in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.dylib; do
