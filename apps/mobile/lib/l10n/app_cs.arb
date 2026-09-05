@@ -622,6 +622,8 @@
   "callBannerRaiseHand": "Zvednout ruku",
   "callBannerLowerHand": "Dát ruku dolů",
   "callBannerReact": "Poslat reakci",
+  "callBannerOpenCallView": "Otevřít zobrazení hovoru",
+  "callScreenTitle": "Hovor ({count})",
   "callBannerCameraOn": "Zapnout kameru",
   "callBannerCameraOff": "Vypnout kameru",
   "callParticipantsTitle": "V hovoru ({count})",

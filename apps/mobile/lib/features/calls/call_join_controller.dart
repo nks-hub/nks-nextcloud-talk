@@ -46,7 +46,8 @@ final class CallJoinState {
 /// negotiates the audio over the room's existing signalling session. Leaving
 /// undoes both, and so does disposal — a call must not outlive the screen that
 /// has the only control for ending it.
-final class CallJoinController
+// `base`, not `final`: a test freezes a joined state by subclassing it.
+base class CallJoinController
     extends AutoDisposeFamilyNotifier<CallJoinState, CallRoomKey> {
   CallMediaSession? _session;
   StreamSubscription<CallMediaState>? _mediaStates;

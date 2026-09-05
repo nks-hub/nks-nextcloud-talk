@@ -41,6 +41,12 @@ from the commit log. Nothing here has reached testers yet.
   rooms at once and removes them again — from the conversation details. Inside
   a breakout room anyone can ask a moderator to come over, and withdraw the
   request; the parent conversation shows that a room is asking.
+- New: a full-screen call view, opened from the banner: one tile per
+  participant with their video or initial, their name, whether they are muted
+  or have a hand up, and your own preview among them; the same controls as the
+  banner plus a Leave button. It closes on its own when the call ends.
+- New: a participant who mutes their microphone is shown muted in the call
+  view and the participant list (the web client's mute/unmute messages).
 - New: turn your camera on in a call from the banner. Your picture goes to
   every participant (a renegotiation per connection), a mirrored preview shows
   in the participant list, and a camera that cannot be opened leaves the call

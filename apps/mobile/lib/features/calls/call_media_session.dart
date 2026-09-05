@@ -94,6 +94,7 @@ final class CallPeerState {
     required this.handRaised,
     required this.since,
     this.video,
+    this.audioMuted = false,
   });
 
   final String peerId;
@@ -104,6 +105,9 @@ final class CallPeerState {
 
   /// The peer's video while they send one; owned by the session.
   final CallRemoteVideo? video;
+
+  /// Whether the peer said their microphone is off (`mute {name: audio}`).
+  final bool audioMuted;
 
   /// When this side first saw the peer in the call. A peer still connecting
   /// long after that is most likely a departed session the server has not
@@ -166,6 +170,7 @@ final class CallMediaSession {
   bool _speakerphone = false;
   bool _handRaised = false;
   final Set<String> _raisedHands = <String>{};
+  final Set<String> _peerAudioMuted = <String>{};
   CallReaction? _reaction;
   Timer? _reactionTimer;
   CallLocalVideo? _video;
@@ -521,6 +526,18 @@ final class CallMediaSession {
         _receiveRaiseHand(senderId: sender.value, payload: message.payload);
       case 'reaction':
         _receiveReaction(senderId: sender.value, payload: message.payload);
+      case 'mute':
+      case 'unmute':
+        // The peer's own word on its microphone, the same message this side
+        // sends; a video state travels as the track itself.
+        if (message.payload?.wire['name'] == 'audio') {
+          final changed = message.type == 'mute'
+              ? _peerAudioMuted.add(sender.value)
+              : _peerAudioMuted.remove(sender.value);
+          if (changed) {
+            _publish();
+          }
+        }
       default:
         return;
     }
@@ -799,6 +816,7 @@ final class CallMediaSession {
   Future<void> _closePeer(String peerId) async {
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
+    _peerAudioMuted.remove(peerId);
     await peer?.video?.dispose();
     peer?.video = null;
     await peer?.connection?.close();
@@ -977,6 +995,7 @@ final class CallMediaSession {
               handRaised: _raisedHands.contains(peer.peerId),
               since: peer.openedAt,
               video: peer.video,
+              audioMuted: _peerAudioMuted.contains(peer.peerId),
             ),
         ],
       ),

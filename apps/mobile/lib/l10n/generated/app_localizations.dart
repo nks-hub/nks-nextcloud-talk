@@ -3314,6 +3314,18 @@ abstract class AppLocalizations {
   /// **'Send a reaction'**
   String get callBannerReact;
 
+  /// No description provided for @callBannerOpenCallView.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the call view'**
+  String get callBannerOpenCallView;
+
+  /// No description provided for @callScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ({count})'**
+  String callScreenTitle(int count);
+
   /// No description provided for @callBannerCameraOn.
   ///
   /// In en, this message translates to:

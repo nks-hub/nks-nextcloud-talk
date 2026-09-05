@@ -307,6 +307,17 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   /// 1.6.1), so the video line is looked up afresh each time.
   @override
   Future<void> setLocalVideo(CallLocalVideo? video) => _guard(() async {
+    try {
+      await _setLocalVideo(video);
+    } on Object catch (error) {
+      // The guard turns this into a plain engine failure; the cause is worth
+      // one log line, because the camera then quietly stays off.
+      debugPrint('[call] setLocalVideo failed: $error');
+      rethrow;
+    }
+  });
+
+  Future<void> _setLocalVideo(CallLocalVideo? video) async {
     final transceivers = await _connection.getTransceivers();
     final videoLines = transceivers
         .where((transceiver) => transceiver.receiver.track?.kind == 'video')
@@ -338,7 +349,7 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
           ? rtc.TransceiverDirection.RecvOnly
           : rtc.TransceiverDirection.SendRecv,
     );
-  });
+  }
 
   @override
   Future<CallSessionDescription> createOffer() =>

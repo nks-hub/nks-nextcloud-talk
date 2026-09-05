@@ -1,0 +1,259 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../app_providers.dart';
+import '../../l10n/generated/app_localizations.dart';
+import 'call_controls.dart';
+import 'call_join_controller.dart';
+import 'call_media_session.dart';
+import 'call_participants_sheet.dart';
+import 'call_transport_service.dart';
+
+/// Opens the full-screen view of a joined call.
+Future<void> showCallScreen(BuildContext context, CallRoomKey key) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/call'),
+      builder: (context) => CallScreen(roomKey: key),
+    ),
+  );
+}
+
+/// The call as a grid: one tile per participant (video when they send it,
+/// their initial otherwise), this side's preview among them, the controls
+/// underneath. It shows the same state the banner does and leaves when the
+/// call does — the banner remains the place a call is joined from.
+final class CallScreen extends ConsumerWidget {
+  const CallScreen({super.key, required this.roomKey});
+
+  final CallRoomKey roomKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = AppLocalizations.of(context);
+    final join = ref.watch(callJoinControllerProvider(roomKey));
+    final names =
+        ref.watch(callParticipantNamesProvider(roomKey)).valueOrNull ??
+        const <String, String>{};
+    // The call ended (or failed) under this screen: nothing to show here any
+    // more, the banner explains why.
+    ref.listen(callJoinControllerProvider(roomKey), (previous, next) {
+      if (next.phase == CallJoinPhase.idle ||
+          next.phase == CallJoinPhase.failed) {
+        Navigator.of(context).maybePop();
+      }
+    });
+    final media = join.media;
+    final tiles = <Widget>[
+      _SelfTile(media: media, strings: strings),
+      for (final peer in media.participants)
+        _PeerTile(peer: peer, names: names, strings: strings),
+    ];
+    final columns = tiles.length <= 1 ? 1 : 2;
+    return Scaffold(
+      key: const Key('call-screen'),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(strings.callScreenTitle(tiles.length)),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: GridView.count(
+                key: const Key('call-grid'),
+                padding: const EdgeInsets.all(8),
+                crossAxisCount: columns,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: columns == 1 ? 3 / 4 : 3 / 4,
+                children: tiles,
+              ),
+            ),
+            if (media.reaction != null)
+              Padding(
+                key: const Key('call-screen-reaction'),
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${media.reaction!.emoji}  '
+                  '${names['actor:${_actorKey(media, media.reaction!.peerId)}'] ?? ''}',
+                  style: const TextStyle(color: Colors.white, fontSize: 20),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CallControls(
+                    roomKey: roomKey,
+                    join: join,
+                    color: Colors.white,
+                    keyPrefix: 'call-screen',
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    key: const Key('call-screen-leave'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                      foregroundColor: Theme.of(context).colorScheme.onError,
+                    ),
+                    onPressed: join.isBusy
+                        ? null
+                        : () => unawaited(
+                            ref
+                                .read(
+                                  callJoinControllerProvider(roomKey).notifier,
+                                )
+                                .leave(),
+                          ),
+                    icon: const Icon(Icons.call_end_rounded),
+                    label: Text(strings.callBannerLeave),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _actorKey(CallMediaState media, String peerId) {
+    for (final peer in media.participants) {
+      if (peer.peerId == peerId) {
+        return '${peer.actorType}:${peer.actorId}';
+      }
+    }
+    return '';
+  }
+}
+
+final class _SelfTile extends StatelessWidget {
+  const _SelfTile({required this.media, required this.strings});
+
+  final CallMediaState media;
+  final AppLocalizations strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = media.localVideo;
+    return _Tile(
+      key: const Key('call-tile-self'),
+      name: strings.callParticipantsYou,
+      initial: '',
+      video: preview?.buildPreview(context),
+      muted: media.muted,
+      handRaised: media.handRaised,
+      subtitle: null,
+    );
+  }
+}
+
+final class _PeerTile extends StatelessWidget {
+  const _PeerTile({
+    required this.peer,
+    required this.names,
+    required this.strings,
+  });
+
+  final CallPeerState peer;
+  final Map<String, String> names;
+  final AppLocalizations strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final name =
+        names['actor:${peer.actorType}:${peer.actorId}'] ??
+        (peer.actorId.isEmpty ? peer.peerId : peer.actorId);
+    return _Tile(
+      key: Key('call-tile-${peer.peerId}'),
+      name: name,
+      initial: name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+      video: peer.video?.build(context),
+      muted: peer.audioMuted,
+      handRaised: peer.handRaised,
+      subtitle: peer.connected ? null : strings.callParticipantConnecting,
+    );
+  }
+}
+
+final class _Tile extends StatelessWidget {
+  const _Tile({
+    super.key,
+    required this.name,
+    required this.initial,
+    required this.video,
+    required this.muted,
+    required this.handRaised,
+    required this.subtitle,
+  });
+
+  final String name;
+  final String initial;
+  final Widget? video;
+  final bool muted;
+  final bool handRaised;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: scheme.surfaceContainerHighest),
+          if (video != null)
+            video!
+          else
+            Center(
+              child: CircleAvatar(
+                radius: 36,
+                child: initial.isEmpty
+                    ? const Icon(Icons.person_rounded, size: 36)
+                    : Text(initial, style: const TextStyle(fontSize: 28)),
+              ),
+            ),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 8,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    subtitle == null ? name : '$name · $subtitle',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      shadows: [Shadow(blurRadius: 4)],
+                    ),
+                  ),
+                ),
+                if (handRaised)
+                  const Icon(
+                    Icons.front_hand_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                if (muted)
+                  const Icon(
+                    Icons.mic_off_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -635,6 +635,40 @@ void main() {
   });
 
   test(
+    "a peer's mute and unmute of its microphone show on its entry",
+    () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      expect(media.state.participants.single.audioMuted, isFalse);
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'mute', <String, Object?>{'name': 'audio'}),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(media.state.participants.single.audioMuted, isTrue);
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'unmute', <String, Object?>{'name': 'audio'}),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(media.state.participants.single.audioMuted, isFalse);
+    },
+  );
+
+  test(
     'an interruption mutes the microphone and giving it back unmutes',
     () async {
       final interruptions = StreamController<CallAudioInterruption>.broadcast();

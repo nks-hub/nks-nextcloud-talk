@@ -1,21 +1,20 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
+import 'call_controls.dart';
 import 'call_join_controller.dart';
 import 'call_lifecycle_service.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_participants_sheet.dart';
+import 'call_screen.dart';
 import 'call_state.dart';
 import 'call_transport_service.dart';
-
-const _callReactions = <String>['❤️', '🎉', '👏', '👍', '👎', '😂'];
 
 /// Banner shown above a chat while the server reports a running call.
 ///
@@ -250,112 +249,16 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
-                  key: const Key('call-banner-mute'),
-                  tooltip: join.media.muted
-                      ? strings.callBannerUnmute
-                      : strings.callBannerMute,
+                  key: const Key('call-banner-open'),
+                  tooltip: strings.callBannerOpenCallView,
                   color: scheme.onPrimaryContainer,
-                  isSelected: join.media.muted,
-                  onPressed: join.isBusy
-                      ? null
-                      : () => unawaited(
-                          ref
-                              .read(callJoinControllerProvider(key).notifier)
-                              .setMicrophoneMuted(!join.media.muted),
-                        ),
-                  icon: const Icon(Icons.mic_rounded),
-                  selectedIcon: const Icon(Icons.mic_off_rounded),
+                  onPressed: () => unawaited(showCallScreen(context, key)),
+                  icon: const Icon(Icons.grid_view_rounded),
                 ),
-                // Only a phone has two outputs to choose from.
-                if (defaultTargetPlatform == TargetPlatform.android ||
-                    defaultTargetPlatform == TargetPlatform.iOS)
-                  IconButton(
-                    key: const Key('call-banner-speaker'),
-                    tooltip: join.media.speakerphone
-                        ? strings.callBannerSpeakerOff
-                        : strings.callBannerSpeakerOn,
-                    color: scheme.onPrimaryContainer,
-                    isSelected: join.media.speakerphone,
-                    onPressed: join.isBusy
-                        ? null
-                        : () => unawaited(
-                            ref
-                                .read(callJoinControllerProvider(key).notifier)
-                                .setSpeakerphone(!join.media.speakerphone),
-                          ),
-                    icon: const Icon(Icons.volume_down_rounded),
-                    selectedIcon: const Icon(Icons.volume_up_rounded),
-                  ),
-                IconButton(
-                  key: const Key('call-banner-camera'),
-                  tooltip: join.media.cameraOn
-                      ? strings.callBannerCameraOff
-                      : strings.callBannerCameraOn,
+                CallControls(
+                  roomKey: key,
+                  join: join,
                   color: scheme.onPrimaryContainer,
-                  isSelected: join.media.cameraOn,
-                  onPressed: join.isBusy
-                      ? null
-                      : () => unawaited(
-                          ref
-                              .read(callJoinControllerProvider(key).notifier)
-                              .setCameraEnabled(!join.media.cameraOn),
-                        ),
-                  icon: const Icon(Icons.videocam_off_outlined),
-                  selectedIcon: const Icon(Icons.videocam_rounded),
-                ),
-                IconButton(
-                  key: const Key('call-banner-raise-hand'),
-                  tooltip: join.media.handRaised
-                      ? strings.callBannerLowerHand
-                      : strings.callBannerRaiseHand,
-                  color: scheme.onPrimaryContainer,
-                  isSelected: join.media.handRaised,
-                  onPressed: join.isBusy
-                      ? null
-                      : () => unawaited(
-                          ref
-                              .read(callJoinControllerProvider(key).notifier)
-                              .setHandRaised(!join.media.handRaised),
-                        ),
-                  // The count is the other participants' hands; our own is the
-                  // selected state of the icon.
-                  icon: Badge.count(
-                    key: const Key('call-banner-raised-hands'),
-                    count: join.media.raisedHands,
-                    isLabelVisible: join.media.raisedHands > 0,
-                    child: const Icon(Icons.front_hand_outlined),
-                  ),
-                  selectedIcon: Badge.count(
-                    count: join.media.raisedHands,
-                    isLabelVisible: join.media.raisedHands > 0,
-                    child: const Icon(Icons.front_hand_rounded),
-                  ),
-                ),
-                // The same six the web client offers, in the same order.
-                PopupMenuButton<String>(
-                  key: const Key('call-banner-react'),
-                  tooltip: strings.callBannerReact,
-                  enabled: !join.isBusy,
-                  onSelected: (emoji) => unawaited(
-                    ref
-                        .read(callJoinControllerProvider(key).notifier)
-                        .sendReaction(emoji),
-                  ),
-                  itemBuilder: (context) => <PopupMenuEntry<String>>[
-                    for (final emoji in _callReactions)
-                      PopupMenuItem<String>(
-                        key: Key('call-banner-react-$emoji'),
-                        value: emoji,
-                        child: Text(
-                          emoji,
-                          style: const TextStyle(fontSize: 22),
-                        ),
-                      ),
-                  ],
-                  icon: Icon(
-                    Icons.add_reaction_outlined,
-                    color: scheme.onPrimaryContainer,
-                  ),
                 ),
               ],
             ),

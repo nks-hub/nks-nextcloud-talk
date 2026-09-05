@@ -1794,6 +1794,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerReact => 'Poslat reakci';
 
   @override
+  String get callBannerOpenCallView => 'Otevřít zobrazení hovoru';
+
+  @override
+  String callScreenTitle(int count) {
+    return 'Hovor ($count)';
+  }
+
+  @override
   String get callBannerCameraOn => 'Zapnout kameru';
 
   @override

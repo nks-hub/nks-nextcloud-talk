@@ -1794,6 +1794,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerReact => 'Send a reaction';
 
   @override
+  String get callBannerOpenCallView => 'Open the call view';
+
+  @override
+  String callScreenTitle(int count) {
+    return 'Call ($count)';
+  }
+
+  @override
   String get callBannerCameraOn => 'Turn camera on';
 
   @override

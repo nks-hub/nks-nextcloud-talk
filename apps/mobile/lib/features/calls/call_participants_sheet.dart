@@ -171,12 +171,21 @@ final class _PeerTileState extends State<_PeerTile> {
                   ? strings.callParticipantNotResponding
                   : strings.callParticipantConnecting),
       ),
-      trailing: peer.handRaised
-          ? Icon(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (peer.audioMuted)
+            Icon(
+              Icons.mic_off_rounded,
+              semanticLabel: strings.callParticipantMuted,
+            ),
+          if (peer.handRaised)
+            Icon(
               Icons.front_hand_rounded,
               semanticLabel: strings.callParticipantHandRaised,
-            )
-          : null,
+            ),
+        ],
+      ),
     );
     if (video == null) {
       return tile;
