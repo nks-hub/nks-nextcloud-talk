@@ -35,6 +35,7 @@ final class CallMediaState {
     this.speakerphone = false,
     this.handRaised = false,
     this.raisedHands = 0,
+    this.reaction,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -59,11 +60,24 @@ final class CallMediaState {
   /// How many other participants have their hand up right now.
   final int raisedHands;
 
+  /// The most recent reaction from another participant, shown for a moment
+  /// and then gone — a reaction is a gesture, not a state.
+  final CallReaction? reaction;
+
   @override
   String toString() =>
       'CallMediaState(${phase.name}, peers: $connectedPeers/$peers, '
       'muted: $muted, speakerphone: $speakerphone, hand: $handRaised, '
-      'raised: $raisedHands, error: ${error?.name})';
+      'raised: $raisedHands, reaction: ${reaction?.emoji}, '
+      'error: ${error?.name})';
+}
+
+/// A reaction another participant sent into the call.
+final class CallReaction {
+  const CallReaction({required this.peerId, required this.emoji});
+
+  final String peerId;
+  final String emoji;
 }
 
 /// Audio media for one room's call, driven by an existing signalling session.
@@ -82,11 +96,15 @@ final class CallMediaSession {
     required Future<bool> Function(SignalingPeerMessage message) sendMessage,
     required CallMediaEngine engine,
     CallAudioInterruptions interruptions = const SilentCallAudioInterruptions(),
+    this.reactionDisplay = const Duration(seconds: 4),
   }) : _initial = initial,
        _updates = updates,
        _sendMessage = sendMessage,
        _engine = engine,
        _interruptions = interruptions;
+
+  /// How long an incoming reaction stays in the state before it clears.
+  final Duration reactionDisplay;
 
   /// Talk labels an audio/video peer connection `video` and a screen share
   /// `screen`; an audio-only call is still the `video` kind.
@@ -109,6 +127,8 @@ final class CallMediaSession {
   bool _speakerphone = false;
   bool _handRaised = false;
   final Set<String> _raisedHands = <String>{};
+  CallReaction? _reaction;
+  Timer? _reactionTimer;
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -189,6 +209,7 @@ final class CallMediaSession {
         return;
       }
       _disposed = true;
+      _reactionTimer?.cancel();
       await _subscription?.cancel();
       _subscription = null;
       await _stopMedia();
@@ -370,6 +391,8 @@ final class CallMediaSession {
         );
       case 'raiseHand':
         _receiveRaiseHand(senderId: sender.value, payload: message.payload);
+      case 'reaction':
+        _receiveReaction(senderId: sender.value, payload: message.payload);
       default:
         return;
     }
@@ -652,6 +675,50 @@ final class CallMediaSession {
     }
   }
 
+  /// Sends a reaction to everyone in the call. Talk's wire form, as the web
+  /// client sends and reads it: a `reaction` message per recipient with
+  /// `{"reaction": "👍"}`. Nothing is kept locally — it is the others' screens
+  /// that show it.
+  Future<void> sendReaction(String emoji) {
+    return _enqueue(() async {
+      if (_disposed || emoji.isEmpty) {
+        return;
+      }
+      for (final peerId in _peers.keys.toList(growable: false)) {
+        try {
+          await _send(
+            peerId: peerId,
+            type: 'reaction',
+            payload: <String, Object?>{'reaction': emoji},
+          );
+        } on CallMediaException {
+          // A reaction that missed one peer is not a reason to end the call.
+        }
+      }
+    });
+  }
+
+  void _receiveReaction({
+    required String senderId,
+    required SignalingOpaquePayload? payload,
+  }) {
+    final emoji = payload?.wire['reaction'];
+    if (emoji is! String || emoji.isEmpty || emoji.length > 16) {
+      return;
+    }
+    _reaction = CallReaction(peerId: senderId, emoji: emoji);
+    _reactionTimer?.cancel();
+    _reactionTimer = Timer(reactionDisplay, () {
+      _reactionTimer = null;
+      if (_disposed) {
+        return;
+      }
+      _reaction = null;
+      _publish();
+    });
+    _publish();
+  }
+
   void _receiveRaiseHand({
     required String senderId,
     required SignalingOpaquePayload? payload,
@@ -688,6 +755,7 @@ final class CallMediaSession {
         speakerphone: _speakerphone,
         handRaised: _handRaised,
         raisedHands: _raisedHands.length,
+        reaction: _reaction,
       ),
     );
   }

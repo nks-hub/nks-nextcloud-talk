@@ -36,6 +36,9 @@ from the commit log. Nothing here has reached testers yet.
   connections are rebuilt, and polling — which used to stop silently on the
   stale pull — restarts. Applies to the built-in Talk signalling; the
   high-performance backend path is unchanged.
+- New: send a reaction into a call from the banner (the same six the web
+  client offers); a reaction from another participant shows on the banner for
+  a moment.
 - New: raise your hand in a call from the banner, and see how many other
   participants have theirs up. Works with the web client both ways.
 - New: a speaker button in the call banner on Android and iOS, switching the

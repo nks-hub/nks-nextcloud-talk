@@ -3308,6 +3308,12 @@ abstract class AppLocalizations {
   /// **'Lower hand'**
   String get callBannerLowerHand;
 
+  /// No description provided for @callBannerReact.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a reaction'**
+  String get callBannerReact;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

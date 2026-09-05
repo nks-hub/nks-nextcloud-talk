@@ -642,6 +642,7 @@
   "callBannerSpeakerOff": "Switch to earpiece",
   "callBannerRaiseHand": "Raise hand",
   "callBannerLowerHand": "Lower hand",
+  "callBannerReact": "Send a reaction",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {

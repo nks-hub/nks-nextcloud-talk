@@ -331,6 +331,46 @@ void main() {
     expect(media.state.raisedHands, 0);
   });
 
+  // A reaction is a gesture: sent to every peer, shown for a moment when it
+  // arrives, and gone again without anyone having to dismiss it.
+  test('a reaction reaches every peer and an incoming one shows briefly', () async {
+    final media = CallMediaSession(
+      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
+      updates: updates.stream,
+      sendMessage: (message) async {
+        sent.add(message);
+        return true;
+      },
+      engine: engine,
+      reactionDisplay: const Duration(milliseconds: 20),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    sent.clear();
+
+    await media.sendReaction('👍');
+    expect(sent.single.type, 'reaction');
+    expect(sent.single.recipient?.value, _remote);
+    expect(sent.single.payload?.wire['reaction'], '👍');
+    expect(media.state.reaction, isNull, reason: 'our own is for the others');
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'reaction', <String, Object?>{'reaction': '🎉'}),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(media.state.reaction?.emoji, '🎉');
+    expect(media.state.reaction?.peerId, _remote);
+
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    expect(media.state.reaction, isNull, reason: 'it clears on its own');
+  });
+
   test('an interruption mutes the microphone and giving it back unmutes', () async {
     final interruptions = StreamController<CallAudioInterruption>.broadcast();
     addTearDown(interruptions.close);

@@ -14,6 +14,8 @@ import 'call_media_session.dart';
 import 'call_state.dart';
 import 'call_transport_service.dart';
 
+const _callReactions = <String>['❤️', '🎉', '👏', '👍', '👎', '😂'];
+
 /// Banner shown above a chat while the server reports a running call.
 ///
 /// The banner recovers and reads the room's durable call REST state before it
@@ -133,159 +135,204 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
     final statusText = joinable
         ? (_callJoinStatusText(join, strings) ?? status)
         : status;
+    // A reaction from another participant rides on the status line for a
+    // moment; the session clears it again.
+    final reaction = join.media.reaction;
+    final shownStatus = reaction == null
+        ? statusText
+        : '$statusText  ${reaction.emoji}';
 
     return Container(
       key: const Key('call-banner'),
       width: double.infinity,
       color: scheme.primaryContainer,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.videocam_rounded, color: scheme.onPrimaryContainer),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              Icon(Icons.videocam_rounded, color: scheme.onPrimaryContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        strings.callBannerTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: scheme.onPrimaryContainer,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            strings.callBannerTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(color: scheme.onPrimaryContainer),
+                          ),
                         ),
+                        if (elapsed != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            formatCallDuration(elapsed),
+                            key: const Key('call-banner-duration'),
+                            semanticsLabel: strings.callBannerRunningFor(
+                              formatCallDuration(elapsed),
+                            ),
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: scheme.onPrimaryContainer,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      shownStatus,
+                      key: const Key('call-banner-transport'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onPrimaryContainer,
                       ),
                     ),
-                    if (elapsed != null) ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        formatCallDuration(elapsed),
-                        key: const Key('call-banner-duration'),
-                        semanticsLabel: strings.callBannerRunningFor(
-                          formatCallDuration(elapsed),
-                        ),
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: scheme.onPrimaryContainer,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  statusText,
-                  key: const Key('call-banner-transport'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onPrimaryContainer,
+              ),
+              if (joinable) ...[
+                const SizedBox(width: 12),
+                FilledButton(
+                  key: const Key('call-banner-join'),
+                  onPressed: join.isBusy
+                      ? null
+                      : () {
+                          final controller = ref.read(
+                            callJoinControllerProvider(key).notifier,
+                          );
+                          unawaited(
+                            joined ? controller.leave() : controller.join(),
+                          );
+                        },
+                  child: Text(
+                    joined ? strings.callBannerLeave : strings.callBannerJoin,
                   ),
                 ),
-              ],
-            ),
-          ),
-          if (joinable) ...[
-            if (joined && join.media.phase != CallMediaPhase.failed) ...[
-              const SizedBox(width: 4),
-              IconButton(
-                key: const Key('call-banner-mute'),
-                tooltip: join.media.muted
-                    ? strings.callBannerUnmute
-                    : strings.callBannerMute,
-                color: scheme.onPrimaryContainer,
-                isSelected: join.media.muted,
-                onPressed: join.isBusy
-                    ? null
-                    : () => unawaited(
-                        ref
-                            .read(callJoinControllerProvider(key).notifier)
-                            .setMicrophoneMuted(!join.media.muted),
-                      ),
-                icon: const Icon(Icons.mic_rounded),
-                selectedIcon: const Icon(Icons.mic_off_rounded),
-              ),
-              // Only a phone has two outputs to choose from.
-              if (defaultTargetPlatform == TargetPlatform.android ||
-                  defaultTargetPlatform == TargetPlatform.iOS)
+              ] else if (lifecycleFailed) ...[
+                const SizedBox(width: 4),
                 IconButton(
-                  key: const Key('call-banner-speaker'),
-                  tooltip: join.media.speakerphone
-                      ? strings.callBannerSpeakerOff
-                      : strings.callBannerSpeakerOn,
+                  key: const Key('call-banner-lifecycle-retry'),
+                  tooltip: strings.retry,
                   color: scheme.onPrimaryContainer,
-                  isSelected: join.media.speakerphone,
+                  onPressed: () {
+                    ref.invalidate(callTransportProvider(key));
+                    ref.invalidate(callLifecycleStatusProvider(key));
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ],
+          ),
+          // The controls of a joined call get a line of their own: four icons
+          // beside the Leave button left the status text one letter per line on
+          // a phone (measured on 5 September 2026).
+          if (joinable && joined && join.media.phase != CallMediaPhase.failed)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  key: const Key('call-banner-mute'),
+                  tooltip: join.media.muted
+                      ? strings.callBannerUnmute
+                      : strings.callBannerMute,
+                  color: scheme.onPrimaryContainer,
+                  isSelected: join.media.muted,
                   onPressed: join.isBusy
                       ? null
                       : () => unawaited(
                           ref
                               .read(callJoinControllerProvider(key).notifier)
-                              .setSpeakerphone(!join.media.speakerphone),
+                              .setMicrophoneMuted(!join.media.muted),
                         ),
-                  icon: const Icon(Icons.volume_down_rounded),
-                  selectedIcon: const Icon(Icons.volume_up_rounded),
+                  icon: const Icon(Icons.mic_rounded),
+                  selectedIcon: const Icon(Icons.mic_off_rounded),
                 ),
-              IconButton(
-                key: const Key('call-banner-raise-hand'),
-                tooltip: join.media.handRaised
-                    ? strings.callBannerLowerHand
-                    : strings.callBannerRaiseHand,
-                color: scheme.onPrimaryContainer,
-                isSelected: join.media.handRaised,
-                onPressed: join.isBusy
-                    ? null
-                    : () => unawaited(
-                        ref
-                            .read(callJoinControllerProvider(key).notifier)
-                            .setHandRaised(!join.media.handRaised),
+                // Only a phone has two outputs to choose from.
+                if (defaultTargetPlatform == TargetPlatform.android ||
+                    defaultTargetPlatform == TargetPlatform.iOS)
+                  IconButton(
+                    key: const Key('call-banner-speaker'),
+                    tooltip: join.media.speakerphone
+                        ? strings.callBannerSpeakerOff
+                        : strings.callBannerSpeakerOn,
+                    color: scheme.onPrimaryContainer,
+                    isSelected: join.media.speakerphone,
+                    onPressed: join.isBusy
+                        ? null
+                        : () => unawaited(
+                            ref
+                                .read(callJoinControllerProvider(key).notifier)
+                                .setSpeakerphone(!join.media.speakerphone),
+                          ),
+                    icon: const Icon(Icons.volume_down_rounded),
+                    selectedIcon: const Icon(Icons.volume_up_rounded),
+                  ),
+                IconButton(
+                  key: const Key('call-banner-raise-hand'),
+                  tooltip: join.media.handRaised
+                      ? strings.callBannerLowerHand
+                      : strings.callBannerRaiseHand,
+                  color: scheme.onPrimaryContainer,
+                  isSelected: join.media.handRaised,
+                  onPressed: join.isBusy
+                      ? null
+                      : () => unawaited(
+                          ref
+                              .read(callJoinControllerProvider(key).notifier)
+                              .setHandRaised(!join.media.handRaised),
+                        ),
+                  // The count is the other participants' hands; our own is the
+                  // selected state of the icon.
+                  icon: Badge.count(
+                    key: const Key('call-banner-raised-hands'),
+                    count: join.media.raisedHands,
+                    isLabelVisible: join.media.raisedHands > 0,
+                    child: const Icon(Icons.front_hand_outlined),
+                  ),
+                  selectedIcon: Badge.count(
+                    count: join.media.raisedHands,
+                    isLabelVisible: join.media.raisedHands > 0,
+                    child: const Icon(Icons.front_hand_rounded),
+                  ),
+                ),
+                // The same six the web client offers, in the same order.
+                PopupMenuButton<String>(
+                  key: const Key('call-banner-react'),
+                  tooltip: strings.callBannerReact,
+                  enabled: !join.isBusy,
+                  onSelected: (emoji) => unawaited(
+                    ref
+                        .read(callJoinControllerProvider(key).notifier)
+                        .sendReaction(emoji),
+                  ),
+                  itemBuilder: (context) => <PopupMenuEntry<String>>[
+                    for (final emoji in _callReactions)
+                      PopupMenuItem<String>(
+                        key: Key('call-banner-react-$emoji'),
+                        value: emoji,
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
                       ),
-                // The count is the other participants' hands; our own is the
-                // selected state of the icon.
-                icon: Badge.count(
-                  key: const Key('call-banner-raised-hands'),
-                  count: join.media.raisedHands,
-                  isLabelVisible: join.media.raisedHands > 0,
-                  child: const Icon(Icons.front_hand_outlined),
+                  ],
+                  icon: Icon(
+                    Icons.add_reaction_outlined,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
-                selectedIcon: Badge.count(
-                  count: join.media.raisedHands,
-                  isLabelVisible: join.media.raisedHands > 0,
-                  child: const Icon(Icons.front_hand_rounded),
-                ),
-              ),
-            ],
-            const SizedBox(width: 12),
-            FilledButton(
-              key: const Key('call-banner-join'),
-              onPressed: join.isBusy
-                  ? null
-                  : () {
-                      final controller = ref.read(
-                        callJoinControllerProvider(key).notifier,
-                      );
-                      unawaited(
-                        joined ? controller.leave() : controller.join(),
-                      );
-                    },
-              child: Text(
-                joined ? strings.callBannerLeave : strings.callBannerJoin,
-              ),
+              ],
             ),
-          ] else if (lifecycleFailed) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              key: const Key('call-banner-lifecycle-retry'),
-              tooltip: strings.retry,
-              color: scheme.onPrimaryContainer,
-              onPressed: () {
-                ref.invalidate(callTransportProvider(key));
-                ref.invalidate(callLifecycleStatusProvider(key));
-              },
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
         ],
       ),
     );

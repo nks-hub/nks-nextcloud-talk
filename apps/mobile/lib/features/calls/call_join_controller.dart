@@ -168,6 +168,15 @@ final class CallJoinController
     await session.setHandRaised(raised);
   }
 
+  /// Sends a reaction into the joined call.
+  Future<void> sendReaction(String emoji) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.sendReaction(emoji);
+  }
+
   Future<void> leave() async {
     if (state.phase == CallJoinPhase.idle || state.isBusy) {
       return;

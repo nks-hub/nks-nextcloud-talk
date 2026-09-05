@@ -621,6 +621,7 @@
   "callBannerSpeakerOff": "Přepnout na sluchátko",
   "callBannerRaiseHand": "Zvednout ruku",
   "callBannerLowerHand": "Dát ruku dolů",
+  "callBannerReact": "Poslat reakci",
   "callBannerJoining": "Připojuji k hovoru…",
   "callBannerTransportReady": "Signalizováno přes {transport}.",
   "callBannerAudioNegotiating": "Navazuji zvuk…",

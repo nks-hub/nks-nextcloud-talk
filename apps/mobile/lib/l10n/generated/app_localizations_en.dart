@@ -1791,6 +1791,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerLowerHand => 'Lower hand';
 
   @override
+  String get callBannerReact => 'Send a reaction';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override
