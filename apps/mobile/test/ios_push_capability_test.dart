@@ -120,6 +120,35 @@ void main() {
     expectCompiled(project, 'PushDeviceKeyStore.swift');
     expectCompiled(project, 'PushEnvelopeDecryptor.swift');
     expectCompiled(project, 'PushNotificationRouteStore.swift');
+    expectCompiled(project, 'CallPushKit.swift');
+  });
+
+  test('the app can be woken by a call and keep its audio in the background',
+      () {
+    // PushKit refuses to hand out a VoIP token to an app that does not
+    // declare the `voip` background mode, so without it the proxy never
+    // learns a PushKit token and a call simply never rings. `audio` is what
+    // lets a joined call keep running once the user leaves the app.
+    final info = File(
+      '$ios${Platform.pathSeparator}Info.plist',
+    ).readAsStringSync();
+    final key = info.indexOf('<key>UIBackgroundModes</key>');
+    expect(key, isNonNegative);
+    final modes = info.substring(key, info.indexOf('</array>', key));
+    expect(modes, contains('<string>voip</string>'));
+    expect(modes, contains('<string>audio</string>'));
+  });
+
+  test('the app delegate builds the CallKit bridge before Flutter exists', () {
+    // A VoIP push reaches a terminated app, and iOS requires the incoming
+    // call to be reported from inside that delivery. Building the bridge
+    // with the Flutter engine instead would miss exactly the case PushKit
+    // exists for.
+    final delegate = File(
+      '$ios${Platform.pathSeparator}AppDelegate.swift',
+    ).readAsStringSync();
+    expect(delegate, contains('let callPushKit = CallPushKit()'));
+    expect(delegate, contains('callPushKit.attach(messenger:'));
   });
 
   test('PushNotificationRouteStore.swift is compiled into both the Runner and '

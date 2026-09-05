@@ -139,6 +139,69 @@ void main() {
     expect(fields['pushEnvironment'], 'production');
   });
 
+  test('a pushkit token that arrives late still reaches the gateway', () async {
+    // The two Apple tokens are issued independently, and a call push has
+    // nowhere to go until the gateway has the PushKit one. The gateway learns
+    // it at registration time and at no other point, so a token that arrives
+    // after the first registration has to cause a second one.
+    await seedAccount('account-a');
+    final keyStore = _FakeDeviceKeyStore();
+    final api = HttpNextcloudApi(
+      client: MockClient((request) async {
+        if (request.url.path.contains('/capabilities')) {
+          return capabilitiesResponse();
+        }
+        if (request.url.path.endsWith('/push')) {
+          return nextcloudRegisterResponse();
+        }
+        return http.Response('unexpected: ${request.url}', 404);
+      }),
+    );
+    addTearDown(api.close);
+    final gatewayRequests = <http.BaseRequest>[];
+    final coordinator = PushRegistrationCoordinator(
+      accounts: accounts,
+      credentials: credentials,
+      api: api,
+      keyStore: keyStore,
+      gateway: gateway,
+      tokenHandlePrefix: 'apns-token',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'production',
+      gatewayClient: PushGatewayClient(
+        client: MockClient((request) async {
+          gatewayRequests.add(request);
+          return http.Response('', 200);
+        }),
+      ),
+    );
+    addTearDown(coordinator.dispose);
+
+    coordinator.installToken('deadbeef');
+    await coordinator.follow('account-a');
+    expect(
+      (gatewayRequests.single as http.Request).bodyFields.containsKey(
+        'voipToken',
+      ),
+      isFalse,
+    );
+
+    coordinator.installVoipToken('feedface');
+    await pumpEventQueue();
+
+    expect(gatewayRequests.length, greaterThan(1));
+    final fields = (gatewayRequests.last as http.Request).bodyFields;
+    expect(fields['voipToken'], 'feedface');
+    expect(fields['pushToken'], 'deadbeef');
+
+    // The same token again is not a change, and re-registering the whole
+    // fleet for nothing is what that would cost.
+    final before = gatewayRequests.length;
+    coordinator.installVoipToken('feedface');
+    await pumpEventQueue();
+    expect(gatewayRequests, hasLength(before));
+  });
+
   test('a server without push v2 registers nothing', () async {
     await seedAccount('account-a');
     final keyStore = _FakeDeviceKeyStore();

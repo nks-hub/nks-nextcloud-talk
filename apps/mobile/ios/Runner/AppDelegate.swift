@@ -120,6 +120,10 @@ final class AppleDeepLinkDelivery {
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
   private var incomingShareChannel: AppleIncomingShareChannel?
   private var callAudioInterruptions: CallAudioInterruptions?
+  /// Built at launch, not with the engine: a VoIP push can arrive at a
+  /// terminated app, and iOS requires the call to be reported to CallKit from
+  /// inside that delivery — long before Flutter exists.
+  let callPushKit = CallPushKit()
   private var backgroundDrainChannel: FlutterMethodChannel?
 
   override func application(
@@ -312,6 +316,7 @@ final class AppleDeepLinkDelivery {
     callAudioInterruptions = CallAudioInterruptions(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+    callPushKit.attach(messenger: engineBridge.applicationRegistrar.messenger())
 
     let drain = FlutterMethodChannel(
       name: "com.nkshub.nextcloudtalk/background_drain",

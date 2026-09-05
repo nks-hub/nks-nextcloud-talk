@@ -20,6 +20,7 @@ final class PushGatewayClient {
     required String rawPushToken,
     required PushGatewayProvider pushProvider,
     String? pushEnvironment,
+    String? voipToken,
   }) async {
     final validEnvironment =
         pushEnvironment == 'development' || pushEnvironment == 'production';
@@ -37,6 +38,16 @@ final class PushGatewayClient {
         'FCM does not use an APNs environment',
       );
     }
+    // PushKit is Apple's, and its token is a second one — the proxy keeps it
+    // beside the ordinary token and sends a call push to it, because APNs
+    // refuses a VoIP push to anything else.
+    if (pushProvider != PushGatewayProvider.apns && voipToken != null) {
+      throw ArgumentError.value(
+        voipToken,
+        'voipToken',
+        'PushKit applies to APNs only',
+      );
+    }
     final response = await _client.post(
       effect.uri,
       body: <String, String>{
@@ -44,6 +55,7 @@ final class PushGatewayClient {
         'pushToken': rawPushToken,
         'pushProvider': pushProvider.name,
         'pushEnvironment': ?pushEnvironment,
+        'voipToken': ?voipToken,
       },
     );
     return decodePushGatewayRegistrationResponse(

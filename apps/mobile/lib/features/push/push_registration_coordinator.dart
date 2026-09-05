@@ -111,6 +111,7 @@ final class PushRegistrationCoordinator {
   var _credentialRetrySeq = 0;
   var _providerGeneration = 0;
   String? _rawToken;
+  String? _voipToken;
   var _draining = false;
   var _disposed = false;
   Future<void>? _activeDrain;
@@ -144,6 +145,25 @@ final class PushRegistrationCoordinator {
       ),
     );
     unawaited(_drain());
+  }
+
+  /// Feeds the device's PushKit token in. Only iOS has one, and only the
+  /// gateway wants it: a call push is a VoIP push, which APNs delivers to
+  /// this token and refuses to send to the ordinary one.
+  ///
+  /// It arrives on its own schedule, usually within a moment of the ordinary
+  /// token and so before anything has registered. A later or changed one
+  /// re-runs the whole registration rather than being lost, because the
+  /// gateway learns it at registration time and at no other point.
+  void installVoipToken(String token) {
+    if (_disposed || token.isEmpty || token == _voipToken) {
+      return;
+    }
+    _voipToken = token;
+    final rawToken = _rawToken;
+    if (rawToken != null) {
+      installToken(rawToken);
+    }
   }
 
   /// Starts, or refreshes, registration for [accountId]. Safe to call again
@@ -484,6 +504,7 @@ final class PushRegistrationCoordinator {
         rawPushToken: rawToken,
         pushProvider: _pushProvider,
         pushEnvironment: _pushEnvironment,
+        voipToken: _pushProvider == PushGatewayProvider.apns ? _voipToken : null,
       );
     } on Object {
       return PushGatewayRegistrationCompletion.transientFailure(effect: effect);

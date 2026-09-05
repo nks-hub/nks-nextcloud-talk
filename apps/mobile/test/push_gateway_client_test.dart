@@ -83,6 +83,57 @@ void main() {
     expect(completion.classification, PushCompletionClass.success);
   });
 
+  test('the pushkit token rides along, and only for apns', () async {
+    late http.BaseRequest seen;
+    final client = PushGatewayClient(
+      client: MockClient((request) async {
+        seen = request;
+        return http.Response('', 200);
+      }),
+    );
+    addTearDown(client.close);
+
+    final effect = RegisterPushWithGatewayEffect(
+      context: _context(),
+      providerToken: PushProviderTokenBinding(
+        handle: PushTokenHandle.parse('token-1'),
+        sha512: 'a' * 128,
+        generation: 1,
+      ),
+      registration: _registration(),
+      cloudId: null,
+    );
+
+    await client.register(
+      effect,
+      rawPushToken: 'deadbeef',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'production',
+      voipToken: 'feedface',
+    );
+    expect((seen as http.Request).bodyFields['voipToken'], 'feedface');
+
+    // Without one the field is absent rather than empty: the proxy tells an
+    // absent PushKit registration from a malformed one.
+    await client.register(
+      effect,
+      rawPushToken: 'deadbeef',
+      pushProvider: PushGatewayProvider.apns,
+      pushEnvironment: 'production',
+    );
+    expect((seen as http.Request).bodyFields.containsKey('voipToken'), isFalse);
+
+    expect(
+      () => client.register(
+        effect,
+        rawPushToken: 'fcm-token',
+        pushProvider: PushGatewayProvider.fcm,
+        voipToken: 'feedface',
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('a 409 is a conflict, not a rejection', () async {
     final client = PushGatewayClient(
       client: MockClient((request) async => http.Response('', 409)),

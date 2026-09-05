@@ -126,3 +126,36 @@ final callJoinControllerProvider =
       CallJoinState,
       CallRoomKey
     >(CallJoinController.new);
+
+/// The system call screen on iOS: a VoIP push rings it while the app is not
+/// running, and this turns what the user pressed there into the same join and
+/// leave the in-app banner performs.
+///
+/// It also carries the PushKit token into the push registration — without
+/// that token the proxy has nothing to send a call push to, so nothing rings
+/// in the first place. `null` off iOS: CallKit is Apple's and macOS has no
+/// PushKit at all.
+final callKitChannelProvider = Provider<CallKitChannel?>((ref) {
+  if (!Platform.isIOS) {
+    return null;
+  }
+  final registration = ref.watch(applePushRegistrationCoordinatorProvider);
+  if (registration == null) {
+    return null;
+  }
+  final channel = CallKitChannel(onVoipToken: registration.installVoipToken);
+  ref.onDispose(channel.dispose);
+  unawaited(channel.checkLaunchVoipToken());
+  channel.answered.listen((ring) {
+    final key = (accountId: ring.accountId, roomToken: ring.roomToken);
+    unawaited(ref.read(callJoinControllerProvider(key).notifier).join());
+  });
+  channel.ended.listen((ring) {
+    if (ring == null) {
+      return;
+    }
+    final key = (accountId: ring.accountId, roomToken: ring.roomToken);
+    unawaited(ref.read(callJoinControllerProvider(key).notifier).leave());
+  });
+  return channel;
+});

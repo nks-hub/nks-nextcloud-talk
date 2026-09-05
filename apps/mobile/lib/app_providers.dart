@@ -30,6 +30,7 @@ import 'features/calls/call_audio_interruptions.dart';
 import 'features/calls/call_picture_in_picture.dart';
 import 'features/calls/call_screen_share_service.dart';
 import 'features/calls/call_join_controller.dart';
+import 'features/calls/call_kit_channel.dart';
 import 'features/calls/call_lifecycle_controller.dart';
 import 'features/calls/call_lifecycle_service.dart';
 import 'features/calls/call_media_engine.dart';
