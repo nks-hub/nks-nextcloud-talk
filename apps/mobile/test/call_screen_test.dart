@@ -82,11 +82,14 @@ CallJoinState _joined() => CallJoinState(
   ),
 );
 
-Future<_FakePictureInPicture> _pumpCallScreen(WidgetTester tester) async {
+Future<_FakePictureInPicture> _pumpCallScreen(
+  WidgetTester tester, {
+  double devicePixelRatio = 1,
+}) async {
   // A phone-sized surface: on the default test window the third tile of
   // the grid is below the fold and is not built at all.
   tester.view.physicalSize = const Size(1080, 2340);
-  tester.view.devicePixelRatio = 1;
+  tester.view.devicePixelRatio = devicePixelRatio;
   addTearDown(tester.view.reset);
   final pictureInPicture = _FakePictureInPicture();
   await tester.pumpWidget(
@@ -131,6 +134,35 @@ void main() {
     expect(find.byKey(const Key('call-screen-raise-hand')), findsOneWidget);
     expect(find.byKey(const Key('call-screen-react')), findsOneWidget);
     expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+  });
+
+  testWidgets('the controls fit a real phone, not just a test window', (
+    tester,
+  ) async {
+    // The case above runs at a device pixel ratio of 1, so those 1080 pixels
+    // are 1080 LOGICAL points and everything fits with room to spare. A phone
+    // of the same pixel width is about 411 points across, and there the six
+    // round controls plus a labelled Leave button did not fit: the row simply
+    // clipped and the red button ran off the right edge reading "Leave c".
+    // Seen on the emulator on 5 September 2026, invisible to every test
+    // because of the ratio.
+    await _pumpCallScreen(tester, devicePixelRatio: 2.625);
+
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'the control bar must not overflow its width',
+    );
+    // Everything is still there and still reachable, on one line or two.
+    for (final key in const <String>[
+      'call-screen-mute',
+      'call-screen-camera',
+      'call-screen-raise-hand',
+      'call-screen-react',
+      'call-screen-leave',
+    ]) {
+      expect(find.byKey(Key(key)), findsOneWidget, reason: key);
+    }
   });
 
   testWidgets('in the small window only the tiles are drawn', (tester) async {

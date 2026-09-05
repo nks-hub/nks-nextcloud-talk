@@ -164,8 +164,17 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              // Wrap, not Row: six round controls plus a labelled leave
+              // button do not fit across a 411 dp phone, and a Row simply
+              // clips — on the emulator the red button ran off the right
+              // edge reading "Leave c". Wrapping puts the button on its own
+              // line when it has to, which keeps every control at full size
+              // rather than shrinking the targets to fit.
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   CallControls(
                     roomKey: roomKey,
@@ -173,7 +182,6 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
                     color: Colors.white,
                     keyPrefix: 'call-screen',
                   ),
-                  const SizedBox(width: 8),
                   FilledButton.icon(
                     key: const Key('call-screen-leave'),
                     style: FilledButton.styleFrom(
