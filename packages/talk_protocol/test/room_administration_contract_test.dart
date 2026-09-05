@@ -111,6 +111,7 @@ Matcher _protocolFailure(TalkProtocolErrorCode code) => throwsA(
 );
 
 void main() {
+  group('breakout rooms', breakoutRoomsTests);
   group('SetRoomPublicRequest', () {
     test('POSTs to the v4 public endpoint when making a room public', () {
       final request = SetRoomPublicRequest(
@@ -927,5 +928,92 @@ void main() {
         _protocolFailure(TalkProtocolErrorCode.unsupportedHttpStatus),
       );
     });
+  });
+}
+
+void breakoutRoomsTests() {
+  const base =
+      'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v1/breakout-rooms/rooma123';
+
+  test('breakout requests take the v1 breakout paths and bodies', () {
+    final configure = ConfigureBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: BreakoutRoomMode.automatic,
+      amount: 3,
+    );
+    expect(configure.httpMethod, 'POST');
+    expect(configure.uri.toString(), '$base?format=json');
+    expect(configure.formBody, {
+      'mode': '1',
+      'amount': '3',
+      'attendeeMap': '[]',
+    });
+
+    final run = RunBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      start: true,
+    );
+    expect(run.httpMethod, 'POST');
+    expect(run.uri.toString(), '$base/rooms?format=json');
+    expect(run.formBody, isNull);
+
+    final broadcast = BroadcastBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      message: 'Five more minutes',
+    );
+    expect(broadcast.uri.toString(), '$base/broadcast?format=json');
+    expect(broadcast.formBody, {'message': 'Five more minutes'});
+
+    final assistance = BreakoutAssistanceRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      requested: false,
+    );
+    expect(assistance.httpMethod, 'DELETE');
+    expect(assistance.uri.toString(), '$base/request-assistance?format=json');
+
+    expect(
+      () => ConfigureBreakoutRoomsRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        mode: BreakoutRoomMode.automatic,
+        amount: 21,
+      ),
+      throwsA(isA<TalkProtocolException>()),
+    );
+    expect(
+      () => BroadcastBreakoutRoomsRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        message: '   ',
+      ),
+      throwsA(isA<TalkProtocolException>()),
+    );
+  });
+
+  test('a 201 broadcast decodes as a success without a room', () {
+    final request = BroadcastBreakoutRoomsRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      message: 'Five more minutes',
+    );
+    final response = decodeRoomAdministrationResponse(
+      request: request,
+      statusCode: 201,
+      body: _ocsBody(statusCode: 201, data: const <Object?>[]),
+    );
+    expect(response, isA<RoomAdministrationSuccess>());
+    expect(response.statusCode, 201);
+    expect((response as RoomAdministrationSuccess).room, isNull);
   });
 }

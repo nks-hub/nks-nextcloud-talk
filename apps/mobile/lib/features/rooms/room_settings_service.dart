@@ -640,6 +640,98 @@ final class RoomSettingsService {
     );
   }
 
+  /// Creates the breakout rooms of a group conversation. Moderator-only; the
+  /// caller gates it on `breakout-rooms-v1`.
+  Future<ConversationRoom?> configureBreakoutRooms({
+    required String accountId,
+    required String roomToken,
+    required int amount,
+    BreakoutRoomMode mode = BreakoutRoomMode.automatic,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => ConfigureBreakoutRoomsRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        mode: mode,
+        amount: amount,
+      ),
+    );
+  }
+
+  Future<ConversationRoom?> removeBreakoutRooms({
+    required String accountId,
+    required String roomToken,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => RemoveBreakoutRoomsRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+      ),
+    );
+  }
+
+  /// Starts or ends the breakout session of the parent conversation.
+  Future<ConversationRoom?> runBreakoutRooms({
+    required String accountId,
+    required String roomToken,
+    required bool start,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => RunBreakoutRoomsRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        start: start,
+      ),
+    );
+  }
+
+  /// Posts one message into every breakout room. Nothing comes back but the
+  /// success itself.
+  Future<void> broadcastToBreakoutRooms({
+    required String accountId,
+    required String roomToken,
+    required String message,
+  }) async {
+    await _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => BroadcastBreakoutRoomsRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        message: message,
+      ),
+    );
+  }
+
+  /// Raises or withdraws a breakout room's request for a moderator.
+  /// `roomToken` is the breakout room's own token.
+  Future<ConversationRoom?> setBreakoutAssistance({
+    required String accountId,
+    required String roomToken,
+    required bool requested,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => BreakoutAssistanceRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        requested: requested,
+      ),
+    );
+  }
+
   /// Changes the room's SIP dial-in mode. The caller gates this on the
   /// server's `sip-support` capability and authoritative `canEnableSIP` flag.
   Future<ConversationRoom> setSip({

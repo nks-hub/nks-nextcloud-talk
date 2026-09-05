@@ -2207,6 +2207,68 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsLobbyLabel => 'Čekárna';
 
   @override
+  String get roomDetailsBreakoutLabel => 'Oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutNotConfigured => 'Zatím žádné';
+
+  @override
+  String get roomDetailsBreakoutStopped => 'Vytvořené, nespuštěné';
+
+  @override
+  String get roomDetailsBreakoutStarted => 'Spuštěné';
+
+  @override
+  String get roomDetailsBreakoutAssistanceRequested =>
+      'Spuštěné — místnost žádá moderátora';
+
+  @override
+  String get roomDetailsBreakoutCreate => 'Vytvořit oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutCreateDialogTitle =>
+      'Kolik oddělených místností?';
+
+  @override
+  String get roomDetailsBreakoutStart => 'Spustit oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutStop => 'Ukončit oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutBroadcast =>
+      'Zpráva do všech oddělených místností';
+
+  @override
+  String get roomDetailsBreakoutBroadcastHint =>
+      'Jedna zpráva, odeslaná do každé oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutBroadcastSend => 'Odeslat';
+
+  @override
+  String get roomDetailsBreakoutRemove => 'Odstranit oddělené místnosti';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogTitle =>
+      'Odstranit oddělené místnosti?';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogMessage =>
+      'Oddělené místnosti i jejich chaty se smažou. Hlavní konverzace zůstane.';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogConfirm => 'Odstranit';
+
+  @override
+  String get roomDetailsBreakoutRequestAssistance =>
+      'Požádat moderátora, aby přišel';
+
+  @override
+  String get roomDetailsBreakoutWithdrawAssistance =>
+      'Stáhnout žádost o moderátora';
+
+  @override
   String get roomDetailsLobbyOff => 'Zapojit se může každý';
 
   @override

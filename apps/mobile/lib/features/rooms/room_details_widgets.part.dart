@@ -717,3 +717,178 @@ final class _ParticipantsError extends StatelessWidget {
     );
   }
 }
+
+enum _BreakoutAction { create, start, stop, broadcast, remove }
+
+/// What a moderator can do with the breakout rooms right now: create them
+/// while there are none; start, stop, broadcast to and remove them afterwards.
+final class _BreakoutActionsSheet extends StatelessWidget {
+  const _BreakoutActionsSheet({
+    required this.strings,
+    required this.configured,
+    required this.started,
+  });
+
+  final AppLocalizations strings;
+  final bool configured;
+  final bool started;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          if (!configured)
+            ListTile(
+              key: const Key('room-details-breakout-create'),
+              leading: const Icon(Icons.add_rounded),
+              title: Text(strings.roomDetailsBreakoutCreate),
+              onTap: () => Navigator.of(context).pop(_BreakoutAction.create),
+            ),
+          if (configured && !started)
+            ListTile(
+              key: const Key('room-details-breakout-start'),
+              leading: const Icon(Icons.play_arrow_rounded),
+              title: Text(strings.roomDetailsBreakoutStart),
+              onTap: () => Navigator.of(context).pop(_BreakoutAction.start),
+            ),
+          if (configured && started)
+            ListTile(
+              key: const Key('room-details-breakout-stop'),
+              leading: const Icon(Icons.stop_rounded),
+              title: Text(strings.roomDetailsBreakoutStop),
+              onTap: () => Navigator.of(context).pop(_BreakoutAction.stop),
+            ),
+          if (configured)
+            ListTile(
+              key: const Key('room-details-breakout-broadcast'),
+              leading: const Icon(Icons.campaign_outlined),
+              title: Text(strings.roomDetailsBreakoutBroadcast),
+              onTap: () => Navigator.of(context).pop(_BreakoutAction.broadcast),
+            ),
+          if (configured)
+            ListTile(
+              key: const Key('room-details-breakout-remove'),
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: Text(strings.roomDetailsBreakoutRemove),
+              onTap: () => Navigator.of(context).pop(_BreakoutAction.remove),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// How many breakout rooms to create — Talk allows 1 to 20, attendees are
+/// spread automatically.
+final class _BreakoutAmountDialog extends StatefulWidget {
+  const _BreakoutAmountDialog({required this.strings});
+
+  final AppLocalizations strings;
+
+  @override
+  State<_BreakoutAmountDialog> createState() => _BreakoutAmountDialogState();
+}
+
+final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
+  int _amount = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    return AlertDialog(
+      key: const Key('room-details-breakout-create-dialog'),
+      title: Text(strings.roomDetailsBreakoutCreateDialogTitle),
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: _amount > breakoutRoomsMinimum
+                ? () => setState(() => _amount--)
+                : null,
+            icon: const Icon(Icons.remove_rounded),
+          ),
+          Text(
+            '$_amount',
+            key: const Key('room-details-breakout-amount'),
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          IconButton(
+            onPressed: _amount < breakoutRoomsMaximum
+                ? () => setState(() => _amount++)
+                : null,
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(
+          key: const Key('room-details-breakout-create-confirm'),
+          onPressed: () => Navigator.of(context).pop(_amount),
+          child: Text(strings.roomDetailsBreakoutCreate),
+        ),
+      ],
+    );
+  }
+}
+
+final class _BreakoutBroadcastDialog extends StatefulWidget {
+  const _BreakoutBroadcastDialog({required this.strings});
+
+  final AppLocalizations strings;
+
+  @override
+  State<_BreakoutBroadcastDialog> createState() =>
+      _BreakoutBroadcastDialogState();
+}
+
+final class _BreakoutBroadcastDialogState
+    extends State<_BreakoutBroadcastDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    return AlertDialog(
+      key: const Key('room-details-breakout-broadcast-dialog'),
+      title: Text(strings.roomDetailsBreakoutBroadcast),
+      content: TextField(
+        key: const Key('room-details-breakout-broadcast-field'),
+        controller: _controller,
+        autofocus: true,
+        maxLines: 3,
+        maxLength: breakoutBroadcastMaximumLength,
+        decoration: InputDecoration(
+          hintText: strings.roomDetailsBreakoutBroadcastHint,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(strings.cancel),
+        ),
+        FilledButton(
+          key: const Key('room-details-breakout-broadcast-confirm'),
+          onPressed: () {
+            final text = _controller.text.trim();
+            if (text.isNotEmpty) {
+              Navigator.of(context).pop(text);
+            }
+          },
+          child: Text(strings.roomDetailsBreakoutBroadcastSend),
+        ),
+      ],
+    );
+  }
+}

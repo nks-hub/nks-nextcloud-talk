@@ -49,6 +49,7 @@ const _roomRemovalAllowedStatusCodes = {200, 400, 401, 403, 404, 429, 503};
 /// Shared by moderator-only room administration endpoints.
 const _roomAdministrationAllowedStatusCodes = {
   200,
+  201,
   400,
   401,
   403,

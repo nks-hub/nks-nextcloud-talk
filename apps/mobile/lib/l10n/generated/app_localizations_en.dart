@@ -2209,6 +2209,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsLobbyLabel => 'Lobby';
 
   @override
+  String get roomDetailsBreakoutLabel => 'Breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutNotConfigured => 'None yet';
+
+  @override
+  String get roomDetailsBreakoutStopped => 'Created, not started';
+
+  @override
+  String get roomDetailsBreakoutStarted => 'Started';
+
+  @override
+  String get roomDetailsBreakoutAssistanceRequested =>
+      'Started — a room asks for a moderator';
+
+  @override
+  String get roomDetailsBreakoutCreate => 'Create breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutCreateDialogTitle => 'How many breakout rooms?';
+
+  @override
+  String get roomDetailsBreakoutStart => 'Start the breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutStop => 'Stop the breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutBroadcast => 'Message all breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutBroadcastHint =>
+      'One message, posted in every breakout room';
+
+  @override
+  String get roomDetailsBreakoutBroadcastSend => 'Send';
+
+  @override
+  String get roomDetailsBreakoutRemove => 'Remove the breakout rooms';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogTitle =>
+      'Remove the breakout rooms?';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogMessage =>
+      'The breakout rooms and their chats are deleted. The main conversation stays.';
+
+  @override
+  String get roomDetailsBreakoutRemoveDialogConfirm => 'Remove';
+
+  @override
+  String get roomDetailsBreakoutRequestAssistance =>
+      'Ask a moderator to come over';
+
+  @override
+  String get roomDetailsBreakoutWithdrawAssistance =>
+      'Withdraw the request for a moderator';
+
+  @override
   String get roomDetailsLobbyOff => 'Everyone can take part';
 
   @override

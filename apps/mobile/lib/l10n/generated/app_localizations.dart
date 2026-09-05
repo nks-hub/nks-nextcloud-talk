@@ -4034,6 +4034,114 @@ abstract class AppLocalizations {
   /// **'Lobby'**
   String get roomDetailsLobbyLabel;
 
+  /// No description provided for @roomDetailsBreakoutLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Breakout rooms'**
+  String get roomDetailsBreakoutLabel;
+
+  /// No description provided for @roomDetailsBreakoutNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'None yet'**
+  String get roomDetailsBreakoutNotConfigured;
+
+  /// No description provided for @roomDetailsBreakoutStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Created, not started'**
+  String get roomDetailsBreakoutStopped;
+
+  /// No description provided for @roomDetailsBreakoutStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get roomDetailsBreakoutStarted;
+
+  /// No description provided for @roomDetailsBreakoutAssistanceRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Started — a room asks for a moderator'**
+  String get roomDetailsBreakoutAssistanceRequested;
+
+  /// No description provided for @roomDetailsBreakoutCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create breakout rooms'**
+  String get roomDetailsBreakoutCreate;
+
+  /// No description provided for @roomDetailsBreakoutCreateDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How many breakout rooms?'**
+  String get roomDetailsBreakoutCreateDialogTitle;
+
+  /// No description provided for @roomDetailsBreakoutStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start the breakout rooms'**
+  String get roomDetailsBreakoutStart;
+
+  /// No description provided for @roomDetailsBreakoutStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the breakout rooms'**
+  String get roomDetailsBreakoutStop;
+
+  /// No description provided for @roomDetailsBreakoutBroadcast.
+  ///
+  /// In en, this message translates to:
+  /// **'Message all breakout rooms'**
+  String get roomDetailsBreakoutBroadcast;
+
+  /// No description provided for @roomDetailsBreakoutBroadcastHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One message, posted in every breakout room'**
+  String get roomDetailsBreakoutBroadcastHint;
+
+  /// No description provided for @roomDetailsBreakoutBroadcastSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get roomDetailsBreakoutBroadcastSend;
+
+  /// No description provided for @roomDetailsBreakoutRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the breakout rooms'**
+  String get roomDetailsBreakoutRemove;
+
+  /// No description provided for @roomDetailsBreakoutRemoveDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the breakout rooms?'**
+  String get roomDetailsBreakoutRemoveDialogTitle;
+
+  /// No description provided for @roomDetailsBreakoutRemoveDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The breakout rooms and their chats are deleted. The main conversation stays.'**
+  String get roomDetailsBreakoutRemoveDialogMessage;
+
+  /// No description provided for @roomDetailsBreakoutRemoveDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get roomDetailsBreakoutRemoveDialogConfirm;
+
+  /// No description provided for @roomDetailsBreakoutRequestAssistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a moderator to come over'**
+  String get roomDetailsBreakoutRequestAssistance;
+
+  /// No description provided for @roomDetailsBreakoutWithdrawAssistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw the request for a moderator'**
+  String get roomDetailsBreakoutWithdrawAssistance;
+
   /// Subtitle shown while the lobby is off.
   ///
   /// In en, this message translates to:

@@ -54,6 +54,8 @@ const int _notificationNever = 3;
 const String _avatarCapability = 'avatar';
 const String _readOnlyCapability = 'read-only-rooms';
 const String _lobbyCapability = 'webinary-lobby';
+const String _breakoutCapability = 'breakout-rooms-v1';
+const String _breakoutObjectType = 'room';
 const String _sipCapability = 'sip-support';
 const String _sipNoPinCapability = 'sip-support-nopin';
 const String _banCapability = 'ban-v1';
@@ -393,6 +395,28 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               value: _lobbyState != 0,
               onChanged: _busy ? null : _toggleLobby,
+            ),
+          if (_canManageBreakoutRooms)
+            ListTile(
+              key: const Key('room-details-breakout'),
+              leading: const Icon(Icons.groups_2_outlined),
+              title: Text(strings.roomDetailsBreakoutLabel),
+              subtitle: Text(
+                _breakoutLabel(strings),
+                key: const Key('room-details-breakout-subtitle'),
+              ),
+              onTap: _busy ? null : _manageBreakoutRooms,
+            ),
+          if (_isBreakoutRoom)
+            ListTile(
+              key: const Key('room-details-breakout-assistance'),
+              leading: const Icon(Icons.support_agent_outlined),
+              title: Text(
+                _breakoutStatus == 2
+                    ? strings.roomDetailsBreakoutWithdrawAssistance
+                    : strings.roomDetailsBreakoutRequestAssistance,
+              ),
+              onTap: _busy ? null : _toggleBreakoutAssistance,
             ),
           if (_canSetSip)
             ListTile(

@@ -91,6 +91,139 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       _isGroupOrPublic &&
       _talkFeatures.contains(_lobbyCapability);
 
+  /// Talk offers breakout rooms on group conversations only, to moderators,
+  /// with the `breakout-rooms-v1` capability. A breakout room itself is
+  /// marked by `objectType == 'room'` (its `objectId` is the parent's token).
+  bool get _canManageBreakoutRooms =>
+      _isModerator &&
+      _room?.type == _roomTypeGroup &&
+      _room?.objectType != _breakoutObjectType &&
+      _talkFeatures.contains(_breakoutCapability);
+
+  bool get _isBreakoutRoom =>
+      _room?.objectType == _breakoutObjectType &&
+      _talkFeatures.contains(_breakoutCapability);
+
+  int get _breakoutMode => _wireInt('breakoutRoomMode');
+  int get _breakoutStatus => _wireInt('breakoutRoomStatus');
+
+  int _wireInt(String key) {
+    final value = _room?.wire[key];
+    return value is int ? value : 0;
+  }
+
+  String _breakoutLabel(AppLocalizations strings) {
+    if (_breakoutMode == 0) {
+      return strings.roomDetailsBreakoutNotConfigured;
+    }
+    return switch (_breakoutStatus) {
+      1 => strings.roomDetailsBreakoutStarted,
+      2 => strings.roomDetailsBreakoutAssistanceRequested,
+      _ => strings.roomDetailsBreakoutStopped,
+    };
+  }
+
+  Future<void> _manageBreakoutRooms() async {
+    final action = await showModalBottomSheet<_BreakoutAction>(
+      context: context,
+      builder: (sheetContext) => _BreakoutActionsSheet(
+        strings: AppLocalizations.of(context),
+        configured: _breakoutMode != 0,
+        started: _breakoutStatus != 0,
+      ),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    switch (action) {
+      case _BreakoutAction.create:
+        final amount = await showDialog<int>(
+          context: context,
+          builder: (dialogContext) =>
+              _BreakoutAmountDialog(strings: AppLocalizations.of(context)),
+        );
+        if (amount == null || !mounted) {
+          return;
+        }
+        await _administer(
+          () => ref
+              .read(roomSettingsServiceProvider)
+              .configureBreakoutRooms(
+                accountId: widget.account.id,
+                roomToken: widget.conversation.token,
+                amount: amount,
+              ),
+          fallback: () => {'breakoutRoomMode': 1, 'breakoutRoomStatus': 0},
+        );
+      case _BreakoutAction.start:
+      case _BreakoutAction.stop:
+        final start = action == _BreakoutAction.start;
+        await _administer(
+          () => ref
+              .read(roomSettingsServiceProvider)
+              .runBreakoutRooms(
+                accountId: widget.account.id,
+                roomToken: widget.conversation.token,
+                start: start,
+              ),
+          fallback: () => {'breakoutRoomStatus': start ? 1 : 0},
+        );
+      case _BreakoutAction.broadcast:
+        final message = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) =>
+              _BreakoutBroadcastDialog(strings: AppLocalizations.of(context)),
+        );
+        if (message == null || !mounted) {
+          return;
+        }
+        await _runAction(
+          () => ref
+              .read(roomSettingsServiceProvider)
+              .broadcastToBreakoutRooms(
+                accountId: widget.account.id,
+                roomToken: widget.conversation.token,
+                message: message,
+              ),
+          errorMessage: _actionErrorMessage,
+        );
+      case _BreakoutAction.remove:
+        if (!await _confirm(
+          key: 'room-details-breakout-remove-dialog',
+          confirmKey: 'room-details-breakout-remove-confirm',
+          title: (strings) => strings.roomDetailsBreakoutRemoveDialogTitle,
+          message: (strings) => strings.roomDetailsBreakoutRemoveDialogMessage,
+          confirmLabel: (strings) =>
+              strings.roomDetailsBreakoutRemoveDialogConfirm,
+        )) {
+          return;
+        }
+        await _administer(
+          () => ref
+              .read(roomSettingsServiceProvider)
+              .removeBreakoutRooms(
+                accountId: widget.account.id,
+                roomToken: widget.conversation.token,
+              ),
+          fallback: () => {'breakoutRoomMode': 0, 'breakoutRoomStatus': 0},
+        );
+    }
+  }
+
+  Future<void> _toggleBreakoutAssistance() async {
+    final requested = _breakoutStatus != 2;
+    await _administer(
+      () => ref
+          .read(roomSettingsServiceProvider)
+          .setBreakoutAssistance(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            requested: requested,
+          ),
+      fallback: () => {'breakoutRoomStatus': requested ? 2 : 1},
+    );
+  }
+
   /// Talk only accepts a name and a description on group and public rooms.
   /// A one-to-one room, its former shell, note-to-self and the changelog take
   /// their title from the other party or from the system, so offering the

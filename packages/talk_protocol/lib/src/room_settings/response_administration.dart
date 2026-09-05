@@ -278,10 +278,13 @@ final class RoomAdministrationSuccess extends RoomAdministrationResponse {
   RoomAdministrationSuccess._({
     required RoomAdministrationRequest request,
     required this.room,
+    this.statusCode = 200,
   }) : super(request);
 
+  /// 200 for every change, 201 for the breakout broadcast, which creates
+  /// messages rather than changing the conversation.
   @override
-  int get statusCode => 200;
+  final int statusCode;
 
   final ConversationRoom? room;
 
@@ -429,6 +432,15 @@ RoomAdministrationResponse decodeRoomAdministrationResponse({
       return RoomAdministrationSuccess._(
         request: request,
         room: _optionalRoom(_decodeOcsEnvelope(body)),
+      );
+    case 201:
+      // The breakout broadcast: `ocs.data` holds the created chat messages,
+      // which is not a conversation and is not needed here.
+      _decodeOcsEnvelope(body);
+      return RoomAdministrationSuccess._(
+        request: request,
+        room: null,
+        statusCode: 201,
       );
     default:
       protocolFailure(
