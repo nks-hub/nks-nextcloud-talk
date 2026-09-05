@@ -1794,6 +1794,26 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerReact => 'Poslat reakci';
 
   @override
+  String callParticipantsTitle(int count) {
+    return 'V hovoru ($count)';
+  }
+
+  @override
+  String get callParticipantsYou => 'Vy';
+
+  @override
+  String get callParticipantConnected => 'Zvuk spojen';
+
+  @override
+  String get callParticipantConnecting => 'Připojování…';
+
+  @override
+  String get callParticipantMuted => 'Ztlumeno';
+
+  @override
+  String get callParticipantHandRaised => 'Zvednutá ruka';
+
+  @override
   String get callBannerJoining => 'Připojuji k hovoru…';
 
   @override

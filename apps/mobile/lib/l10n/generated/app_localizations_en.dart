@@ -1794,6 +1794,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerReact => 'Send a reaction';
 
   @override
+  String callParticipantsTitle(int count) {
+    return 'In the call ($count)';
+  }
+
+  @override
+  String get callParticipantsYou => 'You';
+
+  @override
+  String get callParticipantConnected => 'Audio connected';
+
+  @override
+  String get callParticipantConnecting => 'Connecting…';
+
+  @override
+  String get callParticipantMuted => 'Muted';
+
+  @override
+  String get callParticipantHandRaised => 'Hand raised';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override

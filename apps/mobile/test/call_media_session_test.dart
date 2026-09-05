@@ -371,6 +371,41 @@ void main() {
     expect(media.state.reaction, isNull, reason: 'it clears on its own');
   });
 
+  test('the state lists every peer with its connection and hand', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(media.state.participants.map((peer) => peer.peerId), [_remote]);
+    expect(media.state.participants.single.connected, isFalse);
+
+    engine.connections.single.onConnectionState(
+      CallMediaConnectionState.connected,
+    );
+    await pumpEventQueue();
+    expect(media.state.participants.single.connected, isTrue);
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'raiseHand', <String, Object?>{
+            'state': true,
+            'timestamp': 1,
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(media.state.participants.single.handRaised, isTrue);
+
+    updates.add(_update(localPeerId: _local, participants: []));
+    await pumpEventQueue();
+    expect(media.state.participants, isEmpty);
+  });
+
   test('an interruption mutes the microphone and giving it back unmutes', () async {
     final interruptions = StreamController<CallAudioInterruption>.broadcast();
     addTearDown(interruptions.close);

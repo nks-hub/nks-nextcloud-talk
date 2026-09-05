@@ -11,6 +11,7 @@ import 'call_join_controller.dart';
 import 'call_lifecycle_service.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
+import 'call_participants_sheet.dart';
 import 'call_state.dart';
 import 'call_transport_service.dart';
 
@@ -155,49 +156,57 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
               Icon(Icons.videocam_rounded, color: scheme.onPrimaryContainer),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            strings.callBannerTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(color: scheme.onPrimaryContainer),
-                          ),
-                        ),
-                        if (elapsed != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            formatCallDuration(elapsed),
-                            key: const Key('call-banner-duration'),
-                            semanticsLabel: strings.callBannerRunningFor(
-                              formatCallDuration(elapsed),
+                // In a joined call the texts open the participant list — the
+                // audio call's grid.
+                child: InkWell(
+                  key: const Key('call-banner-participants'),
+                  onTap: joined
+                      ? () => unawaited(showCallParticipantsSheet(context, key))
+                      : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              strings.callBannerTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(color: scheme.onPrimaryContainer),
                             ),
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  color: scheme.onPrimaryContainer,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
                           ),
+                          if (elapsed != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              formatCallDuration(elapsed),
+                              key: const Key('call-banner-duration'),
+                              semanticsLabel: strings.callBannerRunningFor(
+                                formatCallDuration(elapsed),
+                              ),
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: scheme.onPrimaryContainer,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      shownStatus,
-                      key: const Key('call-banner-transport'),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onPrimaryContainer,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        shownStatus,
+                        key: const Key('call-banner-transport'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (joinable) ...[

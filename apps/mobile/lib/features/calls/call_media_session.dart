@@ -36,6 +36,7 @@ final class CallMediaState {
     this.handRaised = false,
     this.raisedHands = 0,
     this.reaction,
+    this.participants = const <CallPeerState>[],
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -64,12 +65,32 @@ final class CallMediaState {
   /// and then gone — a reaction is a gesture, not a state.
   final CallReaction? reaction;
 
+  /// Every other participant in the call, in the order they were seen.
+  final List<CallPeerState> participants;
+
   @override
   String toString() =>
       'CallMediaState(${phase.name}, peers: $connectedPeers/$peers, '
       'muted: $muted, speakerphone: $speakerphone, hand: $handRaised, '
       'raised: $raisedHands, reaction: ${reaction?.emoji}, '
       'error: ${error?.name})';
+}
+
+/// One other participant of the call as this side sees them.
+final class CallPeerState {
+  const CallPeerState({
+    required this.peerId,
+    required this.actorType,
+    required this.actorId,
+    required this.connected,
+    required this.handRaised,
+  });
+
+  final String peerId;
+  final String actorType;
+  final String actorId;
+  final bool connected;
+  final bool handRaised;
 }
 
 /// A reaction another participant sent into the call.
@@ -129,6 +150,7 @@ final class CallMediaSession {
   final Set<String> _raisedHands = <String>{};
   CallReaction? _reaction;
   Timer? _reactionTimer;
+  final Map<String, SignalingParticipant> _participantsByPeer = {};
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -270,6 +292,13 @@ final class CallMediaSession {
         if (participant.inCall != 0 && participant.peerId != localPeerId)
           participant.peerId.value,
     };
+    _participantsByPeer
+      ..clear()
+      ..addEntries([
+        for (final participant in update.participants)
+          if (expected.contains(participant.peerId.value))
+            MapEntry(participant.peerId.value, participant),
+      ]);
     for (final gone in _peers.keys.toSet().difference(expected)) {
       await _closePeer(gone);
     }
@@ -756,6 +785,16 @@ final class CallMediaSession {
         handRaised: _handRaised,
         raisedHands: _raisedHands.length,
         reaction: _reaction,
+        participants: [
+          for (final peer in _peers.values)
+            CallPeerState(
+              peerId: peer.peerId,
+              actorType: _participantsByPeer[peer.peerId]?.actorType ?? '',
+              actorId: _participantsByPeer[peer.peerId]?.actorId ?? '',
+              connected: peer.state == CallMediaConnectionState.connected,
+              handRaised: _raisedHands.contains(peer.peerId),
+            ),
+        ],
       ),
     );
   }

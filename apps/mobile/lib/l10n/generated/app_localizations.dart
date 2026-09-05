@@ -3314,6 +3314,42 @@ abstract class AppLocalizations {
   /// **'Send a reaction'**
   String get callBannerReact;
 
+  /// No description provided for @callParticipantsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'In the call ({count})'**
+  String callParticipantsTitle(int count);
+
+  /// No description provided for @callParticipantsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get callParticipantsYou;
+
+  /// No description provided for @callParticipantConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio connected'**
+  String get callParticipantConnected;
+
+  /// No description provided for @callParticipantConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get callParticipantConnecting;
+
+  /// No description provided for @callParticipantMuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Muted'**
+  String get callParticipantMuted;
+
+  /// No description provided for @callParticipantHandRaised.
+  ///
+  /// In en, this message translates to:
+  /// **'Hand raised'**
+  String get callParticipantHandRaised;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

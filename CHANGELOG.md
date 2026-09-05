@@ -36,6 +36,9 @@ from the commit log. Nothing here has reached testers yet.
   connections are rebuilt, and polling — which used to stop silently on the
   stale pull — restarts. Applies to the built-in Talk signalling; the
   high-performance backend path is unchanged.
+- New: tap the call banner to see who is in the call — each participant with
+  their name, whether their audio is connected to you and whether their hand is
+  up; your own row shows your mute and hand.
 - New: send a reaction into a call from the banner (the same six the web
   client offers); a reaction from another participant shows on the banner for
   a moment.

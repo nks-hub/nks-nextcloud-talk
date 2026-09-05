@@ -643,6 +643,13 @@
   "callBannerRaiseHand": "Raise hand",
   "callBannerLowerHand": "Lower hand",
   "callBannerReact": "Send a reaction",
+  "callParticipantsTitle": "In the call ({count})",
+  "@callParticipantsTitle": {"placeholders": {"count": {"type": "int"}}},
+  "callParticipantsYou": "You",
+  "callParticipantConnected": "Audio connected",
+  "callParticipantConnecting": "Connecting…",
+  "callParticipantMuted": "Muted",
+  "callParticipantHandRaised": "Hand raised",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {
