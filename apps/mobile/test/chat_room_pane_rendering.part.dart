@@ -40,6 +40,54 @@ void _registerChatRoomPaneRenderingTests() {
     await _insertCachedMessage(database, reply, displayText: 'Answer');
   }
 
+  testWidgets('a system message shows the time, like every other row', (
+    tester,
+  ) async {
+    // Reported on 5 September 2026: a run of "joined the call" / "left the
+    // call" with no time on any of them is unreadable.
+    const timestamp = 1724300000;
+    final wire = _messageJson(
+      id: 60,
+      actorId: 'someone-else',
+      actorDisplayName: 'Other person',
+      timestamp: timestamp,
+      message: 'Other person joined the call',
+    );
+    wire['systemMessage'] = 'call_joined';
+    await _insertCachedMessage(
+      database,
+      wire,
+      displayText: 'Other person joined the call',
+    );
+
+    await tester.pumpWidget(app(home: roomScreen()));
+    await tester.pump();
+    await tester.pump();
+
+    final clock =
+        MaterialLocalizations.of(
+          tester.element(find.byKey(const Key('chat-room-pane'))),
+        ).formatTimeOfDay(
+          TimeOfDay.fromDateTime(
+            DateTime.fromMillisecondsSinceEpoch(timestamp * 1000).toLocal(),
+          ),
+        );
+    final row = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            (widget.textSpan?.toPlainText() ?? '').startsWith(
+              'Other person joined the call',
+            ),
+      ),
+    );
+    final painted = row.textSpan!.toPlainText();
+    expect(painted, contains(clock));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('inline replies stay in the room under their quote', (
     tester,
   ) async {

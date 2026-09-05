@@ -392,12 +392,28 @@ final class _MessageBubble extends StatelessWidget {
         onOpenThread != null &&
         (parsed?.isThread == true || (!inlineReplies && threadReplies > 0));
     if (isSystem) {
+      // The time belongs here as much as on an ordinary message: a run of
+      // "joined the call" / "left the call" is unreadable without it
+      // (reported on 5 September 2026). Same clock helper as the bubbles, so
+      // the two cannot drift apart, and it is in the spoken label too.
+      final clock = _formatMessageClock(context, message.timestamp);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
         child: Semantics(
-          label: message.displayText,
-          child: Text(
-            message.displayText,
+          label: '${message.displayText} · $clock',
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: message.displayText),
+                const TextSpan(text: '  '),
+                TextSpan(
+                  text: clock,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
