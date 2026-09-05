@@ -1063,3 +1063,38 @@ final class SwitchBreakoutRoomRequest extends RoomAdministrationRequest {
   @override
   String toString() => 'SwitchBreakoutRoomRequest()';
 }
+
+/// `GET /room/{token}/breakout-rooms` (room API v4; v1 answers OCS 998 on
+/// Talk 22, measured 5 September 2026) — the breakout rooms of a
+/// parent conversation as full conversation objects. This is how a moderator
+/// learns which room asked for assistance: the request marks the BREAKOUT
+/// room's `breakoutRoomStatus` (2), never the parent's.
+final class BreakoutRoomsListRequest {
+  BreakoutRoomsListRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    this.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String userAgent;
+
+  String get httpMethod => 'GET';
+
+  Map<String, String> get headers =>
+      UnmodifiableMapView({'OCS-APIRequest': 'true', 'User-Agent': userAgent});
+
+  Uri get uri => server.uri.replace(
+    path:
+        '${server.basePath}$conversationV4Path/${roomToken.value}/breakout-rooms',
+    queryParameters: const {'format': 'json'},
+  );
+
+  @override
+  String toString() => 'BreakoutRoomsListRequest()';
+}

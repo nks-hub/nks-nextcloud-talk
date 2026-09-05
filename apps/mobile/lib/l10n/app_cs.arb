@@ -770,7 +770,7 @@
   "roomDetailsBreakoutNotConfigured": "Zatím žádné",
   "roomDetailsBreakoutStopped": "Vytvořené, nespuštěné",
   "roomDetailsBreakoutStarted": "Spuštěné",
-  "roomDetailsBreakoutAssistanceRequested": "Spuštěné — místnost žádá moderátora",
+  "roomDetailsBreakoutAssistanceRequested": "Spuštěné — {rooms} žádá moderátora",
   "roomDetailsBreakoutCreate": "Vytvořit oddělené místnosti",
   "roomDetailsBreakoutCreateDialogTitle": "Kolik oddělených místností?",
   "roomDetailsBreakoutStart": "Spustit oddělené místnosti",

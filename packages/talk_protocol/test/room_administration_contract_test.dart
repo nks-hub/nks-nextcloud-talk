@@ -112,6 +112,7 @@ Matcher _protocolFailure(TalkProtocolErrorCode code) => throwsA(
 
 void main() {
   group('breakout rooms', breakoutRoomsTests);
+  group('breakout list', breakoutListTests);
   group('SetRoomPublicRequest', () {
     test('POSTs to the v4 public endpoint when making a room public', () {
       final request = SetRoomPublicRequest(
@@ -1015,5 +1016,53 @@ void breakoutRoomsTests() {
     expect(response, isA<RoomAdministrationSuccess>());
     expect(response.statusCode, 201);
     expect((response as RoomAdministrationSuccess).room, isNull);
+  });
+}
+
+void breakoutListTests() {
+  test('the breakout list decodes the children and their assistance state', () {
+    final request = BreakoutRoomsListRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+    );
+    expect(request.httpMethod, 'GET');
+    expect(
+      request.uri.toString(),
+      'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v4/room/rooma123/breakout-rooms?format=json',
+    );
+    final asking = _syntheticRoom()
+      ..['token'] = 'child001'
+      ..['displayName'] = 'Room 1'
+      ..['objectType'] = 'room'
+      ..['objectId'] = 'rooma123'
+      ..['breakoutRoomMode'] = 1
+      ..['breakoutRoomStatus'] = 2;
+    final quiet = _syntheticRoom()
+      ..['token'] = 'child002'
+      ..['displayName'] = 'Room 2'
+      ..['objectType'] = 'room'
+      ..['objectId'] = 'rooma123'
+      ..['breakoutRoomMode'] = 1
+      ..['breakoutRoomStatus'] = 1;
+    final response = decodeBreakoutRoomsListResponse(
+      request: request,
+      statusCode: 200,
+      body: _ocsBody(data: [asking, quiet]),
+    );
+    expect(response.isSuccess, isTrue);
+    expect(response.rooms.map((room) => room.displayName), [
+      'Room 1',
+      'Room 2',
+    ]);
+    expect(response.rooms.first.wire['breakoutRoomStatus'], 2);
+
+    final refused = decodeBreakoutRoomsListResponse(
+      request: request,
+      statusCode: 403,
+      body: _ocsBody(status: 'failure', statusCode: 403, data: null),
+    );
+    expect(refused.isSuccess, isFalse);
+    expect(refused.rooms, isEmpty);
   });
 }

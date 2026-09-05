@@ -4061,8 +4061,8 @@ abstract class AppLocalizations {
   /// No description provided for @roomDetailsBreakoutAssistanceRequested.
   ///
   /// In en, this message translates to:
-  /// **'Started — a room asks for a moderator'**
-  String get roomDetailsBreakoutAssistanceRequested;
+  /// **'Started — {rooms} asks for a moderator'**
+  String roomDetailsBreakoutAssistanceRequested(String rooms);
 
   /// No description provided for @roomDetailsBreakoutCreate.
   ///

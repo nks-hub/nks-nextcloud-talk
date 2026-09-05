@@ -2221,8 +2221,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsBreakoutStarted => 'Started';
 
   @override
-  String get roomDetailsBreakoutAssistanceRequested =>
-      'Started — a room asks for a moderator';
+  String roomDetailsBreakoutAssistanceRequested(String rooms) {
+    return 'Started — $rooms asks for a moderator';
+  }
 
   @override
   String get roomDetailsBreakoutCreate => 'Create breakout rooms';

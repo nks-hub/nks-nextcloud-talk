@@ -449,3 +449,79 @@ RoomAdministrationResponse decodeRoomAdministrationResponse({
       );
   }
 }
+
+/// The breakout rooms of a parent conversation, or why they could not be read.
+final class BreakoutRoomsListResponse {
+  const BreakoutRoomsListResponse._({
+    required this.request,
+    required this.statusCode,
+    required this.rooms,
+  });
+
+  final BreakoutRoomsListRequest request;
+  final int statusCode;
+
+  /// Empty for every status but 200.
+  final List<ConversationRoom> rooms;
+
+  bool get isSuccess => statusCode == 200;
+
+  @override
+  String toString() =>
+      'BreakoutRoomsListResponse(status: $statusCode, rooms: ${rooms.length})';
+}
+
+/// 200 carries the rooms; 400/401/403/404/429/503 carry nothing. Anything
+/// else is a protocol failure, like every other decoder here.
+BreakoutRoomsListResponse decodeBreakoutRoomsListResponse({
+  required BreakoutRoomsListRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  switch (statusCode) {
+    case 200:
+      final data = _decodeOcsEnvelope(body);
+      final items = requireList(data, path: r'$.ocs.data', code: _responseCode);
+      if (items.length > breakoutRoomsMaximum) {
+        protocolFailure(_responseCode, r'$.ocs.data.length');
+      }
+      final session = JsonFreezeSession(
+        errorCode: _responseCode,
+        errorPath: r'$.ocs.data',
+      );
+      return BreakoutRoomsListResponse._(
+        request: request,
+        statusCode: 200,
+        rooms: List.unmodifiable([
+          for (var i = 0; i < items.length; i++)
+            parseConversationRoom(
+              items[i],
+              path: '\$.ocs.data[$i]',
+              session: session,
+            ),
+        ]),
+      );
+    case 400:
+    case 401:
+    case 403:
+    case 404:
+      _decodeOcsEnvelope(body);
+      return BreakoutRoomsListResponse._(
+        request: request,
+        statusCode: statusCode,
+        rooms: const <ConversationRoom>[],
+      );
+    case 429:
+    case 503:
+      return BreakoutRoomsListResponse._(
+        request: request,
+        statusCode: statusCode,
+        rooms: const <ConversationRoom>[],
+      );
+    default:
+      protocolFailure(
+        TalkProtocolErrorCode.unsupportedHttpStatus,
+        r'$.statusCode',
+      );
+  }
+}

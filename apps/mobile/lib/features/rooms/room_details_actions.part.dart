@@ -19,6 +19,7 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     _notificationLevel = _room?.notificationLevel ?? _notificationDefault;
     _callNotificationsEnabled = _room?.notificationCalls == 1;
     _talkFeatures = _decodeTalkFeatures(widget.account.talkFeaturesJson);
+    unawaited(_loadBreakoutChildren());
   }
 
   Future<List<Participant>> _load() {
@@ -107,6 +108,37 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
   int get _breakoutMode => _wireInt('breakoutRoomMode');
   int get _breakoutStatus => _wireInt('breakoutRoomStatus');
 
+  /// The parent's breakout rooms, read when the screen opens on a configured
+  /// parent and after every breakout action. An assistance request lives on
+  /// the child (`breakoutRoomStatus == 2`), so this is the only way the
+  /// moderator's screen can show it.
+  List<ConversationRoom> _breakoutChildren = const <ConversationRoom>[];
+
+  Future<void> _loadBreakoutChildren() async {
+    if (!_canManageBreakoutRooms || _breakoutMode == 0) {
+      if (_breakoutChildren.isNotEmpty && mounted) {
+        setState(() => _breakoutChildren = const <ConversationRoom>[]);
+      }
+      return;
+    }
+    try {
+      final rooms = await ref
+          .read(roomSettingsServiceProvider)
+          .listBreakoutRooms(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+          );
+      if (mounted) {
+        setState(() => _breakoutChildren = rooms);
+      }
+    } on Object {
+      // The subtitle simply does not mention the children.
+    }
+  }
+
+  Iterable<ConversationRoom> get _breakoutRoomsAsking => _breakoutChildren
+      .where((room) => (room.wire['breakoutRoomStatus'] as int? ?? 0) == 2);
+
   int _wireInt(String key) {
     final value = _room?.wire[key];
     return value is int ? value : 0;
@@ -116,14 +148,23 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     if (_breakoutMode == 0) {
       return strings.roomDetailsBreakoutNotConfigured;
     }
-    return switch (_breakoutStatus) {
-      1 => strings.roomDetailsBreakoutStarted,
-      2 => strings.roomDetailsBreakoutAssistanceRequested,
-      _ => strings.roomDetailsBreakoutStopped,
-    };
+    final asking = _breakoutRoomsAsking
+        .map((room) => room.displayName)
+        .toList();
+    if (asking.isNotEmpty) {
+      return strings.roomDetailsBreakoutAssistanceRequested(asking.join(', '));
+    }
+    return _breakoutStatus == 0
+        ? strings.roomDetailsBreakoutStopped
+        : strings.roomDetailsBreakoutStarted;
   }
 
   Future<void> _manageBreakoutRooms() async {
+    await _manageBreakoutRoomsAction();
+    await _loadBreakoutChildren();
+  }
+
+  Future<void> _manageBreakoutRoomsAction() async {
     final action = await showModalBottomSheet<_BreakoutAction>(
       context: context,
       builder: (sheetContext) => _BreakoutActionsSheet(

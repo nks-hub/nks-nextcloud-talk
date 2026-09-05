@@ -2219,8 +2219,9 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBreakoutStarted => 'Spuštěné';
 
   @override
-  String get roomDetailsBreakoutAssistanceRequested =>
-      'Spuštěné — místnost žádá moderátora';
+  String roomDetailsBreakoutAssistanceRequested(String rooms) {
+    return 'Spuštěné — $rooms žádá moderátora';
+  }
 
   @override
   String get roomDetailsBreakoutCreate => 'Vytvořit oddělené místnosti';

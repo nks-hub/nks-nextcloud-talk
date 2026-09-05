@@ -661,6 +661,33 @@ final class RoomSettingsService {
     );
   }
 
+  /// The breakout rooms of a parent conversation. A refusal comes back as an
+  /// empty list — the caller has nothing to show either way.
+  Future<List<ConversationRoom>> listBreakoutRooms({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final context = await _authContext(accountId);
+    final BreakoutRoomsListRequest request;
+    try {
+      request = BreakoutRoomsListRequest(
+        accountId: AccountId.parse(accountId),
+        server: ServerBase.parse(context.account.serverUrl),
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+      );
+    } on TalkProtocolException {
+      throw const RoomSettingsException(RoomSettingsError.invalidResponse);
+    }
+    final response = await _call(
+      () => _api.listBreakoutRooms(
+        listRequest: request,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+    return response.rooms;
+  }
+
   Future<ConversationRoom?> removeBreakoutRooms({
     required String accountId,
     required String roomToken,

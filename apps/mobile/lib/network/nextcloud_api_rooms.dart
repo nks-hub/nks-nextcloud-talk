@@ -600,6 +600,32 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
   /// public/private, password, lobby, read-only or emoji/removed avatar. The
   /// six endpoints share a status-code range and a response family, so they
   /// share one transport method too.
+  /// Lists the breakout rooms of a parent conversation.
+  Future<BreakoutRoomsListResponse> listBreakoutRooms({
+    required BreakoutRoomsListRequest listRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(listRequest.httpMethod, listRequest.uri, abortTrigger)
+          ..headers.addAll({
+            ...listRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _participantsMaximumBytes,
+    );
+    return decodeBreakoutRoomsListResponse(
+      request: listRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   Future<RoomAdministrationResponse> administerRoom({
     required RoomAdministrationRequest administrationRequest,
     required String loginName,
