@@ -27,6 +27,11 @@ ComposerEnterAction composerEnterAction({
   required int caret,
   required bool shiftPressed,
   required bool sending,
+
+  /// An attachment waiting in the composer. It is a message on its own, with
+  /// the text as its caption, so Enter sends it even with the field empty —
+  /// reported on 5 September 2026, when only the Send button did.
+  bool hasAttachment = false,
 }) {
   // Shift+Enter is the line break, on every platform that sends on Enter.
   if (shiftPressed) {
@@ -37,7 +42,7 @@ ComposerEnterAction composerEnterAction({
   if (caret >= 0 && extractMentionQuery(text, caret) != null) {
     return ComposerEnterAction.insertNewline;
   }
-  if (sending || text.trim().isEmpty) {
+  if (sending || (text.trim().isEmpty && !hasAttachment)) {
     return ComposerEnterAction.swallow;
   }
   return ComposerEnterAction.send;

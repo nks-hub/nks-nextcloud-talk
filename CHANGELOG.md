@@ -52,6 +52,9 @@ from the commit log. Nothing here has reached testers yet.
   participant with their video or initial, their name, whether they are muted
   or have a hand up, and your own preview among them; the same controls as the
   banner plus a Leave button. It closes on its own when the call ends.
+- Fixed: Enter now sends a pasted or picked attachment that has no caption.
+  Until now only the send button did, so a screenshot pasted with Ctrl+V sat
+  in the composer.
 - New: share this device's screen into a call on Android, from the same
   controls as the camera. The system asks for consent, a notification shows
   for as long as the screen is visible, and stopping tells everyone.

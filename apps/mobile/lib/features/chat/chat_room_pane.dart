@@ -795,6 +795,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
           // soft keyboard on a phone would be hostile.
           autofocus: widget.threadId != null && context.sendsOnEnter,
           sending: _sending,
+          hasAttachment: () => _mediaComposerController.hasPreparedAttachment,
           onSubmit: _send,
           onPasteImage: (image) => _mediaComposerController.attachImageBytes(
             image.bytes,

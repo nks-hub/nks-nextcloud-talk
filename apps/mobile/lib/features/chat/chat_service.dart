@@ -155,9 +155,10 @@ final class ChatService {
     for (final binding in bindings) {
       binding.close();
     }
-    for (final relay in _relayBindings
-        .where((binding) => binding.accountId == accountId)
-        .toList(growable: false)) {
+    for (final relay
+        in _relayBindings
+            .where((binding) => binding.accountId == accountId)
+            .toList(growable: false)) {
       relay.close();
     }
     active.addAll(

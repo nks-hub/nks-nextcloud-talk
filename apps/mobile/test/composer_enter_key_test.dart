@@ -56,6 +56,43 @@ void main() {
       );
     });
 
+    test('an attachment with no caption still sends', () {
+      // Reported on 5 September 2026: a screenshot pasted with Ctrl+V went out
+      // on the Send button but not on Enter, because the decision read the
+      // text alone.
+      expect(
+        composerEnterAction(
+          text: '',
+          caret: 0,
+          shiftPressed: false,
+          sending: false,
+          hasAttachment: true,
+        ),
+        ComposerEnterAction.send,
+      );
+      // The other rules still win over it.
+      expect(
+        composerEnterAction(
+          text: '',
+          caret: 0,
+          shiftPressed: true,
+          sending: false,
+          hasAttachment: true,
+        ),
+        ComposerEnterAction.insertNewline,
+      );
+      expect(
+        composerEnterAction(
+          text: '',
+          caret: 0,
+          shiftPressed: false,
+          sending: true,
+          hasAttachment: true,
+        ),
+        ComposerEnterAction.swallow,
+      );
+    });
+
     test('swallows Enter on an empty composer', () {
       for (final text in const ['', '   ', '\n']) {
         expect(

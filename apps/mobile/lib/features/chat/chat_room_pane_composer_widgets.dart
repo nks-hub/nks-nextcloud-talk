@@ -217,6 +217,7 @@ final class _ChatComposer extends StatelessWidget {
     required this.mentionSource,
     required this.onSubmit,
     required this.onPasteImage,
+    required this.hasAttachment,
   });
 
   final TextEditingController controller;
@@ -239,6 +240,13 @@ final class _ChatComposer extends StatelessWidget {
   final CachedChatMessage? replyTo;
   final VoidCallback onCancelReply;
   final MentionSuggestionSource? mentionSource;
+
+  /// Whether a picked or pasted file is waiting to be sent with this message.
+  /// Asked at the moment the key is pressed rather than passed as a value:
+  /// the card that shows the waiting file rebuilds on its own, without this
+  /// widget, so a value captured at build time would be stale exactly when it
+  /// matters.
+  final bool Function() hasAttachment;
 
   /// Sends whatever is in the composer, same as the send button.
   final VoidCallback onSubmit;
@@ -311,6 +319,7 @@ final class _ChatComposer extends StatelessWidget {
       caret: value.selection.baseOffset,
       shiftPressed: HardwareKeyboard.instance.isShiftPressed,
       sending: sending,
+      hasAttachment: hasAttachment(),
     );
     switch (action) {
       case ComposerEnterAction.insertNewline:
