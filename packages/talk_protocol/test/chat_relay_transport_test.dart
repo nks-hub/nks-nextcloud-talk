@@ -86,8 +86,8 @@ void main() {
     const live =
         '{"type":"event","event":{"target":"room","type":"message","messa'
         'ge":{"roomid":"r00mtokn","data":{"type":"chat","chat":{"comment"'
-        ':{"id":78949,"token":"r00mtokn","actorType":"users","actorId":"n'
-        'ctalk-test2","actorDisplayName":"NCloudTalk Test 2","timestamp":'
+        ':{"id":78949,"token":"r00mtokn","actorType":"users","actorId":"'
+        'fixture-user2","actorDisplayName":"NCloudTalk Test 2","timestamp":'
         '1788468853,"message":"relay probe","messageParameters":[],"syste'
         'mMessage":"","messageType":"comment","isReplyable":true,"referen'
         'ceId":"relayprobe1","reactions":{},"expirationTimestamp":0,"mark'
