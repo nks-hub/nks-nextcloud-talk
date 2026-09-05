@@ -504,7 +504,7 @@
       "mode": "internal",
       "phase": "internalReady",
       "connectionEpoch": 1,
-      "roomEpoch": 1,
+      "roomEpoch": 2,
       "hasSession": false,
       "hasResume": false,
       "resumeValid": false,
@@ -513,7 +513,7 @@
       "federatedPeers": 0,
       "allInCall": null,
       "federationInterrupted": false,
-      "renegotiationRequired": true,
+      "renegotiationRequired": false,
       "pending": null,
       "outcome": "renegotiationRequired"
     }

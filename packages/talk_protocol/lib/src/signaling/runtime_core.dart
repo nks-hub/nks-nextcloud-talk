@@ -359,13 +359,37 @@ SignalingRuntimeResult applyInternalSignalingBatchResponse(
       snapshot,
       account.copyWith(pendingInternalBatch: null),
     ),
-    InternalSignalingClassification.serverError => _replaceAccount(
+    InternalSignalingClassification.serverError => _renegotiateByRoomEpoch(
       snapshot,
-      account.copyWith(pendingInternalBatch: null, renegotiationRequired: true),
-      SignalingRuntimeOutcome.renegotiationRequired,
+      account,
     ),
   };
 }
+
+/// The internal transport's answer to a batch whose delivery is unknown.
+///
+/// A body that may have reached the server leaves the peers in a state this
+/// side cannot know, and the old answer was the sticky flag — which stopped
+/// media dead and, as it was never cleared, kept every later call from
+/// negotiating until a fresh authority arrived. A NEW ROOM EPOCH IS THE
+/// RENEGOTIATION: the media session tears every peer connection down when it
+/// sees one and offers again, so nothing inconsistent survives and the flag
+/// has nothing to protect. The pending pull belongs to the old epoch (its
+/// context would not match any more) and is released here so the lane can
+/// plan a fresh one; the flag itself is left alone for the HPB and restart
+/// paths that still use it.
+SignalingRuntimeResult _renegotiateByRoomEpoch(
+  SignalingRuntimeSnapshot snapshot,
+  SignalingAccountState account,
+) => _replaceAccount(
+  snapshot,
+  account.copyWith(
+    pendingInternalBatch: null,
+    pendingInternalPull: null,
+    roomEpoch: account.roomEpoch + 1,
+  ),
+  SignalingRuntimeOutcome.renegotiationRequired,
+);
 
 SignalingRuntimeResult recordSignalingHttpTransportFailure(
   SignalingRuntimeSnapshot snapshot, {
@@ -406,17 +430,13 @@ SignalingRuntimeResult recordSignalingHttpTransportFailure(
   }
   if (request is InternalSignalingBatchRequest &&
       identical(account.pendingInternalBatch, request)) {
+    if (bodyState == SignalingTransportBodyState.possiblySent) {
+      return _renegotiateByRoomEpoch(snapshot, account);
+    }
     return _replaceAccount(
       snapshot,
-      account.copyWith(
-        pendingInternalBatch: null,
-        renegotiationRequired:
-            account.renegotiationRequired ||
-            bodyState == SignalingTransportBodyState.possiblySent,
-      ),
-      bodyState == SignalingTransportBodyState.possiblySent
-          ? SignalingRuntimeOutcome.renegotiationRequired
-          : SignalingRuntimeOutcome.unchanged,
+      account.copyWith(pendingInternalBatch: null),
+      SignalingRuntimeOutcome.unchanged,
     );
   }
   return _result(SignalingRuntimeOutcome.rejected);

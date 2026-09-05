@@ -232,7 +232,9 @@ def apply_runtime_action(state: dict[str, Any], raw_action: Any) -> None:
             raise ContractValidationError("runtime bodyState is unsupported")
         state["pending"] = None
         if body_state == "possiblySent":
-            state["renegotiationRequired"] = True
+            # The renegotiation is a new room epoch, which rebuilds every peer
+            # connection; the flag stays for the HPB and restart paths.
+            state["roomEpoch"] += 1
             state["outcome"] = "renegotiationRequired"
         else:
             state["outcome"] = "unchanged"

@@ -51,7 +51,10 @@ including escaped keys.
 The batch POST contains a URL-encoded `messages` array. Every item must have
 `ev=message`, a JSON string `fn`, the current Nextcloud session ID and a specific
 recipient. A transport error before the body allows a new plan. A possibly sent
-body is not retried automatically and requires a new negotiation.
+body, or a server error in reply to one, is not retried: it opens a new room
+epoch, which rebuilds every peer connection, and releases the pull of the old
+epoch so a fresh one is planned. The sticky renegotiation flag is not raised on
+this path.
 
 ## Settings and endpoint trust
 

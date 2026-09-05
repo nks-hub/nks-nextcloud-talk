@@ -417,6 +417,7 @@ final class _CallSignalingLane {
     if (_disposed || _failed) {
       return;
     }
+    final stalePull = _state.pendingInternalPull;
     final result = applyInternalSignalingBatchResponse(
       _snapshot,
       accountId: authority.accountId,
@@ -432,7 +433,26 @@ final class _CallSignalingLane {
     }
     if (result.outcome == SignalingRuntimeOutcome.settingsRefreshRequired) {
       _scheduleSettingsRetry();
+    } else if (result.outcome ==
+        SignalingRuntimeOutcome.renegotiationRequired) {
+      await _restartInternalPull(stalePull);
     }
+  }
+
+  /// The runtime answered an ambiguous batch with a new room epoch, which
+  /// orphans the pull in flight: its context names the old epoch, so its
+  /// response would be rejected and nothing would plan the next one — polling
+  /// would stop while the room looked ready. Abort it and start over.
+  Future<void> _restartInternalPull(
+    InternalSignalingPullRequest? stalePull,
+  ) async {
+    if (stalePull != null) {
+      final abort = _httpAborts.remove(stalePull.requestId.value);
+      if (abort != null && !abort.isCompleted) {
+        abort.complete();
+      }
+    }
+    await _planInternalPull();
   }
 
   Future<void> _handleHttpFailure(
@@ -450,6 +470,7 @@ final class _CallSignalingLane {
     if (error.code == NextcloudApiError.cancelled) {
       return;
     }
+    final stalePull = _state.pendingInternalPull;
     final result = recordSignalingHttpTransportFailure(
       _snapshot,
       accountId: authority.accountId,
@@ -467,6 +488,9 @@ final class _CallSignalingLane {
       _scheduleSettingsRetry();
     } else if (request is InternalSignalingPullRequest) {
       _scheduleInternalRetry();
+    } else if (result.outcome ==
+        SignalingRuntimeOutcome.renegotiationRequired) {
+      await _restartInternalPull(stalePull);
     }
   }
 

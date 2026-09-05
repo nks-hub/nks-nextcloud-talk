@@ -66,14 +66,31 @@ void main() {
       expect(populated.signalingReady, isTrue);
       expect(await session.sendPeerMessage(_peerMessage()), isTrue);
 
+      // An ambiguous batch is answered with a new room epoch — the thing
+      // that makes the media session rebuild its peers — and not with the
+      // sticky flag, which used to keep every later call from negotiating.
       final ambiguous = await _waitFor(
         session,
-        (update) => update.renegotiationRequired,
+        (update) => update.roomEpoch > populated.roomEpoch,
       );
       final stored = await database.select(database.callSessions).getSingle();
       expect(ambiguous.failure, isNull);
+      expect(ambiguous.renegotiationRequired, isFalse);
+      expect(ambiguous.signalingReady, isTrue);
       expect(client.batchAttempts, 1);
-      expect(stored.renegotiationRequired, isTrue);
+      expect(stored.roomEpoch, ambiguous.roomEpoch);
+      expect(stored.renegotiationRequired, isFalse);
+      expect(
+        await session.sendPeerMessage(_peerMessage()),
+        isTrue,
+        reason: 'the new epoch carries SDP again; no flag blocks it',
+      );
+      final again = await _waitFor(
+        session,
+        (update) => update.roomEpoch > ambiguous.roomEpoch,
+      );
+      expect(client.batchAttempts, 2);
+      expect(again.renegotiationRequired, isFalse);
 
       await session.release();
       expect(await database.select(database.callSessions).get(), isEmpty);

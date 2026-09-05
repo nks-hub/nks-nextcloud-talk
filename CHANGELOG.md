@@ -26,6 +26,12 @@ from the commit log. Nothing here has reached testers yet.
 - New: a mute button in the call banner. It closes and reopens the microphone
   without renegotiating the call, and a microphone the user closed stays closed
   when a telephone call ends.
+- Fixed: a call no longer dies, and later calls no longer refuse to negotiate,
+  after one signalling batch whose delivery was unknown. The signalling now
+  opens a new room epoch instead of raising a flag nothing cleared, the peer
+  connections are rebuilt, and polling — which used to stop silently on the
+  stale pull — restarts. Applies to the built-in Talk signalling; the
+  high-performance backend path is unchanged.
 - New: a speaker button in the call banner on Android and iOS, switching the
   call between the earpiece and the loudspeaker. An audio call now starts on
   the earpiece; before, the WebRTC engine's own preference put it on the

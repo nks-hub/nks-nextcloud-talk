@@ -562,9 +562,20 @@ void main() {
       );
     });
 
-    test('possibly sent POST batch requires renegotiation', () {
+    // The renegotiation is the new epoch, not a flag: the media session
+    // rebuilds every peer connection on an epoch change, and a flag that
+    // nothing cleared used to keep every later call from negotiating.
+    test('possibly sent POST batch opens a new room epoch', () {
       final authority = signalingAuthority();
       var snapshot = configuredSignalingSnapshot(mode: 'internal');
+      final pull = planInternalSignalingPull(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        requestId: signalingRequestId(200),
+      );
+      snapshot = commitSignaling(snapshot, pull);
+      final before = snapshot.accounts[signalingAccountA]!;
       final batch = planInternalSignalingBatch(
         snapshot,
         accountId: signalingAccountA,
@@ -581,12 +592,61 @@ void main() {
         bodyState: SignalingTransportBodyState.possiblySent,
       );
       snapshot = commitSignaling(snapshot, failure);
+      final after = snapshot.accounts[signalingAccountA]!;
 
       expect(failure.outcome, SignalingRuntimeOutcome.renegotiationRequired);
+      expect(after.roomEpoch, before.roomEpoch + 1);
+      expect(after.renegotiationRequired, isFalse);
+      expect(after.pendingInternalBatch, isNull);
       expect(
-        snapshot.accounts[signalingAccountA]!.renegotiationRequired,
-        isTrue,
+        after.pendingInternalPull,
+        isNull,
+        reason: 'the pull of the old epoch could never be matched again',
       );
+      expect(after.signalingReady, isTrue, reason: 'the room stays confirmed');
+
+      final stale = applyInternalSignalingPullResponse(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        response: InternalSignalingPullResponse(
+          request: pull.request! as InternalSignalingPullRequest,
+          classification: InternalSignalingClassification.confirmed,
+          messages: const <SignalingPeerMessage>[],
+          participants: const <SignalingParticipant>[],
+        ),
+        refreshEffectId: signalingEffectId(900),
+      );
+      expect(stale.outcome, SignalingRuntimeOutcome.rejected);
+    });
+
+    test('a server error on a POST batch opens a new room epoch', () {
+      final authority = signalingAuthority();
+      var snapshot = configuredSignalingSnapshot(mode: 'internal');
+      final before = snapshot.accounts[signalingAccountA]!;
+      final batch = planInternalSignalingBatch(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        requestId: signalingRequestId(202),
+        messages: <SignalingPeerMessage>[signalingMessage()],
+      );
+      snapshot = commitSignaling(snapshot, batch);
+      final result = applyInternalSignalingBatchResponse(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        response: InternalSignalingBatchResponse(
+          request: batch.request! as InternalSignalingBatchRequest,
+          classification: InternalSignalingClassification.serverError,
+        ),
+      );
+      snapshot = commitSignaling(snapshot, result);
+      final after = snapshot.accounts[signalingAccountA]!;
+
+      expect(result.outcome, SignalingRuntimeOutcome.renegotiationRequired);
+      expect(after.roomEpoch, before.roomEpoch + 1);
+      expect(after.renegotiationRequired, isFalse);
     });
 
     test(
