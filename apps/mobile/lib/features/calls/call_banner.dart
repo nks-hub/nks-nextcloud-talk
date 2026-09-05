@@ -227,6 +227,34 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                   icon: const Icon(Icons.volume_down_rounded),
                   selectedIcon: const Icon(Icons.volume_up_rounded),
                 ),
+              IconButton(
+                key: const Key('call-banner-raise-hand'),
+                tooltip: join.media.handRaised
+                    ? strings.callBannerLowerHand
+                    : strings.callBannerRaiseHand,
+                color: scheme.onPrimaryContainer,
+                isSelected: join.media.handRaised,
+                onPressed: join.isBusy
+                    ? null
+                    : () => unawaited(
+                        ref
+                            .read(callJoinControllerProvider(key).notifier)
+                            .setHandRaised(!join.media.handRaised),
+                      ),
+                // The count is the other participants' hands; our own is the
+                // selected state of the icon.
+                icon: Badge.count(
+                  key: const Key('call-banner-raised-hands'),
+                  count: join.media.raisedHands,
+                  isLabelVisible: join.media.raisedHands > 0,
+                  child: const Icon(Icons.front_hand_outlined),
+                ),
+                selectedIcon: Badge.count(
+                  count: join.media.raisedHands,
+                  isLabelVisible: join.media.raisedHands > 0,
+                  child: const Icon(Icons.front_hand_rounded),
+                ),
+              ),
             ],
             const SizedBox(width: 12),
             FilledButton(

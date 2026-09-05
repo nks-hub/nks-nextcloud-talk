@@ -287,6 +287,50 @@ void main() {
     expect(media.state.speakerphone, isFalse);
   });
 
+  // The wire form is the web client's: one `raiseHand` message per peer with
+  // `{state, timestamp}`, and a hand is a fact about a peer that leaves with it.
+  test('raising a hand tells every peer and a remote hand is counted', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    sent.clear();
+
+    await media.setHandRaised(true);
+    final raise = sent.single;
+    expect(raise.type, 'raiseHand');
+    expect(raise.recipient?.value, _remote);
+    expect(raise.payload?.wire['state'], isTrue);
+    expect(raise.payload?.wire['timestamp'], isA<int>());
+    expect(media.state.handRaised, isTrue);
+    expect(media.state.raisedHands, 0, reason: 'our own hand is not counted');
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'raiseHand', <String, Object?>{
+            'state': true,
+            'timestamp': 1,
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(media.state.raisedHands, 1);
+
+    await media.setHandRaised(false);
+    expect(sent.last.payload?.wire['state'], isFalse);
+    expect(media.state.handRaised, isFalse);
+
+    // The remote participant leaves the call: the hand goes with them.
+    updates.add(_update(localPeerId: _local, participants: []));
+    await pumpEventQueue();
+    expect(media.state.raisedHands, 0);
+  });
+
   test('an interruption mutes the microphone and giving it back unmutes', () async {
     final interruptions = StreamController<CallAudioInterruption>.broadcast();
     addTearDown(interruptions.close);

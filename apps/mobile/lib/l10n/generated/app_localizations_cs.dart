@@ -1785,6 +1785,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerSpeakerOff => 'Přepnout na sluchátko';
 
   @override
+  String get callBannerRaiseHand => 'Zvednout ruku';
+
+  @override
+  String get callBannerLowerHand => 'Dát ruku dolů';
+
+  @override
   String get callBannerJoining => 'Připojuji k hovoru…';
 
   @override

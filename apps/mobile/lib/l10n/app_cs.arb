@@ -619,6 +619,8 @@
   "callBannerUnmute": "Zapnout mikrofon",
   "callBannerSpeakerOn": "Přepnout na reproduktor",
   "callBannerSpeakerOff": "Přepnout na sluchátko",
+  "callBannerRaiseHand": "Zvednout ruku",
+  "callBannerLowerHand": "Dát ruku dolů",
   "callBannerJoining": "Připojuji k hovoru…",
   "callBannerTransportReady": "Signalizováno přes {transport}.",
   "callBannerAudioNegotiating": "Navazuji zvuk…",

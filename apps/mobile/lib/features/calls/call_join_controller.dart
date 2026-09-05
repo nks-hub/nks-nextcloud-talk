@@ -159,6 +159,15 @@ final class CallJoinController
     await session.setSpeakerphone(on);
   }
 
+  /// Raises or lowers this participant's hand in the joined call.
+  Future<void> setHandRaised(bool raised) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.setHandRaised(raised);
+  }
+
   Future<void> leave() async {
     if (state.phase == CallJoinPhase.idle || state.isBusy) {
       return;

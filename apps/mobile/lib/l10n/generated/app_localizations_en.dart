@@ -1785,6 +1785,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerSpeakerOff => 'Switch to earpiece';
 
   @override
+  String get callBannerRaiseHand => 'Raise hand';
+
+  @override
+  String get callBannerLowerHand => 'Lower hand';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override

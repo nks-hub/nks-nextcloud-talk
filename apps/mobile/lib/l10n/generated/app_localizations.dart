@@ -3296,6 +3296,18 @@ abstract class AppLocalizations {
   /// **'Switch to earpiece'**
   String get callBannerSpeakerOff;
 
+  /// No description provided for @callBannerRaiseHand.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise hand'**
+  String get callBannerRaiseHand;
+
+  /// No description provided for @callBannerLowerHand.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower hand'**
+  String get callBannerLowerHand;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

@@ -33,6 +33,8 @@ final class CallMediaState {
     this.peers = 0,
     this.muted = false,
     this.speakerphone = false,
+    this.handRaised = false,
+    this.raisedHands = 0,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -51,10 +53,17 @@ final class CallMediaState {
   /// route a call starts on.
   final bool speakerphone;
 
+  /// This participant's own raised hand.
+  final bool handRaised;
+
+  /// How many other participants have their hand up right now.
+  final int raisedHands;
+
   @override
   String toString() =>
       'CallMediaState(${phase.name}, peers: $connectedPeers/$peers, '
-      'muted: $muted, speakerphone: $speakerphone, error: ${error?.name})';
+      'muted: $muted, speakerphone: $speakerphone, hand: $handRaised, '
+      'raised: $raisedHands, error: ${error?.name})';
 }
 
 /// Audio media for one room's call, driven by an existing signalling session.
@@ -98,6 +107,8 @@ final class CallMediaSession {
   bool _userMuted = false;
   bool _interrupted = false;
   bool _speakerphone = false;
+  bool _handRaised = false;
+  final Set<String> _raisedHands = <String>{};
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -273,6 +284,11 @@ final class CallMediaSession {
     if (connection == null) {
       return;
     }
+    if (_handRaised) {
+      // A hand raised before this participant arrived is otherwise invisible
+      // to them: the web client only learns of a hand from the message.
+      await _sendRaiseHand(peerId);
+    }
     if (!_isOfferer(localPeerId: localPeerId, remotePeerId: peerId)) {
       return;
     }
@@ -352,6 +368,8 @@ final class CallMediaSession {
           senderId: sender.value,
           payload: message.payload,
         );
+      case 'raiseHand':
+        _receiveRaiseHand(senderId: sender.value, payload: message.payload);
       default:
         return;
     }
@@ -597,7 +615,57 @@ final class CallMediaSession {
 
   Future<void> _closePeer(String peerId) async {
     final peer = _peers.remove(peerId);
+    _raisedHands.remove(peerId);
     await peer?.connection?.close();
+  }
+
+  /// Raises or lowers this participant's hand for everyone in the call.
+  ///
+  /// Talk's wire form, as the web client sends and reads it: a `raiseHand`
+  /// message per recipient with `{"state": bool, "timestamp": ms}` as the
+  /// payload. There is no acknowledgement and nothing to renegotiate.
+  Future<void> setHandRaised(bool raised) {
+    return _enqueue(() async {
+      if (_disposed || _handRaised == raised) {
+        return;
+      }
+      _handRaised = raised;
+      for (final peerId in _peers.keys.toList(growable: false)) {
+        await _sendRaiseHand(peerId);
+      }
+      _publish();
+    });
+  }
+
+  Future<void> _sendRaiseHand(String peerId) async {
+    try {
+      await _send(
+        peerId: peerId,
+        type: 'raiseHand',
+        payload: <String, Object?>{
+          'state': _handRaised,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
+    } on CallMediaException {
+      // A hand that did not reach one peer is not a reason to end the call.
+    }
+  }
+
+  void _receiveRaiseHand({
+    required String senderId,
+    required SignalingOpaquePayload? payload,
+  }) {
+    final state = payload?.wire['state'];
+    if (state is! bool) {
+      return;
+    }
+    final changed = state
+        ? _raisedHands.add(senderId)
+        : _raisedHands.remove(senderId);
+    if (changed) {
+      _publish();
+    }
   }
 
   void _publish() {
@@ -618,6 +686,8 @@ final class CallMediaSession {
         peers: _peers.length,
         muted: _userMuted,
         speakerphone: _speakerphone,
+        handRaised: _handRaised,
+        raisedHands: _raisedHands.length,
       ),
     );
   }

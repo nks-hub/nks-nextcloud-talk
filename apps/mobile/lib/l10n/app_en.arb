@@ -640,6 +640,8 @@
   "callBannerUnmute": "Unmute microphone",
   "callBannerSpeakerOn": "Switch to speaker",
   "callBannerSpeakerOff": "Switch to earpiece",
+  "callBannerRaiseHand": "Raise hand",
+  "callBannerLowerHand": "Lower hand",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {

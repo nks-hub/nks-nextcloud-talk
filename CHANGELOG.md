@@ -36,6 +36,8 @@ from the commit log. Nothing here has reached testers yet.
   connections are rebuilt, and polling — which used to stop silently on the
   stale pull — restarts. Applies to the built-in Talk signalling; the
   high-performance backend path is unchanged.
+- New: raise your hand in a call from the banner, and see how many other
+  participants have theirs up. Works with the web client both ways.
 - New: a speaker button in the call banner on Android and iOS, switching the
   call between the earpiece and the loudspeaker. An audio call now starts on
   the earpiece; before, the WebRTC engine's own preference put it on the
