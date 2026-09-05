@@ -1779,6 +1779,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerUnmute => 'Zapnout mikrofon';
 
   @override
+  String get callBannerSpeakerOn => 'Přepnout na reproduktor';
+
+  @override
+  String get callBannerSpeakerOff => 'Přepnout na sluchátko';
+
+  @override
   String get callBannerJoining => 'Připojuji k hovoru…';
 
   @override

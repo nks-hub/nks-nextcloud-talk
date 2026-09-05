@@ -32,6 +32,7 @@ final class CallMediaState {
     this.connectedPeers = 0,
     this.peers = 0,
     this.muted = false,
+    this.speakerphone = false,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -46,10 +47,14 @@ final class CallMediaState {
   /// choice and it lifts on its own.
   final bool muted;
 
+  /// Whether the audio goes to the loudspeaker. Off means the earpiece, the
+  /// route a call starts on.
+  final bool speakerphone;
+
   @override
   String toString() =>
       'CallMediaState(${phase.name}, peers: $connectedPeers/$peers, '
-      'muted: $muted, error: ${error?.name})';
+      'muted: $muted, speakerphone: $speakerphone, error: ${error?.name})';
 }
 
 /// Audio media for one room's call, driven by an existing signalling session.
@@ -92,6 +97,7 @@ final class CallMediaSession {
   CallLocalAudio? _audio;
   bool _userMuted = false;
   bool _interrupted = false;
+  bool _speakerphone = false;
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -146,6 +152,13 @@ final class CallMediaSession {
         await _stopMedia();
         return;
       }
+      // An audio call starts on the earpiece. Measured on 5 September 2026:
+      // the WebRTC plugin's own preference puts the loudspeaker ahead of the
+      // earpiece and switched it on at every call start
+      // (`setSpeakerphoneOn(true)` in `dumpsys audio`), which is the video
+      // call convention, not the telephone one. The state above starts as
+      // "off", so the route has to be made to match it.
+      await _audio!.setSpeakerphone(_speakerphone);
       _subscription = _updates.listen(
         (update) => unawaited(_enqueue(() => _apply(update))),
         // The lane closes its stream when the room session is released or
@@ -505,6 +518,19 @@ final class CallMediaSession {
     });
   }
 
+  /// The user's speaker control.
+  Future<void> setSpeakerphone(bool on) {
+    return _enqueue(() async {
+      final audio = _audio;
+      if (_disposed || audio == null || _speakerphone == on) {
+        return;
+      }
+      _speakerphone = on;
+      await audio.setSpeakerphone(on);
+      _publish();
+    });
+  }
+
   /// One place decides what the track does: closed if EITHER the user or the
   /// system wants it closed, open only when neither does.
   Future<void> _applyMicrophone() async {
@@ -591,6 +617,7 @@ final class CallMediaSession {
         connectedPeers: connected,
         peers: _peers.length,
         muted: _userMuted,
+        speakerphone: _speakerphone,
       ),
     );
   }

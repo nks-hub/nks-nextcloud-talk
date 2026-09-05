@@ -150,6 +150,15 @@ final class CallJoinController
     await session.setMicrophoneMuted(muted);
   }
 
+  /// Routes the joined call's audio to the loudspeaker or the earpiece.
+  Future<void> setSpeakerphone(bool on) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.setSpeakerphone(on);
+  }
+
   Future<void> leave() async {
     if (state.phase == CallJoinPhase.idle || state.isBusy) {
       return;

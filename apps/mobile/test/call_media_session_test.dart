@@ -261,6 +261,32 @@ void main() {
   // microphone back for the length of the interruption and takes it again
   // afterwards, without closing the track: closing it would force a
   // renegotiation with every peer for something that lasts seconds.
+  test('the speaker control reaches the audio route and the state', () async {
+    final media = CallMediaSession(
+      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
+      updates: updates.stream,
+      sendMessage: (message) async {
+        sent.add(message);
+        return true;
+      },
+      engine: engine,
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    final audio = engine.audio.single;
+    expect(media.state.speakerphone, isFalse, reason: 'a call starts on the earpiece');
+    expect(audio.speakerphoneCalls, <bool>[false],
+        reason: 'the route is set at the start, not left to the plugin');
+
+    await media.setSpeakerphone(true);
+    expect(audio.speakerphone, isTrue);
+    expect(media.state.speakerphone, isTrue);
+
+    await media.setSpeakerphone(false);
+    expect(audio.speakerphone, isFalse);
+    expect(media.state.speakerphone, isFalse);
+  });
+
   test('an interruption mutes the microphone and giving it back unmutes', () async {
     final interruptions = StreamController<CallAudioInterruption>.broadcast();
     addTearDown(interruptions.close);
@@ -437,12 +463,21 @@ final class _FakeEngine implements CallMediaEngine {
 final class _FakeAudio implements CallLocalAudio {
   bool disposed = false;
   bool muted = false;
+  bool speakerphone = false;
   final List<bool> muteCalls = <bool>[];
 
   @override
   Future<void> setMuted(bool value) async {
     muted = value;
     muteCalls.add(value);
+  }
+
+  final List<bool> speakerphoneCalls = <bool>[];
+
+  @override
+  Future<void> setSpeakerphone(bool on) async {
+    speakerphone = on;
+    speakerphoneCalls.add(on);
   }
 
   @override

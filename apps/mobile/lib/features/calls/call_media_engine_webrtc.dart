@@ -134,6 +134,20 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
   }
 
   @override
+  Future<void> setSpeakerphone(bool on) async {
+    if (_disposed) {
+      return;
+    }
+    try {
+      await rtc.Helper.setSpeakerphoneOn(on);
+    } on MissingPluginException {
+      // No such route on this platform.
+    } on PlatformException {
+      // The desktop plugins answer the method with "not implemented".
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) {
       return;

@@ -1779,6 +1779,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerUnmute => 'Unmute microphone';
 
   @override
+  String get callBannerSpeakerOn => 'Switch to speaker';
+
+  @override
+  String get callBannerSpeakerOff => 'Switch to earpiece';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override

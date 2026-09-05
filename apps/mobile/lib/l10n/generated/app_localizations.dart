@@ -3284,6 +3284,18 @@ abstract class AppLocalizations {
   /// **'Unmute microphone'**
   String get callBannerUnmute;
 
+  /// No description provided for @callBannerSpeakerOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to speaker'**
+  String get callBannerSpeakerOn;
+
+  /// No description provided for @callBannerSpeakerOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to earpiece'**
+  String get callBannerSpeakerOff;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

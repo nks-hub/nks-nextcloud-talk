@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -206,6 +207,26 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                 icon: const Icon(Icons.mic_rounded),
                 selectedIcon: const Icon(Icons.mic_off_rounded),
               ),
+              // Only a phone has two outputs to choose from.
+              if (defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS)
+                IconButton(
+                  key: const Key('call-banner-speaker'),
+                  tooltip: join.media.speakerphone
+                      ? strings.callBannerSpeakerOff
+                      : strings.callBannerSpeakerOn,
+                  color: scheme.onPrimaryContainer,
+                  isSelected: join.media.speakerphone,
+                  onPressed: join.isBusy
+                      ? null
+                      : () => unawaited(
+                          ref
+                              .read(callJoinControllerProvider(key).notifier)
+                              .setSpeakerphone(!join.media.speakerphone),
+                        ),
+                  icon: const Icon(Icons.volume_down_rounded),
+                  selectedIcon: const Icon(Icons.volume_up_rounded),
+                ),
             ],
             const SizedBox(width: 12),
             FilledButton(

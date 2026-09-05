@@ -82,6 +82,11 @@ abstract interface class CallLocalAudio {
   /// and pick it up again afterwards without renegotiating.
   Future<void> setMuted(bool muted);
 
+  /// Routes the call's audio to the loudspeaker or back to the earpiece.
+  ///
+  /// A phone concept: the desktops have one output and take this as a no-op.
+  Future<void> setSpeakerphone(bool on);
+
   Future<void> dispose();
 }
 

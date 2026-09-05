@@ -638,6 +638,8 @@
   "callBannerLeave": "Leave call",
   "callBannerMute": "Mute microphone",
   "callBannerUnmute": "Unmute microphone",
+  "callBannerSpeakerOn": "Switch to speaker",
+  "callBannerSpeakerOff": "Switch to earpiece",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {
