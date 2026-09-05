@@ -129,6 +129,9 @@ final class CallJoinController
         media: media,
         mediaError: media.error,
       );
+      if (media.phase == CallMediaPhase.failed) {
+        unawaited(_abandonFailedCall(session));
+      }
     });
     await session.start();
     if (_disposed) {
@@ -147,6 +150,27 @@ final class CallJoinController
       return;
     }
     state = const CallJoinState();
+    ref.invalidate(callLifecycleStatusProvider(arg));
+  }
+
+  /// Gives the server-side seat back when the media could not be established.
+  ///
+  /// The REST join succeeds before the media does, so a media failure used to
+  /// leave the client a participant of a call it cannot hear: measured on
+  /// 5 September 2026 as `inCall=7` on the server while the banner read "Call
+  /// in progress / Running for 58:58 / The call signalling ended, so the audio
+  /// stopped." and offered to JOIN. Nothing outside the app could clear it
+  /// either — the seat belongs to the app's own Talk session, so a `DELETE`
+  /// from anywhere else answers 404. The state is deliberately left at
+  /// [CallJoinPhase.failed] so the reason stays on screen; only the seat goes.
+  Future<void> _abandonFailedCall(CallMediaSession session) async {
+    if (_disposed || !identical(_session, session)) {
+      return;
+    }
+    await _teardown(leaveServer: true);
+    if (_disposed) {
+      return;
+    }
     ref.invalidate(callLifecycleStatusProvider(arg));
   }
 
