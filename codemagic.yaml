@@ -321,8 +321,21 @@ workflows:
           fi
           cd apps/mobile/build/macos/Build/Products/Release
           shasum -a 256 nks-talk-macos.zip
-          GH_TOKEN=$GITHUB_RELEASE_TOKEN gh release upload "$CM_TAG" \
-            nks-talk-macos.zip --clobber --repo nks-hub/nks-nextcloud-talk
+          export GH_TOKEN=$GITHUB_RELEASE_TOKEN
+          # WHICHEVER SIDE GETS HERE FIRST CREATES THE RELEASE. The GitHub
+          # Actions `release` job waits for the Windows installer, which takes
+          # longer than this whole build, so on the v0.1.0+60 tag this step ran
+          # against a release that did not exist yet and the macOS zip was lost.
+          # Waiting for it would burn Mac minutes on a metered plan, so the step
+          # is made order-independent instead: it creates the release if it is
+          # missing, and `softprops/action-gh-release` replaces the title and the
+          # notes when the other side arrives.
+          if ! gh release view "$CM_TAG" --repo nks-hub/nks-nextcloud-talk >/dev/null 2>&1; then
+            gh release create "$CM_TAG" --repo nks-hub/nks-nextcloud-talk \
+              --title "$CM_TAG" --notes "The other artifacts are still building."
+          fi
+          gh release upload "$CM_TAG" nks-talk-macos.zip --clobber \
+            --repo nks-hub/nks-nextcloud-talk
     artifacts:
       - apps/mobile/build/macos/Build/Products/Release/nks-talk-macos.zip
       - /tmp/macos-build.log
