@@ -126,7 +126,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         onRemoteVideo(null);
       }
     };
-    return _WebRtcPeerConnection(connection);
+    return _WebRtcPeerConnection(connection, stream);
   }
 }
 
@@ -288,9 +288,17 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
 }
 
 final class _WebRtcPeerConnection implements CallPeerConnection {
-  _WebRtcPeerConnection(this._connection);
+  _WebRtcPeerConnection(this._connection, this._localStream);
 
   final rtc.RTCPeerConnection _connection;
+
+  /// The microphone's stream: the camera track is sent under the SAME stream
+  /// id, because the web client listens to the legacy `addstream` event and
+  /// keeps one `MediaStream` per peer — a video track with its own (or no)
+  /// stream id never reaches the element it renders (measured on 5 September
+  /// 2026: the answer said `video:recvonly`, the frames were encoded, the
+  /// web's stream still had no video track).
+  final rtc.MediaStream _localStream;
   bool _closed = false;
 
   /// The transceiver handed back by `addTransceiver` must not be kept: the
@@ -300,14 +308,31 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   @override
   Future<void> setLocalVideo(CallLocalVideo? video) => _guard(() async {
     final transceivers = await _connection.getTransceivers();
-    final line = transceivers.firstWhere(
-      (transceiver) => transceiver.receiver.track?.kind == 'video',
-      orElse: () =>
-          throw const CallMediaException(CallMediaError.engineFailure),
+    final videoLines = transceivers
+        .where((transceiver) => transceiver.receiver.track?.kind == 'video')
+        .toList(growable: false);
+    if (videoLines.isEmpty) {
+      throw const CallMediaException(CallMediaError.engineFailure);
+    }
+    // Prefer the line the peer already negotiated (it has a mid): when the
+    // peer offered first, our own receive-only transceiver was not matched to
+    // their video line and a second one exists; sending on the negotiated
+    // line keeps one video line per connection.
+    final line = videoLines.firstWhere(
+      (transceiver) => transceiver.mid.isNotEmpty,
+      orElse: () => videoLines.first,
     );
     await line.sender.replaceTrack(
       video == null ? null : (video as _WebRtcLocalVideo).track,
     );
+    if (video != null) {
+      try {
+        await line.sender.setStreams([_localStream]);
+      } on Object {
+        // Best effort: without it the track travels with its own stream id,
+        // which some receivers do not attach to the participant's stream.
+      }
+    }
     await line.setDirection(
       video == null
           ? rtc.TransceiverDirection.RecvOnly

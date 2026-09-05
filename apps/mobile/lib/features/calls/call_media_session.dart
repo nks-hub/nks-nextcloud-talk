@@ -2,6 +2,8 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'call_audio_interruptions.dart';
@@ -383,6 +385,10 @@ final class CallMediaSession {
       final offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
+      debugPrint(
+        '[call] offer → ${peer.peerId} sid=${peer.sid} '
+        'video=${_video != null} lines=${_mediaLines(offer.sdp)}',
+      );
       await _send(
         peerId: peer.peerId,
         type: 'offer',
@@ -422,7 +428,10 @@ final class CallMediaSession {
         }
         try {
           await connection.setLocalVideo(enabled ? video : null);
-        } on CallMediaException {
+        } on CallMediaException catch (error) {
+          debugPrint(
+            '[call] video line → ${peer.peerId} failed: ${error.code.name}',
+          );
           continue;
         }
         // Glare guard: a peer whose offer of ours is still unanswered gets
@@ -529,6 +538,10 @@ final class CallMediaSession {
       return;
     }
     var peer = _peers[senderId];
+    debugPrint(
+      '[call] offer ← $senderId sid=$sid known=${peer != null} '
+      'pending=${peer?.localOfferPending} lines=${_mediaLines(sdp.sdp)}',
+    );
     if (peer != null && sid != null && sid.isNotEmpty) {
       peer.sid = sid;
     }
@@ -550,6 +563,15 @@ final class CallMediaSession {
       if (await _createConnection(peer, iceServers) == null) {
         return;
       }
+      final video = _video;
+      if (video != null) {
+        // A camera already on rides in the answer, on the offered video line.
+        try {
+          await peer.connection?.setLocalVideo(video);
+        } on CallMediaException {
+          // This peer simply does not get our video.
+        }
+      }
       await _announceMedia(senderId);
     }
     final connection = peer.connection;
@@ -562,6 +584,9 @@ final class CallMediaSession {
       await _drainRemoteCandidates(peer);
       final answer = await connection.createAnswer();
       await connection.setLocalDescription(answer);
+      debugPrint(
+        '[call] answer → $senderId sid=${peer.sid} lines=${_mediaLines(answer.sdp)}',
+      );
       await _send(
         peerId: senderId,
         type: 'answer',
@@ -585,6 +610,9 @@ final class CallMediaSession {
     if (sdp == null) {
       return;
     }
+    debugPrint(
+      '[call] answer ← $senderId sid=${peer.sid} lines=${_mediaLines(sdp.sdp)}',
+    );
     try {
       await connection.setRemoteDescription(sdp);
       peer.localOfferPending = false;
@@ -999,6 +1027,27 @@ final class _MediaPeer {
   bool remoteDescriptionSet = false;
   CallMediaConnectionState state = CallMediaConnectionState.connecting;
   final List<CallIceCandidate> pendingRemoteCandidates = [];
+}
+
+/// The media lines and their directions, the only part of an SDP worth a log
+/// line: `audio:sendrecv,video:recvonly`.
+String _mediaLines(String sdp) {
+  final out = <String>[];
+  String? kind;
+  for (final raw in sdp.split('\n')) {
+    final line = raw.trim();
+    if (line.startsWith('m=')) {
+      kind = line.substring(2).split(' ').first;
+    } else if (kind != null &&
+        (line == 'a=sendrecv' ||
+            line == 'a=sendonly' ||
+            line == 'a=recvonly' ||
+            line == 'a=inactive')) {
+      out.add('$kind:${line.substring(2)}');
+      kind = null;
+    }
+  }
+  return out.join(',');
 }
 
 Map<String, Object?> _sdpPayload(CallSessionDescription description) =>

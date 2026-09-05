@@ -607,6 +607,33 @@ void main() {
     expect(sids.single, isNotEmpty);
   });
 
+  // A peer that offers to us while our camera is on gets it in the answer,
+  // not at the next toggle.
+  test('an incoming offer is answered with the camera already on', () async {
+    final media = session(_update(localPeerId: _remote, participants: []));
+    addTearDown(media.dispose);
+    await media.start();
+    await media.setCameraEnabled(true);
+    final camera = engine.cameras.single;
+
+    updates.add(
+      _update(
+        localPeerId: _remote,
+        participants: [_participant(_local)],
+        messages: [
+          _message(_local, 'offer', <String, Object?>{
+            'type': 'offer',
+            'sdp': 'sdp-offer-1',
+          }, sid: 'web-sid-7'),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    final connection = engine.connections.single;
+    expect(connection.localVideos, [same(camera)]);
+    expect(connection.createdAnswers, 1);
+  });
+
   test(
     'an interruption mutes the microphone and giving it back unmutes',
     () async {
