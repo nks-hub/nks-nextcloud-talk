@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -45,6 +47,13 @@ class ScreenShareService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        // Only now may the projection be taken. `startForegroundService`
+        // returns before this runs, and a capture that raced ahead of it died
+        // in `MediaProjection.start` (measured on the Android 14 emulator on
+        // 5 September 2026 — the very same tap worked when the timing fell the
+        // other way).
+        onForeground?.invoke(true)
+        onForeground = null
         // Not sticky: a share that died with the process is over, and a
         // restarted service without a projection would only show a lying
         // notification.
@@ -69,6 +78,10 @@ class ScreenShareService : Service() {
 
     companion object {
         const val CHANNEL_NAME = "com.nkshub.nextcloudtalk/screen_share"
+
+        /** Told once the service is actually in the foreground; see above. */
+        @Volatile
+        var onForeground: ((Boolean) -> Unit)? = null
         private const val CHANNEL_ID = "screen-share"
         private const val NOTIFICATION_ID = 4109
     }
@@ -88,7 +101,21 @@ class ScreenShareChannel(private val context: Context) : MethodChannel.MethodCal
                     result.success(false)
                     return
                 }
-                val started = runCatching {
+                // Answered when the service reports itself in the foreground,
+                // not when the start was merely requested; a service that never
+                // gets there answers false after a moment rather than hanging.
+                val handler = Handler(Looper.getMainLooper())
+                var answered = false
+                val answer: (Boolean) -> Unit = { ok ->
+                    if (!answered) {
+                        answered = true
+                        ScreenShareService.onForeground = null
+                        result.success(ok)
+                    }
+                }
+                ScreenShareService.onForeground = { ok -> handler.post { answer(ok) } }
+                handler.postDelayed({ answer(false) }, 3000)
+                val requested = runCatching {
                     val intent = Intent(context, ScreenShareService::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.startForegroundService(intent)
@@ -96,7 +123,9 @@ class ScreenShareChannel(private val context: Context) : MethodChannel.MethodCal
                         context.startService(intent)
                     }
                 }.isSuccess
-                result.success(started)
+                if (!requested) {
+                    answer(false)
+                }
             }
             "stop" -> {
                 runCatching {

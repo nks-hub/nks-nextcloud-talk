@@ -145,7 +145,11 @@ recovery. Through a prepared external HPB, only a payload-free `startedTyping` o
 `stoppedTyping` with an empty `roomType` and without `sid`, a sender and a payload
 may pass as an exception. `unshareScreen` is the third payload-free peer message:
 the web client sends it without a payload when a participant stops sharing their
-screen, and a decoder that insisted on one failed the whole batch. SDP, ICE and forged typing stay blocked and their
+screen, and a decoder that insisted on one failed the whole batch. A screen
+message may also carry `broadcaster`, the sharer's own session id: the web
+client's SimpleWebRTC decides from it whether an incoming screen offer is a
+remote screen to show or a request to share the receiver's own, so every
+message of an outgoing share sets it. SDP, ICE and forged typing stay blocked and their
 rejection must not delete a pending typing state of another session. A lifecycle
 refresh only re-evaluates the ban on typing; a non-empty old draft without a new
 text change does not create a new start.

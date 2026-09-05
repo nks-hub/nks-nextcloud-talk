@@ -185,6 +185,10 @@ final class CallMediaSession {
   List<CallIceServer> _iceServers = const <CallIceServer>[];
   List<CallAudioRoute> _audioRoutes = const <CallAudioRoute>[];
   CallAudioRoute? _audioRoute;
+
+  /// This side's own session id, as the room lists it; a share names it as
+  /// the broadcaster so the far side knows whose screen it is.
+  String? _localPeerId;
   StreamSubscription<void>? _routeChanges;
 
   final CallSignalingUpdate _initial;
@@ -330,6 +334,7 @@ final class CallMediaSession {
       return;
     }
     final localPeerId = update.localPeerId;
+    _localPeerId = localPeerId?.value;
     if (localPeerId == null) {
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
       return;
@@ -676,7 +681,11 @@ final class CallMediaSession {
     if (screen == null || _shares.containsKey(peerId)) {
       return;
     }
-    final share = _MediaPeer(peerId, roomType: _screenRoomType);
+    final share = _MediaPeer(
+      peerId,
+      roomType: _screenRoomType,
+      ownScreen: true,
+    );
     _shares[peerId] = share;
     try {
       final connection = await _engine.createPeerConnection(
@@ -1147,6 +1156,9 @@ final class CallMediaSession {
         type: type,
         roomType: target?.roomType ?? _roomType,
         sid: target?.sid,
+        // Every message of an outgoing share says whose screen it is; the
+        // web reads it on the offer and ignores it elsewhere.
+        broadcaster: target != null && target.ownScreen ? _localPeerId : null,
         recipient: SignalingPeerId.parse(peerId),
         sender: null,
         payload: payload == null
@@ -1405,12 +1417,20 @@ final class CallMediaSession {
 const _maximumPendingCandidates = 128;
 
 final class _MediaPeer {
-  _MediaPeer(this.peerId, {this.roomType = CallMediaSession._roomType});
+  _MediaPeer(
+    this.peerId, {
+    this.roomType = CallMediaSession._roomType,
+    this.ownScreen = false,
+  });
 
   final String peerId;
 
   /// `video` for the call itself, `screen` for a shared screen.
   final String roomType;
+
+  /// A screen connection carrying THIS side's screen out, as opposed to one
+  /// bringing a participant's screen in.
+  final bool ownScreen;
   final DateTime openedAt = DateTime.now();
 
   /// The web client pairs every message with a peer connection by `sid`: an

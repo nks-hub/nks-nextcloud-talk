@@ -79,6 +79,9 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         const <String, dynamic>{'audio': false, 'video': true},
       );
     } on Object catch (error) {
+      // The plugin's own words, because the mapped code alone cannot tell a
+      // refused consent from a capturer that failed to start.
+      debugPrint('[call] openScreen failed: $error');
       throw CallMediaException(_screenError(error));
     }
     if (stream.getVideoTracks().isEmpty) {

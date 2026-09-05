@@ -302,10 +302,13 @@ final class SignalingPeerMessage {
     required this.recipient,
     required this.sender,
     required this.payload,
+    this.broadcaster,
   }) {
     if (!_safeWireName(type, maximumLength: 128) ||
         (roomType.isNotEmpty && !_safeWireName(roomType, maximumLength: 64)) ||
-        (sid != null && !_safeWireName(sid!, maximumLength: 512))) {
+        (sid != null && !_safeWireName(sid!, maximumLength: 512)) ||
+        (broadcaster != null &&
+            !_safeWireName(broadcaster!, maximumLength: 512))) {
       protocolFailure(
         TalkProtocolErrorCode.invalidSignalingFrame,
         r'$.message',
@@ -373,11 +376,28 @@ final class SignalingPeerMessage {
           ? null
           : SignalingPeerId.parse(message['from'], path: '$path.from'),
       payload: payload,
+      broadcaster: message['broadcaster'] == null
+          ? null
+          : requireString(
+              message['broadcaster'],
+              path: '$path.broadcaster',
+              code: TalkProtocolErrorCode.invalidSignalingFrame,
+              minLength: 1,
+              maxLength: 512,
+            ),
     );
   }
 
   final String type;
   final String roomType;
+
+  /// On a screen-share message, the session id of the participant whose
+  /// screen it is. The web client's SimpleWebRTC reads it on an incoming
+  /// screen offer: with it, the offer is a remote screen to show; WITHOUT it
+  /// the offer is taken as a request to share the receiver's own screen and
+  /// nothing is rendered (measured on 5 September 2026 — the share was
+  /// answered, encoded and sent, and never drawn).
+  final String? broadcaster;
   final String? sid;
   final SignalingPeerId? recipient;
   final SignalingPeerId? sender;
@@ -392,6 +412,7 @@ final class SignalingPeerMessage {
     if (sid != null) 'sid': sid,
     if (includeRecipient && recipient != null) 'to': recipient!.value,
     if (includeSender && sender != null) 'from': sender!.value,
+    if (broadcaster != null) 'broadcaster': broadcaster,
     if (payload != null) 'payload': payload!.wire,
   });
 

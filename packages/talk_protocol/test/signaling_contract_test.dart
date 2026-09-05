@@ -242,6 +242,36 @@ void main() {
       }
     });
 
+    test('a screen message names its broadcaster on the wire', () {
+      final outbound = SignalingPeerMessage(
+        type: 'offer',
+        roomType: 'screen',
+        sid: 'screen-1',
+        recipient: SignalingPeerId.parse('peer-b'),
+        sender: null,
+        payload: SignalingOpaquePayload.fromJson(<String, Object?>{
+          'type': 'offer',
+          'sdp': 'v=0',
+        }),
+        broadcaster: 'peer-a',
+      );
+      expect(outbound.toWire()['broadcaster'], 'peer-a');
+      final inbound = SignalingPeerMessage.fromJson(outbound.toWire());
+      expect(inbound.broadcaster, 'peer-a');
+      // A call message has none and none is written.
+      expect(
+        SignalingPeerMessage(
+          type: 'offer',
+          roomType: 'video',
+          sid: null,
+          recipient: SignalingPeerId.parse('peer-b'),
+          sender: null,
+          payload: outbound.payload,
+        ).toWire().containsKey('broadcaster'),
+        isFalse,
+      );
+    });
+
     test('unshareScreen travels without a payload, as the web sends it', () {
       final inbound = SignalingPeerMessage.fromJson(<String, Object?>{
         'type': 'unshareScreen',

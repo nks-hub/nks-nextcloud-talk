@@ -459,6 +459,10 @@ void main() {
     expect(offer.roomType, 'screen');
     expect(offer.sid, isNotNull);
     expect(offer.sid, isNot(sent.first.sid));
+    // Whose screen it is — without this the web takes the offer as a request
+    // to share ITS screen and draws nothing.
+    expect(offer.broadcaster, _local);
+    expect(sent.first.broadcaster, isNull);
 
     // The answer comes back on that sid and settles the share, not the call.
     updates.add(
