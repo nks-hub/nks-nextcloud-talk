@@ -62,8 +62,8 @@ extension _ChatServiceRelayCases on _ChatServiceIntegrationSuite {
         accountId: 'account-a',
         roomToken: 'rooma123',
       );
-      final blocks =
-          (jsonDecode(scope!.blocksJson) as List<Object?>).cast<Object?>();
+      final blocks = (jsonDecode(scope!.blocksJson) as List<Object?>)
+          .cast<Object?>();
       // One block: no handover left a hole behind.
       expect(blocks, hasLength(1));
       expect(scope.futureCursor, '114');

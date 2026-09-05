@@ -124,11 +124,11 @@ void main() {
     session.emit('https://example.com/not-a-login?token=supersecret');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('qr-login-scanner-unreadable')), findsOneWidget);
     expect(
-      find.text('This is not a Nextcloud login code.'),
+      find.byKey(const Key('qr-login-scanner-unreadable')),
       findsOneWidget,
     );
+    expect(find.text('This is not a Nextcloud login code.'), findsOneWidget);
     expect(find.textContaining('supersecret'), findsNothing);
     expect(find.byKey(const Key('fake-camera-preview')), findsOneWidget);
   });

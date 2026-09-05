@@ -264,7 +264,9 @@ void main() {
         }
         sends++;
         final fixture =
-            readFixtureJson('chat-messages/fixtures/send-success.response.json')!
+            readFixtureJson(
+                  'chat-messages/fixtures/send-success.response.json',
+                )!
                 as Map<String, Object?>;
         final data =
             (fixture['ocs']! as Map<String, Object?>)['data']!
@@ -356,7 +358,9 @@ Future<void> _cacheConversation(
           as Map<String, Object?>;
   final rooms =
       (root['ocs']! as Map<String, Object?>)['data']! as List<Object?>;
-  final roomJson = Map<String, Object?>.from(rooms.first! as Map<String, Object?>);
+  final roomJson = Map<String, Object?>.from(
+    rooms.first! as Map<String, Object?>,
+  );
   final room = ConversationRoom.fromJson(roomJson);
   await database
       .into(database.cachedConversations)

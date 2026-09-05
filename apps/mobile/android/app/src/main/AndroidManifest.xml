@@ -9,6 +9,12 @@
          the connectivity state on its native thread - without
          ACCESS_NETWORK_STATE that thread aborts the process with SIGABRT. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Sharing this device's screen into a call. Android 10+ only grants a
+         MediaProjection while a foreground service of type mediaProjection is
+         running, and Android 14 needs the second permission for it. Neither is
+         a runtime permission: the consent is the system's own capture dialog. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Live preview for reading a Nextcloud login QR code during onboarding.
@@ -170,6 +176,12 @@
             android:name=".background.BackgroundDrainJobService"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE"/>
+        <!-- Runs for as long as this device's screen is shared into a call;
+             its notification is what tells the user the screen is visible. -->
+        <service
+            android:name=".calls.ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

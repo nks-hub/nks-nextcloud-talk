@@ -41,6 +41,7 @@ final class CallMediaState {
     this.participants = const <CallPeerState>[],
     this.cameraOn = false,
     this.localVideo,
+    this.screenSharing = false,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -75,6 +76,9 @@ final class CallMediaState {
   /// Whether this side sends its camera, and the preview of it while it does.
   final bool cameraOn;
   final CallLocalVideo? localVideo;
+
+  /// Whether this device's screen is going out to the call.
+  final bool screenSharing;
 
   @override
   String toString() =>
@@ -161,7 +165,16 @@ final class CallMediaSession {
   /// messages carry `roomType: screen` and their own `sid`. This side only
   /// ever receives one: the sharer offers, we answer.
   static const _screenRoomType = 'screen';
+
+  /// Screens arriving from other participants, one connection per sharer.
   final Map<String, _MediaPeer> _screens = <String, _MediaPeer>{};
+
+  /// This side's screen going out, one connection per participant. Separate
+  /// from [_screens] because two people can share at once, and then one peer
+  /// has two screen connections that only their direction tells apart.
+  final Map<String, _MediaPeer> _shares = <String, _MediaPeer>{};
+  CallLocalVideo? _screen;
+  List<CallIceServer> _iceServers = const <CallIceServer>[];
 
   final CallSignalingUpdate _initial;
   final Stream<CallSignalingUpdate> _updates;
@@ -311,7 +324,7 @@ final class CallMediaSession {
     }
     _boundRoomEpoch = update.roomEpoch;
 
-    final iceServers = update.iceServers
+    _iceServers = update.iceServers
         .map(
           (server) => CallIceServer(
             urls: server.urls,
@@ -320,6 +333,7 @@ final class CallMediaSession {
           ),
         )
         .toList(growable: false);
+    final iceServers = _iceServers;
 
     final expected = <String>{
       for (final participant in update.participants)
@@ -345,6 +359,8 @@ final class CallMediaSession {
         localPeerId: localPeerId.value,
         iceServers: iceServers,
       );
+      // Someone who joins while the screen is up gets it too.
+      await _openShare(peerId);
     }
 
     for (final message in update.messages) {
@@ -410,6 +426,9 @@ final class CallMediaSession {
         peerId: peer.peerId,
         type: 'offer',
         payload: _sdpPayload(offer),
+        // The connection this offer belongs to decides its room type and
+        // sid: a share and the call itself both offer to the same peer.
+        via: peer,
       );
     } on CallMediaException {
       await _closePeer(peer.peerId);
@@ -571,21 +590,127 @@ final class CallMediaSession {
     required SignalingPeerMessage message,
     required List<CallIceServer> iceServers,
   }) async {
+    final share = _shares[senderId];
+    final sid = message.sid;
     switch (message.type) {
       case 'offer':
         await _receiveScreenOffer(
           senderId: senderId,
           payload: message.payload,
-          sid: message.sid,
+          sid: sid,
           iceServers: iceServers,
         );
+      case 'answer':
+        // Only this side's own share is ever answered.
+        await _receiveAnswerOn(share, message.payload);
       case 'candidate':
-        await _receiveCandidateFor(_screens[senderId], message.payload);
+        // Two screen connections to one peer are told apart by sid: ours
+        // carries the one this side named when it offered.
+        final mine = share != null && sid != null && sid == share.sid;
+        await _receiveCandidateFor(
+          mine ? share : _screens[senderId],
+          message.payload,
+        );
       case 'unshareScreen':
         await _closeScreen(senderId);
       default:
         return;
     }
+  }
+
+  /// Starts or stops sharing this device's screen with everyone in the call.
+  ///
+  /// Talk carries a share as a second connection per participant, so this
+  /// opens one per peer and offers on it; stopping sends the web client's own
+  /// `unshareScreen` (which carries no payload) before closing them. A screen
+  /// that cannot be opened leaves the call as it was.
+  Future<void> setScreenSharing(bool sharing) {
+    return _enqueue(() async {
+      if (_disposed || sharing == (_screen != null)) {
+        return;
+      }
+      if (!sharing) {
+        await _stopSharing();
+        _publish();
+        return;
+      }
+      final CallLocalVideo screen;
+      try {
+        screen = await _engine.openScreen();
+      } on CallMediaException catch (error) {
+        debugPrint('[call] screen share refused: ${error.code.name}');
+        return;
+      }
+      if (_disposed) {
+        await screen.dispose();
+        return;
+      }
+      _screen = screen;
+      for (final peerId in _peers.keys.toList(growable: false)) {
+        await _openShare(peerId);
+      }
+      _publish();
+    });
+  }
+
+  /// One outgoing screen connection to one participant, offered right away.
+  Future<void> _openShare(String peerId) async {
+    final screen = _screen;
+    if (screen == null || _shares.containsKey(peerId)) {
+      return;
+    }
+    final share = _MediaPeer(peerId, roomType: _screenRoomType);
+    _shares[peerId] = share;
+    try {
+      final connection = await _engine.createPeerConnection(
+        iceServers: _iceServers,
+        audio: null,
+        video: screen,
+        onIceCandidate: (candidate) =>
+            unawaited(_enqueue(() => _sendCandidate(share, candidate))),
+        onConnectionState: (state) => unawaited(
+          _enqueue(() async {
+            if (identical(_shares[peerId], share)) {
+              share.state = state;
+            }
+          }),
+        ),
+        onRemoteVideo: (video) => unawaited(video?.dispose()),
+      );
+      if (_disposed || !identical(_shares[peerId], share)) {
+        await connection.close();
+        return;
+      }
+      share.connection = connection;
+    } on CallMediaException {
+      _shares.remove(peerId);
+      return;
+    }
+    debugPrint('[call] share → $peerId sid=${share.sid}');
+    await _offer(share);
+  }
+
+  /// Tells everyone the share is over and closes it. Quiet about a failure to
+  /// send: the connections go either way, and a peer that missed the message
+  /// sees the track end.
+  Future<void> _stopSharing() async {
+    for (final share in _shares.values.toList(growable: false)) {
+      try {
+        await _send(
+          peerId: share.peerId,
+          type: 'unshareScreen',
+          payload: null,
+          via: share,
+        );
+      } on CallMediaException {
+        // Nothing to do: the connection closes below regardless.
+      }
+      await share.connection?.close();
+    }
+    _shares.clear();
+    final screen = _screen;
+    _screen = null;
+    await screen?.dispose();
   }
 
   /// A participant started sharing their screen: a receive-only connection of
@@ -766,12 +891,17 @@ final class CallMediaSession {
   Future<void> _receiveAnswer({
     required String senderId,
     required SignalingOpaquePayload? payload,
-  }) async {
-    final peer = _peers[senderId];
+  }) => _receiveAnswerOn(_peers[senderId], payload);
+
+  Future<void> _receiveAnswerOn(
+    _MediaPeer? peer,
+    SignalingOpaquePayload? payload,
+  ) async {
     final connection = peer?.connection;
     if (peer == null || connection == null || !peer.localOfferPending) {
       return;
     }
+    final senderId = peer.peerId;
     final sdp = _readSdp(payload, expectedType: 'answer');
     if (sdp == null) {
       return;
@@ -949,7 +1079,7 @@ final class CallMediaSession {
   Future<void> _send({
     required String peerId,
     required String type,
-    required Map<String, Object?> payload,
+    required Map<String, Object?>? payload,
     _MediaPeer? via,
   }) async {
     if (_disposed) {
@@ -964,7 +1094,9 @@ final class CallMediaSession {
         sid: target?.sid,
         recipient: SignalingPeerId.parse(peerId),
         sender: null,
-        payload: SignalingOpaquePayload.fromJson(payload),
+        payload: payload == null
+            ? null
+            : SignalingOpaquePayload.fromJson(payload),
       );
     } on TalkProtocolException {
       throw const CallMediaException(CallMediaError.engineFailure);
@@ -991,6 +1123,7 @@ final class CallMediaSession {
   }
 
   Future<void> _closeAllPeers() async {
+    await _stopSharing();
     for (final peerId in _peers.keys.toList(growable: false)) {
       await _closePeer(peerId);
     }
@@ -998,6 +1131,8 @@ final class CallMediaSession {
 
   Future<void> _closePeer(String peerId) async {
     await _closeScreen(peerId);
+    final share = _shares.remove(peerId);
+    await share?.connection?.close();
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
@@ -1169,6 +1304,7 @@ final class CallMediaSession {
         reaction: _reaction,
         cameraOn: _video != null,
         localVideo: _video,
+        screenSharing: _screen != null,
         participants: [
           for (final peer in _peers.values)
             CallPeerState(
@@ -1227,7 +1363,14 @@ final class _MediaPeer {
   /// first, and puts it on every message to the peer (measured on 5 September
   /// 2026: a camera renegotiation with `sid: null` went to a fresh connection
   /// the web never showed).
-  String sid = DateTime.now().microsecondsSinceEpoch.toString();
+  String sid = _nextSid();
+
+  /// Unique per connection, not merely per moment: a share and the call
+  /// itself are two connections to the same peer opened in the same
+  /// microsecond, and the web client tells them apart by sid alone.
+  static int _sidCounter = 0;
+  static String _nextSid() =>
+      '${DateTime.now().microsecondsSinceEpoch}${_sidCounter++}';
   CallPeerConnection? connection;
   CallRemoteVideo? video;
   bool localOfferPending = false;
@@ -1241,19 +1384,34 @@ final class _MediaPeer {
 String _mediaLines(String sdp) {
   final out = <String>[];
   String? kind;
+  String? direction;
+  var msid = false;
+  void flush() {
+    if (kind != null && direction != null) {
+      out.add('$kind:$direction${msid ? '+msid' : ''}');
+    }
+    kind = null;
+    direction = null;
+    msid = false;
+  }
+
   for (final raw in sdp.split('\n')) {
     final line = raw.trim();
     if (line.startsWith('m=')) {
+      flush();
       kind = line.substring(2).split(' ').first;
-    } else if (kind != null &&
-        (line == 'a=sendrecv' ||
-            line == 'a=sendonly' ||
-            line == 'a=recvonly' ||
-            line == 'a=inactive')) {
-      out.add('$kind:${line.substring(2)}');
-      kind = null;
+    } else if (line.startsWith('a=msid:')) {
+      // Whether the line names a stream: a track without one reaches the web
+      // client as a track nobody attaches to a participant.
+      msid = true;
+    } else if (line == 'a=sendrecv' ||
+        line == 'a=sendonly' ||
+        line == 'a=recvonly' ||
+        line == 'a=inactive') {
+      direction = line.substring(2);
     }
   }
+  flush();
   return out.join(',');
 }
 

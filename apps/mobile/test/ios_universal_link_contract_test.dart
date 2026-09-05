@@ -42,7 +42,9 @@ void main() {
 
     expect(details, hasLength(1));
     final detail = details.single! as Map<String, Object?>;
-    expect(detail['appIDs'], <String>[r'${APPLE_TEAM_ID}.com.nkshub.nextcloudtalk']);
+    expect(detail['appIDs'], <String>[
+      r'${APPLE_TEAM_ID}.com.nkshub.nextcloudtalk',
+    ]);
     final components = (detail['components']! as List<Object?>)
         .cast<Map<String, Object?>>();
     expect(components.map((component) => component['/']), <String>[

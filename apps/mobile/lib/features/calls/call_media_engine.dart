@@ -63,6 +63,12 @@ enum CallMediaError {
   /// Signalling ended, or its session was replaced, while media were running.
   signalingLost,
 
+  /// The user refused to share their screen.
+  screenSharePermissionDenied,
+
+  /// This device cannot capture its screen; nothing was shared.
+  screenShareUnavailable,
+
   /// The user refused the camera, or the system has it blocked. Never fails
   /// the call: the call goes on without video.
   cameraPermissionDenied,
@@ -150,12 +156,32 @@ abstract interface class CallMediaEngine {
   /// [CallMediaError.cameraUnavailable]; the call is not affected either way.
   Future<CallLocalVideo> openCamera();
 
+  /// Asks for the platform's screen-capture consent WITHOUT starting the
+  /// capture, and answers whether it was given.
+  ///
+  /// Separate from [openScreen] because Android 14 puts a requirement of its
+  /// own between the two: the foreground service that a capture needs may
+  /// only start once the consent is in hand, and the capture may only start
+  /// once that service runs. On a platform that asks for nothing, this is
+  /// `true` and [openScreen] does the asking.
+  Future<bool> requestScreenConsent();
+
+  /// Opens this device's screen for sharing, reusing the consent above.
+  /// Throws [CallMediaException] with
+  /// [CallMediaError.screenSharePermissionDenied] or
+  /// [CallMediaError.screenShareUnavailable].
+  Future<CallLocalVideo> openScreen();
+
   /// A connection to one peer. With [audio] `null` it sends nothing and only
   /// receives — the shape of a screen share, which Talk carries on a second
   /// connection per participant (`roomType: screen`).
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
+
+    /// A picture the connection sends from the start, on a send-only video
+    /// line: a screen share, which never receives one back.
+    CallLocalVideo? video,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
 

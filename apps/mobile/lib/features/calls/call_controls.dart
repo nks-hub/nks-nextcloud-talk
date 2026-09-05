@@ -86,6 +86,24 @@ final class CallControls extends ConsumerWidget {
           icon: const Icon(Icons.videocam_off_outlined),
           selectedIcon: const Icon(Icons.videocam_rounded),
         ),
+        // Sharing this device's screen exists where the platform can capture
+        // one; on a phone that is Android.
+        if (defaultTargetPlatform == TargetPlatform.android)
+          IconButton(
+            key: Key('$keyPrefix-share-screen'),
+            tooltip: join.media.screenSharing
+                ? strings.callBannerStopSharing
+                : strings.callBannerShareScreen,
+            color: color,
+            isSelected: join.media.screenSharing,
+            onPressed: busy
+                ? null
+                : () => unawaited(
+                    controller().setScreenSharing(!join.media.screenSharing),
+                  ),
+            icon: const Icon(Icons.screen_share_outlined),
+            selectedIcon: const Icon(Icons.stop_screen_share_rounded),
+          ),
         IconButton(
           key: Key('$keyPrefix-raise-hand'),
           tooltip: join.media.handRaised

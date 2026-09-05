@@ -181,6 +181,34 @@ base class CallJoinController
     await session.sendReaction(emoji);
   }
 
+  /// Starts or stops sharing this device's screen into the joined call. The
+  /// foreground service Android needs for a capture runs for exactly as long
+  /// as the share does.
+  Future<void> setScreenSharing(bool sharing) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    final service = ref.read(callScreenShareServiceProvider);
+    if (sharing) {
+      // The order Android 14 insists on: consent, then the foreground
+      // service, then the capture. Starting the service first is refused,
+      // because the permission it needs only exists once the user has said
+      // yes (measured on the Android 14 emulator: a SecurityException that
+      // took the whole app down).
+      if (!await ref.read(callMediaEngineProvider).requestScreenConsent()) {
+        return;
+      }
+      if (!await service.start()) {
+        return;
+      }
+    }
+    await session.setScreenSharing(sharing);
+    if (!sharing || !state.media.screenSharing) {
+      await service.stop();
+    }
+  }
+
   /// Turns this participant's camera on or off in the joined call.
   Future<void> setCameraEnabled(bool enabled) async {
     final session = _session;

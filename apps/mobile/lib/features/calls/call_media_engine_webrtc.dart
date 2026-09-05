@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
@@ -52,9 +53,46 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
   }
 
   @override
+  Future<bool> requestScreenConsent() async {
+    if (defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return true;
+    }
+    try {
+      // Stores the consent inside the plugin; the `getDisplayMedia` below
+      // then reuses it instead of asking a second time.
+      return await rtc.Helper.requestCapturePermission();
+    } on Object catch (error) {
+      debugPrint('[call] screen consent failed: $error');
+      return false;
+    }
+  }
+
+  @override
+  Future<CallLocalVideo> openScreen() async {
+    final rtc.MediaStream stream;
+    try {
+      // The platform asks for consent itself (Android's capture dialog); the
+      // foreground service that Android 10+ requires is started by the caller
+      // before this runs.
+      stream = await rtc.navigator.mediaDevices.getDisplayMedia(
+        const <String, dynamic>{'audio': false, 'video': true},
+      );
+    } on Object catch (error) {
+      throw CallMediaException(_screenError(error));
+    }
+    if (stream.getVideoTracks().isEmpty) {
+      await stream.dispose();
+      throw const CallMediaException(CallMediaError.screenShareUnavailable);
+    }
+    return _WebRtcLocalVideo.open(stream);
+  }
+
+  @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
+    CallLocalVideo? video,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
@@ -77,6 +115,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     } on Object {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
+    _WebRtcLocalVideo? local;
     try {
       if (stream != null) {
         for (final track in stream.getAudioTracks()) {
@@ -87,12 +126,26 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       // that sends video (the web client does by default) is seen without a
       // camera open here; turning the camera on puts a track on this same
       // line and flips it to send-and-receive, followed by a new offer.
-      await connection.addTransceiver(
-        kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
-        init: rtc.RTCRtpTransceiverInit(
-          direction: rtc.TransceiverDirection.RecvOnly,
-        ),
-      );
+      // A share opens with the picture already on the line, sending only:
+      // nothing ever comes back on a screen connection.
+      // Hoisted: the flag outlives the block that builds the transceiver.
+      local = video as _WebRtcLocalVideo?;
+      if (local == null) {
+        await connection.addTransceiver(
+          kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
+          init: rtc.RTCRtpTransceiverInit(
+            direction: rtc.TransceiverDirection.RecvOnly,
+          ),
+        );
+      } else {
+        await connection.addTransceiver(
+          track: local.track,
+          init: rtc.RTCRtpTransceiverInit(
+            direction: rtc.TransceiverDirection.SendOnly,
+            streams: <rtc.MediaStream>[local.stream],
+          ),
+        );
+      }
     } on Object {
       await connection.close();
       await connection.dispose();
@@ -128,7 +181,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         onRemoteVideo(null);
       }
     };
-    return _WebRtcPeerConnection(connection, stream);
+    return _WebRtcPeerConnection(connection, stream, sendOnly: local != null);
   }
 }
 
@@ -290,7 +343,18 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
 }
 
 final class _WebRtcPeerConnection implements CallPeerConnection {
-  _WebRtcPeerConnection(this._connection, this._localStream);
+  _WebRtcPeerConnection(
+    this._connection,
+    this._localStream, {
+    required this._sendOnly,
+  });
+
+  /// A share offers nothing back. Without this the plugin's default offer
+  /// constraints add a receive-only audio and video line to every offer, and
+  /// a screen offer then reaches the web client as three m-lines it did not
+  /// ask for (measured on 5 September 2026: the web answered them
+  /// `inactive` and showed no screen at all).
+  final bool _sendOnly;
 
   final rtc.RTCPeerConnection _connection;
 
@@ -360,15 +424,23 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   }
 
   @override
-  Future<CallSessionDescription> createOffer({bool iceRestart = false}) =>
-      _describe(
-        iceRestart
-            ? _connection.createOffer(<String, dynamic>{
-                'mandatory': <String, dynamic>{'IceRestart': true},
-                'optional': <dynamic>[],
-              })
-            : _connection.createOffer(),
-      );
+  Future<CallSessionDescription> createOffer({bool iceRestart = false}) {
+    final mandatory = <String, dynamic>{
+      if (iceRestart) 'IceRestart': true,
+      if (_sendOnly) ...<String, dynamic>{
+        'OfferToReceiveAudio': false,
+        'OfferToReceiveVideo': false,
+      },
+    };
+    return _describe(
+      mandatory.isEmpty
+          ? _connection.createOffer()
+          : _connection.createOffer(<String, dynamic>{
+              'mandatory': mandatory,
+              'optional': <dynamic>[],
+            }),
+    );
+  }
 
   @override
   Future<CallSessionDescription> createAnswer() =>
@@ -445,4 +517,19 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
   }
+}
+
+/// The plugin reports a refused capture as a plain string, the same way it
+/// does a refused microphone, so the text is what separates "the user said
+/// no" from "this device cannot".
+CallMediaError _screenError(Object error) {
+  final text = error.toString().toLowerCase();
+  if (text.contains('notallowed') ||
+      text.contains('permission') ||
+      text.contains('denied') ||
+      text.contains("didn't give") ||
+      text.contains('did not give')) {
+    return CallMediaError.screenSharePermissionDenied;
+  }
+  return CallMediaError.screenShareUnavailable;
 }

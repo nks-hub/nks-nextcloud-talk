@@ -38,85 +38,88 @@ void main() {
 
   tearDown(() => database.close());
 
-  test('a room session activated mid-flight does not cancel the transport', () async {
-    final settingsReached = Completer<void>();
-    final releaseSettings = Completer<void>();
-    late final HttpNextcloudApi api;
-    api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/signaling/settings')) {
-          if (!settingsReached.isCompleted) {
-            settingsReached.complete();
+  test(
+    'a room session activated mid-flight does not cancel the transport',
+    () async {
+      final settingsReached = Completer<void>();
+      final releaseSettings = Completer<void>();
+      late final HttpNextcloudApi api;
+      api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/signaling/settings')) {
+            if (!settingsReached.isCompleted) {
+              settingsReached.complete();
+            }
+            await releaseSettings.future;
+            return _ocs(<String, Object?>{
+              'signalingMode': 'external',
+              'userId': 'fixture-user',
+              'hideWarning': true,
+              'server': 'https://signal.example.invalid/standalone-signaling',
+              'federation': null,
+              'stunservers': <Object?>[
+                <String, Object?>{
+                  'urls': <Object?>['stun:stun.example.invalid:3478'],
+                },
+              ],
+              'turnservers': <Object?>[],
+              'sipDialinInfo': '',
+              'ticket': 'fixture-ticket',
+              'helloAuthParams': <String, Object?>{
+                '1.0': <String, Object?>{
+                  'userid': 'fixture-user',
+                  'ticket': 'fixture-ticket',
+                },
+              },
+            });
           }
-          await releaseSettings.future;
-          return _ocs(<String, Object?>{
-            'signalingMode': 'external',
-            'userId': 'fixture-user',
-            'hideWarning': true,
-            'server': 'https://signal.example.invalid/standalone-signaling',
-            'federation': null,
-            'stunservers': <Object?>[
-              <String, Object?>{
-                'urls': <Object?>['stun:stun.example.invalid:3478'],
+          if (request.url.path.endsWith('/participants/active')) {
+            final root =
+                readFixtureJson(
+                      'conversation-list/fixtures/conversations-full.response.json',
+                    )!
+                    as Map<String, Object?>;
+            final ocs = root['ocs']! as Map<String, Object?>;
+            final rooms = ocs['data']! as List<Object?>;
+            return http.Response(
+              _ocs(rooms.first).body,
+              200,
+              headers: const <String, String>{
+                'set-cookie': 'nc_session=transport-probe; Path=/; HttpOnly',
               },
-            ],
-            'turnservers': <Object?>[],
-            'sipDialinInfo': '',
-            'ticket': 'fixture-ticket',
-            'helloAuthParams': <String, Object?>{
-              '1.0': <String, Object?>{
-                'userid': 'fixture-user',
-                'ticket': 'fixture-ticket',
-              },
-            },
-          });
-        }
-        if (request.url.path.endsWith('/participants/active')) {
-          final root =
-              readFixtureJson(
-                    'conversation-list/fixtures/conversations-full.response.json',
-                  )!
-                  as Map<String, Object?>;
-          final ocs = root['ocs']! as Map<String, Object?>;
-          final rooms = ocs['data']! as List<Object?>;
-          return http.Response(
-            _ocs(rooms.first).body,
-            200,
-            headers: const <String, String>{
-              'set-cookie': 'nc_session=transport-probe; Path=/; HttpOnly',
-            },
-          );
-        }
-        fail('Unexpected request ${request.method} ${request.url}');
-      }),
-    );
-    addTearDown(api.close);
+            );
+          }
+          fail('Unexpected request ${request.method} ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
 
-    final transport = CallTransportService(
-      accounts: accounts,
-      credentials: vault,
-      api: api,
-    );
-    final pending = transport.resolve(
-      accountId: 'account-a',
-      roomToken: 'rooma123',
-    );
-    await settingsReached.future;
+      final transport = CallTransportService(
+        accounts: accounts,
+        credentials: vault,
+        api: api,
+      );
+      final pending = transport.resolve(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+      );
+      await settingsReached.future;
 
-    // Exactly what opening the chat does while the banner is asking.
-    await api.activateRoomSession(
-      activeRequest: ActiveRoomSessionRequest(
-        accountId: AccountId.parse('account-a'),
-        server: ServerBase.parse('https://cloud.example.invalid'),
-        roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
-      ),
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    releaseSettings.complete();
+      // Exactly what opening the chat does while the banner is asking.
+      await api.activateRoomSession(
+        activeRequest: ActiveRoomSessionRequest(
+          accountId: AccountId.parse('account-a'),
+          server: ServerBase.parse('https://cloud.example.invalid'),
+          roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+        ),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      releaseSettings.complete();
 
-    expect(await pending, CallTransport.externalHpb);
-  });
+      expect(await pending, CallTransport.externalHpb);
+    },
+  );
 }
 
 http.Response _ocs(Object? data) => http.Response(

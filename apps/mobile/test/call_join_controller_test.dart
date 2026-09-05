@@ -139,9 +139,18 @@ final class _RecordingEngine implements CallMediaEngine {
   }
 
   @override
+  Future<bool> requestScreenConsent() async => true;
+
+  @override
+  Future<CallLocalVideo> openScreen() async {
+    throw const CallMediaException(CallMediaError.screenShareUnavailable);
+  }
+
+  @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
+    CallLocalVideo? video,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,

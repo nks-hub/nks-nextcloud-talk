@@ -225,12 +225,11 @@ void main() {
       supportDirectory: () async => support,
     );
 
-    await vault.writePendingRevocations('[{"server":"https://example.invalid"}]');
-
-    expect(
-      File('${support.path}/pending-revocations').existsSync(),
-      isTrue,
+    await vault.writePendingRevocations(
+      '[{"server":"https://example.invalid"}]',
     );
+
+    expect(File('${support.path}/pending-revocations').existsSync(), isTrue);
     expect(
       await vault.readPendingRevocations(),
       '[{"server":"https://example.invalid"}]',
@@ -312,7 +311,9 @@ void main() {
       supportDirectory: () async => support,
     );
 
-    await vault.writePendingRevocations('[{"server":"https://example.invalid"}]');
+    await vault.writePendingRevocations(
+      '[{"server":"https://example.invalid"}]',
+    );
     await vault.writePendingRevocations(null);
 
     expect(File('${support.path}/pending-revocations').existsSync(), isFalse);

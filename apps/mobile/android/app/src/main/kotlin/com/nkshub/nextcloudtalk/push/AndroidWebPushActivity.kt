@@ -13,6 +13,8 @@ import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
 import com.nkshub.nextcloudtalk.calls.CallPictureInPicture
+import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
+import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
 import com.nkshub.nextcloudtalk.contacts.ContactPickerChannel
 import com.nkshub.nextcloudtalk.share.AndroidShareCaptureResult
@@ -39,6 +41,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var shortcutChannel: MethodChannel? = null
     private var callAudioFocusChannel: EventChannel? = null
     private var callPictureInPicture: CallPictureInPicture? = null
+    private var screenShareChannel: MethodChannel? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
@@ -218,6 +221,13 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
             ),
         )
         callPictureInPicture = pictureInPicture
+
+        val screenShare = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ScreenShareService.CHANNEL_NAME,
+        )
+        screenShare.setMethodCallHandler(ScreenShareChannel(applicationContext))
+        screenShareChannel = screenShare
     }
 
     override fun onUserLeaveHint() {
@@ -396,6 +406,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         callAudioFocusChannel = null
         callPictureInPicture?.detach()
         callPictureInPicture = null
+        screenShareChannel?.setMethodCallHandler(null)
+        screenShareChannel = null
         disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()

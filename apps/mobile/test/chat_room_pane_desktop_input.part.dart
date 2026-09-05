@@ -58,40 +58,42 @@ void _registerChatRoomPaneDesktopInputTests() {
     await tester.pump();
   }
 
-  testWidgets('a pointer over a message says the bubble is a target', (
-    tester,
-  ) async {
-    await pumpRoom(tester);
-    expect(
-      affordanceRing(tester, 10),
-      Colors.transparent,
-      reason: 'an untouched bubble must draw no ring',
-    );
+  testWidgets(
+    'a pointer over a message says the bubble is a target',
+    (tester) async {
+      await pumpRoom(tester);
+      expect(
+        affordanceRing(tester, 10),
+        Colors.transparent,
+        reason: 'an untouched bubble must draw no ring',
+      );
 
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await mouse.addPointer(location: Offset.zero);
-    addTearDown(mouse.removePointer);
-    await tester.pump();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await tester.pump();
 
-    await mouse.moveTo(
-      tester.getCenter(find.byKey(const Key('chat-message-target-10'))),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      affordanceRing(tester, 10),
-      isNot(Colors.transparent),
-      reason: 'hovering a bubble must show that it can be acted on',
-    );
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const Key('chat-message-target-10'))),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        affordanceRing(tester, 10),
+        isNot(Colors.transparent),
+        reason: 'hovering a bubble must show that it can be acted on',
+      );
 
-    // And it has to go away again: a ring left behind points at a message the
-    // pointer is no longer on.
-    await mouse.moveTo(const Offset(2, 2));
-    await tester.pumpAndSettle();
-    expect(affordanceRing(tester, 10), Colors.transparent);
+      // And it has to go away again: a ring left behind points at a message the
+      // pointer is no longer on.
+      await mouse.moveTo(const Offset(2, 2));
+      await tester.pumpAndSettle();
+      expect(affordanceRing(tester, 10), Colors.transparent);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  }, variant: TargetPlatformVariant.desktop());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
 
   testWidgets('a keyboard reaches the message actions and the composer after '
       'them', (tester) async {
@@ -126,56 +128,62 @@ void _registerChatRoomPaneDesktopInputTests() {
     await tester.pump(const Duration(milliseconds: 1));
   }, variant: TargetPlatformVariant.desktop());
 
-  testWidgets('Enter in the composer stays a message, not a menu', (
-    tester,
-  ) async {
-    await pumpRoom(tester);
+  testWidgets(
+    'Enter in the composer stays a message, not a menu',
+    (tester) async {
+      await pumpRoom(tester);
 
-    // Focus in a text field means the key belongs to the text field. The
-    // bubble binding must not reach across and open its sheet instead.
-    await tester.tap(find.byKey(const Key('chat-composer')));
-    await tester.pump();
-    await tester.enterText(find.byKey(const Key('chat-composer')), 'typed');
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
+      // Focus in a text field means the key belongs to the text field. The
+      // bubble binding must not reach across and open its sheet instead.
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('chat-composer')), 'typed');
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('message-action-reply')), findsNothing);
+      expect(find.byKey(const Key('message-action-reply')), findsNothing);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  }, variant: TargetPlatformVariant.desktop());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
 
-  testWidgets('a reaction chip lets the hover ink through', (tester) async {
-    await _insertCachedMessage(
-      database,
-      _messageJson(
-        id: 71,
-        actorId: 'someone-else',
-        actorDisplayName: 'Other person',
-        timestamp: 1724300500,
-        message: 'Reacted to',
-        reactions: const {'👍': 2},
-      ),
-      displayText: 'Reacted to',
-    );
-    await pumpRoom(tester);
+  testWidgets(
+    'a reaction chip lets the hover ink through',
+    (tester) async {
+      await _insertCachedMessage(
+        database,
+        _messageJson(
+          id: 71,
+          actorId: 'someone-else',
+          actorDisplayName: 'Other person',
+          timestamp: 1724300500,
+          message: 'Reacted to',
+          reactions: const {'👍': 2},
+        ),
+        displayText: 'Reacted to',
+      );
+      await pumpRoom(tester);
 
-    final chip = find.byKey(const Key('chat-reaction-71-0'));
-    expect(chip, findsOneWidget);
-    // Ink paints between a Material and its child, so an opaque box inside
-    // the InkWell hides the hover highlight and the chip looks dead under a
-    // pointer. The colour belongs on the Material above the ink instead.
-    expect(
-      find.descendant(
-        of: find.descendant(of: chip, matching: find.byType(InkWell)),
-        matching: find.byType(DecoratedBox),
-      ),
-      findsNothing,
-      reason: 'an opaque box under the ink swallows the hover highlight',
-    );
+      final chip = find.byKey(const Key('chat-reaction-71-0'));
+      expect(chip, findsOneWidget);
+      // Ink paints between a Material and its child, so an opaque box inside
+      // the InkWell hides the hover highlight and the chip looks dead under a
+      // pointer. The colour belongs on the Material above the ink instead.
+      expect(
+        find.descendant(
+          of: find.descendant(of: chip, matching: find.byType(InkWell)),
+          matching: find.byType(DecoratedBox),
+        ),
+        findsNothing,
+        reason: 'an opaque box under the ink swallows the hover highlight',
+      );
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump(const Duration(milliseconds: 1));
-  }, variant: TargetPlatformVariant.desktop());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
 }

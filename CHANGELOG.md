@@ -52,6 +52,9 @@ from the commit log. Nothing here has reached testers yet.
   participant with their video or initial, their name, whether they are muted
   or have a hand up, and your own preview among them; the same controls as the
   banner plus a Leave button. It closes on its own when the call ends.
+- New: share this device's screen into a call on Android, from the same
+  controls as the camera. The system asks for consent, a notification shows
+  for as long as the screen is visible, and stopping tells everyone.
 - New: a participant's shared screen shows in the call view, full width above
   the participant tiles, and goes away when they stop sharing.
 - Fixed: a participant stopping their screen share no longer ends the call for

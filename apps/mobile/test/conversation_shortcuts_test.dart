@@ -34,17 +34,20 @@ void main() {
         limit: 3,
       );
 
-      expect(
-        shortcuts.map((shortcut) => shortcut.id),
-        ['account-b|cccc', 'account-a|aaaa', 'account-b|dddd'],
-      );
+      expect(shortcuts.map((shortcut) => shortcut.id), [
+        'account-b|cccc',
+        'account-a|aaaa',
+        'account-b|dddd',
+      ]);
     });
 
     test('builds a link the deep link resolver accepts under a base path', () {
       final shortcuts = conversationShortcuts(
         accounts: const [_accountB],
         conversations: {
-          'account-b': [_room(account: 'account-b', token: 'cccc', activity: 1)],
+          'account-b': [
+            _room(account: 'account-b', token: 'cccc', activity: 1),
+          ],
         },
       );
 
@@ -128,9 +131,7 @@ void main() {
             return published.last.length;
           });
       addTearDown(
-        () => TestDefaultBinaryMessengerBinding
-            .instance
-            .defaultBinaryMessenger
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null),
       );
     });
@@ -185,18 +186,14 @@ void main() {
   group('ConversationShortcutPublisher', () {
     test('hands the whole set to the platform in one call', () async {
       final calls = <MethodCall>[];
-      const channel = MethodChannel(
-        ConversationShortcutPublisher.channelName,
-      );
+      const channel = MethodChannel(ConversationShortcutPublisher.channelName);
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             calls.add(call);
             return 1;
           });
       addTearDown(
-        () => TestDefaultBinaryMessengerBinding
-            .instance
-            .defaultBinaryMessenger
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null),
       );
 
@@ -221,9 +218,7 @@ void main() {
     });
 
     test('survives a platform that has no shortcut channel', () async {
-      const channel = MethodChannel(
-        ConversationShortcutPublisher.channelName,
-      );
+      const channel = MethodChannel(ConversationShortcutPublisher.channelName);
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);
 

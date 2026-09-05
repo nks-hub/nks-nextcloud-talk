@@ -629,6 +629,8 @@
   "callParticipantsTitle": "V hovoru ({count})",
   "callParticipantsYou": "Vy",
   "callScreenSharedBy": "{name} sdílí obrazovku",
+  "callBannerShareScreen": "Sdílet obrazovku",
+  "callBannerStopSharing": "Ukončit sdílení obrazovky",
   "callParticipantConnected": "Zvuk spojen",
   "callParticipantConnecting": "Připojování…",
   "callParticipantMuted": "Ztlumeno",

@@ -593,75 +593,85 @@ void main() {
   // signalling pull that followed was answered 409, and a 409 terminates the
   // lane for good, so a joined call never negotiated with anybody. Holders are
   // counted now: the room is activated once and released by the last one.
-  test('the same room is activated once and released by the last holder', () async {
-    final room = _activeRoomFixture();
-    var activations = 0;
-    var deletes = 0;
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/participants/active')) {
-          if (request.method == 'DELETE') {
-            deletes++;
-            return _ocsResponse(null);
+  test(
+    'the same room is activated once and released by the last holder',
+    () async {
+      final room = _activeRoomFixture();
+      var activations = 0;
+      var deletes = 0;
+      final api = HttpNextcloudApi(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/participants/active')) {
+            if (request.method == 'DELETE') {
+              deletes++;
+              return _ocsResponse(null);
+            }
+            activations++;
+            return _ocsResponse(room, cookie: 'nc_session=session; Path=/');
           }
-          activations++;
-          return _ocsResponse(room, cookie: 'nc_session=session; Path=/');
-        }
-        throw StateError('Unexpected request ${request.url}');
-      }),
-    );
-    addTearDown(api.close);
-    final server = ServerBase.parse('https://cloud.example.invalid');
-    ActiveRoomSessionRequest requestFor(String token) =>
-        ActiveRoomSessionRequest(
-          accountId: AccountId.parse('account-a'),
-          server: server,
-          roomToken: ConversationToken.parse(token, path: r'$.roomToken'),
-        );
+          throw StateError('Unexpected request ${request.url}');
+        }),
+      );
+      addTearDown(api.close);
+      final server = ServerBase.parse('https://cloud.example.invalid');
+      ActiveRoomSessionRequest requestFor(String token) =>
+          ActiveRoomSessionRequest(
+            accountId: AccountId.parse('account-a'),
+            server: server,
+            roomToken: ConversationToken.parse(token, path: r'$.roomToken'),
+          );
 
-    final first = await api.activateRoomSession(
-      activeRequest: requestFor('rooma123'),
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    final second = await api.activateRoomSession(
-      activeRequest: requestFor('rooma123'),
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    expect(activations, 1, reason: 'the second holder joins the live session');
-    expect(deletes, 0);
-    expect(identical(first.lease, second.lease), isTrue);
+      final first = await api.activateRoomSession(
+        activeRequest: requestFor('rooma123'),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      final second = await api.activateRoomSession(
+        activeRequest: requestFor('rooma123'),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      expect(
+        activations,
+        1,
+        reason: 'the second holder joins the live session',
+      );
+      expect(deletes, 0);
+      expect(identical(first.lease, second.lease), isTrue);
 
-    await api.deactivateRoomSession(
-      lease: first.lease!,
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    expect(deletes, 0, reason: 'one holder letting go is not the end of it');
+      await api.deactivateRoomSession(
+        lease: first.lease!,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      expect(deletes, 0, reason: 'one holder letting go is not the end of it');
 
-    await api.deactivateRoomSession(
-      lease: second.lease!,
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    expect(deletes, 1, reason: 'the last holder releases the session');
+      await api.deactivateRoomSession(
+        lease: second.lease!,
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      expect(deletes, 1, reason: 'the last holder releases the session');
 
-    // Exclusivity is untouched: another room still replaces this one.
-    await api.activateRoomSession(
-      activeRequest: requestFor('rooma123'),
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    await api.activateRoomSession(
-      activeRequest: requestFor('roomb456'),
-      loginName: 'fixture-user',
-      appPassword: 'fixture-password',
-    );
-    expect(activations, 3);
-    expect(deletes, 2, reason: 'a different room deactivates the previous one');
-  });
-
+      // Exclusivity is untouched: another room still replaces this one.
+      await api.activateRoomSession(
+        activeRequest: requestFor('rooma123'),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      await api.activateRoomSession(
+        activeRequest: requestFor('roomb456'),
+        loginName: 'fixture-user',
+        appPassword: 'fixture-password',
+      );
+      expect(activations, 3);
+      expect(
+        deletes,
+        2,
+        reason: 'a different room deactivates the previous one',
+      );
+    },
+  );
 }
 
 ActiveRoomSessionRequest _activeRequest(

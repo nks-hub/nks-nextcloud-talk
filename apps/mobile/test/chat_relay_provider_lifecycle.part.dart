@@ -10,97 +10,100 @@ part of 'chat_typing_indicator_test.dart';
 /// repository. This drives real HPB frames through the real coordinator,
 /// provider and service, and asserts the message lands in the database.
 void _registerRelayProviderLifecycleTests() {
-  test('a relayed frame on the live session reaches the chat database', () async {
-    final database = openTestDatabase();
-    addTearDown(database.close);
-    final accounts = AccountRepository(database);
-    final chat = ChatRepository(database);
-    final credentials = MemoryCredentialVault();
-    await accounts.upsertAccount(
-      accountId: 'account-a',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'fixture-user',
-      serverProductName: 'Nextcloud',
-      talkFeatures: const {'signaling-v3', 'typing-privacy', 'chat-v2'},
-      createdAt: DateTime.utc(2026, 9, 1),
-    );
-    await chat.recordCapabilities(
-      accountId: 'account-a',
-      talkFeatures: const {'signaling-v3', 'typing-privacy', 'chat-v2'},
-      observedAt: DateTime.utc(2026, 9, 1),
-    );
-    credentials.values['account-a'] = 'fixture-password';
-    await _insertRelayConversation(database);
+  test(
+    'a relayed frame on the live session reaches the chat database',
+    () async {
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      final accounts = AccountRepository(database);
+      final chat = ChatRepository(database);
+      final credentials = MemoryCredentialVault();
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'fixture-user',
+        serverProductName: 'Nextcloud',
+        talkFeatures: const {'signaling-v3', 'typing-privacy', 'chat-v2'},
+        createdAt: DateTime.utc(2026, 9, 1),
+      );
+      await chat.recordCapabilities(
+        accountId: 'account-a',
+        talkFeatures: const {'signaling-v3', 'typing-privacy', 'chat-v2'},
+        observedAt: DateTime.utc(2026, 9, 1),
+      );
+      credentials.values['account-a'] = 'fixture-password';
+      await _insertRelayConversation(database);
 
-    final client = _RelayLifecycleClient();
-    final api = HttpNextcloudApi(client: client);
-    addTearDown(api.close);
-    final sockets = _ActiveTypingSockets();
-    final coordinator = CallSignalingCoordinator(
-      accounts: accounts,
-      sessions: CallSessionRepository(database),
-      credentials: credentials,
-      api: api,
-      socketConnector: sockets,
-      refreshConversationSession: (_, _) async =>
-          ConversationSessionId.parse('active-session'),
-    );
-    addTearDown(coordinator.dispose);
-    final container = ProviderContainer(
-      overrides: <Override>[
-        appDatabaseProvider.overrideWithValue(database),
-        credentialVaultProvider.overrideWithValue(credentials),
-        nextcloudApiProvider.overrideWithValue(api),
-        callSignalingCoordinatorProvider.overrideWithValue(coordinator),
-      ],
-    );
-    addTearDown(container.dispose);
+      final client = _RelayLifecycleClient();
+      final api = HttpNextcloudApi(client: client);
+      addTearDown(api.close);
+      final sockets = _ActiveTypingSockets();
+      final coordinator = CallSignalingCoordinator(
+        accounts: accounts,
+        sessions: CallSessionRepository(database),
+        credentials: credentials,
+        api: api,
+        socketConnector: sockets,
+        refreshConversationSession: (_, _) async =>
+            ConversationSessionId.parse('active-session'),
+      );
+      addTearDown(coordinator.dispose);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(credentials),
+          nextcloudApiProvider.overrideWithValue(api),
+          callSignalingCoordinatorProvider.overrideWithValue(coordinator),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    const key = (accountId: 'account-a', roomToken: 'rooma123');
-    final subscription = container.listen(
-      chatRelayProvider(key),
-      (_, _) {},
-      fireImmediately: true,
-    );
-    addTearDown(subscription.close);
-    // Surfaces a provider failure here instead of as a silent timeout later.
-    await container.read(chatRelayProvider(key).future);
+      const key = (accountId: 'account-a', roomToken: 'rooma123');
+      final subscription = container.listen(
+        chatRelayProvider(key),
+        (_, _) {},
+        fireImmediately: true,
+      );
+      addTearDown(subscription.close);
+      // Surfaces a provider failure here instead of as a silent timeout later.
+      await container.read(chatRelayProvider(key).future);
 
-    // The HPB handshake, frame for frame. `chat-relay` in the welcome is what
-    // opens the gate: without it the update never reports the relay active
-    // and the room keeps polling.
-    final socket = await sockets.connected.future.timeout(
-      const Duration(seconds: 5),
-    );
-    socket.add(_relayWelcome());
-    final hello = jsonDecode(await socket.sent(0)) as Map<String, Object?>;
-    expect(
-      (hello['hello']! as Map<String, Object?>)['features'],
-      contains('chat-relay'),
-    );
-    await _flushAsync();
-    socket.add(_activeHello(hello['id']! as String));
-    final room = jsonDecode(await socket.sent(1)) as Map<String, Object?>;
-    await _flushAsync();
-    socket.add(_activeRoom(room['id']! as String));
+      // The HPB handshake, frame for frame. `chat-relay` in the welcome is what
+      // opens the gate: without it the update never reports the relay active
+      // and the room keeps polling.
+      final socket = await sockets.connected.future.timeout(
+        const Duration(seconds: 5),
+      );
+      socket.add(_relayWelcome());
+      final hello = jsonDecode(await socket.sent(0)) as Map<String, Object?>;
+      expect(
+        (hello['hello']! as Map<String, Object?>)['features'],
+        contains('chat-relay'),
+      );
+      await _flushAsync();
+      socket.add(_activeHello(hello['id']! as String));
+      final room = jsonDecode(await socket.sent(1)) as Map<String, Object?>;
+      await _flushAsync();
+      socket.add(_activeRoom(room['id']! as String));
 
-    // Trust is earned by the catch-up that follows the room being confirmed,
-    // so the relayed message is only merged once that has run.
-    await _settleRelay(client);
-    socket.add(_relayComment(111));
+      // Trust is earned by the catch-up that follows the room being confirmed,
+      // so the relayed message is only merged once that has run.
+      await _settleRelay(client);
+      socket.add(_relayComment(111));
 
-    final ids = await _relayMessageIds(chat, timeoutMessage: 111);
-    expect(ids, contains(111));
-    // Exactly one row: the relay is an inlet to the same merge, not a second
-    // writer racing the fetch that established trust.
-    expect(ids.where((id) => id == 111), hasLength(1));
-    // The room was activated once. A second activation would have taken the
-    // typing indicator's session id away and killed this very socket.
-    expect(
-      client.paths.where((path) => path.endsWith('/participants/active')),
-      hasLength(1),
-    );
-  });
+      final ids = await _relayMessageIds(chat, timeoutMessage: 111);
+      expect(ids, contains(111));
+      // Exactly one row: the relay is an inlet to the same merge, not a second
+      // writer racing the fetch that established trust.
+      expect(ids.where((id) => id == 111), hasLength(1));
+      // The room was activated once. A second activation would have taken the
+      // typing indicator's session id away and killed this very socket.
+      expect(
+        client.paths.where((path) => path.endsWith('/participants/active')),
+        hasLength(1),
+      );
+    },
+  );
 }
 
 Future<void> _insertRelayConversation(AppDatabase database) async {

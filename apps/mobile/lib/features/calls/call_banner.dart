@@ -313,7 +313,9 @@ String? _callJoinStatusText(CallJoinState join, AppLocalizations strings) {
       // A camera problem never ends a call; these are here only because the
       // switch is exhaustive.
       CallMediaError.cameraPermissionDenied ||
-      CallMediaError.cameraUnavailable => strings.callBannerAudioFailed,
+      CallMediaError.cameraUnavailable ||
+      CallMediaError.screenSharePermissionDenied ||
+      CallMediaError.screenShareUnavailable => strings.callBannerAudioFailed,
     };
   }
   return switch (join.phase) {

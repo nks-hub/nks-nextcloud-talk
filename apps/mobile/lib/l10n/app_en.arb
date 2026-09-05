@@ -652,6 +652,8 @@
   "@callParticipantsTitle": {"placeholders": {"count": {"type": "int"}}},
   "callParticipantsYou": "You",
   "callScreenSharedBy": "{name} is sharing their screen",
+  "callBannerShareScreen": "Share your screen",
+  "callBannerStopSharing": "Stop sharing your screen",
   "@callScreenSharedBy": {"placeholders": {"name": {"type": "String"}}},
   "callParticipantConnected": "Audio connected",
   "callParticipantConnecting": "Connecting…",

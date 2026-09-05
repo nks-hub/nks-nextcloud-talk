@@ -1821,6 +1821,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get callBannerShareScreen => 'Share your screen';
+
+  @override
+  String get callBannerStopSharing => 'Stop sharing your screen';
+
+  @override
   String get callParticipantConnected => 'Audio connected';
 
   @override

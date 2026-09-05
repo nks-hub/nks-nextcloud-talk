@@ -255,58 +255,65 @@ void main() {
     },
   );
 
-  test('a rate-limited capability read is not retried by every caller', () async {
-    // 4. 9. 2026 the reference server put the whole office IP behind a
-    // brute-force block. Because no failure was cached, each capability call
-    // site fetched again and the app went from ~50 requests an hour to ~900,
-    // holding the block open. A 429 now parks every caller for one window.
-    var requests = 0;
-    var status = 429;
-    var now = DateTime.utc(2026, 9, 4, 1);
-    final api = HttpNextcloudApi(
-      client: MockClient((_) async {
-        requests++;
-        return status == 429
-            ? http.Response('Too many requests', 429)
-            : http.Response(jsonEncode(capabilitiesJson()), 200);
-      }),
-      capabilityCacheTtl: const Duration(minutes: 5),
-      clock: () => now,
-    );
-    addTearDown(api.close);
+  test(
+    'a rate-limited capability read is not retried by every caller',
+    () async {
+      // 4. 9. 2026 the reference server put the whole office IP behind a
+      // brute-force block. Because no failure was cached, each capability call
+      // site fetched again and the app went from ~50 requests an hour to ~900,
+      // holding the block open. A 429 now parks every caller for one window.
+      var requests = 0;
+      var status = 429;
+      var now = DateTime.utc(2026, 9, 4, 1);
+      final api = HttpNextcloudApi(
+        client: MockClient((_) async {
+          requests++;
+          return status == 429
+              ? http.Response('Too many requests', 429)
+              : http.Response(jsonEncode(capabilitiesJson()), 200);
+        }),
+        capabilityCacheTtl: const Duration(minutes: 5),
+        clock: () => now,
+      );
+      addTearDown(api.close);
 
-    Future<void> read({bool cancellable = false}) => api
-        .getAuthenticatedCapabilities(
-          server: server,
-          loginName: 'fixture-user',
-          appPassword: 'fixture-password',
-          abortTrigger: cancellable ? Completer<void>().future : null,
-        )
-        .then<void>((_) {});
+      Future<void> read({bool cancellable = false}) => api
+          .getAuthenticatedCapabilities(
+            server: server,
+            loginName: 'fixture-user',
+            appPassword: 'fixture-password',
+            abortTrigger: cancellable ? Completer<void>().future : null,
+          )
+          .then<void>((_) {});
 
-    Matcher rateLimited() => throwsA(
-      isA<NextcloudApiException>().having(
-        (error) => error.statusCode,
-        'statusCode',
-        429,
-      ),
-    );
+      Matcher rateLimited() => throwsA(
+        isA<NextcloudApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          429,
+        ),
+      );
 
-    await expectLater(read(), rateLimited());
-    expect(requests, 1);
+      await expectLater(read(), rateLimited());
+      expect(requests, 1);
 
-    for (var caller = 0; caller < 8; caller++) {
-      await expectLater(read(cancellable: caller.isEven), rateLimited());
-    }
-    expect(requests, 1, reason: 'the block is served from the snapshot cache');
+      for (var caller = 0; caller < 8; caller++) {
+        await expectLater(read(cancellable: caller.isEven), rateLimited());
+      }
+      expect(
+        requests,
+        1,
+        reason: 'the block is served from the snapshot cache',
+      );
 
-    now = now.add(const Duration(seconds: 61));
-    status = 200;
-    await read();
-    expect(requests, 2, reason: 'the pause expires and the app comes back');
-    await read();
-    expect(requests, 2, reason: 'the fresh snapshot caches normally again');
-  });
+      now = now.add(const Duration(seconds: 61));
+      status = 200;
+      await read();
+      expect(requests, 2, reason: 'the pause expires and the app comes back');
+      await read();
+      expect(requests, 2, reason: 'the fresh snapshot caches normally again');
+    },
+  );
 
   test('a capability 429 holds back every other path on that server', () async {
     // Capabilities have no per-endpoint rate limit, so a 429 there means the

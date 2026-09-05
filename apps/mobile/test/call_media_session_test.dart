@@ -437,6 +437,77 @@ void main() {
     expect(connection.iceRestarts, 2);
   });
 
+  test('sharing this screen opens a send-only connection per peer', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections, hasLength(1));
+
+    await media.setScreenSharing(true);
+    await pumpEventQueue();
+    expect(engine.screens, hasLength(1));
+    expect(media.state.screenSharing, isTrue);
+    // A second connection to the same peer, carrying the screen and no
+    // microphone, offered under its own room type and sid.
+    expect(engine.connections, hasLength(2));
+    final share = engine.connections.last;
+    expect(share.audio, isNull);
+    expect(share.video, same(engine.screens.single));
+    final offer = sent.lastWhere((message) => message.type == 'offer');
+    expect(offer.roomType, 'screen');
+    expect(offer.sid, isNotNull);
+    expect(offer.sid, isNot(sent.first.sid));
+
+    // The answer comes back on that sid and settles the share, not the call.
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(
+            _remote,
+            'answer',
+            <String, Object?>{'type': 'answer', 'sdp': 'share-answer'},
+            sid: offer.sid,
+            roomType: 'screen',
+          ),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(share.remoteDescriptions.single.sdp, 'share-answer');
+
+    await media.setScreenSharing(false);
+    await pumpEventQueue();
+    // The web client's own goodbye: no payload, on the share's room type.
+    final goodbye = sent.lastWhere(
+      (message) => message.type == 'unshareScreen',
+    );
+    expect(goodbye.roomType, 'screen');
+    expect(goodbye.payload, isNull);
+    expect(share.closed, isTrue);
+    expect(engine.screens.single.disposed, isTrue);
+    expect(media.state.screenSharing, isFalse);
+    expect(engine.connections.first.closed, isFalse);
+  });
+
+  test('a screen that will not open leaves the call alone', () async {
+    engine.screenError = CallMediaError.screenSharePermissionDenied;
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    await media.setScreenSharing(true);
+    await pumpEventQueue();
+    expect(media.state.screenSharing, isFalse);
+    expect(engine.connections, hasLength(1));
+    expect(media.state.phase, isNot(CallMediaPhase.failed));
+  });
+
   test('a shared screen is a second, receive-only connection', () async {
     final media = session(
       _update(localPeerId: _local, participants: [_participant(_remote)]),
@@ -943,6 +1014,9 @@ final class _FakeEngine implements CallMediaEngine {
   CallMediaError? cameraError;
   final List<_FakeVideo> cameras = <_FakeVideo>[];
 
+  CallMediaError? screenError;
+  final List<_FakeVideo> screens = <_FakeVideo>[];
+
   @override
   Future<CallLocalVideo> openCamera() async {
     final error = cameraError;
@@ -955,15 +1029,31 @@ final class _FakeEngine implements CallMediaEngine {
   }
 
   @override
+  Future<bool> requestScreenConsent() async => true;
+
+  @override
+  Future<CallLocalVideo> openScreen() async {
+    final error = screenError;
+    if (error != null) {
+      throw CallMediaException(error);
+    }
+    final opened = _FakeVideo();
+    screens.add(opened);
+    return opened;
+  }
+
+  @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio? audio,
+    CallLocalVideo? video,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     final connection = _FakeConnection(
       audio: audio,
+      video: video,
       iceServers: iceServers,
       onIceCandidate: onIceCandidate,
       onConnectionState: onConnectionState,
@@ -1022,6 +1112,7 @@ final class _FakeAudio implements CallLocalAudio {
 final class _FakeConnection implements CallPeerConnection {
   _FakeConnection({
     required this.audio,
+    required this.video,
     required this.iceServers,
     required this.onIceCandidate,
     required this.onConnectionState,
@@ -1030,6 +1121,7 @@ final class _FakeConnection implements CallPeerConnection {
   });
 
   final CallLocalAudio? audio;
+  final CallLocalVideo? video;
   final List<CallIceServer> iceServers;
   final void Function(CallIceCandidate candidate) onIceCandidate;
   final void Function(CallMediaConnectionState state) onConnectionState;

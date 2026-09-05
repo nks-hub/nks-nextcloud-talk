@@ -1821,6 +1821,12 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get callBannerShareScreen => 'Sdílet obrazovku';
+
+  @override
+  String get callBannerStopSharing => 'Ukončit sdílení obrazovky';
+
+  @override
   String get callParticipantConnected => 'Zvuk spojen';
 
   @override

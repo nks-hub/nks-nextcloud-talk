@@ -3356,6 +3356,18 @@ abstract class AppLocalizations {
   /// **'{name} is sharing their screen'**
   String callScreenSharedBy(String name);
 
+  /// No description provided for @callBannerShareScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your screen'**
+  String get callBannerShareScreen;
+
+  /// No description provided for @callBannerStopSharing.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop sharing your screen'**
+  String get callBannerStopSharing;
+
   /// No description provided for @callParticipantConnected.
   ///
   /// In en, this message translates to:

@@ -110,6 +110,15 @@ final callPictureInPictureProvider = Provider<CallPictureInPicture>((ref) {
   return const UnavailableCallPictureInPicture();
 });
 
+/// The foreground service a screen capture needs on Android. Elsewhere it
+/// answers "no service needed" and the capture stands on its own.
+final callScreenShareServiceProvider = Provider<CallScreenShareService>((ref) {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return const PlatformCallScreenShareService();
+  }
+  return const NoCallScreenShareService();
+});
+
 /// Joining and leaving one room's call with audio.
 final callJoinControllerProvider =
     AutoDisposeNotifierProviderFamily<

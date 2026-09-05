@@ -18,7 +18,8 @@ import 'package:zxing2/qrcode.dart';
   final width = matrix.width * scale + quietZone * 2;
   final height = matrix.height * scale + quietZone * 2;
   final bytesPerRow = width + rowPadding;
-  final luma = Uint8List(bytesPerRow * height)..fillRange(0, bytesPerRow * height, 0xFF);
+  final luma = Uint8List(bytesPerRow * height)
+    ..fillRange(0, bytesPerRow * height, 0xFF);
   for (var y = 0; y < matrix.height; y++) {
     for (var x = 0; x < matrix.width; x++) {
       if (matrix.get(x, y) == 0) {
