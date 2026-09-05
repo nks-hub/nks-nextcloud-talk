@@ -23,6 +23,19 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New: an incoming call rings on iOS even when the app is not running. The
+  call arrives as a VoIP push and the system's own call screen answers or
+  declines it; answering joins the room straight away. Needs the push proxy
+  to have the device's PushKit token, which the app now registers alongside
+  the ordinary one; a device that has none still gets the call as an ordinary
+  notification rather than not at all.
+- Fixed: a call on iOS kept its audio only while the app was in front. The
+  build declares the background audio mode now, so leaving the app no longer
+  silences the call.
+- New: builds can be told to place calls through a TURN relay only
+  (`--dart-define=CALL_ICE_RELAY_ONLY=true`). It exists to measure the relay
+  path on a network where a direct connection would otherwise always win; off
+  in every shipped build.
 - New: a mute button in the call banner. It closes and reopens the microphone
   without renegotiating the call, and a microphone the user closed stays closed
   when a telephone call ends.

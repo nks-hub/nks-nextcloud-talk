@@ -15,6 +15,39 @@ import 'call_media_engine.dart';
 final class WebRtcCallMediaEngine implements CallMediaEngine {
   const WebRtcCallMediaEngine();
 
+  /// Forces every connection to use a TURN relay and nothing else.
+  ///
+  /// On a rig where both ends can see each other directly, ICE picks the host
+  /// pair — as it should — so a call proves that TURN servers were offered
+  /// and that relay candidates were gathered, but never that a relayed pair
+  /// actually carries media. This is the only way to prove that half without
+  /// a network built to block direct paths: build with
+  /// `--dart-define=CALL_ICE_RELAY_ONLY=true` and the host candidates are
+  /// gone, so a call that connects at all connected through TURN.
+  ///
+  /// Off by default and build-time only: a call that silently relays is a
+  /// call paying latency and someone else's bandwidth for nothing.
+  static const relayOnly = bool.fromEnvironment('CALL_ICE_RELAY_ONLY');
+
+  /// The plugin's connection configuration, apart so the relay switch can be
+  /// read back without a platform channel.
+  static Map<String, dynamic> connectionConfiguration(
+    List<CallIceServer> iceServers, {
+    bool relayOnly = relayOnly,
+  }) => <String, dynamic>{
+    'iceServers': iceServers
+        .map(
+          (server) => <String, dynamic>{
+            'urls': server.urls,
+            if (server.username != null) 'username': server.username,
+            if (server.credential != null) 'credential': server.credential,
+          },
+        )
+        .toList(growable: false),
+    'sdpSemantics': 'unified-plan',
+    if (relayOnly) 'iceTransportPolicy': 'relay',
+  };
+
   @override
   Future<CallLocalAudio> openMicrophone() async {
     final rtc.MediaStream stream;
@@ -105,22 +138,14 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     final oneWay = sendOnly || video != null;
     debugPrint(
       '[call] ice servers: '
-      '${iceServers.map((server) => server.urls.map((u) => u.split(':').first).join('/')).join(' ')}',
+      '${iceServers.map((server) => server.urls.map((u) => u.split(':').first).join('/')).join(' ')}'
+      '${relayOnly ? ' policy=relay' : ''}',
     );
     final rtc.RTCPeerConnection connection;
     try {
-      connection = await rtc.createPeerConnection(<String, dynamic>{
-        'iceServers': iceServers
-            .map(
-              (server) => <String, dynamic>{
-                'urls': server.urls,
-                if (server.username != null) 'username': server.username,
-                if (server.credential != null) 'credential': server.credential,
-              },
-            )
-            .toList(growable: false),
-        'sdpSemantics': 'unified-plan',
-      });
+      connection = await rtc.createPeerConnection(
+        connectionConfiguration(iceServers),
+      );
     } on Object {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
