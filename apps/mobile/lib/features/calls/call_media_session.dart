@@ -42,6 +42,8 @@ final class CallMediaState {
     this.cameraOn = false,
     this.localVideo,
     this.screenSharing = false,
+    this.audioRoutes = const <CallAudioRoute>[],
+    this.audioRoute,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -79,6 +81,12 @@ final class CallMediaState {
 
   /// Whether this device's screen is going out to the call.
   final bool screenSharing;
+
+  /// The outputs the platform offers right now, and the one the user picked
+  /// from them (`null` until they pick — the platform's own default is then
+  /// in effect, which [speakerphone] describes on a phone).
+  final List<CallAudioRoute> audioRoutes;
+  final CallAudioRoute? audioRoute;
 
   @override
   String toString() =>
@@ -175,6 +183,9 @@ final class CallMediaSession {
   final Map<String, _MediaPeer> _shares = <String, _MediaPeer>{};
   CallLocalVideo? _screen;
   List<CallIceServer> _iceServers = const <CallIceServer>[];
+  List<CallAudioRoute> _audioRoutes = const <CallAudioRoute>[];
+  CallAudioRoute? _audioRoute;
+  StreamSubscription<void>? _routeChanges;
 
   final CallSignalingUpdate _initial;
   final Stream<CallSignalingUpdate> _updates;
@@ -234,6 +245,10 @@ final class CallMediaSession {
       _interruptionEvents = _interruptions.events.listen(_onInterruption);
       try {
         _audio = await _engine.openMicrophone();
+        _routeChanges ??= _audio!.routeChanges.listen(
+          (_) => unawaited(_enqueue(_refreshAudioRoutes)),
+        );
+        await _refreshAudioRoutes();
       } on CallMediaException catch (error) {
         await _stopMedia();
         _emit(CallMediaState(phase: CallMediaPhase.failed, error: error.code));
@@ -278,6 +293,8 @@ final class CallMediaSession {
         return;
       }
       _disposed = true;
+      await _routeChanges?.cancel();
+      _routeChanges = null;
       _reactionTimer?.cancel();
       await _subscription?.cancel();
       _subscription = null;
@@ -1036,9 +1053,47 @@ final class CallMediaSession {
         return;
       }
       _speakerphone = on;
+      // The toggle speaks for itself; a picked route no longer does.
+      _audioRoute = null;
       await audio.setSpeakerphone(on);
       _publish();
     });
+  }
+
+  /// Sends the call's audio to one of the outputs in
+  /// [CallMediaState.audioRoutes] — the way to reach a Bluetooth headset or
+  /// wired headphones, which the speaker toggle cannot name.
+  Future<void> selectAudioRoute(CallAudioRoute route) {
+    return _enqueue(() async {
+      final audio = _audio;
+      if (_disposed || audio == null) {
+        return;
+      }
+      await audio.selectRoute(route);
+      _audioRoute = route;
+      _speakerphone = route.kind == CallAudioRouteKind.speaker;
+      _publish();
+    });
+  }
+
+  /// Asks the platform for its outputs again; a headset that was just
+  /// plugged in shows up, one that was unplugged goes away, and a picked
+  /// route that is gone is forgotten.
+  Future<void> _refreshAudioRoutes() async {
+    final audio = _audio;
+    if (_disposed || audio == null) {
+      return;
+    }
+    _audioRoutes = await audio.routes();
+    debugPrint(
+      '[call] audio routes: '
+      '${_audioRoutes.map((route) => '${route.kind.name}:${route.id}').join(', ')}',
+    );
+    final picked = _audioRoute;
+    if (picked != null && !_audioRoutes.any((route) => route.id == picked.id)) {
+      _audioRoute = null;
+    }
+    _publish();
   }
 
   /// One place decides what the track does: closed if EITHER the user or the
@@ -1305,6 +1360,8 @@ final class CallMediaSession {
         cameraOn: _video != null,
         localVideo: _video,
         screenSharing: _screen != null,
+        audioRoutes: _audioRoutes,
+        audioRoute: _audioRoute,
         participants: [
           for (final peer in _peers.values)
             CallPeerState(

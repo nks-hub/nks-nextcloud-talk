@@ -1785,6 +1785,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerSpeakerOff => 'Switch to earpiece';
 
   @override
+  String get callBannerAudioRoute => 'Audio output';
+
+  @override
+  String get callAudioRouteSpeaker => 'Speaker';
+
+  @override
+  String get callAudioRouteEarpiece => 'Earpiece';
+
+  @override
+  String get callAudioRouteBluetooth => 'Bluetooth';
+
+  @override
+  String get callAudioRouteWiredHeadset => 'Wired headset';
+
+  @override
   String get callBannerRaiseHand => 'Raise hand';
 
   @override

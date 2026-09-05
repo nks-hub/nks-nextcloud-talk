@@ -166,8 +166,15 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         ),
       );
     };
-    connection.onConnectionState = (state) =>
-        onConnectionState(_connectionState(state));
+    connection.onConnectionState = (state) {
+      final mapped = _connectionState(state);
+      onConnectionState(mapped);
+      // A share has no picture of its own to look at, so the only proof it
+      // sends is the sender's own counters. Three samples, then quiet.
+      if (local != null && mapped == CallMediaConnectionState.connected) {
+        unawaited(_probeOutbound(connection));
+      }
+    };
     connection.onTrack = (event) {
       if (event.track.kind != 'video' || event.streams.isEmpty) {
         return;
@@ -297,10 +304,83 @@ final class _WebRtcRemoteVideo implements CallRemoteVideo {
 }
 
 final class _WebRtcLocalAudio implements CallLocalAudio {
-  _WebRtcLocalAudio(this.stream);
+  _WebRtcLocalAudio(this.stream) {
+    // The plugin has one hook for every kind of device; a call is the only
+    // thing in this app that cares, so it owns the hook for its lifetime.
+    rtc.navigator.mediaDevices.ondevicechange = (_) {
+      if (!_routeChanges.isClosed) {
+        _routeChanges.add(null);
+      }
+    };
+  }
 
   final rtc.MediaStream stream;
+  final _routeChanges = StreamController<void>.broadcast();
   bool _disposed = false;
+
+  @override
+  Stream<void> get routeChanges => _routeChanges.stream;
+
+  @override
+  Future<List<CallAudioRoute>> routes() async {
+    if (_disposed) {
+      return const [];
+    }
+    try {
+      final outputs = await rtc.Helper.audiooutputs;
+      return [
+        for (final device in outputs)
+          CallAudioRoute(
+            id: device.deviceId,
+            label: device.label,
+            kind: _routeKind(device.deviceId, device.groupId),
+          ),
+      ];
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    } on Object {
+      // The desktop plugins throw a bare String for "not implemented".
+      return const [];
+    }
+  }
+
+  @override
+  Future<void> selectRoute(CallAudioRoute route) async {
+    if (_disposed) {
+      return;
+    }
+    try {
+      await rtc.Helper.selectAudioOutput(route.id);
+    } on MissingPluginException {
+      // No such route on this platform.
+    } on PlatformException {
+      // The desktop plugins answer the method with "not implemented".
+    }
+  }
+
+  /// Android names outputs by kind (`speaker`, `earpiece`, `bluetooth`,
+  /// `wired-headset`); iOS hands back the port's UID with its `portType` as
+  /// the group, and `Speaker` for the built-in loudspeaker.
+  static CallAudioRouteKind _routeKind(String id, String? group) {
+    final key = '${id.toLowerCase()}|${(group ?? '').toLowerCase()}';
+    if (key.startsWith('speaker')) {
+      return CallAudioRouteKind.speaker;
+    }
+    if (key.startsWith('earpiece') || key.contains('|receiver')) {
+      return CallAudioRouteKind.earpiece;
+    }
+    if (key.contains('bluetooth')) {
+      return CallAudioRouteKind.bluetooth;
+    }
+    if (key.contains('wired') ||
+        key.contains('headphones') ||
+        key.contains('headset')) {
+      return CallAudioRouteKind.wiredHeadset;
+    }
+    return CallAudioRouteKind.other;
+  }
 
   @override
   Future<void> setMuted(bool muted) async {
@@ -331,6 +411,8 @@ final class _WebRtcLocalAudio implements CallLocalAudio {
 
   @override
   Future<void> dispose() async {
+    rtc.navigator.mediaDevices.ondevicechange = null;
+    await _routeChanges.close();
     if (_disposed) {
       return;
     }
@@ -515,6 +597,34 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
       rethrow;
     } on Object {
       throw const CallMediaException(CallMediaError.engineFailure);
+    }
+  }
+}
+
+/// Logs the outbound video counters of a send-only connection a few times
+/// after it connects: frames captured, encoded and sent, and bytes on the
+/// wire. This is how a share that the far side does not paint is told apart
+/// from one that never left this device.
+Future<void> _probeOutbound(rtc.RTCPeerConnection connection) async {
+  for (var sample = 0; sample < 3; sample++) {
+    await Future<void>.delayed(const Duration(seconds: 4));
+    try {
+      final reports = await connection.getStats();
+      for (final report in reports) {
+        if (report.type != 'outbound-rtp') {
+          continue;
+        }
+        final v = report.values;
+        debugPrint(
+          '[call] outbound ${v['kind'] ?? v['mediaType']} '
+          'frames=${v['framesEncoded']}/${v['framesSent']} '
+          'bytes=${v['bytesSent']} res=${v['frameWidth']}x${v['frameHeight']} '
+          'fps=${v['framesPerSecond']} limit=${v['qualityLimitationReason']}',
+        );
+      }
+    } on Object catch (error) {
+      debugPrint('[call] outbound stats failed: $error');
+      return;
     }
   }
 }

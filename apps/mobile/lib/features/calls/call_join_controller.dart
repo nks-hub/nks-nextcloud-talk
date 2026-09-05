@@ -163,6 +163,15 @@ base class CallJoinController
     await session.setSpeakerphone(on);
   }
 
+  /// Sends the joined call's audio to one of the platform's outputs.
+  Future<void> selectAudioRoute(CallAudioRoute route) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.selectAudioRoute(route);
+  }
+
   /// Raises or lowers this participant's hand in the joined call.
   Future<void> setHandRaised(bool raised) async {
     final session = _session;

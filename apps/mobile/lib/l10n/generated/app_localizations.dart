@@ -3296,6 +3296,36 @@ abstract class AppLocalizations {
   /// **'Switch to earpiece'**
   String get callBannerSpeakerOff;
 
+  /// No description provided for @callBannerAudioRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio output'**
+  String get callBannerAudioRoute;
+
+  /// No description provided for @callAudioRouteSpeaker.
+  ///
+  /// In en, this message translates to:
+  /// **'Speaker'**
+  String get callAudioRouteSpeaker;
+
+  /// No description provided for @callAudioRouteEarpiece.
+  ///
+  /// In en, this message translates to:
+  /// **'Earpiece'**
+  String get callAudioRouteEarpiece;
+
+  /// No description provided for @callAudioRouteBluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get callAudioRouteBluetooth;
+
+  /// No description provided for @callAudioRouteWiredHeadset.
+  ///
+  /// In en, this message translates to:
+  /// **'Wired headset'**
+  String get callAudioRouteWiredHeadset;
+
   /// No description provided for @callBannerRaiseHand.
   ///
   /// In en, this message translates to:

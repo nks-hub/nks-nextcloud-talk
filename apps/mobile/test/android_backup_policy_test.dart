@@ -18,6 +18,7 @@ void main() {
       _expectBackupDisabled(sourceManifest);
       _expectPredictiveBackEnabled(sourceManifest);
       _expectCallPictureInPicture(sourceManifest);
+      _expectScreenShareService(sourceManifest);
 
       final wrapper = File(
         '${android.path}${Platform.pathSeparator}'
@@ -51,6 +52,7 @@ void main() {
       _expectBackupDisabled(mergedManifest);
       _expectPredictiveBackEnabled(mergedManifest);
       _expectCallPictureInPicture(mergedManifest);
+      _expectScreenShareService(mergedManifest);
     },
     // Ten, not two: this is the only test that runs Gradle, and on a fresh CI
     // machine that first invocation downloads the wrapper, AGP and Kotlin
@@ -106,4 +108,26 @@ void _expectCallPictureInPicture(File manifest) {
       reason: '${manifest.path} must handle $change without a restart',
     );
   }
+}
+
+/// Android 10+ grants a screen capture only to a running foreground service of
+/// type mediaProjection, and Android 14 wants the matching permission for it;
+/// without either the share dies with a SecurityException that takes the app
+/// down (measured on the Android 14 emulator on 5 September 2026).
+void _expectScreenShareService(File manifest) {
+  final text = manifest.readAsStringSync();
+  final service = RegExp(
+    r'<service\s[^>]*ScreenShareService[^>]*>',
+  ).firstMatch(text)?.group(0);
+  expect(service, isNotNull, reason: 'ScreenShareService is missing');
+  expect(
+    service,
+    contains('android:foregroundServiceType="mediaProjection"'),
+    reason: '${manifest.path} must type the screen share service',
+  );
+  expect(
+    text,
+    contains('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION'),
+    reason: '${manifest.path} must declare the media projection permission',
+  );
 }

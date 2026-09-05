@@ -91,6 +91,24 @@ final class CallMediaException implements Exception {
 }
 
 /// The local microphone capture. Held for the whole call and closed once.
+/// Where a call's audio can go. The kinds are the four a phone has; anything
+/// the platform names that is none of them stays selectable under its label.
+enum CallAudioRouteKind { speaker, earpiece, bluetooth, wiredHeadset, other }
+
+/// One selectable audio output.
+final class CallAudioRoute {
+  const CallAudioRoute({
+    required this.id,
+    required this.label,
+    required this.kind,
+  });
+
+  /// The platform's own id, handed back to select it.
+  final String id;
+  final String label;
+  final CallAudioRouteKind kind;
+}
+
 abstract interface class CallLocalAudio {
   /// Stops or resumes capture without tearing the track down, so a call can
   /// give the microphone back to the system for the length of an interruption
@@ -101,6 +119,17 @@ abstract interface class CallLocalAudio {
   ///
   /// A phone concept: the desktops have one output and take this as a no-op.
   Future<void> setSpeakerphone(bool on);
+
+  /// The outputs available right now. Empty where the platform lists none.
+  Future<List<CallAudioRoute>> routes();
+
+  /// Sends the call's audio to one of [routes] — a Bluetooth headset, wired
+  /// headphones, the loudspeaker, the earpiece.
+  Future<void> selectRoute(CallAudioRoute route);
+
+  /// Fires when an output appears or goes away (a headset plugged in, a
+  /// Bluetooth device connecting), so [routes] is worth asking again.
+  Stream<void> get routeChanges;
 
   Future<void> dispose();
 }

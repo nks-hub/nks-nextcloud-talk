@@ -55,6 +55,9 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- New: with a Bluetooth headset or wired headphones connected, the speaker
+  button in a call becomes a menu of every audio output, and the call follows
+  a headset that connects or disconnects mid-call.
 - New: share this device's screen into a call on Android, from the same
   controls as the camera. The system asks for consent, a notification shows
   for as long as the screen is visible, and stopping tells everyone.

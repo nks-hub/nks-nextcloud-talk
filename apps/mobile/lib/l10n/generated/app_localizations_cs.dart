@@ -1785,6 +1785,21 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerSpeakerOff => 'Přepnout na sluchátko';
 
   @override
+  String get callBannerAudioRoute => 'Zvukový výstup';
+
+  @override
+  String get callAudioRouteSpeaker => 'Reproduktor';
+
+  @override
+  String get callAudioRouteEarpiece => 'Sluchátko telefonu';
+
+  @override
+  String get callAudioRouteBluetooth => 'Bluetooth sluchátka';
+
+  @override
+  String get callAudioRouteWiredHeadset => 'Drátová sluchátka';
+
+  @override
   String get callBannerRaiseHand => 'Zvednout ruku';
 
   @override

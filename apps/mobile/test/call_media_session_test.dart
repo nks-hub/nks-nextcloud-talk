@@ -508,6 +508,65 @@ void main() {
     expect(media.state.phase, isNot(CallMediaPhase.failed));
   });
 
+  test(
+    'the outputs the platform lists are offered and one can be picked',
+    () async {
+      const speaker = CallAudioRoute(
+        id: 'speaker',
+        label: 'Speaker',
+        kind: CallAudioRouteKind.speaker,
+      );
+      const earpiece = CallAudioRoute(
+        id: 'earpiece',
+        label: 'Earpiece',
+        kind: CallAudioRouteKind.earpiece,
+      );
+      const headset = CallAudioRoute(
+        id: 'bluetooth',
+        label: 'WH-1000',
+        kind: CallAudioRouteKind.bluetooth,
+      );
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final audio = engine.audio.single;
+      expect(media.state.audioRoutes, isEmpty);
+
+      // A headset connects: the platform says "devices changed" and the list
+      // is asked for again.
+      audio.availableRoutes = const [speaker, earpiece, headset];
+      audio.routeChangeController.add(null);
+      await pumpEventQueue();
+      expect(media.state.audioRoutes.map((route) => route.id), [
+        'speaker',
+        'earpiece',
+        'bluetooth',
+      ]);
+      expect(media.state.audioRoute, isNull);
+
+      await media.selectAudioRoute(headset);
+      await pumpEventQueue();
+      expect(audio.selectedRoutes.single.id, 'bluetooth');
+      expect(media.state.audioRoute?.id, 'bluetooth');
+      expect(media.state.speakerphone, isFalse);
+
+      // Picking the loudspeaker through the list is the same as the toggle.
+      await media.selectAudioRoute(speaker);
+      await pumpEventQueue();
+      expect(media.state.speakerphone, isTrue);
+
+      // The headset goes away: the pick is forgotten, nothing else changes.
+      await media.selectAudioRoute(headset);
+      audio.availableRoutes = const [speaker, earpiece];
+      audio.routeChangeController.add(null);
+      await pumpEventQueue();
+      expect(media.state.audioRoutes, hasLength(2));
+      expect(media.state.audioRoute, isNull);
+    },
+  );
+
   test('a shared screen is a second, receive-only connection', () async {
     final media = session(
       _update(localPeerId: _local, participants: [_participant(_remote)]),
@@ -1104,6 +1163,20 @@ final class _FakeAudio implements CallLocalAudio {
     speakerphone = on;
     speakerphoneCalls.add(on);
   }
+
+  List<CallAudioRoute> availableRoutes = const <CallAudioRoute>[];
+  final List<CallAudioRoute> selectedRoutes = <CallAudioRoute>[];
+  final routeChangeController = StreamController<void>.broadcast();
+
+  @override
+  Future<List<CallAudioRoute>> routes() async => availableRoutes;
+
+  @override
+  Future<void> selectRoute(CallAudioRoute route) async =>
+      selectedRoutes.add(route);
+
+  @override
+  Stream<void> get routeChanges => routeChangeController.stream;
 
   @override
   Future<void> dispose() async => disposed = true;

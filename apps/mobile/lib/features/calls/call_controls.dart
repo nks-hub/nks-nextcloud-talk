@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'call_join_controller.dart';
+import 'call_media_engine.dart';
 import 'call_transport_service.dart';
 
 /// The same six the web client offers, in the same order.
@@ -15,6 +16,26 @@ const callReactions = <String>['❤️', '🎉', '👏', '👍', '👎', '😂']
 /// The controls of a joined call — mute, speaker (phones), camera, hand,
 /// reaction — shared by the banner and the call screen so both behave the
 /// same. Keys are `<keyPrefix>-mute` and so on.
+IconData _routeIcon(CallAudioRouteKind kind) => switch (kind) {
+  CallAudioRouteKind.speaker => Icons.volume_up_rounded,
+  CallAudioRouteKind.earpiece => Icons.phone_in_talk_rounded,
+  CallAudioRouteKind.bluetooth => Icons.bluetooth_audio_rounded,
+  CallAudioRouteKind.wiredHeadset => Icons.headset_rounded,
+  CallAudioRouteKind.other => Icons.speaker_rounded,
+};
+
+/// The kind's own name where there is one; the platform's label for the rest,
+/// which is where a Bluetooth headset's product name ends up.
+String _routeLabel(AppLocalizations strings, CallAudioRoute route) =>
+    switch (route.kind) {
+      CallAudioRouteKind.speaker => strings.callAudioRouteSpeaker,
+      CallAudioRouteKind.earpiece => strings.callAudioRouteEarpiece,
+      CallAudioRouteKind.bluetooth =>
+        route.label.isEmpty ? strings.callAudioRouteBluetooth : route.label,
+      CallAudioRouteKind.wiredHeadset => strings.callAudioRouteWiredHeadset,
+      CallAudioRouteKind.other => route.label.isEmpty ? route.id : route.label,
+    };
+
 final class CallControls extends ConsumerWidget {
   const CallControls({
     super.key,
@@ -53,8 +74,42 @@ final class CallControls extends ConsumerWidget {
           icon: const Icon(Icons.mic_rounded),
           selectedIcon: const Icon(Icons.mic_off_rounded),
         ),
+        // A headset or headphones present: a menu names every output. Only
+        // the built-in two: the toggle, which is faster than a menu.
+        if (join.media.audioRoutes.length > 2)
+          PopupMenuButton<CallAudioRoute>(
+            key: Key('$keyPrefix-audio-route'),
+            tooltip: strings.callBannerAudioRoute,
+            enabled: !busy,
+            onSelected: (route) =>
+                unawaited(controller().selectAudioRoute(route)),
+            itemBuilder: (context) => <PopupMenuEntry<CallAudioRoute>>[
+              for (final route in join.media.audioRoutes)
+                PopupMenuItem<CallAudioRoute>(
+                  key: Key('$keyPrefix-audio-route-${route.id}'),
+                  value: route,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(_routeIcon(route.kind)),
+                    title: Text(_routeLabel(strings, route)),
+                    trailing: route.id == join.media.audioRoute?.id
+                        ? const Icon(Icons.check_rounded)
+                        : null,
+                  ),
+                ),
+            ],
+            icon: Icon(
+              _routeIcon(
+                join.media.audioRoute?.kind ??
+                    (join.media.speakerphone
+                        ? CallAudioRouteKind.speaker
+                        : CallAudioRouteKind.earpiece),
+              ),
+              color: color,
+            ),
+          )
         // Only a phone has two outputs to choose from.
-        if (defaultTargetPlatform == TargetPlatform.android ||
+        else if (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.iOS)
           IconButton(
             key: Key('$keyPrefix-speaker'),
