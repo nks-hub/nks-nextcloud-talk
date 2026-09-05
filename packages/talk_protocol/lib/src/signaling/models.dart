@@ -428,7 +428,12 @@ final class SignalingPeerMessage {
 bool _isPayloadFreePeerMessage(String type) =>
     type == 'startedTyping' ||
     type == 'stoppedTyping' ||
-    type == 'unshareScreen';
+    type == 'unshareScreen' ||
+    // Asking an MCU for a participant's stream, and its mirror image where
+    // the server asks a publisher to offer to a new subscriber. Both name a
+    // `roomType` and a `sid` and carry nothing else.
+    type == 'requestoffer' ||
+    type == 'sendoffer';
 
 final class HpbControlMessage {
   const HpbControlMessage({

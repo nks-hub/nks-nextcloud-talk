@@ -55,6 +55,9 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- New: calls work on servers that use a separate signalling server with a
+  media server. The app publishes once to the media server and subscribes to
+  every other participant, instead of connecting to each of them directly.
 - Fixed: a call over an external signalling server no longer refuses to
   negotiate after the connection has dropped once. A lost session used to
   leave a flag set for good, which blocked every offer, answer and candidate

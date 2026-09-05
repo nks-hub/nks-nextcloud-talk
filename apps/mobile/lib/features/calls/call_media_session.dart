@@ -498,27 +498,30 @@ final class CallMediaSession {
     });
   }
 
+  /// Asks the MCU for a participant's stream.
+  ///
+  /// A PEER MESSAGE, not a control frame: the standalone signalling API
+  /// carries `requestoffer` as `{"type":"message","message":{"recipient":…,
+  /// "data":{"type":"requestoffer","sid":…,"roomType":"video"}}}`, and the
+  /// server answers an offer only on that path. Sent as a control it was
+  /// accepted far enough for the server to create a listener and no offer
+  /// ever came back — measured against the reference cloud on 5 September
+  /// 2026, with the web client's own request in the server log for contrast.
+  /// The `sid` names the subscriber connection the offer belongs to.
   Future<void> _requestOffer(String peerId) async {
-    final send = _sendControl;
-    if (send == null) {
+    final peer = _peers[peerId];
+    if (peer == null) {
       return;
     }
-    debugPrint('[call] requestoffer → $peerId');
+    debugPrint('[call] requestoffer → $peerId sid=${peer.sid}');
     try {
-      final accepted = await send(
-        HpbControlMessage(
-          recipient: SignalingPeerId.parse(peerId),
-          sender: null,
-          data: SignalingOpaquePayload.fromJson(<String, Object?>{
-            'type': 'requestoffer',
-            'roomType': _roomType,
-          }),
-        ),
+      await _send(
+        peerId: peerId,
+        type: 'requestoffer',
+        payload: null,
+        via: peer,
       );
-      if (!accepted) {
-        debugPrint('[call] requestoffer refused → $peerId');
-      }
-    } on TalkProtocolException {
+    } on CallMediaException {
       // Nothing to subscribe to under that id.
     }
   }

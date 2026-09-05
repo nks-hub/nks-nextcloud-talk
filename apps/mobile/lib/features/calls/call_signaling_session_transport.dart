@@ -233,6 +233,19 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
         final type = decoded['type'];
         final body = decoded[type];
         if (body is Map<String, Object?>) {
+          if (body['type'] == 'update' || body['type'] == 'join') {
+            final users = body['users'] ?? body['join'];
+            final flags = users is List
+                ? users
+                      .map(
+                        (u) => u is Map<String, Object?>
+                            ? '${(u['sessionId'] as String? ?? '?').substring(0, 6)}:${u['inCall']}'
+                            : '?',
+                      )
+                      .join(' ')
+                : '';
+            return 'type=$type/${body['type']} $flags';
+          }
           final data = body['data'];
           final inner = data is Map<String, Object?>
               ? ' data=${data['type']}/${data['roomType']}'

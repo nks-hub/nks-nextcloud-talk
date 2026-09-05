@@ -22,7 +22,9 @@ from validator_signaling_common import (
 )
 
 
-PAYLOAD_FREE_PEER_MESSAGE_TYPES = frozenset({"startedTyping", "stoppedTyping", "unshareScreen"})
+PAYLOAD_FREE_PEER_MESSAGE_TYPES = frozenset(
+    {"startedTyping", "stoppedTyping", "unshareScreen", "requestoffer", "sendoffer"}
+)
 
 
 def validate_request_id(value: Any, label: str = "frame.id") -> str:

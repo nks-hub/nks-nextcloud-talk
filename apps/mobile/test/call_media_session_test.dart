@@ -607,13 +607,17 @@ void main() {
       expect(offer.roomType, 'video');
       final publisherSid = offer.sid;
       expect(publisherSid, isNotNull);
-      // The participant is asked for through the server, not offered to.
-      expect(controls, hasLength(1));
-      expect(controls.single.recipient?.value, _remote);
-      expect(controls.single.data.wire, {
-        'type': 'requestoffer',
-        'roomType': 'video',
-      });
+      // The participant is asked for with a peer message, not offered to.
+      final request = sent.singleWhere(
+        (message) => message.type == 'requestoffer',
+      );
+      expect(request.recipient?.value, _remote);
+      expect(request.roomType, 'video');
+      expect(request.payload, isNull);
+      // The subscriber connection this offer is for: the MCU answers on it,
+      // and asking without one gets no offer at all.
+      expect(request.sid, isNotNull);
+      expect(request.sid, isNot(publisherSid));
       expect(media.state.participants.single.connected, isFalse);
 
       // The server answers the publisher from this side's own session id.
