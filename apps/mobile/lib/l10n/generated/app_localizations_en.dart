@@ -1773,6 +1773,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerLeave => 'Leave call';
 
   @override
+  String get callBannerMute => 'Mute microphone';
+
+  @override
+  String get callBannerUnmute => 'Unmute microphone';
+
+  @override
   String get callBannerJoining => 'Joining the call…';
 
   @override

@@ -1773,6 +1773,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerLeave => 'Odpojit se z hovoru';
 
   @override
+  String get callBannerMute => 'Ztlumit mikrofon';
+
+  @override
+  String get callBannerUnmute => 'Zapnout mikrofon';
+
+  @override
   String get callBannerJoining => 'Připojuji k hovoru…';
 
   @override

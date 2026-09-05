@@ -141,6 +141,15 @@ final class CallJoinController
     ref.invalidate(callLifecycleStatusProvider(arg));
   }
 
+  /// Mutes or unmutes this participant's microphone in the joined call.
+  Future<void> setMicrophoneMuted(bool muted) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.setMicrophoneMuted(muted);
+  }
+
   Future<void> leave() async {
     if (state.phase == CallJoinPhase.idle || state.isBusy) {
       return;

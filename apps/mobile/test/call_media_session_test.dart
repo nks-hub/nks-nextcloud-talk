@@ -291,6 +291,42 @@ void main() {
     expect(audio.muteCalls, <bool>[true, false]);
   });
 
+  // The user's mute and the system's interruption both close the microphone,
+  // and lifting one must not lift the other: a microphone the user closed
+  // stays closed when the telephone call ends.
+  test('the end of an interruption does not unmute a user-muted microphone', () async {
+    final interruptions = StreamController<CallAudioInterruption>.broadcast();
+    addTearDown(interruptions.close);
+    final media = CallMediaSession(
+      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
+      updates: updates.stream,
+      sendMessage: (message) async {
+        sent.add(message);
+        return true;
+      },
+      engine: engine,
+      interruptions: _FakeInterruptions(interruptions.stream),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    final audio = engine.audio.single;
+
+    await media.setMicrophoneMuted(true);
+    expect(audio.muted, isTrue);
+    expect(media.state.muted, isTrue, reason: 'the control shows the choice');
+
+    interruptions.add(CallAudioInterruption.began);
+    await pumpEventQueue();
+    interruptions.add(CallAudioInterruption.ended);
+    await pumpEventQueue();
+    expect(audio.muted, isTrue, reason: 'the user did not unmute');
+    expect(media.state.muted, isTrue);
+
+    await media.setMicrophoneMuted(false);
+    expect(audio.muted, isFalse);
+    expect(media.state.muted, isFalse);
+  });
+
 }
 
 CallSignalingUpdate _update({

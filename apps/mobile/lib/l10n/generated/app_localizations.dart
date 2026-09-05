@@ -3272,6 +3272,18 @@ abstract class AppLocalizations {
   /// **'Leave call'**
   String get callBannerLeave;
 
+  /// No description provided for @callBannerMute.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute microphone'**
+  String get callBannerMute;
+
+  /// No description provided for @callBannerUnmute.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute microphone'**
+  String get callBannerUnmute;
+
   /// No description provided for @callBannerJoining.
   ///
   /// In en, this message translates to:

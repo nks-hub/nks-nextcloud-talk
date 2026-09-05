@@ -31,6 +31,7 @@ final class CallMediaState {
     this.error,
     this.connectedPeers = 0,
     this.peers = 0,
+    this.muted = false,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -40,10 +41,15 @@ final class CallMediaState {
   final int connectedPeers;
   final int peers;
 
+  /// The user's own mute, as shown on the control. A system interruption also
+  /// closes the microphone but is not reported here: it is not the user's
+  /// choice and it lifts on its own.
+  final bool muted;
+
   @override
   String toString() =>
       'CallMediaState(${phase.name}, peers: $connectedPeers/$peers, '
-      'error: ${error?.name})';
+      'muted: $muted, error: ${error?.name})';
 }
 
 /// Audio media for one room's call, driven by an existing signalling session.
@@ -84,6 +90,8 @@ final class CallMediaSession {
   StreamSubscription<CallSignalingUpdate>? _subscription;
   StreamSubscription<CallAudioInterruption>? _interruptionEvents;
   CallLocalAudio? _audio;
+  bool _userMuted = false;
+  bool _interrupted = false;
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
@@ -480,11 +488,31 @@ final class CallMediaSession {
   /// renegotiating with every peer, and an interruption is over in seconds.
   /// The call stays up throughout, which is what the other participants see.
   Future<void> _onInterruption(CallAudioInterruption event) async {
+    _interrupted = event == CallAudioInterruption.began;
+    await _applyMicrophone();
+  }
+
+  /// The user's mute control. Survives an interruption: a microphone the user
+  /// closed stays closed when the system hands the audio back.
+  Future<void> setMicrophoneMuted(bool muted) {
+    return _enqueue(() async {
+      if (_disposed || _userMuted == muted) {
+        return;
+      }
+      _userMuted = muted;
+      await _applyMicrophone();
+      _publish();
+    });
+  }
+
+  /// One place decides what the track does: closed if EITHER the user or the
+  /// system wants it closed, open only when neither does.
+  Future<void> _applyMicrophone() async {
     final audio = _audio;
     if (_disposed || audio == null) {
       return;
     }
-    await audio.setMuted(event == CallAudioInterruption.began);
+    await audio.setMuted(_userMuted || _interrupted);
   }
 
   void _recordConnectionState(String peerId, CallMediaConnectionState state) {
@@ -562,6 +590,7 @@ final class CallMediaSession {
                   : CallMediaPhase.negotiating),
         connectedPeers: connected,
         peers: _peers.length,
+        muted: _userMuted,
       ),
     );
   }

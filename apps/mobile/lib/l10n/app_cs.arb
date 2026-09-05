@@ -615,6 +615,8 @@
   "callBannerRunningFor": "Běží {duration}",
   "callBannerJoin": "Připojit se k hovoru",
   "callBannerLeave": "Odpojit se z hovoru",
+  "callBannerMute": "Ztlumit mikrofon",
+  "callBannerUnmute": "Zapnout mikrofon",
   "callBannerJoining": "Připojuji k hovoru…",
   "callBannerTransportReady": "Signalizováno přes {transport}.",
   "callBannerAudioNegotiating": "Navazuji zvuk…",

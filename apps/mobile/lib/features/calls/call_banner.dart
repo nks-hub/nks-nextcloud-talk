@@ -187,6 +187,26 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
             ),
           ),
           if (joinable) ...[
+            if (joined && join.media.phase != CallMediaPhase.failed) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                key: const Key('call-banner-mute'),
+                tooltip: join.media.muted
+                    ? strings.callBannerUnmute
+                    : strings.callBannerMute,
+                color: scheme.onPrimaryContainer,
+                isSelected: join.media.muted,
+                onPressed: join.isBusy
+                    ? null
+                    : () => unawaited(
+                        ref
+                            .read(callJoinControllerProvider(key).notifier)
+                            .setMicrophoneMuted(!join.media.muted),
+                      ),
+                icon: const Icon(Icons.mic_rounded),
+                selectedIcon: const Icon(Icons.mic_off_rounded),
+              ),
+            ],
             const SizedBox(width: 12),
             FilledButton(
               key: const Key('call-banner-join'),

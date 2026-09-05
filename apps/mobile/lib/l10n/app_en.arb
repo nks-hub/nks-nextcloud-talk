@@ -636,6 +636,8 @@
   },
   "callBannerJoin": "Join call",
   "callBannerLeave": "Leave call",
+  "callBannerMute": "Mute microphone",
+  "callBannerUnmute": "Unmute microphone",
   "callBannerJoining": "Joining the call…",
   "callBannerTransportReady": "Signalled through {transport}.",
   "@callBannerTransportReady": {

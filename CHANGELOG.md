@@ -23,6 +23,9 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New: a mute button in the call banner. It closes and reopens the microphone
+  without renegotiating the call, and a microphone the user closed stays closed
+  when a telephone call ends.
 - New: a telephone call now mutes the Talk call's microphone for as long as
   it lasts. Before, an incoming phone call left the microphone capturing and
   the other participants kept hearing the room. Android only for now; the
