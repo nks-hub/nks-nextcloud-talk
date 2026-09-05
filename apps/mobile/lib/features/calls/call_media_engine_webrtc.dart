@@ -103,6 +103,10 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
   }) async {
     final stream = (audio as _WebRtcLocalAudio?)?.stream;
     final oneWay = sendOnly || video != null;
+    debugPrint(
+      '[call] ice servers: '
+      '${iceServers.map((server) => server.urls.map((u) => u.split(':').first).join('/')).join(' ')}',
+    );
     final rtc.RTCPeerConnection connection;
     try {
       connection = await rtc.createPeerConnection(<String, dynamic>{
@@ -166,6 +170,12 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       // transport address, and Talk has no wire message for it.
       if (value == null || value.isEmpty) {
         return;
+      }
+      // The candidate's type is the fourth token of the a=candidate line;
+      // `relay` is the only proof a TURN server is actually in use.
+      final parts = value.split(' ');
+      if (parts.length > 7) {
+        debugPrint('[call] candidate ${parts[7]}');
       }
       onIceCandidate(
         CallIceCandidate(

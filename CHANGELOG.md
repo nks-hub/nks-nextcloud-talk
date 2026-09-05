@@ -55,6 +55,8 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- New: calls use the TURN servers a server hands out, so a call can connect
+  from a network that blocks direct connections.
 - New: on servers with a media server, video is received from and sent to
   every participant through it.
 - New: calls work on servers that use a separate signalling server with a
