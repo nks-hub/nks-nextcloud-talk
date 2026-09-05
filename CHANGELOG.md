@@ -55,6 +55,8 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- New: start a call from the conversation header, with or without video.
+  Until now a call could only be joined once somebody else had started it.
 - Fixed: the entries about joining and leaving a call now show their time,
   like every other message. A run of them was impossible to place in time.
 - Fixed: signalling messages now carry the recipient in the shape the web

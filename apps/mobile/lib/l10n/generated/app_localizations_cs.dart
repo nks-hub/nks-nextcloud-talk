@@ -1770,6 +1770,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerJoin => 'Připojit se k hovoru';
 
   @override
+  String get callStartAudio => 'Zahájit hovor';
+
+  @override
+  String get callStartVideo => 'Zahájit hovor s videem';
+
+  @override
   String get callBannerLeave => 'Odpojit se z hovoru';
 
   @override

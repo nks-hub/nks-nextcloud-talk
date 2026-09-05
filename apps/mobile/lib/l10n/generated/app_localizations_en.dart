@@ -1770,6 +1770,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerJoin => 'Join call';
 
   @override
+  String get callStartAudio => 'Start a call';
+
+  @override
+  String get callStartVideo => 'Start a call with video';
+
+  @override
   String get callBannerLeave => 'Leave call';
 
   @override

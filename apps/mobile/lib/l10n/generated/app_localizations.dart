@@ -3266,6 +3266,18 @@ abstract class AppLocalizations {
   /// **'Join call'**
   String get callBannerJoin;
 
+  /// No description provided for @callStartAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a call'**
+  String get callStartAudio;
+
+  /// No description provided for @callStartVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a call with video'**
+  String get callStartVideo;
+
   /// No description provided for @callBannerLeave.
   ///
   /// In en, this message translates to:

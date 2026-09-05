@@ -635,6 +635,8 @@
     }
   },
   "callBannerJoin": "Join call",
+  "callStartAudio": "Start a call",
+  "callStartVideo": "Start a call with video",
   "callBannerLeave": "Leave call",
   "callBannerMute": "Mute microphone",
   "callBannerUnmute": "Unmute microphone",

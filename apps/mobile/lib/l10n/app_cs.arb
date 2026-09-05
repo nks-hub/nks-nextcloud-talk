@@ -614,6 +614,8 @@
   "callBannerTitle": "Probíhá hovor",
   "callBannerRunningFor": "Běží {duration}",
   "callBannerJoin": "Připojit se k hovoru",
+  "callStartAudio": "Zahájit hovor",
+  "callStartVideo": "Zahájit hovor s videem",
   "callBannerLeave": "Odpojit se z hovoru",
   "callBannerMute": "Ztlumit mikrofon",
   "callBannerUnmute": "Zapnout mikrofon",

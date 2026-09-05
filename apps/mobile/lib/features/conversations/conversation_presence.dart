@@ -7,6 +7,7 @@ import '../../app_providers.dart';
 import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../calls/call_banner.dart';
+import '../calls/call_start_button.dart';
 import '../chat/chat_room_pane.dart';
 import '../chat/chat_background_surface.dart';
 import '../rooms/room_details_screen.dart';
@@ -222,6 +223,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
               roomName: current.displayName,
             ),
           ),
+          CallStartButtons(accountId: account.id, conversation: current),
           IconButton(
             key: const Key('open-thread-management'),
             tooltip: AppLocalizations.of(context).threadManagementOpenTooltip,
@@ -394,6 +396,10 @@ final class PresenceChatRoomPane extends StatelessWidget {
                     ),
                   ),
                 ),
+              ),
+              CallStartButtons(
+                accountId: account.id,
+                conversation: conversation,
               ),
               IconButton(
                 key: const Key('open-room-details'),
