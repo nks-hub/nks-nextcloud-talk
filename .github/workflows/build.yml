@@ -7,15 +7,18 @@
 # Ubuntu-only run never executes them.
 #
 # Costs, because this repository is private and these minutes are billed:
-# Linux counts 1x, Windows 2x. A push runs tests + android + linux, roughly 57
-# billed minutes. The Windows job is gated to manual runs and `v*` tags: on its
-# own it is 90 billed minutes, more than the other three together.
+# Linux counts 1x, Windows 2x. One run of tests + android + linux is roughly 57
+# billed minutes, and a busy day pushes to `main` many times — that alone ate
+# 90% of the monthly allowance by 5 September 2026. So nothing runs on a push
+# to a branch any more: the whole workflow is gated to manual runs and `v*`
+# tags, the same way the Windows job already was (90 billed minutes on its
+# own, more than the other three together). The suites still run on every
+# developer machine before a push.
 name: build
 
 on:
   workflow_dispatch:
   push:
-    branches: [main, ci/codemagic-matrix]
     tags: ['v*']
 
 permissions:
