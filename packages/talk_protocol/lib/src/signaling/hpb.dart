@@ -266,7 +266,13 @@ final class HpbMessageClientFrame extends HpbClientFrame {
           'type': 'session',
           'sessionid': recipient.value,
         },
-        'data': message.toWire(includeRecipient: false),
+        // The recipient appears TWICE on the wire — once as the frame's
+        // `recipient`, once as `data.to` — because that is what the web
+        // client sends and what a standalone server with an MCU expects.
+        // Captured from talk-web's own socket on 5 September 2026:
+        // `data.type=offer roomType=screen keys=broadcaster,payload,roomType,
+        // sid,to,type`.
+        'data': message.toWire(),
       },
     });
   }

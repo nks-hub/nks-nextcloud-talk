@@ -130,6 +130,17 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         for (final track in stream.getAudioTracks()) {
           await connection.addTrack(track, stream);
         }
+      } else if (video != null) {
+        // A screen publish still offers an audio line, empty and send-only.
+        // talk-web's own screen offer reads `m=audio,video dir=sendonly,
+        // sendonly` (captured from its socket on 5 September 2026), and a
+        // media server given video alone never answered ours at all.
+        await connection.addTransceiver(
+          kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeAudio,
+          init: rtc.RTCRtpTransceiverInit(
+            direction: rtc.TransceiverDirection.SendOnly,
+          ),
+        );
       }
       // One video line per connection. It starts receive-only, so a peer
       // that sends video (the web client does by default) is seen without a

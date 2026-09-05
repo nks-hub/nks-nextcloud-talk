@@ -57,6 +57,8 @@ from the commit log. Nothing here has reached testers yet.
   in the composer.
 - Fixed: the entries about joining and leaving a call now show their time,
   like every other message. A run of them was impossible to place in time.
+- Fixed: signalling messages now carry the recipient in the shape the web
+  client uses, which some servers require.
 - New: calls use the TURN servers a server hands out, so a call can connect
   from a network that blocks direct connections.
 - New: on servers with a media server, video is received from and sent to

@@ -248,9 +248,10 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
           }
           final data = body['data'];
           final inner = data is Map<String, Object?>
-              ? ' data=${data['type']}/${data['roomType']}'
+              ? ' data=${data['type']}/${data['roomType']} '
+                    'keys=${(data.keys.toList()..sort()).join(',')}'
               : '';
-          return 'type=$type keys=${body.keys.take(6).join(',')}$inner';
+          return 'type=$type$inner';
         }
         return 'type=$type';
       }

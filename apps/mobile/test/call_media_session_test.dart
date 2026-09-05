@@ -693,9 +693,8 @@ void main() {
       final offer = sent.lastWhere((message) => message.type == 'offer');
       expect(offer.roomType, 'screen');
       expect(offer.recipient?.value, _local);
-      // Through an MCU the server adds the broadcaster on the way out; a
-      // client that puts it on its own publish got no answer at all.
-      expect(offer.broadcaster, isNull);
+      // Whose screen it is; talk-web sends this to an MCU as well.
+      expect(offer.broadcaster, _local);
     },
   );
 

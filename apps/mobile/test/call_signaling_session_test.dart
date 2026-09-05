@@ -290,13 +290,15 @@ void main() {
         jsonDecode(await socket.waitForSent(3)) as Map<String, Object?>;
     expect(_peerRecipient(first), 'peer-a');
     expect(_peerRecipient(second), 'peer-b');
+    // The recipient rides inside `data` as well as on the frame — the shape
+    // talk-web puts on the wire and a standalone server expects.
     expect(
       (first['message']! as Map<String, Object?>)['data'],
-      <String, Object?>{'type': 'startedTyping'},
+      <String, Object?>{'type': 'startedTyping', 'to': 'peer-a'},
     );
     expect(
       (second['message']! as Map<String, Object?>)['data'],
-      <String, Object?>{'type': 'startedTyping'},
+      <String, Object?>{'type': 'startedTyping', 'to': 'peer-b'},
     );
     expect(
       await session.sendPeerMessage(_typingPeerMessageWithPayload()),
