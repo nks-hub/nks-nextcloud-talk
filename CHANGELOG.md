@@ -57,6 +57,11 @@ from the commit log. Nothing here has reached testers yet.
   in the composer.
 - New: add people and groups to a conversation from its details, with a
   search that only offers those who are not in it yet.
+- Fixed: sharing a screen through a media server. The answer to the publish
+  arrives from this device's own signalling session, the same way the
+  publisher's does, and was being discarded; the other participants were also
+  never told that a screen had appeared or gone away. Not yet proven against a
+  live media server, which is currently unavailable.
 - New: start a call from the conversation header, with or without video.
   Until now a call could only be joined once somebody else had started it.
 - Fixed: the entries about joining and leaving a call now show their time,

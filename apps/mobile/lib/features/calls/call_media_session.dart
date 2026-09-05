@@ -399,6 +399,12 @@ final class CallMediaSession {
       }
       if (_mcu) {
         await _subscribe(peerId);
+        // Someone who joins while the screen is up has to be told about it:
+        // the one publisher already carries the picture, but the server does
+        // not announce it to them by itself.
+        if (_screen != null) {
+          await _announceShare(peerId);
+        }
         continue;
       }
       await _openPeer(
@@ -406,8 +412,8 @@ final class CallMediaSession {
         localPeerId: localPeerId.value,
         iceServers: iceServers,
       );
-      // Someone who joins while the screen is up gets it too. Through an MCU
-      // the one publisher already reaches them, so there is nothing to open.
+      // Someone who joins while the screen is up gets it too. In the mesh
+      // that means one more screen connection.
       await _openShare(peerId);
     }
 
@@ -696,19 +702,24 @@ final class CallMediaSession {
       return;
     }
     if (sender.value == localPeerId) {
-      // Only an MCU ever talks back from this side's own session id: the
-      // answer to the publisher's offer and the candidates for it.
-      final publisher = _publisher;
-      if (publisher == null ||
-          message.sid == null ||
-          message.sid != publisher.sid) {
+      // Only an MCU ever talks back from this side's own session id, and it
+      // does so for BOTH of this side's publishes: the audio/video publisher
+      // and the screen, which is published to the same own session id with
+      // `roomType: screen`. Routing this by the publisher alone dropped every
+      // screen answer without a word — the defect that made screen sharing
+      // through the MCU look like a server that never answers (5 September
+      // 2026); the server had answered all along.
+      final own = message.roomType == _screenRoomType
+          ? _shares[localPeerId]
+          : _publisher;
+      if (own == null || message.sid == null || message.sid != own.sid) {
         return;
       }
       switch (message.type) {
         case 'answer':
-          await _receiveAnswerOn(publisher, message.payload);
+          await _receiveAnswerOn(own, message.payload);
         case 'candidate':
-          await _receiveCandidateFor(publisher, message.payload);
+          await _receiveCandidateFor(own, message.payload);
         default:
           return;
       }
@@ -829,6 +840,9 @@ final class CallMediaSession {
         final localPeerId = _localPeerId;
         if (localPeerId != null) {
           await _openShare(localPeerId);
+          for (final peerId in _peers.keys.toList(growable: false)) {
+            await _announceShare(peerId);
+          }
         }
       } else {
         for (final peerId in _peers.keys.toList(growable: false)) {
@@ -884,10 +898,51 @@ final class CallMediaSession {
     await _offer(share);
   }
 
+  /// Tells one participant that this side is publishing a screen.
+  ///
+  /// Through an MCU the screen is published once, to this side's own session,
+  /// and NOTHING tells the other participants it exists — the media server
+  /// does not announce a publisher and there is no `requestoffer` they could
+  /// know to send. The publisher has to push: `sendoffer` makes the server
+  /// build a subscriber for that participant and hand them the offer. This is
+  /// what talk-web does for the same reason, with the same note in its source
+  /// (`sendOffer(sessionId, 'screen')`). Without it the publish succeeds and
+  /// no one ever sees the screen.
+  Future<void> _announceShare(String peerId) async {
+    debugPrint('[call] sendoffer(screen) → $peerId');
+    try {
+      await _send(
+        peerId: peerId,
+        type: 'sendoffer',
+        payload: null,
+        roomType: _screenRoomType,
+      );
+    } on CallMediaException {
+      // The participant left between the list and this message.
+    }
+  }
+
   /// Tells everyone the share is over and closes it. Quiet about a failure to
   /// send: the connections go either way, and a peer that missed the message
   /// sees the track end.
   Future<void> _stopSharing() async {
+    // Through an MCU the only share is the publish to this side's own
+    // session, which tells the SERVER to drop the publisher; the other
+    // participants hear nothing from it, so they are told separately.
+    if (_mcu) {
+      for (final peerId in _peers.keys.toList(growable: false)) {
+        try {
+          await _send(
+            peerId: peerId,
+            type: 'unshareScreen',
+            payload: null,
+            roomType: _screenRoomType,
+          );
+        } on CallMediaException {
+          // Nothing to do: their subscription ends with the track.
+        }
+      }
+    }
     for (final share in _shares.values.toList(growable: false)) {
       try {
         await _send(
@@ -1321,16 +1376,17 @@ final class CallMediaSession {
     required String type,
     required Map<String, Object?>? payload,
     _MediaPeer? via,
+    String? roomType,
   }) async {
     if (_disposed) {
       return;
     }
-    final target = via ?? _peers[peerId];
+    final target = roomType == null ? via ?? _peers[peerId] : null;
     final SignalingPeerMessage message;
     try {
       message = SignalingPeerMessage(
         type: type,
-        roomType: target?.roomType ?? _roomType,
+        roomType: roomType ?? target?.roomType ?? _roomType,
         sid: target?.sid,
         // Every message of an outgoing share says whose screen it is, on
         // both transports: the mesh peer reads it to tell a remote screen

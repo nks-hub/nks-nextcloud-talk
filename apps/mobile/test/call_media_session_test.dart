@@ -698,6 +698,95 @@ void main() {
     },
   );
 
+  test(
+    'through an MCU the screen is announced to every participant',
+    () async {
+      // The media server does not tell anyone a publisher appeared, and the
+      // participants have no way to guess a screen exists, so the publisher
+      // pushes an offer at each of them. Without this the publish succeeded
+      // and nobody ever saw the picture (5 September 2026).
+      final media = session(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote), _participant('carol-session')],
+          topology: SignalingTopology.externalMcu,
+        ),
+        withControl: true,
+      );
+      addTearDown(media.dispose);
+      await media.start();
+
+      await media.setScreenSharing(true);
+      await pumpEventQueue();
+      final offers = sent
+          .where((message) => message.type == 'sendoffer')
+          .toList(growable: false);
+      expect(offers.map((message) => message.recipient?.value).toSet(), {
+        _remote,
+        'carol-session',
+      });
+      expect(offers.every((message) => message.roomType == 'screen'), isTrue);
+      // The publish itself still goes to this side's own session only.
+      expect(offers.every((message) => message.recipient?.value != _local), isTrue);
+
+      // Stopping tells them too: their subscription is not closed by the
+      // message that drops the publisher, which is addressed to this side.
+      sent.clear();
+      await media.setScreenSharing(false);
+      await pumpEventQueue();
+      final stops = sent
+          .where(
+            (message) =>
+                message.type == 'unshareScreen' &&
+                message.recipient?.value != _local,
+          )
+          .toList(growable: false);
+      expect(stops.map((message) => message.recipient?.value).toSet(), {
+        _remote,
+        'carol-session',
+      });
+      expect(stops.every((message) => message.roomType == 'screen'), isTrue);
+    },
+  );
+
+  test('through an MCU the answer to the screen publish is accepted', () async {
+    // The answer comes back from this side's OWN session id, exactly like the
+    // audio/video publisher's, and is told apart by its sid and room type.
+    // Routing it by the publisher alone dropped it silently and made the
+    // server look like it never answered.
+    final media = session(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        topology: SignalingTopology.externalMcu,
+      ),
+      withControl: true,
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    await media.setScreenSharing(true);
+    await pumpEventQueue();
+    final share = engine.connections.last;
+    final offer = sent.lastWhere((message) => message.type == 'offer');
+    expect(offer.roomType, 'screen');
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        topology: SignalingTopology.externalMcu,
+        messages: [
+          _message(_local, 'answer', <String, Object?>{
+            'type': 'answer',
+            'sdp': 'mcu-screen-answer',
+          }, sid: offer.sid, roomType: 'screen'),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(share.remoteDescriptions.single.sdp, 'mcu-screen-answer');
+  });
+
   test('an MCU without a control channel is still refused', () async {
     final media = session(
       _update(
