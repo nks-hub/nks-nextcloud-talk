@@ -12,6 +12,15 @@
 # Both workflows run both test suites before they build anything. An artifact
 # that nobody tested is worth less than no artifact.
 #
+# DORMANT BY DECISION OF THE OWNER, 5 September 2026. The Apple targets are
+# built and released from `build-mac` (the owner's Apple Silicon host, reached over
+# the remote-cmd relay), NOT from Codemagic and NOT from any CI. Do not start
+# these workflows: there is no webhook, no schedule and no `triggering:`, so the
+# only way they run is a deliberate `POST /builds` — and that is what must not
+# happen. The file stays because it documents a working signing setup (the
+# Developer ID p12 with a SHA-1 MAC, the entitlement expansion, the notarised
+# zip) that `build-mac` follows step for step. Owner's words: "nevydavej verze pro
+# osx a ios pres codemagic pouze pres build-mac a ne pres CI".
 # No `triggering:` section on purpose - builds are started deliberately
 # (`POST /builds`), so a push does not spend macOS minutes.
 #
