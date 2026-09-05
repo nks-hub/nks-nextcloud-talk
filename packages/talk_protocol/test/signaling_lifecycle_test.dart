@@ -172,6 +172,55 @@ void main() {
       );
     });
 
+    test('a process restart leaves no federated state behind', () {
+      var snapshot = externalReadySignalingSnapshot();
+      // A federated participant is present and the federation is interrupted:
+      // the state a restart must not carry over, because the socket, the
+      // session and every peer are gone with the process.
+      final account = snapshot.accounts[signalingAccountA]!;
+      snapshot = SignalingRuntimeSnapshot(
+        accounts: <AccountId, SignalingAccountState>{
+          signalingAccountA: account.copyWith(
+            federationInterrupted: true,
+            participants: <SignalingPeerId, SignalingParticipant>{
+              SignalingPeerId.parse('federated-peer'): SignalingParticipant(
+                peerId: SignalingPeerId.parse('federated-peer'),
+                nextcloudSessionId: ConversationSessionId.parse('remote'),
+                userId: 'someone',
+                inCall: 7,
+                permissions: 0,
+                actorType: 'federated_users',
+                actorId: 'someone@remote.invalid',
+                federated: true,
+                features: const <String>[],
+              ),
+            },
+          ),
+        },
+      );
+
+      snapshot = commitSignaling(
+        snapshot,
+        recoverSignalingAfterProcessRestart(
+          snapshot,
+          accountId: signalingAccountA,
+        ),
+      );
+      final recovered = snapshot.accounts[signalingAccountA]!;
+
+      expect(recovered.federationInterrupted, isFalse);
+      expect(recovered.participants, isEmpty);
+      // The federated endpoint is part of the settings, which are fetched
+      // again rather than trusted from before the restart.
+      expect(recovered.settings, isNull);
+      expect(recovered.roomConfirmed, isFalse);
+      expect(recovered.activeSocket, isFalse);
+      // The epoch never goes backwards, so a late frame from before the
+      // restart cannot be mistaken for a current one.
+      expect(recovered.connectionEpoch, greaterThan(account.connectionEpoch));
+      expect(recovered.roomEpoch, greaterThan(account.roomEpoch));
+    });
+
     test('a peer message arrives while a frame of ours waits to be sent', () {
       final authority = signalingAuthority();
       var snapshot = externalReadySignalingSnapshot();
