@@ -143,7 +143,9 @@ thread.
 Commit `030ffac` separates chat typing from media renegotiation after a process
 recovery. Through a prepared external HPB, only a payload-free `startedTyping` or
 `stoppedTyping` with an empty `roomType` and without `sid`, a sender and a payload
-may pass as an exception. SDP, ICE and forged typing stay blocked and their
+may pass as an exception. `unshareScreen` is the third payload-free peer message:
+the web client sends it without a payload when a participant stops sharing their
+screen, and a decoder that insisted on one failed the whole batch. SDP, ICE and forged typing stay blocked and their
 rejection must not delete a pending typing state of another session. A lifecycle
 refresh only re-evaluates the ban on typing; a non-empty old draft without a new
 text change does not create a new start.

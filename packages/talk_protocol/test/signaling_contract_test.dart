@@ -242,6 +242,19 @@ void main() {
       }
     });
 
+    test('unshareScreen travels without a payload, as the web sends it', () {
+      final inbound = SignalingPeerMessage.fromJson(<String, Object?>{
+        'type': 'unshareScreen',
+        'from': 'peer-a',
+        'to': 'peer-b',
+        'roomType': 'screen',
+        'sid': 'screen-1',
+      });
+      expect(inbound.type, 'unshareScreen');
+      expect(inbound.roomType, 'screen');
+      expect(inbound.payload, isNull);
+    });
+
     test('non-typing messages still require an explicit payload', () {
       expect(
         () => SignalingPeerMessage.fromJson(<String, Object?>{

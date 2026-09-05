@@ -399,8 +399,15 @@ final class SignalingPeerMessage {
   String toString() => 'SignalingPeerMessage(<redacted>)';
 }
 
+/// The upstream peer messages that travel without a `payload`: the typing
+/// pair, and `unshareScreen`, which the web client sends to every participant
+/// when it stops sharing its screen. Measured on 5 September 2026: with it
+/// missing here, one participant stopping a share failed the whole batch and
+/// ended everyone's call with "the signalling ended".
 bool _isPayloadFreePeerMessage(String type) =>
-    type == 'startedTyping' || type == 'stoppedTyping';
+    type == 'startedTyping' ||
+    type == 'stoppedTyping' ||
+    type == 'unshareScreen';
 
 final class HpbControlMessage {
   const HpbControlMessage({
