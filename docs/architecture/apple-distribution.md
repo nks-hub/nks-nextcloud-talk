@@ -6,12 +6,12 @@ along the way — each of them looked like something other than what it was.
 
 ## Account and identity
 
-- Team `TEAMID0000`. On `developer.apple.com` you have to sign in as the
+- Team `<team-id>` (the value lives in `Local.xcconfig`, not here). On `developer.apple.com` you have to sign in as the
   **account holder**; an ordinary ASC Admin cannot see the team portal.
 - App ID `com.nkshub.nextcloudtalk` ("NKS Talk") with the Push Notifications
   capability.
 - App Store Connect record id `6805831712`, platforms iOS and macOS.
-- `DEVELOPMENT_TEAM = TEAMID0000` is in `ios/Runner.xcodeproj` and in
+- `DEVELOPMENT_TEAM = $(APPLE_TEAM_ID)` is in `ios/Runner.xcodeproj` and in
   `macos/Runner/Configs/AppInfo.xcconfig`.
 - An updated Apple Developer Program License Agreement has to be accepted by the
   account holder manually. Until that happens, nothing new can be submitted.
@@ -21,7 +21,7 @@ along the way — each of them looked like something other than what it was.
 The Runner has `com.apple.developer.associated-domains` for
 `applinks:cloud.example.invalid`. The authoritative AASA document is versioned in
 `deploy/reference-server/apple-app-site-association`; it allows only `/call/*`
-and `/index.php/call/*` for `TEAMID0000.com.nkshub.nextcloudtalk`.
+and `/index.php/call/*` for `<team-id>.com.nkshub.nextcloudtalk`.
 
 The reference server serves it through an exact-path Apache alias from the Git
 checkout of commit `2f1d36f`, not from a file placed manually into the Nextcloud
@@ -49,7 +49,7 @@ xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
   -allowProvisioningUpdates \
   -authenticationKeyPath <p8> -authenticationKeyID <id> \
   -authenticationKeyIssuerID <issuer> \
-  DEVELOPMENT_TEAM=TEAMID0000
+  DEVELOPMENT_TEAM=<team-id>
 
 xcodebuild -exportArchive -archivePath <archive> \
   -exportOptionsPlist <plist with method=app-store-connect> \

@@ -82,8 +82,8 @@ the attribution in the picker. Root history/read-unread, live outbox
 process-death, attachments, voice, real push delivery and calls remain separate
 unfinished slices.
 The exact state is tracked by the
-[development status](docs/architecture/development-status-2026-08-25.md) and the
-[completion audit](docs/architecture/completion-audit.md).
+the maintainer notes and the
+their completion audit.
 
 ## Push without a per-server rebuild
 
@@ -126,15 +126,18 @@ device registration through the `proxyServer` parameter.
 A full description of all three channels, of the contract with Nextcloud and of
 what is fixed by the platform is in the
 [notifications document](docs/architecture/notifications.md). The older analysis
-is in the [push analysis](docs/research/push-fcm.md).
+is in the push analysis in the maintainer notes.
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
 - [Flutter application foundation](docs/architecture/flutter-foundation.md)
-- [Requirements and completion evidence](docs/architecture/requirements.md)
 - [System design](docs/architecture/system-design.md)
 - [Notifications on all platforms](docs/architecture/notifications.md)
-- [Delivery slices and test gates](docs/architecture/delivery-plan.md)
 - [Decisions and open choices](docs/architecture/decisions.md)
-- [Research on the official clients](docs/research/README.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) — in particular the public repository
+policy: nothing that names the operator's hosts, machines, accounts or
+identifiers is committed here.

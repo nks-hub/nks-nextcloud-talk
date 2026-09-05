@@ -15,4 +15,7 @@ PRODUCT_COPYRIGHT = Copyright © 2026 com.nkshub. All rights reserved.
 
 // The Apple Developer team the signed build belongs to. Signing needs it
 // even for a local Developer ID build; it stays empty in forks.
-DEVELOPMENT_TEAM = TEAMID0000
+// The signing team is not in the repository: Local.xcconfig (gitignored)
+// or the environment of the build supplies APPLE_TEAM_ID.
+#include? "Local.xcconfig"
+DEVELOPMENT_TEAM = $(APPLE_TEAM_ID)

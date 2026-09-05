@@ -15,9 +15,14 @@ final class PushDeviceKeyStore {
   private static let tagPrefix = "com.nkshub.nextcloudtalk.pushkey."
 
   /// Shared with the Notification Service Extension via the
-  /// `keychain-access-groups` entitlement on both targets (team TEAMID0000) —
-  /// the extension has no other way to reach a key it did not create.
-  static let sharedAccessGroup = "TEAMID0000.com.nkshub.nextcloudtalk"
+  /// `keychain-access-groups` entitlement on both targets — the extension has
+  /// no other way to reach a key it did not create. The team prefix comes from
+  /// Info.plist (`AppIdentifierPrefix`, which Xcode fills from the signing
+  /// team), so the team id itself is not in the source.
+  static let sharedAccessGroup: String = {
+    let prefix = Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String ?? ""
+    return prefix + "com.nkshub.nextcloudtalk"
+  }()
 
   private func applicationTag(for handle: String) -> Data {
     (Self.tagPrefix + handle).data(using: .utf8)!

@@ -767,7 +767,7 @@
 					"@executable_path/Frameworks",
 				);
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -952,7 +952,7 @@
 					"@executable_path/Frameworks",
 				);
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -977,7 +977,7 @@
 					"@executable_path/Frameworks",
 				);
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -994,7 +994,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1018,7 +1018,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1042,7 +1042,7 @@
 				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NotificationServiceExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1067,7 +1067,7 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1096,7 +1096,7 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1123,7 +1123,7 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = TEAMID0000;
+				DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;

@@ -69,7 +69,7 @@ server.
 
 The detailed record is in the
 [Flutter foundation document](../../docs/architecture/flutter-foundation.md) and
-in the [completion audit](../../docs/architecture/completion-audit.md).
+in the maintainer notes' completion audit (not part of this repository).
 
 ## License
 

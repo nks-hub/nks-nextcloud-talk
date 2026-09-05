@@ -12,8 +12,8 @@ The fresh automated gate has `flutter analyze` with no findings, 1493 passing
 Flutter tests with four credential-gated skips and 946/946 `talk_protocol` tests.
 Android push in `3c74165` additionally passed 16/16 Kotlin unit and 15/15
 connected tests on `chatujmePixel`. The exact split between code, automation,
-live evidence and open parts is tracked by the
-[current development status](development-status-2026-08-25.md).
+live evidence and open parts is tracked in the maintainer notes, which are not
+part of this repository.
 
 ## Design outcome
 
@@ -42,9 +42,6 @@ the media implementation is not created as an empty stub.
 
 ## Documents
 
-- [Requirements and completion evidence](requirements.md)
-- [Development status as of 25 August 2026](development-status-2026-08-25.md)
-- [Completion audit of the whole goal](completion-audit.md)
 - [System design](system-design.md)
 - [Synchronization and local data](sync-storage.md)
 - [Flutter application foundation](flutter-foundation.md)
@@ -58,22 +55,10 @@ the media implementation is not created as an empty stub.
 - [Capability-bound current location sharing](location-sharing-api.md)
 - [Talk OCS, WebDAV and the attachment state contract](attachment-upload-api.md)
 - [Internal/HPB signaling contract and runtime](signaling-api.md)
-- [Delivery slices and test gates](delivery-plan.md)
 - [Decisions and open choices](decisions.md)
 - [Technical decisions](decisions-technical.md)
 - [Dependency and asset audit](dependency-licenses.md)
 - [Pure Dart talk_protocol](../../packages/talk_protocol/README.md)
-- [Historical public multi-server push-v2 design](../plans/2026-08-22-public-multi-server-push-design.md)
-- [Original Talk-inspired Flutter client](../plans/2026-08-22-original-flutter-client-design.md)
-- [Client bootstrap contract design](../plans/2026-08-22-client-bootstrap-contract-design.md)
-- [Conversation-list contract design](../plans/2026-08-22-conversation-list-contract-design.md)
-- [Dart conversation runtime implementation](../plans/2026-08-22-dart-conversation-runtime-design.md)
-- [Chat-messages contract design](../plans/2026-08-22-chat-messages-contract-design.md)
-- [Dart chat runtime implementation](../plans/2026-08-23-dart-chat-runtime-design.md)
-- [Rich chat and threads](../plans/2026-08-23-rich-chat-threads-design.md)
-- [Attachment upload runtime implementation](../plans/2026-08-23-attachment-upload-runtime-design.md)
-- [Signaling preparation runtime design](../plans/2026-08-23-signaling-preparation-runtime-design.md)
-- [Historical Dart push-v2 client runtime](../plans/2026-08-23-dart-push-client-runtime-design.md)
 
 ## Principles
 

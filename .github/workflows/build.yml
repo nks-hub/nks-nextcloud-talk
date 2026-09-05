@@ -90,6 +90,10 @@ jobs:
           flutter pub get
           flutter analyze lib test
           flutter test --reporter expanded
+      # This repository is public: nothing that names the operator's hosts,
+      # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
+      - name: Public repository gate
+        run: python3 tool/public_repo_gate.py
 
   android:
     name: android
@@ -154,11 +158,13 @@ jobs:
           RYBBIT_HOST: ${{ secrets.RYBBIT_HOST }}
           RYBBIT_SITE_ID: ${{ secrets.RYBBIT_SITE_ID }}
           TELEMETRY_ENVIRONMENT: ${{ secrets.TELEMETRY_ENVIRONMENT }}
+          PUSH_GATEWAY_ORIGIN: ${{ secrets.PUSH_GATEWAY_ORIGIN }}
         working-directory: apps/mobile
         run: |
-          test -n "$SENTRY_DSN" && test -n "$RYBBIT_HOST"
+          test -n "$SENTRY_DSN" && test -n "$RYBBIT_HOST" && test -n "$PUSH_GATEWAY_ORIGIN"
           for target in apk appbundle; do
             flutter build $target --release \
+              --dart-define=PUSH_GATEWAY_ORIGIN=$PUSH_GATEWAY_ORIGIN \
               --dart-define=SENTRY_DSN=$SENTRY_DSN \
               --dart-define=RYBBIT_HOST=$RYBBIT_HOST \
               --dart-define=RYBBIT_SITE_ID=$RYBBIT_SITE_ID \

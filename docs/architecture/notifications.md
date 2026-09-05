@@ -69,7 +69,7 @@ the background.
 
 The native path on Android is our own proxy, that is exactly the contract iOS
 uses: `POST /ocs/v2.php/apps/notifications/api/v2/push` with
-`proxyServer: https://push.example.invalid` and then registration with the
+`proxyServer: <the build's PUSH_GATEWAY_ORIGIN>` and then registration with the
 proxy at `/devices`. The server side does not change at all — `Push.php` does not
 distinguish platforms, it groups by the `proxyserver` column, and the decision of
 whether to send a notification to APNs or to FCM is made only by the proxy,
@@ -279,7 +279,7 @@ On the Apple side this is what is needed:
 
 | item | value |
 | --- | --- |
-| Team | `TEAMID0000` |
+| Team | `<team-id>` |
 | App ID | `com.nkshub.nextcloudtalk` with the Push Notifications capability |
 | Extension App ID | `com.nkshub.nextcloudtalk.NotificationService` |
 | App Group | `group.com.nkshub.nextcloudtalk` |

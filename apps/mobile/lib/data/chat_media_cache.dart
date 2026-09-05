@@ -290,7 +290,7 @@ final class ChatMediaDiskCache {
   /// Drops every cached byte belonging to one account.
   ///
   /// Account removal is not implemented yet — see the unchecked
-  /// "Bezpečné odebrání účtu" item in `docs/TODO.md`. Whatever lands there has
+  /// "Bezpečné odebrání účtu" item in the maintainer notes. Whatever lands there has
   /// to await this and call [ChatMediaCache.evictAccount] next to
   /// `CredentialVault.deleteAppPassword`, in the same `AccountRepository` step
   /// that deletes the account row, or conversation bytes outlive the account

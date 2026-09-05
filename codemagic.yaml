@@ -256,7 +256,7 @@ workflows:
           # a length and a digest of a secret are not the secret.
           printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/devid.p12
           echo "p12 bytes $(wc -c < /tmp/devid.p12), password length ${#MACOS_CERTIFICATE_PASSWORD}"
-          echo "${MACOS_CERTIFICATE_P12_SHA256}  /tmp/devid.p12" | shasum -a 256 -c -
+          echo "$MACOS_CERTIFICATE_P12_SHA256  /tmp/devid.p12" | shasum -a 256 -c -
           openssl pkcs12 -in /tmp/devid.p12 -passin "pass:$MACOS_CERTIFICATE_PASSWORD" -nokeys -clcerts -noout
           security import /tmp/devid.p12 -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
           rm -f /tmp/devid.p12
@@ -289,8 +289,8 @@ workflows:
           {
             security unlock-keychain -p ci-temp nks-build.keychain
             APP=build/macos/Build/Products/Release/nextcloudtalk.app
-            python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)','TEAMID0000.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
-            # The full signing identity string ("Developer ID Application: … (TEAM)")
+            python3 -c "import io,sys; t=io.open(sys.argv[1]).read(); t=t.replace(chr(36)+'(APS_ENVIRONMENT)','production'); t=t.replace(chr(36)+'(AppIdentifierPrefix)',__import__('os').environ['APPLE_TEAM_ID']+'.'); io.open(sys.argv[2],'w').write(t)" macos/Runner/Release.entitlements /tmp/release.entitlements
+            # The full signing identity string ("Developer ID Application: <name> (<team>)")
             # lives in the secure environment group, not in this file.
             ID="${MACOS_SIGNING_IDENTITY:?MACOS_SIGNING_IDENTITY is not set}"
             # Inside out: a nested bundle signed after its container invalidates
@@ -310,7 +310,7 @@ workflows:
         script: |
           APP=apps/mobile/build/macos/Build/Products/Release/nextcloudtalk.app
           codesign -dv --entitlements - "$APP" 2>&1 | tee /tmp/sig.txt
-          grep -q "TeamIdentifier=TEAMID0000" /tmp/sig.txt             || { echo "Unsigned or wrong team - refusing to publish."; exit 1; }
+          grep -q "TeamIdentifier=$APPLE_TEAM_ID" /tmp/sig.txt             || { echo "Unsigned or wrong team - refusing to publish."; exit 1; }
           codesign -d --entitlements - "$APP" 2>&1 | grep -q "app-sandbox"             || { echo "No app-sandbox entitlement - the app would lose its account."; exit 1; }
       # Zipped rather than shipped as a .app directory, because an artifact
       # download would otherwise lose the bundle's symlinks and the result

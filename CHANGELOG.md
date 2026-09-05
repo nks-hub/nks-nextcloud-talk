@@ -213,7 +213,7 @@ and launched. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nks-talk-macos-57.zip` 33,016,873 B, SHA-256
 `0eea6b8d0066cac37b0d734a943d10b6619dfeb498374179a2dd9b6f598407bb`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID, `stapler validate` OK — verified on a file
 downloaded back from Nextcloud; it runs on build-mac. Sent into the Pimpula chat
 (share 8936, message 78914).
@@ -257,7 +257,7 @@ and launched. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nks-talk-macos-56.zip` 32,929,803 B, SHA-256
 `7513ff7816d507a202988d188f0009e14e3e9ecac6a971e765f0005116df584f`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID, `stapler validate` OK — verified on a file
 downloaded back from Nextcloud; it runs on build-mac. Sent into the Pimpula chat
 (share 8932, message 78878).
@@ -303,7 +303,7 @@ and launched. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nks-talk-macos-55.zip` 32,916,541 B, SHA-256
 `9ffa883b7ca8375fb9f4af8e2eb31cc12b402022703aee5302abdb5c79a265a9`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID, `stapler validate` OK — verified on a file
 downloaded back from Nextcloud; it runs on build-mac. Sent into the Pimpula chat
 (share 8928, message 78856).
@@ -348,7 +348,7 @@ launched. TestFlight was not uploaded (cadence, the latest is 51).
 
 macOS: `nks-talk-macos-54.zip` 32,917,467 B, SHA-256
 `20df8cde271e16cc808e13f4c3a225b6c923ff860b0347511e235dd511aafd74`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID — verified on a file downloaded back from
 Nextcloud; it runs on build-mac (PID 76194). Sent into the Pimpula chat (share 8919,
 message 78838).
@@ -387,7 +387,7 @@ not uploaded (cadence, the latest is 51).
 
 macOS: `nks-talk-macos-53.zip` 32,882,920 B, SHA-256
 `6a71b3e7a00f047832024b3aedb6d8854a718688fb98b15d1657c2dafd05dc0b`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID — verified on a file downloaded back from
 Nextcloud; it runs on build-mac (PID 47641). Sent into the Pimpula chat (share 8911,
 message 78812).
@@ -426,7 +426,7 @@ was not uploaded to TestFlight (cadence).
 
 macOS: `nks-talk-macos-52.zip` 32,883,246 B, SHA-256
 `8e88f15e2c07f404b3314fc57bdf3c0c49f5b6d8f24adcbab5e8df8a92522c38`,
-Developer ID Application (TEAMID0000), notarized (Accepted), stapled,
+Developer ID Application (team id withheld), notarized (Accepted), stapled,
 `spctl`: Notarized Developer ID — verified on a file downloaded back from
 Nextcloud; it runs on build-mac (PID 31592). Sent into the Pimpula chat (share 8909,
 message 78763). A trap: entitlements signed straight from the source file carry
@@ -658,7 +658,7 @@ multi-server client, and no code used universal links.
 
 macOS: the ZIP 32,022,517 B, SHA-256
 `c55ab36ffdf544a40e701c3ea80cc8fa4364e6566611049ea96da170ba4ee6f3`, signed with
-Developer ID (team TEAMID0000), `app-sandbox` and `aps-environment`,
+Developer ID (team id withheld), `app-sandbox` and `aps-environment`,
 `codesign --verify` reports "satisfies its Designated Requirement".
 
 Windows: deployed on `win-test-2`, the installer reported `Installed 0.1.0+47`.

@@ -340,7 +340,7 @@ The original Flutter `attachment_transport_test.dart` milestone passed 25/25 on
 24 August 2026. On 25 August the combined targeted suite of the transport, the
 repository, the service, the submission, the image controller/panel/viewer and
 the voice controller passed 91/91. The current full count and the APK hash are
-tracked in the [development status](development-status-2026-08-25.md), so that a
+tracked in the maintainer notes, so that a
 historical transport milestone is not mixed with later slices here.
 
 The scope binding is documented by commits `d518694`, `4b4e61b` and `cd22bdb`.

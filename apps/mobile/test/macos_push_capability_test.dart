@@ -43,7 +43,7 @@ void main() {
       reason: 'restricted APNs entitlements cannot use an ad-hoc signature',
     );
     expect(
-      'DEVELOPMENT_TEAM = TEAMID0000;'.allMatches(project).length,
+      r'DEVELOPMENT_TEAM = $(APPLE_TEAM_ID);'.allMatches(project).length,
       6,
       reason: 'Runner and its extension must be signed by the same team',
     );

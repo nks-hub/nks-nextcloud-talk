@@ -48,7 +48,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   # WebRTC media for Talk calls. The only maintained Flutter wrapper over
   # libwebrtc that covers all our targets; MIT, so it does not conflict with
-  # our GPL-3.0-or-later. See docs/research/calls-architecture.md.
+  # our GPL-3.0-or-later. See the calls architecture note in the maintainer notes.
   flutter_webrtc: ^1.6.1
   http: ^1.6.0
   mime: ^2.0.0

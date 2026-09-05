@@ -191,12 +191,15 @@ final androidPushRegistrationCoordinatorProvider =
               AndroidPushTransport.proxy) {
         return null;
       }
+      if (_pushGatewayOrigin.isEmpty) {
+        return null;
+      }
       final coordinator = PushRegistrationCoordinator(
         accounts: ref.watch(accountRepositoryProvider),
         credentials: ref.watch(credentialVaultProvider),
         api: ref.watch(nextcloudApiProvider),
         keyStore: AndroidPushDeviceKeyChannel(),
-        gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        gateway: PushGatewayOrigin.parse(_pushGatewayOrigin),
         tokenHandlePrefix: 'fcm-token',
         pushProvider: PushGatewayProvider.fcm,
       );
@@ -420,6 +423,13 @@ final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {
   return coordinator;
 });
 
+/// The push gateway this build registers devices with. A build-time value
+/// (`--dart-define=PUSH_GATEWAY_ORIGIN=…`, or `telemetry.env`), like the
+/// telemetry endpoints: the repository is public and names no operator host.
+/// Empty means this build registers for push nowhere — it fails closed instead
+/// of pointing every device at a host that does not exist.
+const _pushGatewayOrigin = String.fromEnvironment('PUSH_GATEWAY_ORIGIN');
+
 /// Registers this device for Nextcloud push v2 and the `nks-talk-notify`
 /// APNs proxy — see that project's README for the wire contract each effect
 /// executes. `null` outside Apple platforms: there is no APNs token or
@@ -435,13 +445,16 @@ final applePushRegistrationCoordinatorProvider =
       if (!ref.watch(clientPushEnabledProvider)) {
         return null;
       }
+      if (_pushGatewayOrigin.isEmpty) {
+        return null;
+      }
       final deviceKeyChannel = ApplePushDeviceKeyChannel();
       final coordinator = PushRegistrationCoordinator(
         accounts: ref.watch(accountRepositoryProvider),
         credentials: ref.watch(credentialVaultProvider),
         api: ref.watch(nextcloudApiProvider),
         keyStore: deviceKeyChannel,
-        gateway: PushGatewayOrigin.parse('https://push.example.invalid'),
+        gateway: PushGatewayOrigin.parse(_pushGatewayOrigin),
         tokenHandlePrefix: 'apns-token',
         pushProvider: PushGatewayProvider.apns,
         pushEnvironment: kDebugMode ? 'development' : 'production',

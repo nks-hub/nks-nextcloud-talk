@@ -79,3 +79,8 @@ Thumbs.db
 *.cer
 *.csr
 *.pfx
+
+# Public repository: nothing operator-specific is versioned.
+Local.xcconfig
+/docs/private/
+.public-denylist

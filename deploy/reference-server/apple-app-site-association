@@ -3,7 +3,7 @@
     "details": [
       {
         "appIDs": [
-          "TEAMID0000.com.nkshub.nextcloudtalk"
+          "${APPLE_TEAM_ID}.com.nkshub.nextcloudtalk"
         ],
         "components": [
           {
