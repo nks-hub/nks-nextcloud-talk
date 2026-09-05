@@ -292,4 +292,92 @@ void _registerTypingProviderLifecycleTests() {
       reason: 'nothing released the room session while the listener was held',
     );
   });
+
+  // The four requests the server logged in one second decode exactly:
+  // `activateRoomSession` deactivates whatever the account already holds
+  // before it POSTs, so two activations plus a final dispose read as
+  // POST, DELETE, POST, DELETE - and the last DELETE leaves the client with no
+  // room session at all. Two activations for one account and one room mean the
+  // lease was disposed and rebuilt, which is what an `autoDispose` provider
+  // does the moment its last listener goes away for even a frame. Screen
+  // navigation does that routinely. A momentary gap must not cost the session.
+  test('a momentary gap between listeners keeps the room session', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    final credentials = MemoryCredentialVault();
+    await accounts.upsertAccount(
+      accountId: 'account-a',
+      serverUrl: 'https://cloud.example.invalid',
+      loginName: 'fixture-user',
+      serverProductName: 'Nextcloud',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      createdAt: DateTime.utc(2026, 9, 1),
+    );
+    await ChatRepository(database).recordCapabilities(
+      accountId: 'account-a',
+      talkFeatures: const {'signaling-v3', 'typing-privacy'},
+      observedAt: DateTime.utc(2026, 9, 1),
+    );
+    credentials.values['account-a'] = 'fixture-password';
+    final account = (await accounts.getAccount('account-a'))!;
+    final client = _ActiveTypingClient();
+    final api = HttpNextcloudApi(client: client);
+    addTearDown(api.close);
+    final sockets = _ActiveTypingSockets();
+    final coordinator = CallSignalingCoordinator(
+      accounts: accounts,
+      sessions: CallSessionRepository(database),
+      credentials: credentials,
+      api: api,
+      socketConnector: sockets,
+      refreshConversationSession: (_, _) async =>
+          ConversationSessionId.parse('active-session'),
+    );
+    addTearDown(coordinator.dispose);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(credentials),
+        nextcloudApiProvider.overrideWithValue(api),
+        callSignalingCoordinatorProvider.overrideWithValue(coordinator),
+      ],
+    );
+    addTearDown(container.dispose);
+    final key = chatTypingRoomKeyFor(
+      account: account,
+      conversation: _sessionZeroConversation(),
+    )!;
+
+    final first = container.listen(
+      chatTypingStateProvider(key),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    await client.activeStarted.future;
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    first.close();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final second = container.listen(
+      chatTypingStateProvider(key),
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(second.close);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    final activations = client.paths
+        .where((path) => path.endsWith('/participants/active'))
+        .length;
+    expect(
+      client.deletes,
+      0,
+      reason: 'a gap of one frame between readers must not release the session',
+    );
+    expect(
+      activations,
+      1,
+      reason: 'the second reader has to join the session, not replace it',
+    );
+  });
 }

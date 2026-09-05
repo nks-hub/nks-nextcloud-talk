@@ -50,11 +50,42 @@ bool chatRoomSignalingAllowed(CapabilitySnapshot snapshot) =>
     snapshot.context == CapabilityContext.authenticated &&
     snapshot.supportsTalk('signaling-v3');
 
+/// How long the room session outlives its last reader.
+///
+/// Without it, a single frame in which no provider is listening costs the
+/// session: `autoDispose` releases it, the next reader activates a new one, and
+/// `activateRoomSession` is exclusive, so the new activation kills the old
+/// session id. On 5 September 2026 the server logged that as four requests in
+/// one second when a conversation was opened — POST, DELETE, POST, DELETE — and
+/// because the last one is a DELETE the client was left holding no session at
+/// all. The signalling lane had already started with one of the dead ids, its
+/// first pull was answered 409, and a 409 terminates the lane for good, so a
+/// joined call never negotiated with anybody.
+///
+/// Two seconds, the same grace [WindowActivity] already applies to a window
+/// that briefly loses focus, and for the same reason: presence is worth
+/// releasing when the user leaves, not when a widget tree rearranges itself.
+const chatRoomSignalingGrace = Duration(seconds: 2);
+
 final chatRoomSignalingProvider = FutureProvider.autoDispose
     .family<ChatRoomSignalingLease, ChatRoomSignalingKey>((ref, key) async {
+      // Armed before anything else: the gap that costs the session can open
+      // while the activation below is still in flight.
+      final link = ref.keepAlive();
+      Timer? expiry;
+      ref.onCancel(() {
+        expiry?.cancel();
+        expiry = Timer(chatRoomSignalingGrace, link.close);
+      });
+      ref.onResume(() {
+        expiry?.cancel();
+        expiry = null;
+      });
+
       var disposed = false;
       Future<void> Function()? owned;
       ref.onDispose(() {
+        expiry?.cancel();
         disposed = true;
         final release = owned;
         if (release != null) {
