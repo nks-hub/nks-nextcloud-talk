@@ -30,6 +30,9 @@ from the commit log. Nothing here has reached testers yet.
   longer name the owner's machines, addresses, accounts or test servers; roles
   and `example.invalid` hosts stand in for them ahead of the repository going
   public. No code path changed.
+- Fixed: a call survives a network change. When the connection to a
+  participant fails (Wi-Fi to mobile data, a short outage) the app renegotiates
+  it in place instead of sitting on "Connecting…" until you leave.
 - Fixed: leaving the app during a call (the home gesture, a switch to another
   app) no longer ends the call. The room session that carries the call used to
   be released together with the conversation's presence the moment the window
