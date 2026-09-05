@@ -172,6 +172,112 @@ void main() {
       );
     });
 
+    test('a peer message arrives while a frame of ours waits to be sent', () {
+      final authority = signalingAuthority();
+      var snapshot = externalReadySignalingSnapshot();
+      // Something of ours is queued for the socket: an MCU answers the
+      // publisher's offer at exactly this moment, and dropping it would lose
+      // the call's only answer.
+      final planned = planHpbPeerFrame(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        requestId: signalingRequestId(540),
+        effectId: signalingEffectId(540),
+        message: SignalingPeerMessage(
+          type: 'offer',
+          roomType: 'video',
+          sid: 'publisher-1',
+          recipient: SignalingPeerId.parse('hpb-session-a'),
+          sender: null,
+          payload: SignalingOpaquePayload.fromJson(<String, Object?>{
+            'type': 'offer',
+            'sdp': 'v=0',
+          }),
+        ),
+      );
+      snapshot = commitSignaling(snapshot, planned);
+      expect(snapshot.accounts[signalingAccountA]!.pendingHpbFrame, isNotNull);
+
+      final received = applyHpbServerFrame(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        connectionEpoch: snapshot.accounts[signalingAccountA]!.connectionEpoch,
+        roomEpoch: snapshot.accounts[signalingAccountA]!.roomEpoch,
+        frame: decodeHpbFrame(<String, Object?>{
+          'type': 'message',
+          'message': <String, Object?>{
+            'sender': <String, Object?>{
+              'type': 'session',
+              'sessionid': 'hpb-session-a',
+            },
+            'data': <String, Object?>{
+              'type': 'answer',
+              'roomType': 'video',
+              'sid': 'publisher-1',
+              'payload': <String, Object?>{'type': 'answer', 'sdp': 'v=0'},
+            },
+          },
+        }),
+        nowMicros: 100000,
+      );
+
+      expect(received.outcome, SignalingRuntimeOutcome.messagesReceived);
+      expect(received.messages.single.type, 'answer');
+    });
+
+    test('a full hello clears the renegotiation the lost session raised', () {
+      final authority = signalingAuthority();
+      // The resume window has passed, so the reconnect is a full hello and the
+      // flag is up.
+      final prepared = _planHelloAfterDisconnect(
+        nowMicros: 10000,
+        reconnectMicros: 30010000,
+        requestNumber: 530,
+      );
+      expect(prepared.account.renegotiationRequired, isTrue);
+      var snapshot = prepared.snapshot;
+      final send = snapshot.accounts[signalingAccountA]!.pendingHpbFrame!;
+      snapshot = commitSignaling(
+        snapshot,
+        completeHpbFrameSend(
+          snapshot,
+          accountId: signalingAccountA,
+          authority: authority,
+          effect: send,
+        ),
+      );
+
+      final welcomed = applyHpbServerFrame(
+        snapshot,
+        accountId: signalingAccountA,
+        authority: authority,
+        connectionEpoch: 2,
+        roomEpoch: snapshot.accounts[signalingAccountA]!.roomEpoch,
+        frame: decodeHpbFrame(<String, Object?>{
+          'id': send.frame.requestId.value,
+          'type': 'hello',
+          'hello': <String, Object?>{
+            'version': '2.0',
+            'sessionid': 'hpb-session-b',
+            'resumeid': 'hpb-resume-b',
+          },
+        }),
+        nowMicros: 30010300,
+        nextRequestId: signalingRequestId(534),
+        sendEffectId: signalingEffectId(534),
+      );
+      snapshot = commitSignaling(snapshot, welcomed);
+
+      // A new session in a new room epoch with no participants carried over:
+      // every peer is rebuilt, which is what the flag was asking for.
+      final account = snapshot.accounts[signalingAccountA]!;
+      expect(account.renegotiationRequired, isFalse);
+      expect(account.roomEpoch, greaterThan(prepared.account.roomEpoch));
+      expect(account.participants, isEmpty);
+    });
+
     test('failed reconnect does not extend the original resume window', () {
       final authority = signalingAuthority();
       final prepared = _planHelloAfterDisconnect(

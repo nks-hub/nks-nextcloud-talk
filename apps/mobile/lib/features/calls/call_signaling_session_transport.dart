@@ -151,8 +151,18 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
     final HpbServerFrame frame;
     try {
       frame = HpbServerFrame.decode(encoded);
-    } on TalkProtocolException {
-      await _protocolDisconnect(connectionEpoch);
+    } on TalkProtocolException catch (error) {
+      // Ignored, not fatal. The signalling protocol grows: a standalone
+      // server with an MCU sends frames this client has no use for, and
+      // closing the socket over one of them took the whole call down —
+      // measured against the reference cloud on 5 September 2026, where the
+      // server logged `websocket: close 1002 (protocol error)` from this
+      // client seconds after it published, and every later message was
+      // refused because the lost session raised the renegotiation flag.
+      debugPrint(
+        '[call] ignoring an undecodable frame: ${error.code.name} '
+        '${_frameSummary(encoded)}',
+      );
       return;
     }
     final result = applyHpbServerFrame(
@@ -171,7 +181,15 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
     );
     if (!result.canCommit) {
       if (result.outcome == SignalingRuntimeOutcome.rejected) {
-        await _protocolDisconnect(connectionEpoch);
+        // Same reasoning as above: a frame this state cannot use (a message
+        // from a session that is not a participant, an event for a room this
+        // account has left) is dropped, not answered with a disconnect.
+        debugPrint(
+          '[call] ignoring a rejected frame: ${_frameSummary(encoded)} '
+          'sender=${_shortSender(encoded)} '
+          'own=${_short(_state.hpbSessionId?.value)} '
+          'ready=${_state.signalingReady} room=${_state.roomConfirmed}',
+        );
       }
       return;
     }
@@ -183,15 +201,50 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
     }
   }
 
-  Future<void> _protocolDisconnect(int connectionEpoch) async {
-    final socket = _socket;
-    if (socket != null && _socketEpoch == connectionEpoch) {
-      await socket.close(HpbCloseReason.protocolFailure);
+  static String _short(String? value) => value == null
+      ? '-'
+      : value.substring(0, value.length < 8 ? value.length : 8);
+
+  /// Who the server says sent the frame, shortened.
+  static String _shortSender(String encoded) {
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is Map<String, Object?>) {
+        final body = decoded[decoded['type']];
+        if (body is Map<String, Object?>) {
+          final sender = body['sender'];
+          if (sender is Map<String, Object?>) {
+            return '${sender['type']}:${_short(sender['sessionid'] as String?)}';
+          }
+        }
+      }
+    } on Object {
+      // Not a shape with a sender.
     }
-    await _recordSocketDisconnect(
-      connectionEpoch,
-      outboundPossiblySent: _peerFramePossiblySent,
-    );
+    return '-';
+  }
+
+  /// The frame's shape without its content: enough to name what was dropped,
+  /// never enough to leak an SDP or a chat message into a log.
+  static String _frameSummary(String encoded) {
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is Map<String, Object?>) {
+        final type = decoded['type'];
+        final body = decoded[type];
+        if (body is Map<String, Object?>) {
+          final data = body['data'];
+          final inner = data is Map<String, Object?>
+              ? ' data=${data['type']}/${data['roomType']}'
+              : '';
+          return 'type=$type keys=${body.keys.take(6).join(',')}$inner';
+        }
+        return 'type=$type';
+      }
+    } on Object {
+      // Not even JSON.
+    }
+    return 'bytes=${encoded.length}';
   }
 
   Future<void> _recordSocketDisconnect(

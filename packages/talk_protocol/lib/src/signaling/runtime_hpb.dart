@@ -190,8 +190,22 @@ SignalingRuntimeResult applyHpbServerFrame(
       !_authorityMatches(account, authority) ||
       connectionEpoch != account.connectionEpoch ||
       roomEpoch != account.roomEpoch ||
-      !account.activeSocket ||
-      account.pendingHpbFrame != null) {
+      !account.activeSocket) {
+    return _result(SignalingRuntimeOutcome.rejected);
+  }
+  // A frame waiting to go out blocks the NEXT SEND, never what arrives. The
+  // two are independent directions on one socket, and a peer message dropped
+  // because this side happened to have something queued is a lost answer or
+  // candidate: measured against an MCU on 5 September 2026, where the
+  // publisher's own answer was rejected while a `requestoffer` sat in the
+  // send queue, and the call never negotiated. Handshake frames keep the
+  // guard — a welcome or a hello answered while another one is still going
+  // out would be answering the wrong request.
+  final handshake =
+      frame is HpbWelcomeServerFrame ||
+      frame is HpbHelloServerFrame ||
+      frame is HpbRoomServerFrame;
+  if (handshake && account.pendingHpbFrame != null) {
     return _result(SignalingRuntimeOutcome.rejected);
   }
   return switch (frame) {
@@ -517,6 +531,16 @@ SignalingRuntimeResult _applyHello(
     roomConfirmed: false,
     participants: const <SignalingPeerId, SignalingParticipant>{},
     awaitingHpbResponse: null,
+    // A full hello is a new session in a new room epoch with no participants
+    // carried over, so every peer connection is torn down and built again —
+    // which is exactly what the flag asks for. Leaving it set here made it
+    // permanent on the HPB transport: a session lost once (a resume that
+    // expired, `no_such_session`) blocked every offer, answer and candidate
+    // from then on, and a call against an MCU never negotiated at all
+    // (measured on 5 September 2026: `peer send refused … renegotiation=true`
+    // for every candidate). A RESUME keeps the flag: there the peers survive
+    // and nothing rebuilds them.
+    renegotiationRequired: false,
   );
   return _planRoomJoin(
     snapshot,
@@ -826,6 +850,15 @@ bool _acceptsInboundPeer(
 ) {
   if (sender == null) {
     return false;
+  }
+  // An MCU answers this side's own publisher offer FROM this side's own
+  // session id, and sends that connection's candidates the same way (the
+  // standalone signalling API spells this out). This side is not in its own
+  // participant list, so without this the answer to our publisher was
+  // dropped by the runtime and the call never connected — measured against
+  // the reference cloud on 5 September 2026.
+  if (account.hpbSessionId?.value == sender.value) {
+    return true;
   }
   final participant = account.participants[sender];
   return participant != null &&

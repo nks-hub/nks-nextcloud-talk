@@ -55,6 +55,14 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: Enter now sends a pasted or picked attachment that has no caption.
   Until now only the send button did, so a screenshot pasted with Ctrl+V sat
   in the composer.
+- Fixed: a call over an external signalling server no longer refuses to
+  negotiate after the connection has dropped once. A lost session used to
+  leave a flag set for good, which blocked every offer, answer and candidate
+  from then on.
+- Fixed: an unfamiliar message from the signalling server no longer ends the
+  call. It is ignored, as is a message this client cannot use.
+- Fixed: messages from the signalling server are no longer dropped while this
+  side has something queued to send.
 - New: with a Bluetooth headset or wired headphones connected, the speaker
   button in a call becomes a menu of every audio output, and the call follows
   a headset that connects or disconnects mid-call.

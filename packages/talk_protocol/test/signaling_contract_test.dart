@@ -242,6 +242,23 @@ void main() {
       }
     });
 
+    test('an MCU answer from this side\'s own session is accepted', () {
+      // The publisher's answer and its candidates come back from the same
+      // session id this client holds; without accepting them the call
+      // negotiates with nobody.
+      final inbound = SignalingPeerMessage.fromJson(<String, Object?>{
+        'type': 'answer',
+        'roomType': 'video',
+        'sid': 'publisher-1',
+        'from': 'own-session',
+        'to': 'own-session',
+        'payload': <String, Object?>{'type': 'answer', 'sdp': 'v=0'},
+      });
+      expect(inbound.sender?.value, 'own-session');
+      expect(inbound.recipient?.value, 'own-session');
+      expect(inbound.sid, 'publisher-1');
+    });
+
     test('a screen message names its broadcaster on the wire', () {
       final outbound = SignalingPeerMessage(
         type: 'offer',

@@ -39,6 +39,7 @@ final class _CallSignalingLane {
       StreamController<CallSignalingUpdate>.broadcast(sync: true);
   final Map<String, Completer<void>> _httpAborts = {};
   final List<SignalingPeerMessage> _peerMessageQueue = [];
+  final List<HpbControlMessage> _controlQueue = <HpbControlMessage>[];
 
   late final CallSignalingSession handle;
   late CallSignalingUpdate _current;
@@ -95,6 +96,14 @@ final class _CallSignalingLane {
           renegotiationBlocksBatch ||
           _peerMessageQueue.length + queued.length >
               maximumSignalingParticipants) {
+        // The one line that says which gate closed; a refused peer message is
+        // otherwise indistinguishable from a dead socket.
+        debugPrint(
+          '[call] peer send refused: disposed=$_disposed failed=$_failed '
+          'ready=${_state.signalingReady} '
+          'renegotiation=${_state.renegotiationRequired} '
+          'queued=${_peerMessageQueue.length}+${queued.length}',
+        );
         return false;
       }
       _peerMessageQueue.addAll(queued);
@@ -153,10 +162,12 @@ final class _CallSignalingLane {
         return true;
     }
     if (!result.canCommit) {
+      debugPrint('[call] peer frame rejected: ${result.outcome.name}');
       _peerMessageQueue.clear();
       return false;
     }
     if (!await _commit(result)) {
+      debugPrint('[call] peer frame commit failed');
       _peerMessageQueue.clear();
       return false;
     }
@@ -185,22 +196,51 @@ final class _CallSignalingLane {
     return _enqueue(() async {
       if (_disposed ||
           _failed ||
-          _state.transport != SignalingTransportKind.externalHpb) {
+          _state.transport != SignalingTransportKind.externalHpb ||
+          _controlQueue.length >= maximumSignalingParticipants) {
         return false;
       }
-      final result = planHpbControlFrame(
-        _snapshot,
-        accountId: authority.accountId,
-        authority: authority,
-        requestId: _requestId(),
-        effectId: _effectId(),
-        control: control,
-      );
-      if (!result.canCommit) {
-        return false;
-      }
-      return _commit(result);
+      // Queued like a peer message: only one frame may be in flight, and a
+      // control dropped because another frame was on the wire is a
+      // `requestoffer` nobody ever repeats (measured against an MCU on
+      // 5 September 2026 — the second participant was never subscribed to).
+      _controlQueue.add(control);
+      return _flushControls();
     });
+  }
+
+  Future<bool> _flushControls() async {
+    if (_disposed || _failed || _controlQueue.isEmpty) {
+      if (_disposed || _failed) {
+        _controlQueue.clear();
+      }
+      return !_disposed && !_failed;
+    }
+    if (_state.transport != SignalingTransportKind.externalHpb) {
+      _controlQueue.clear();
+      return false;
+    }
+    if (_state.pendingHpbFrame != null || _state.awaitingHpbResponse != null) {
+      return true;
+    }
+    final result = planHpbControlFrame(
+      _snapshot,
+      accountId: authority.accountId,
+      authority: authority,
+      requestId: _requestId(),
+      effectId: _effectId(),
+      control: _controlQueue.first,
+    );
+    if (!result.canCommit) {
+      _controlQueue.clear();
+      return false;
+    }
+    if (!await _commit(result)) {
+      _controlQueue.clear();
+      return false;
+    }
+    _controlQueue.removeAt(0);
+    return true;
   }
 
   void retain() => _leases++;
@@ -531,6 +571,7 @@ final class _CallSignalingLane {
       _executeEffect(effect);
     }
     await _flushPeerMessages();
+    await _flushControls();
     return true;
   }
 

@@ -505,7 +505,7 @@ final class CallMediaSession {
     }
     debugPrint('[call] requestoffer → $peerId');
     try {
-      await send(
+      final accepted = await send(
         HpbControlMessage(
           recipient: SignalingPeerId.parse(peerId),
           sender: null,
@@ -515,6 +515,9 @@ final class CallMediaSession {
           }),
         ),
       );
+      if (!accepted) {
+        debugPrint('[call] requestoffer refused → $peerId');
+      }
     } on TalkProtocolException {
       // Nothing to subscribe to under that id.
     }
@@ -1326,7 +1329,9 @@ final class CallMediaSession {
     } on TalkProtocolException {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
-    await _sendMessage(message);
+    if (!await _sendMessage(message)) {
+      debugPrint('[call] send refused: $type → $peerId (${message.roomType})');
+    }
   }
 
   Future<void> _failAndStop(CallMediaError error) async {

@@ -280,7 +280,11 @@ void main() {
     final first =
         jsonDecode(await socket.waitForSent(2)) as Map<String, Object?>;
     expect(await typing, isTrue);
-    expect(await session.sendPeerMessage(_peerMessage()), isFalse);
+    // Queued behind the held frame rather than refused: a full hello clears
+    // the renegotiation a lost session raised, so an ordinary peer message is
+    // welcome again the moment the room is confirmed. The refusal while a
+    // renegotiation IS required has its own test below.
+    expect(await session.sendPeerMessage(_peerMessage()), isTrue);
     socket.releaseHeldSend();
     final second =
         jsonDecode(await socket.waitForSent(3)) as Map<String, Object?>;
@@ -296,7 +300,7 @@ void main() {
     );
     expect(
       await session.sendPeerMessage(_typingPeerMessageWithPayload()),
-      isFalse,
+      isTrue,
     );
     expect(socket.sent, hasLength(4));
 
