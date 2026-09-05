@@ -2,7 +2,7 @@
 
 State as of 2 September 2026, measured on the code of `_ExpandedShell`
 (`features/conversations/conversation_workspace.dart`) and on running build 45 on
-`windows-test-vm`.
+`win-test-1`.
 
 ## What is drawn today
 

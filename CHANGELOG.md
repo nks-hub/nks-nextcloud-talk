@@ -26,6 +26,10 @@ from the commit log. Nothing here has reached testers yet.
 - New: a mute button in the call banner. It closes and reopens the microphone
   without renegotiating the call, and a microphone the user closed stays closed
   when a telephone call ends.
+- Changed: the maintainer notes, the CI comments and one contract fixture no
+  longer name the owner's machines, addresses, accounts or test servers; roles
+  and `example.invalid` hosts stand in for them ahead of the repository going
+  public. No code path changed.
 - Fixed: a call no longer dies, and later calls no longer refuse to negotiate,
   after one signalling batch whose delivery was unknown. The signalling now
   opens a new room epoch instead of raising a flag nothing cleared, the peer
@@ -142,7 +146,7 @@ cold start straight into a conversation. The Play track was not uploaded
 
 Windows: the installer `NKS-Talk-0.1.0-58-windows-x64-setup.exe` 35,491,818 B,
 SHA-256 `f558c4141be8a243c5eec8c9fa113b2ba368c44fe00edabc4ee22352ccd94805`,
-unsigned. The installation on `windows-test-vm` DID NOT HAPPEN — the machine was
+unsigned. The installation on `win-test-1` DID NOT HAPPEN — the machine was
 disconnected at the time of the release (it is a live workstation).
 
 iOS: an iPhone / iOS 18.6 simulator, the debug build 58 installed and launched,
@@ -197,7 +201,7 @@ not uploaded (cadence).
 Windows: the installer `NKS-Talk-0.1.0-57-windows-x64-setup.exe` 35,479,397 B,
 SHA-256 `9dd86a86a2844fc528b83a8d607a4d12449795ead499c7c8cc0bdc352ce18377`,
 unsigned; `nextcloudtalk.exe` reports `0.1.0+57`. The installation on
-`windows-test-vm` DID NOT HAPPEN — the machine was disconnected at the time of the
+`win-test-1` DID NOT HAPPEN — the machine was disconnected at the time of the
 release (it is a live workstation); the installer is waiting for the next
 connection.
 
@@ -242,7 +246,7 @@ and a cold start without duplicates. The Play track was not uploaded (cadence).
 
 Windows: the installer `NKS-Talk-0.1.0-56-windows-x64-setup.exe` 35,467,496 B,
 SHA-256 `6be82917c35dd3f1144ed346f169f82826dc7ebcfb6cbdfb7b80e11f966c451a`,
-unsigned; a silent installation on `windows-test-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-1`, `nextcloudtalk.exe` reports
 `0.1.0+56` (PID 23288).
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, the debug build 56 installed
@@ -287,7 +291,7 @@ open conversation. The Play track was not uploaded (cadence).
 
 Windows: the installer `NKS-Talk-0.1.0-55-windows-x64-setup.exe` 35,456,840 B,
 SHA-256 `7e781a3a7d3bb18387aa32dbe470819682286a163e67a6854997f3e0abe4b4b4`,
-unsigned; a silent installation on `windows-test-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-1`, `nextcloudtalk.exe` reports
 `0.1.0+55` (PID 26480); the deep link `nctalk://open?uri=…/call/<token>`
 switched the running instance to the correct room (a screenshot).
 
@@ -333,7 +337,7 @@ push from the second server arrived. The Play track was not uploaded (cadence).
 
 Windows: the installer `NKS-Talk-0.1.0-54-windows-x64-setup.exe` 35,457,353 B,
 SHA-256 `97d9e14b3fb1f1daa985db2bcf7a0b8cf91b1858000b31c78b9dc965be74e159`,
-unsigned; a silent installation on `windows-test-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-1`, `nextcloudtalk.exe` reports
 `0.1.0+54` (PID 7868).
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, a debug build installed and
@@ -371,7 +375,7 @@ sent and the message arrived at the server. The Play track was not uploaded
 
 Windows: the installer `NKS-Talk-0.1.0-53-windows-x64-setup.exe` 35,436,443 B,
 SHA-256 `9ea6211b9110f3a5f8ccfa066ce67252f6484e82bbb8ce8a31cf6b6c3ca735e5`,
-unsigned; a silent installation on `windows-test-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-1`, `nextcloudtalk.exe` reports
 `0.1.0+53` (PID 20348).
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, a debug build installed and
@@ -407,7 +411,7 @@ a reply (message 78744, parent 78742). The Play track: see the note at release
 
 Windows: the installer `NKS-Talk-0.1.0-52-windows-x64-setup.exe` 35,445,402 B,
 SHA-256 `a49e2f84be83f132e0cb0e0259fba3f7c3a376a976c99c2ff8d65064ead68441`,
-unsigned; a silent installation on `windows-test-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-1`, `nextcloudtalk.exe` reports
 `0.1.0+52` (PID 8448). The previous installer with this name (SHA
 `31044eb8…`) carried an exe from before the bump and was replaced.
 
@@ -457,7 +461,7 @@ uploaded.
 
 Windows: the installer `NKS-Talk-0.1.0-51-windows-x64-setup.exe` 35,439,793 B,
 SHA-256 `07dae9d6a952b10b775fa302390a63a3ebb1592a157ce2b2c69e32b9392a47b2`,
-unsigned; a silent installation on `windows-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-2`, `nextcloudtalk.exe` reports
 `0.1.0+51` (PID 320).
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, a debug build installed and
@@ -492,7 +496,7 @@ downloading the capabilities repeatedly. The Play track was not uploaded.
 
 Windows: the installer `NKS-Talk-0.1.0-50-windows-x64-setup.exe` 35,215,152 B,
 SHA-256 `735af5242196d460d2cf1f616d7427519228e271889fa5eac940e83ba05a8531`,
-unsigned; a silent installation on `windows-vm`, `nextcloudtalk.exe` reports
+unsigned; a silent installation on `win-test-2`, `nextcloudtalk.exe` reports
 `0.1.0+50` (PID 9608), the account signed in and synchronizing.
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, a debug build installed and
@@ -530,7 +534,7 @@ message actions. The Play track was not uploaded.
 
 Windows: the installer `NKS-Talk-0.1.0-49-windows-x64-setup.exe` 35,212,253 B,
 SHA-256 `3ca79e7bcbe450716e57ca5adfb464c78391e271d5aab4e35555cea2c3411ff5`,
-unsigned; a silent installation on `windows-vm` under RDP, `nextcloudtalk.exe`
+unsigned; a silent installation on `win-test-2` under RDP, `nextcloudtalk.exe`
 reports `0.1.0+49`, the window "NKS Talk" is alive (PID 9960).
 
 iOS: the iPhone 16 Pro Max / iOS 18.6 simulator, a debug build from the same
@@ -576,7 +580,7 @@ track has not been uploaded yet.
 
 Windows: the installer `NKS-Talk-0.1.0-48-windows-x64-setup.exe` 35,210,814 B,
 SHA-256 `e1988a72d6694499da89bed6f056df2df9b2dd6ab7186cf4e80bb0d7493f0c25`,
-unsigned; installed by a silent run on `windows-vm` under the RDP user into
+unsigned; installed by a silent run on `win-test-2` under the RDP user into
 `%LOCALAPPDATA%\Programs\NKS Talk`, `nextcloudtalk.exe` reports `0.1.0+48` and
 the window "NKS Talk" is alive. A build on that VM is not possible (MSVC ×
 `jni`), so it was built locally. The account on the VM has been in the "sign in
@@ -654,7 +658,7 @@ macOS: the ZIP 32,022,517 B, SHA-256
 Developer ID (team TEAMID0000), `app-sandbox` and `aps-environment`,
 `codesign --verify` reports "satisfies its Designated Requirement".
 
-Windows: deployed on `windows-vm`, the installer reported `Installed 0.1.0+47`.
+Windows: deployed on `win-test-2`, the installer reported `Installed 0.1.0+47`.
 Android was verified on the `chatujmePixel` emulator (`versionCode=47`), iOS on
 the iPhone 16 Pro Max simulator.
 
@@ -694,7 +698,7 @@ verified by a query back to the track.
 
 Windows: the ZIP has the SHA-256
 `ef7508d85aefb2c6beaccf74698aee3f758239fa879e0755a478ef1d5200e600`, deployed by
-the installation script on `windows-test-vm` into `C:\Program Files\NKS Talk`.
+the installation script on `win-test-1` into `C:\Program Files\NKS Talk`.
 Verified while running: a single instance, `0.1.0+46`, the window "NKS Talk".
 
 macOS: built on Codemagic (the build `<codemagic-app-id>`), the ZIP has
@@ -734,7 +738,7 @@ verified by a query back to the track.
 
 Windows: a desktop package is released for the first time too. The ZIP has the
 SHA-256 `84e330681f2e8b68243840616dd35d9d67ea3508b5ccc69142a16139c2a6895a` and
-is deployed on `windows-test-vm` by a new installation script into
+is deployed on `win-test-1` by a new installation script into
 `C:\Program Files\NKS Talk`; `nextcloudtalk.exe` reports `0.1.0+45`.
 
 TestFlight and macOS: NOT RELEASED. `build-mac` is not connected to the RemoteCmd
@@ -1088,7 +1092,7 @@ TestFlight: Apple ContentDelivery accepted exactly one IPA of the size
 30,149,946 B, verified its MD5
 `AD2E839D201A6A640A17D50CDFDA9357` and completed the upload without an error.
 Both the delivery UUID and the App Store Connect build record are
-`<provisioning-profile-uuid>`. App Store Connect returns `VALID`, a
+`<profile-uuid>`. App Store Connect returns `VALID`, a
 minimum of iOS 15.0, encryption `false`, Czech notes matching this changelog,
 both the internal and the external group `IN_BETA_TESTING` and the beta review
 `APPROVED`.

@@ -85,8 +85,8 @@ void main() {
     // replaced) so a parser change that would break the real wire fails here.
     const live =
         '{"type":"event","event":{"target":"room","type":"message","messa'
-        'ge":{"roomid":"<room-token>","data":{"type":"chat","chat":{"comment"'
-        ':{"id":78949,"token":"<room-token>","actorType":"users","actorId":"n'
+        'ge":{"roomid":"r00mtokn","data":{"type":"chat","chat":{"comment"'
+        ':{"id":78949,"token":"r00mtokn","actorType":"users","actorId":"n'
         'ctalk-test2","actorDisplayName":"NCloudTalk Test 2","timestamp":'
         '1788468853,"message":"relay probe","messageParameters":[],"syste'
         'mMessage":"","messageType":"comment","isReplyable":true,"referen'
@@ -95,7 +95,7 @@ void main() {
 
     test('parses into one relayed comment', () {
       final frame = HpbServerFrame.decode(live) as HpbEventServerFrame;
-      expect(frame.roomToken!.value, '<room-token>');
+      expect(frame.roomToken!.value, 'r00mtokn');
       final event = decodeChatRelayEvent(
         frame.chatRelay!,
         roomToken: frame.roomToken!,

@@ -169,7 +169,7 @@ void main() {
         return http.Response(
           '{"ocs":{"meta":{"status":"ok","statuscode":200},"data":{'
           '"notification_id":54975,"app":"spreed","object_type":"chat",'
-          '"object_id":"<room-token>/78663/78653"}}}',
+          '"object_id":"r00mtokn/78663/78653"}}}',
           200,
         );
       }),
@@ -180,7 +180,7 @@ void main() {
       loginName: 'tester',
       appPassword: 'secret',
       notificationId: 54975,
-      roomToken: '<room-token>',
+      roomToken: 'r00mtokn',
     );
     expect(messageId, 78663);
     expect(
@@ -191,7 +191,7 @@ void main() {
 
   test('a gone or foreign notification yields no reply target', () async {
     var status = 404;
-    var objectId = '<room-token>/78663';
+    var objectId = 'r00mtokn/78663';
     final api = HttpNextcloudApi(
       client: MockClient((request) async {
         if (status == 404) {
@@ -210,13 +210,13 @@ void main() {
       loginName: 'tester',
       appPassword: 'secret',
       notificationId: 1,
-      roomToken: '<room-token>',
+      roomToken: 'r00mtokn',
     );
     expect(await lookup(), isNull);
     status = 200;
     objectId = 'otherroom/78663';
     expect(await lookup(), isNull);
-    objectId = '<room-token>';
+    objectId = 'r00mtokn';
     expect(await lookup(), isNull);
   });
 
