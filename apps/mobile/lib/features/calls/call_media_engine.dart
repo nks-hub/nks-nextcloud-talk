@@ -122,7 +122,10 @@ abstract interface class CallPeerConnection {
   /// line. The caller renegotiates afterwards; this only swaps the track.
   Future<void> setLocalVideo(CallLocalVideo? video);
 
-  Future<CallSessionDescription> createOffer();
+  /// A fresh offer; with [iceRestart] it carries new ICE credentials so a
+  /// connection whose transport died (a network change) can find a path again
+  /// without being torn down.
+  Future<CallSessionDescription> createOffer({bool iceRestart = false});
 
   Future<CallSessionDescription> createAnswer();
 

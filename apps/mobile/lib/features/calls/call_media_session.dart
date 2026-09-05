@@ -380,19 +380,21 @@ final class CallMediaSession {
   }
 
   /// Creates and sends an offer on an existing connection — the first one,
-  /// or a renegotiation after the video line changed.
-  Future<void> _offer(_MediaPeer peer) async {
+  /// a renegotiation after the video line changed, or an ICE restart after
+  /// the transport failed.
+  Future<void> _offer(_MediaPeer peer, {bool iceRestart = false}) async {
     final connection = peer.connection;
     if (connection == null) {
       return;
     }
     try {
-      final offer = await connection.createOffer();
+      final offer = await connection.createOffer(iceRestart: iceRestart);
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
       debugPrint(
         '[call] offer → ${peer.peerId} sid=${peer.sid} '
-        'video=${_video != null} lines=${_mediaLines(offer.sdp)}',
+        'video=${_video != null} iceRestart=$iceRestart '
+        'lines=${_mediaLines(offer.sdp)}',
       );
       await _send(
         peerId: peer.peerId,
@@ -756,13 +758,27 @@ final class CallMediaSession {
     await audio.setMuted(_userMuted || _interrupted);
   }
 
-  void _recordConnectionState(String peerId, CallMediaConnectionState state) {
+  Future<void> _recordConnectionState(
+    String peerId,
+    CallMediaConnectionState state,
+  ) async {
     final peer = _peers[peerId];
     if (peer == null) {
       return;
     }
+    final previous = peer.state;
     peer.state = state;
     _publish();
+    // The transport died — measured on 5 September 2026 with ten seconds of
+    // airplane mode during a connected call: ICE went disconnected → failed
+    // and nothing offered again, so the call sat in "connecting" for good.
+    // An ICE restart on the same connection (same sid, new credentials) is
+    // what the web client answers; each new failure earns one more attempt.
+    if (state == CallMediaConnectionState.failed &&
+        previous != CallMediaConnectionState.failed &&
+        peer.connection != null) {
+      await _offer(peer, iceRestart: true);
+    }
   }
 
   Future<void> _send({

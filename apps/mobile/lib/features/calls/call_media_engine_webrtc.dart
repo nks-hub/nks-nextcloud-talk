@@ -357,8 +357,15 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   }
 
   @override
-  Future<CallSessionDescription> createOffer() =>
-      _describe(_connection.createOffer());
+  Future<CallSessionDescription> createOffer({bool iceRestart = false}) =>
+      _describe(
+        iceRestart
+            ? _connection.createOffer(<String, dynamic>{
+                'mandatory': <String, dynamic>{'IceRestart': true},
+                'optional': <dynamic>[],
+              })
+            : _connection.createOffer(),
+      );
 
   @override
   Future<CallSessionDescription> createAnswer() =>

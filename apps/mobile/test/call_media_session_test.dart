@@ -404,6 +404,39 @@ void main() {
     },
   );
 
+  test('a failed transport is offered again with an ICE restart', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    final connection = engine.connections.single;
+    connection.emitConnectionState(CallMediaConnectionState.connected);
+    await pumpEventQueue();
+    final sid = sent.firstWhere((message) => message.type == 'offer').sid;
+    expect(connection.iceRestarts, 0);
+
+    connection.emitConnectionState(CallMediaConnectionState.failed);
+    await pumpEventQueue();
+    // One restart on the SAME connection and sid — the web client answers a
+    // re-offer, a fresh sid would have opened a second connection there.
+    expect(connection.iceRestarts, 1);
+    expect(engine.connections, hasLength(1));
+    final offers = sent.where((message) => message.type == 'offer').toList();
+    expect(offers, hasLength(2));
+    expect(offers.last.sid, sid);
+    expect(media.state.participants.single.connected, isFalse);
+
+    // Staying failed is not a new failure; recovering and failing again is.
+    connection.emitConnectionState(CallMediaConnectionState.failed);
+    await pumpEventQueue();
+    expect(connection.iceRestarts, 1);
+    connection.emitConnectionState(CallMediaConnectionState.connecting);
+    connection.emitConnectionState(CallMediaConnectionState.failed);
+    await pumpEventQueue();
+    expect(connection.iceRestarts, 2);
+  });
+
   test('the state lists every peer with its connection and hand', () async {
     final media = session(
       _update(localPeerId: _local, participants: [_participant(_remote)]),
@@ -948,9 +981,14 @@ final class _FakeConnection implements CallPeerConnection {
   void emitConnectionState(CallMediaConnectionState state) =>
       onConnectionState(state);
 
+  int iceRestarts = 0;
+
   @override
-  Future<CallSessionDescription> createOffer() async {
+  Future<CallSessionDescription> createOffer({bool iceRestart = false}) async {
     createdOffers++;
+    if (iceRestart) {
+      iceRestarts++;
+    }
     return (type: 'offer', sdp: 'sdp-offer-$index');
   }
 
