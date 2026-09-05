@@ -170,6 +170,44 @@ void main() {
     },
   );
 
+  test('a failure outside the retry loop stays out of the zone', () async {
+    // The suspects above are all inside the loop's own catch. The wait between
+    // attempts is NOT: it sits after the catch, and nothing awaits the run
+    // loop's future until `stop()`, which a running app may never call. So an
+    // error there had no listener at all and reached the platform handler as a
+    // fatal crash — the shape NKS-TALK-8 was reported in, and the one hole the
+    // earlier tests could not have caught. The injected wait stands in for it
+    // because it is the only step out there that a test can make fail.
+    final unhandled = <Object>[];
+    var waits = 0;
+    await runZonedGuarded(() async {
+      final coordinator = ClientPushCoordinator(
+        resolve: (accountId, cancellation) async {
+          throw const NextcloudApiException(NextcloudApiError.timeout);
+        },
+        fetchToken: (accountId, endpoints, cancellation) async => 'unused',
+        connector: const _NeverConnects(),
+        onWakeUp: (_) {},
+        firstRetry: const Duration(milliseconds: 5),
+        maximumRetry: const Duration(milliseconds: 5),
+        delay: (_) async {
+          waits++;
+          throw StateError('the wait itself failed');
+        },
+      );
+      coordinator.follow('account-a');
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await coordinator.dispose().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => fail('teardown must finish, not hang'),
+      );
+    }, (error, stack) => unhandled.add(error));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+
+    expect(waits, greaterThan(0), reason: 'the loop really reached the wait');
+    expect(unhandled, isEmpty);
+  });
+
   test('disposing cancels a stalled socket connection', () async {
     final unhandled = <Object>[];
     final connector = _StalledConnector();

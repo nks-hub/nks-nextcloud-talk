@@ -68,7 +68,17 @@ final class ClientPushCoordinator {
     }
     final channel = _AccountChannel();
     _channels[accountId] = channel;
-    channel.runner = _run(accountId, channel);
+    // Nobody awaits this future until `stop()`, which may never be called, so
+    // anything escaping `_run` would sit on it with no listener and reach the
+    // platform handler as a FATAL crash. That is the wrong end for a
+    // background accelerator: a channel that failed has already lost nothing
+    // but itself, polling still carries the app, and the retry loop inside
+    // covers everything it knows about. The same rule the wake-up path
+    // follows, for the same reason.
+    channel.runner = _run(
+      accountId,
+      channel,
+    ).catchError((Object _, StackTrace _) {});
   }
 
   /// Drops the channel for [accountId]; a removed account must not keep a

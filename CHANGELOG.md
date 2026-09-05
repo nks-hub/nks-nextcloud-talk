@@ -57,6 +57,8 @@ from the commit log. Nothing here has reached testers yet.
   in the composer.
 - New: add people and groups to a conversation from its details, with a
   search that only offers those who are not in it yet.
+- Fixed: a live-notification channel that lost its connection could end the
+  application instead of retrying quietly.
 - Fixed: sharing a screen through a media server. The answer to the publish
   arrives from this device's own signalling session, the same way the
   publisher's does, and was being discarded; the other participants were also
