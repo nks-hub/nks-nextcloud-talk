@@ -147,7 +147,8 @@ final class _PeerTileState extends State<_PeerTile> {
         names['actor:${peer.actorType}:${peer.actorId}'] ??
         (peer.actorId.isEmpty ? peer.peerId : peer.actorId);
     final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return ListTile(
+    final video = peer.video;
+    final tile = ListTile(
       key: Key('call-participant-${peer.peerId}'),
       leading: CircleAvatar(child: Text(initial)),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -164,6 +165,26 @@ final class _PeerTileState extends State<_PeerTile> {
               semanticLabel: strings.callParticipantHandRaised,
             )
           : null,
+    );
+    if (video == null) {
+      return tile;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        tile,
+        Padding(
+          key: Key('call-participant-video-${peer.peerId}'),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: video.build(context),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

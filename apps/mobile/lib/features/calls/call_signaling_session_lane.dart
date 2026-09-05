@@ -608,9 +608,10 @@ final class _CallSignalingLane {
   /// The peer id this client is known by inside [SignalingAccountState.participants].
   static SignalingPeerId? _localPeerId(SignalingAccountState state) {
     return switch (state.transport) {
-      SignalingTransportKind.externalHpb => state.hpbSessionId == null
-          ? null
-          : SignalingPeerId.parse(state.hpbSessionId!.value),
+      SignalingTransportKind.externalHpb =>
+        state.hpbSessionId == null
+            ? null
+            : SignalingPeerId.parse(state.hpbSessionId!.value),
       SignalingTransportKind.internal => SignalingPeerId.parse(
         state.nextcloudSessionId.value,
       ),

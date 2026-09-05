@@ -8,6 +8,8 @@
 /// the plugin.
 library;
 
+import 'package:flutter/widgets.dart';
+
 /// An SDP blob with its role. `type` is `offer` or `answer` exactly as it
 /// travels on the wire.
 typedef CallSessionDescription = ({String type, String sdp});
@@ -90,6 +92,16 @@ abstract interface class CallLocalAudio {
   Future<void> dispose();
 }
 
+/// Another participant's video as something the UI can show.
+///
+/// Only the engine knows the renderer behind it; the UI is handed a widget
+/// and gives the object back with [dispose] when the peer is gone.
+abstract interface class CallRemoteVideo {
+  Widget build(BuildContext context);
+
+  Future<void> dispose();
+}
+
 abstract interface class CallPeerConnection {
   Future<CallSessionDescription> createOffer();
 
@@ -116,5 +128,10 @@ abstract interface class CallMediaEngine {
     required CallLocalAudio audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
+
+    /// The peer's video arriving (a renderer ready to show) or going away
+    /// (`null`). Every connection offers to receive video, so a participant
+    /// who sends it is seen without any negotiation on this side.
+    required void Function(CallRemoteVideo? video) onRemoteVideo,
   });
 }

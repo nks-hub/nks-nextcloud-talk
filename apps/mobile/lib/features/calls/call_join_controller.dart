@@ -92,10 +92,7 @@ final class CallJoinController
     final lifecycle = ref.read(callLifecycleServiceProvider);
     _lifecycle = lifecycle;
     try {
-      await lifecycle.join(
-        accountId: arg.accountId,
-        roomToken: arg.roomToken,
-      );
+      await lifecycle.join(accountId: arg.accountId, roomToken: arg.roomToken);
       _joinedServer = true;
     } on CallLifecycleException catch (error) {
       if (!_disposed) {

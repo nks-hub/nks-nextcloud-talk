@@ -41,6 +41,9 @@ from the commit log. Nothing here has reached testers yet.
   rooms at once and removes them again — from the conversation details. Inside
   a breakout room anyone can ask a moderator to come over, and withdraw the
   request; the parent conversation shows that a room is asking.
+- New: a participant who sends video is now seen — their picture appears under
+  their entry in the call's participant list. Every connection offers to
+  receive video; sending your own camera is not part of this build yet.
 - New: tap the call banner to see who is in the call — each participant with
   their name, whether their audio is connected to you and whether their hand is
   up; your own row shows your mute and hand.

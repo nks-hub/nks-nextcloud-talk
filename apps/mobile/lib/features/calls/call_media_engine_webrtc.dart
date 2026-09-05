@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 
 import 'call_media_engine.dart';
@@ -34,6 +37,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     required CallLocalAudio audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
+    required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     final stream = (audio as _WebRtcLocalAudio).stream;
     final rtc.RTCPeerConnection connection;
@@ -57,6 +61,15 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       for (final track in stream.getAudioTracks()) {
         await connection.addTrack(track, stream);
       }
+      // Receive-only video: the offer carries a video m-line, so a peer that
+      // sends video (the web client does by default) is seen here without
+      // this side having a camera open. Sending video is a later step.
+      await connection.addTransceiver(
+        kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: rtc.RTCRtpTransceiverInit(
+          direction: rtc.TransceiverDirection.RecvOnly,
+        ),
+      );
     } on Object {
       await connection.close();
       await connection.dispose();
@@ -79,6 +92,19 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     };
     connection.onConnectionState = (state) =>
         onConnectionState(_connectionState(state));
+    connection.onTrack = (event) {
+      if (event.track.kind != 'video' || event.streams.isEmpty) {
+        return;
+      }
+      unawaited(
+        _WebRtcRemoteVideo.open(event.streams.first).then(onRemoteVideo),
+      );
+    };
+    connection.onRemoveTrack = (stream, track) {
+      if (track.kind == 'video') {
+        onRemoteVideo(null);
+      }
+    };
     return _WebRtcPeerConnection(connection);
   }
 }
@@ -113,6 +139,38 @@ CallMediaConnectionState _connectionState(rtc.RTCPeerConnectionState state) =>
       rtc.RTCPeerConnectionState.RTCPeerConnectionStateDisconnected =>
         CallMediaConnectionState.connecting,
     };
+
+/// A renderer bound to one remote stream. `initialize` has to finish before
+/// the stream is attached, so construction is asynchronous.
+final class _WebRtcRemoteVideo implements CallRemoteVideo {
+  _WebRtcRemoteVideo._(this._renderer);
+
+  static Future<_WebRtcRemoteVideo> open(rtc.MediaStream stream) async {
+    final renderer = rtc.RTCVideoRenderer();
+    await renderer.initialize();
+    renderer.srcObject = stream;
+    return _WebRtcRemoteVideo._(renderer);
+  }
+
+  final rtc.RTCVideoRenderer _renderer;
+  bool _disposed = false;
+
+  @override
+  Widget build(BuildContext context) => rtc.RTCVideoView(
+    _renderer,
+    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+  );
+
+  @override
+  Future<void> dispose() async {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _renderer.srcObject = null;
+    await _renderer.dispose();
+  }
+}
 
 final class _WebRtcLocalAudio implements CallLocalAudio {
   _WebRtcLocalAudio(this.stream);
@@ -209,6 +267,8 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
     _closed = true;
     _connection.onIceCandidate = null;
     _connection.onConnectionState = null;
+    _connection.onTrack = null;
+    _connection.onRemoveTrack = null;
     try {
       await _connection.close();
     } on Object {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
@@ -35,87 +36,91 @@ void main() {
     engine: engine,
   );
 
-  test('the higher session id offers, takes the answer and trades ICE', () async {
-    final media = session(
-      _update(localPeerId: _local, participants: [_participant(_remote)]),
-    );
-    addTearDown(media.dispose);
-    await media.start();
+  test(
+    'the higher session id offers, takes the answer and trades ICE',
+    () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
 
-    expect(engine.microphoneOpens, 1);
-    expect(engine.connections, hasLength(1));
-    final connection = engine.connections.single;
-    expect(connection.createdOffers, 1);
-    expect(connection.localDescriptions.single.type, 'offer');
+      expect(engine.microphoneOpens, 1);
+      expect(engine.connections, hasLength(1));
+      final connection = engine.connections.single;
+      expect(connection.createdOffers, 1);
+      expect(connection.localDescriptions.single.type, 'offer');
 
-    final offer = sent.single;
-    expect(offer.type, 'offer');
-    expect(offer.roomType, 'video');
-    expect(offer.recipient?.value, _remote);
-    expect(offer.payload?.wire['type'], 'offer');
-    expect(offer.payload?.wire['sdp'], 'sdp-offer-1');
+      final offer = sent.single;
+      expect(offer.type, 'offer');
+      expect(offer.roomType, 'video');
+      expect(offer.recipient?.value, _remote);
+      expect(offer.payload?.wire['type'], 'offer');
+      expect(offer.payload?.wire['sdp'], 'sdp-offer-1');
 
-    // A candidate that overtakes the answer must not be dropped.
-    updates.add(
-      _update(
-        localPeerId: _local,
-        participants: [_participant(_remote)],
-        messages: [
-          _message(_remote, 'candidate', <String, Object?>{
-            'candidate': <String, Object?>{
-              'candidate': 'candidate:early',
-              'sdpMid': 'audio',
-              'sdpMLineIndex': 0,
-            },
-          }),
-        ],
-      ),
-    );
-    await pumpEventQueue();
-    expect(connection.remoteCandidates, isEmpty);
+      // A candidate that overtakes the answer must not be dropped.
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'candidate', <String, Object?>{
+              'candidate': <String, Object?>{
+                'candidate': 'candidate:early',
+                'sdpMid': 'audio',
+                'sdpMLineIndex': 0,
+              },
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(connection.remoteCandidates, isEmpty);
 
-    updates.add(
-      _update(
-        localPeerId: _local,
-        participants: [_participant(_remote)],
-        messages: [
-          _message(_remote, 'answer', <String, Object?>{
-            'type': 'answer',
-            'sdp': 'sdp-answer-remote',
-          }),
-        ],
-      ),
-    );
-    await pumpEventQueue();
-    expect(connection.remoteDescriptions.single.type, 'answer');
-    expect(connection.remoteDescriptions.single.sdp, 'sdp-answer-remote');
-    expect(
-      connection.remoteCandidates.map((candidate) => candidate.candidate),
-      ['candidate:early'],
-    );
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'answer', <String, Object?>{
+              'type': 'answer',
+              'sdp': 'sdp-answer-remote',
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(connection.remoteDescriptions.single.type, 'answer');
+      expect(connection.remoteDescriptions.single.sdp, 'sdp-answer-remote');
+      expect(
+        connection.remoteCandidates.map((candidate) => candidate.candidate),
+        ['candidate:early'],
+      );
 
-    // A local candidate leaves as its own signalling message.
-    connection.emitIceCandidate(
-      const CallIceCandidate(
-        candidate: 'candidate:local',
-        sdpMid: 'audio',
-        sdpMLineIndex: 0,
-      ),
-    );
-    await pumpEventQueue();
-    final candidate = sent.last;
-    expect(candidate.type, 'candidate');
-    expect(candidate.recipient?.value, _remote);
-    final wire = candidate.payload?.wire['candidate']! as Map<String, Object?>;
-    expect(wire['candidate'], 'candidate:local');
-    expect(wire['sdpMid'], 'audio');
-    expect(wire['sdpMLineIndex'], 0);
+      // A local candidate leaves as its own signalling message.
+      connection.emitIceCandidate(
+        const CallIceCandidate(
+          candidate: 'candidate:local',
+          sdpMid: 'audio',
+          sdpMLineIndex: 0,
+        ),
+      );
+      await pumpEventQueue();
+      final candidate = sent.last;
+      expect(candidate.type, 'candidate');
+      expect(candidate.recipient?.value, _remote);
+      final wire =
+          candidate.payload?.wire['candidate']! as Map<String, Object?>;
+      expect(wire['candidate'], 'candidate:local');
+      expect(wire['sdpMid'], 'audio');
+      expect(wire['sdpMLineIndex'], 0);
 
-    connection.emitConnectionState(CallMediaConnectionState.connected);
-    await pumpEventQueue();
-    expect(media.state.phase, CallMediaPhase.connected);
-    expect(media.state.connectedPeers, 1);
-  });
+      connection.emitConnectionState(CallMediaConnectionState.connected);
+      await pumpEventQueue();
+      expect(media.state.phase, CallMediaPhase.connected);
+      expect(media.state.connectedPeers, 1);
+    },
+  );
 
   test('the lower session id waits for the offer and answers it', () async {
     // Reversed roles: this client is `alice`, the peer is `zulu`.
@@ -263,7 +268,10 @@ void main() {
   // renegotiation with every peer for something that lasts seconds.
   test('the speaker control reaches the audio route and the state', () async {
     final media = CallMediaSession(
-      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
+      initial: _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+      ),
       updates: updates.stream,
       sendMessage: (message) async {
         sent.add(message);
@@ -274,9 +282,16 @@ void main() {
     addTearDown(media.dispose);
     await media.start();
     final audio = engine.audio.single;
-    expect(media.state.speakerphone, isFalse, reason: 'a call starts on the earpiece');
-    expect(audio.speakerphoneCalls, <bool>[false],
-        reason: 'the route is set at the start, not left to the plugin');
+    expect(
+      media.state.speakerphone,
+      isFalse,
+      reason: 'a call starts on the earpiece',
+    );
+    expect(
+      audio.speakerphoneCalls,
+      <bool>[false],
+      reason: 'the route is set at the start, not left to the plugin',
+    );
 
     await media.setSpeakerphone(true);
     expect(audio.speakerphone, isTrue);
@@ -289,87 +304,96 @@ void main() {
 
   // The wire form is the web client's: one `raiseHand` message per peer with
   // `{state, timestamp}`, and a hand is a fact about a peer that leaves with it.
-  test('raising a hand tells every peer and a remote hand is counted', () async {
-    final media = session(
-      _update(localPeerId: _local, participants: [_participant(_remote)]),
-    );
-    addTearDown(media.dispose);
-    await media.start();
-    sent.clear();
+  test(
+    'raising a hand tells every peer and a remote hand is counted',
+    () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      sent.clear();
 
-    await media.setHandRaised(true);
-    final raise = sent.single;
-    expect(raise.type, 'raiseHand');
-    expect(raise.recipient?.value, _remote);
-    expect(raise.payload?.wire['state'], isTrue);
-    expect(raise.payload?.wire['timestamp'], isA<int>());
-    expect(media.state.handRaised, isTrue);
-    expect(media.state.raisedHands, 0, reason: 'our own hand is not counted');
+      await media.setHandRaised(true);
+      final raise = sent.single;
+      expect(raise.type, 'raiseHand');
+      expect(raise.recipient?.value, _remote);
+      expect(raise.payload?.wire['state'], isTrue);
+      expect(raise.payload?.wire['timestamp'], isA<int>());
+      expect(media.state.handRaised, isTrue);
+      expect(media.state.raisedHands, 0, reason: 'our own hand is not counted');
 
-    updates.add(
-      _update(
-        localPeerId: _local,
-        participants: [_participant(_remote)],
-        messages: [
-          _message(_remote, 'raiseHand', <String, Object?>{
-            'state': true,
-            'timestamp': 1,
-          }),
-        ],
-      ),
-    );
-    await pumpEventQueue();
-    expect(media.state.raisedHands, 1);
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'raiseHand', <String, Object?>{
+              'state': true,
+              'timestamp': 1,
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(media.state.raisedHands, 1);
 
-    await media.setHandRaised(false);
-    expect(sent.last.payload?.wire['state'], isFalse);
-    expect(media.state.handRaised, isFalse);
+      await media.setHandRaised(false);
+      expect(sent.last.payload?.wire['state'], isFalse);
+      expect(media.state.handRaised, isFalse);
 
-    // The remote participant leaves the call: the hand goes with them.
-    updates.add(_update(localPeerId: _local, participants: []));
-    await pumpEventQueue();
-    expect(media.state.raisedHands, 0);
-  });
+      // The remote participant leaves the call: the hand goes with them.
+      updates.add(_update(localPeerId: _local, participants: []));
+      await pumpEventQueue();
+      expect(media.state.raisedHands, 0);
+    },
+  );
 
   // A reaction is a gesture: sent to every peer, shown for a moment when it
   // arrives, and gone again without anyone having to dismiss it.
-  test('a reaction reaches every peer and an incoming one shows briefly', () async {
-    final media = CallMediaSession(
-      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
-      updates: updates.stream,
-      sendMessage: (message) async {
-        sent.add(message);
-        return true;
-      },
-      engine: engine,
-      reactionDisplay: const Duration(milliseconds: 20),
-    );
-    addTearDown(media.dispose);
-    await media.start();
-    sent.clear();
+  test(
+    'a reaction reaches every peer and an incoming one shows briefly',
+    () async {
+      final media = CallMediaSession(
+        initial: _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+        ),
+        updates: updates.stream,
+        sendMessage: (message) async {
+          sent.add(message);
+          return true;
+        },
+        engine: engine,
+        reactionDisplay: const Duration(milliseconds: 20),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      sent.clear();
 
-    await media.sendReaction('👍');
-    expect(sent.single.type, 'reaction');
-    expect(sent.single.recipient?.value, _remote);
-    expect(sent.single.payload?.wire['reaction'], '👍');
-    expect(media.state.reaction, isNull, reason: 'our own is for the others');
+      await media.sendReaction('👍');
+      expect(sent.single.type, 'reaction');
+      expect(sent.single.recipient?.value, _remote);
+      expect(sent.single.payload?.wire['reaction'], '👍');
+      expect(media.state.reaction, isNull, reason: 'our own is for the others');
 
-    updates.add(
-      _update(
-        localPeerId: _local,
-        participants: [_participant(_remote)],
-        messages: [
-          _message(_remote, 'reaction', <String, Object?>{'reaction': '🎉'}),
-        ],
-      ),
-    );
-    await pumpEventQueue();
-    expect(media.state.reaction?.emoji, '🎉');
-    expect(media.state.reaction?.peerId, _remote);
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'reaction', <String, Object?>{'reaction': '🎉'}),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(media.state.reaction?.emoji, '🎉');
+      expect(media.state.reaction?.peerId, _remote);
 
-    await Future<void>.delayed(const Duration(milliseconds: 60));
-    expect(media.state.reaction, isNull, reason: 'it clears on its own');
-  });
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(media.state.reaction, isNull, reason: 'it clears on its own');
+    },
+  );
 
   test('the state lists every peer with its connection and hand', () async {
     final media = session(
@@ -406,72 +430,114 @@ void main() {
     expect(media.state.participants, isEmpty);
   });
 
-  test('an interruption mutes the microphone and giving it back unmutes', () async {
-    final interruptions = StreamController<CallAudioInterruption>.broadcast();
-    addTearDown(interruptions.close);
-    final media = CallMediaSession(
-      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
-      updates: updates.stream,
-      sendMessage: (message) async {
-        sent.add(message);
-        return true;
-      },
-      engine: engine,
-      interruptions: _FakeInterruptions(interruptions.stream),
+  // Every connection offers to receive video; a peer that sends it shows up
+  // as a renderer on their entry and is disposed with the peer.
+  test('a remote video is exposed per peer and disposed with it', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
     );
     addTearDown(media.dispose);
-
     await media.start();
-    final audio = engine.audio.single;
-    expect(audio.muted, isFalse, reason: 'a call starts unmuted');
+    final connection = engine.connections.single;
 
-    interruptions.add(CallAudioInterruption.began);
+    final video = _FakeRemoteVideo();
+    connection.onRemoteVideo(video);
     await pumpEventQueue();
-    expect(audio.muted, isTrue, reason: 'the system took the audio away');
-    expect(audio.disposed, isFalse, reason: 'the track has to survive it');
+    expect(media.state.participants.single.video, same(video));
 
-    interruptions.add(CallAudioInterruption.ended);
+    final replacement = _FakeRemoteVideo();
+    connection.onRemoteVideo(replacement);
     await pumpEventQueue();
-    expect(audio.muted, isFalse, reason: 'the audio belongs to the call again');
-    expect(audio.muteCalls, <bool>[true, false]);
+    expect(video.disposed, isTrue, reason: 'the old renderer is released');
+    expect(media.state.participants.single.video, same(replacement));
+
+    updates.add(_update(localPeerId: _local, participants: []));
+    await pumpEventQueue();
+    expect(replacement.disposed, isTrue, reason: 'gone with the peer');
+    expect(media.state.participants, isEmpty);
   });
+
+  test(
+    'an interruption mutes the microphone and giving it back unmutes',
+    () async {
+      final interruptions = StreamController<CallAudioInterruption>.broadcast();
+      addTearDown(interruptions.close);
+      final media = CallMediaSession(
+        initial: _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+        ),
+        updates: updates.stream,
+        sendMessage: (message) async {
+          sent.add(message);
+          return true;
+        },
+        engine: engine,
+        interruptions: _FakeInterruptions(interruptions.stream),
+      );
+      addTearDown(media.dispose);
+
+      await media.start();
+      final audio = engine.audio.single;
+      expect(audio.muted, isFalse, reason: 'a call starts unmuted');
+
+      interruptions.add(CallAudioInterruption.began);
+      await pumpEventQueue();
+      expect(audio.muted, isTrue, reason: 'the system took the audio away');
+      expect(audio.disposed, isFalse, reason: 'the track has to survive it');
+
+      interruptions.add(CallAudioInterruption.ended);
+      await pumpEventQueue();
+      expect(
+        audio.muted,
+        isFalse,
+        reason: 'the audio belongs to the call again',
+      );
+      expect(audio.muteCalls, <bool>[true, false]);
+    },
+  );
 
   // The user's mute and the system's interruption both close the microphone,
   // and lifting one must not lift the other: a microphone the user closed
   // stays closed when the telephone call ends.
-  test('the end of an interruption does not unmute a user-muted microphone', () async {
-    final interruptions = StreamController<CallAudioInterruption>.broadcast();
-    addTearDown(interruptions.close);
-    final media = CallMediaSession(
-      initial: _update(localPeerId: _local, participants: [_participant(_remote)]),
-      updates: updates.stream,
-      sendMessage: (message) async {
-        sent.add(message);
-        return true;
-      },
-      engine: engine,
-      interruptions: _FakeInterruptions(interruptions.stream),
-    );
-    addTearDown(media.dispose);
-    await media.start();
-    final audio = engine.audio.single;
+  test(
+    'the end of an interruption does not unmute a user-muted microphone',
+    () async {
+      final interruptions = StreamController<CallAudioInterruption>.broadcast();
+      addTearDown(interruptions.close);
+      final media = CallMediaSession(
+        initial: _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+        ),
+        updates: updates.stream,
+        sendMessage: (message) async {
+          sent.add(message);
+          return true;
+        },
+        engine: engine,
+        interruptions: _FakeInterruptions(interruptions.stream),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final audio = engine.audio.single;
 
-    await media.setMicrophoneMuted(true);
-    expect(audio.muted, isTrue);
-    expect(media.state.muted, isTrue, reason: 'the control shows the choice');
+      await media.setMicrophoneMuted(true);
+      expect(audio.muted, isTrue);
+      expect(media.state.muted, isTrue, reason: 'the control shows the choice');
 
-    interruptions.add(CallAudioInterruption.began);
-    await pumpEventQueue();
-    interruptions.add(CallAudioInterruption.ended);
-    await pumpEventQueue();
-    expect(audio.muted, isTrue, reason: 'the user did not unmute');
-    expect(media.state.muted, isTrue);
+      interruptions.add(CallAudioInterruption.began);
+      await pumpEventQueue();
+      interruptions.add(CallAudioInterruption.ended);
+      await pumpEventQueue();
+      expect(audio.muted, isTrue, reason: 'the user did not unmute');
+      expect(media.state.muted, isTrue);
 
-    await media.setMicrophoneMuted(false);
-    expect(audio.muted, isFalse);
-    expect(media.state.muted, isFalse);
-  });
-
+      await media.setMicrophoneMuted(false);
+      expect(audio.muted, isFalse);
+      expect(media.state.muted, isFalse);
+    },
+  );
 }
 
 CallSignalingUpdate _update({
@@ -497,9 +563,7 @@ CallSignalingUpdate _update({
   chatRelay: null,
   roomEpoch: 1,
   chatRelaySupported: false,
-  localPeerId: localPeerId == null
-      ? null
-      : SignalingPeerId.parse(localPeerId),
+  localPeerId: localPeerId == null ? null : SignalingPeerId.parse(localPeerId),
   iceServers: <IceServerConfiguration>[
     IceServerConfiguration(
       urls: const ['stun:stun.example.invalid:19302'],
@@ -567,16 +631,28 @@ final class _FakeEngine implements CallMediaEngine {
     required CallLocalAudio audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
+    required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     final connection = _FakeConnection(
       iceServers: iceServers,
       onIceCandidate: onIceCandidate,
       onConnectionState: onConnectionState,
+      onRemoteVideo: onRemoteVideo,
       index: connections.length + 1,
     );
     connections.add(connection);
     return connection;
   }
+}
+
+final class _FakeRemoteVideo implements CallRemoteVideo {
+  bool disposed = false;
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+
+  @override
+  Future<void> dispose() async => disposed = true;
 }
 
 final class _FakeAudio implements CallLocalAudio {
@@ -608,12 +684,14 @@ final class _FakeConnection implements CallPeerConnection {
     required this.iceServers,
     required this.onIceCandidate,
     required this.onConnectionState,
+    required this.onRemoteVideo,
     required this.index,
   });
 
   final List<CallIceServer> iceServers;
   final void Function(CallIceCandidate candidate) onIceCandidate;
   final void Function(CallMediaConnectionState state) onConnectionState;
+  final void Function(CallRemoteVideo? video) onRemoteVideo;
   final int index;
 
   int createdOffers = 0;

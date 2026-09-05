@@ -54,7 +54,10 @@ final class PlatformCallAudioInterruptions implements CallAudioInterruptions {
       .map(_parse)
       .where((event) => event != null)
       .cast<CallAudioInterruption>()
-      .handleError((Object _) {}, test: (error) => error is MissingPluginException);
+      .handleError(
+        (Object _) {},
+        test: (error) => error is MissingPluginException,
+      );
 
   static CallAudioInterruption? _parse(Object? event) => switch (event) {
     'began' => CallAudioInterruption.began,

@@ -85,6 +85,7 @@ final class CallPeerState {
     required this.connected,
     required this.handRaised,
     required this.since,
+    this.video,
   });
 
   final String peerId;
@@ -92,6 +93,9 @@ final class CallPeerState {
   final String actorId;
   final bool connected;
   final bool handRaised;
+
+  /// The peer's video while they send one; owned by the session.
+  final CallRemoteVideo? video;
 
   /// When this side first saw the peer in the call. A peer still connecting
   /// long after that is most likely a departed session the server has not
@@ -385,6 +389,8 @@ final class CallMediaSession {
         onConnectionState: (state) => unawaited(
           _enqueue(() async => _recordConnectionState(peer.peerId, state)),
         ),
+        onRemoteVideo: (video) =>
+            unawaited(_enqueue(() => _recordRemoteVideo(peer, video))),
       );
       if (_disposed || !identical(_peers[peer.peerId], peer)) {
         await connection.close();
@@ -674,7 +680,25 @@ final class CallMediaSession {
   Future<void> _closePeer(String peerId) async {
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
+    await peer?.video?.dispose();
+    peer?.video = null;
     await peer?.connection?.close();
+  }
+
+  /// A renderer that arrives for a peer already gone is disposed on the
+  /// spot; otherwise it replaces the previous one and the UI is told.
+  Future<void> _recordRemoteVideo(
+    _MediaPeer peer,
+    CallRemoteVideo? video,
+  ) async {
+    if (_disposed || !identical(_peers[peer.peerId], peer)) {
+      await video?.dispose();
+      return;
+    }
+    final previous = peer.video;
+    peer.video = video;
+    await previous?.dispose();
+    _publish();
   }
 
   /// Raises or lowers this participant's hand for everyone in the call.
@@ -800,6 +824,7 @@ final class CallMediaSession {
               connected: peer.state == CallMediaConnectionState.connected,
               handRaised: _raisedHands.contains(peer.peerId),
               since: peer.openedAt,
+              video: peer.video,
             ),
         ],
       ),
@@ -836,6 +861,7 @@ final class _MediaPeer {
   final String peerId;
   final DateTime openedAt = DateTime.now();
   CallPeerConnection? connection;
+  CallRemoteVideo? video;
   bool localOfferPending = false;
   bool remoteDescriptionSet = false;
   CallMediaConnectionState state = CallMediaConnectionState.connecting;

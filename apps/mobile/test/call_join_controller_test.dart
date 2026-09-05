@@ -24,25 +24,28 @@ void main() {
     );
   });
 
-  test('joining without a signalling session never opens the microphone', () async {
-    final engine = _RecordingEngine();
-    final container = ProviderContainer(
-      overrides: [
-        callMediaEngineProvider.overrideWithValue(engine),
-        chatRoomSignalingProvider.overrideWith(
-          (ref, key) async => const ChatRoomSignalingLease.unavailable(),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'joining without a signalling session never opens the microphone',
+    () async {
+      final engine = _RecordingEngine();
+      final container = ProviderContainer(
+        overrides: [
+          callMediaEngineProvider.overrideWithValue(engine),
+          chatRoomSignalingProvider.overrideWith(
+            (ref, key) async => const ChatRoomSignalingLease.unavailable(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    await container.read(callJoinControllerProvider(_key).notifier).join();
+      await container.read(callJoinControllerProvider(_key).notifier).join();
 
-    final state = container.read(callJoinControllerProvider(_key));
-    expect(state.phase, CallJoinPhase.failed);
-    expect(state.signalingUnavailable, isTrue);
-    expect(engine.microphoneOpens, 0);
-  });
+      final state = container.read(callJoinControllerProvider(_key));
+      expect(state.phase, CallJoinPhase.failed);
+      expect(state.signalingUnavailable, isTrue);
+      expect(engine.microphoneOpens, 0);
+    },
+  );
 }
 
 CapabilitySnapshot _capabilities({
@@ -90,6 +93,7 @@ final class _RecordingEngine implements CallMediaEngine {
     required CallLocalAudio audio,
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
+    required void Function(CallRemoteVideo? video) onRemoteVideo,
   }) async {
     throw const CallMediaException(CallMediaError.engineFailure);
   }
