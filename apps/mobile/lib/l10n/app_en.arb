@@ -643,6 +643,8 @@
   "callBannerRaiseHand": "Raise hand",
   "callBannerLowerHand": "Lower hand",
   "callBannerReact": "Send a reaction",
+  "callBannerCameraOn": "Turn camera on",
+  "callBannerCameraOff": "Turn camera off",
   "callParticipantsTitle": "In the call ({count})",
   "@callParticipantsTitle": {"placeholders": {"count": {"type": "int"}}},
   "callParticipantsYou": "You",

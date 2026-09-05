@@ -85,6 +85,18 @@ final class CallParticipantsSheet extends ConsumerWidget {
                   )
                 : null,
           ),
+          if (media.localVideo != null)
+            Padding(
+              key: const Key('call-participant-self-video'),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: media.localVideo!.buildPreview(context),
+                ),
+              ),
+            ),
           for (final peer in media.participants)
             _PeerTile(peer: peer, names: names, strings: strings),
         ],

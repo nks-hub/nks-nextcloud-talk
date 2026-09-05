@@ -3314,6 +3314,18 @@ abstract class AppLocalizations {
   /// **'Send a reaction'**
   String get callBannerReact;
 
+  /// No description provided for @callBannerCameraOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn camera on'**
+  String get callBannerCameraOn;
+
+  /// No description provided for @callBannerCameraOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn camera off'**
+  String get callBannerCameraOff;
+
   /// No description provided for @callParticipantsTitle.
   ///
   /// In en, this message translates to:

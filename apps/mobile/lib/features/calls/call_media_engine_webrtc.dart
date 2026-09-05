@@ -32,6 +32,26 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
   }
 
   @override
+  Future<CallLocalVideo> openCamera() async {
+    final rtc.MediaStream stream;
+    try {
+      stream = await rtc.navigator.mediaDevices.getUserMedia(
+        const <String, dynamic>{
+          'audio': false,
+          'video': <String, dynamic>{'facingMode': 'user'},
+        },
+      );
+    } on Object catch (error) {
+      throw CallMediaException(_cameraError(error));
+    }
+    if (stream.getVideoTracks().isEmpty) {
+      await stream.dispose();
+      throw const CallMediaException(CallMediaError.cameraUnavailable);
+    }
+    return _WebRtcLocalVideo.open(stream);
+  }
+
+  @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio audio,
@@ -61,9 +81,10 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       for (final track in stream.getAudioTracks()) {
         await connection.addTrack(track, stream);
       }
-      // Receive-only video: the offer carries a video m-line, so a peer that
-      // sends video (the web client does by default) is seen here without
-      // this side having a camera open. Sending video is a later step.
+      // One video line per connection. It starts receive-only, so a peer
+      // that sends video (the web client does by default) is seen without a
+      // camera open here; turning the camera on puts a track on this same
+      // line and flips it to send-and-receive, followed by a new offer.
       await connection.addTransceiver(
         kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
         init: rtc.RTCRtpTransceiverInit(
@@ -106,6 +127,54 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       }
     };
     return _WebRtcPeerConnection(connection);
+  }
+}
+
+CallMediaError _cameraError(Object error) {
+  final detail = error is PlatformException
+      ? '${error.code} ${error.message ?? ''}'
+      : error.toString();
+  return detail.contains('NotAllowedError')
+      ? CallMediaError.cameraPermissionDenied
+      : CallMediaError.cameraUnavailable;
+}
+
+/// The camera stream with a mirrored preview of it.
+final class _WebRtcLocalVideo implements CallLocalVideo {
+  _WebRtcLocalVideo._(this.stream, this._renderer);
+
+  static Future<_WebRtcLocalVideo> open(rtc.MediaStream stream) async {
+    final renderer = rtc.RTCVideoRenderer();
+    await renderer.initialize();
+    renderer.srcObject = stream;
+    return _WebRtcLocalVideo._(stream, renderer);
+  }
+
+  final rtc.MediaStream stream;
+  final rtc.RTCVideoRenderer _renderer;
+  bool _disposed = false;
+
+  rtc.MediaStreamTrack get track => stream.getVideoTracks().first;
+
+  @override
+  Widget buildPreview(BuildContext context) => rtc.RTCVideoView(
+    _renderer,
+    mirror: true,
+    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+  );
+
+  @override
+  Future<void> dispose() async {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _renderer.srcObject = null;
+    await _renderer.dispose();
+    for (final track in stream.getTracks()) {
+      await track.stop();
+    }
+    await stream.dispose();
   }
 }
 
@@ -223,6 +292,28 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
 
   final rtc.RTCPeerConnection _connection;
   bool _closed = false;
+
+  /// The transceiver handed back by `addTransceiver` must not be kept: the
+  /// plugin disposes that wrapper once the connection negotiates ("RtpTransceiver
+  /// has been disposed", measured on 5 September 2026 with flutter_webrtc
+  /// 1.6.1), so the video line is looked up afresh each time.
+  @override
+  Future<void> setLocalVideo(CallLocalVideo? video) => _guard(() async {
+    final transceivers = await _connection.getTransceivers();
+    final line = transceivers.firstWhere(
+      (transceiver) => transceiver.receiver.track?.kind == 'video',
+      orElse: () =>
+          throw const CallMediaException(CallMediaError.engineFailure),
+    );
+    await line.sender.replaceTrack(
+      video == null ? null : (video as _WebRtcLocalVideo).track,
+    );
+    await line.setDirection(
+      video == null
+          ? rtc.TransceiverDirection.RecvOnly
+          : rtc.TransceiverDirection.SendRecv,
+    );
+  });
 
   @override
   Future<CallSessionDescription> createOffer() =>

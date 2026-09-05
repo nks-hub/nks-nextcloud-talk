@@ -37,6 +37,8 @@ final class CallMediaState {
     this.raisedHands = 0,
     this.reaction,
     this.participants = const <CallPeerState>[],
+    this.cameraOn = false,
+    this.localVideo,
   });
 
   static const idle = CallMediaState(phase: CallMediaPhase.idle);
@@ -67,6 +69,10 @@ final class CallMediaState {
 
   /// Every other participant in the call, in the order they were seen.
   final List<CallPeerState> participants;
+
+  /// Whether this side sends its camera, and the preview of it while it does.
+  final bool cameraOn;
+  final CallLocalVideo? localVideo;
 
   @override
   String toString() =>
@@ -160,6 +166,7 @@ final class CallMediaSession {
   final Set<String> _raisedHands = <String>{};
   CallReaction? _reaction;
   Timer? _reactionTimer;
+  CallLocalVideo? _video;
   final Map<String, SignalingParticipant> _participantsByPeer = {};
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
@@ -349,17 +356,87 @@ final class CallMediaSession {
       // to them: the web client only learns of a hand from the message.
       await _sendRaiseHand(peerId);
     }
+    await _announceMedia(peerId);
+    final video = _video;
+    if (video != null) {
+      // A camera already on rides in the very first offer to a newcomer.
+      try {
+        await connection.setLocalVideo(video);
+      } on CallMediaException {
+        // The newcomer simply does not get our video.
+      }
+    }
     if (!_isOfferer(localPeerId: localPeerId, remotePeerId: peerId)) {
+      return;
+    }
+    await _offer(peer);
+  }
+
+  /// Creates and sends an offer on an existing connection — the first one,
+  /// or a renegotiation after the video line changed.
+  Future<void> _offer(_MediaPeer peer) async {
+    final connection = peer.connection;
+    if (connection == null) {
       return;
     }
     try {
       final offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       peer.localOfferPending = true;
-      await _send(peerId: peerId, type: 'offer', payload: _sdpPayload(offer));
+      await _send(
+        peerId: peer.peerId,
+        type: 'offer',
+        payload: _sdpPayload(offer),
+      );
     } on CallMediaException {
-      await _closePeer(peerId);
+      await _closePeer(peer.peerId);
     }
+  }
+
+  /// Turns this side's camera on or off for everyone in the call.
+  ///
+  /// The video line of every connection swaps its track and direction, then a
+  /// new offer goes out: a track added after the first negotiation is not on
+  /// the wire until the peer has answered again. A camera that cannot be
+  /// opened leaves the call as it was — audio only.
+  Future<void> setCameraEnabled(bool enabled) {
+    return _enqueue(() async {
+      if (_disposed || (enabled == (_video != null))) {
+        return;
+      }
+      if (enabled) {
+        try {
+          _video = await _engine.openCamera();
+        } on CallMediaException {
+          return;
+        }
+      }
+      final video = _video;
+      if (!enabled) {
+        _video = null;
+      }
+      for (final peer in _peers.values.toList(growable: false)) {
+        final connection = peer.connection;
+        if (connection == null) {
+          continue;
+        }
+        try {
+          await connection.setLocalVideo(enabled ? video : null);
+        } on CallMediaException {
+          continue;
+        }
+        // Glare guard: a peer whose offer of ours is still unanswered gets
+        // the change with the next negotiation instead of a second offer.
+        if (!peer.localOfferPending) {
+          await _offer(peer);
+        }
+      }
+      await _announceMediaToAll();
+      if (!enabled) {
+        await video?.dispose();
+      }
+      _publish();
+    });
   }
 
   /// Exactly one side of a pair offers, and both sides decide it from the same
@@ -421,6 +498,7 @@ final class CallMediaSession {
           senderId: sender.value,
           localPeerId: localPeerId,
           payload: message.payload,
+          sid: message.sid,
           iceServers: iceServers,
         );
       case 'answer':
@@ -443,6 +521,7 @@ final class CallMediaSession {
     required String senderId,
     required String localPeerId,
     required SignalingOpaquePayload? payload,
+    required String? sid,
     required List<CallIceServer> iceServers,
   }) async {
     final sdp = _readSdp(payload, expectedType: 'offer');
@@ -450,6 +529,9 @@ final class CallMediaSession {
       return;
     }
     var peer = _peers[senderId];
+    if (peer != null && sid != null && sid.isNotEmpty) {
+      peer.sid = sid;
+    }
     // Our own offer is still unanswered: only one side of a pair offers, so an
     // offer arriving here would be a role collision. Answering it as well
     // would leave both sides waiting.
@@ -461,10 +543,14 @@ final class CallMediaSession {
       // sender we have not listed yet is one whose participant event has not
       // arrived; building the connection now is what avoids losing the offer.
       peer = _MediaPeer(senderId);
+      if (sid != null && sid.isNotEmpty) {
+        peer.sid = sid;
+      }
       _peers[senderId] = peer;
       if (await _createConnection(peer, iceServers) == null) {
         return;
       }
+      await _announceMedia(senderId);
     }
     final connection = peer.connection;
     if (connection == null) {
@@ -585,6 +671,7 @@ final class CallMediaSession {
   Future<void> _onInterruption(CallAudioInterruption event) async {
     _interrupted = event == CallAudioInterruption.began;
     await _applyMicrophone();
+    await _announceMediaToAll();
   }
 
   /// The user's mute control. Survives an interruption: a microphone the user
@@ -596,6 +683,7 @@ final class CallMediaSession {
       }
       _userMuted = muted;
       await _applyMicrophone();
+      await _announceMediaToAll();
       _publish();
     });
   }
@@ -645,7 +733,7 @@ final class CallMediaSession {
       message = SignalingPeerMessage(
         type: type,
         roomType: _roomType,
-        sid: null,
+        sid: _peers[peerId]?.sid,
         recipient: SignalingPeerId.parse(peerId),
         sender: null,
         payload: SignalingOpaquePayload.fromJson(payload),
@@ -666,6 +754,9 @@ final class CallMediaSession {
     _interruptionEvents = null;
     await interruptions?.cancel();
     await _closeAllPeers();
+    final video = _video;
+    _video = null;
+    await video?.dispose();
     final audio = _audio;
     _audio = null;
     await audio?.dispose();
@@ -717,6 +808,37 @@ final class CallMediaSession {
       }
       _publish();
     });
+  }
+
+  /// Tells one peer whether this side's audio and video are on.
+  ///
+  /// The web client shows a participant's microphone as muted and their
+  /// camera as off until a `unmute`/`mute` message with `{name}` says
+  /// otherwise (measured on 5 September 2026: our tile carried the crossed
+  /// microphone with audio flowing, and a camera turned on stayed an avatar
+  /// until this message was sent). Sent when a peer appears and on every
+  /// change; a system interruption counts as muted, like the track it closes.
+  Future<void> _announceMedia(String peerId) async {
+    for (final (name, on) in [
+      ('audio', !(_userMuted || _interrupted)),
+      ('video', _video != null),
+    ]) {
+      try {
+        await _send(
+          peerId: peerId,
+          type: on ? 'unmute' : 'mute',
+          payload: <String, Object?>{'name': name},
+        );
+      } on CallMediaException {
+        // The state rides along with the next change instead.
+      }
+    }
+  }
+
+  Future<void> _announceMediaToAll() async {
+    for (final peerId in _peers.keys.toList(growable: false)) {
+      await _announceMedia(peerId);
+    }
   }
 
   Future<void> _sendRaiseHand(String peerId) async {
@@ -815,6 +937,8 @@ final class CallMediaSession {
         handRaised: _handRaised,
         raisedHands: _raisedHands.length,
         reaction: _reaction,
+        cameraOn: _video != null,
+        localVideo: _video,
         participants: [
           for (final peer in _peers.values)
             CallPeerState(
@@ -860,6 +984,15 @@ final class _MediaPeer {
 
   final String peerId;
   final DateTime openedAt = DateTime.now();
+
+  /// The web client pairs every message with a peer connection by `sid`: an
+  /// offer whose `sid` matches no known one creates a NEW connection, and a
+  /// later message is dropped when its `sid` differs. So this side echoes the
+  /// `sid` of the offer it received, or names one of its own when it offers
+  /// first, and puts it on every message to the peer (measured on 5 September
+  /// 2026: a camera renegotiation with `sid: null` went to a fresh connection
+  /// the web never showed).
+  String sid = DateTime.now().microsecondsSinceEpoch.toString();
   CallPeerConnection? connection;
   CallRemoteVideo? video;
   bool localOfferPending = false;

@@ -88,6 +88,11 @@ final class _RecordingEngine implements CallMediaEngine {
   }
 
   @override
+  Future<CallLocalVideo> openCamera() async {
+    throw const CallMediaException(CallMediaError.cameraUnavailable);
+  }
+
+  @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
     required CallLocalAudio audio,

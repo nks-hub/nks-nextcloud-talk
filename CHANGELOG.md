@@ -41,6 +41,10 @@ from the commit log. Nothing here has reached testers yet.
   rooms at once and removes them again — from the conversation details. Inside
   a breakout room anyone can ask a moderator to come over, and withdraw the
   request; the parent conversation shows that a room is asking.
+- New: turn your camera on in a call from the banner. Your picture goes to
+  every participant (a renegotiation per connection), a mirrored preview shows
+  in the participant list, and a camera that cannot be opened leaves the call
+  as it was — audio only.
 - New: a participant who sends video is now seen — their picture appears under
   their entry in the call's participant list. Every connection offers to
   receive video; sending your own camera is not part of this build yet.

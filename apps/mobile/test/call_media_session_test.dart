@@ -51,7 +51,7 @@ void main() {
       expect(connection.createdOffers, 1);
       expect(connection.localDescriptions.single.type, 'offer');
 
-      final offer = sent.single;
+      final offer = sent.singleWhere((message) => message.type == 'offer');
       expect(offer.type, 'offer');
       expect(offer.roomType, 'video');
       expect(offer.recipient?.value, _remote);
@@ -132,7 +132,11 @@ void main() {
 
     expect(engine.connections, hasLength(1));
     expect(engine.connections.single.createdOffers, 0);
-    expect(sent, isEmpty, reason: 'the other side owns the offer');
+    expect(
+      sent.where((message) => message.type == 'offer'),
+      isEmpty,
+      reason: 'the other side owns the offer',
+    );
 
     updates.add(
       _update(
@@ -151,8 +155,8 @@ void main() {
     final connection = engine.connections.single;
     expect(connection.remoteDescriptions.single.sdp, 'sdp-offer-remote');
     expect(connection.createdAnswers, 1);
-    expect(sent.single.type, 'answer');
-    expect(sent.single.payload?.wire['sdp'], 'sdp-answer-1');
+    final answer = sent.singleWhere((message) => message.type == 'answer');
+    expect(answer.payload?.wire['sdp'], 'sdp-answer-1');
   });
 
   test('losing the signalling session closes the peer connection', () async {
@@ -217,7 +221,12 @@ void main() {
     await media.start();
 
     expect(engine.connections, isEmpty);
-    expect(sent, isEmpty);
+    expect(
+      sent.where(
+        (message) => message.type != 'mute' && message.type != 'unmute',
+      ),
+      isEmpty,
+    );
     expect(media.state.phase, CallMediaPhase.failed);
     expect(media.state.error, CallMediaError.microphonePermissionDenied);
   });
@@ -457,6 +466,147 @@ void main() {
     expect(media.state.participants, isEmpty);
   });
 
+  // A track added after the first negotiation is not on the wire until the
+  // peer answers again, so the camera swaps the track and offers anew — on
+  // every connection, both ways.
+  test(
+    'turning the camera on renegotiates with every peer and off again',
+    () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final connection = engine.connections.single;
+      expect(sent.where((message) => message.type == 'offer'), hasLength(1));
+      expect(media.state.cameraOn, isFalse);
+      // The first offer is answered, as in a live call; only then is a
+      // renegotiation offer allowed out (the glare guard).
+      updates.add(
+        _update(
+          localPeerId: _local,
+          participants: [_participant(_remote)],
+          messages: [
+            _message(_remote, 'answer', <String, Object?>{
+              'type': 'answer',
+              'sdp': 'sdp-answer-remote',
+            }),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      expect(connection.remoteDescriptions, hasLength(1));
+
+      await media.setCameraEnabled(true);
+      final camera = engine.cameras.single;
+      expect(connection.localVideos, [same(camera)]);
+      expect(sent.where((message) => message.type == 'offer'), hasLength(2));
+      expect(media.state.cameraOn, isTrue);
+      expect(media.state.localVideo, same(camera));
+
+      // The renegotiation offer is still unanswered: a second toggle must not
+      // pile a third offer on it, but the track still goes.
+      await media.setCameraEnabled(false);
+      expect(connection.localVideos.last, isNull);
+      expect(sent.where((message) => message.type == 'offer'), hasLength(2));
+      expect(camera.disposed, isTrue);
+      expect(media.state.cameraOn, isFalse);
+    },
+  );
+
+  test('a camera that cannot be opened leaves the call audio-only', () async {
+    engine.cameraError = CallMediaError.cameraPermissionDenied;
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    await media.setCameraEnabled(true);
+    expect(media.state.cameraOn, isFalse);
+    expect(media.state.phase, isNot(CallMediaPhase.failed));
+    expect(sent.where((message) => message.type == 'offer'), hasLength(1));
+  });
+
+  // The web client shows a peer as muted and camera-off until told otherwise,
+  // so this side announces both on arrival and on every change.
+  test('the media state is announced to peers as mute and unmute', () async {
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    List<String> announced() => [
+      for (final message in sent)
+        if (message.type == 'mute' || message.type == 'unmute')
+          '${message.type} ${message.payload?.wire['name']}',
+    ];
+    expect(announced(), ['unmute audio', 'mute video']);
+
+    await media.setMicrophoneMuted(true);
+    expect(announced().sublist(announced().length - 2), [
+      'mute audio',
+      'mute video',
+    ]);
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        messages: [
+          _message(_remote, 'answer', <String, Object?>{
+            'type': 'answer',
+            'sdp': 'sdp-answer-remote',
+          }),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    await media.setCameraEnabled(true);
+    expect(announced().sublist(announced().length - 2), [
+      'mute audio',
+      'unmute video',
+    ]);
+  });
+
+  // The web client keys a peer connection by `sid`; a message with a foreign
+  // or missing one opens a new connection or is dropped.
+  test('every message to a peer carries the sid of its connection', () async {
+    // The remote offers first (its id sorts lower): its sid is adopted.
+    final media = session(
+      _update(localPeerId: _remote, participants: [_participant(_local)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    sent.clear();
+    updates.add(
+      _update(
+        localPeerId: _remote,
+        participants: [_participant(_local)],
+        messages: [
+          _message(_local, 'offer', <String, Object?>{
+            'type': 'offer',
+            'sdp': 'sdp-offer-1',
+          }, sid: 'web-sid-42'),
+        ],
+      ),
+    );
+    await pumpEventQueue();
+    expect(sent.map((message) => message.type), contains('answer'));
+    expect(sent.map((message) => message.sid).toSet(), {'web-sid-42'});
+
+    // This side offers first: it names a sid and keeps using it.
+    sent.clear();
+    final offering = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(offering.dispose);
+    await offering.start();
+    final sids = sent.map((message) => message.sid).toSet();
+    expect(sids, hasLength(1));
+    expect(sids.single, isNotNull);
+    expect(sids.single, isNotEmpty);
+  });
+
   test(
     'an interruption mutes the microphone and giving it back unmutes',
     () async {
@@ -590,11 +740,12 @@ SignalingParticipant _participant(String peerId, {int inCall = 7}) =>
 SignalingPeerMessage _message(
   String sender,
   String type,
-  Map<String, Object?> payload,
-) => SignalingPeerMessage(
+  Map<String, Object?> payload, {
+  String? sid,
+}) => SignalingPeerMessage(
   type: type,
   roomType: 'video',
-  sid: null,
+  sid: sid,
   recipient: SignalingPeerId.parse(_local),
   sender: SignalingPeerId.parse(sender),
   payload: SignalingOpaquePayload.fromJson(payload),
@@ -625,6 +776,20 @@ final class _FakeEngine implements CallMediaEngine {
     return opened;
   }
 
+  CallMediaError? cameraError;
+  final List<_FakeVideo> cameras = <_FakeVideo>[];
+
+  @override
+  Future<CallLocalVideo> openCamera() async {
+    final error = cameraError;
+    if (error != null) {
+      throw CallMediaException(error);
+    }
+    final opened = _FakeVideo();
+    cameras.add(opened);
+    return opened;
+  }
+
   @override
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,
@@ -643,6 +808,16 @@ final class _FakeEngine implements CallMediaEngine {
     connections.add(connection);
     return connection;
   }
+}
+
+final class _FakeVideo implements CallLocalVideo {
+  bool disposed = false;
+
+  @override
+  Widget buildPreview(BuildContext context) => const SizedBox.shrink();
+
+  @override
+  Future<void> dispose() async => disposed = true;
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
@@ -697,6 +872,11 @@ final class _FakeConnection implements CallPeerConnection {
   int createdOffers = 0;
   int createdAnswers = 0;
   bool closed = false;
+  final List<CallLocalVideo?> localVideos = <CallLocalVideo?>[];
+
+  @override
+  Future<void> setLocalVideo(CallLocalVideo? video) async =>
+      localVideos.add(video);
   final List<CallSessionDescription> localDescriptions = [];
   final List<CallSessionDescription> remoteDescriptions = [];
   final List<CallIceCandidate> remoteCandidates = [];

@@ -63,6 +63,13 @@ enum CallMediaError {
   /// Signalling ended, or its session was replaced, while media were running.
   signalingLost,
 
+  /// The user refused the camera, or the system has it blocked. Never fails
+  /// the call: the call goes on without video.
+  cameraPermissionDenied,
+
+  /// The permission is there but no video track could be opened.
+  cameraUnavailable,
+
   /// The room's signalling is an HPB with an MCU. A publisher/subscriber call
   /// is a separate piece of work; a mesh offer would be answered by nobody.
   topologyUnsupported,
@@ -102,7 +109,19 @@ abstract interface class CallRemoteVideo {
   Future<void> dispose();
 }
 
+/// This side's camera: a track to send and a preview to show. Opened once
+/// per call while the camera is on, handed to every peer connection.
+abstract interface class CallLocalVideo {
+  Widget buildPreview(BuildContext context);
+
+  Future<void> dispose();
+}
+
 abstract interface class CallPeerConnection {
+  /// Starts or stops sending this side's video on the connection's video
+  /// line. The caller renegotiates afterwards; this only swaps the track.
+  Future<void> setLocalVideo(CallLocalVideo? video);
+
   Future<CallSessionDescription> createOffer();
 
   Future<CallSessionDescription> createAnswer();
@@ -122,6 +141,11 @@ abstract interface class CallMediaEngine {
   /// [CallMediaError.microphonePermissionDenied] on a refusal, so a refusal
   /// is a reported outcome and never a call that silently hangs.
   Future<CallLocalAudio> openMicrophone();
+
+  /// Opens the front camera. Throws [CallMediaException] with
+  /// [CallMediaError.cameraPermissionDenied] or
+  /// [CallMediaError.cameraUnavailable]; the call is not affected either way.
+  Future<CallLocalVideo> openCamera();
 
   Future<CallPeerConnection> createPeerConnection({
     required List<CallIceServer> iceServers,

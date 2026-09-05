@@ -287,6 +287,23 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                     selectedIcon: const Icon(Icons.volume_up_rounded),
                   ),
                 IconButton(
+                  key: const Key('call-banner-camera'),
+                  tooltip: join.media.cameraOn
+                      ? strings.callBannerCameraOff
+                      : strings.callBannerCameraOn,
+                  color: scheme.onPrimaryContainer,
+                  isSelected: join.media.cameraOn,
+                  onPressed: join.isBusy
+                      ? null
+                      : () => unawaited(
+                          ref
+                              .read(callJoinControllerProvider(key).notifier)
+                              .setCameraEnabled(!join.media.cameraOn),
+                        ),
+                  icon: const Icon(Icons.videocam_off_outlined),
+                  selectedIcon: const Icon(Icons.videocam_rounded),
+                ),
+                IconButton(
                   key: const Key('call-banner-raise-hand'),
                   tooltip: join.media.handRaised
                       ? strings.callBannerLowerHand
@@ -390,6 +407,10 @@ String? _callJoinStatusText(CallJoinState join, AppLocalizations strings) {
       CallMediaError.topologyUnsupported => strings.callBannerMcuUnsupported,
       CallMediaError.signalingLost => strings.callBannerAudioSignalingLost,
       CallMediaError.engineFailure => strings.callBannerAudioFailed,
+      // A camera problem never ends a call; these are here only because the
+      // switch is exhaustive.
+      CallMediaError.cameraPermissionDenied ||
+      CallMediaError.cameraUnavailable => strings.callBannerAudioFailed,
     };
   }
   return switch (join.phase) {

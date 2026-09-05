@@ -174,6 +174,15 @@ final class CallJoinController
     await session.sendReaction(emoji);
   }
 
+  /// Turns this participant's camera on or off in the joined call.
+  Future<void> setCameraEnabled(bool enabled) async {
+    final session = _session;
+    if (session == null || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    await session.setCameraEnabled(enabled);
+  }
+
   Future<void> leave() async {
     if (state.phase == CallJoinPhase.idle || state.isBusy) {
       return;
