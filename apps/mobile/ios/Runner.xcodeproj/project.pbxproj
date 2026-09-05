@@ -33,6 +33,7 @@
 		C9359FE8CE2352897C9F3B46 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2C3BF989F792EC59EA775638 /* Pods_Runner.framework */; };
 		A5E000000000000000000001 /* AppleIncomingShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000101 /* AppleIncomingShareInbox.swift */; };
 		A5E000000000000000000002 /* AppleIncomingShareChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000102 /* AppleIncomingShareChannel.swift */; };
+		917AFDCEF28CCEE0482F1690 /* CallAudioInterruptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */; };
 		A5E000000000000000000003 /* AppleIncomingShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000101 /* AppleIncomingShareInbox.swift */; };
 		A5E000000000000000000004 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000103 /* ShareViewController.swift */; };
 		A5E000000000000000000005 /* AppleIncomingShareInboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */; };
@@ -130,6 +131,7 @@
 		D2D32FF1521197415A9860ED /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		A5E000000000000000000101 /* AppleIncomingShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareInbox.swift; sourceTree = "<group>"; };
 		A5E000000000000000000102 /* AppleIncomingShareChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareChannel.swift; sourceTree = "<group>"; };
+		4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioInterruptions.swift; sourceTree = "<group>"; };
 		A5E000000000000000000103 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A5E000000000000000000104 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A5E000000000000000000105 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
@@ -244,6 +246,7 @@
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
 				A5E000000000000000000102 /* AppleIncomingShareChannel.swift */,
+				4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */,
 				C04A91B12F00000000000002 /* ContactPickerChannel.swift */,
 				B34A0D100000000000000002 /* VoiceMessageTranscriber.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
@@ -615,6 +618,7 @@
 				AA83E4E97DB74EB7C7E03581 /* PushNotificationRouteStore.swift in Sources */,
 				A5E000000000000000000001 /* AppleIncomingShareInbox.swift in Sources */,
 				A5E000000000000000000002 /* AppleIncomingShareChannel.swift in Sources */,
+				917AFDCEF28CCEE0482F1690 /* CallAudioInterruptions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

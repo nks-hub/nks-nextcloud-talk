@@ -119,6 +119,7 @@ final class AppleDeepLinkDelivery {
   private var contactPickerChannel: ContactPickerChannel?
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
   private var incomingShareChannel: AppleIncomingShareChannel?
+  private var callAudioInterruptions: CallAudioInterruptions?
   private var backgroundDrainChannel: FlutterMethodChannel?
 
   override func application(
@@ -305,6 +306,10 @@ final class AppleDeepLinkDelivery {
     )
     incomingShareChannel?.dispose()
     incomingShareChannel = AppleIncomingShareChannel(
+      messenger: engineBridge.applicationRegistrar.messenger()
+    )
+    callAudioInterruptions?.dispose()
+    callAudioInterruptions = CallAudioInterruptions(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
 
