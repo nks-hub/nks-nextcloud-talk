@@ -67,6 +67,27 @@ bool chatRoomSignalingAllowed(CapabilitySnapshot snapshot) =>
 /// releasing when the user leaves, not when a widget tree rearranges itself.
 const chatRoomSignalingGrace = Duration(seconds: 2);
 
+/// Rooms whose call this device has joined. Their session must outlive the
+/// window's focus: switching to another app, or the call shrinking into a
+/// picture-in-picture window, must keep the call running, and the call runs
+/// on the room session. Measured on 5 September 2026 — the home gesture
+/// during a connected call released the session, and with it the peer.
+final callHeldRoomsProvider = StateProvider<Set<ChatRoomSignalingKey>>(
+  (ref) => const {},
+);
+
+/// Whether the room's session should exist right now: while the window is
+/// active (presence is the point) or while a call holds the room. Derived so
+/// the session provider rebuilds only when the answer changes, not on every
+/// focus change during a call.
+final chatRoomSessionWantedProvider = Provider.autoDispose
+    .family<bool, ChatRoomSignalingKey>((ref, key) {
+      return ref.watch(windowActiveProvider) ||
+          ref.watch(
+            callHeldRoomsProvider.select((rooms) => rooms.contains(key)),
+          );
+    });
+
 final chatRoomSignalingProvider = FutureProvider.autoDispose
     .family<ChatRoomSignalingLease, ChatRoomSignalingKey>((ref, key) async {
       // Armed before anything else: the gap that costs the session can open
@@ -98,8 +119,8 @@ final chatRoomSignalingProvider = FutureProvider.autoDispose
       // conversation, so it suppressed every notification for it — the open
       // conversation that never notified. Watched, not read once: losing
       // focus has to tear the session down, and regaining it has to build one
-      // again.
-      if (!ref.watch(windowActiveProvider)) {
+      // again — unless a call holds the room, see [callHeldRoomsProvider].
+      if (!ref.watch(chatRoomSessionWantedProvider(key))) {
         return const ChatRoomSignalingLease.unavailable();
       }
 

@@ -319,9 +319,14 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
 
   Future<void> _setLocalVideo(CallLocalVideo? video) async {
     final transceivers = await _connection.getTransceivers();
-    final videoLines = transceivers
-        .where((transceiver) => transceiver.receiver.track?.kind == 'video')
-        .toList(growable: false);
+    // A typed literal, not `where().toList()`: the plugin hands back a list of
+    // its own subtype, and a filtered copy keeps that runtime type, so the
+    // `orElse` closure below (typed to the interface) would be refused at
+    // run time — measured as a camera that never left "engine failure".
+    final videoLines = <rtc.RTCRtpTransceiver>[
+      for (final transceiver in transceivers)
+        if (transceiver.receiver.track?.kind == 'video') transceiver,
+    ];
     if (videoLines.isEmpty) {
       throw const CallMediaException(CallMediaError.engineFailure);
     }

@@ -54,6 +54,7 @@ base class CallJoinController
   CallLifecycleService? _lifecycle;
   bool _joinedServer = false;
   bool _disposed = false;
+  StateController<Set<ChatRoomSignalingKey>>? _heldRooms;
 
   @override
   CallJoinState build(CallRoomKey arg) {
@@ -75,12 +76,16 @@ base class CallJoinController
     }
     state = const CallJoinState(phase: CallJoinPhase.joining);
 
+    // Held before the lease is asked for: the room session must survive the
+    // window losing focus for as long as this call lives.
+    _hold(true);
     final lease = await ref.read(chatRoomSignalingProvider(arg).future);
     final signaling = lease.session;
     if (_disposed) {
       return;
     }
     if (signaling == null) {
+      _hold(false);
       state = const CallJoinState(
         phase: CallJoinPhase.failed,
         signalingUnavailable: true,
@@ -96,6 +101,7 @@ base class CallJoinController
       await lifecycle.join(accountId: arg.accountId, roomToken: arg.roomToken);
       _joinedServer = true;
     } on CallLifecycleException catch (error) {
+      _hold(false);
       if (!_disposed) {
         state = CallJoinState(
           phase: CallJoinPhase.failed,
@@ -218,7 +224,31 @@ base class CallJoinController
     ref.invalidate(callLifecycleStatusProvider(arg));
   }
 
+  /// Marks the room as held by this call in [callHeldRoomsProvider]. The
+  /// controller is read once and kept: the release runs from a dispose, where
+  /// the container may already be going away.
+  void _hold(bool held) {
+    try {
+      final StateController<Set<ChatRoomSignalingKey>> rooms =
+          _heldRooms ?? ref.read(callHeldRoomsProvider.notifier);
+      _heldRooms = rooms;
+      final current = rooms.state;
+      if (current.contains(arg) == held) {
+        return;
+      }
+      rooms.state = held
+          ? {...current, arg}
+          : {
+              for (final room in current)
+                if (room != arg) room,
+            };
+    } on Object {
+      // A disposed container has no rooms left to hold.
+    }
+  }
+
   Future<void> _teardown({required bool leaveServer}) async {
+    _hold(false);
     final subscription = _mediaStates;
     _mediaStates = null;
     await subscription?.cancel();

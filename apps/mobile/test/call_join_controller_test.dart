@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -44,6 +46,50 @@ void main() {
       expect(state.phase, CallJoinPhase.failed);
       expect(state.signalingUnavailable, isTrue);
       expect(engine.microphoneOpens, 0);
+      // The failed join does not leave the room held.
+      expect(container.read(callHeldRoomsProvider), isEmpty);
+    },
+  );
+
+  test(
+    'a joining call holds the room session until the join settles',
+    () async {
+      final lease = Completer<ChatRoomSignalingLease>();
+      final container = ProviderContainer(
+        overrides: [
+          callMediaEngineProvider.overrideWithValue(_RecordingEngine()),
+          chatRoomSignalingProvider.overrideWith((ref, key) => lease.future),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final join = container
+          .read(callJoinControllerProvider(_key).notifier)
+          .join();
+      expect(container.read(callHeldRoomsProvider), {_key});
+      lease.complete(const ChatRoomSignalingLease.unavailable());
+      await join;
+      expect(container.read(callHeldRoomsProvider), isEmpty);
+    },
+  );
+
+  test(
+    'a room held by a call wants its session while the window is inactive',
+    () {
+      final container = ProviderContainer(
+        overrides: [windowActiveProvider.overrideWithValue(false)],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(chatRoomSessionWantedProvider(_key)), isFalse);
+      container.read(callHeldRoomsProvider.notifier).state = {_key};
+      expect(container.read(chatRoomSessionWantedProvider(_key)), isTrue);
+      expect(
+        container.read(
+          chatRoomSessionWantedProvider((accountId: 'a', roomToken: 'other')),
+        ),
+        isFalse,
+      );
     },
   );
 }
