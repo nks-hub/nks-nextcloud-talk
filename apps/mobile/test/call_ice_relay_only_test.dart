@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine_webrtc.dart';
+import 'package:nextcloudtalk/features/settings/call_relay_preference.dart';
 
-/// TURN is proven as far as this rig can prove it: the servers are offered and
-/// relay candidates are gathered. What stays unproven is that a RELAYED pair
-/// carries the media, because on a rig where both ends see each other ICE
-/// picks the host pair. `--dart-define=CALL_ICE_RELAY_ONLY=true` removes the
-/// host pair from the choice, which is the only way to measure that half here.
+/// The relay servers themselves are never configured in the app or in the
+/// build — Talk hands them out per room in its signalling settings, from what
+/// the Nextcloud administrator entered there. What this covers is the
+/// transport POLICY applied to them: with "always use a relay server" on, the
+/// host candidates are gone from the choice, so a call that connects at all
+/// connected through TURN. That is the only way to measure the relay path on
+/// a rig where a direct connection would always win.
 void main() {
   const servers = [
     CallIceServer(
@@ -21,7 +26,7 @@ void main() {
     ),
   ];
 
-  test('a call relays only when it was built to', () {
+  test('a call relays only when the policy says so', () {
     final ordinary = WebRtcCallMediaEngine.connectionConfiguration(servers);
     expect(ordinary.containsKey('iceTransportPolicy'), isFalse);
 
@@ -32,8 +37,9 @@ void main() {
     expect(relayed['iceTransportPolicy'], 'relay');
   });
 
-  test('the switch is off unless the build says otherwise', () {
-    expect(WebRtcCallMediaEngine.relayOnly, isFalse);
+  test('an engine relays only when it was asked to', () {
+    expect(const WebRtcCallMediaEngine().relayOnly, isFalse);
+    expect(const WebRtcCallMediaEngine(relayOnly: true).relayOnly, isTrue);
   });
 
   test('every server keeps its credentials on the way to the plugin', () {
@@ -47,5 +53,18 @@ void main() {
     expect((ice.last as Map)['username'], 'user');
     expect((ice.last as Map)['credential'], 'secret');
     expect(configuration['sdpSemantics'], 'unified-plan');
+  });
+
+  test('the choice survives a restart, and defaults to off', () async {
+    final directory = Directory.systemTemp.createTempSync('call-relay');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final store = FileCallRelayPreferenceStore(directory: directory);
+
+    expect(await store.read(), isFalse);
+    await store.write(true);
+    expect(await FileCallRelayPreferenceStore(directory: directory).read(),
+        isTrue);
+    await store.write(false);
+    expect(await store.read(), isFalse);
   });
 }

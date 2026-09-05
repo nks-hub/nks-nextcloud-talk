@@ -1134,6 +1134,16 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsRepliesSection => 'Odpovědi';
 
   @override
+  String get settingsCallsSection => 'Hovory';
+
+  @override
+  String get settingsCallRelayOnly => 'Vždy použít přenosový server';
+
+  @override
+  String get settingsCallRelayOnlyDescription =>
+      'Posílat hovory přes TURN server, který nastavil správce tvého Nextcloudu, místo přímého spojení. Je to pomalejší, ale projde to sítí, která přímé spojení blokuje. Projeví se u dalšího hovoru.';
+
+  @override
   String get settingsReplyLayoutInline => 'V konverzaci';
 
   @override

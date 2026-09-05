@@ -1135,6 +1135,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsRepliesSection => 'Replies';
 
   @override
+  String get settingsCallsSection => 'Calls';
+
+  @override
+  String get settingsCallRelayOnly => 'Always use a relay server';
+
+  @override
+  String get settingsCallRelayOnlyDescription =>
+      'Send calls through the TURN server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.';
+
+  @override
   String get settingsReplyLayoutInline => 'In the conversation';
 
   @override

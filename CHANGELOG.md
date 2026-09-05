@@ -37,10 +37,10 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: a call on iOS kept its audio only while the app was in front. The
   build declares the background audio mode now, so leaving the app no longer
   silences the call.
-- New: builds can be told to place calls through a TURN relay only
-  (`--dart-define=CALL_ICE_RELAY_ONLY=true`). It exists to measure the relay
-  path on a network where a direct connection would otherwise always win; off
-  in every shipped build.
+- New: Settings → Calls → "Always use a relay server". Calls then go through
+  the TURN server your Nextcloud administrator set up instead of connecting
+  directly — slower, but it gets through a network that blocks direct
+  connections. Off by default, and it applies to the next call.
 - New: a mute button in the call banner. It closes and reopens the microphone
   without renegotiating the call, and a microphone the user closed stays closed
   when a telephone call ends.

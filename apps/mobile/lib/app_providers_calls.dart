@@ -91,7 +91,7 @@ final callLifecycleStatusProvider = FutureProvider.autoDispose
 /// The WebRTC engine behind call media. Overridden in tests so negotiation can
 /// be driven without a platform channel.
 final callMediaEngineProvider = Provider<CallMediaEngine>((ref) {
-  return const WebRtcCallMediaEngine();
+  return WebRtcCallMediaEngine(relayOnly: ref.watch(callRelayOnlyProvider));
 });
 
 /// Where a call hears that the system took its audio — an incoming telephone

@@ -13,27 +13,31 @@ import 'call_media_engine.dart';
 /// decision is made here, so the call logic above stays testable without a
 /// platform channel.
 final class WebRtcCallMediaEngine implements CallMediaEngine {
-  const WebRtcCallMediaEngine();
+  const WebRtcCallMediaEngine({this.relayOnly = false});
 
   /// Forces every connection to use a TURN relay and nothing else.
   ///
-  /// On a rig where both ends can see each other directly, ICE picks the host
-  /// pair — as it should — so a call proves that TURN servers were offered
-  /// and that relay candidates were gathered, but never that a relayed pair
-  /// actually carries media. This is the only way to prove that half without
-  /// a network built to block direct paths: build with
-  /// `--dart-define=CALL_ICE_RELAY_ONLY=true` and the host candidates are
-  /// gone, so a call that connects at all connected through TURN.
+  /// The relay servers are NOT configured here and never in the build: Talk
+  /// hands them out per room in its signalling settings, from what the
+  /// Nextcloud administrator entered there. This only says which of the
+  /// candidates ICE gathered may be used.
   ///
-  /// Off by default and build-time only: a call that silently relays is a
-  /// call paying latency and someone else's bandwidth for nothing.
-  static const relayOnly = bool.fromEnvironment('CALL_ICE_RELAY_ONLY');
+  /// It exists because on a rig where both ends see each other ICE picks the
+  /// host pair — as it should — so a call proves TURN was offered and that
+  /// relay candidates were gathered, but never that a relayed pair carries
+  /// media. With the host pair gone from the choice, a call that connects at
+  /// all connected through TURN. It also gets a call through a network that
+  /// blocks the direct path without saying so.
+  ///
+  /// Off by default: a call that relays when it did not have to pays latency
+  /// and somebody else's bandwidth for nothing.
+  final bool relayOnly;
 
   /// The plugin's connection configuration, apart so the relay switch can be
   /// read back without a platform channel.
   static Map<String, dynamic> connectionConfiguration(
     List<CallIceServer> iceServers, {
-    bool relayOnly = relayOnly,
+    bool relayOnly = false,
   }) => <String, dynamic>{
     'iceServers': iceServers
         .map(
@@ -144,7 +148,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     final rtc.RTCPeerConnection connection;
     try {
       connection = await rtc.createPeerConnection(
-        connectionConfiguration(iceServers),
+        connectionConfiguration(iceServers, relayOnly: relayOnly),
       );
     } on Object {
       throw const CallMediaException(CallMediaError.engineFailure);

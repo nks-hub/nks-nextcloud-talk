@@ -2114,6 +2114,24 @@ abstract class AppLocalizations {
   /// **'Replies'**
   String get settingsRepliesSection;
 
+  /// No description provided for @settingsCallsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get settingsCallsSection;
+
+  /// No description provided for @settingsCallRelayOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Always use a relay server'**
+  String get settingsCallRelayOnly;
+
+  /// No description provided for @settingsCallRelayOnlyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Send calls through the TURN server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.'**
+  String get settingsCallRelayOnlyDescription;
+
   /// No description provided for @settingsReplyLayoutInline.
   ///
   /// In en, this message translates to:

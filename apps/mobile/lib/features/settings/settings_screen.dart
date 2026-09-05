@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -202,6 +204,19 @@ final class SettingsScreen extends ConsumerWidget {
               _SectionHeader(strings.settingsSecuritySection),
               const AppLockSettingsTile(),
             ],
+            const Divider(height: 1),
+            _SectionHeader(strings.settingsCallsSection),
+            SwitchListTile(
+              key: const Key('call-relay-only'),
+              title: Text(strings.settingsCallRelayOnly),
+              subtitle: Text(strings.settingsCallRelayOnlyDescription),
+              value: ref.watch(callRelayOnlyProvider),
+              onChanged: (relayOnly) => unawaited(
+                ref
+                    .read(callRelayOnlyProvider.notifier)
+                    .setRelayOnly(relayOnly),
+              ),
+            ),
             const Divider(height: 1),
             _SectionHeader(strings.settingsRepliesSection),
             RadioGroup<ReplyLayout>(

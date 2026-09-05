@@ -66,6 +66,7 @@ import 'features/settings/account_removal_service.dart';
 import 'features/settings/app_password_revocation_queue.dart';
 import 'features/settings/remote_wipe_service.dart';
 import 'features/conversations/list_pane_preference.dart';
+import 'features/settings/call_relay_preference.dart';
 import 'features/settings/reply_layout_preference.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/threads/thread_management_service.dart';

@@ -63,6 +63,12 @@ final replyLayoutPreferenceStoreProvider = Provider<ReplyLayoutPreferenceStore>(
   },
 );
 
+final callRelayPreferenceStoreProvider = Provider<CallRelayPreferenceStore>((
+  ref,
+) {
+  return FileCallRelayPreferenceStore();
+});
+
 final themePreferenceStoreProvider = Provider<ThemePreferenceStore>((ref) {
   return FileThemePreferenceStore();
 });
@@ -166,6 +172,33 @@ final class ThemeModeController extends Notifier<ThemeMode> {
   Future<void> setThemeMode(ThemeMode mode) async {
     state = mode;
     await ref.read(themePreferenceStoreProvider).write(mode);
+  }
+}
+
+/// Whether calls may only travel through a TURN relay. The relay servers
+/// themselves come from the Nextcloud administrator through Talk's signalling
+/// settings; this is only the transport policy applied to them.
+final callRelayOnlyProvider = NotifierProvider<CallRelayController, bool>(
+  CallRelayController.new,
+);
+
+base class CallRelayController extends Notifier<bool> {
+  @override
+  bool build() {
+    unawaited(_load());
+    return false;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(callRelayPreferenceStoreProvider).read();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  Future<void> setRelayOnly(bool relayOnly) async {
+    state = relayOnly;
+    await ref.read(callRelayPreferenceStoreProvider).write(relayOnly);
   }
 }
 
