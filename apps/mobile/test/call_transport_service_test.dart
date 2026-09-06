@@ -79,6 +79,26 @@ void main() {
     expect(requested.queryParameters['token'], 'rooma123');
   });
 
+  test(
+    'an external High Performance Backend is chosen when the server names one',
+    () async {
+      final cases =
+          readFixtureJson('signaling/fixtures/settings.cases.json')
+              as List<Object?>;
+      final external =
+          cases
+                  .cast<Map<String, Object?>>()
+                  .firstWhere((c) => c['id'] == 'external-v1')['data']!
+              as Map<String, Object?>;
+
+      final transport = await service(
+        MockClient((_) async => ocs(external, 200)),
+      ).resolve(accountId: 'account-a', roomToken: 'rooma123');
+
+      expect(transport, CallTransport.externalHpb);
+    },
+  );
+
   test('the relay switch follows what the server hands out', () async {
     final cases =
         readFixtureJson('signaling/fixtures/settings.cases.json')

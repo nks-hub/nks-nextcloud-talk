@@ -24,6 +24,15 @@ already lets a user accept a self-signed server:
 
 Nothing here is part of the application. It is a screenshot rig, and it lives
 in `tool/` next to the other things that are run by hand.
+
+A second, unrelated use added later: automated call coverage. The same rig
+also answers the INTERNAL Talk signalling endpoints — settings, the room
+session activation, and the long-poll pull/push a client uses to negotiate a
+call — so a Dart test can drive the real network code (`CallTransportService`,
+`HttpNextcloudApi`, `CallSignalingCoordinator`) against a real socket instead
+of `MockClient`. Nothing there is faked WebRTC media; the endpoints under
+`/_test/` exist only so a test can inject a "peer" message or read back what
+the app pushed, and are not part of what a real Talk server answers.
 """
 
 from __future__ import annotations
@@ -334,6 +343,108 @@ def capabilities() -> dict:
     }
 
 
+def signaling_settings() -> dict:
+    """Internal-mode signalling settings: no external HPB, no relay."""
+    return {
+        "signalingMode": "internal",
+        "userId": USER,
+        "hideWarning": True,
+        "server": "",
+        "federation": None,
+        "stunservers": [],
+        "turnservers": [],
+        "sipDialinInfo": "",
+    }
+
+
+def call_room_json(token: str, session_id: str) -> dict:
+    """A `participants/active` response for a synthetic call room.
+
+    Same field set as [room_json], which the real app already parses
+    successfully for the conversation list; only the identity and session
+    differ, since a call test opens a room the screenshot rig does not know.
+    """
+    return {
+        "id": 900,
+        "token": token,
+        "type": 2,
+        "name": "Automated call",
+        "displayName": "Automated call",
+        "description": "",
+        "participantType": 1,
+        "attendeeId": 900,
+        "attendeePin": None,
+        "attributes": 0,
+        "hasScheduledMessages": 0,
+        "hiddenPinnedId": 0,
+        "lastPinnedId": 0,
+        "liveTranscriptionLanguageId": "",
+        "tagIds": [],
+        "actorType": "users",
+        "actorId": USER,
+        "permissions": 254,
+        "attendeePermissions": 0,
+        "callPermissions": 0,
+        "defaultPermissions": 0,
+        "participantFlags": 0,
+        "readOnly": 0,
+        "listable": 0,
+        "messageExpiration": 0,
+        "lastPing": 0,
+        "sessionId": session_id,
+        "hasPassword": False,
+        "hasCall": True,
+        "callFlag": 0,
+        "canStartCall": True,
+        "canDeleteConversation": True,
+        "canLeaveConversation": True,
+        "lastActivity": BASE_TIME,
+        "isFavorite": False,
+        "notificationLevel": 0,
+        "notificationCalls": 1,
+        "lobbyState": 0,
+        "lobbyTimer": 0,
+        "sipEnabled": 0,
+        "canEnableSIP": False,
+        "unreadMessages": 0,
+        "unreadMention": False,
+        "unreadMentionDirect": False,
+        "lastReadMessage": 0,
+        "lastCommonReadMessage": 0,
+        "lastMessage": None,
+        "objectType": "",
+        "objectId": "",
+        "breakoutRoomMode": 0,
+        "breakoutRoomStatus": 0,
+        "avatarVersion": "",
+        "isCustomAvatar": False,
+        "callStartTime": BASE_TIME,
+        "callRecording": 0,
+        "recordingConsent": 0,
+        "mentionPermissions": 0,
+        "isArchived": False,
+        "isImportant": False,
+        "isSensitive": False,
+    }
+
+
+class CallState:
+    """Everything the internal-signalling test endpoints keep between
+    requests: one call, one account, no persistence, reset between tests."""
+
+    def __init__(self) -> None:
+        self.session_counter = 0
+        self.peer_joined = False
+        self.pushed: list[dict] = []
+        self.queued: list[dict] = []
+
+    def reset(self) -> None:
+        self.__init__()  # noqa: PLC2801 — deliberately re-runs __init__
+
+
+CALL_STATE = CallState()
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     language = "en"
 
@@ -404,12 +515,67 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 ocs(messages),
                 last_given=min(message["id"] for message in messages),
             )
+        if path.endswith("/apps/spreed/api/v3/signaling/settings"):
+            return self._send(ocs(signaling_settings()))
+        if "/apps/spreed/api/v3/signaling/" in path:
+            # The internal long poll: any message the test queued, exactly
+            # once, in the order it was queued, THEN this side's own session
+            # plus — once the test says a peer joined — that peer. The
+            # `usersInRoom` item must be last: the real protocol codec
+            # rejects a `message` item once it has seen `usersInRoom`.
+            items = [
+                {"type": "message", "data": json.dumps(message)}
+                for message in CALL_STATE.queued
+            ]
+            CALL_STATE.queued.clear()
+            items.append(
+                {
+                    "type": "usersInRoom",
+                    "data": self._signaling_users(),
+                }
+            )
+            return self._send(ocs(items))
+        if path == "/_test/pushed":
+            return self._send(json.dumps(CALL_STATE.pushed).encode())
         # Everything else — avatars, user status, search — is answered as
         # missing. The application draws initials and hides what it cannot ask
         # for, which is what a smaller server would give it anyway.
         self.send_response(404)
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _signaling_users(self) -> list[dict]:
+        users = [
+            {
+                "sessionId": str(CALL_STATE.session_counter or 1),
+                "roomId": 900,
+                "lastPing": int(time.time()),
+                "userId": USER,
+                "inCall": 7,
+                "participantPermissions": 254,
+                "actorType": "users",
+                "actorId": USER,
+            }
+        ]
+        if CALL_STATE.peer_joined:
+            users.append(
+                {
+                    "sessionId": "peer-session-1",
+                    "roomId": 900,
+                    "lastPing": int(time.time()),
+                    "userId": "peer",
+                    "inCall": 7,
+                    "participantPermissions": 254,
+                    "actorType": "users",
+                    "actorId": "peer",
+                }
+            )
+        return users
+
+    def _read_json_body(self) -> object:
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8"))
 
     def do_POST(self) -> None:  # noqa: N802
         path = urllib.parse.urlparse(self.path).path
@@ -440,6 +606,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     }
                 ).encode()
             )
+        if path.endswith("/participants/active"):
+            token = path.split("/room/")[1].split("/")[0]
+            CALL_STATE.session_counter += 1
+            return self._send(
+                ocs(call_room_json(token, str(CALL_STATE.session_counter)))
+            )
+        if "/apps/spreed/api/v3/signaling/" in path:
+            # The internal batch push: `messages` is a JSON array of
+            # `{ev, fn, sessionId}`, `fn` itself a JSON-encoded message. Only
+            # `fn` is kept — it is what the test wants to assert on.
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length).decode("utf-8")
+            form = urllib.parse.parse_qs(body)
+            envelopes = json.loads(form.get("messages", ["[]"])[0])
+            for envelope in envelopes:
+                CALL_STATE.pushed.append(json.loads(envelope["fn"]))
+            return self._send(ocs([]))
+        if path == "/_test/peer-joined":
+            self._read_json_body()
+            CALL_STATE.peer_joined = True
+            return self._send(b"{}")
+        if path == "/_test/inject":
+            CALL_STATE.queued.append(self._read_json_body())
+            return self._send(b"{}")
+        if path == "/_test/reset":
+            CALL_STATE.reset()
+            return self._send(b"{}")
+        self.send_response(404)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        path = urllib.parse.urlparse(self.path).path
+        if path.endswith("/participants/active"):
+            return self._send(ocs(None))
         self.send_response(404)
         self.send_header("Content-Length", "0")
         self.end_headers()
@@ -508,8 +709,15 @@ def main() -> None:
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", arguments.port), Handler)
     server.socket = context.wrap_socket(server.socket, server_side=True)
-    print(f"https://{HOST_NAME} on 127.0.0.1:{arguments.port} ({arguments.language})")
-    print(f"pin {pin}")
+    bound_port = server.socket.getsockname()[1]
+    print(
+        f"https://{HOST_NAME} on 127.0.0.1:{bound_port} ({arguments.language})",
+        flush=True,
+    )
+    print(f"pin {pin}", flush=True)
+    # Machine-readable, for a test that spawned this with --port 0: the two
+    # lines above are for a human running the screenshot rig by hand.
+    print(f"PORT {bound_port}", flush=True)
     server.serve_forever()
 
 
