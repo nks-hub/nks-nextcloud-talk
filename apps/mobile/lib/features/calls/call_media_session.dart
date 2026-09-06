@@ -160,6 +160,7 @@ final class CallMediaSession {
     Future<bool> Function(HpbControlMessage control)? sendControl,
     CallAudioInterruptions interruptions = const SilentCallAudioInterruptions(),
     this.reactionDisplay = const Duration(seconds: 4),
+    this.renegotiationHold = const Duration(seconds: 45),
   }) : _initial = initial,
        _updates = updates,
        _sendMessage = sendMessage,
@@ -169,6 +170,14 @@ final class CallMediaSession {
 
   /// How long an incoming reaction stays in the state before it clears.
   final Duration reactionDisplay;
+
+  /// How long a call waits for the signalling to come back with a fresh
+  /// authority before it gives up. Long enough to cover a lift, a tunnel or a
+  /// hand-over between Wi-Fi and mobile data; short enough that a call which
+  /// is really gone does not pretend otherwise.
+  final Duration renegotiationHold;
+
+  Timer? _renegotiationHold;
 
   /// Talk labels an audio/video peer connection `video` and a screen share
   /// `screen`; an audio-only call is still the `video` kind.
@@ -316,11 +325,31 @@ final class CallMediaSession {
       await _routeChanges?.cancel();
       _routeChanges = null;
       _reactionTimer?.cancel();
+      _renegotiationHold?.cancel();
+      _renegotiationHold = null;
       await _subscription?.cancel();
       _subscription = null;
       await _stopMedia();
       _emit(CallMediaState.idle);
       await _states.close();
+    });
+  }
+
+  /// Drops what the old session built and waits for the new one.
+  ///
+  /// Bounded, because waiting forever would be its own kind of lie: a
+  /// signalling connection that never comes back means the call really is
+  /// gone, and after [renegotiationHold] it says so exactly as it did before.
+  Future<void> _holdForRenegotiation() async {
+    await _closeAllPeers();
+    _emit(const CallMediaState(phase: CallMediaPhase.preparing));
+    _renegotiationHold ??= Timer(renegotiationHold, () {
+      unawaited(
+        _enqueue(() async {
+          _renegotiationHold = null;
+          await _failAndStop(CallMediaError.signalingLost);
+        }),
+      );
     });
   }
 
@@ -332,14 +361,24 @@ final class CallMediaSession {
       await _failAndStop(CallMediaError.signalingLost);
       return;
     }
-    // The runtime sets this when a reconnect or a possibly-sent batch made the
-    // peer state unreliable, and it also refuses to carry SDP while it is set.
-    // Media therefore cannot rebuild the mesh from here; stopping and saying so
-    // is the only honest outcome.
+    // The runtime sets this when a reconnect, or a batch whose delivery was
+    // unknown, left the peer state unreliable; while it is set the lane
+    // refuses to carry SDP, so everything built against the old session is
+    // worthless. It used to end the call here — measured on 6 September 2026
+    // against the reference instance, eighteen seconds of airplane mode in an
+    // MCU call cost the call, with "the call signalling ended" and a Join
+    // button where the call had been.
+    // It does not have to. A full hello opens a NEW room epoch, clears this
+    // flag and carries no participants over, and the code below already
+    // rebuilds every peer when the epoch changes. So this waits for that
+    // instead: the peers go, the call says it is connecting, and the rebuild
+    // happens when the fresh authority arrives.
     if (update.renegotiationRequired) {
-      await _failAndStop(CallMediaError.signalingLost);
+      await _holdForRenegotiation();
       return;
     }
+    _renegotiationHold?.cancel();
+    _renegotiationHold = null;
     if (update.topology == SignalingTopology.externalMcu &&
         _sendControl == null) {
       await _failAndStop(CallMediaError.topologyUnsupported);

@@ -31,8 +31,10 @@ void main() {
   CallMediaSession session(
     CallSignalingUpdate initial, {
     bool withControl = false,
+    Duration renegotiationHold = const Duration(seconds: 45),
   }) => CallMediaSession(
     initial: initial,
+    renegotiationHold: renegotiationHold,
     updates: updates.stream,
     sendMessage: (message) async {
       sent.add(message);
@@ -258,7 +260,11 @@ void main() {
     expect(media.state.phase, CallMediaPhase.preparing);
   });
 
-  test('a required renegotiation stops media instead of pretending', () async {
+  test('a required renegotiation drops the peers instead of pretending', () async {
+    // What it must NOT do is keep media running against a session the lane has
+    // already declared unreliable. It used to end the call outright; it now
+    // waits for the new one (see the reconnect tests below), but the peers go
+    // either way — that half was always right.
     final media = session(
       _update(localPeerId: _local, participants: [_participant(_remote)]),
     );
@@ -276,7 +282,7 @@ void main() {
     await pumpEventQueue();
 
     expect(engine.connections.single.closed, isTrue);
-    expect(media.state.error, CallMediaError.signalingLost);
+    expect(media.state.phase, CallMediaPhase.preparing);
   });
 
   // Measured on 5 September 2026: with a connected call, an incoming telephone
@@ -1216,6 +1222,82 @@ void main() {
       expect(media.state.muted, isFalse);
     },
   );
+  test('a reconnect waits for the new session instead of ending the call', () async {
+    // Measured live on 6 September 2026: eighteen seconds of airplane mode in
+    // an MCU call ended it outright — "the call signalling ended, so the audio
+    // stopped" and a Join button where the call had been. The flag is set
+    // while the lane refuses to carry SDP; what follows it is a full hello
+    // with a new room epoch, which is exactly the rebuild the flag asks for.
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(engine.connections, hasLength(1));
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        renegotiationRequired: true,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      media.state.phase,
+      CallMediaPhase.preparing,
+      reason: 'the call is connecting again, not over',
+    );
+    expect(media.state.error, isNull);
+    expect(engine.connections.single.closed, isTrue);
+
+    // The fresh authority: a new epoch, the flag cleared.
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        roomEpoch: 2,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      engine.connections,
+      hasLength(2),
+      reason: 'the peer is rebuilt against the new session',
+    );
+    expect(media.state.error, isNull);
+  });
+
+  test('a reconnect that never completes still ends the call', () async {
+    // The wait is bounded on purpose: signalling that does not come back
+    // means the call really is gone, and saying otherwise would be a lie
+    // told with a spinner.
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+      renegotiationHold: const Duration(milliseconds: 30),
+    );
+    addTearDown(media.dispose);
+    await media.start();
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        renegotiationRequired: true,
+      ),
+    );
+    await pumpEventQueue();
+    expect(media.state.phase, CallMediaPhase.preparing);
+
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await pumpEventQueue();
+
+    expect(media.state.phase, CallMediaPhase.failed);
+    expect(media.state.error, CallMediaError.signalingLost);
+  });
+
 }
 
 CallSignalingUpdate _update({
@@ -1226,6 +1308,7 @@ CallSignalingUpdate _update({
   SignalingAccountPhase phase = SignalingAccountPhase.signalingReady,
   bool roomConfirmed = true,
   bool renegotiationRequired = false,
+  int roomEpoch = 1,
 }) => CallSignalingUpdate(
   key: const (accountId: 'account-a', roomToken: 'rooma123'),
   outcome: SignalingRuntimeOutcome.unchanged,
@@ -1239,7 +1322,7 @@ CallSignalingUpdate _update({
   messages: messages,
   controls: const <HpbControlMessage>[],
   chatRelay: null,
-  roomEpoch: 1,
+  roomEpoch: roomEpoch,
   chatRelaySupported: false,
   localPeerId: localPeerId == null ? null : SignalingPeerId.parse(localPeerId),
   iceServers: <IceServerConfiguration>[
