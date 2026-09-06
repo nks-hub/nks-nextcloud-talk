@@ -289,7 +289,13 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             content: Text(strings.messageForwarded(target.displayName)),
           ),
         );
-    } on Object {
+    } on Object catch (error, stack) {
+      // The snack bar can only say it did not go. Which of the share, the
+      // capabilities or the send refused it belongs in the log: the same
+      // swallowed catch cost a day on the file share and again on voice
+      // playback, both on 6 September 2026.
+      debugPrint('[forward] into ${target.token} failed: $error');
+      debugPrintStack(stackTrace: stack, maxFrames: 8);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
