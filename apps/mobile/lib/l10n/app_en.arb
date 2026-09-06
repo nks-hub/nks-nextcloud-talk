@@ -451,7 +451,7 @@
   "settingsNotificationPermissionRequest": "Allow",
   "settingsNotificationPermissionFailed": "Notification permission could not be requested.",
   "settingsPushTransportProxy": "Our own proxy",
-  "settingsPushTransportProxySubtitle": "Notifications take the same path as on iOS, through nks-talk-notify.",
+  "settingsPushTransportProxySubtitle": "Notifications take the same path as on iOS, through this application's own notification service.",
   "settingsPushTransportWebPush": "Web Push (fallback)",
   "settingsPushTransportWebPushSubtitle": "Routes through the public UnifiedPush gateway. Use this if the proxy gives trouble.",
   "settingsPushTransportSwitchFailed": "Could not switch. The previous registration is still in place.",

@@ -66,6 +66,10 @@ from the commit log. Nothing here has reached testers yet.
   to use, and a call turned on with it could not connect at all. The setting is
   now hidden on such a server, and a call never forces a relay that is not
   there.
+- Changed: the notification setting no longer names an internal service. It
+  said notifications go "through nks-talk-notify", which means nothing to
+  anybody outside the project; it now says they go through the application's
+  own notification service.
 
 ## 0.1.0 (62) — 6 September 2026
 

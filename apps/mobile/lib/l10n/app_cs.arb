@@ -443,7 +443,7 @@
   "settingsNotificationPermissionRequest": "Povolit",
   "settingsNotificationPermissionFailed": "O oprávnění notifikací se nepodařilo požádat.",
   "settingsPushTransportProxy": "Vlastní proxy",
-  "settingsPushTransportProxySubtitle": "Notifikace jdou stejnou cestou jako na iOS, přes nks-talk-notify.",
+  "settingsPushTransportProxySubtitle": "Notifikace jdou stejnou cestou jako na iOS, přes vlastní službu této aplikace.",
   "settingsPushTransportWebPush": "Web Push (záloha)",
   "settingsPushTransportWebPushSubtitle": "Vede přes veřejnou bránu UnifiedPush. Použijte, když proxy dělá potíže.",
   "settingsPushTransportSwitchFailed": "Přepnutí se nepovedlo. Platí dál původní registrace.",

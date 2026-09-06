@@ -1278,7 +1278,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsPushTransportProxySubtitle =>
-      'Notifications take the same path as on iOS, through nks-talk-notify.';
+      'Notifications take the same path as on iOS, through this application\'s own notification service.';
 
   @override
   String get settingsPushTransportWebPush => 'Web Push (fallback)';

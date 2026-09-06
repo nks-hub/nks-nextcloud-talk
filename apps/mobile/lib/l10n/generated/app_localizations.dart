@@ -2369,7 +2369,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsPushTransportProxySubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Notifications take the same path as on iOS, through nks-talk-notify.'**
+  /// **'Notifications take the same path as on iOS, through this application\'s own notification service.'**
   String get settingsPushTransportProxySubtitle;
 
   /// No description provided for @settingsPushTransportWebPush.

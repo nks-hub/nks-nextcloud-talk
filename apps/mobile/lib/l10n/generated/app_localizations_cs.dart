@@ -1277,7 +1277,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsPushTransportProxySubtitle =>
-      'Notifikace jdou stejnou cestou jako na iOS, přes nks-talk-notify.';
+      'Notifikace jdou stejnou cestou jako na iOS, přes vlastní službu této aplikace.';
 
   @override
   String get settingsPushTransportWebPush => 'Web Push (záloha)';
