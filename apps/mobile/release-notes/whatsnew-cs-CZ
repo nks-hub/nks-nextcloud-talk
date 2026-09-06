@@ -1,7 +1,7 @@
-Hovory mají video a vlastní obrazovku s dlaždicí pro každého účastníka.
-Fungují i na serverech se samostatnou signalizací, s media serverem a přes
-TURN, ne jen na vestavěné cestě. Sdílení obrazovky jde oběma směry a výpadek
-sítě už hovor neukončí. Přibyly breakout místnosti a obraz v obraze.
+Opravuje build 61, který na Androidu 10 a 11 nešel vůbec otevřít — zavřel se
+hned po spuštění. Nic jiného na něm špatně nebylo a nic se neztratilo, stačí
+aplikaci otevřít znovu.
 
-Opraveno: tři pády, chybějící čas u záznamů o hovoru a kamera nabízená
-někomu, komu ji moderátor zakázal.
+Dál je v tomhle buildu: sdílení souboru do aplikace ukazuje rovnou konverzace
+místo dvou rozbalovacích seznamů, včetně vláken, a nenabízí účet, jehož server
+přílohy odmítá.

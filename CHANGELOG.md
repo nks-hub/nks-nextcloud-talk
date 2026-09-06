@@ -18,10 +18,15 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased — the next build after 61
+## Unreleased — the next build after 62
 
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
+
+## 0.1.0 (62) — 6 September 2026
+
+A repair of build 61, which went out the same day and could not be opened at
+all on Android 10 and 11. Everything else here landed after 61 was tagged.
 
 - Fixed: on Android 10 and 11 the app did not start at all — it closed the
   moment it was opened. A class the call code needs names a listener that only
