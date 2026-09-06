@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New: a call on an iPhone keeps going in a small window when you leave the
+  app, the way it already did on Android. The window shows a shared screen if
+  somebody is sharing one, otherwise the first participant sending video.
+  Built, but not yet tried on a real iPhone.
 - Changed: sharing a file or a link into the app no longer opens a form with
   two dropdowns. It shows the conversations themselves — avatar, name and the
   last message — grouped under their account, with a search box once there are
