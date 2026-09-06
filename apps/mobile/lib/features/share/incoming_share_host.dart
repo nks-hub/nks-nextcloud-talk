@@ -19,12 +19,19 @@ final class IncomingShareTarget {
     required this.accountLabel,
     required this.roomToken,
     required this.roomLabel,
+    this.threadId,
+    this.threadTitle,
   });
 
   final String accountId;
   final String accountLabel;
   final String roomToken;
   final String roomLabel;
+
+  /// The thread inside [roomToken] the item goes into, when one was picked.
+  /// `null` means the conversation itself.
+  final int? threadId;
+  final String? threadTitle;
 }
 
 final class IncomingShareAccount {
@@ -44,16 +51,29 @@ final class IncomingShareAccount {
   final StoredAccount? account;
 }
 
+/// A thread inside a conversation, offered as a target of its own.
+final class IncomingShareThread {
+  const IncomingShareThread({required this.id, required this.title});
+
+  final int id;
+  final String title;
+}
+
 final class IncomingShareRoom {
   const IncomingShareRoom({
     required this.token,
     required this.label,
     this.conversation,
     this.subtitle,
+    this.threads = const <IncomingShareThread>[],
   });
 
   final String token;
   final String label;
+
+  /// The threads this conversation has in the cache, newest first. Only ones
+  /// already synced appear — the picker does not go to the network.
+  final List<IncomingShareThread> threads;
 
   /// The cached row behind [token]; see [IncomingShareAccount.account].
   final CachedConversation? conversation;
@@ -140,6 +160,22 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
       final conversations = await ref.read(
         conversationsProvider(account.id).future,
       );
+      final threads = await ref
+          .read(threadRepositoryProvider)
+          .listAccount(account.id);
+      final threadsByRoom = <String, List<IncomingShareThread>>{};
+      for (final thread in threads) {
+        final title = thread.title.trim();
+        if (title.isEmpty) {
+          continue;
+        }
+        threadsByRoom
+            .putIfAbsent(thread.roomToken, () => <IncomingShareThread>[])
+            .add(IncomingShareThread(id: thread.threadId, title: title));
+      }
+      for (final list in threadsByRoom.values) {
+        list.sort((a, b) => b.id.compareTo(a.id));
+      }
       final rooms = conversations
           .where((room) => room.readOnly == 0 && !room.isArchived)
           .map(
@@ -148,6 +184,8 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
               label: _roomLabel(room),
               conversation: room,
               subtitle: room.lastMessageText?.trim(),
+              threads:
+                  threadsByRoom[room.token] ?? const <IncomingShareThread>[],
             ),
           )
           .toList(growable: false);
@@ -173,6 +211,7 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
             accountId: target.accountId,
             roomToken: target.roomToken,
             message: share.text!,
+            threadId: target.threadId,
           );
       return;
     }
@@ -201,7 +240,7 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
               kind: AttachmentMessageKind.file,
               caption: share.text,
               replyTo: null,
-              threadId: null,
+              threadId: target.threadId,
               silent: false,
             ),
           );
@@ -267,6 +306,7 @@ final class _IncomingShareTargetDialogState
   final _query = TextEditingController();
   IncomingShareAccount? _account;
   IncomingShareRoom? _room;
+  IncomingShareThread? _thread;
   String? _error;
   var _sending = false;
 
@@ -420,7 +460,14 @@ final class _IncomingShareTargetDialogState
       final rooms = query.isEmpty
           ? account.rooms
           : account.rooms
-                .where((room) => room.label.toLowerCase().contains(query))
+                .where(
+                  (room) =>
+                      room.label.toLowerCase().contains(query) ||
+                      room.threads.any(
+                        (thread) =>
+                            thread.title.toLowerCase().contains(query),
+                      ),
+                )
                 .toList(growable: false);
       if (rooms.isEmpty) {
         continue;
@@ -439,6 +486,11 @@ final class _IncomingShareTargetDialogState
       }
       for (final room in rooms) {
         rows.add(_roomTile(account, room));
+        // A thread is a target inside its conversation, so it sits under it
+        // and indented rather than as another top-level row.
+        for (final thread in room.threads) {
+          rows.add(_threadTile(account, room, thread));
+        }
       }
     }
     if (rows.isEmpty) {
@@ -453,8 +505,41 @@ final class _IncomingShareTargetDialogState
     return ListView(padding: EdgeInsets.zero, shrinkWrap: true, children: rows);
   }
 
+  Widget _threadTile(
+    IncomingShareAccount account,
+    IncomingShareRoom room,
+    IncomingShareThread thread,
+  ) {
+    final selected =
+        _thread?.id == thread.id &&
+        _room?.token == room.token &&
+        _account?.id == account.id;
+    return ListTile(
+      key: Key(
+        'incoming-share-thread-${account.id}-${room.token}-${thread.id}',
+      ),
+      selected: selected,
+      enabled: !_sending,
+      contentPadding: const EdgeInsets.only(left: 56, right: 16),
+      leading: const Icon(Icons.forum_outlined),
+      title: Text(thread.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: selected ? const Icon(Icons.check_rounded) : null,
+      onTap: _sending
+          ? null
+          : () => setState(() {
+              _account = account;
+              _room = room;
+              _thread = thread;
+              _error = null;
+            }),
+    );
+  }
+
   Widget _roomTile(IncomingShareAccount account, IncomingShareRoom room) {
-    final selected = _room?.token == room.token && _account?.id == account.id;
+    final selected =
+        _room?.token == room.token &&
+        _account?.id == account.id &&
+        _thread == null;
     final subtitle = room.subtitle;
     return ListTile(
       key: Key('incoming-share-room-${account.id}-${room.token}'),
@@ -471,6 +556,7 @@ final class _IncomingShareTargetDialogState
           : () => setState(() {
               _account = account;
               _room = room;
+              _thread = null;
               _error = null;
             }),
     );
@@ -504,6 +590,8 @@ final class _IncomingShareTargetDialogState
           accountLabel: account.label,
           roomToken: room.token,
           roomLabel: room.label,
+          threadId: _thread?.id,
+          threadTitle: _thread?.title,
         ),
       );
       if (mounted) {

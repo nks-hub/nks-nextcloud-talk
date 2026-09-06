@@ -227,6 +227,97 @@ void main() {
     expect(sent?.roomToken, 'room-7');
   });
 
+  testWidgets('a thread under a conversation is a target of its own', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(id: 'share-6', text: 'hello', file: null),
+          loadAccounts: () async => const [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [
+                IncomingShareRoom(
+                  token: 'room-a',
+                  label: 'Project',
+                  threads: [
+                    IncomingShareThread(id: 41, title: 'Roadmap'),
+                    IncomingShareThread(id: 42, title: 'Hiring'),
+                  ],
+                ),
+              ],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Roadmap'), findsOneWidget);
+    expect(find.text('Hiring'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('incoming-share-thread-account-a-room-a-42')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.roomToken, 'room-a');
+    expect(sent?.threadId, 42);
+    expect(sent?.threadTitle, 'Hiring');
+  });
+
+  testWidgets('picking the conversation after a thread drops the thread', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(id: 'share-7', text: 'hello', file: null),
+          loadAccounts: () async => const [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [
+                IncomingShareRoom(
+                  token: 'room-a',
+                  label: 'Project',
+                  threads: [IncomingShareThread(id: 41, title: 'Roadmap')],
+                ),
+              ],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('incoming-share-thread-account-a-room-a-41')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-a-room-a')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.roomToken, 'room-a');
+    expect(
+      sent?.threadId,
+      isNull,
+      reason: 'the conversation itself is not the thread that was picked first',
+    );
+  });
+
   testWidgets('send failure keeps the picker open for retry', (tester) async {
     await tester.pumpWidget(
       _localizedApp(
