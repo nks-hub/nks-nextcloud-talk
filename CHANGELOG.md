@@ -56,6 +56,15 @@ from the commit log. Nothing here has reached testers yet.
   button folds it, and the button now always works. Reported on the desktop and
   found earlier on a 7-inch tablet in portrait.
 
+- Changed: the Czech progress messages no longer talk about themselves.
+  Twenty-four of them said "Kontroluji server…", "Stahuji přílohu…",
+  "Připojuji se k hovoru…"; they now name the action — "Kontrola serveru…",
+  "Stahování přílohy…", "Připojování k hovoru…" — like the rest of the app.
+- Changed: four pairs of Czech words that meant the same thing now agree.
+  Notifications are "oznámení" everywhere, the thing that takes a photo is a
+  "fotoaparát" and only the one in a call is a "kamera", the waiting room is
+  always a "čekárna", and breakout rooms are always "oddělené místnosti".
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
