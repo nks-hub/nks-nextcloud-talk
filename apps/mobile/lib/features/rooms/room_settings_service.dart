@@ -714,11 +714,16 @@ final class RoomSettingsService {
     return response.rooms;
   }
 
+  /// [childTokens] are the breakout rooms this removal deletes on the server.
+  /// They are dropped from the cache with it, the same way `deleteRoom` drops
+  /// the room it deleted: without that the list keeps offering conversations
+  /// that no longer exist until the next sync.
   Future<ConversationRoom?> removeBreakoutRooms({
     required String accountId,
     required String roomToken,
-  }) {
-    return _administer(
+    Iterable<String> childTokens = const <String>[],
+  }) async {
+    final room = await _administer(
       accountId: accountId,
       roomToken: roomToken,
       build: (ids) => RemoveBreakoutRoomsRequest(
@@ -727,6 +732,10 @@ final class RoomSettingsService {
         roomToken: ids.roomToken,
       ),
     );
+    for (final token in childTokens) {
+      await _accounts.removeConversation(accountId: accountId, token: token);
+    }
+    return room;
   }
 
   /// Starts or ends the breakout session of the parent conversation.

@@ -263,12 +263,19 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
         )) {
           return;
         }
+        // The children are already loaded for the "asks for a moderator"
+        // subtitle, so the removal can name the rooms it deletes and they
+        // leave the list with it instead of lingering until the next sync.
+        final removed = [
+          for (final child in _breakoutChildren) child.token.value,
+        ];
         await _administer(
           () => ref
               .read(roomSettingsServiceProvider)
               .removeBreakoutRooms(
                 accountId: widget.account.id,
                 roomToken: widget.conversation.token,
+                childTokens: removed,
               ),
           fallback: () => {'breakoutRoomMode': 0, 'breakoutRoomStatus': 0},
         );
