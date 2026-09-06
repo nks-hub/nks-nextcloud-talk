@@ -141,6 +141,14 @@ abstract interface class CallLocalAudio {
 abstract interface class CallRemoteVideo {
   Widget build(BuildContext context);
 
+  /// The id of the track this shows, as the platform knows it.
+  ///
+  /// iOS needs it to put the same picture into a picture-in-picture window:
+  /// that window is not the Flutter view, it is a layer the system draws, so
+  /// it has to be fed the frames directly rather than the widget. `null`
+  /// where the engine has no id to give — a fake in a test.
+  String? get videoTrackId;
+
   Future<void> dispose();
 }
 

@@ -120,6 +120,7 @@ final class AppleDeepLinkDelivery {
   private var voiceMessageTranscriber: VoiceMessageTranscriber?
   private var incomingShareChannel: AppleIncomingShareChannel?
   private var callAudioInterruptions: CallAudioInterruptions?
+  private var callPictureInPicture: CallPictureInPicture?
   /// Built at launch, not with the engine: a VoIP push can arrive at a
   /// terminated app, and iOS requires the call to be reported to CallKit from
   /// inside that delivery — long before Flutter exists.
@@ -316,6 +317,15 @@ final class AppleDeepLinkDelivery {
     callAudioInterruptions = CallAudioInterruptions(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+    // The window draws a layer of its own, so it needs a view to live in as
+    // well as a channel. Without a root view there is nothing to attach to
+    // and the call screen is told the platform has no window.
+    if let host = window?.rootViewController?.view {
+      callPictureInPicture = CallPictureInPicture(
+        messenger: engineBridge.applicationRegistrar.messenger(),
+        host: host
+      )
+    }
     callPushKit.attach(messenger: engineBridge.applicationRegistrar.messenger())
 
     let drain = FlutterMethodChannel(

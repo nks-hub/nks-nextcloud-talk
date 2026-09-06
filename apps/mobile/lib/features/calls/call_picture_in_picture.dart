@@ -15,6 +15,15 @@ abstract interface class CallPictureInPicture {
   /// whether the platform can do that at all.
   Future<bool> setAvailable(bool available);
 
+  /// Names the video the window should show, by platform track id.
+  ///
+  /// Android ignores it: there the window IS this application's own screen,
+  /// so whatever the call view draws is what appears. On iOS the window is a
+  /// layer the system owns and the Flutter view is not in it, so exactly one
+  /// picture can go there and it has to be named. `null` leaves the window
+  /// with nothing to show, which is what a call with no video looks like.
+  Future<void> setVideoTrack(String? trackId);
+
   /// `true` while the call is shown as a small window.
   Stream<bool> get active;
 }
@@ -46,6 +55,17 @@ final class PlatformCallPictureInPicture implements CallPictureInPicture {
   }
 
   @override
+  Future<void> setVideoTrack(String? trackId) async {
+    try {
+      await _channel.invokeMethod<void>('setVideoTrack', trackId);
+    } on MissingPluginException {
+      // The platform has no window to fill.
+    } on PlatformException {
+      // The track went away between the pick and the call.
+    }
+  }
+
+  @override
   Stream<bool> get active => _active.stream;
 
   Future<void> _onCall(MethodCall call) async {
@@ -61,6 +81,9 @@ final class UnavailableCallPictureInPicture implements CallPictureInPicture {
 
   @override
   Future<bool> setAvailable(bool available) async => false;
+
+  @override
+  Future<void> setVideoTrack(String? trackId) async {}
 
   @override
   Stream<bool> get active => const Stream.empty();

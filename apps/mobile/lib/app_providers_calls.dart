@@ -104,7 +104,8 @@ final callAudioInterruptionsProvider = Provider<CallAudioInterruptions>((ref) {
 /// The small window a call shrinks into when the user leaves the app. Armed
 /// only while the call screen is showing.
 final callPictureInPictureProvider = Provider<CallPictureInPicture>((ref) {
-  if (defaultTargetPlatform == TargetPlatform.android) {
+  if (defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS) {
     return PlatformCallPictureInPicture();
   }
   return const UnavailableCallPictureInPicture();

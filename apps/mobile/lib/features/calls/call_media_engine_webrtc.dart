@@ -351,14 +351,21 @@ CallMediaConnectionState _connectionState(rtc.RTCPeerConnectionState state) =>
 /// A renderer bound to one remote stream. `initialize` has to finish before
 /// the stream is attached, so construction is asynchronous.
 final class _WebRtcRemoteVideo implements CallRemoteVideo {
-  _WebRtcRemoteVideo._(this._renderer);
+  _WebRtcRemoteVideo._(this._renderer, this.videoTrackId);
 
   static Future<_WebRtcRemoteVideo> open(rtc.MediaStream stream) async {
     final renderer = rtc.RTCVideoRenderer();
     await renderer.initialize();
     renderer.srcObject = stream;
-    return _WebRtcRemoteVideo._(renderer);
+    final tracks = stream.getVideoTracks();
+    return _WebRtcRemoteVideo._(
+      renderer,
+      tracks.isEmpty ? null : tracks.first.id,
+    );
   }
+
+  @override
+  final String? videoTrackId;
 
   final rtc.RTCVideoRenderer _renderer;
   bool _disposed = false;

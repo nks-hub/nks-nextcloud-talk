@@ -28,6 +28,11 @@ final class _FrozenJoinController extends CallJoinController {
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
+  _FakeRemoteVideo({this.videoTrackId});
+
+  @override
+  final String? videoTrackId;
+
   @override
   Widget build(BuildContext context) =>
       const ColoredBox(key: Key('fake-remote-video'), color: Colors.green);
@@ -41,11 +46,17 @@ final class _FakePictureInPicture implements CallPictureInPicture {
   final modes = StreamController<bool>.broadcast();
   final armed = <bool>[];
 
+  final windowTracks = <String?>[];
+
   @override
   Future<bool> setAvailable(bool available) async {
     armed.add(available);
     return true;
   }
+
+  @override
+  Future<void> setVideoTrack(String? trackId) async =>
+      windowTracks.add(trackId);
 
   @override
   Stream<bool> get active => modes.stream;
@@ -54,6 +65,8 @@ final class _FakePictureInPicture implements CallPictureInPicture {
 
 CallJoinState _joined({
   CallPublishingRights publishing = const CallPublishingRights(),
+  String? videoTrackId,
+  String? screenTrackId,
 }) => CallJoinState(
   phase: CallJoinPhase.joined,
   publishing: publishing,
@@ -71,7 +84,7 @@ CallJoinState _joined({
         connected: true,
         handRaised: false,
         since: DateTime(2026, 9, 5),
-        video: _FakeRemoteVideo(),
+        video: _FakeRemoteVideo(videoTrackId: videoTrackId),
         audioMuted: true,
       ),
       CallPeerState(
@@ -81,6 +94,9 @@ CallJoinState _joined({
         connected: false,
         handRaised: true,
         since: DateTime(2026, 9, 5),
+        screen: screenTrackId == null
+            ? null
+            : _FakeRemoteVideo(videoTrackId: screenTrackId),
       ),
     ],
   ),
@@ -90,6 +106,8 @@ Future<_FakePictureInPicture> _pumpCallScreen(
   WidgetTester tester, {
   double devicePixelRatio = 1,
   CallPublishingRights publishing = const CallPublishingRights(),
+  String? videoTrackId,
+  String? screenTrackId,
 }) async {
   // A phone-sized surface: on the default test window the third tile of
   // the grid is below the fold and is not built at all.
@@ -101,7 +119,13 @@ Future<_FakePictureInPicture> _pumpCallScreen(
     ProviderScope(
       overrides: [
         callJoinControllerProvider.overrideWith(
-          () => _FrozenJoinController(_joined(publishing: publishing)),
+          () => _FrozenJoinController(
+            _joined(
+              publishing: publishing,
+              videoTrackId: videoTrackId,
+              screenTrackId: screenTrackId,
+            ),
+          ),
         ),
         callParticipantNamesProvider.overrideWith(
           (ref, key) async => {'actor:users:alice': 'Alice Example'},
@@ -215,5 +239,34 @@ void main() {
       reason: 'audio was not taken away, so the microphone stays',
     );
     expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+  });
+
+  testWidgets('the window is told which video to draw', (tester) async {
+    final platform = await _pumpCallScreen(tester, videoTrackId: 'track-cam');
+    expect(platform.windowTracks, ['track-cam']);
+  });
+
+  testWidgets('a shared screen goes into the window before a camera', (
+    tester,
+  ) async {
+    final platform = await _pumpCallScreen(
+      tester,
+      videoTrackId: 'track-cam',
+      screenTrackId: 'track-screen',
+    );
+    expect(
+      platform.windowTracks,
+      ['track-screen'],
+      reason: 'a shared screen is what the small window is opened for',
+    );
+  });
+
+  testWidgets('a call with no video names no track', (tester) async {
+    final platform = await _pumpCallScreen(tester);
+    expect(
+      platform.windowTracks,
+      isEmpty,
+      reason: 'no video to draw is not a change worth a platform call',
+    );
   });
 }

@@ -43,6 +43,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
   late final CallPictureInPicture _pictureInPicture;
   StreamSubscription<bool>? _pictureInPictureModes;
   bool _inPictureInPicture = false;
+  String? _windowTrackId;
 
   @override
   void initState() {
@@ -63,6 +64,26 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
     super.dispose();
   }
 
+  /// The one picture a picture-in-picture window can hold: a shared screen if
+  /// somebody is sharing, otherwise the first participant who sends video.
+  /// The order matters — a share is what people open the window to keep an
+  /// eye on.
+  String? _windowTrack(CallMediaState media) {
+    for (final peer in media.participants) {
+      final screen = peer.screen?.videoTrackId;
+      if (screen != null) {
+        return screen;
+      }
+    }
+    for (final peer in media.participants) {
+      final video = peer.video?.videoTrackId;
+      if (video != null) {
+        return video;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
@@ -79,6 +100,14 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       }
     });
     final media = join.media;
+    // Recomputed on every build rather than watched: the participants list is
+    // rebuilt whenever a track appears or goes away, and the port drops a
+    // repeat of the same id on the platform side.
+    final windowTrack = _windowTrack(media);
+    if (windowTrack != _windowTrackId) {
+      _windowTrackId = windowTrack;
+      unawaited(_pictureInPicture.setVideoTrack(windowTrack));
+    }
     final tiles = <Widget>[
       _SelfTile(media: media, strings: strings),
       for (final peer in media.participants)

@@ -1503,6 +1503,9 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
   bool disposed = false;
 
   @override
+  String? get videoTrackId => null;
+
+  @override
   Widget build(BuildContext context) => const SizedBox.shrink();
 
   @override
