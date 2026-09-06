@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
@@ -233,6 +234,54 @@ void main() {
     });
   }
 
+  testWidgets('a failed download re-reads the message and opens what it finds', (
+    tester,
+  ) async {
+    // The other half of the repair the voice player already does: a message
+    // cached with the path the HPB relay wrote names a file the server does
+    // not know, and every download of it fails. The message is re-read once
+    // and the download repeated against the address it then carries — so the
+    // person taps once, not twice, and never sees the failure at all.
+    final opener = _RecordingOpener(result: ChatAttachmentOpenResult.downloadFailed);
+    final repaired = Uri.parse(
+      'https://cloud.example.invalid/remote.php/dav/files/alice/Talk/room/report.pdf',
+    );
+    var repairs = 0;
+
+    await tester.pumpWidget(
+      _app(
+        exporter: _RecordingExporter(),
+        opener: opener,
+        overrides: [
+          attachmentUriRepairProvider.overrideWithValue(({
+            required account,
+            required roomToken,
+            required messageId,
+            required index,
+            required failedUri,
+          }) async {
+            repairs++;
+            opener.result = ChatAttachmentOpenResult.opened;
+            return repaired;
+          }),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-open-action-81-0')));
+    await tester.pumpAndSettle();
+
+    expect(repairs, 1, reason: 'asked once, not once per attempt');
+    expect(opener.openedUris.length, 2);
+    expect(opener.openedUris.last, repaired);
+    expect(
+      find.text('The attachment could not be downloaded.'),
+      findsNothing,
+      reason: 'the download that succeeded is the one that counts',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   const openFailures = <ChatAttachmentOpenResult, String>{
     ChatAttachmentOpenResult.reauthenticationRequired:
         'Sign in again to download this attachment.',
@@ -254,6 +303,10 @@ void main() {
         _app(
           exporter: _RecordingExporter(),
           opener: _RecordingOpener(result: entry.key),
+          // Nothing to repair: these are the failures that stand, and the
+          // message has to be the one the person sees. Left live, the repair
+          // would reach the database and the frame would never settle.
+          overrides: [_noRepair],
         ),
       );
 
@@ -308,6 +361,7 @@ Widget _app({
   ChatMessage? message,
   double width = 420,
   TextScaler textScaler = TextScaler.noScaling,
+  List<Override> overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
@@ -315,6 +369,7 @@ Widget _app({
         (_) => exporter,
       ),
       chatAttachmentOpenActionFactoryProvider.overrideWithValue((_) => opener),
+      ...overrides,
     ],
     child: localizedTestApp(
       home: Scaffold(
@@ -376,11 +431,24 @@ final class _RecordingExporter implements ChatAttachmentExportAction {
   }
 }
 
+/// No corrected address exists for this attachment, so a failed download stays
+/// failed and the person is told.
+final _noRepair = attachmentUriRepairProvider.overrideWithValue(({
+  required account,
+  required roomToken,
+  required messageId,
+  required index,
+  required failedUri,
+}) async => null);
+
 final class _RecordingOpener implements ChatAttachmentOpenAction {
   _RecordingOpener({this.result = ChatAttachmentOpenResult.opened});
 
-  final ChatAttachmentOpenResult result;
+  /// Not final: a repair test lets the second attempt succeed where the first
+  /// one failed, which is the whole point of repeating it.
+  ChatAttachmentOpenResult result;
   final List<String> openedNames = [];
+  final List<Uri> openedUris = [];
 
   /// When set, `open` reports this progress and then waits for [release].
   ({int received, int? total})? heldProgress;
@@ -397,6 +465,7 @@ final class _RecordingOpener implements ChatAttachmentOpenAction {
     ChatDownloadProgress? onProgress,
   }) async {
     openedNames.add(fileName);
+    openedUris.add(uri);
     final held = heldProgress;
     if (held != null) {
       onProgress?.call(held.received, held.total);

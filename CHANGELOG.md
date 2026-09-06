@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: a file you had sent yourself and could not open now opens on the first
+  tap. Build 63 repaired such a message only when a voice message in it was
+  played; the same repair now happens when any attachment fails to download, so
+  nothing has to be tapped twice.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —

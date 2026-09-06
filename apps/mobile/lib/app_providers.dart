@@ -41,6 +41,7 @@ import 'features/chat/attachment_service.dart';
 import 'features/chat/chat_background_surface.dart';
 import 'features/chat/chat_attachment_context.dart';
 import 'features/chat/chat_message_actions_service.dart';
+import 'features/chat/chat_message_content.dart';
 import 'features/chat/message_translation_service.dart';
 import 'features/chat/references/reference_resolver.dart';
 import 'features/chat/location_share_service.dart';

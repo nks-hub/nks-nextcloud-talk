@@ -8,6 +8,38 @@ typedef ChatVoiceProviderKey = ({
 
 typedef ChatVoiceTranscriberFactory = VoiceTranscriber Function();
 
+/// Re-reads the message behind a download that failed and answers with the
+/// attachment's corrected address, or `null` when nothing changed.
+///
+/// A provider rather than a bare call so a widget test can render an
+/// attachment bubble without the repair reaching the database behind
+/// `chatServiceProvider` — which never settles under `pumpAndSettle`.
+typedef AttachmentUriRepair =
+    Future<Uri?> Function({
+      required StoredAccount account,
+      required String roomToken,
+      required int messageId,
+      required int index,
+      required Uri failedUri,
+    });
+
+final attachmentUriRepairProvider = Provider<AttachmentUriRepair>((ref) {
+  return ({
+    required StoredAccount account,
+    required String roomToken,
+    required int messageId,
+    required int index,
+    required Uri failedUri,
+  }) => repairAttachmentUri(
+    ref,
+    account: account,
+    roomToken: roomToken,
+    messageId: messageId,
+    index: index,
+    failedUri: failedUri,
+  );
+});
+
 final chatVoiceTranscriberFactoryProvider =
     Provider<ChatVoiceTranscriberFactory?>((ref) {
       if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {

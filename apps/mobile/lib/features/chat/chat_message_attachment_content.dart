@@ -611,6 +611,14 @@ final class _ChatAttachment extends ConsumerWidget {
               fileName: name,
               contentType: mimeType,
               expectedBytes: _attachmentExpectedBytes(parameter),
+              repairUri: () => _repairedAttachmentUri(
+                ref,
+                account: account,
+                roomToken: roomToken,
+                messageId: messageId,
+                index: index,
+                failedUri: originalUri,
+              ),
             ),
           );
     final openAttachment = openImage ?? openFile;
@@ -1119,6 +1127,23 @@ Future<Uri?> _repairedAttachmentUri(
   required int messageId,
   required int index,
   required Uri failedUri,
+}) => ref.read(attachmentUriRepairProvider)(
+  account: account,
+  roomToken: roomToken,
+  messageId: messageId,
+  index: index,
+  failedUri: failedUri,
+);
+
+/// The repair itself, behind [attachmentUriRepairProvider] so a widget test
+/// can render a bubble without it reaching a database.
+Future<Uri?> repairAttachmentUri(
+  Ref ref, {
+  required StoredAccount account,
+  required String roomToken,
+  required int messageId,
+  required int index,
+  required Uri failedUri,
 }) async {
   try {
     final refreshed = await ref
@@ -1164,21 +1189,34 @@ Future<void> _openDownloadedAttachment(
   required String fileName,
   required String contentType,
   int? expectedBytes,
+  Future<Uri?> Function()? repairUri,
 }) async {
   final opener = ref.read(chatAttachmentOpenActionFactoryProvider)(
     ref.read(chatMediaRepositoryProvider),
   );
-  final result = await _withDownloadNotice(
+  Future<ChatAttachmentOpenResult> open(Uri target) => _withDownloadNotice(
     context,
     expectedBytes: expectedBytes,
     (onProgress) => opener.open(
       account: account,
-      uri: uri,
+      uri: target,
       fileName: fileName,
       expectedContentType: contentType,
       onProgress: onProgress,
     ),
   );
+  var result = await open(uri);
+  // A download that failed can mean the cached message still names a path the
+  // server does not know. The message is re-read once, and only then is the
+  // failure reported.
+  if (result == ChatAttachmentOpenResult.downloadFailed &&
+      repairUri != null &&
+      context.mounted) {
+    final repaired = await repairUri();
+    if (repaired != null && context.mounted) {
+      result = await open(repaired);
+    }
+  }
   if (result == ChatAttachmentOpenResult.opened || !context.mounted) {
     return;
   }
