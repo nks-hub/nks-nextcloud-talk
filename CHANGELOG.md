@@ -48,6 +48,14 @@ from the commit log. Nothing here has reached testers yet.
   played; the same repair now happens when any attachment fails to download, so
   nothing has to be tapped twice.
 
+- Fixed: on a desktop window between roughly 720 and 920 points wide, the
+  conversation list vanished the moment a conversation was opened and could not
+  be brought back — the button for it flipped a setting the narrow window
+  overruled again, so pressing it twice changed nothing and no other
+  conversation could be picked. The list no longer folds itself; only the
+  button folds it, and the button now always works. Reported on the desktop and
+  found earlier on a 7-inch tablet in portrait.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
