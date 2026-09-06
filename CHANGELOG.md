@@ -75,6 +75,8 @@ from the commit log. Nothing here has reached testers yet.
   give a conversation room, the conversation list was hidden even though no
   conversation was open — leaving only "Select a conversation" and no way to
   select one. The list is now hidden only while a conversation is on screen.
+- Changed: the Czech diagnostics say "v mezipaměti" where they said "v cache".
+  The rest of the Czech text already used the Czech word.
 
 ## 0.1.0 (62) — 6 September 2026
 

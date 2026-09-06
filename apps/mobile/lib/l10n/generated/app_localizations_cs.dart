@@ -1356,13 +1356,13 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsForeignKeyViolations => 'Porušení cizích klíčů';
 
   @override
-  String get diagnosticsConversationRows => 'Konverzace v cache';
+  String get diagnosticsConversationRows => 'Konverzace v mezipaměti';
 
   @override
-  String get diagnosticsMessageRows => 'Zprávy v cache';
+  String get diagnosticsMessageRows => 'Zprávy v mezipaměti';
 
   @override
-  String get diagnosticsThreadRows => 'Vlákna v cache';
+  String get diagnosticsThreadRows => 'Vlákna v mezipaměti';
 
   @override
   String get diagnosticsTextOutboxRows => 'Položky textového outboxu';
