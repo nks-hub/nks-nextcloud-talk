@@ -219,6 +219,9 @@ extension _ChatServiceRelay on ChatService {
               ? _ChatRelayApplication.fetchRequired
               : _ChatRelayApplication.nothingNew;
         }
+        if (relay.comments.any(_carriesFile)) {
+          return _ChatRelayApplication.fetchRequired;
+        }
         final scope = (await _chat.getNetworkScope(
           accountId: prepared.account.id,
           roomToken: prepared.conversation.token,
@@ -252,6 +255,26 @@ extension _ChatServiceRelay on ChatService {
       },
     );
   }
+
+  /// Whether a relayed message carries a file, which is the one thing the
+  /// relay renders differently from every chat read.
+  ///
+  /// The relay describes a file the way the SHARE sees it: the path is relative
+  /// to the share root and the link is the share's own. So
+  /// `Talk/<room>/<user>/voice-message.m4a` arrives as `voice-message.m4a`, and
+  /// because the poll never reads a message it already knows, that wrong path
+  /// is the only one the row will ever hold — every later attempt to play or
+  /// open the attachment is a 404.
+  ///
+  /// Measured on a Galaxy S9+ on 6 September 2026, all against the same message
+  /// ids: the chat endpoint, a long poll held open across the send, the
+  /// shared-items listing and the same message read as the other participant all
+  /// render the FULL path. Only the relay does not. So a payload with an
+  /// attachment is fetched instead of merged; text, which is everything else,
+  /// still costs no request at all.
+  bool _carriesFile(ChatMessage message) => message.messageParameters.values.any(
+    (parameter) => parameter.type == 'file',
+  );
 
   /// The long poll's stand-down. While a trusted relay covers this room's
   /// root scope, the poll waits on the relay instead of holding an HTTP

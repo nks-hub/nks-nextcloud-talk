@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: an attachment you had sent yourself could never be opened or played
+  again. The app kept the path the file has inside the share instead of the one
+  it has on the server, so every attempt ended in a silent failure. Older
+  messages are not repaired by this; new ones are correct.
 - Fixed: on a phone the conversation header showed no conversation name at
   all. Five buttons took the whole width and the name was left with nothing.
   The name now keeps its room and the buttons that no longer fit move into a
