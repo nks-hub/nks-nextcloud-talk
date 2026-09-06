@@ -76,6 +76,12 @@ from the commit log. Nothing here has reached testers yet.
   was drawn only on the two phones although the engine can capture a desktop
   screen, so on a desktop the feature simply was not there.
 
+- Nothing users see: a whole call now runs in the test suite over a real
+  socket, against a stand-in Talk server — joining, a second participant
+  arriving, video, a screen share started and stopped, and leaving. It carries
+  no media, which no automated test can, but every message the application
+  sends is now checked on the wire rather than against a mock.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
