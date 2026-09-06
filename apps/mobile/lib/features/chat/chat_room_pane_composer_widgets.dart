@@ -76,25 +76,46 @@ final class _GiphyThumbnailState extends State<_GiphyThumbnail> {
 /// message already lives in is filtered out. The cached list is read without a
 /// spinner so an account that has not synced yet shows the empty state instead
 /// of an indeterminate progress indicator.
-final class _ForwardTargetSheet extends ConsumerWidget {
+/// Where a forwarded message goes.
+///
+/// It shows the conversations themselves, the way the incoming-share screen
+/// does: the real avatar, the name and the line the room last carried. The
+/// owner asked for that on 6 September 2026 about the share screen — "a list of
+/// conversations including icons", not a select — and this sheet does the same
+/// job, so it holds to the same standard. A search box appears from
+/// [_forwardSearchFrom] conversations up; below that the whole list is on
+/// screen anyway.
+final class _ForwardTargetSheet extends ConsumerStatefulWidget {
   const _ForwardTargetSheet({
-    required this.accountId,
+    required this.account,
     required this.excludedToken,
   });
 
-  final String accountId;
+  final StoredAccount account;
   final String excludedToken;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ForwardTargetSheet> createState() =>
+      _ForwardTargetSheetState();
+}
+
+/// Below this many conversations a search field is noise, not help.
+const int _forwardSearchFrom = 8;
+
+final class _ForwardTargetSheetState
+    extends ConsumerState<_ForwardTargetSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final targets =
-        (ref.watch(conversationsProvider(accountId)).valueOrNull ??
+    final all =
+        (ref.watch(conversationsProvider(widget.account.id)).valueOrNull ??
                 const <CachedConversation>[])
             .where(
               (conversation) =>
-                  conversation.token != excludedToken &&
+                  conversation.token != widget.excludedToken &&
                   // Forwarding into a room this account may not post in only
                   // fails at the server, so it is not offered.
                   ChatPostingAccess.fromCachedConversation(
@@ -102,6 +123,15 @@ final class _ForwardTargetSheet extends ConsumerWidget {
                   ).canPost,
             )
             .toList(growable: false);
+    final needle = _query.trim().toLowerCase();
+    final targets = needle.isEmpty
+        ? all
+        : all
+              .where(
+                (conversation) =>
+                    conversation.displayName.toLowerCase().contains(needle),
+              )
+              .toList(growable: false);
     return SafeArea(
       child: Column(
         key: const Key('chat-forward-sheet'),
@@ -115,6 +145,21 @@ final class _ForwardTargetSheet extends ConsumerWidget {
               style: theme.textTheme.titleMedium,
             ),
           ),
+          if (all.length >= _forwardSearchFrom)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                key: const Key('chat-forward-search'),
+                autofocus: false,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  hintText: strings.incomingShareSearch,
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
           if (targets.isEmpty)
             Padding(
               key: const Key('chat-forward-empty'),
@@ -128,14 +173,28 @@ final class _ForwardTargetSheet extends ConsumerWidget {
                 itemCount: targets.length,
                 itemBuilder: (context, index) {
                   final target = targets[index];
+                  final preview = target.lastMessageText?.trim();
                   return ListTile(
                     key: Key('chat-forward-conversation-${target.token}'),
-                    leading: const Icon(Icons.forum_outlined),
+                    leading: ExcludeSemantics(
+                      child: ConversationAvatar(
+                        account: widget.account,
+                        conversation: target,
+                        radius: 20,
+                      ),
+                    ),
                     title: Text(
                       target.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    subtitle: preview == null || preview.isEmpty
+                        ? null
+                        : Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                     onTap: () => Navigator.of(context).pop(target),
                   );
                 },

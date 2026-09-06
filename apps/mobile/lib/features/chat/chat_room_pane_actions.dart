@@ -254,7 +254,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
       useSafeArea: true,
       isScrollControlled: true,
       builder: (sheetContext) => _ForwardTargetSheet(
-        accountId: accountId,
+        account: widget.account,
         excludedToken: widget.conversation.token,
       ),
     );
