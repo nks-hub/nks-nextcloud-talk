@@ -82,6 +82,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get incomingShareConversation => 'Conversation';
 
   @override
+  String get incomingShareSearch => 'Search conversations';
+
+  @override
+  String get incomingShareNoMatches => 'No conversation matches that.';
+
+  @override
+  String get incomingShareFile => 'Sharing a file';
+
+  @override
+  String get incomingShareText => 'Sharing text';
+
+  @override
   String get incomingShareSend => 'Send';
 
   @override

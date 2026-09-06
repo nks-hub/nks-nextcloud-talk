@@ -236,6 +236,30 @@ abstract class AppLocalizations {
   /// **'Conversation'**
   String get incomingShareConversation;
 
+  /// No description provided for @incomingShareSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search conversations'**
+  String get incomingShareSearch;
+
+  /// No description provided for @incomingShareNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversation matches that.'**
+  String get incomingShareNoMatches;
+
+  /// No description provided for @incomingShareFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing a file'**
+  String get incomingShareFile;
+
+  /// No description provided for @incomingShareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing text'**
+  String get incomingShareText;
+
   /// No description provided for @incomingShareSend.
   ///
   /// In en, this message translates to:

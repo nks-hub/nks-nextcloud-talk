@@ -82,6 +82,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get incomingShareConversation => 'Konverzace';
 
   @override
+  String get incomingShareSearch => 'Hledat konverzaci';
+
+  @override
+  String get incomingShareNoMatches => 'Tomu neodpovídá žádná konverzace.';
+
+  @override
+  String get incomingShareFile => 'Sdílíte soubor';
+
+  @override
+  String get incomingShareText => 'Sdílíte text';
+
+  @override
   String get incomingShareSend => 'Odeslat';
 
   @override

@@ -119,7 +119,7 @@ void main() {
     expect(coordinator.takeNext(), isNull);
   });
 
-  testWidgets('picker requires an exact account and room before sending', (
+  testWidgets('the picker lists every conversation and sends to the one tapped', (
     tester,
   ) async {
     IncomingShareTarget? sent;
@@ -145,31 +145,86 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Every conversation of every account is on screen at once, under its
+    // account's heading - no picker has to be opened first.
+    expect(find.text('alice · cloud.example'), findsOneWidget);
+    expect(find.text('bob · other.example'), findsOneWidget);
+    expect(find.text('Project'), findsOneWidget);
+    expect(find.text('Team'), findsOneWidget);
     expect(
       tester
           .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
           .onPressed,
       isNull,
     );
-    await tester.tap(find.byKey(const Key('incoming-share-account')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('bob · other.example').last);
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
-          .onPressed,
-      isNull,
+
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-b-room-b')),
     );
-    await tester.tap(find.byKey(const Key('incoming-share-room')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Team').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('incoming-share-send')));
     await tester.pumpAndSettle();
 
     expect(sent?.accountId, 'account-b');
     expect(sent?.roomToken, 'room-b');
+  });
+
+  testWidgets('the picker searches once there are enough conversations', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(id: 'share-5', text: 'hello', file: null),
+          loadAccounts: () async => [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [
+                for (var index = 0; index < 9; index++)
+                  IncomingShareRoom(
+                    token: 'room-$index',
+                    label: index == 7 ? 'Roadmap' : 'Room $index',
+                  ),
+              ],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incoming-share-search')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('incoming-share-search')),
+      'road',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Roadmap'), findsOneWidget);
+    expect(find.text('Room 0'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('incoming-share-search')),
+      'nothing matches this',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('incoming-share-no-matches')), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('incoming-share-search')),
+      'road',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-a-room-7')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.roomToken, 'room-7');
   });
 
   testWidgets('send failure keeps the picker open for retry', (tester) async {
@@ -189,13 +244,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('incoming-share-account')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('alice').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('incoming-share-room')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Project').last);
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-a-room-a')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('incoming-share-send')));
     await tester.pumpAndSettle();
