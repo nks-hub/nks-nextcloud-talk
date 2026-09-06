@@ -183,7 +183,11 @@ void main() {
       isNotNull,
       reason: 'media exists, so the button must act',
     );
-    expect(find.text('Signalled through external HPB.'), findsOneWidget);
+    expect(
+      find.text('The call runs through a separate signalling server.'),
+      findsOneWidget,
+      reason: 'the banner names the transport in words, not as an acronym',
+    );
   });
 
   testWidgets('a join without a signalling session says so and stays idle', (

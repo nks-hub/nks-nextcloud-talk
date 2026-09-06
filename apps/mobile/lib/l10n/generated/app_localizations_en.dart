@@ -985,7 +985,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String roomDetailsParticipantsCount(int count) {
-    return '$count participants';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count participants',
+      one: '1 participant',
+    );
+    return '$_temp0';
   }
 
   @override

@@ -1841,7 +1841,7 @@ abstract class AppLocalizations {
   /// No description provided for @roomDetailsParticipantsCount.
   ///
   /// In en, this message translates to:
-  /// **'{count} participants'**
+  /// **'{count, plural, =1{1 participant} other{{count} participants}}'**
   String roomDetailsParticipantsCount(int count);
 
   /// No description provided for @roomDetailsParticipantsEmpty.

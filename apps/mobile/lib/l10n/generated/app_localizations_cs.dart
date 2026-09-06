@@ -854,7 +854,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get presenceAway => 'Pryč';
 
   @override
-  String get presenceBusy => 'Zaneprázdněn';
+  String get presenceBusy => 'Nemám čas';
 
   @override
   String get presenceDoNotDisturb => 'Nerušit';
@@ -981,12 +981,19 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String roomDetailsAddParticipantAdded(String name) {
-    return '$name byl přidán';
+    return 'Přidáno: $name';
   }
 
   @override
   String roomDetailsParticipantsCount(int count) {
-    return '$count účastníků';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count účastníků',
+      few: '$count účastníci',
+      one: '1 účastník',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1172,11 +1179,11 @@ class AppLocalizationsCs extends AppLocalizations {
       'Odpověď zůstává v konverzaci pod citací zprávy, na kterou reaguje.';
 
   @override
-  String get settingsReplyLayoutThread => 'V podvláknu';
+  String get settingsReplyLayoutThread => 'Ve vlákně';
 
   @override
   String get settingsReplyLayoutThreadDescription =>
-      'Odpovědi z konverzace mizí a otevírají se v samostatném vlákně.';
+      'Odpovědi se z konverzace přesunou do samostatného vlákna.';
 
   @override
   String get settingsThemeSection => 'Vzhled';
@@ -1509,7 +1516,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsTalkFeatureCount => 'Nahlášené funkce';
 
   @override
-  String get diagnosticsValueNone => 'Žádná';
+  String get diagnosticsValueNone => 'Nic';
 
   @override
   String get diagnosticsValueNever => 'Nikdy';
@@ -1546,13 +1553,13 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusAway => 'Pryč';
 
   @override
-  String get profileStatusBusy => 'Zaneprázdněn';
+  String get profileStatusBusy => 'Nemám čas';
 
   @override
   String get profileStatusDoNotDisturb => 'Nerušit';
 
   @override
-  String get profileStatusInvisible => 'Neviditelný';
+  String get profileStatusInvisible => 'Skrytý stav';
 
   @override
   String get profileStatusOffline => 'Offline';
@@ -1933,7 +1940,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerStopSharing => 'Ukončit sdílení obrazovky';
 
   @override
-  String get callParticipantConnected => 'Zvuk spojen';
+  String get callParticipantConnected => 'Zvuk je spojený';
 
   @override
   String get callParticipantConnecting => 'Připojování…';
@@ -1959,7 +1966,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerAudioNegotiating => 'Navazuji zvuk…';
 
   @override
-  String get callBannerAudioConnected => 'Zvuk je propojený';
+  String get callBannerAudioConnected => 'Zvuk je spojený';
 
   @override
   String get callBannerAudioWaiting => 'Čekám na ostatní účastníky…';
@@ -2319,7 +2326,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsPasswordFieldLabel => 'Nové heslo';
 
   @override
-  String get roomDetailsPasswordRemoveAction => 'Zrušit heslo';
+  String get roomDetailsPasswordRemoveAction => 'Odebrat heslo';
 
   @override
   String get roomDetailsPasswordRemoveDialogTitle => 'Zrušit heslo?';
@@ -2329,7 +2336,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Kdokoli s odkazem se pak připojí bez hesla.';
 
   @override
-  String get roomDetailsPasswordRemoveDialogConfirm => 'Zrušit heslo';
+  String get roomDetailsPasswordRemoveDialogConfirm => 'Odebrat heslo';
 
   @override
   String get roomDetailsPasswordRejected => 'Server toto heslo odmítl.';
@@ -2544,7 +2551,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Podle světlého nebo tmavého režimu';
 
   @override
-  String get roomDetailsChatBackgroundAction => 'Pozadí zpráv';
+  String get roomDetailsChatBackgroundAction => 'Pozadí konverzace';
 
   @override
   String roomDetailsAvatarColorSemantics(String color) {
@@ -2944,7 +2951,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String typingOneOther(String first, String second, String third) {
-    return '$first, $second, $third a další píší…';
+    return '$first, $second, $third a jeden další píší…';
   }
 
   @override

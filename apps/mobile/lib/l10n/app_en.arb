@@ -356,7 +356,7 @@
   "roomDetailsAddParticipantEmpty": "Nobody matches",
   "roomDetailsAddParticipantAdded": "{name} was added",
   "@roomDetailsAddParticipantAdded": {"placeholders": {"name": {"type": "String"}}},
-  "roomDetailsParticipantsCount": "{count} participants",
+  "roomDetailsParticipantsCount": "{count, plural, =1{1 participant} other{{count} participants}}",
   "@roomDetailsParticipantsCount": {
     "placeholders": {
       "count": {
