@@ -256,6 +256,99 @@ final latestBuildProvider = FutureProvider<UpdateCheckResult?>((ref) async {
   return ref.watch(updateCheckServiceProvider).check();
 });
 
+final updateInstallerServiceProvider = Provider<UpdateInstallerService>((ref) {
+  final service = UpdateInstallerService();
+  ref.onDispose(service.close);
+  return service;
+});
+
+/// What the Windows download-and-install flow is doing right now. A newer
+/// [download] call always starts from [UpdateInstallIdle] again: the state
+/// only ever reflects the most recent request, so a stale progress callback
+/// from a cancelled attempt can never overwrite the one that replaced it.
+sealed class UpdateInstallState {
+  const UpdateInstallState();
+}
+
+final class UpdateInstallIdle extends UpdateInstallState {
+  const UpdateInstallIdle();
+}
+
+final class UpdateInstallDownloading extends UpdateInstallState {
+  const UpdateInstallDownloading(this.receivedBytes, this.totalBytes);
+
+  final int receivedBytes;
+  final int? totalBytes;
+}
+
+/// Downloaded, checksum verified, waiting on the second confirmation before
+/// [UpdateInstallStateController.runInstaller] is ever allowed to run it.
+final class UpdateInstallReadyState extends UpdateInstallState {
+  const UpdateInstallReadyState(this.installerFile);
+
+  final File installerFile;
+}
+
+final updateInstallStateProvider =
+    NotifierProvider<UpdateInstallStateController, UpdateInstallState>(
+      UpdateInstallStateController.new,
+    );
+
+base class UpdateInstallStateController extends Notifier<UpdateInstallState> {
+  DownloadCancellation? _cancellation;
+
+  @override
+  UpdateInstallState build() => const UpdateInstallIdle();
+
+  /// Downloads and verifies the Windows installer for [release]. The result
+  /// is both returned (so the caller can show a one-off message for a
+  /// failure) and reflected in [state] (so the tile can show progress and,
+  /// once verified, the second "install now" step).
+  Future<UpdateInstallResult> download(UpdateAvailable release) async {
+    final cancellation = DownloadCancellation();
+    _cancellation = cancellation;
+    state = const UpdateInstallDownloading(0, null);
+    final result = await ref
+        .read(updateInstallerServiceProvider)
+        .downloadAndVerify(
+          release: release,
+          onProgress: (received, total) {
+            if (identical(_cancellation, cancellation)) {
+              state = UpdateInstallDownloading(received, total);
+            }
+          },
+          cancellation: cancellation,
+        );
+    if (identical(_cancellation, cancellation)) {
+      state = switch (result) {
+        UpdateInstallReady(:final installerFile) => UpdateInstallReadyState(
+          installerFile,
+        ),
+        _ => const UpdateInstallIdle(),
+      };
+    }
+    return result;
+  }
+
+  void cancelDownload() => _cancellation?.cancel();
+
+  /// Starts the installer [state] verified. Only reachable from
+  /// [UpdateInstallReadyState], so nothing this controller exposes can run a
+  /// file that never passed the checksum check.
+  Future<bool> runInstaller(UpdateInstallReadyState ready) async {
+    final started = await ref
+        .read(updateInstallerServiceProvider)
+        .runInstaller(UpdateInstallReady(ready.installerFile));
+    state = const UpdateInstallIdle();
+    return started;
+  }
+
+  void reset() {
+    _cancellation = null;
+    state = const UpdateInstallIdle();
+  }
+}
+
 final replyLayoutProvider =
     NotifierProvider<ReplyLayoutController, ReplyLayout>(
       ReplyLayoutController.new,

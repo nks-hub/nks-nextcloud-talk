@@ -2327,7 +2327,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateCheckSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent, and nothing is downloaded or installed for you.'**
+  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows you can then choose to download the installer and have it checked before anything runs; nothing downloads or runs without you saying so, twice.'**
   String get settingsUpdateCheckSubtitle;
 
   /// No description provided for @settingsUpdateCheckCurrentBuild.
@@ -2371,6 +2371,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The release page could not be opened.'**
   String get settingsUpdateCheckOpenFailed;
+
+  /// No description provided for @settingsUpdateCheckDownloadInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and install'**
+  String get settingsUpdateCheckDownloadInstall;
+
+  /// No description provided for @settingsUpdateCheckDownloadConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download the installer?'**
+  String get settingsUpdateCheckDownloadConfirmTitle;
+
+  /// No description provided for @settingsUpdateCheckDownloadConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This downloads the Windows installer from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing runs yet.'**
+  String get settingsUpdateCheckDownloadConfirmBody;
+
+  /// No description provided for @settingsUpdateCheckDownloadConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get settingsUpdateCheckDownloadConfirmAction;
+
+  /// No description provided for @settingsUpdateCheckDownloadDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get settingsUpdateCheckDownloadDismiss;
+
+  /// No description provided for @settingsUpdateCheckDownloadingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading… {percent}%'**
+  String settingsUpdateCheckDownloadingProgress(Object percent);
+
+  /// No description provided for @settingsUpdateCheckDownloadingUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get settingsUpdateCheckDownloadingUnknown;
+
+  /// No description provided for @settingsUpdateCheckDownloadCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get settingsUpdateCheckDownloadCancel;
+
+  /// No description provided for @settingsUpdateCheckDownloadCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Download cancelled.'**
+  String get settingsUpdateCheckDownloadCancelled;
+
+  /// No description provided for @settingsUpdateCheckDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The installer could not be downloaded. Try again later.'**
+  String get settingsUpdateCheckDownloadFailed;
+
+  /// No description provided for @settingsUpdateCheckVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not match the checksum GitHub published for it, so it was refused and deleted.'**
+  String get settingsUpdateCheckVerificationFailed;
+
+  /// No description provided for @settingsUpdateCheckInstallNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Install now'**
+  String get settingsUpdateCheckInstallNow;
+
+  /// No description provided for @settingsUpdateCheckInstallConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install now?'**
+  String get settingsUpdateCheckInstallConfirmTitle;
+
+  /// No description provided for @settingsUpdateCheckInstallConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This starts the installer, which closes NKS Talk to finish installing the new build.'**
+  String get settingsUpdateCheckInstallConfirmBody;
+
+  /// No description provided for @settingsUpdateCheckInstallConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get settingsUpdateCheckInstallConfirmAction;
+
+  /// No description provided for @settingsUpdateCheckInstallDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get settingsUpdateCheckInstallDismiss;
+
+  /// No description provided for @settingsUpdateCheckInstallStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'The installer has started.'**
+  String get settingsUpdateCheckInstallStarted;
+
+  /// No description provided for @settingsUpdateCheckInstallStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The installer could not be started.'**
+  String get settingsUpdateCheckInstallStartFailed;
 
   /// No description provided for @settingsPushSection.
   ///

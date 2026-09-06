@@ -28,17 +28,24 @@ void main() {
     String name = 'NKS Talk',
     String htmlUrl =
         'https://github.com/nks-hub/nks-nextcloud-talk/releases/tag/v0.1.0%2B63',
+    List<Map<String, Object?>>? assets,
   }) {
     return http.Response(
       jsonEncode(<String, Object?>{
         'tag_name': tag,
         'name': name,
         'html_url': htmlUrl,
+        'assets': ?assets,
       }),
       200,
       headers: const {'content-type': 'application/json'},
     );
   }
+
+  Map<String, Object?> asset(String name, String url) => <String, Object?>{
+    'name': name,
+    'browser_download_url': url,
+  };
 
   test('a newer build is offered with its number, name and page', () async {
     late http.BaseRequest sent;
@@ -151,5 +158,81 @@ void main() {
     ).check();
 
     expect(result, isA<UpdateCheckUnavailable>());
+  });
+
+  test('the Windows installer and its checksum list are picked out of the '
+      'asset array', () async {
+    final result = await service(
+      MockClient(
+        (_) async => release(
+          'v0.1.0+63',
+          assets: [
+            asset(
+              'NKS-Talk-0.1.0-63-windows-x64-setup.exe',
+              'https://github.com/nks-hub/nks-nextcloud-talk/releases/'
+                  'download/v0.1.0%2B63/'
+                  'NKS-Talk-0.1.0-63-windows-x64-setup.exe',
+            ),
+            asset(
+              'SHA256SUMS',
+              'https://github.com/nks-hub/nks-nextcloud-talk/releases/'
+                  'download/v0.1.0%2B63/SHA256SUMS',
+            ),
+            asset(
+              'nks-talk-linux-x64.tar.gz',
+              'https://github.com/nks-hub/nks-nextcloud-talk/releases/'
+                  'download/v0.1.0%2B63/nks-talk-linux-x64.tar.gz',
+            ),
+          ],
+        ),
+      ),
+    ).check();
+
+    final available = result as UpdateAvailable;
+    expect(
+      available.windowsInstallerAssetUri.toString(),
+      'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+      'v0.1.0%2B63/NKS-Talk-0.1.0-63-windows-x64-setup.exe',
+    );
+    expect(
+      available.sha256SumsAssetUri.toString(),
+      'https://github.com/nks-hub/nks-nextcloud-talk/releases/download/'
+      'v0.1.0%2B63/SHA256SUMS',
+    );
+  });
+
+  test('no assets means no installer to offer, not a broken check', () async {
+    final result = await service(
+      MockClient((_) async => release('v0.1.0+63')),
+    ).check();
+
+    final available = result as UpdateAvailable;
+    expect(available.windowsInstallerAssetUri, isNull);
+    expect(available.sha256SumsAssetUri, isNull);
+  });
+
+  test('an installer asset pointing off GitHub is never offered', () async {
+    final result = await service(
+      MockClient(
+        (_) async => release(
+          'v0.1.0+63',
+          assets: [
+            asset(
+              'NKS-Talk-0.1.0-63-windows-x64-setup.exe',
+              'https://malicious.invalid/NKS-Talk-0.1.0-63-windows-x64-setup.exe',
+            ),
+            asset(
+              'SHA256SUMS',
+              'https://github.com/nks-hub/nks-nextcloud-talk/releases/'
+                  'download/v0.1.0%2B63/SHA256SUMS',
+            ),
+          ],
+        ),
+      ),
+    ).check();
+
+    final available = result as UpdateAvailable;
+    expect(available.windowsInstallerAssetUri, isNull);
+    expect(available.sha256SumsAssetUri, isNotNull);
   });
 }

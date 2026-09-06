@@ -1262,7 +1262,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckSubtitle =>
-      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent, and nothing is downloaded or installed for you.';
+      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent. On Windows you can then choose to download the installer and have it checked before anything runs; nothing downloads or runs without you saying so, twice.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1290,6 +1290,68 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsUpdateCheckOpenFailed =>
       'The release page could not be opened.';
+
+  @override
+  String get settingsUpdateCheckDownloadInstall => 'Download and install';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmTitle =>
+      'Download the installer?';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmBody =>
+      'This downloads the Windows installer from GitHub into a temporary folder and checks it against the checksum GitHub published for it. Nothing runs yet.';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmAction => 'Download';
+
+  @override
+  String get settingsUpdateCheckDownloadDismiss => 'Not now';
+
+  @override
+  String settingsUpdateCheckDownloadingProgress(Object percent) {
+    return 'Downloading… $percent%';
+  }
+
+  @override
+  String get settingsUpdateCheckDownloadingUnknown => 'Downloading…';
+
+  @override
+  String get settingsUpdateCheckDownloadCancel => 'Cancel download';
+
+  @override
+  String get settingsUpdateCheckDownloadCancelled => 'Download cancelled.';
+
+  @override
+  String get settingsUpdateCheckDownloadFailed =>
+      'The installer could not be downloaded. Try again later.';
+
+  @override
+  String get settingsUpdateCheckVerificationFailed =>
+      'The download did not match the checksum GitHub published for it, so it was refused and deleted.';
+
+  @override
+  String get settingsUpdateCheckInstallNow => 'Install now';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmTitle => 'Install now?';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmBody =>
+      'This starts the installer, which closes NKS Talk to finish installing the new build.';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmAction => 'Install';
+
+  @override
+  String get settingsUpdateCheckInstallDismiss => 'Not now';
+
+  @override
+  String get settingsUpdateCheckInstallStarted => 'The installer has started.';
+
+  @override
+  String get settingsUpdateCheckInstallStartFailed =>
+      'The installer could not be started.';
 
   @override
   String get settingsPushSection => 'Push notifications';

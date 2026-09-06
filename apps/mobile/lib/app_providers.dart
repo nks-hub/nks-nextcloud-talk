@@ -4,7 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
-import 'package:flutter/services.dart' show MethodChannel, MissingPluginException;
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException;
 import 'package:flutter/widgets.dart'
     show AppLifecycleListener, NavigatorObserver, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +73,7 @@ import 'features/settings/reply_layout_preference.dart';
 import 'features/settings/theme_preference.dart';
 import 'features/settings/update_check_preference.dart';
 import 'features/settings/update_check_service.dart';
+import 'features/settings/update_installer_service.dart';
 import 'features/threads/thread_management_service.dart';
 import 'features/push/android_fcm_channel.dart';
 import 'features/push/android_push_coordinator.dart';
@@ -511,7 +513,9 @@ final chatServiceProvider = Provider<ChatService>((ref) {
 Future<void> drainForBackground(ProviderContainer container) async {
   await container.read(chatServiceProvider).drainPendingSends();
   await container.read(appPasswordRevocationQueueProvider).drain();
-  await (await container.read(attachmentServiceProvider.future)).resumeRetries();
+  await (await container.read(
+    attachmentServiceProvider.future,
+  )).resumeRetries();
 }
 
 /// Replays queued text sends for rooms that are not open, on start and on

@@ -18,6 +18,10 @@ final defaultLatestReleaseUri = Uri.parse(
 /// version name in front of it has not moved in a long time.
 final _tagPattern = RegExp(r'^v?\d+\.\d+\.\d+\+(\d+)$');
 
+/// `NKS-Talk-0.1.0-63-windows-x64-setup.exe` — the installer asset name for
+/// every release, whatever its version and build.
+final _windowsInstallerName = RegExp(r'^NKS-Talk-.*-windows-x64-setup\.exe$');
+
 /// Whether this platform may check for a build at all.
 ///
 /// Desktop only, and not as a preference: a build installed from Google Play
@@ -47,18 +51,25 @@ final class UpdateUpToDate extends UpdateCheckResult {
 }
 
 /// A newer build exists. [releaseUri] is the release page to open in a
-/// browser; this app never downloads or runs anything itself.
+/// browser. [windowsInstallerAssetUri] and [sha256SumsAssetUri] are set only
+/// when the release carries a Windows installer and its checksum list — the
+/// one platform this app ever downloads and runs something for; every other
+/// platform only ever gets [releaseUri] to open by hand.
 @immutable
 final class UpdateAvailable extends UpdateCheckResult {
   const UpdateAvailable({
     required this.buildNumber,
     required this.name,
     required this.releaseUri,
+    this.windowsInstallerAssetUri,
+    this.sha256SumsAssetUri,
   });
 
   final int buildNumber;
   final String name;
   final Uri releaseUri;
+  final Uri? windowsInstallerAssetUri;
+  final Uri? sha256SumsAssetUri;
 }
 
 /// GitHub could not be asked, or answered something this cannot read. A
@@ -145,11 +156,43 @@ final class UpdateCheckService {
       return const UpdateCheckUnavailable();
     }
     final name = decoded['name'];
+    final (installer, sums) = _windowsAssets(decoded['assets']);
     return UpdateAvailable(
       buildNumber: published,
       name: name is String && name.trim().isNotEmpty ? name.trim() : tag,
       releaseUri: releaseUri,
+      windowsInstallerAssetUri: installer,
+      sha256SumsAssetUri: sums,
     );
+  }
+
+  /// Picks the Windows installer and its `SHA256SUMS` list out of the
+  /// release's asset array, if both are there. Every asset URL goes through
+  /// the same GitHub-only check as the release page: [UpdateInstallerService]
+  /// downloads real bytes from whatever this returns, so a stray asset
+  /// pointing off GitHub must never survive this far.
+  (Uri?, Uri?) _windowsAssets(Object? assets) {
+    if (assets is! List<Object?>) {
+      return (null, null);
+    }
+    Uri? installer;
+    Uri? sums;
+    for (final asset in assets) {
+      if (asset is! Map<String, Object?>) {
+        continue;
+      }
+      final name = asset['name'];
+      final uri = _releasePage(asset['browser_download_url']);
+      if (name is! String || uri == null) {
+        continue;
+      }
+      if (name == 'SHA256SUMS') {
+        sums = uri;
+      } else if (_windowsInstallerName.hasMatch(name)) {
+        installer = uri;
+      }
+    }
+    return (installer, sums);
   }
 
   Future<String> _readBounded(http.StreamedResponse response) async {

@@ -1262,7 +1262,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsUpdateCheckSubtitle =>
-      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá a nic se za vás nestahuje ani neinstaluje.';
+      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá. Ve Windows si pak můžete vyžádat stažení instalátoru a jeho ověření, než se cokoliv spustí; nic se nestáhne ani nespustí bez vašeho dvojího potvrzení.';
 
   @override
   String settingsUpdateCheckCurrentBuild(Object build) {
@@ -1290,6 +1290,67 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get settingsUpdateCheckOpenFailed =>
       'Stránku vydání se nepodařilo otevřít.';
+
+  @override
+  String get settingsUpdateCheckDownloadInstall => 'Stáhnout a nainstalovat';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmTitle => 'Stáhnout instalátor?';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmBody =>
+      'Stáhne se instalátor pro Windows z GitHubu do dočasné složky a ověří se proti kontrolnímu součtu, který k němu GitHub zveřejnil. Zatím se nic nespustí.';
+
+  @override
+  String get settingsUpdateCheckDownloadConfirmAction => 'Stáhnout';
+
+  @override
+  String get settingsUpdateCheckDownloadDismiss => 'Teď ne';
+
+  @override
+  String settingsUpdateCheckDownloadingProgress(Object percent) {
+    return 'Stahuje se… $percent %';
+  }
+
+  @override
+  String get settingsUpdateCheckDownloadingUnknown => 'Stahuje se…';
+
+  @override
+  String get settingsUpdateCheckDownloadCancel => 'Zrušit stahování';
+
+  @override
+  String get settingsUpdateCheckDownloadCancelled => 'Stahování zrušeno.';
+
+  @override
+  String get settingsUpdateCheckDownloadFailed =>
+      'Instalátor se nepodařilo stáhnout. Zkuste to prosím později.';
+
+  @override
+  String get settingsUpdateCheckVerificationFailed =>
+      'Stažený soubor neodpovídá kontrolnímu součtu, který GitHub zveřejnil, proto byl odmítnut a smazán.';
+
+  @override
+  String get settingsUpdateCheckInstallNow => 'Nainstalovat';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmTitle => 'Spustit instalaci?';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmBody =>
+      'Spustí se instalátor, který kvůli dokončení instalace nové verze zavře NKS Talk.';
+
+  @override
+  String get settingsUpdateCheckInstallConfirmAction => 'Nainstalovat';
+
+  @override
+  String get settingsUpdateCheckInstallDismiss => 'Teď ne';
+
+  @override
+  String get settingsUpdateCheckInstallStarted => 'Instalátor byl spuštěn.';
+
+  @override
+  String get settingsUpdateCheckInstallStartFailed =>
+      'Instalátor se nepodařilo spustit.';
 
   @override
   String get settingsPushSection => 'Push notifikace';

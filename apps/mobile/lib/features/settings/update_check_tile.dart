@@ -7,12 +7,15 @@ import '../../app_providers.dart';
 import '../../core/app_version.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'update_check_service.dart';
+import 'update_installer_service.dart';
 
 /// The desktop update section: a switch that decides whether GitHub is asked
 /// at all, and — only once it is on — what the last answer was.
 ///
-/// A newer build is offered as a link to its release page. Nothing is
-/// downloaded and nothing is run; installing stays the person's own step.
+/// A newer build is always offered as a link to its release page. On Windows,
+/// once the release carries an installer, it is also offered as a download —
+/// but only after the person says so, and again before it is ever run; every
+/// other platform only ever gets the link.
 final class UpdateCheckSettingsTile extends ConsumerWidget {
   const UpdateCheckSettingsTile({super.key});
 
@@ -22,6 +25,7 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
     final enabled = ref.watch(updateCheckEnabledProvider);
     final answer = ref.watch(latestBuildProvider);
     final available = answer.valueOrNull;
+    final installState = ref.watch(updateInstallStateProvider);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -55,6 +59,19 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
                     child: Text(strings.settingsUpdateCheckOpen),
                   )
                 : null,
+          ),
+        if (available is UpdateAvailable &&
+            canDownloadAndInstallUpdate &&
+            available.windowsInstallerAssetUri != null)
+          _InstallRow(
+            release: available,
+            state: installState,
+            onDownload: () =>
+                unawaited(_confirmDownload(context, ref, available)),
+            onCancel: () =>
+                ref.read(updateInstallStateProvider.notifier).cancelDownload(),
+            onInstall: (ready) =>
+                unawaited(_confirmInstall(context, ref, ready)),
           ),
       ],
     );
@@ -91,5 +108,155 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
         SnackBar(content: Text(strings.settingsUpdateCheckOpenFailed)),
       );
     }
+  }
+
+  Future<void> _confirmDownload(
+    BuildContext context,
+    WidgetRef ref,
+    UpdateAvailable release,
+  ) async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(strings.settingsUpdateCheckDownloadConfirmTitle),
+        content: Text(strings.settingsUpdateCheckDownloadConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(strings.settingsUpdateCheckDownloadDismiss),
+          ),
+          TextButton(
+            key: const Key('settings-update-check-download-confirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(strings.settingsUpdateCheckDownloadConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final result = await ref
+        .read(updateInstallStateProvider.notifier)
+        .download(release);
+    final message = switch (result) {
+      UpdateInstallReady() => null,
+      UpdateInstallVerificationFailed() =>
+        strings.settingsUpdateCheckVerificationFailed,
+      UpdateInstallCancelled() => strings.settingsUpdateCheckDownloadCancelled,
+      UpdateInstallUnavailable() => strings.settingsUpdateCheckDownloadFailed,
+    };
+    if (message != null) {
+      messenger?.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _confirmInstall(
+    BuildContext context,
+    WidgetRef ref,
+    UpdateInstallReadyState ready,
+  ) async {
+    final strings = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(strings.settingsUpdateCheckInstallConfirmTitle),
+        content: Text(strings.settingsUpdateCheckInstallConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(strings.settingsUpdateCheckInstallDismiss),
+          ),
+          TextButton(
+            key: const Key('settings-update-check-install-confirm'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(strings.settingsUpdateCheckInstallConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final started = await ref
+        .read(updateInstallStateProvider.notifier)
+        .runInstaller(ready);
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          started
+              ? strings.settingsUpdateCheckInstallStarted
+              : strings.settingsUpdateCheckInstallStartFailed,
+        ),
+      ),
+    );
+  }
+}
+
+/// The Windows-only download/install row, shown under the check result once
+/// a release carries an installer.
+final class _InstallRow extends StatelessWidget {
+  const _InstallRow({
+    required this.release,
+    required this.state,
+    required this.onDownload,
+    required this.onCancel,
+    required this.onInstall,
+  });
+
+  final UpdateAvailable release;
+  final UpdateInstallState state;
+  final VoidCallback onDownload;
+  final VoidCallback onCancel;
+  final void Function(UpdateInstallReadyState ready) onInstall;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    return switch (state) {
+      UpdateInstallDownloading(:final receivedBytes, :final totalBytes) =>
+        ListTile(
+          key: const Key('settings-update-check-downloading'),
+          leading: const Icon(Icons.downloading_outlined),
+          title: LinearProgressIndicator(
+            value: totalBytes == null || totalBytes == 0
+                ? null
+                : receivedBytes / totalBytes,
+          ),
+          subtitle: Text(
+            totalBytes == null || totalBytes == 0
+                ? strings.settingsUpdateCheckDownloadingUnknown
+                : strings.settingsUpdateCheckDownloadingProgress(
+                    (receivedBytes * 100 / totalBytes).floor(),
+                  ),
+          ),
+          trailing: TextButton(
+            key: const Key('settings-update-check-download-cancel'),
+            onPressed: onCancel,
+            child: Text(strings.settingsUpdateCheckDownloadCancel),
+          ),
+        ),
+      final UpdateInstallReadyState ready => ListTile(
+        key: const Key('settings-update-check-ready'),
+        leading: const Icon(Icons.verified_outlined),
+        title: TextButton(
+          key: const Key('settings-update-check-install'),
+          onPressed: () => onInstall(ready),
+          child: Text(strings.settingsUpdateCheckInstallNow),
+        ),
+      ),
+      UpdateInstallIdle() => ListTile(
+        key: const Key('settings-update-check-download-row'),
+        leading: const Icon(Icons.download_outlined),
+        title: TextButton(
+          key: const Key('settings-update-check-download'),
+          onPressed: onDownload,
+          child: Text(strings.settingsUpdateCheckDownloadInstall),
+        ),
+      ),
+    };
   }
 }
