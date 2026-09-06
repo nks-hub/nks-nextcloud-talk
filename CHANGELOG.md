@@ -39,10 +39,11 @@ from the commit log. Nothing here has reached testers yet.
   again. The app kept the path the file has inside the share instead of the one
   it has on the server, so every attempt ended in a silent failure. Older
   messages are not repaired by this; new ones are correct.
-- Fixed: on a phone the conversation header showed no conversation name at
-  all. Five buttons took the whole width and the name was left with nothing.
-  The name now keeps its room and the buttons that no longer fit move into a
-  menu, the call buttons last. Seen on a Galaxy S9+ at its own display size.
+- Fixed: on a phone the conversation header had no room left for the name of
+  the conversation. Five buttons took the width, and depending on the display
+  size the name was cut to a few dots or was not there at all. The name now
+  keeps its room and the buttons that no longer fit move into a menu, the call
+  buttons last.
 
 ## 0.1.0 (62) — 6 September 2026
 
