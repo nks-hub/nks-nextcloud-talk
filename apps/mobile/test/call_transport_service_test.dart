@@ -79,6 +79,37 @@ void main() {
     expect(requested.queryParameters['token'], 'rooma123');
   });
 
+  test('the relay switch follows what the server hands out', () async {
+    final cases =
+        readFixtureJson('signaling/fixtures/settings.cases.json')
+            as List<Object?>;
+    Map<String, Object?> data(int index) =>
+        (cases[index]! as Map<String, Object?>)['data']! as Map<String, Object?>;
+
+    // Case 1 carries a TURN server, case 0 lists none — a Nextcloud whose
+    // administrator configured no relay, which is the ordinary small install.
+    expect(
+      await service(
+        MockClient((_) async => ocs(data(1), 200)),
+      ).offersRelay(accountId: 'account-a', roomToken: 'rooma123'),
+      isTrue,
+    );
+    expect(
+      await service(
+        MockClient((_) async => ocs(data(0), 200)),
+      ).offersRelay(accountId: 'account-a', roomToken: 'rooma123'),
+      isFalse,
+    );
+    // A server that cannot be asked keeps the switch: hiding a working one is
+    // worse than showing one that may do nothing.
+    expect(
+      await service(
+        MockClient((_) async => ocs(const <String, Object?>{}, 500)),
+      ).offersRelay(accountId: 'account-a', roomToken: 'rooma123'),
+      isTrue,
+    );
+  });
+
   test('an unauthorized fetch asks for a new sign-in', () async {
     final transport = await service(
       MockClient((_) async => ocs(const <String, Object?>{}, 401)),

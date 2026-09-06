@@ -109,9 +109,14 @@ Widget _wrap({
   required Stream<List<StoredAccount>> accountsStream,
   List<Override> overrides = const [],
   double textScale = 1,
+  bool relayOffered = true,
 }) {
   return ProviderScope(
     overrides: [
+      // The relay switch asks the server whether it hands out a TURN
+      // server at all. That probe is not what most of this file is about,
+      // and left live it would wait on the real database.
+      callRelayOfferedProvider.overrideWith((ref) async => relayOffered),
       accountRepositoryProvider.overrideWithValue(accountRepository),
       // accountsProvider normally watches a live Drift stream (and also
       // attachmentServiceProvider, which needs platform plugins unavailable
@@ -692,6 +697,57 @@ void main() {
     expect(group().groupValue, ReplyLayout.thread);
     expect(store.stored, ReplyLayout.thread);
     expect(store.writeCount, 1);
+  });
+
+  testWidgets('the relay switch is offered only where a relay exists', (
+    tester,
+  ) async {
+    // A Nextcloud whose administrator configured no TURN server answers the
+    // signalling settings with an empty `turnservers`. Forcing a call onto a
+    // relay there would leave ICE without a usable candidate, so the choice
+    // is not shown at all — while the answer is still unknown it is, because
+    // hiding a working switch is worse than showing one that may do nothing.
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    final accounts = AccountRepository(database);
+    late List<StoredAccount> initial;
+    await tester.runAsync(() async {
+      await accounts.upsertAccount(
+        accountId: 'account-a',
+        serverUrl: 'https://cloud.example.invalid',
+        loginName: 'alice',
+        serverProductName: 'Nextcloud',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+      initial = await _allAccounts(database);
+    });
+
+    for (final offered in <bool>[true, false]) {
+      // A fresh scope per case: Riverpod keeps the resolved value of an
+      // override on the scope it already built, so reusing it would answer
+      // the first case twice.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(
+        _wrap(
+          accountRepository: accounts,
+          accountsStream: Stream.value(initial),
+          relayOffered: offered,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('call-relay-only')),
+        offered ? findsOneWidget : findsNothing,
+        reason: 'a relay the server does not hand out cannot be forced',
+      );
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('loads the persisted theme mode on start', (tester) async {

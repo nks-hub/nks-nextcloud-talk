@@ -54,8 +54,20 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         )
         .toList(growable: false),
     'sdpSemantics': 'unified-plan',
-    if (relayOnly) 'iceTransportPolicy': 'relay',
+    // Only where a relay actually exists. `relay` tells ICE to discard every
+    // candidate that is not a relayed one, so on a server whose administrator
+    // configured no TURN server it leaves ICE with nothing at all and the call
+    // never connects. The switch is the user's answer to "prefer the relay",
+    // not an instruction to break a call it cannot help.
+    if (relayOnly && iceServers.any(offersRelay)) 'iceTransportPolicy': 'relay',
   };
+
+  /// Whether [server] is a TURN server, which is the only kind a relay-only
+  /// policy can use. Talk lists STUN and TURN in the same settings answer.
+  static bool offersRelay(CallIceServer server) => server.urls.any((url) {
+    final scheme = url.trim().toLowerCase();
+    return scheme.startsWith('turn:') || scheme.startsWith('turns:');
+  });
 
   @override
   Future<CallLocalAudio> openMicrophone() async {

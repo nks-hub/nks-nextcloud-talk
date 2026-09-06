@@ -18,6 +18,29 @@ final callTransportProvider = FutureProvider.autoDispose
           .resolve(accountId: key.accountId, roomToken: key.roomToken);
     });
 
+/// Whether a relay-only call is worth offering at all: true as soon as one
+/// signed-in account's server hands out a TURN server.
+///
+/// The setting is app-wide while the answer is per server, so any server that
+/// offers one keeps the switch. A server that cannot be asked counts as
+/// offering one — see [CallTransportService.offersRelay].
+final callRelayOfferedProvider = FutureProvider<bool>((ref) async {
+  final accounts = await ref.watch(accountRepositoryProvider).listAccounts();
+  for (final account in accounts) {
+    final rooms = await ref.watch(conversationsProvider(account.id).future);
+    if (rooms.isEmpty) {
+      continue;
+    }
+    final offered = await ref
+        .watch(callTransportServiceProvider)
+        .offersRelay(accountId: account.id, roomToken: rooms.first.token);
+    if (offered) {
+      return true;
+    }
+  }
+  return false;
+});
+
 final callSessionRepositoryProvider = Provider<CallSessionRepository>((ref) {
   return CallSessionRepository(ref.watch(appDatabaseProvider));
 });

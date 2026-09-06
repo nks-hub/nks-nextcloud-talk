@@ -55,13 +55,67 @@ final class CallTransportService {
     required String accountId,
     required String roomToken,
   }) async {
+    final settings = await _settings(
+      accountId: accountId,
+      roomToken: roomToken,
+    );
+    if (settings == null) {
+      return CallTransport.unavailable;
+    }
+    if (settings.credentialsRejected) {
+      return CallTransport.reauthenticationRequired;
+    }
+    final response = settings.response;
+    if (response == null) {
+      return CallTransport.unavailable;
+    }
+    return switch (response.classification) {
+      SignalingSettingsClassification.confirmed =>
+        switch (response.settings?.transport) {
+          SignalingTransportKind.internal => CallTransport.internal,
+          SignalingTransportKind.externalHpb => CallTransport.externalHpb,
+          null => CallTransport.unavailable,
+        },
+      SignalingSettingsClassification.reauthenticationRequired =>
+        CallTransport.reauthenticationRequired,
+      SignalingSettingsClassification.roomRefreshRequired =>
+        CallTransport.roomUnavailable,
+      SignalingSettingsClassification.serverError => CallTransport.unavailable,
+    };
+  }
+
+  /// Whether this account's server hands out a TURN relay at all.
+  ///
+  /// The administrator of a Nextcloud may configure none, and Talk then lists
+  /// only STUN servers. Forcing a call onto a relay that does not exist leaves
+  /// ICE without a single usable candidate, so the choice is not offered where
+  /// the answer is no. A server that cannot be asked counts as offering one:
+  /// hiding a working switch is worse than showing one that may do nothing.
+  Future<bool> offersRelay({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    final response = (await _settings(
+      accountId: accountId,
+      roomToken: roomToken,
+    ))?.response;
+    if (response == null) {
+      return true;
+    }
+    return response.settings?.turnServers.isNotEmpty ?? true;
+  }
+
+  Future<_SignalingSettingsOutcome?> _settings({
+    required String accountId,
+    required String roomToken,
+  }) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {
-      return CallTransport.unavailable;
+      return null;
     }
     final appPassword = await _credentials.readAppPassword(accountId);
     if (appPassword == null) {
-      return CallTransport.reauthenticationRequired;
+      return const _SignalingSettingsOutcome(credentialsRejected: true);
     }
 
     final SignalingSettingsRequest request;
@@ -82,37 +136,34 @@ final class CallTransportService {
         ),
       );
     } on TalkProtocolException {
-      return CallTransport.unavailable;
+      return null;
     }
 
-    final SignalingSettingsResponse response;
     try {
-      response = await _api.getSignalingSettings(
-        settingsRequest: request,
-        loginName: account.loginName,
-        appPassword: appPassword,
-        // Answering "how would this be signalled" opens no socket and needs no
-        // room session, so it must not be cancelled when one is replaced.
-        bindRoomSession: false,
+      return _SignalingSettingsOutcome(
+        response: await _api.getSignalingSettings(
+          settingsRequest: request,
+          loginName: account.loginName,
+          appPassword: appPassword,
+          // Answering "how would this be signalled" opens no socket and needs
+          // no room session, so it must not be cancelled when one is replaced.
+          bindRoomSession: false,
+        ),
       );
     } on NextcloudApiException {
-      return CallTransport.unavailable;
+      return null;
     } on TalkProtocolException {
-      return CallTransport.unavailable;
+      return null;
     }
-
-    return switch (response.classification) {
-      SignalingSettingsClassification.confirmed =>
-        switch (response.settings?.transport) {
-          SignalingTransportKind.internal => CallTransport.internal,
-          SignalingTransportKind.externalHpb => CallTransport.externalHpb,
-          null => CallTransport.unavailable,
-        },
-      SignalingSettingsClassification.reauthenticationRequired =>
-        CallTransport.reauthenticationRequired,
-      SignalingSettingsClassification.roomRefreshRequired =>
-        CallTransport.roomUnavailable,
-      SignalingSettingsClassification.serverError => CallTransport.unavailable,
-    };
   }
+}
+
+final class _SignalingSettingsOutcome {
+  const _SignalingSettingsOutcome({
+    this.response,
+    this.credentialsRejected = false,
+  });
+
+  final SignalingSettingsResponse? response;
+  final bool credentialsRejected;
 }

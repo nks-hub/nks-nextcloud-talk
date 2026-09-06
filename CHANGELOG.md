@@ -61,6 +61,11 @@ from the commit log. Nothing here has reached testers yet.
   their file, so playing them always failed; the app now asks the server for
   that one message and plays it. Files sent from an older version still need
   the conversation's history to be cleared.
+- Fixed: "always use a relay server" is offered only where the server has one.
+  A Nextcloud whose administrator set up no relay left the switch with nothing
+  to use, and a call turned on with it could not connect at all. The setting is
+  now hidden on such a server, and a call never forces a relay that is not
+  there.
 
 ## 0.1.0 (62) — 6 September 2026
 

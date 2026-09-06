@@ -204,19 +204,24 @@ final class SettingsScreen extends ConsumerWidget {
               _SectionHeader(strings.settingsSecuritySection),
               const AppLockSettingsTile(),
             ],
-            const Divider(height: 1),
-            _SectionHeader(strings.settingsCallsSection),
-            SwitchListTile(
-              key: const Key('call-relay-only'),
-              title: Text(strings.settingsCallRelayOnly),
-              subtitle: Text(strings.settingsCallRelayOnlyDescription),
-              value: ref.watch(callRelayOnlyProvider),
-              onChanged: (relayOnly) => unawaited(
-                ref
-                    .read(callRelayOnlyProvider.notifier)
-                    .setRelayOnly(relayOnly),
+            // Hidden where no server offers a relay: the policy would leave
+            // ICE without a usable candidate, so the switch could only break
+            // a call, never help one.
+            if (ref.watch(callRelayOfferedProvider).valueOrNull != false) ...[
+              const Divider(height: 1),
+              _SectionHeader(strings.settingsCallsSection),
+              SwitchListTile(
+                key: const Key('call-relay-only'),
+                title: Text(strings.settingsCallRelayOnly),
+                subtitle: Text(strings.settingsCallRelayOnlyDescription),
+                value: ref.watch(callRelayOnlyProvider),
+                onChanged: (relayOnly) => unawaited(
+                  ref
+                      .read(callRelayOnlyProvider.notifier)
+                      .setRelayOnly(relayOnly),
+                ),
               ),
-            ),
+            ],
             const Divider(height: 1),
             _SectionHeader(strings.settingsRepliesSection),
             RadioGroup<ReplyLayout>(

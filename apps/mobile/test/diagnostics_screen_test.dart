@@ -692,6 +692,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // The relay switch asks the server whether it hands out a TURN
+          // server at all. That probe is not what this file is about, and
+          // left live it would wait on the real database.
+          callRelayOfferedProvider.overrideWith((ref) async => true),
           appDatabaseProvider.overrideWithValue(database),
           accountRepositoryProvider.overrideWithValue(accounts),
           accountsProvider.overrideWith((ref) => Stream.value(stored)),

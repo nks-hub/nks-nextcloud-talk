@@ -37,6 +37,43 @@ void main() {
     expect(relayed['iceTransportPolicy'], 'relay');
   });
 
+  test('a relay policy needs a relay to apply to', () {
+    // Measured behaviour of `iceTransportPolicy: relay`: it discards every
+    // candidate that is not relayed. On a Nextcloud whose administrator
+    // configured no TURN server, Talk answers with STUN alone, and the policy
+    // would leave the connection with nothing to try.
+    const stunOnly = [
+      CallIceServer(
+        urls: ['stun:stun.example.invalid:3478'],
+        username: null,
+        credential: null,
+      ),
+    ];
+    final asked = WebRtcCallMediaEngine.connectionConfiguration(
+      stunOnly,
+      relayOnly: true,
+    );
+    expect(asked.containsKey('iceTransportPolicy'), isFalse);
+    expect(
+      WebRtcCallMediaEngine.connectionConfiguration(
+        const <CallIceServer>[],
+        relayOnly: true,
+      ).containsKey('iceTransportPolicy'),
+      isFalse,
+    );
+    // `turns:` is a relay as much as `turn:` is.
+    expect(
+      WebRtcCallMediaEngine.connectionConfiguration(const [
+        CallIceServer(
+          urls: ['turns:relay.example.invalid:5349'],
+          username: 'user',
+          credential: 'secret',
+        ),
+      ], relayOnly: true)['iceTransportPolicy'],
+      'relay',
+    );
+  });
+
   test('an engine relays only when it was asked to', () {
     expect(const WebRtcCallMediaEngine().relayOnly, isFalse);
     expect(const WebRtcCallMediaEngine(relayOnly: true).relayOnly, isTrue);
