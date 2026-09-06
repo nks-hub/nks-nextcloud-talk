@@ -18,10 +18,19 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased — the next build after 60
+## Unreleased — the next build after 61
 
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
+
+## 0.1.0 (61) — 6 September 2026
+
+Calls are the whole of this build. Build 60 could carry audio between two
+people; this one has video, a call view with a tile per participant, screen
+sharing in both directions, breakout rooms, and it survives a network that
+drops out from under it. It is also the first build whose calls work on the
+servers most Nextcloud installations use for them — a separate signalling
+server, a media server, a TURN relay — rather than only on the built-in path.
 
 - Fixed: removing breakout rooms left them in the conversation list until the
   next refresh, so for a moment the list showed a set that had already been
