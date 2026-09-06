@@ -302,6 +302,44 @@ void main() {
     await settle(tester);
   });
 
+  testWidgets('a window too narrow for both panes still shows the list', (
+    tester,
+  ) async {
+    // FOUND ON A 7-INCH TABLET IN PORTRAIT, 6 September 2026: 901 dp is over
+    // the two-pane breakpoint and 49 dp short of the room a conversation
+    // needs, so the list was collapsed to protect a conversation that was not
+    // open. What was left was the "select a conversation" placeholder over the
+    // whole window — no list, no account menu, no way to reach settings, and
+    // no toggle, because the toggle lives in the conversation pane.
+    tester.view.physicalSize = const Size(901, 1440);
+    await pump(tester);
+
+    expect(
+      find.byKey(const Key('conversation-shell-expanded')),
+      findsOneWidget,
+      reason: '901 dp is past the two-pane breakpoint',
+    );
+    expect(
+      find.byKey(const Key('conversation-list-pane')),
+      findsOneWidget,
+      reason: 'with nothing open there is nothing to give the room to',
+    );
+
+    // With a conversation open the narrow window collapses it again, and the
+    // pane that took its place carries the toggle back.
+    await tester.tap(find.text('Breakpoint room'));
+    await tester.pump();
+    expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
+    expect(find.byKey(const Key('conversation-list-splitter')), findsNothing);
+    expect(
+      find.byKey(const Key('toggle-conversation-list')),
+      findsOneWidget,
+      reason: 'the pane that took the room carries the way back',
+    );
+
+    await settle(tester);
+  });
+
   testWidgets('the details panel stays between 300 and 500 wide', (
     tester,
   ) async {

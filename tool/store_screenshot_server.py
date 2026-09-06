@@ -117,6 +117,13 @@ TALK_FEATURES = [
 
 TOKEN_PREFIX = "demoroom"
 
+# Login Flow v2 tokens. Opaque to the application, 32 characters or more, and
+# the two must differ; nothing about them is secret, since the rig hands the
+# credentials to whoever asks.
+POLL_TOKEN = "screenshotrigpolltoken0000000000000000"
+LOGIN_TOKEN = "screenshotrigflowtoken0000000000000000"
+APP_PASSWORD = "screenshot-rig-app-password"
+
 # Relative to the moment the rig starts, so a screenshot never shows a list of
 # conversations that all happened on the same day last year. The first two
 # rooms are hours old and show a time; the rest are days old and show a date.
@@ -375,6 +382,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802
+        path = urllib.parse.urlparse(self.path).path
+        # Login Flow v2, so a device with no account can be given one without
+        # a browser: the rig answers the poll immediately instead of waiting
+        # for a grant nobody can click on an emulator.
+        if path.endswith("/login/v2"):
+            return self._send(
+                json.dumps(
+                    {
+                        "poll": {
+                            "token": POLL_TOKEN,
+                            "endpoint": f"https://{HOST_NAME}"
+                            "/index.php/login/v2/poll",
+                        },
+                        "login": f"https://{HOST_NAME}"
+                        f"/index.php/login/v2/flow/{LOGIN_TOKEN}",
+                    }
+                ).encode()
+            )
+        if path.endswith("/login/v2/poll"):
+            return self._send(
+                json.dumps(
+                    {
+                        "server": f"https://{HOST_NAME}",
+                        "loginName": USER,
+                        "appPassword": APP_PASSWORD,
+                    }
+                ).encode()
+            )
         self.send_response(404)
         self.send_header("Content-Length", "0")
         self.end_headers()

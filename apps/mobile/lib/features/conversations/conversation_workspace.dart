@@ -153,6 +153,15 @@ final class ConversationWorkspace extends StatelessWidget {
             context.listPaneWidth;
         final cramped =
             constraints.maxWidth - chromeWidth < kMinConversationWidth;
+        // The list is only ever hidden to give a conversation room, so with no
+        // conversation on screen it is never hidden. Found on a 7-inch tablet
+        // in portrait — 901 dp, wide enough for two panes and 49 dp short of
+        // the room one needs: the list went away, the placeholder took the
+        // whole window, and the toggle that brings the list back lives in the
+        // conversation pane that was not there. Nothing could be opened, no
+        // account switched, no settings reached.
+        final hideList =
+            (listCollapsed || cramped) && selectedConversation != null;
         return _ExpandedShell(
           account: account,
           accounts: accounts,
@@ -172,7 +181,7 @@ final class ConversationWorkspace extends StatelessWidget {
           detailsOpen: detailsOpen,
           onOpenDetails: onOpenDetails,
           onCloseDetails: onCloseDetails,
-          listCollapsed: listCollapsed || cramped,
+          listCollapsed: hideList,
           listWidth: listWidth,
           onResizeList: onResizeList,
           onResizeListEnd: onResizeListEnd,

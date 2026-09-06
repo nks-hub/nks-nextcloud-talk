@@ -71,20 +71,15 @@ void main() {
     expect(single - withRail, 89);
   });
 
-  testWidgets('folding the list hands its width to the conversation', (
+  testWidgets('the list is not folded away while no conversation is open', (
     tester,
   ) async {
-    await _pumpWide(tester, accounts: [account('account-a')]);
-    final expanded = tester
-        .getSize(find.byKey(const Key('conversation-detail-pane')))
-        .width;
-    // Read rather than hardcoded: the list is 300 px on a pointer platform
-    // and 390 on a touch one, and a widget test runs with the touch density.
-    // Writing 300 here would assert the test environment, not the layout.
-    final listWidth = tester
-        .getSize(find.byKey(const Key('conversation-list-pane')))
-        .width;
-
+    // Folding exists to give a conversation room. With no conversation the
+    // folded window held only the "select a conversation" placeholder, and
+    // the toggle that brings the list back lives in the conversation pane
+    // that was not there — found on a 7-inch tablet on 6 September 2026.
+    // What folding does once a room IS open is measured in
+    // `adaptive_breakpoint_test.dart`, where one can be opened.
     await _pumpWide(
       tester,
       accounts: [account('account-a')],
@@ -92,12 +87,8 @@ void main() {
       onResizeList: (_) {},
     );
 
-    expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
-    final collapsed = tester
-        .getSize(find.byKey(const Key('conversation-detail-pane')))
-        .width;
-    // The pane and its divider, both gone; nothing else moved.
-    expect(collapsed - expanded, listWidth + 1);
+    expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
+    expect(find.byKey(const Key('conversation-list-splitter')), findsOneWidget);
   });
 
   testWidgets('nothing offers to fold the list while no room is open', (
@@ -141,22 +132,16 @@ void main() {
     await tester.drag(splitter, const Offset(60, 0));
     expect(dragged, before.width + 60);
 
-    // Folded away, there is no boundary left to drag - offering one would be
-    // a handle for a pane that is not there.
-    await _pumpWide(
-      tester,
-      accounts: [account('account-a')],
-      listCollapsed: true,
-    );
-    expect(find.byKey(const Key('conversation-list-splitter')), findsNothing);
   });
 
-  testWidgets('a cramped window folds the list without being asked', (
+  testWidgets('a cramped window keeps the list until a room is open', (
     tester,
   ) async {
     // Two panes fit long before the conversation has room to be used: at
-    // 1000 px the rail and the list leave the chat under 620, and typing in a
-    // slot is worse than one click to bring the list back.
+    // 1000 px the rail and the list leave the chat under 620. That is a reason
+    // to fold the list once a conversation needs the room, and no reason at
+    // all while the window holds nothing but the placeholder — the automatic
+    // fold with a room open is guarded in `adaptive_breakpoint_test.dart`.
     tester.view.physicalSize = const Size(1000, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -164,12 +149,7 @@ void main() {
       tester,
       accounts: [account('account-a'), account('account-b')],
     );
-    expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
 
-    // ... and comes back on its own once the window can afford it, because
-    // the stored preference was never touched.
-    tester.view.physicalSize = const Size(1600, 900);
-    await tester.pumpAndSettle();
     expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
   });
 

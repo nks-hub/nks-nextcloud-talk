@@ -70,6 +70,11 @@ from the commit log. Nothing here has reached testers yet.
   said notifications go "through nks-talk-notify", which means nothing to
   anybody outside the project; it now says they go through the application's
   own notification service.
+- Fixed: on a tablet the application could open on an empty screen with
+  nothing to press. In a window wide enough for two panes but too narrow to
+  give a conversation room, the conversation list was hidden even though no
+  conversation was open — leaving only "Select a conversation" and no way to
+  select one. The list is now hidden only while a conversation is on screen.
 
 ## 0.1.0 (62) — 6 September 2026
 
