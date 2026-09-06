@@ -359,6 +359,56 @@ void main() {
     );
   });
 
+  testWidgets('a file share offers the account whose server took the file', (
+    tester,
+  ) async {
+    IncomingShareTarget? sent;
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(
+            id: 'share-9',
+            text: null,
+            file: IncomingSharedFile(
+              path: '/tmp/probe.png',
+              mimeType: 'image/png',
+              displayName: 'probe.png',
+              byteLength: 12,
+              sha256: 'deadbeef',
+            ),
+          ),
+          // The other half of the pair above: the host keeps the accounts
+          // whose profile came back enabled, and the dialog must offer them
+          // for a file exactly as it does for text. Which accounts survive is
+          // decided upstream, against the capability profile, and is covered
+          // in chat_attachment_context_test.dart - rendering the host here
+          // would reach live providers and never settle.
+          loadAccounts: () async => const [
+            IncomingShareAccount(
+              id: 'account-a',
+              label: 'alice',
+              rooms: [IncomingShareRoom(token: 'room-a', label: 'Project')],
+            ),
+          ],
+          send: (target) async => sent = target,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incoming-share-no-targets')), findsNothing);
+    expect(find.text('probe.png'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('incoming-share-room-account-a-room-a')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('incoming-share-send')));
+    await tester.pumpAndSettle();
+
+    expect(sent?.roomToken, 'room-a');
+  });
+
   testWidgets('send failure keeps the picker open for retry', (tester) async {
     await tester.pumpWidget(
       _localizedApp(

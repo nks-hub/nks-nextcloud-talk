@@ -103,6 +103,62 @@ void main() {
     );
   });
 
+  test(
+    'three attachment answers, and which two the picker cannot tell apart',
+    () async {
+      // This is the call the incoming-share picker makes per account before it
+      // offers a file target: `_acceptsFiles` in incoming_share_host.dart reads
+      // `enabled` off exactly this profile. The servers below are three
+      // different answers, and `enabled` is not "the server allows
+      // attachments" - it is allowed && conversation-subfolders &&
+      // chat-reference-id && !federated, this app's upload prerequisites. So a
+      // server that says NOTHING is skipped for the same reason as one that
+      // REFUSES, and nothing on the profile says which happened. That is
+      // recorded here rather than found again from a support report.
+      Future<AttachmentCapabilityProfile> profileFor(
+        Map<String, Object?>? attachments,
+      ) async {
+        final api = _api(
+          (_) async => http.Response(
+            jsonEncode(_attachmentCapabilities(attachments: attachments)),
+            200,
+          ),
+        );
+        addTearDown(api.close);
+        return _resolver(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+          uploadPolicy: uploadPolicy,
+        ).resolveProfile(
+          accountId: AccountId.parse('account-a'),
+          roomToken: _roomToken(),
+        );
+      }
+
+      expect(
+        (await profileFor(const <String, Object?>{'allowed': false})).enabled,
+        isFalse,
+        reason: 'the admin turned attachments off - the account is skipped',
+      );
+      expect(
+        (await profileFor(null)).enabled,
+        isFalse,
+        reason:
+            'the server sent no attachments config at all - skipped just the '
+            'same, and indistinguishable from the refusal above',
+      );
+      expect(
+        (await profileFor(_grantsAttachments)).enabled,
+        isTrue,
+        reason:
+            'allowed, conversation-subfolders and chat-reference-id together - '
+            'the only shape the picker offers a file target for',
+      );
+    },
+  );
+
   test('binds voice replies and named threads to separate scopes', () async {
     await _upsertAttachmentThreadRoot(database, rootId: 40, named: false);
     await _upsertAttachmentThreadRoot(database, rootId: 42, named: true);
@@ -658,20 +714,13 @@ AttachmentMetadata _metadata({
 
 Map<String, Object?> _attachmentCapabilities({
   Set<String> talkFeatures = _requiredAttachmentFeatures,
-}) {
-  final result = capabilitiesJson(talkFeatures: talkFeatures);
-  final ocs = result['ocs']! as Map<String, Object?>;
-  final data = ocs['data']! as Map<String, Object?>;
-  final capabilities = data['capabilities']! as Map<String, Object?>;
-  final spreed = capabilities['spreed']! as Map<String, Object?>;
-  spreed['config'] = <String, Object?>{
-    'attachments': <String, Object?>{
-      'allowed': true,
-      'conversation-subfolders': true,
-    },
-  };
-  return result;
-}
+  Map<String, Object?>? attachments = _grantsAttachments,
+}) => capabilitiesJson(talkFeatures: talkFeatures, attachments: attachments);
+
+const Map<String, Object?> _grantsAttachments = <String, Object?>{
+  'allowed': true,
+  'conversation-subfolders': true,
+};
 
 Map<String, Object?> _roomJson({
   int readOnly = 0,

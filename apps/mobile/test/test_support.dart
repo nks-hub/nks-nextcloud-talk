@@ -106,10 +106,17 @@ Map<String, Object?> loginSuccessJson() => <String, Object?>{
   'appPassword': 'fixture-app-password-never-use',
 };
 
+/// A `/cloud/capabilities` body.
+///
+/// [attachments] is written under `spreed.config.attachments` verbatim, and
+/// leaving it null is a server that says NOTHING about attachments — which is
+/// a different server from one that sends `{'allowed': false}`, even though
+/// `AttachmentCapabilityProfile` decides the same way about both.
 Map<String, Object?> capabilitiesJson({
   bool withTalk = true,
   Iterable<String>? talkFeatures,
   Iterable<String>? notificationPushFeatures,
+  Map<String, Object?>? attachments,
 }) {
   return <String, Object?>{
     'ocs': <String, Object?>{
@@ -138,7 +145,7 @@ Map<String, Object?> capabilitiesJson({
                 ],
               ],
               'features-local': <Object?>[],
-              'config': <String, Object?>{},
+              'config': <String, Object?>{'attachments': ?attachments},
               'version': '24.0.2',
             },
           if (notificationPushFeatures != null)
