@@ -196,8 +196,73 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
     if (!await _commit(result)) {
       return;
     }
+    // Who the server says is in the room, every time it says it. This is the
+    // one thing a call cannot reconstruct afterwards: on 6 September 2026 a
+    // client that reconnected after a network drop ended up with an empty
+    // participant list and the other side heard nothing at all, and the two
+    // could only be told apart by whether a frame had arrived and been
+    // dropped or had never come. Neither had been logged, so the run had to
+    // be repeated. Room and participant events are rare enough to keep.
+    final announcement = _participantAnnouncement(encoded);
+    if (announcement != null) {
+      debugPrint('[call] $announcement');
+    }
     if (result.outcome == SignalingRuntimeOutcome.settingsRefreshRequired) {
       _scheduleSettingsRetry();
+    }
+  }
+
+  /// The sessions an event names, with their call flag when it carries one.
+  /// A leave carries bare session ids, a join and an update carry objects.
+  static String _sessions(Object? value) {
+    if (value is! List) {
+      return '';
+    }
+    return value
+        .map((entry) {
+          if (entry is String) {
+            return _short(entry);
+          }
+          if (entry is Map<String, Object?>) {
+            final session = entry['sessionId'] ?? entry['sessionid'];
+            final inCall = entry['inCall'];
+            return inCall == null
+                ? _short(session as String?)
+                : '${_short(session as String?)}:$inCall';
+          }
+          return '?';
+        })
+        .join(' ');
+  }
+
+  /// A one-line summary of a room or participants event, or null for anything
+  /// else — peer messages carry media and are logged where they are used.
+  static String? _participantAnnouncement(String encoded) {
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! Map<String, Object?> || decoded['type'] != 'event') {
+        return null;
+      }
+      final event = decoded['event'];
+      if (event is! Map<String, Object?>) {
+        return null;
+      }
+      final target = event['target'];
+      if (target != 'participants' && target != 'room') {
+        return null;
+      }
+      final kind = event['type'];
+      final detail = switch (kind) {
+        'join' => _sessions(event['join']),
+        'leave' => _sessions(event['leave']),
+        'update' => _sessions(
+          (event['update'] as Map<String, Object?>?)?['users'],
+        ),
+        _ => '',
+      };
+      return 'room event $target/$kind $detail'.trimRight();
+    } on Object {
+      return null;
     }
   }
 
@@ -234,7 +299,15 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
         final body = decoded[type];
         if (body is Map<String, Object?>) {
           if (body['type'] == 'update' || body['type'] == 'join') {
-            final users = body['users'] ?? body['join'];
+            // The standalone signalling server nests a participants update
+            // one level deeper — `event.update.users` — so reading only the
+            // top level printed the event with no users at all, which is
+            // exactly the detail a reconnect needs.
+            final update = body['update'];
+            final users =
+                body['users'] ??
+                body['join'] ??
+                (update is Map<String, Object?> ? update['users'] : null);
             final flags = users is List
                 ? users
                       .map(

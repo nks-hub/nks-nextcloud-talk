@@ -398,6 +398,20 @@ final class CallMediaSession {
     }
     // A new room epoch means the relay stream restarted, so every peer
     // connection built against the previous one is stale.
+    //
+    // It also means this side has a NEW signalling session id, and that is
+    // where a reconnected call used to stall. Read off the wire on
+    // 6 September 2026: after the hello both sides are told `room/leave` for
+    // the old session and `room/join` for the new one — but a room join says
+    // only that a session is in the ROOM. Membership of the CALL travels in
+    // `participants/update`, and the server sends that when Talk's backend
+    // reports a change. Nothing changed there — the Nextcloud session was
+    // never lost, only the signalling one — so nobody is told either side is
+    // still in the call, and neither opens a connection to the other. Asking
+    // Talk again over REST does not help: it answers that both are in the
+    // call, which is true and therefore not a change worth broadcasting
+    // (measured, same night). The recovery has to make the membership really
+    // change, and that decision is not made here.
     if (_boundRoomEpoch != null && _boundRoomEpoch != update.roomEpoch) {
       await _closeAllPeers();
     }
