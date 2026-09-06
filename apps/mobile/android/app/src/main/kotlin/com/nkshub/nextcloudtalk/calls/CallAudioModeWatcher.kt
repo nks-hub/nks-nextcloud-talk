@@ -28,8 +28,7 @@ internal class CallAudioModeWatcher(
 
     private val listener =
         AudioManager.OnModeChangedListener { mode ->
-            val now =
-                mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_RINGTONE
+            val now = callAudioModeInterrupts(mode)
             if (now != interrupted) {
                 interrupted = now
                 onInterruptionChanged(now)

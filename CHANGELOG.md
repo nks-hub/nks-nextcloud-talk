@@ -23,6 +23,9 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: on Android 10 and 11 the microphone stayed open for the whole of an
+  incoming telephone call. It now closes while the phone rings and opens again
+  when that call ends, the way it already did on Android 12 and newer.
 - Fixed: a voice message arrived at everybody as a plain file, without a
   waveform or a length. The recording is now in a format the server files as a
   voice message; it is a larger file for the same length, so a long recording
