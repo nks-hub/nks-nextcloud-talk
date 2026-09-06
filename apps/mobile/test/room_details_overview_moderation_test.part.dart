@@ -74,11 +74,21 @@ void _registerOverviewAndModerationTests() {
       );
       await tester.pump();
 
+      // A header too narrow for every icon folds the rest into its overflow
+      // menu, so on a 400 pixel surface reaching the details means opening the
+      // menu first. What this asserts either way is that a user can get there.
       final infoButton = find.byKey(const Key('open-room-details'));
+      if (infoButton.evaluate().isEmpty) {
+        await tester.tap(
+          find.byKey(const Key('conversation-header-overflow')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
       expect(infoButton, findsOneWidget);
       await tester.tap(infoButton);
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byKey(const Key('room-details-screen')), findsOneWidget);
       await _pumpUntil(

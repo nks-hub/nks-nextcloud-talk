@@ -14,6 +14,7 @@ import '../rooms/room_details_screen.dart';
 import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
+import 'conversation_header_actions.dart';
 import 'conversation_absence.dart';
 import 'conversation_upcoming_event.dart';
 
@@ -194,69 +195,39 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
       ref.watch(conversationsProvider(account.id)).valueOrNull,
       conversation,
     );
+    const avatarRadius = 18.0;
+    const avatarGap = 10.0;
     return Scaffold(
       key: const Key('chat-room-screen'),
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
-          children: [
-            ExcludeSemantics(
-              child: ConversationAvatar(
-                account: account,
-                conversation: current,
-                radius: 18,
+        // Everything lives in the title, actions included, because only there
+        // is the width known: `AppBar` hands its actions whatever they ask for
+        // and gives the title the leftovers, which on a phone is nothing.
+        title: LayoutBuilder(
+          builder: (context, box) => Row(
+            children: [
+              ExcludeSemantics(
+                child: ConversationAvatar(
+                  account: account,
+                  conversation: current,
+                  radius: avatarRadius,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: ConversationPresenceTitle(conversation: current)),
-          ],
+              const SizedBox(width: avatarGap),
+              Expanded(child: ConversationPresenceTitle(conversation: current)),
+              ...conversationHeaderActions(
+                _headerActions(context, ref, account, current),
+                width: box.maxWidth,
+                titleFloor: conversationTitleFloor(
+                  context,
+                  avatarExtent: avatarRadius * 2,
+                  gap: avatarGap,
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          IconButton(
-            key: const Key('open-room-search'),
-            tooltip: AppLocalizations.of(context).searchInConversation,
-            icon: const Icon(Icons.search_rounded),
-            onPressed: () => openMessageSearch(
-              context,
-              account.id,
-              roomToken: current.token,
-              roomName: current.displayName,
-            ),
-          ),
-          CallStartButtons(accountId: account.id, conversation: current),
-          IconButton(
-            key: const Key('open-thread-management'),
-            tooltip: AppLocalizations.of(context).threadManagementOpenTooltip,
-            icon: const Icon(Icons.forum_outlined),
-            onPressed: () => unawaited(
-              Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/threads'),
-                  builder: (context) => ThreadManagementScreen(
-                    account: account,
-                    conversation: current,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            key: const Key('open-room-details'),
-            tooltip: AppLocalizations.of(context).roomDetailsOpenTooltip,
-            icon: const Icon(Icons.info_outline_rounded),
-            onPressed: () => unawaited(
-              Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/conversation/details'),
-                  builder: (context) => RoomDetailsScreen(
-                    account: account,
-                    conversation: current,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         top: false,
@@ -286,7 +257,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
   }
 }
 
-final class PresenceChatRoomPane extends StatelessWidget {
+final class PresenceChatRoomPane extends ConsumerWidget {
   const PresenceChatRoomPane({
     super.key,
     required this.account,
@@ -315,8 +286,15 @@ final class PresenceChatRoomPane extends StatelessWidget {
   final bool listCollapsed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppLocalizations.of(context);
+    const avatarExtent = 40.0;
+    const avatarGap = 14.0;
+    // Each leading button and its gap come off the width before the name and
+    // the actions divide what is left.
+    final leadingExtent =
+        (onToggleList == null ? 0.0 : kMinInteractiveDimension + 4) +
+        (onClose == null ? 0.0 : kMinInteractiveDimension + 4);
     return Column(
       children: [
         Container(
@@ -330,98 +308,66 @@ final class PresenceChatRoomPane extends StatelessWidget {
               ),
             ),
           ),
-          child: Row(
-            children: [
-              if (onToggleList != null) ...[
-                IconButton(
-                  key: const Key('toggle-conversation-list'),
-                  tooltip: listCollapsed
-                      ? strings.showConversationList
-                      : strings.hideConversationList,
-                  icon: Icon(
-                    listCollapsed
-                        ? Icons.menu_open_rounded
-                        : Icons.menu_rounded,
-                  ),
-                  onPressed: onToggleList,
-                ),
-                const SizedBox(width: 4),
-              ],
-              if (onClose != null) ...[
-                IconButton(
-                  key: const Key('close-conversation'),
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  icon: const BackButtonIcon(),
-                  onPressed: onClose,
-                ),
-                const SizedBox(width: 4),
-              ],
-              ExcludeSemantics(
-                child: ConversationAvatar(
-                  account: account,
-                  conversation: conversation,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: ConversationPresenceTitle(
-                  conversation: conversation,
-                  titleStyle: Theme.of(context).textTheme.titleMedium,
-                  fallbackSubtitle: conversation.description,
-                ),
-              ),
-              IconButton(
-                key: const Key('open-room-search'),
-                tooltip: strings.searchInConversation,
-                icon: const Icon(Icons.search_rounded),
-                onPressed: () => openMessageSearch(
-                  context,
-                  account.id,
-                  roomToken: conversation.token,
-                  roomName: conversation.displayName,
-                ),
-              ),
-              IconButton(
-                key: const Key('open-thread-management'),
-                tooltip: strings.threadManagementOpenTooltip,
-                icon: const Icon(Icons.forum_outlined),
-                onPressed: () => unawaited(
-                  Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      settings: const RouteSettings(name: '/threads'),
-                      builder: (context) => ThreadManagementScreen(
-                        account: account,
-                        conversation: conversation,
-                      ),
+          child: LayoutBuilder(
+            builder: (context, box) => Row(
+              children: [
+                if (onToggleList != null) ...[
+                  IconButton(
+                    key: const Key('toggle-conversation-list'),
+                    tooltip: listCollapsed
+                        ? strings.showConversationList
+                        : strings.hideConversationList,
+                    icon: Icon(
+                      listCollapsed
+                          ? Icons.menu_open_rounded
+                          : Icons.menu_rounded,
                     ),
+                    onPressed: onToggleList,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                if (onClose != null) ...[
+                  IconButton(
+                    key: const Key('close-conversation'),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                    icon: const BackButtonIcon(),
+                    onPressed: onClose,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                ExcludeSemantics(
+                  child: ConversationAvatar(
+                    account: account,
+                    conversation: conversation,
                   ),
                 ),
-              ),
-              CallStartButtons(
-                accountId: account.id,
-                conversation: conversation,
-              ),
-              IconButton(
-                key: const Key('open-room-details'),
-                tooltip: strings.roomDetailsOpenTooltip,
-                icon: const Icon(Icons.info_outline_rounded),
-                onPressed:
-                    onOpenDetails ??
-                    () => unawaited(
-                      Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          settings: const RouteSettings(
-                            name: '/conversation/details',
-                          ),
-                          builder: (context) => RoomDetailsScreen(
-                            account: account,
-                            conversation: conversation,
-                          ),
-                        ),
-                      ),
-                    ),
-              ),
-            ],
+                const SizedBox(width: avatarGap),
+                Expanded(
+                  child: ConversationPresenceTitle(
+                    conversation: conversation,
+                    titleStyle: Theme.of(context).textTheme.titleMedium,
+                    fallbackSubtitle: conversation.description,
+                  ),
+                ),
+                ...conversationHeaderActions(
+                  _headerActions(
+                    context,
+                    ref,
+                    account,
+                    conversation,
+                    onOpenDetails: onOpenDetails,
+                  ),
+                  width: box.maxWidth - leadingExtent,
+                  titleFloor: conversationTitleFloor(
+                    context,
+                    avatarExtent: avatarExtent,
+                    gap: avatarGap,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         ConversationUpcomingEventBanner(
@@ -440,6 +386,71 @@ final class PresenceChatRoomPane extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The header's actions, most important first — that order is also the order
+/// in which a narrow header stops showing them as icons.
+List<ConversationHeaderAction> _headerActions(
+  BuildContext context,
+  WidgetRef ref,
+  StoredAccount account,
+  CachedConversation conversation, {
+  VoidCallback? onOpenDetails,
+}) {
+  final strings = AppLocalizations.of(context);
+  return [
+    ...callStartActions(
+      context,
+      ref,
+      accountId: account.id,
+      conversation: conversation,
+    ),
+    ConversationHeaderAction(
+      id: const Key('open-room-search'),
+      icon: Icons.search_rounded,
+      label: strings.searchInConversation,
+      onPressed: () => openMessageSearch(
+        context,
+        account.id,
+        roomToken: conversation.token,
+        roomName: conversation.displayName,
+      ),
+    ),
+    ConversationHeaderAction(
+      id: const Key('open-thread-management'),
+      icon: Icons.forum_outlined,
+      label: strings.threadManagementOpenTooltip,
+      onPressed: () => unawaited(
+        Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: '/threads'),
+            builder: (context) => ThreadManagementScreen(
+              account: account,
+              conversation: conversation,
+            ),
+          ),
+        ),
+      ),
+    ),
+    ConversationHeaderAction(
+      id: const Key('open-room-details'),
+      icon: Icons.info_outline_rounded,
+      label: strings.roomDetailsOpenTooltip,
+      onPressed:
+          onOpenDetails ??
+          () => unawaited(
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                settings: const RouteSettings(name: '/conversation/details'),
+                builder: (context) => RoomDetailsScreen(
+                  account: account,
+                  conversation: conversation,
+                ),
+              ),
+            ),
+          ),
+    ),
+  ];
 }
 
 CachedConversation _currentConversation(

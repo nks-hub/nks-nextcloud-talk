@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: on a phone the conversation header showed no conversation name at
+  all. Five buttons took the whole width and the name was left with nothing.
+  The name now keeps its room and the buttons that no longer fit move into a
+  menu, the call buttons last. Seen on a Galaxy S9+ at its own display size.
+
 ## 0.1.0 (62) — 6 September 2026
 
 A repair of build 61, which went out the same day and could not be opened at
