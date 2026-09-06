@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -142,6 +143,7 @@ final class ChatMessageContent extends StatelessWidget {
                 key: Key('chat-attachment-${parsed.messageId}-$index'),
                 account: account,
                 parameter: attachments[index].value,
+                roomToken: parsed.roomToken.value,
                 messageId: parsed.messageId,
                 index: index,
               ),

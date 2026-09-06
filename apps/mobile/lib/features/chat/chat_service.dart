@@ -339,6 +339,63 @@ final class ChatService {
     });
   }
 
+  /// Re-reads one message from the server and overwrites its cached row.
+  ///
+  /// Nothing else re-reads a message the cache already holds, so a row that
+  /// was persisted wrong stays wrong for as long as the cache lives. That is
+  /// what the HPB relay left behind until build 63: it renders a file the way
+  /// the SHARE sees it, so an attachment sent from this account carries a path
+  /// no download can resolve. Asking for that one message repairs the row in
+  /// place.
+  ///
+  /// Returns whether a message came back. The cursors are untouched — this
+  /// applies a single message the way an edit does, so it cannot disturb the
+  /// poll of an open room.
+  Future<bool> refreshMessage({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    if (messageId < 1) {
+      return false;
+    }
+    final prepared = await _prepare(accountId, roomToken);
+    final request = ChatFetchRequest(
+      accountId: AccountId.parse(accountId),
+      requestId: ChatRequestId.parse(_uuid.v4()),
+      server: prepared.authority.server,
+      roomToken: prepared.room.token,
+      profile: prepared.profile,
+      direction: ChatFetchDirection.history,
+      cursor: ChatCursor.parse(messageId.toString()),
+      lastCommonRead: ChatCursor.parse('0'),
+      limit: 1,
+      includeLastKnown: true,
+      timeoutSeconds: 0,
+      interactive: true,
+    );
+    final response = await _api.getChat(
+      chatRequest: request,
+      loginName: prepared.account.loginName,
+      appPassword: prepared.appPassword,
+    );
+    if (response.classification != ChatGetClassification.messages) {
+      return false;
+    }
+    for (final message in response.messages) {
+      if (message.messageId != messageId) {
+        continue;
+      }
+      await _chat.applyMessageMutation(
+        accountId: accountId,
+        server: prepared.authority.server,
+        message: message,
+      );
+      return true;
+    }
+    return false;
+  }
+
   /// [replyTo] answers a specific root message. Talk turns that into a thread,
   /// so it is mutually exclusive with sending inside an existing [threadId].
   Future<void> sendText({

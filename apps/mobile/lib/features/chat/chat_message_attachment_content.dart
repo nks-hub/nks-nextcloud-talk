@@ -4,13 +4,17 @@ final class _VoiceAttachment extends ConsumerStatefulWidget {
   const _VoiceAttachment({
     required this.account,
     required this.uri,
+    required this.roomToken,
     required this.messageId,
+    required this.index,
     required this.name,
   });
 
   final StoredAccount account;
   final Uri uri;
+  final String roomToken;
   final int messageId;
+  final int index;
   final String name;
 
   @override
@@ -19,6 +23,11 @@ final class _VoiceAttachment extends ConsumerStatefulWidget {
 
 final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   VoicePlaybackBackend? _backend;
+
+  /// Set once a failed download turned out to be a cached path the server
+  /// does not know; see [_repairedAttachmentUri].
+  Uri? _repairedUri;
+  bool _pathRepairAttempted = false;
   StreamSubscription<void>? _completion;
   StreamSubscription<Duration>? _positionUpdates;
   StreamSubscription<Duration>? _durationUpdates;
@@ -43,12 +52,18 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
   /// already walked away from, so its text never reaches the bubble.
   int _transcriptionGeneration = 0;
 
+  Uri get _uri => _repairedUri ?? widget.uri;
+
   @override
   void didUpdateWidget(_VoiceAttachment oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.account.id != widget.account.id ||
         oldWidget.messageId != widget.messageId) {
       _discardTranscription();
+    }
+    if (oldWidget.uri != widget.uri) {
+      _repairedUri = null;
+      _pathRepairAttempted = false;
     }
   }
 
@@ -96,7 +111,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       final file = await ref.read(
         chatVoiceFileProvider((
           account: widget.account,
-          uri: widget.uri,
+          uri: _uri,
           messageId: widget.messageId,
         )).future,
       );
@@ -185,7 +200,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       final file = await ref.read(
         chatVoiceFileProvider((
           account: widget.account,
-          uri: widget.uri,
+          uri: _uri,
           messageId: widget.messageId,
         )).future,
       );
@@ -222,8 +237,24 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       // The bubble can only say "it did not play". Which of the download, the
       // credentials or the player refused it is in the log — a silent catch
       // here already cost a day once, on a device where it was the only clue.
-      debugPrint('[voice] playback failed for ${widget.uri}: $error');
+      debugPrint('[voice] playback failed for $_uri: $error');
       debugPrintStack(stackTrace: stack, maxFrames: 8);
+      if (!_pathRepairAttempted) {
+        _pathRepairAttempted = true;
+        final repaired = await _repairedAttachmentUri(
+          ref,
+          account: widget.account,
+          roomToken: widget.roomToken,
+          messageId: widget.messageId,
+          index: widget.index,
+          failedUri: _uri,
+        );
+        if (repaired != null && mounted) {
+          _repairedUri = repaired;
+          await _start();
+          return;
+        }
+      }
       if (mounted) {
         setState(() {
           _loading = false;
@@ -512,12 +543,14 @@ final class _ChatAttachment extends ConsumerWidget {
     super.key,
     required this.account,
     required this.parameter,
+    required this.roomToken,
     required this.messageId,
     required this.index,
   });
 
   final StoredAccount account;
   final ChatRichObjectParameter parameter;
+  final String roomToken;
   final int messageId;
   final int index;
 
@@ -600,7 +633,9 @@ final class _ChatAttachment extends ConsumerWidget {
           _VoiceAttachment(
             account: account,
             uri: voiceUri,
+            roomToken: roomToken,
             messageId: messageId,
+            index: index,
             name: name,
           ),
         if (loadedImage != null) ...[
@@ -1065,6 +1100,59 @@ final class _AttachmentDownloadNotice extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Re-reads the message behind a download that failed and returns the
+/// attachment's corrected address, or `null` when nothing changed.
+///
+/// A download can fail because the cached message carries a path the server
+/// does not know. That is what the HPB relay wrote until build 63: it renders
+/// a file the way the SHARE sees it, so an attachment sent from this account
+/// keeps a path every download answers with 404, and nothing re-reads a
+/// message the cache already holds. The message is asked for once, and the
+/// address it then yields is returned so the download can be repeated.
+Future<Uri?> _repairedAttachmentUri(
+  WidgetRef ref, {
+  required StoredAccount account,
+  required String roomToken,
+  required int messageId,
+  required int index,
+  required Uri failedUri,
+}) async {
+  try {
+    final refreshed = await ref
+        .read(chatServiceProvider)
+        .refreshMessage(
+          accountId: account.id,
+          roomToken: roomToken,
+          messageId: messageId,
+        );
+    if (!refreshed) {
+      return null;
+    }
+    final row = await ref
+        .read(chatRepositoryProvider)
+        .getMessage(
+          accountId: account.id,
+          roomToken: roomToken,
+          messageId: messageId,
+        );
+    if (row == null) {
+      return null;
+    }
+    final message = ChatMessage.fromJson(jsonDecode(row.rawJson));
+    final files = message.messageParameters.entries
+        .where((entry) => entry.value.type == 'file')
+        .toList(growable: false);
+    if (index >= files.length) {
+      return null;
+    }
+    final uri = _davAttachment(account, files[index].value)?.uri;
+    return uri == null || uri == failedUri ? null : uri;
+  } on Object catch (error) {
+    debugPrint('[attachments] re-reading message $messageId failed: $error');
+    return null;
   }
 }
 
