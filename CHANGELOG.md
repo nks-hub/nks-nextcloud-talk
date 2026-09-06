@@ -96,6 +96,12 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
+- Nothing users see: an incoming telephone call on Android 11 now has a
+  measured answer instead of a guess. It mutes what this application is
+  sending 34 ms after the phone starts ringing and unmutes it 100 ms after the
+  ringing stops, and the call it interrupted survives. It had been recorded as
+  untestable without a physical phone below Android 12.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
