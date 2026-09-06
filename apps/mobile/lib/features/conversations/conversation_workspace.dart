@@ -4,16 +4,6 @@ part of 'conversation_shell.dart';
 /// conversation moves onto the navigator instead.
 const double kExpandedShellBreakpoint = 720;
 
-/// How much room the conversation has to keep before the list folds itself.
-///
-/// A window wide enough for two panes is not automatically a roomy one: the
-/// rail and the list can leave the chat narrower than its own composer wants,
-/// and typing in a slot is worse than one click to bring the list back. The
-/// list folds itself below this and returns when the window grows, without
-/// touching the stored preference - that one is the person's choice for
-/// windows that do have the room.
-const double kMinConversationWidth = 620;
-
 final class ConversationWorkspace extends StatelessWidget {
   const ConversationWorkspace({
     super.key,
@@ -145,23 +135,15 @@ final class ConversationWorkspace extends StatelessWidget {
             onDecideFederationInvitation: onDecideFederationInvitation,
           );
         }
-        // Chrome is what stands between the window edge and the conversation:
-        // the account rail when it is drawn, plus the list pane itself. A
-        // window wide enough for two panes is not automatically a roomy one.
-        final chromeWidth =
-            (accounts.length > 1 ? kAccountRailWidth + 1 : 0) +
-            context.listPaneWidth;
-        final cramped =
-            constraints.maxWidth - chromeWidth < kMinConversationWidth;
-        // The list is only ever hidden to give a conversation room, so with no
-        // conversation on screen it is never hidden. Found on a 7-inch tablet
-        // in portrait — 901 dp, wide enough for two panes and 49 dp short of
-        // the room one needs: the list went away, the placeholder took the
-        // whole window, and the toggle that brings the list back lives in the
-        // conversation pane that was not there. Nothing could be opened, no
-        // account switched, no settings reached.
-        final hideList =
-            (listCollapsed || cramped) && selectedConversation != null;
+        // Only the person's own fold hides the list. A narrow window used to
+        // fold it too, to give the conversation room, and that was a dead end:
+        // the toggle that brings the list back only flips the stored
+        // preference, which the narrow window overruled again — pressing it
+        // twice left the list gone and no conversation could be picked. Found
+        // on a 7-inch tablet in portrait (901 dp) and reported again on a
+        // desktop window dragged into the same band. The room it saved was
+        // never worth it; anyone who wants it presses the toggle.
+        final hideList = listCollapsed && selectedConversation != null;
         return _ExpandedShell(
           account: account,
           accounts: accounts,

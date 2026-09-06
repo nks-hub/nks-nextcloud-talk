@@ -305,61 +305,42 @@ void main() {
   testWidgets('a window too narrow for both panes still shows the list', (
     tester,
   ) async {
-    // FOUND ON A 7-INCH TABLET IN PORTRAIT, 6 September 2026: 901 dp is over
-    // the two-pane breakpoint and 49 dp short of the room a conversation
-    // needs, so the list was collapsed to protect a conversation that was not
-    // open. What was left was the "select a conversation" placeholder over the
-    // whole window — no list, no account menu, no way to reach settings, and
-    // no toggle, because the toggle lives in the conversation pane.
+    // FOUND ON A 7-INCH TABLET IN PORTRAIT, 6 September 2026, AND REPORTED
+    // AGAIN THE SAME NIGHT ON A DESKTOP WINDOW: 901 dp is over the two-pane
+    // breakpoint and 49 dp short of the room a conversation was said to need,
+    // so the list folded itself. With nothing open that left the "select a
+    // conversation" placeholder over the whole window; with a conversation
+    // open it left no way back to the list, because the toggle in the
+    // conversation pane only flips the STORED preference and the fold
+    // overruled it again — pressing it twice changed nothing on screen.
+    // The fold is gone. Only the person's own toggle hides the list now.
     tester.view.physicalSize = const Size(901, 1440);
-    await pump(tester);
+    await pump(
+      tester,
+      conversations: const [_conversation, _secondConversation],
+    );
 
     expect(
       find.byKey(const Key('conversation-shell-expanded')),
       findsOneWidget,
       reason: '901 dp is past the two-pane breakpoint',
     );
+    expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
+
+    // Opening a conversation leaves the list where it is, so the next one can
+    // be picked without touching anything else.
+    await tester.tap(find.text('Breakpoint room'));
+    await tester.pump();
     expect(
       find.byKey(const Key('conversation-list-pane')),
       findsOneWidget,
-      reason: 'with nothing open there is nothing to give the room to',
+      reason: 'this is the dead end that was reported: no list, no way back',
     );
-
-    final listWidth = tester
-        .getSize(find.byKey(const Key('conversation-list-pane')))
-        .width;
-    final beside = tester
-        .getSize(find.byKey(const Key('conversation-detail-pane')))
-        .width;
-
-    // With a conversation open the narrow window collapses it again, and the
-    // pane that took its place carries the toggle back.
-    await tester.tap(find.text('Breakpoint room'));
+    // And the list is live, not a leftover: the next conversation opens from
+    // it, which is what could not be done.
+    await tester.tap(find.text('Second breakpoint room'));
     await tester.pump();
-    expect(find.byKey(const Key('conversation-list-pane')), findsNothing);
-    expect(find.byKey(const Key('conversation-list-splitter')), findsNothing);
-    expect(
-      find.byKey(const Key('toggle-conversation-list')),
-      findsOneWidget,
-      reason: 'the pane that took the room carries the way back',
-    );
-
-    // The width the list gave up goes to the conversation, divider and all —
-    // the assertion `desktop_chrome_test.dart` used to carry before folding
-    // needed a room to be open.
-    final folded = tester
-        .getSize(find.byKey(const Key('conversation-detail-pane')))
-        .width;
-    expect(folded - beside, listWidth + 1);
-
-    // And it comes back on its own once the window can afford both again,
-    // because nothing stored a preference to fold.
-    tester.view.physicalSize = const Size(1600, 1440);
-    // Two pumps rather than a settle: the open conversation pane keeps a
-    // stream alive that `pumpAndSettle` waits on forever.
-    await tester.pump();
-    await tester.pump();
-    expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
+    expect(find.text('Second conversation'), findsWidgets);
 
     await settle(tester);
   });

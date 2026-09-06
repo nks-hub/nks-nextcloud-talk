@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
-import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 
 import 'test_support.dart';
