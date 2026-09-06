@@ -91,16 +91,16 @@ final class SampleUploader {
         attachmentModeOut: nil
       ) as? NSNumber
 
-    guard
-      let request = CFHTTPMessageCreateRequest(
-        kCFAllocatorDefault,
-        "POST" as CFString,
-        CFURLCreateWithString(kCFAllocatorDefault, "http://localhost" as CFString, nil),
-        kCFHTTPVersion1_1
-      )?.takeRetainedValue()
+    guard let url = CFURLCreateWithString(kCFAllocatorDefault, "http://localhost" as CFString, nil)
     else {
       return nil
     }
+    let request = CFHTTPMessageCreateRequest(
+      kCFAllocatorDefault,
+      "POST" as CFString,
+      url,
+      kCFHTTPVersion1_1
+    ).takeRetainedValue()
     CFHTTPMessageSetHeaderFieldValue(
       request, "Content-Length" as CFString, String(jpeg.count) as CFString)
     CFHTTPMessageSetHeaderFieldValue(
