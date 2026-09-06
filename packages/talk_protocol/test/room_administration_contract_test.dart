@@ -113,6 +113,7 @@ Matcher _protocolFailure(TalkProtocolErrorCode code) => throwsA(
 void main() {
   group('breakout rooms', breakoutRoomsTests);
   group('breakout list', breakoutListTests);
+  group('call recording', callRecordingTests);
   group('SetRoomPublicRequest', () {
     test('POSTs to the v4 public endpoint when making a room public', () {
       final request = SetRoomPublicRequest(
@@ -1105,5 +1106,169 @@ void breakoutListTests() {
     );
     expect(refused.isSuccess, isFalse);
     expect(refused.rooms, isEmpty);
+  });
+}
+
+void callRecordingTests() {
+  const base =
+      'https://cloud.example.invalid/ocs/v2.php/apps/spreed/api/v1/recording/rooma123';
+
+  test('starting a video recording POSTs status 3 to the v1 recording path', () {
+    final request = StartCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: CallRecordingStartMode.video,
+    );
+    expect(request.httpMethod, 'POST');
+    expect(request.uri.toString(), '$base?format=json');
+    expect(request.formBody, {'status': '3'});
+    expect(request.headers['OCS-APIRequest'], 'true');
+  });
+
+  test(
+    'starting an audio-only recording POSTs status 4 to the same path',
+    () {
+      final request = StartCallRecordingRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        mode: CallRecordingStartMode.audioOnly,
+      );
+      expect(request.formBody, {'status': '4'});
+      expect(request.uri.toString(), '$base?format=json');
+    },
+  );
+
+  test('stopping a recording DELETEs the same path with no body', () {
+    final request = StopCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+    );
+    expect(request.httpMethod, 'DELETE');
+    expect(request.uri.toString(), '$base?format=json');
+    expect(request.formBody, isNull);
+  });
+
+  test('a 200 decodes as confirmed', () {
+    final request = StartCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: CallRecordingStartMode.video,
+    );
+    final response = decodeCallRecordingResponse(
+      request: request,
+      statusCode: 200,
+      body: _ocsBody(),
+    );
+    expect(response.isSuccess, isTrue);
+    expect(
+      response.classification,
+      CallRecordingResponseClassification.confirmed,
+    );
+  });
+
+  test('a 400 decodes as rejected and surfaces the bounded error code', () {
+    final request = StartCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: CallRecordingStartMode.video,
+    );
+    final body = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'ocs': {
+            'meta': {
+              'status': 'failure',
+              'statuscode': 400,
+              'message': 'recording',
+            },
+            'data': {'error': 'recording'},
+          },
+        }),
+      ),
+    );
+    final response = decodeCallRecordingResponse(
+      request: request,
+      statusCode: 400,
+      body: body,
+    );
+    expect(
+      response.classification,
+      CallRecordingResponseClassification.rejected,
+    );
+    expect(response.errorCode, 'recording');
+  });
+
+  test('a 403 decodes as forbidden — the caller is not a moderator', () {
+    final request = StopCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+    );
+    final response = decodeCallRecordingResponse(
+      request: request,
+      statusCode: 403,
+      body: _ocsBody(status: 'failure', statusCode: 403, data: null),
+    );
+    expect(
+      response.classification,
+      CallRecordingResponseClassification.forbidden,
+    );
+    expect(response.isSuccess, isFalse);
+  });
+
+  test('a 412 decodes as precondition failed — an active lobby', () {
+    final request = StartCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+      mode: CallRecordingStartMode.audioOnly,
+    );
+    final response = decodeCallRecordingResponse(
+      request: request,
+      statusCode: 412,
+      body: _ocsBody(status: 'failure', statusCode: 412, data: null),
+    );
+    expect(
+      response.classification,
+      CallRecordingResponseClassification.preconditionFailed,
+    );
+  });
+
+  test('a 404 decodes as room missing', () {
+    final request = StopCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+    );
+    final response = decodeCallRecordingResponse(
+      request: request,
+      statusCode: 404,
+      body: _ocsBody(status: 'failure', statusCode: 404, data: null),
+    );
+    expect(
+      response.classification,
+      CallRecordingResponseClassification.roomMissing,
+    );
+  });
+
+  test('an unsupported status code is a protocol failure, not a guess', () {
+    final request = StopCallRecordingRequest(
+      accountId: _accountId(),
+      server: _server(),
+      roomToken: _token(),
+    );
+    expect(
+      () => decodeCallRecordingResponse(
+        request: request,
+        statusCode: 418,
+        body: Uint8List(0),
+      ),
+      _protocolFailure(TalkProtocolErrorCode.unsupportedHttpStatus),
+    );
   });
 }

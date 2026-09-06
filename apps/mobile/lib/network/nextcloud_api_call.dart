@@ -12,6 +12,19 @@ final Set<int> _callRestAllowedStatusCodes = Set.unmodifiable({
   ...Iterable<int>.generate(100, (index) => 500 + index),
 });
 
+/// Every status `docs/recording.md` documents for start and stop, plus the
+/// generic `429`/`503` this package treats uniformly everywhere else.
+final Set<int> _callRecordingAllowedStatusCodes = Set.unmodifiable({
+  200,
+  400,
+  401,
+  403,
+  404,
+  412,
+  429,
+  503,
+});
+
 mixin _NextcloudApiCall on _HttpNextcloudApiBase {
   Future<CallRestResponse> getCallPeers({
     required CallPeersRequest peersRequest,
@@ -60,6 +73,42 @@ mixin _NextcloudApiCall on _HttpNextcloudApiBase {
     appPassword: appPassword,
     abortTrigger: abortTrigger,
   );
+
+  /// Starts or stops call recording. Moderator-only on the server
+  /// (`#[RequireLoggedInModeratorParticipant]`); the caller is responsible for
+  /// not offering the control to anyone else.
+  Future<CallRecordingResponse> administerCallRecording({
+    required CallRecordingRequest recordingRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            recordingRequest.httpMethod,
+            recordingRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...recordingRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          });
+    final formBody = recordingRequest.formBody;
+    if (formBody != null) {
+      request.bodyFields = formBody;
+    }
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _callRecordingAllowedStatusCodes,
+      maximumBytes: _callRestMaximumBytes,
+    );
+    return decodeCallRecordingResponse(
+      request: recordingRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
 
   Future<CallRestResponse> _sendCallRestRequest(
     CallRestRequest callRequest, {

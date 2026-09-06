@@ -5,13 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/talk_features.dart';
 import '../chat/chat_room_signaling.dart';
+import '../rooms/room_settings_service.dart';
 import 'call_lifecycle_service.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_transport_service.dart';
 
 enum CallJoinPhase { idle, joining, joined, leaving, failed }
+
+/// The Talk capability that gates the moderator recording control, the same
+/// way `breakout-rooms-v1` gates the breakout-rooms control.
+const String callRecordingCapability = 'recording-v1';
 
 /// What a participant may publish into a call, as the room's permissions say.
 /// Everything is allowed until the room says otherwise, so a room that could
@@ -35,6 +41,33 @@ final class CallPublishingRights {
   final bool screen;
 }
 
+/// What this participant may do to the call as a whole, as opposed to what
+/// they may publish into it. Read once from the cached conversation and the
+/// account's own capabilities, same source and same "hide rather than offer
+/// something the server will refuse" policy as [CallPublishingRights].
+final class CallModeratorState {
+  const CallModeratorState({
+    this.publishing = const CallPublishingRights(),
+    this.canManageRecording = false,
+    this.recordingActive = false,
+  });
+
+  final CallPublishingRights publishing;
+
+  /// A moderator, on a server that advertises [callRecordingCapability]. A
+  /// participant for whom this is `false` must not see the recording control
+  /// at all — the same rule [CallPublishingRights.screen] already applies to
+  /// the screen-share button.
+  final bool canManageRecording;
+
+  /// Whether the room already reports a recording starting or in progress
+  /// (`ConversationRoom.callRecording != 0`) as of the last read. Kept
+  /// optimistically in sync with this participant's own start/stop calls
+  /// rather than polled, since nothing else in this screen re-reads the room
+  /// while a call is joined.
+  final bool recordingActive;
+}
+
 final class CallJoinState {
   const CallJoinState({
     this.phase = CallJoinPhase.idle,
@@ -43,6 +76,8 @@ final class CallJoinState {
     this.lifecycleError,
     this.signalingUnavailable = false,
     this.publishing = const CallPublishingRights(),
+    this.canManageRecording = false,
+    this.recordingActive = false,
   });
 
   final CallJoinPhase phase;
@@ -59,6 +94,12 @@ final class CallJoinState {
   /// worse than no control — pressing the camera really opens the camera, and
   /// pressing the screen share really asks the system to record the screen.
   final CallPublishingRights publishing;
+
+  /// See [CallModeratorState.canManageRecording].
+  final bool canManageRecording;
+
+  /// See [CallModeratorState.recordingActive].
+  final bool recordingActive;
 
   bool get isBusy =>
       phase == CallJoinPhase.joining || phase == CallJoinPhase.leaving;
@@ -124,30 +165,40 @@ base class CallJoinController
     );
   }
 
-  var _publishing = const CallPublishingRights();
+  var _moderator = const CallModeratorState();
 
-  /// What the room says this participant may publish.
+  /// What the room says this participant may publish and manage.
   ///
   /// Read from the cached conversation, which is the same copy the room
   /// details read their moderation state from — no extra request, and a room
   /// that cannot be parsed leaves every control as it was rather than hiding
   /// something the user is allowed to use.
-  Future<CallPublishingRights> _readPublishingRights() async {
+  Future<CallModeratorState> _readModeratorState() async {
     try {
-      final cached = await ref
-          .read(accountRepositoryProvider)
-          .getConversation(accountId: arg.accountId, token: arg.roomToken);
+      final accounts = ref.read(accountRepositoryProvider);
+      final cached = await accounts.getConversation(
+        accountId: arg.accountId,
+        token: arg.roomToken,
+      );
       if (cached == null) {
-        return const CallPublishingRights();
+        return const CallModeratorState();
       }
       final room = ConversationRoom.fromJson(
         jsonDecode(cached.rawJson) as Object?,
       );
-      return CallPublishingRights.fromPolicy(
-        CallRoomPolicy.fromConversation(room),
+      final policy = CallRoomPolicy.fromConversation(room);
+      final account = await accounts.getAccount(arg.accountId);
+      final canManageRecording =
+          policy.isModerator &&
+          account != null &&
+          talkFeaturesOf(account).contains(callRecordingCapability);
+      return CallModeratorState(
+        publishing: CallPublishingRights.fromPolicy(policy),
+        canManageRecording: canManageRecording,
+        recordingActive: room.callRecording != 0,
       );
     } on Object {
-      return const CallPublishingRights();
+      return const CallModeratorState();
     }
   }
 
@@ -196,7 +247,7 @@ base class CallJoinController
       return;
     }
 
-    _publishing = await _readPublishingRights();
+    _moderator = await _readModeratorState();
 
     final session = CallMediaSession(
       initial: signaling.current,
@@ -218,7 +269,9 @@ base class CallJoinController
             : CallJoinPhase.joined,
         media: media,
         mediaError: media.error,
-        publishing: _publishing,
+        publishing: _moderator.publishing,
+        canManageRecording: _moderator.canManageRecording,
+        recordingActive: _moderator.recordingActive,
       );
       if (media.phase == CallMediaPhase.failed) {
         unawaited(_abandonFailedCall(session));
@@ -274,6 +327,60 @@ base class CallJoinController
       return;
     }
     await session.sendReaction(emoji);
+  }
+
+  /// Starts or stops recording the call. `CallControls` is responsible for
+  /// only offering this to a participant for whom
+  /// `state.canManageRecording` is true — the server also refuses it on its
+  /// own (`#[RequireLoggedInModeratorParticipant]`), but the control must not
+  /// exist at all for anyone else, the same rule the screen-share button
+  /// already follows for `publish-screen`.
+  ///
+  /// ponytail: a failure is swallowed rather than surfaced, matching every
+  /// other fire-and-forget control on this banner. Add a visible error once
+  /// there is a recording backend on the rig to observe one against.
+  Future<void> setRecording(
+    bool active, {
+    CallRecordingStartMode mode = CallRecordingStartMode.video,
+  }) async {
+    if (state.phase != CallJoinPhase.joined || state.isBusy) {
+      return;
+    }
+    final settings = ref.read(roomSettingsServiceProvider);
+    try {
+      if (active) {
+        await settings.startCallRecording(
+          accountId: arg.accountId,
+          roomToken: arg.roomToken,
+          mode: mode,
+        );
+      } else {
+        await settings.stopCallRecording(
+          accountId: arg.accountId,
+          roomToken: arg.roomToken,
+        );
+      }
+    } on RoomSettingsException {
+      return;
+    }
+    if (_disposed || state.phase != CallJoinPhase.joined) {
+      return;
+    }
+    _moderator = CallModeratorState(
+      publishing: _moderator.publishing,
+      canManageRecording: _moderator.canManageRecording,
+      recordingActive: active,
+    );
+    state = CallJoinState(
+      phase: state.phase,
+      media: state.media,
+      mediaError: state.mediaError,
+      lifecycleError: state.lifecycleError,
+      signalingUnavailable: state.signalingUnavailable,
+      publishing: _moderator.publishing,
+      canManageRecording: _moderator.canManageRecording,
+      recordingActive: active,
+    );
   }
 
   /// Starts or stops sharing this device's screen into the joined call. The

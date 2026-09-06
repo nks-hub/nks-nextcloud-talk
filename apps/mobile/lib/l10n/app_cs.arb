@@ -680,6 +680,8 @@
   "callScreenSharedBy": "{name} sdílí obrazovku",
   "callBannerShareScreen": "Sdílet obrazovku",
   "callBannerStopSharing": "Ukončit sdílení obrazovky",
+  "callBannerStartRecording": "Spustit nahrávání",
+  "callBannerStopRecording": "Zastavit nahrávání",
   "callParticipantConnected": "Zvuk je spojený",
   "callParticipantConnecting": "Připojování…",
   "callParticipantMuted": "Ztlumeno",

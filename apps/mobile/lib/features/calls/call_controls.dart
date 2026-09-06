@@ -172,6 +172,27 @@ final class CallControls extends ConsumerWidget {
             icon: const Icon(Icons.screen_share_outlined),
             selectedIcon: const Icon(Icons.stop_screen_share_rounded),
           ),
+        // Moderator-only, and only where the server advertises
+        // `recording-v1` — see `CallJoinState.canManageRecording`. A
+        // participant without it must not see this button at all, the same
+        // way a participant without `publish-screen` does not see the
+        // screen-share one above.
+        if (join.canManageRecording)
+          IconButton(
+            key: Key('$keyPrefix-recording'),
+            tooltip: join.recordingActive
+                ? strings.callBannerStopRecording
+                : strings.callBannerStartRecording,
+            color: color,
+            isSelected: join.recordingActive,
+            onPressed: busy
+                ? null
+                : () => unawaited(
+                    controller().setRecording(!join.recordingActive),
+                  ),
+            icon: const Icon(Icons.fiber_manual_record_outlined),
+            selectedIcon: const Icon(Icons.fiber_manual_record_rounded),
+          ),
         IconButton(
           key: Key('$keyPrefix-raise-hand'),
           tooltip: join.media.handRaised

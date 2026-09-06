@@ -158,6 +158,78 @@ List<CallPeer> _decodePeers(CallPeersRequest request, Object? data) {
   return UnmodifiableListView(peers);
 }
 
+enum CallRecordingResponseClassification {
+  confirmed,
+  rejected,
+  reauthenticationRequired,
+  forbidden,
+  roomMissing,
+  preconditionFailed,
+  rateLimited,
+  serverFailure,
+}
+
+final class CallRecordingResponse {
+  const CallRecordingResponse._({
+    required this.request,
+    required this.statusCode,
+    required this.classification,
+    required this.errorCode,
+  });
+
+  final CallRecordingRequest request;
+  final int statusCode;
+  final CallRecordingResponseClassification classification;
+
+  /// The `message` Talk's `400` carries (`status`, `config`, `recording` or
+  /// `call`, per `docs/recording.md`); never included in [toString].
+  final String? errorCode;
+
+  bool get isSuccess =>
+      classification == CallRecordingResponseClassification.confirmed;
+
+  @override
+  String toString() =>
+      'CallRecordingResponse(statusCode: $statusCode, '
+      'classification: ${classification.name})';
+}
+
+CallRecordingResponse decodeCallRecordingResponse({
+  required CallRecordingRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  if (statusCode == 200) {
+    _decodeOcsData(body);
+    return CallRecordingResponse._(
+      request: request,
+      statusCode: statusCode,
+      classification: CallRecordingResponseClassification.confirmed,
+      errorCode: null,
+    );
+  }
+
+  final classification = switch (statusCode) {
+    400 => CallRecordingResponseClassification.rejected,
+    401 => CallRecordingResponseClassification.reauthenticationRequired,
+    403 => CallRecordingResponseClassification.forbidden,
+    404 => CallRecordingResponseClassification.roomMissing,
+    412 => CallRecordingResponseClassification.preconditionFailed,
+    429 => CallRecordingResponseClassification.rateLimited,
+    >= 500 && <= 599 => CallRecordingResponseClassification.serverFailure,
+    _ => protocolFailure(
+      TalkProtocolErrorCode.unsupportedHttpStatus,
+      r'$.statusCode',
+    ),
+  };
+  return CallRecordingResponse._(
+    request: request,
+    statusCode: statusCode,
+    classification: classification,
+    errorCode: statusCode == 400 ? _optionalErrorCode(body) : null,
+  );
+}
+
 String? _optionalErrorCode(Uint8List body) {
   if (body.isEmpty) {
     return null;

@@ -3662,6 +3662,18 @@ abstract class AppLocalizations {
   /// **'Stop sharing your screen'**
   String get callBannerStopSharing;
 
+  /// No description provided for @callBannerStartRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Start recording'**
+  String get callBannerStartRecording;
+
+  /// No description provided for @callBannerStopRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop recording'**
+  String get callBannerStopRecording;
+
   /// No description provided for @callParticipantConnected.
   ///
   /// In en, this message translates to:

@@ -2000,6 +2000,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerStopSharing => 'Ukončit sdílení obrazovky';
 
   @override
+  String get callBannerStartRecording => 'Spustit nahrávání';
+
+  @override
+  String get callBannerStopRecording => 'Zastavit nahrávání';
+
+  @override
   String get callParticipantConnected => 'Zvuk je spojený';
 
   @override

@@ -2000,6 +2000,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerStopSharing => 'Stop sharing your screen';
 
   @override
+  String get callBannerStartRecording => 'Start recording';
+
+  @override
+  String get callBannerStopRecording => 'Stop recording';
+
+  @override
   String get callParticipantConnected => 'Audio connected';
 
   @override
