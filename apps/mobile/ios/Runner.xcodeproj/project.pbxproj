@@ -11,6 +11,7 @@
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		A17C3E9B2F00000000000002 /* image-picker-android.txt in Resources */ = {isa = PBXBuildFile; fileRef = A17C3E9B2F00000000000003 /* image-picker-android.txt */; };
+		A17C3E9B2F00000000000012 /* dart-webrtc-mit.txt in Resources */ = {isa = PBXBuildFile; fileRef = A17C3E9B2F00000000000013 /* dart-webrtc-mit.txt */; };
 		A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A17C3E9B2F00000000000007 /* InfoPlist.strings */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		C04A91B12F00000000000001 /* ContactPickerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04A91B12F00000000000002 /* ContactPickerChannel.swift */; };
@@ -140,6 +141,7 @@
 		A17C3E9B2F00000000000006 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		9DF934A21EA87F9222773A34 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A17C3E9B2F00000000000003 /* image-picker-android.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "image-picker-ios.txt"; path = "../android/app/release-licenses/notices/image-picker-android.txt"; sourceTree = SOURCE_ROOT; };
+		A17C3E9B2F00000000000013 /* dart-webrtc-mit.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "dart-webrtc-mit.txt"; path = "../android/app/release-licenses/notices/dart-webrtc-mit.txt"; sourceTree = SOURCE_ROOT; };
 		C69DE9ED111E42CC88B2C2A5 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		D2D32FF1521197415A9860ED /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		A5E000000000000000000101 /* AppleIncomingShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareInbox.swift; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 			isa = PBXGroup;
 			children = (
 				A17C3E9B2F00000000000003 /* image-picker-android.txt */,
+				A17C3E9B2F00000000000013 /* dart-webrtc-mit.txt */,
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				A5E000000000000000000201 /* Shared */,
@@ -488,6 +491,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A17C3E9B2F00000000000002 /* image-picker-android.txt in Resources */,
+				A17C3E9B2F00000000000012 /* dart-webrtc-mit.txt in Resources */,
 				A17C3E9B2F00000000000004 /* InfoPlist.strings in Resources */,
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
