@@ -45,8 +45,9 @@ from the commit log. Nothing here has reached testers yet.
   takes longer to send.
 - Fixed: an attachment you had sent yourself could never be opened or played
   again. The app kept the path the file has inside the share instead of the one
-  it has on the server, so every attempt ended in a silent failure. Older
-  messages are not repaired by this; new ones are correct.
+  it has on the server, so every attempt ended in a silent failure. Messages
+  that already carry the wrong path are repaired the first time a voice message
+  in them is played — see below.
 - Fixed: on a phone the conversation header had no room left for the name of
   the conversation. Five buttons took the width, and depending on the display
   size the name was cut to a few dots or was not there at all. The name now
