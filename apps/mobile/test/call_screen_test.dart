@@ -49,10 +49,14 @@ final class _FakePictureInPicture implements CallPictureInPicture {
 
   @override
   Stream<bool> get active => modes.stream;
+
 }
 
-CallJoinState _joined() => CallJoinState(
+CallJoinState _joined({
+  CallPublishingRights publishing = const CallPublishingRights(),
+}) => CallJoinState(
   phase: CallJoinPhase.joined,
+  publishing: publishing,
   media: CallMediaState(
     phase: CallMediaPhase.connected,
     connectedPeers: 1,
@@ -85,6 +89,7 @@ CallJoinState _joined() => CallJoinState(
 Future<_FakePictureInPicture> _pumpCallScreen(
   WidgetTester tester, {
   double devicePixelRatio = 1,
+  CallPublishingRights publishing = const CallPublishingRights(),
 }) async {
   // A phone-sized surface: on the default test window the third tile of
   // the grid is below the fold and is not built at all.
@@ -96,7 +101,7 @@ Future<_FakePictureInPicture> _pumpCallScreen(
     ProviderScope(
       overrides: [
         callJoinControllerProvider.overrideWith(
-          () => _FrozenJoinController(_joined()),
+          () => _FrozenJoinController(_joined(publishing: publishing)),
         ),
         callParticipantNamesProvider.overrideWith(
           (ref, key) async => {'actor:users:alice': 'Alice Example'},
@@ -187,5 +192,28 @@ void main() {
     // Leaving the screen disarms it, so a conversation never shrinks.
     await tester.pumpWidget(const SizedBox());
     expect(pictureInPicture.armed, [true, false]);
+  });
+
+  testWidgets('a control that the server would refuse is not offered', (
+    tester,
+  ) async {
+    // A moderator can take publishing away (Talk's `publish-video` and
+    // `publish-screen`). Offering the buttons anyway is a promise the client
+    // cannot keep: the camera really opens on this device and the screen
+    // share really walks the user through the system's recording consent,
+    // both for media the server will not carry.
+    await _pumpCallScreen(
+      tester,
+      publishing: const CallPublishingRights(video: false, screen: false),
+    );
+
+    expect(find.byKey(const Key('call-screen-camera')), findsNothing);
+    expect(find.byKey(const Key('call-screen-share-screen')), findsNothing);
+    expect(
+      find.byKey(const Key('call-screen-mute')),
+      findsOneWidget,
+      reason: 'audio was not taken away, so the microphone stays',
+    );
+    expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
   });
 }

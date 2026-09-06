@@ -126,24 +126,32 @@ final class CallControls extends ConsumerWidget {
             icon: const Icon(Icons.volume_down_rounded),
             selectedIcon: const Icon(Icons.volume_up_rounded),
           ),
-        IconButton(
-          key: Key('$keyPrefix-camera'),
-          tooltip: join.media.cameraOn
-              ? strings.callBannerCameraOff
-              : strings.callBannerCameraOn,
-          color: color,
-          isSelected: join.media.cameraOn,
-          onPressed: busy
-              ? null
-              : () => unawaited(
-                  controller().setCameraEnabled(!join.media.cameraOn),
-                ),
-          icon: const Icon(Icons.videocam_off_outlined),
-          selectedIcon: const Icon(Icons.videocam_rounded),
-        ),
+        // A moderator can take publishing away. The button must go with it:
+        // pressing it really opens the camera on this device and renegotiates
+        // the connection, for a picture the server will not carry.
+        if (join.publishing.video)
+          IconButton(
+            key: Key('$keyPrefix-camera'),
+            tooltip: join.media.cameraOn
+                ? strings.callBannerCameraOff
+                : strings.callBannerCameraOn,
+            color: color,
+            isSelected: join.media.cameraOn,
+            onPressed: busy
+                ? null
+                : () => unawaited(
+                    controller().setCameraEnabled(!join.media.cameraOn),
+                  ),
+            icon: const Icon(Icons.videocam_off_outlined),
+            selectedIcon: const Icon(Icons.videocam_rounded),
+          ),
         // Sharing this device's screen exists where the platform can capture
-        // one; on a phone that is Android.
-        if (defaultTargetPlatform == TargetPlatform.android)
+        // one; on a phone that is Android. `publish-screen` is a permission
+        // and never a call flag, so it has to be asked for separately —
+        // without it the button would walk the user through the system's
+        // recording consent for a share nobody receives.
+        if (defaultTargetPlatform == TargetPlatform.android &&
+            join.publishing.screen)
           IconButton(
             key: Key('$keyPrefix-share-screen'),
             tooltip: join.media.screenSharing

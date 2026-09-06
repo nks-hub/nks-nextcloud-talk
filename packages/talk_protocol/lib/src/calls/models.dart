@@ -132,6 +132,15 @@ final class CallRoomPolicy {
     return CallInCallFlags.parse(value);
   }
 
+  /// Whether this participant may share their screen. Unlike audio and video
+  /// this never appears in the call flags — it is a permission only — so a
+  /// client that wants to hide the control has to ask here.
+  bool get canPublishScreen => _hasPermission(CallPermission.screen);
+
+  bool get canPublishAudio => _hasPermission(CallPermission.audio);
+
+  bool get canPublishVideo => _hasPermission(CallPermission.video);
+
   bool canJoinWith(CallInCallFlags flags) {
     if (!flags.contains(CallFlag.inCall)) {
       return false;

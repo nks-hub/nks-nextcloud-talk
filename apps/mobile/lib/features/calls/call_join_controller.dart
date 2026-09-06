@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../chat/chat_room_signaling.dart';
@@ -11,6 +13,28 @@ import 'call_transport_service.dart';
 
 enum CallJoinPhase { idle, joining, joined, leaving, failed }
 
+/// What a participant may publish into a call, as the room's permissions say.
+/// Everything is allowed until the room says otherwise, so a room that could
+/// not be read behaves as it always did.
+final class CallPublishingRights {
+  const CallPublishingRights({
+    this.audio = true,
+    this.video = true,
+    this.screen = true,
+  });
+
+  factory CallPublishingRights.fromPolicy(CallRoomPolicy policy) =>
+      CallPublishingRights(
+        audio: policy.canPublishAudio,
+        video: policy.canPublishVideo,
+        screen: policy.canPublishScreen,
+      );
+
+  final bool audio;
+  final bool video;
+  final bool screen;
+}
+
 final class CallJoinState {
   const CallJoinState({
     this.phase = CallJoinPhase.idle,
@@ -18,6 +42,7 @@ final class CallJoinState {
     this.mediaError,
     this.lifecycleError,
     this.signalingUnavailable = false,
+    this.publishing = const CallPublishingRights(),
   });
 
   final CallJoinPhase phase;
@@ -28,6 +53,12 @@ final class CallJoinState {
   /// The room has no signalling session, so there is nothing to negotiate
   /// over. Distinct from a media failure: nothing was attempted.
   final bool signalingUnavailable;
+
+  /// What this participant is allowed to publish. A moderator can take any of
+  /// it away, and a control that promises what the server will refuse is
+  /// worse than no control — pressing the camera really opens the camera, and
+  /// pressing the screen share really asks the system to record the screen.
+  final CallPublishingRights publishing;
 
   bool get isBusy =>
       phase == CallJoinPhase.joining || phase == CallJoinPhase.leaving;
@@ -93,6 +124,33 @@ base class CallJoinController
     );
   }
 
+  var _publishing = const CallPublishingRights();
+
+  /// What the room says this participant may publish.
+  ///
+  /// Read from the cached conversation, which is the same copy the room
+  /// details read their moderation state from — no extra request, and a room
+  /// that cannot be parsed leaves every control as it was rather than hiding
+  /// something the user is allowed to use.
+  Future<CallPublishingRights> _readPublishingRights() async {
+    try {
+      final cached = await ref
+          .read(accountRepositoryProvider)
+          .getConversation(accountId: arg.accountId, token: arg.roomToken);
+      if (cached == null) {
+        return const CallPublishingRights();
+      }
+      final room = ConversationRoom.fromJson(
+        jsonDecode(cached.rawJson) as Object?,
+      );
+      return CallPublishingRights.fromPolicy(
+        CallRoomPolicy.fromConversation(room),
+      );
+    } on Object {
+      return const CallPublishingRights();
+    }
+  }
+
   Future<void> join() async {
     if (state.isBusy || state.phase == CallJoinPhase.joined) {
       return;
@@ -138,6 +196,8 @@ base class CallJoinController
       return;
     }
 
+    _publishing = await _readPublishingRights();
+
     final session = CallMediaSession(
       initial: signaling.current,
       updates: signaling.updates,
@@ -158,6 +218,7 @@ base class CallJoinController
             : CallJoinPhase.joined,
         media: media,
         mediaError: media.error,
+        publishing: _publishing,
       );
       if (media.phase == CallMediaPhase.failed) {
         unawaited(_abandonFailedCall(session));
