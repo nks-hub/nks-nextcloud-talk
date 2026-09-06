@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Changed: forwarding a message now shows the conversations themselves —
+  avatar, name and the last message — with a search box once there are several,
+  instead of a bare list of names. The sharing screen was rebuilt that way
+  earlier; forwarding does the same job and now looks the same.
 - Fixed: the conversation details offered to add somebody to a conversation
   that cannot have anybody added — your own notes, or a one-to-one. Choosing a
   person there only failed afterwards. The button is no longer shown where the
