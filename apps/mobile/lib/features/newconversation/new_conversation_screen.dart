@@ -321,7 +321,7 @@ final class _NewConversationScreenState
       NewConversationError.unavailable =>
         strings.newConversationErrorUnavailable,
       NewConversationError.passwordRequired =>
-        strings.newConversationErrorPasswordRequired,
+        strings.newConversationErrorPasswordRejected,
       NewConversationError.ocsFailure => strings.newConversationErrorOcsFailure,
       NewConversationError.rateLimited =>
         strings.newConversationErrorRateLimited,

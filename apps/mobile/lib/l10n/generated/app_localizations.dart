@@ -5564,11 +5564,11 @@ abstract class AppLocalizations {
   /// **'This conversation is no longer open.'**
   String get newConversationErrorUnavailable;
 
-  /// No description provided for @newConversationErrorPasswordRequired.
+  /// No description provided for @newConversationErrorPasswordRejected.
   ///
   /// In en, this message translates to:
   /// **'The conversation password is wrong.'**
-  String get newConversationErrorPasswordRequired;
+  String get newConversationErrorPasswordRejected;
 }
 
 class _AppLocalizationsDelegate

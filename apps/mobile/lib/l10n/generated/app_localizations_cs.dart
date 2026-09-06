@@ -57,10 +57,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get reauthenticateAccountAction => 'Přihlásit se znovu';
 
   @override
-  String get checkingServer => 'Kontroluji server…';
+  String get checkingServer => 'Kontrola serveru…';
 
   @override
-  String get openingLogin => 'Otevírám bezpečné přihlášení…';
+  String get openingLogin => 'Otevírá se bezpečné přihlášení';
 
   @override
   String get waitingForLogin => 'Dokončete přihlášení v prohlížeči';
@@ -204,10 +204,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get refresh => 'Obnovit';
 
   @override
-  String get syncing => 'Synchronizuji…';
+  String get syncing => 'Synchronizace…';
 
   @override
-  String get cached => 'Zobrazuji uložené konverzace';
+  String get cached => 'Zobrazeny uložené konverzace';
 
   @override
   String get noConversations => 'Zatím žádné konverzace';
@@ -374,7 +374,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openGiphyPicker => 'Otevřít výběr GIFů';
 
   @override
-  String get giphyChecking => 'Kontroluji dostupnost GIFů…';
+  String get giphyChecking => 'Kontrola dostupnosti GIFů…';
 
   @override
   String get giphyRetry => 'Zkusit znovu načíst GIFy';
@@ -401,16 +401,16 @@ class AppLocalizationsCs extends AppLocalizations {
   String get loadOlderMessages => 'Načíst starší zprávy';
 
   @override
-  String get loadingOlderMessages => 'Načítám starší zprávy…';
+  String get loadingOlderMessages => 'Načítání starších zpráv…';
 
   @override
   String get jumpToNewestMessages => 'Skočit na nejnovější zprávy';
 
   @override
-  String get silentSendOff => 'Odeslat bez upozornění';
+  String get silentSendOff => 'Odeslat bez oznámení';
 
   @override
-  String get silentSendOn => 'Odesílá se bez upozornění';
+  String get silentSendOn => 'Odesílá se bez oznámení';
 
   @override
   String get chatHistoryGapNotice => 'Část zpráv zde chybí';
@@ -433,7 +433,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get outboxQueued => 'Čeká na odeslání';
 
   @override
-  String get outboxSending => 'Odesílám…';
+  String get outboxSending => 'Odesílání…';
 
   @override
   String get outboxRetryable => 'Čeká na připojení';
@@ -660,7 +660,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get openImage => 'Otevřít obrázek';
 
   @override
-  String get loadingImage => 'Načítám obrázek…';
+  String get loadingImage => 'Načítání obrázku…';
 
   @override
   String get imageLoadFailed => 'Obrázek se nepodařilo načíst.';
@@ -678,7 +678,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachImage => 'Připojit obrázek';
 
   @override
-  String get preparingImage => 'Připravuji přílohu…';
+  String get preparingImage => 'Příprava přílohy…';
 
   @override
   String get imageUploadQueued => 'Čeká na nahrání';
@@ -691,14 +691,14 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String uploadingImage(int percent) {
-    return 'Nahrávám… $percent %';
+    return 'Nahrávání… $percent %';
   }
 
   @override
-  String get confirmingAttachment => 'Potvrzuji přílohu…';
+  String get confirmingAttachment => 'Potvrzování přílohy…';
 
   @override
-  String get cancellingUpload => 'Ruším nahrávání…';
+  String get cancellingUpload => 'Rušení nahrávání';
 
   @override
   String get imageSent => 'Příloha byla odeslána';
@@ -741,7 +741,7 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
-  String get mediaCapabilityChecking => 'Ověřuji podporu příloh…';
+  String get mediaCapabilityChecking => 'Ověřování podpory příloh…';
 
   @override
   String get mediaCapabilityUnavailable => 'Přílohy jsou dočasně nedostupné.';
@@ -819,7 +819,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get cancelVoiceTranscription => 'Zrušit přepis';
 
   @override
-  String get voiceTranscriptionRunning => 'Přepisuji hlasovou zprávu…';
+  String get voiceTranscriptionRunning => 'Přepis hlasové zprávy…';
 
   @override
   String get copyVoiceTranscript => 'Kopírovat přepis';
@@ -923,8 +923,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsCallNotificationsLabel => 'Oznámení hovorů';
 
   @override
-  String get roomDetailsCallNotificationsSubtitle =>
-      'Upozornit při zahájení hovoru';
+  String get roomDetailsCallNotificationsSubtitle => 'Oznámit zahájení hovoru';
 
   @override
   String get roomDetailsMessageExpirationLabel => 'Expirace zpráv';
@@ -1124,7 +1123,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBotDisable => 'Vypnout bota';
 
   @override
-  String get roomDetailsBotUpdating => 'Aktualizuji bota…';
+  String get roomDetailsBotUpdating => 'Aktualizace bota…';
 
   @override
   String get roomDetailsBotsLoadFailed => 'Seznam botů se nepodařilo načíst.';
@@ -1241,7 +1240,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsDesktopAutostartChecking =>
-      'Kontroluji systémové automatické spuštění…';
+      'Kontrola systémového automatického spuštění';
 
   @override
   String get settingsDesktopAutostartOnSubtitle =>
@@ -1955,7 +1954,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callParticipantNotResponding => 'Neodpovídá';
 
   @override
-  String get callBannerJoining => 'Připojuji se k hovoru…';
+  String get callBannerJoining => 'Připojování k hovoru…';
 
   @override
   String callBannerTransportReady(String transport) {
@@ -1963,13 +1962,13 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
-  String get callBannerAudioNegotiating => 'Navazuji zvuk…';
+  String get callBannerAudioNegotiating => 'Navazování zvuku…';
 
   @override
   String get callBannerAudioConnected => 'Zvuk je spojený';
 
   @override
-  String get callBannerAudioWaiting => 'Čekám na ostatní účastníky…';
+  String get callBannerAudioWaiting => 'Čekání na ostatní účastníky…';
 
   @override
   String get callBannerMicrophoneDenied =>
@@ -1999,7 +1998,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get callBannerTransportChecking =>
-      'Zjišťuji, jak je hovor signalizován…';
+      'Zjišťování, jak je hovor signalizován…';
 
   @override
   String get callBannerTransportUnavailable =>
@@ -2133,11 +2132,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get attachmentSaveCancelled => 'Ukládání bylo zrušeno.';
 
   @override
-  String get attachmentDownloading => 'Stahuji přílohu…';
+  String get attachmentDownloading => 'Stahování přílohy…';
 
   @override
   String attachmentDownloadingPercent(Object percent) {
-    return 'Stahuji přílohu… $percent %';
+    return 'Stahování přílohy… $percent %';
   }
 
   @override
@@ -2220,7 +2219,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get attachmentCameraUnavailable =>
-      'Toto zařízení nemá dostupnou kameru.';
+      'Toto zařízení nemá dostupný fotoaparát.';
 
   @override
   String get attachmentGalleryDenied =>
@@ -2399,7 +2398,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsBreakoutSwitchEmpty =>
-      'Žádná vedlejší místnost teď není otevřená.';
+      'Žádná oddělená místnost teď není otevřená.';
 
   @override
   String roomDetailsBreakoutSwitched(String name) {
@@ -2806,7 +2805,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get sharedItemsLobbyRestricted =>
-      'Sdílené položky jsou skryté, dokud čekáte v předsálí.';
+      'Sdílené položky jsou skryté, dokud čekáte v čekárně.';
 
   @override
   String get sharedItemsInvalidResponse =>
@@ -2921,10 +2920,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pollMenuAction => 'Anketa';
 
   @override
-  String get pollChecking => 'Ověřuji podporu anket';
+  String get pollChecking => 'Ověřování podpory anket';
 
   @override
-  String get pollLoading => 'Načítám anketu';
+  String get pollLoading => 'Načítání ankety';
 
   @override
   String get pollReloadAction => 'Zkusit znovu';
@@ -3093,6 +3092,6 @@ class AppLocalizationsCs extends AppLocalizations {
       'Tato konverzace už není otevřená.';
 
   @override
-  String get newConversationErrorPasswordRequired =>
+  String get newConversationErrorPasswordRejected =>
       'Heslo konverzace nesouhlasí.';
 }

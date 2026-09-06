@@ -3090,6 +3090,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This conversation is no longer open.';
 
   @override
-  String get newConversationErrorPasswordRequired =>
+  String get newConversationErrorPasswordRejected =>
       'The conversation password is wrong.';
 }

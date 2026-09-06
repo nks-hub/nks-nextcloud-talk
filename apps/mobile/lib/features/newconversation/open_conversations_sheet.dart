@@ -216,7 +216,7 @@ final class _OpenConversationsSheetState
       NewConversationError.unavailable =>
         strings.newConversationErrorUnavailable,
       NewConversationError.passwordRequired =>
-        strings.newConversationErrorPasswordRequired,
+        strings.newConversationErrorPasswordRejected,
       NewConversationError.reauthenticationRequired =>
         strings.newConversationErrorReauthenticationRequired,
       NewConversationError.serviceUnavailable =>
