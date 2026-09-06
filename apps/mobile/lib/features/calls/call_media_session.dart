@@ -159,14 +159,23 @@ final class CallMediaSession {
     /// an MCU. Absent on the internal transport, which has no server to ask.
     Future<bool> Function(HpbControlMessage control)? sendControl,
     CallAudioInterruptions interruptions = const SilentCallAudioInterruptions(),
+
+    /// Called once the signalling has come back as a new session and every
+    /// peer has been rebuilt against it. What the caller does with that is
+    /// the caller's business — see the room epoch branch for why anything
+    /// has to happen at all.
+    void Function()? onSignalingRebuilt,
     this.reactionDisplay = const Duration(seconds: 4),
     this.renegotiationHold = const Duration(seconds: 45),
   }) : _initial = initial,
+       _onSignalingRebuilt = onSignalingRebuilt,
        _updates = updates,
        _sendMessage = sendMessage,
        _sendControl = sendControl,
        _engine = engine,
        _interruptions = interruptions;
+
+  final void Function()? _onSignalingRebuilt;
 
   /// How long an incoming reaction stays in the state before it clears.
   final Duration reactionDisplay;
@@ -412,7 +421,9 @@ final class CallMediaSession {
     // call, which is true and therefore not a change worth broadcasting
     // (measured, same night). The recovery has to make the membership really
     // change, and that decision is not made here.
-    if (_boundRoomEpoch != null && _boundRoomEpoch != update.roomEpoch) {
+    final rebuilt =
+        _boundRoomEpoch != null && _boundRoomEpoch != update.roomEpoch;
+    if (rebuilt) {
       await _closeAllPeers();
     }
     _boundRoomEpoch = update.roomEpoch;
@@ -468,6 +479,10 @@ final class CallMediaSession {
       // Someone who joins while the screen is up gets it too. In the mesh
       // that means one more screen connection.
       await _openShare(peerId);
+    }
+
+    if (rebuilt) {
+      _onSignalingRebuilt?.call();
     }
 
     for (final message in update.messages) {

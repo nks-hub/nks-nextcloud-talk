@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../chat/chat_room_signaling.dart';
@@ -70,6 +71,30 @@ base class CallJoinController
     return const CallJoinState();
   }
 
+  /// Re-asserts this side's call flags after the signalling came back as a
+  /// new session.
+  ///
+  /// Talk broadcasts the call's participant list when its own state changes,
+  /// and a pure signalling reconnect changes nothing there — so without this
+  /// nobody is told either side is still in the call and the two never open
+  /// connections to each other again. A flag update is the lightest change
+  /// there is: no system message, no call restart.
+  void _refreshCallFlags() {
+    final lifecycle = _lifecycle;
+    if (_disposed || !_joinedServer || lifecycle == null) {
+      return;
+    }
+    unawaited(
+      lifecycle
+          .updateFlags(
+            accountId: arg.accountId,
+            roomToken: arg.roomToken,
+            flags: CallInCallFlags.audioVideo(),
+          )
+          .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+  }
+
   Future<void> join() async {
     if (state.isBusy || state.phase == CallJoinPhase.joined) {
       return;
@@ -122,6 +147,7 @@ base class CallJoinController
       sendControl: signaling.sendControl,
       engine: ref.read(callMediaEngineProvider),
       interruptions: ref.read(callAudioInterruptionsProvider),
+      onSignalingRebuilt: _refreshCallFlags,
     );
     _session = session;
     _mediaStates = session.states.listen((media) {

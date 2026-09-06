@@ -32,9 +32,11 @@ void main() {
     CallSignalingUpdate initial, {
     bool withControl = false,
     Duration renegotiationHold = const Duration(seconds: 45),
+    void Function()? onSignalingRebuilt,
   }) => CallMediaSession(
     initial: initial,
     renegotiationHold: renegotiationHold,
+    onSignalingRebuilt: onSignalingRebuilt,
     updates: updates.stream,
     sendMessage: (message) async {
       sent.add(message);
@@ -1298,6 +1300,48 @@ void main() {
     expect(media.state.error, CallMediaError.signalingLost);
   });
 
+
+  test('a rebuilt session tells the caller, so the call can be re-announced',
+      () async {
+    // Read off the wire on 6 September 2026 and then fixed there: after a
+    // reconnect both sides are told `room/leave` and `room/join` for the
+    // changed signalling session, and nothing else. Being in the ROOM is not
+    // being in the CALL — that travels in `participants/update`, which the
+    // server sends when Talk reports a change of its own. A pure signalling
+    // reconnect changes nothing there, so without this hook neither side
+    // learns the other stayed in the call and no media is ever rebuilt
+    // between them.
+    var rebuilds = 0;
+    final media = session(
+      _update(localPeerId: _local, participants: [_participant(_remote)]),
+      onSignalingRebuilt: () => rebuilds++,
+    );
+    addTearDown(media.dispose);
+    await media.start();
+    expect(rebuilds, 0, reason: 'the first session is not a rebuild');
+
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        roomEpoch: 2,
+      ),
+    );
+    await pumpEventQueue();
+    expect(rebuilds, 1);
+
+    // The same epoch again is an ordinary update, not a reconnect: announcing
+    // on every one of them would put a request on the server for each poll.
+    updates.add(
+      _update(
+        localPeerId: _local,
+        participants: [_participant(_remote)],
+        roomEpoch: 2,
+      ),
+    );
+    await pumpEventQueue();
+    expect(rebuilds, 1);
+  });
 
 }
 

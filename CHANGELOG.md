@@ -25,9 +25,9 @@ from the commit log. Nothing here has reached testers yet.
 
 - Fixed: a short network drop no longer ends a call. Going through a tunnel,
   or a hand-over between Wi-Fi and mobile data, used to end the call outright
-  with "the call signalling ended"; the call now waits for the connection to
-  come back and rebuilds itself. Sound between the participants can still need
-  a rejoin — that part is not finished yet.
+  with "the call signalling ended". The call now waits for the connection to
+  come back, rebuilds itself and picks the other participants up again — sound
+  included, without anybody having to rejoin.
 - Fixed: sharing your screen now works in calls that go through a media
   server, not only in direct ones. The other participants were never told a
   screen had appeared, and the media server's reply to the share was being
