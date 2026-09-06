@@ -1,7 +1,9 @@
-Repairs build 61, which could not be opened at all on Android 10 and 11: it
-closed the moment it was started. Nothing else was wrong with it, and nothing
-was lost - open it again and it is there.
+Fixes found on a real phone.
 
-Also in this build: sharing a file into the app shows the conversations
-themselves instead of two dropdowns, threads included, and it no longer offers
-an account whose server refuses attachments.
+Voice messages now arrive as voice messages instead of plain files. An
+attachment you sent yourself can be opened and played again. The conversation's
+name is back in its header. On Android 10 and 11 the microphone closes when
+somebody calls you. And attachments can no longer be knocked out by a file left
+in the queue by an older version.
+
+Forwarding a message shows conversations with pictures and a search box.

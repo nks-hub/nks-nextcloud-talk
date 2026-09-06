@@ -1,7 +1,8 @@
-Opravuje build 61, který na Androidu 10 a 11 nešel vůbec otevřít — zavřel se
-hned po spuštění. Nic jiného na něm špatně nebylo a nic se neztratilo, stačí
-aplikaci otevřít znovu.
+Opravy nalezené na skutečném telefonu.
 
-Dál je v tomhle buildu: sdílení souboru do aplikace ukazuje rovnou konverzace
-místo dvou rozbalovacích seznamů, včetně vláken, a nenabízí účet, jehož server
-přílohy odmítá.
+Hlasovky teď dorazí jako hlasovky, ne jako obyčejný soubor. Přílohu, kterou
+jste sami poslali, jde zase otevřít a přehrát. V záhlaví konverzace je znovu
+vidět její název. Na Androidu 10 a 11 se mikrofon zavře, když vám někdo volá.
+A přílohy už nemůže vyřadit soubor, který zůstal ve frontě z předchozí verze.
+
+Přeposílání zprávy nabízí konverzace s obrázky a hledáním, ne jen seznam jmen.
