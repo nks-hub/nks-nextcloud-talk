@@ -12,8 +12,17 @@ const int attachmentMaximumTemporaryDestinationCandidates = 16;
 /// (see `voiceRecordingMimeType` in the mobile app's platform layer);
 /// `audio/wav` and `audio/mpeg` remain accepted for sources produced by
 /// older builds or other Talk clients.
+/// What a Nextcloud Talk server accepts AS a voice message rather than as an
+/// ordinary file.
+///
+/// MEASURED against Talk 24.0.2 on 6 September 2026 by finalizing the same
+/// bytes under four names: `audio/mpeg` and `audio/wav` come back as
+/// `voice-message`, while `audio/mp4` and `audio/ogg` come back as `comment`.
+/// The server does not refuse a format it will not treat as voice — it files it
+/// quietly as an attachment, so sending one is a defect that shows up only on
+/// the recipient's screen. `audio/mp4` was on this list until then, which is
+/// how every voice message this app sent up to build 62 became a plain file.
 const Set<String> attachmentSupportedVoiceMimeTypes = <String>{
-  'audio/mp4',
   'audio/mpeg',
   'audio/wav',
 };

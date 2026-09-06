@@ -6,26 +6,49 @@ import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dar
 import 'package:record/record.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
-/// Voice messages are recorded as AAC-LC in an MP4/M4A container instead of
-/// raw PCM WAV.
+/// Voice messages are recorded as 16-bit PCM in a WAV container, because that
+/// is one of only two formats a Nextcloud Talk server will accept AS a voice
+/// message.
 ///
-/// `record` (pubspec ^7.1.1) implements [AudioEncoder.aacLc] natively on
-/// Android through `MediaRecorder`, and `audioplayers` (pubspec ^6.8.1)
-/// plays MP4/AAC out of the box on Android, so no extra native codec has to
-/// be shipped on either side. At [_voiceBitRate] bit/s a five-second
-/// recording drops from roughly 3.1 MB (16-bit PCM WAV) to well under
-/// 100 KB, which keeps voice messages on the non-chunked upload path
-/// instead of forcing chunked delivery for what is a short clip.
-const AudioEncoder _voiceEncoder = AudioEncoder.aacLc;
-const int _voiceBitRate = 64000;
+/// MEASURED against Talk 24.0.2 on 6 September 2026, by finalizing the SAME
+/// bytes under four names and reading the message type back:
+///
+/// | sent as | server mime | resulting messageType |
+/// |---------|-------------|-----------------------|
+/// | `.mp3`  | `audio/mpeg`| `voice-message`       |
+/// | `.wav`  | `audio/wav` | `voice-message`       |
+/// | `.m4a`  | `audio/mp4` | `comment`             |
+/// | `.ogg`  | `audio/ogg` | `comment`             |
+///
+/// The server does not refuse a rejected format, it silently files it as an
+/// ordinary attachment, which is why this went unnoticed: builds up to 62
+/// recorded AAC-LC in an M4A container and every voice message they ever sent
+/// arrived at every Talk client — ours included — as a plain file, with no
+/// waveform, no duration and no voice bubble.
+///
+/// MP3 is not an option: `record` cannot encode it on any platform. So WAV it
+/// is, and the price is paid in size — [_voiceSampleRate] mono at 16 bits is
+/// 32 kB per second against roughly 8 kB for AAC at 64 kbit/s. The sample rate
+/// is dropped from 48 kHz to 16 kHz for exactly that reason: 16 kHz is
+/// wideband speech, which is what a voice message is, and it keeps a minute
+/// under 2 MB. A long recording may now take the chunked upload path, which
+/// works and is the right trade for a message the recipient can actually see
+/// as a voice message.
+const AudioEncoder _voiceEncoder = AudioEncoder.wav;
+
+/// Wideband speech. WAV carries no bit rate of its own — the file is
+/// `sampleRate * channels * 2` bytes a second — but the platform interface
+/// still asks for one, so this is what is handed over.
+const int _voiceBitRate = 256000;
+const int _voiceSampleRate = 16000;
 
 /// The real MIME type of the file [RecordVoiceRecorder] produces. It must
 /// stay in sync with the encoder above and with
 /// [attachmentSupportedVoiceMimeTypes] in `talk_protocol`, because the
 /// filename and MIME type sent to the server always have to match the
 /// actual bytes on disk.
-const String voiceRecordingMimeType = 'audio/mp4';
-const String voiceRecordingFileExtension = '.m4a';
+const String voiceRecordingMimeType = 'audio/wav';
+const String voiceRecordingFileExtension = '.wav';
 
 enum VoicePlatformError {
   closed,
@@ -251,10 +274,10 @@ final class RecordVoiceRecorder implements VoiceRecorder {
   RecordVoiceRecorder({
     required VoiceCaptureBackend backend,
     required DurableAttachmentSourceStore store,
-    int sampleRate = 48000,
+    int sampleRate = _voiceSampleRate,
     int channels = 1,
     int bitRate = _voiceBitRate,
-    String displayName = 'voice-message.m4a',
+    String displayName = 'voice-message$voiceRecordingFileExtension',
     VoiceRecordingClock clock = const SystemVoiceRecordingClock(),
     Duration startTimeout = const Duration(seconds: 10),
   }) : this._(

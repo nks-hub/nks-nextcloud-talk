@@ -7,6 +7,7 @@ import 'package:nextcloudtalk/features/chat/composer/voice_message.dart';
 import 'package:nextcloudtalk/platform/media/durable_attachment_source_store.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
 import 'package:record_platform_interface/record_platform_interface.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 
 void main() {
   late Directory root;
@@ -197,9 +198,21 @@ void main() {
 
       expect(recording.duration, const Duration(seconds: 4, milliseconds: 250));
       expect(recording.source.mimeType, voiceRecordingMimeType);
-      expect(recording.source.displayName, 'voice-message.m4a');
-      expect(backend.lastBitRate, 64000);
-      expect(backend.lastSampleRate, 48000);
+      expect(
+        recording.source.displayName,
+        'voice-message$voiceRecordingFileExtension',
+      );
+      // The recorded format has to be one the server will actually FILE as a
+      // voice message. It silently downgrades anything else to a plain
+      // attachment, so this is the only place the mistake can be caught before
+      // it reaches a recipient's screen — builds up to 62 recorded `audio/mp4`,
+      // which the server accepts as a file and never as voice.
+      expect(
+        attachmentSupportedVoiceMimeTypes,
+        contains(voiceRecordingMimeType),
+        reason: 'the server files any other format as an ordinary attachment',
+      );
+      expect(backend.lastSampleRate, 16000);
       expect(backend.lastChannels, 1);
       expect(
         (await store.observe(

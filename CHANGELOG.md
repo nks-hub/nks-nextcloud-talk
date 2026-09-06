@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: a voice message arrived at everybody as a plain file, without a
+  waveform or a length. The recording is now in a format the server files as a
+  voice message; it is a larger file for the same length, so a long recording
+  takes longer to send.
 - Fixed: an attachment you had sent yourself could never be opened or played
   again. The app kept the path the file has inside the share instead of the one
   it has on the server, so every attempt ended in a silent failure. Older
