@@ -77,6 +77,9 @@ from the commit log. Nothing here has reached testers yet.
   select one. The list is now hidden only while a conversation is on screen.
 - Changed: the Czech diagnostics say "v mezipaměti" where they said "v cache".
   The rest of the Czech text already used the Czech word.
+- Fixed: the last conversation in the list is no longer left under the compose
+  button. At 200 % text a short list does not scroll, so the last room's
+  message could not be moved out from under it.
 
 ## 0.1.0 (62) — 6 September 2026
 

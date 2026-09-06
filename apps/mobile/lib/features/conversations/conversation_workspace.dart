@@ -370,6 +370,9 @@ final class _CompactShell extends StatelessWidget {
               loading: loading,
               onRefresh: onRefresh,
               onSelect: onOpenConversation,
+              // The new-conversation button floats over this list, and a list
+              // short enough not to scroll cannot be moved out from under it.
+              bottomInset: 88,
             ),
           ),
         ],

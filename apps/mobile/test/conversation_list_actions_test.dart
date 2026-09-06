@@ -104,6 +104,7 @@ void main() {
     ValueListenable<StoredAccount>? accountListenable,
     Map<String, List<CachedConversation>> conversationsByAccount = const {},
     HttpNextcloudApi? api,
+    double bottomInset = 0,
   }) {
     final resolvedApi = api ?? HttpNextcloudApi(client: client);
     Widget conversationList(
@@ -116,6 +117,7 @@ void main() {
         loading: false,
         onRefresh: () async {},
         onSelect: (_) {},
+        bottomInset: bottomInset,
       );
     }
 
@@ -165,6 +167,33 @@ void main() {
       statusCode,
     );
   }
+
+  testWidgets('the last conversation is not left under the compose button', (
+    tester,
+  ) async {
+    // FOUND AT 200 % TEXT ON A PHONE, 6 September 2026: with six rooms the
+    // list does not scroll, and the floating compose button sat over the last
+    // room's message with no way to move it out.
+    await setTalkFeatures(const {'chat-v2'});
+    final conversation = await insertConversation(token: 'roomlast');
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+        bottomInset: 88,
+      ),
+    );
+    await tester.pump();
+
+    final list = tester.widget<ListView>(find.byType(ListView));
+    expect(
+      list.padding,
+      const EdgeInsets.only(bottom: 88),
+      reason: 'the room the button covers has to be scrollable out from under it',
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('mark-unread stays hidden without its capability profile', (
     tester,

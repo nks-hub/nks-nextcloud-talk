@@ -34,6 +34,7 @@ final class ConversationListView extends ConsumerStatefulWidget {
     required this.onRefresh,
     required this.onSelect,
     this.selectedToken,
+    this.bottomInset = 0,
   });
 
   final StoredAccount account;
@@ -42,6 +43,13 @@ final class ConversationListView extends ConsumerStatefulWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<CachedConversation> onSelect;
   final String? selectedToken;
+
+  /// Room to leave under the last row for whatever floats over the list.
+  ///
+  /// The compact shell puts the new-conversation button there, and a short
+  /// list does not scroll: at 200 % text the last conversation's message sat
+  /// under the button with no way to move it.
+  final double bottomInset;
 
   @override
   ConsumerState<ConversationListView> createState() =>
@@ -237,6 +245,7 @@ final class _ConversationListViewState
       onRefresh: widget.onRefresh,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(bottom: widget.bottomInset),
         itemCount: items.length,
         separatorBuilder: (_, _) => const Divider(indent: 84),
         itemBuilder: (context, index) => items[index],
