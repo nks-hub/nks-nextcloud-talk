@@ -23,6 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New: sharing your screen from an iPhone. iOS only lets another process
+  capture the screen, so the app now ships a broadcast extension and the
+  system's own picker starts it; the picture then goes into the call the same
+  way it does from Android. Built and in the app, but not yet tried on a real
+  iPhone.
+
 ## 0.1.0 (61) — 6 September 2026
 
 Calls are the whole of this build. Build 60 could carry audio between two
