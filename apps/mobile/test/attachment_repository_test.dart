@@ -130,6 +130,51 @@ void main() {
     }
   });
 
+  test('a job the current model refuses is dropped, not fatal', () async {
+    // MEASURED ON A GALAXY S9+ ON 6 SEPTEMBER 2026, and it was self-inflicted.
+    // Narrowing the voice formats this app may send left a queued job whose
+    // source is `audio/mp4`. `AttachmentJobDraft` checks `supportsSource` in
+    // its constructor, so decoding that row threw, the exception escaped
+    // `loadRuntime`, `attachmentServiceProvider` never resolved, and the
+    // composer read "attachments are temporarily unavailable" — permanently,
+    // because nothing could reach the row to remove it. Any future tightening
+    // of the model would do the same to a phone with a job in flight across the
+    // update.
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    await _insertAccount(database, 'account-a');
+    final repository = AttachmentRepository(database);
+    final runtime = _runtime(
+      accountId: 'account-a',
+      sourceHandle: 'nctalk-media-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    await repository.persistAdmission(
+      account: runtime.snapshot.accounts.values.single,
+      job: runtime.job,
+      metadata: runtime.metadata,
+      updatedAt: DateTime.utc(2026, 8, 24),
+    );
+
+    // What an older build wrote and this one will not accept.
+    await database.customStatement(
+      "update attachment_jobs set source_mime_type = 'audio/mp4', "
+      "message_kind = 'voice'",
+    );
+
+    final loaded = await repository.loadRuntime();
+
+    expect(loaded.snapshot.accounts.values.single.jobs, isEmpty);
+    final left = await database
+        .customSelect('select count(*) as n from attachment_jobs')
+        .getSingle();
+    expect(
+      left.data['n'],
+      0,
+      reason: 'a row nothing can decode can also never be finished or '
+          'cancelled, so it is deleted instead of logged about forever',
+    );
+  });
+
   test('keeps attachment runtime isolated by account', () async {
     final database = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(database.close);

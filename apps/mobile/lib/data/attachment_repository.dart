@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'app_database.dart';
@@ -257,6 +258,7 @@ final class AttachmentRepository {
 
     final accounts = <AccountId, AttachmentAccountState>{};
     final metadata = <AttachmentPersistenceKey, AttachmentExecutionMetadata>{};
+    final undecodable = <String>[];
     for (final row in accountRows) {
       final accountId = AccountId.parse(row.accountId);
       final server = ServerBase.parse(row.serverUrl);
@@ -265,7 +267,30 @@ final class AttachmentRepository {
         if (jobRow.serverUrl != row.serverUrl) {
           throw StateError('Attachment job server binding is inconsistent');
         }
-        final job = _decodeJob(jobRow);
+        final AttachmentJob job;
+        try {
+          job = _decodeJob(jobRow);
+        } on TalkProtocolException catch (error) {
+          // A row the CURRENT model refuses. It used to bring the whole
+          // attachment runtime down with it: the exception escaped
+          // `loadRuntime`, `attachmentServiceProvider` never resolved, and the
+          // composer said "attachments are temporarily unavailable" for as long
+          // as the row existed — which is forever, since nothing could reach it
+          // to delete it.
+          //
+          // Seen on 6 September 2026 on a Galaxy S9+, and it was self-inflicted:
+          // narrowing the voice formats the app may send left a queued job with
+          // an `audio/mp4` source that no longer satisfies `supportsSource`.
+          // Any future tightening of the model would do the same to a phone
+          // that had a job in flight across the update.
+          //
+          // So a row that cannot be decoded is dropped, not obeyed. The bytes
+          // it points at are cleaned up by the source store's own sweep; what
+          // must not happen is losing attachments altogether.
+          debugPrint('[attachments] dropping undecodable job ${jobRow.jobId}: $error');
+          undecodable.add(jobRow.jobId);
+          continue;
+        }
         jobs[job.jobId] = job;
         metadata[(accountId: row.accountId, jobId: jobRow.jobId)] =
             _decodeMetadata(jobRow);
@@ -285,6 +310,14 @@ final class AttachmentRepository {
     }
     if (jobsByAccount.isNotEmpty) {
       throw StateError('Attachment job is missing its runtime account');
+    }
+    if (undecodable.isNotEmpty) {
+      // Deleted rather than left behind: a row nothing can decode is a row
+      // nothing can finish or cancel, and keeping it only repeats the log line
+      // on every start.
+      await (_database.delete(_database.attachmentJobs)
+            ..where((job) => job.jobId.isIn(undecodable)))
+          .go();
     }
     return LoadedAttachmentRuntime(
       snapshot: AttachmentRuntimeSnapshot(accounts: accounts),

@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: attachments could stop working altogether after an update, and stay
+  that way. A file left waiting in the send queue from an older version could
+  make the whole attachment machinery fail to start, and the message box then
+  said attachments were temporarily unavailable for good. Such a leftover is
+  now discarded instead.
 - Fixed: on Android 10 and 11 the microphone stayed open for the whole of an
   incoming telephone call. It now closes while the phone rings and opens again
   when that call ends, the way it already did on Android 12 and newer.
