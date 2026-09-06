@@ -114,6 +114,24 @@ final class CallRoomPolicy {
 
   bool get canEndForEveryone => isModerator;
 
+  /// The most this participant is allowed to join with.
+  ///
+  /// A moderator can take publishing away — Talk's `publish-audio` and
+  /// `publish-video` — and a client that asks for more than it may have is
+  /// refused outright rather than joined with less. Somebody whose video was
+  /// taken away must still be able to join and listen, so the flags are
+  /// chosen from the permissions instead of assumed.
+  CallInCallFlags get permittedJoinFlags {
+    var value = CallFlag.inCall;
+    if (_hasPermission(CallPermission.audio)) {
+      value |= CallFlag.audio;
+    }
+    if (_hasPermission(CallPermission.video)) {
+      value |= CallFlag.video;
+    }
+    return CallInCallFlags.parse(value);
+  }
+
   bool canJoinWith(CallInCallFlags flags) {
     if (!flags.contains(CallFlag.inCall)) {
       return false;

@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: someone whose moderator had turned off their camera permission could
+  not join a call at all — not even to listen. The app asked to join with
+  camera and microphone regardless of what it was allowed to use; it now asks
+  for what the participant may actually publish.
 - Fixed: a short network drop no longer ends a call. Going through a tunnel,
   or a hand-over between Wi-Fi and mobile data, used to end the call outright
   with "the call signalling ended". The call now waits for the connection to

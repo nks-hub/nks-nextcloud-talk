@@ -116,6 +116,10 @@ final class CallLifecycleService {
     await Future.wait<void>(sessions.map(_deactivateRoomSession));
   }
 
+  /// Joins the call. With no [flags] the participant joins with everything
+  /// their permissions allow — see `CallRoomPolicy.permittedJoinFlags`, and
+  /// note that asking for audio and video unconditionally locks out anybody
+  /// whose moderator took publishing away.
   Future<CallLifecycleState> join({
     required String accountId,
     required String roomToken,
@@ -129,22 +133,27 @@ final class CallLifecycleService {
     operation: () => _join(
       accountId: accountId,
       roomToken: roomToken,
-      flags: flags ?? CallInCallFlags.audioVideo(),
+      requested: flags,
       silent: silent,
       recordingConsent: recordingConsent,
       silentFor: silentFor,
     ),
   );
 
+  /// Re-asserts this participant's call flags. With none given it sends what
+  /// their permissions allow, which is the same set [join] used.
   Future<CallLifecycleState> updateFlags({
     required String accountId,
     required String roomToken,
-    required CallInCallFlags flags,
+    CallInCallFlags? flags,
   }) => _serialize(
     accountId: accountId,
     roomToken: roomToken,
-    operation: () =>
-        _updateFlags(accountId: accountId, roomToken: roomToken, flags: flags),
+    operation: () => _updateFlags(
+      accountId: accountId,
+      roomToken: roomToken,
+      requested: flags,
+    ),
   );
 
   Future<void> leave({
@@ -193,12 +202,13 @@ final class CallLifecycleService {
   Future<CallLifecycleState> _join({
     required String accountId,
     required String roomToken,
-    required CallInCallFlags flags,
+    required CallInCallFlags? requested,
     required bool silent,
     required bool recordingConsent,
     required Iterable<ConversationSessionId> silentFor,
   }) async {
     final context = await _prepare(accountId, roomToken);
+    final flags = requested ?? context.policy.permittedJoinFlags;
     if (!context.policy.canJoinWith(flags)) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }
@@ -297,9 +307,10 @@ final class CallLifecycleService {
   Future<CallLifecycleState> _updateFlags({
     required String accountId,
     required String roomToken,
-    required CallInCallFlags flags,
+    required CallInCallFlags? requested,
   }) async {
     final context = await _prepare(accountId, roomToken);
+    final flags = requested ?? context.policy.permittedJoinFlags;
     if (!context.policy.canJoinWith(flags)) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../chat/chat_room_signaling.dart';
@@ -89,7 +88,6 @@ base class CallJoinController
           .updateFlags(
             accountId: arg.accountId,
             roomToken: arg.roomToken,
-            flags: CallInCallFlags.audioVideo(),
           )
           .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
     );
