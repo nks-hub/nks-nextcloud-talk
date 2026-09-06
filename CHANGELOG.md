@@ -23,6 +23,9 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: removing breakout rooms left them in the conversation list until the
+  next refresh, so for a moment the list showed a set that had already been
+  deleted next to a newly created one.
 - Changed: the call no longer offers a camera or screen sharing to somebody
   whose moderator has turned those off. Pressing them used to open the camera,
   or walk through the system's screen-recording consent, for something nobody

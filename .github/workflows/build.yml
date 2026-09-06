@@ -395,10 +395,12 @@ jobs:
           # The changelog keeps SHA-256 for every artefact, so the release
           # carries the same list rather than a different one.
           ( cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS )
-      # English, and from the commits rather than the changelog: CHANGELOG.md
-      # is written in Czech for the wiki and the store listings, while the
-      # repository - commits, code, this file - is English. A release page is
-      # repository-facing, so it follows the repository.
+      # From the commits rather than from CHANGELOG.md, and the reason is no
+      # longer the language: the changelog was Czech for the wiki and the
+      # store listings when this was written, and has been English since the
+      # repository went English on 5 September 2026. What still separates them
+      # is the audience - the changelog says what a tester notices, a release
+      # page says what changed in the tree, so it is built from the commits.
       - name: Write the release notes
         run: |
           version=$(sed -n 's/^version: *//p' apps/mobile/pubspec.yaml)
