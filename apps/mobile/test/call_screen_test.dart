@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -239,6 +240,37 @@ void main() {
       reason: 'audio was not taken away, so the microphone stays',
     );
     expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+  });
+
+  testWidgets('the desktops are offered the screen share too', (tester) async {
+    // FOUND BY READING THE CODE AGAINST THE CALL MATRIX, 7 September 2026: the
+    // button was gated to Android and iOS, so on Windows and macOS it was not
+    // drawn at all — four cells of the matrix could not be filled, and the
+    // matrix said the gap was the rig's. It is not: `openScreen` goes through
+    // `getDisplayMedia`, which the engine offers on every platform it runs
+    // on, and `requestScreenConsent` already handles the macOS prompt.
+    // What still gates the button is the server's `publish-screen`, which is
+    // the right gate and is covered by the test above.
+    for (final platform in const [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    ]) {
+      debugDefaultTargetPlatformOverride = platform;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await _pumpCallScreen(tester);
+      expect(
+        find.byKey(const Key('call-screen-share-screen')),
+        findsOneWidget,
+        reason: '$platform can capture a screen',
+      );
+      // A desktop has one audio output to speak of, so the phone's
+      // speaker/earpiece toggle stays away.
+      expect(find.byKey(const Key('call-screen-speaker')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('the window is told which video to draw', (tester) async {
