@@ -70,11 +70,12 @@ from the commit log. Nothing here has reached testers yet.
   said notifications go "through nks-talk-notify", which means nothing to
   anybody outside the project; it now says they go through the application's
   own notification service.
-- Fixed: on a tablet the application could open on an empty screen with
-  nothing to press. In a window wide enough for two panes but too narrow to
-  give a conversation room, the conversation list was hidden even though no
-  conversation was open — leaving only "Select a conversation" and no way to
-  select one. The list is now hidden only while a conversation is on screen.
+- Fixed: the application could open on an empty screen with nothing to press —
+  on a tablet, and on an ordinary phone turned sideways. In a window wide
+  enough for two panes but too narrow to give a conversation room, the
+  conversation list was hidden even though no conversation was open, leaving
+  only "Select a conversation" and no way to select one. The list is now hidden
+  only while a conversation is on screen.
 - Changed: the Czech diagnostics say "v mezipaměti" where they said "v cache".
   The rest of the Czech text already used the Czech word.
 - Fixed: the last conversation in the list is no longer left under the compose
