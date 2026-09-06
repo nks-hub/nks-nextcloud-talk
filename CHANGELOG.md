@@ -82,6 +82,14 @@ from the commit log. Nothing here has reached testers yet.
   no media, which no automated test can, but every message the application
   sends is now checked on the wire rather than against a mock.
 
+- Known, not yet fixed: to somebody watching from the Talk web client, a person
+  using this application looks muted with their camera off — even while their
+  voice and picture are arriving and being played. The application does not
+  open the peer-to-peer channel that carries that state, so the other side
+  falls back to assuming the worst. A screen share is unaffected. Measured on
+  7 September with 1684 video frames decoded beside an avatar that never
+  changed.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
