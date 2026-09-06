@@ -1,19 +1,22 @@
-# Android, Linux and the Windows installer. The Apple half is on Codemagic
-# (`codemagic.yaml`) because that plan has Macs and this one does not have to.
+# Android, Linux and the Windows installer. The Apple half is not here and not
+# on any CI: since 5 September 2026 iOS and macOS are built and released from
+# `build-mac`, the owner's Apple Silicon host (`codemagic.yaml` is dormant).
 #
 # The suites run once on Ubuntu and gate both Linux builds. Windows runs them
 # again on purpose: two tests in `windows_notification_integration_test` drive
 # the native Windows notification channel and skip everywhere else, so an
 # Ubuntu-only run never executes them.
 #
-# Costs, because this repository is private and these minutes are billed:
-# Linux counts 1x, Windows 2x. One run of tests + android + linux is roughly 57
-# billed minutes, and a busy day pushes to `main` many times — that alone ate
-# 90% of the monthly allowance by 5 September 2026. So nothing runs on a push
-# to a branch any more: the whole workflow is gated to manual runs and `v*`
-# tags, the same way the Windows job already was (90 billed minutes on its
-# own, more than the other three together). The suites still run on every
-# developer machine before a push.
+# The gate to manual runs and `v*` tags was put here for cost: while the
+# repository was private, Linux counted 1x and Windows 2x, one run of tests +
+# android + linux was roughly 57 billed minutes, Windows alone 90, and a busy
+# day of pushes to `main` ate 90% of the monthly allowance by 5 September 2026.
+# THAT REASON IS GONE since the repository went public on 5 September —
+# GitHub-hosted standard runners are free for public repositories. The gate
+# stays anyway, now for a different and smaller reason: both suites run on
+# every developer machine before a push, so a per-commit run would only repeat
+# them, and what actually has to be green is the tag build that ships. Run the
+# workflow by hand (`workflow_dispatch`) before tagging.
 name: build
 
 on:
@@ -411,7 +414,7 @@ jobs:
               git log --no-merges --pretty='- %s' "$previous..${GITHUB_REF_NAME}"                 | grep -E '^- (feat|fix|perf)' || echo "- Maintenance only; see the commit log."
             fi
             echo
-            echo "Artifacts below are signed release builds. \`SHA256SUMS\` lists the checksums of the ones built here; the macOS zip is built on Codemagic and carries its own \`nks-talk-macos.zip.sha256\`."
+            echo "Artifacts below are signed release builds. \`SHA256SUMS\` lists the checksums of the ones built here; the macOS zip is built on the maintainer's Apple Silicon host and carries its own \`nks-talk-macos.zip.sha256\`."
           } > notes.md
           cat notes.md
       - uses: softprops/action-gh-release@v2
