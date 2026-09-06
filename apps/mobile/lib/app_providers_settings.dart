@@ -202,6 +202,60 @@ base class CallRelayController extends Notifier<bool> {
   }
 }
 
+/// Whether this platform may offer the update check at all. A provider rather
+/// than the bare predicate so a test can pump the settings screen as a
+/// desktop without pretending to be one.
+final updateCheckHostProvider = Provider<bool>((ref) {
+  return isDesktopUpdateCheckPlatform;
+});
+
+final updateCheckPreferenceStoreProvider = Provider<UpdateCheckPreferenceStore>(
+  (ref) {
+    return FileUpdateCheckPreferenceStore();
+  },
+);
+
+final updateCheckServiceProvider = Provider<UpdateCheckService>((ref) {
+  final service = UpdateCheckService();
+  ref.onDispose(service.close);
+  return service;
+});
+
+/// Whether the app may ask GitHub about newer builds. Off until the stored
+/// choice says otherwise, so a start that cannot read the file asks nothing.
+final updateCheckEnabledProvider =
+    NotifierProvider<UpdateCheckController, bool>(UpdateCheckController.new);
+
+base class UpdateCheckController extends Notifier<bool> {
+  @override
+  bool build() {
+    unawaited(_load());
+    return false;
+  }
+
+  Future<void> _load() async {
+    final stored = await ref.read(updateCheckPreferenceStoreProvider).read();
+    if (state != stored) {
+      state = stored;
+    }
+  }
+
+  Future<void> setEnabled(bool enabled) async {
+    state = enabled;
+    await ref.read(updateCheckPreferenceStoreProvider).write(enabled);
+  }
+}
+
+/// The answer of the last check, or null while the check is switched off.
+/// Null rather than [UpdateUpToDate]: nothing was asked, which is not the
+/// same as knowing this build is the newest.
+final latestBuildProvider = FutureProvider<UpdateCheckResult?>((ref) async {
+  if (!ref.watch(updateCheckEnabledProvider)) {
+    return null;
+  }
+  return ref.watch(updateCheckServiceProvider).check();
+});
+
 final replyLayoutProvider =
     NotifierProvider<ReplyLayoutController, ReplyLayout>(
       ReplyLayoutController.new,

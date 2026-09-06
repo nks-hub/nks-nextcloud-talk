@@ -1249,6 +1249,43 @@ class AppLocalizationsEn extends AppLocalizations {
       'The system startup setting could not be changed.';
 
   @override
+  String get settingsUpdatesSection => 'Updates';
+
+  @override
+  String get settingsUpdateCheck => 'Look for newer builds';
+
+  @override
+  String get settingsUpdateCheckSubtitle =>
+      'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent, and nothing is downloaded or installed for you.';
+
+  @override
+  String settingsUpdateCheckCurrentBuild(Object build) {
+    return 'This build is $build';
+  }
+
+  @override
+  String get settingsUpdateCheckChecking => 'Asking GitHub…';
+
+  @override
+  String get settingsUpdateCheckUpToDate => 'Nothing newer has been published.';
+
+  @override
+  String settingsUpdateCheckAvailable(Object build, Object name) {
+    return 'Build $build is out: $name';
+  }
+
+  @override
+  String get settingsUpdateCheckFailed =>
+      'GitHub could not be asked. Try again later.';
+
+  @override
+  String get settingsUpdateCheckOpen => 'Open release';
+
+  @override
+  String get settingsUpdateCheckOpenFailed =>
+      'The release page could not be opened.';
+
+  @override
   String get settingsPushSection => 'Push notifications';
 
   @override

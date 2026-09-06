@@ -2312,6 +2312,66 @@ abstract class AppLocalizations {
   /// **'The system startup setting could not be changed.'**
   String get settingsDesktopAutostartFailed;
 
+  /// No description provided for @settingsUpdatesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get settingsUpdatesSection;
+
+  /// No description provided for @settingsUpdateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Look for newer builds'**
+  String get settingsUpdateCheck;
+
+  /// No description provided for @settingsUpdateCheckSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turned on, the app asks GitHub which build is the newest, which tells GitHub that this installation exists. Nothing about you, your account or your conversations is sent, and nothing is downloaded or installed for you.'**
+  String get settingsUpdateCheckSubtitle;
+
+  /// No description provided for @settingsUpdateCheckCurrentBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'This build is {build}'**
+  String settingsUpdateCheckCurrentBuild(Object build);
+
+  /// No description provided for @settingsUpdateCheckChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking GitHub…'**
+  String get settingsUpdateCheckChecking;
+
+  /// No description provided for @settingsUpdateCheckUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing newer has been published.'**
+  String get settingsUpdateCheckUpToDate;
+
+  /// No description provided for @settingsUpdateCheckAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Build {build} is out: {name}'**
+  String settingsUpdateCheckAvailable(Object build, Object name);
+
+  /// No description provided for @settingsUpdateCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub could not be asked. Try again later.'**
+  String get settingsUpdateCheckFailed;
+
+  /// No description provided for @settingsUpdateCheckOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open release'**
+  String get settingsUpdateCheckOpen;
+
+  /// No description provided for @settingsUpdateCheckOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The release page could not be opened.'**
+  String get settingsUpdateCheckOpenFailed;
+
   /// No description provided for @settingsPushSection.
   ///
   /// In en, this message translates to:

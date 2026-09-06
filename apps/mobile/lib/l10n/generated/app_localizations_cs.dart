@@ -1248,6 +1248,43 @@ class AppLocalizationsCs extends AppLocalizations {
       'Systémové automatické spuštění se nepodařilo změnit.';
 
   @override
+  String get settingsUpdatesSection => 'Aktualizace';
+
+  @override
+  String get settingsUpdateCheck => 'Hlídat novější sestavení';
+
+  @override
+  String get settingsUpdateCheckSubtitle =>
+      'Zapnuté hlídání se GitHubu zeptá, které sestavení je nejnovější — tím mu prozradí, že tato instalace existuje. Nic o vás, vašem účtu ani konverzacích se neposílá a nic se za vás nestahuje ani neinstaluje.';
+
+  @override
+  String settingsUpdateCheckCurrentBuild(Object build) {
+    return 'Toto sestavení je $build';
+  }
+
+  @override
+  String get settingsUpdateCheckChecking => 'Zjišťuje se to…';
+
+  @override
+  String get settingsUpdateCheckUpToDate => 'Nic novějšího zatím nevyšlo.';
+
+  @override
+  String settingsUpdateCheckAvailable(Object build, Object name) {
+    return 'Vyšlo sestavení $build: $name';
+  }
+
+  @override
+  String get settingsUpdateCheckFailed =>
+      'GitHubu se nepodařilo zeptat. Zkuste to prosím později.';
+
+  @override
+  String get settingsUpdateCheckOpen => 'Otevřít vydání';
+
+  @override
+  String get settingsUpdateCheckOpenFailed =>
+      'Stránku vydání se nepodařilo otevřít.';
+
+  @override
   String get settingsPushSection => 'Push notifikace';
 
   @override

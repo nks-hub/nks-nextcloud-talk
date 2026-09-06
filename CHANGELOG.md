@@ -82,6 +82,11 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: the last conversation in the list is no longer left under the compose
   button. At 200 % text a short list does not scroll, so the last room's
   message could not be moved out from under it.
+- New: the desktop can tell you when a newer build has been published. It is
+  off until you turn it on in the settings, because the check asks GitHub and
+  that tells GitHub the installation exists; when it finds something newer it
+  offers the release page. Nothing is downloaded or installed for you, and the
+  setting does not exist on Android or iOS, where the store updates the app.
 
 ## 0.1.0 (62) — 6 September 2026
 
