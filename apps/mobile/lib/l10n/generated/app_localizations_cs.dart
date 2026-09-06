@@ -249,7 +249,8 @@ class AppLocalizationsCs extends AppLocalizations {
   String get lastMessageUnavailable => 'Nová aktivita';
 
   @override
-  String get syncCredentialMissing => 'Tento účet se musí znovu přihlásit.';
+  String get syncCredentialMissing =>
+      'K tomuto účtu se musíte znovu přihlásit.';
 
   @override
   String get syncTalkUnavailable => 'Talk už na tomto serveru není dostupný.';
@@ -976,7 +977,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsAddParticipantSearch => 'Hledat osoby a skupiny';
 
   @override
-  String get roomDetailsAddParticipantEmpty => 'Nikdo neodpovídá';
+  String get roomDetailsAddParticipantEmpty => 'Nikdo takový se nenašel';
 
   @override
   String roomDetailsAddParticipantAdded(String name) {
@@ -1058,7 +1059,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsSensitiveClassifiedSubtitle =>
-      'Povinné u klasifikovaných konverzací';
+      'Povinné u konverzací s utajovaným obsahem';
 
   @override
   String get roomDetailsSensitiveRejected =>
@@ -1119,7 +1120,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBotUpdating => 'Aktualizuji bota…';
 
   @override
-  String get roomDetailsBotsLoadFailed => 'Boty se nepodařilo načíst.';
+  String get roomDetailsBotsLoadFailed => 'Seznam botů se nepodařilo načíst.';
 
   @override
   String get settingsTitle => 'Nastavení';
@@ -1317,7 +1318,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Notifikace jdou stejnou cestou jako na iOS, přes vlastní službu této aplikace.';
 
   @override
-  String get settingsPushTransportWebPush => 'Web Push (záloha)';
+  String get settingsPushTransportWebPush => 'Web Push (záložní)';
 
   @override
   String get settingsPushTransportWebPushSubtitle =>
@@ -1402,10 +1403,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsThreadRows => 'Vlákna v mezipaměti';
 
   @override
-  String get diagnosticsTextOutboxRows => 'Položky textového outboxu';
+  String get diagnosticsTextOutboxRows => 'Texty v odchozí frontě';
 
   @override
-  String get diagnosticsAttachmentOutboxRows => 'Položky outboxu příloh';
+  String get diagnosticsAttachmentOutboxRows => 'Přílohy v odchozí frontě';
 
   @override
   String get diagnosticsOutboxSection => 'Odchozí fronta';
@@ -1505,7 +1506,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsCapabilitiesSection => 'Funkce Talku';
 
   @override
-  String get diagnosticsTalkFeatureCount => 'Nahlášené featury';
+  String get diagnosticsTalkFeatureCount => 'Nahlášené funkce';
 
   @override
   String get diagnosticsValueNone => 'Žádná';
@@ -1947,11 +1948,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callParticipantNotResponding => 'Neodpovídá';
 
   @override
-  String get callBannerJoining => 'Připojuji k hovoru…';
+  String get callBannerJoining => 'Připojuji se k hovoru…';
 
   @override
   String callBannerTransportReady(String transport) {
-    return 'Signalizováno přes $transport.';
+    return 'Hovor běží přes $transport.';
   }
 
   @override
@@ -1980,7 +1981,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get callBannerMcuUnsupported =>
-      'Tento server přenáší hovory přes MCU, k takovému hovoru se tento klient zatím neumí připojit.';
+      'Tento server vede hovory přes centrální přenosový server. K takovému hovoru se aplikace zatím neumí připojit.';
 
   @override
   String get callBannerJoinFailed => 'Připojení k hovoru se nezdařilo.';
@@ -2006,13 +2007,13 @@ class AppLocalizationsCs extends AppLocalizations {
       'Tato konverzace už na serveru není dostupná.';
 
   @override
-  String get callTransportInternal => 'interní';
+  String get callTransportInternal => 'vestavěnou signalizaci';
 
   @override
-  String get callTransportExternalHpb => 'externí HPB';
+  String get callTransportExternalHpb => 'samostatný signalizační server';
 
   @override
-  String get messageActionNoteToSelf => 'Poslat do Note to self';
+  String get messageActionNoteToSelf => 'Poslat do Poznámek pro sebe';
 
   @override
   String get messageActionForward => 'Přeposlat';
@@ -2395,7 +2396,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String roomDetailsBreakoutSwitched(String name) {
-    return 'Jsi teď v místnosti $name.';
+    return 'Jste teď v místnosti $name.';
   }
 
   @override
@@ -2456,7 +2457,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Dokud čekárna běží, mohou číst, psát a volat jen moderátoři. Vyberte, kdy se má otevřít, nebo ji nechte otevřít ručně.';
 
   @override
-  String get roomDetailsLobbyTimerNone => 'Bez času otevření';
+  String get roomDetailsLobbyTimerNone => 'Bez konce';
 
   @override
   String get roomDetailsLobbyTimerPick => 'Vybrat datum a čas';
@@ -2585,7 +2586,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBansEmpty => 'Nikdo není zabanovaný.';
 
   @override
-  String get roomDetailsBansLoadError => 'Bany se nepodařilo načíst.';
+  String get roomDetailsBansLoadError => 'Seznam zákazů se nepodařilo načíst.';
 
   @override
   String get roomDetailsUnbanAction => 'Zrušit ban';
@@ -2690,7 +2691,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get reminderTitle => 'Připomenout tuto zprávu';
 
   @override
-  String get reminderLaterToday => 'Dnes večer';
+  String get reminderLaterToday => 'Později dnes';
 
   @override
   String get reminderTomorrow => 'Zítra ráno';
@@ -2907,7 +2908,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pollFailed => 'Akce s anketou se nezdařila.';
 
   @override
-  String get pollSignInAgain => 'Přihlaste tento účet znovu.';
+  String get pollSignInAgain => 'Přihlaste se k tomuto účtu znovu.';
 
   @override
   String get pollMenuAction => 'Anketa';
@@ -2991,7 +2992,8 @@ class AppLocalizationsCs extends AppLocalizations {
   String get remoteFilesLoadFailed => 'Složku se nepodařilo načíst.';
 
   @override
-  String get remoteFilesSignInAgain => 'Tento účet je potřeba znovu přihlásit.';
+  String get remoteFilesSignInAgain =>
+      'K tomuto účtu se musíte znovu přihlásit.';
 
   @override
   String get remoteFilesShareTitle => 'Sdílet soubor do konverzace?';

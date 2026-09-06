@@ -241,6 +241,16 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
       debugPrintStack(stackTrace: stack, maxFrames: 8);
       if (!_pathRepairAttempted) {
         _pathRepairAttempted = true;
+        // The failure is shown FIRST. The repair is two requests long on a
+        // slow link, and holding the loading state through it left the play
+        // button dead with no explanation.
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _playing = false;
+            _failed = true;
+          });
+        }
         final repaired = await _repairedAttachmentUri(
           ref,
           account: widget.account,
@@ -254,6 +264,7 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           await _start();
           return;
         }
+        return;
       }
       if (mounted) {
         setState(() {

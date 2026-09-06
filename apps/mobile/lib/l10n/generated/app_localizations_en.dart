@@ -1951,7 +1951,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String callBannerTransportReady(String transport) {
-    return 'Signalled through $transport.';
+    return 'The call runs through $transport.';
   }
 
   @override
@@ -1981,7 +1981,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callBannerMcuUnsupported =>
-      'This server relays calls through an MCU, which this client cannot join yet.';
+      'This server routes calls through a central media server, which this app cannot join yet.';
 
   @override
   String get callBannerJoinFailed => 'Joining the call failed.';
@@ -2007,10 +2007,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This conversation is no longer available on the server.';
 
   @override
-  String get callTransportInternal => 'internal';
+  String get callTransportInternal => 'the built-in signalling';
 
   @override
-  String get callTransportExternalHpb => 'external HPB';
+  String get callTransportExternalHpb => 'a separate signalling server';
 
   @override
   String get messageActionNoteToSelf => 'Send to Note to self';

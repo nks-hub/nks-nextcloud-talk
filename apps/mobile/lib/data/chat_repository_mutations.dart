@@ -90,8 +90,14 @@ extension _ChatRepositoryMutations on ChatRepository {
       accountId: accountId,
       roomToken: message.roomToken.value,
     );
+    // A room whose preview timestamp is not known yet must not take the
+    // timestamp of whatever message happens to be written next: re-reading an
+    // OLD message to repair it would otherwise push the room to the top of the
+    // list carrying that old message's text.
     if (conversation == null ||
-        (conversation.lastMessageTimestamp ?? -1) > message.timestamp) {
+        (conversation.lastMessageTimestamp ?? -1) > message.timestamp ||
+        (conversation.lastMessageTimestamp == null &&
+            (conversation.lastActivity) > message.timestamp)) {
       return;
     }
     await (_database.update(_database.cachedConversations)..where(

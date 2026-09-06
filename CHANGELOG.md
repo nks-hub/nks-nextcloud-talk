@@ -23,6 +23,26 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: the settings asked the server about relay servers far too often. After
+  the settings screen had been opened once, every arriving message sent another
+  request for the rest of the run. It is asked once now, when the screen needs
+  the answer.
+- Fixed: an account that had not synced yet had no calls section in the
+  settings at all, because there was no conversation to ask the server about.
+- Fixed: repairing a message no longer clears the room's notifications. A voice
+  message that failed to download re-reads that one message, and the re-read
+  was marking the whole room's notifications as read on the server.
+- Fixed: a voice message that fails to play says so at once instead of leaving
+  the play button dead while it tries to repair itself.
+- Changed: the call banner no longer says "HPB" or "MCU". It now says the call
+  runs through the built-in signalling or through a separate signalling server,
+  and a server this app cannot join is described in words.
+- Changed: eighteen pieces of Czech text corrected — "v cache" and "outbox"
+  replaced with Czech words, "klasifikovaných" (which means "graded") replaced
+  where "utajovaným" was meant, "Note to self" translated, a stray informal
+  "ty" made formal like the rest of the app, and several sentences that were
+  missing a word.
+
 - Fixed: a file you had sent yourself and could not open now opens on the first
   tap. Build 63 repaired such a message only when a voice message in it was
   played; the same repair now happens when any attachment fails to download, so

@@ -372,7 +372,11 @@ final class ChatService {
       limit: 1,
       includeLastKnown: true,
       timeoutSeconds: 0,
-      interactive: true,
+      // Interactive would mean `markNotificationsAsRead=1` and a status
+      // update: re-reading one message to repair its file path would then
+      // clear the whole room's pending notifications on the server, which
+      // nobody asked for. This reads, it does not visit.
+      interactive: !prepared.profile.backgroundCatchUp,
     );
     final response = await _api.getChat(
       chatRequest: request,

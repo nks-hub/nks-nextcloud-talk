@@ -3593,7 +3593,7 @@ abstract class AppLocalizations {
   /// No description provided for @callBannerTransportReady.
   ///
   /// In en, this message translates to:
-  /// **'Signalled through {transport}.'**
+  /// **'The call runs through {transport}.'**
   String callBannerTransportReady(String transport);
 
   /// No description provided for @callBannerAudioNegotiating.
@@ -3641,7 +3641,7 @@ abstract class AppLocalizations {
   /// No description provided for @callBannerMcuUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'This server relays calls through an MCU, which this client cannot join yet.'**
+  /// **'This server routes calls through a central media server, which this app cannot join yet.'**
   String get callBannerMcuUnsupported;
 
   /// No description provided for @callBannerJoinFailed.
@@ -3683,13 +3683,13 @@ abstract class AppLocalizations {
   /// No description provided for @callTransportInternal.
   ///
   /// In en, this message translates to:
-  /// **'internal'**
+  /// **'the built-in signalling'**
   String get callTransportInternal;
 
   /// No description provided for @callTransportExternalHpb.
   ///
   /// In en, this message translates to:
-  /// **'external HPB'**
+  /// **'a separate signalling server'**
   String get callTransportExternalHpb;
 
   /// No description provided for @messageActionNoteToSelf.

@@ -693,7 +693,7 @@
   "callParticipantHandRaised": "Hand raised",
   "callParticipantNotResponding": "Not responding",
   "callBannerJoining": "Joining the call…",
-  "callBannerTransportReady": "Signalled through {transport}.",
+  "callBannerTransportReady": "The call runs through {transport}.",
   "@callBannerTransportReady": {
     "placeholders": {
       "transport": {
@@ -708,15 +708,15 @@
   "callBannerMicrophoneUnavailable": "The microphone could not be opened.",
   "callBannerAudioFailed": "The call audio could not be established.",
   "callBannerAudioSignalingLost": "The call signalling ended, so the audio stopped.",
-  "callBannerMcuUnsupported": "This server relays calls through an MCU, which this client cannot join yet.",
+  "callBannerMcuUnsupported": "This server routes calls through a central media server, which this app cannot join yet.",
   "callBannerJoinFailed": "Joining the call failed.",
   "callBannerSignalingUnavailable": "This conversation has no signalling session, so its call cannot be joined.",
   "callBannerTransportChecking": "Checking how this call is signalled…",
   "callBannerTransportUnavailable": "The call transport could not be resolved.",
   "callBannerTransportReauth": "Sign in again to see how this call is signalled.",
   "callBannerTransportRoomUnavailable": "This conversation is no longer available on the server.",
-  "callTransportInternal": "internal",
-  "callTransportExternalHpb": "external HPB",
+  "callTransportInternal": "the built-in signalling",
+  "callTransportExternalHpb": "a separate signalling server",
   "messageActionNoteToSelf": "Send to Note to self",
   "messageActionForward": "Forward",
   "messageActionPrivateReply": "Reply privately",

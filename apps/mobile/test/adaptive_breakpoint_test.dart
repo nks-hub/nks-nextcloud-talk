@@ -325,6 +325,13 @@ void main() {
       reason: 'with nothing open there is nothing to give the room to',
     );
 
+    final listWidth = tester
+        .getSize(find.byKey(const Key('conversation-list-pane')))
+        .width;
+    final beside = tester
+        .getSize(find.byKey(const Key('conversation-detail-pane')))
+        .width;
+
     // With a conversation open the narrow window collapses it again, and the
     // pane that took its place carries the toggle back.
     await tester.tap(find.text('Breakpoint room'));
@@ -336,6 +343,23 @@ void main() {
       findsOneWidget,
       reason: 'the pane that took the room carries the way back',
     );
+
+    // The width the list gave up goes to the conversation, divider and all —
+    // the assertion `desktop_chrome_test.dart` used to carry before folding
+    // needed a room to be open.
+    final folded = tester
+        .getSize(find.byKey(const Key('conversation-detail-pane')))
+        .width;
+    expect(folded - beside, listWidth + 1);
+
+    // And it comes back on its own once the window can afford both again,
+    // because nothing stored a preference to fold.
+    tester.view.physicalSize = const Size(1600, 1440);
+    // Two pumps rather than a settle: the open conversation pane keeps a
+    // stream alive that `pumpAndSettle` waits on forever.
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('conversation-list-pane')), findsOneWidget);
 
     await settle(tester);
   });
