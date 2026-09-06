@@ -165,7 +165,19 @@ final class CallRoomPolicy {
     return true;
   }
 
-  bool _hasPermission(int permission) => (permissions & permission) != 0;
+  /// Talk answers `permissions: 0` for "use this conversation's defaults",
+  /// and the defaults grant everything a participant would ordinarily have.
+  /// Reading the bits of a bare zero therefore denies every permission at
+  /// once — which would refuse the join outright and, since the flags are
+  /// composed from the same answer, would otherwise have joined somebody with
+  /// neither microphone nor camera.
+  ///
+  /// The reference server (Nextcloud 34) resolves them before answering — 510
+  /// for an owner, 502 for a plain participant — so this is the lenient path
+  /// for anything that does not, and it matches what the chat side already
+  /// does with the same field (`ChatPostingAccess`).
+  bool _hasPermission(int permission) =>
+      permissions == 0 || (permissions & permission) != 0;
 }
 
 /// Account, origin, room and generation boundary persisted with every intent.

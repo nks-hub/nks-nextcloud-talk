@@ -234,7 +234,12 @@ void _registerCallLifecycleRoomSessionTests() {
           : _ocsResponse(200, <String, Object?>{}),
     );
     addTearDown(harness.dispose);
-    await harness.seedRoom(token: 'roomb123', permissions: 0);
+    // 255 without PERMISSIONS_CALL_START (2) and PERMISSIONS_CALL_JOIN (4):
+    // a participant this room really refuses, whether or not a call is
+    // already running. It used to say `permissions: 0`, which denied every
+    // bit at once — but a bare zero is Talk's "use the defaults", and reading
+    // its bits was the bug fixed on 6 September 2026.
+    await harness.seedRoom(token: 'roomb123', permissions: 255 - 2 - 4);
     await harness.service.join(accountId: 'account-a', roomToken: 'rooma123');
 
     await expectLater(

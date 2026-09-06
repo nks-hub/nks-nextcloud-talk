@@ -58,6 +58,20 @@ void main() {
     expect(policy.canJoinWith(flags), isTrue);
   });
 
+  test('a room that answers "use the defaults" grants everything', () {
+    // Talk answers `permissions: 0` for "this conversation's defaults", and
+    // the defaults are the full set. Reading its bits denies everything at
+    // once — which would refuse the join, and compose flags with neither
+    // microphone nor camera for anybody it did let through.
+    final policy = policyWith(0);
+    final flags = policy.permittedJoinFlags;
+
+    expect(flags.contains(CallFlag.audio), isTrue);
+    expect(flags.contains(CallFlag.video), isTrue);
+    expect(policy.canPublishScreen, isTrue);
+    expect(policy.canJoinWith(flags), isTrue);
+  });
+
   test('no permission to join at all is still a refusal', () {
     // PERMISSIONS_CALL_JOIN (4) removed: nothing about the flags helps.
     final policy = policyWith(255 - 4);
