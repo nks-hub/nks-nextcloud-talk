@@ -15,7 +15,9 @@ the device with:
         | grep -o 'https://<host>/login/v2/flow/[A-Za-z0-9._~-]*' | head -1"
 """
 
+import base64
 import http.cookiejar
+import json
 import re
 import sys
 import urllib.error
@@ -77,16 +79,23 @@ grant_page, grant_html = fetch(
     referer=login_page,
 )
 action = re.search(r'<form[^>]*action="([^"]*login/v2/grant[^"]*)"', grant_html)
-if action is None:
-    sys.exit(f"no grant form after login; landed on {grant_page}")
+state = re.search(r'id="initial-state-core-loginFlowAuth"[^>]*value="([^"]*)"', grant_html)
+if action is not None:
+    # Older servers render the form; the state token rides in the action URL.
+    grant_url = action.group(1).replace("&amp;", "&")
+    body = {"requesttoken": request_token(grant_html) or token}
+elif state is not None:
+    # Newer ones draw it client-side and leave the state token in inline state.
+    grant_url = f"{origin}/index.php/login/v2/grant"
+    body = {
+        "stateToken": json.loads(base64.b64decode(state.group(1)))["stateToken"],
+        "requesttoken": request_token(grant_html) or token,
+    }
+else:
+    sys.exit(f"no grant form and no login flow state after login; landed on {grant_page}")
 
-# The state token rides in the action URL, the request token in the body.
 final, final_html = fetch(
-    action.group(1).replace("&amp;", "&"),
-    urllib.parse.urlencode(
-        {"requesttoken": request_token(grant_html) or token}
-    ).encode(),
-    referer=grant_page,
+    grant_url, urllib.parse.urlencode(body).encode(), referer=grant_page
 )
 print("granted ->", final)
 print("account connected:", "Account connected" in final_html or "connected" in final_html.lower())
