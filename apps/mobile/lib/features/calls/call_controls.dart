@@ -146,11 +146,13 @@ final class CallControls extends ConsumerWidget {
             selectedIcon: const Icon(Icons.videocam_rounded),
           ),
         // Sharing this device's screen exists where the platform can capture
-        // one; on a phone that is Android. `publish-screen` is a permission
-        // and never a call flag, so it has to be asked for separately —
-        // without it the button would walk the user through the system's
-        // recording consent for a share nobody receives.
-        if (defaultTargetPlatform == TargetPlatform.android &&
+        // one: Android through a MediaProjection, iOS through the Broadcast
+        // Upload Extension the system's own picker starts. `publish-screen`
+        // is a permission and never a call flag, so it has to be asked for
+        // separately — without it the button would walk the user through the
+        // system's recording consent for a share nobody receives.
+        if ((defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS) &&
             join.publishing.screen)
           IconButton(
             key: Key('$keyPrefix-share-screen'),

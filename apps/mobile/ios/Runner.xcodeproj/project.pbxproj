@@ -40,6 +40,10 @@
 		A5E000000000000000000005 /* AppleIncomingShareInboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */; };
 		A5E000000000000000000006 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000204 /* Localizable.strings */; };
 		A5E000000000000000000007 /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000108 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
+		A5E000000000000000000011 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000111 /* SampleHandler.swift */; };
+		A5E000000000000000000012 /* SocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000112 /* SocketConnection.swift */; };
+		A5E000000000000000000013 /* SampleUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000113 /* SampleUploader.swift */; };
+		A5E000000000000000000014 /* BroadcastExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000118 /* BroadcastExtension.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +68,13 @@
 			remoteGlobalIDString = A5E000000000000000000401;
 			remoteInfo = ShareExtension;
 		};
+		A5E000000000000000000511 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A5E000000000000000000411;
+			remoteInfo = BroadcastExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -85,6 +96,7 @@
 			files = (
 				47BAA877F12999C489E45A1B /* NotificationServiceExtension.appex in Embed App Extensions */,
 				A5E000000000000000000007 /* ShareExtension.appex in Embed App Extensions */,
+				A5E000000000000000000014 /* BroadcastExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -140,6 +152,12 @@
 		A5E000000000000000000106 /* cs */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = cs; path = cs.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A5E000000000000000000107 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A5E000000000000000000108 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5E000000000000000000111 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		A5E000000000000000000112 /* SocketConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketConnection.swift; sourceTree = "<group>"; };
+		A5E000000000000000000113 /* SampleUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleUploader.swift; sourceTree = "<group>"; };
+		A5E000000000000000000115 /* BroadcastExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BroadcastExtension.entitlements; sourceTree = "<group>"; };
+		A5E000000000000000000116 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A5E000000000000000000118 /* BroadcastExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BroadcastExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareInboxTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -169,6 +187,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A5E000000000000000000302 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E000000000000000000312 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -207,6 +232,7 @@
 				A5E000000000000000000201 /* Shared */,
 				A5E000000000000000000202 /* ShareExtension */,
 				A5E000000000000000000203 /* ShareExtensionTests */,
+				A5E000000000000000000212 /* BroadcastExtension */,
 				B0F75E31B6DCBE9935952C3A /* NotificationServiceExtension */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
@@ -232,6 +258,7 @@
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 				34B630F28A4C4E2744551061 /* NotificationServiceExtension.appex */,
 				A5E000000000000000000108 /* ShareExtension.appex */,
+				A5E000000000000000000118 /* BroadcastExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -291,6 +318,18 @@
 				A5E000000000000000000101 /* AppleIncomingShareInbox.swift */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		A5E000000000000000000212 /* BroadcastExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A5E000000000000000000111 /* SampleHandler.swift */,
+				A5E000000000000000000112 /* SocketConnection.swift */,
+				A5E000000000000000000113 /* SampleUploader.swift */,
+				A5E000000000000000000116 /* Info.plist */,
+				A5E000000000000000000115 /* BroadcastExtension.entitlements */,
+			);
+			path = BroadcastExtension;
 			sourceTree = "<group>";
 		};
 		A5E000000000000000000202 /* ShareExtension */ = {
@@ -354,6 +393,7 @@
 			dependencies = (
 				298A52FDF99585BD75F5BBC5 /* PBXTargetDependency */,
 				A5E000000000000000000502 /* PBXTargetDependency */,
+				A5E000000000000000000512 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -404,6 +444,9 @@
 					A5E000000000000000000401 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					A5E000000000000000000411 = {
+						CreatedOnToolsVersion = 16.0;
+					};
 				};
 			};
 			buildConfigurationList = 97C146E91CF9000F007C117D /* Build configuration list for PBXProject "Runner" */;
@@ -427,6 +470,7 @@
 				331C8080294A63A400263BE5 /* RunnerTests */,
 				6ED32A04E0AADF60AAD85F18 /* NotificationServiceExtension */,
 				A5E000000000000000000401 /* ShareExtension */,
+				A5E000000000000000000411 /* BroadcastExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -467,6 +511,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A5E000000000000000000313 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -486,6 +537,23 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		A5E000000000000000000411 /* BroadcastExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A5E000000000000000000412 /* Build configuration list for PBXNativeTarget "BroadcastExtension" */;
+			buildPhases = (
+				A5E000000000000000000311 /* Sources */,
+				A5E000000000000000000312 /* Frameworks */,
+				A5E000000000000000000313 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BroadcastExtension;
+			productName = BroadcastExtension;
+			productReference = A5E000000000000000000118 /* BroadcastExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		A5E000000000000000000401 /* ShareExtension */ = {
 			isa = PBXNativeTarget;
@@ -655,6 +723,11 @@
 			target = A5E000000000000000000401 /* ShareExtension */;
 			targetProxy = A5E000000000000000000501 /* PBXContainerItemProxy */;
 		};
+		A5E000000000000000000512 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A5E000000000000000000411 /* BroadcastExtension */;
+			targetProxy = A5E000000000000000000511 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -673,6 +746,16 @@
 			files = (
 				A5E000000000000000000003 /* AppleIncomingShareInbox.swift in Sources */,
 				A5E000000000000000000004 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E000000000000000000311 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5E000000000000000000011 /* SampleHandler.swift in Sources */,
+				A5E000000000000000000012 /* SocketConnection.swift in Sources */,
+				A5E000000000000000000013 /* SampleUploader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1062,6 +1145,89 @@
 			};
 			name = Profile;
 		};
+		A5E000000000000000000413 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = BroadcastExtension/BroadcastExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(APPLE_TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BroadcastExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.BroadcastExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A5E000000000000000000414 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = BroadcastExtension/BroadcastExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(APPLE_TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BroadcastExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.BroadcastExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A5E000000000000000000415 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = BroadcastExtension/BroadcastExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = "$(APPLE_TEAM_ID)";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = BroadcastExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.BroadcastExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Profile;
+		};
 		A5E000000000000000000403 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
@@ -1184,6 +1350,16 @@
 				7A6B44B29E267CA74C0CF5D2 /* Debug */,
 				146755F7CF8E946E88F96B5D /* Release */,
 				225A7A7B44BF1FE1027BA252 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A5E000000000000000000412 /* Build configuration list for PBXNativeTarget "BroadcastExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A5E000000000000000000413 /* Debug */,
+				A5E000000000000000000414 /* Release */,
+				A5E000000000000000000415 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -7,6 +7,11 @@ import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 
 import 'call_media_engine.dart';
 
+/// True on iOS, where the whole device's screen is only reachable through a
+/// Broadcast Upload Extension. macOS shares a window through the desktop
+/// capturer instead and has no such extension.
+bool get _isApplePhone => defaultTargetPlatform == TargetPlatform.iOS;
+
 /// The only file that talks to `flutter_webrtc`.
 ///
 /// It maps the plugin onto [CallMediaEngine] and nothing else: no negotiation
@@ -112,8 +117,21 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
       // The platform asks for consent itself (Android's capture dialog); the
       // foreground service that Android 10+ requires is started by the caller
       // before this runs.
+      //
+      // On iOS the whole device's screen only reaches us through a Broadcast
+      // Upload Extension, and the plugin picks that path from the `broadcast`
+      // device id alone: it then reads the frames off the unix socket in the
+      // App Group container and presents the system picker for the extension
+      // named by `RTCScreenSharingExtension`. Without the prefix it would use
+      // `RPScreenRecorder`, which records this application's own window — in
+      // a call that is the call view, which is of no use to anybody.
       stream = await rtc.navigator.mediaDevices.getDisplayMedia(
-        const <String, dynamic>{'audio': false, 'video': true},
+        <String, dynamic>{
+          'audio': false,
+          'video': _isApplePhone
+              ? const <String, dynamic>{'deviceId': 'broadcast'}
+              : true,
+        },
       );
     } on Object catch (error) {
       // The plugin's own words, because the mapped code alone cannot tell a

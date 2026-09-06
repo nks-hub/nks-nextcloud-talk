@@ -111,5 +111,9 @@
 	</array>
 	<key>AppIdentifierPrefix</key>
 	<string>$(AppIdentifierPrefix)</string>
+	<key>RTCAppGroupIdentifier</key>
+	<string>group.com.nkshub.nextcloudtalk</string>
+	<key>RTCScreenSharingExtension</key>
+	<string>com.nkshub.nextcloudtalk.BroadcastExtension</string>
 </dict>
 </plist>
