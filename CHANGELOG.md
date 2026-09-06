@@ -23,6 +23,15 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: on Android 10 and 11 the app did not start at all — it closed the
+  moment it was opened. A class the call code needs names a listener that only
+  exists from Android 12, and naming it was enough to stop the whole screen
+  from loading on an older phone. Found on a Galaxy S9+; every build up to and
+  including 61 is affected.
+- Fixed: sharing a file into the app offered accounts whose server does not
+  take attachments at all, and then failed after the conversation had been
+  chosen, blaming the account. Such accounts are no longer offered for a file,
+  and if none is left the screen says why.
 - New: a call on an iPhone keeps going in a small window when you leave the
   app, the way it already did on Android. The window shows a shared screen if
   somebody is sharing one, otherwise the first participant sending video.
