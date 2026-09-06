@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: the iOS release build could not be produced at all. The licence
+  check that guards a release rejected it because the notice for one package
+  the call code brought in was missing from the iPhone build; the check only
+  runs on an Apple machine, so no other build noticed.
 - New: sharing your screen from an iPhone. iOS only lets another process
   capture the screen, so the app now ships a broadcast extension and the
   system's own picker starts it; the picture then goes into the call the same
