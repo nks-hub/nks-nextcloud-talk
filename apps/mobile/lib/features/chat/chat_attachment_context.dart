@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
@@ -103,6 +104,17 @@ final class ChatAttachmentContextResolver {
       metadata: metadata,
     );
     if (!authority.profile.supports(currentMetadata)) {
+      // Which of the profile's flags said no is the only useful thing here,
+      // and the caller can only report "unsupported" — so it is written down
+      // rather than lost.
+      debugPrint(
+        '[attachment] rejected by the profile: ${authority.profile} '
+        'for kind=${currentMetadata.kind.name} '
+        'caption=${currentMetadata.caption != null} '
+        'reply=${currentMetadata.replyTo != null} '
+        'thread=${currentMetadata.threadId != null} '
+        'silent=${currentMetadata.silent}',
+      );
       throw const ChatAttachmentContextException(
         ChatAttachmentContextError.attachmentUnsupported,
       );

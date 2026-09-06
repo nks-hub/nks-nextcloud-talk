@@ -82,6 +82,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get incomingShareConversation => 'Conversation';
 
   @override
+  String get incomingShareNoFileTargets =>
+      'None of your accounts takes file attachments. Their servers have them turned off; text can still be shared.';
+
+  @override
   String get incomingShareSearch => 'Search conversations';
 
   @override

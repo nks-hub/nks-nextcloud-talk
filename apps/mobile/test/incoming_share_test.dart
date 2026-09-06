@@ -318,6 +318,47 @@ void main() {
     );
   });
 
+  testWidgets('a file share says so when no server takes attachments', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _localizedApp(
+        IncomingShareTargetDialog(
+          share: const IncomingShare(
+            id: 'share-8',
+            text: null,
+            file: IncomingSharedFile(
+              path: '/tmp/probe.png',
+              mimeType: 'image/png',
+              displayName: 'probe.png',
+              byteLength: 12,
+              sha256: 'deadbeef',
+            ),
+          ),
+          // The host drops such accounts before the dialog sees them, so an
+          // empty list is exactly what a file share meets on a server with
+          // attachments turned off.
+          loadAccounts: () async => const <IncomingShareAccount>[],
+          send: (_) async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('incoming-share-no-targets')), findsOneWidget);
+    expect(
+      find.text('None of your accounts takes file attachments. Their servers '
+          'have them turned off; text can still be shared.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('incoming-share-send')))
+          .onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('send failure keeps the picker open for retry', (tester) async {
     await tester.pumpWidget(
       _localizedApp(

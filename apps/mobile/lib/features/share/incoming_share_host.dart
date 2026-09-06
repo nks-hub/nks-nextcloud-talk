@@ -40,6 +40,7 @@ final class IncomingShareAccount {
     required this.label,
     required this.rooms,
     this.account,
+    this.acceptsFiles = true,
   });
 
   final String id;
@@ -49,6 +50,12 @@ final class IncomingShareAccount {
   /// The stored row behind [id], carried so the picker can draw the real
   /// conversation avatars. Absent in tests, where the list is built by hand.
   final StoredAccount? account;
+
+  /// Whether this account's server takes attachments at all. A Talk instance
+  /// with `attachments.allowed: false` accepts text and refuses files, and
+  /// offering a file target it will refuse only produces a failure after the
+  /// user has already chosen.
+  final bool acceptsFiles;
 }
 
 /// A thread inside a conversation, offered as a target of its own.
@@ -134,7 +141,7 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
           barrierDismissible: false,
           builder: (context) => IncomingShareTargetDialog(
             share: share,
-            loadAccounts: _loadAccounts,
+            loadAccounts: () => _loadAccounts(forFile: share.file != null),
             send: (target) => _send(share, target),
           ),
         );
@@ -152,7 +159,26 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
     }
   }
 
-  Future<List<IncomingShareAccount>> _loadAccounts() async {
+  /// Whether [account] takes attachments, read from its own capabilities.
+  /// A server that cannot be asked is treated as willing: refusing to offer it
+  /// would be worse than the failure the send would report.
+  Future<bool> _acceptsFiles(String accountId, String roomToken) async {
+    try {
+      final profile = await ref
+          .read(chatAttachmentContextResolverProvider)
+          .resolveProfile(
+            accountId: AccountId.parse(accountId),
+            roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+          );
+      return profile.enabled;
+    } on Object {
+      return true;
+    }
+  }
+
+  Future<List<IncomingShareAccount>> _loadAccounts({
+    bool forFile = false,
+  }) async {
     final repository = ref.read(accountRepositoryProvider);
     final accounts = await repository.listAccounts();
     final result = <IncomingShareAccount>[];
@@ -190,12 +216,20 @@ final class _IncomingShareHostState extends ConsumerState<IncomingShareHost> {
           )
           .toList(growable: false);
       if (rooms.isEmpty) continue;
+      // Asked once per account, against any of its rooms: the answer comes
+      // from the server's capabilities, which are per account, not per room.
+      final acceptsFiles =
+          !forFile || await _acceptsFiles(account.id, rooms.first.token);
+      if (forFile && !acceptsFiles) {
+        continue;
+      }
       result.add(
         IncomingShareAccount(
           id: account.id,
           label: _accountLabel(account),
           rooms: rooms,
           account: account,
+          acceptsFiles: acceptsFiles,
         ),
       );
     }
@@ -446,9 +480,18 @@ final class _IncomingShareTargetDialogState
     bool failed,
   ) {
     if (failed || accounts.isEmpty) {
+      // A file share with nothing left is a different sentence: the
+      // conversations exist, their servers just refuse attachments, and
+      // "no writable conversations" would send the user looking for the
+      // wrong thing.
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        child: Text(strings.incomingShareNoTargets),
+        child: Text(
+          widget.share.file != null && !failed
+              ? strings.incomingShareNoFileTargets
+              : strings.incomingShareNoTargets,
+          key: const Key('incoming-share-no-targets'),
+        ),
       );
     }
     final query = _query.text.trim().toLowerCase();
@@ -597,7 +640,12 @@ final class _IncomingShareTargetDialogState
       if (mounted) {
         Navigator.of(context).pop(true);
       }
-    } on Object {
+    } on Object catch (error, stack) {
+      // The screen can only say "it could not be queued"; without this the
+      // cause never reaches anywhere a person can read it, and a share that
+      // fails on a device leaves nothing to go on.
+      debugPrint('[share] send failed: $error');
+      debugPrintStack(stackTrace: stack, maxFrames: 8);
       if (mounted) {
         setState(() {
           _sending = false;

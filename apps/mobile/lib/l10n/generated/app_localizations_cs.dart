@@ -82,6 +82,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get incomingShareConversation => 'Konverzace';
 
   @override
+  String get incomingShareNoFileTargets =>
+      'Žádný z účtů nepřijímá přílohy. Jejich servery je mají vypnuté; text sdílet lze.';
+
+  @override
   String get incomingShareSearch => 'Hledat konverzaci';
 
   @override

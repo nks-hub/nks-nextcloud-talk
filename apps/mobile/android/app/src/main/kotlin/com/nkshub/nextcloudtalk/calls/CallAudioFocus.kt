@@ -37,6 +37,12 @@ import io.flutter.plugin.common.EventChannel
  * `addOnModeChangedListener` exists from API 31. Below that this reports
  * nothing, and the Dart side treats silence as "no interruptions", which is
  * honest: the older devices behave as they did before this change.
+ *
+ * THE LISTENER ITSELF IS NOT HELD HERE, and that is not tidiness. A field of
+ * type `AudioManager.OnModeChangedListener` is resolved when this class is
+ * loaded, which happens on every device that opens the app — a version check
+ * inside a method never gets the chance to prevent it. It lives in
+ * [CallAudioModeWatcher], which is only ever constructed above API 31.
  */
 class CallAudioFocus(context: Context) : EventChannel.StreamHandler {
 
@@ -44,33 +50,30 @@ class CallAudioFocus(context: Context) : EventChannel.StreamHandler {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val handler = Handler(Looper.getMainLooper())
     private var sink: EventChannel.EventSink? = null
-    private var interrupted = false
 
-    private val listener = AudioManager.OnModeChangedListener { mode ->
-        val now = mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_RINGTONE
-        if (now == interrupted) {
-            return@OnModeChangedListener
-        }
-        interrupted = now
-        val event = if (now) BEGAN else ENDED
-        // The callback runs on the executor handed over below, which is the
-        // platform thread, the only one a sink may be used from.
-        sink?.success(event)
-    }
+    /** Held as [Any] so this class carries no API 31 type of its own. */
+    private var watcher: Any? = null
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         sink = events
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             return
         }
-        interrupted = false
-        audioManager.addOnModeChangedListener({ handler.post(it) }, listener)
+        val watcher =
+            CallAudioModeWatcher(audioManager) { interrupted ->
+                // Called on the executor handed over below, which posts to the
+                // platform thread — the only one a sink may be used from.
+                sink?.success(if (interrupted) BEGAN else ENDED)
+            }
+        this.watcher = watcher
+        watcher.start { handler.post(it) }
     }
 
     override fun onCancel(arguments: Any?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            audioManager.removeOnModeChangedListener(listener)
+            (watcher as? CallAudioModeWatcher)?.stop()
         }
+        watcher = null
         sink = null
     }
 

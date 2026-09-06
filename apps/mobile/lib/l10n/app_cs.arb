@@ -23,6 +23,7 @@
   "incomingShareTitle": "Sdílet do konverzace",
   "incomingShareAccount": "Účet",
   "incomingShareConversation": "Konverzace",
+  "incomingShareNoFileTargets": "Žádný z účtů nepřijímá přílohy. Jejich servery je mají vypnuté; text sdílet lze.",
   "incomingShareSearch": "Hledat konverzaci",
   "incomingShareNoMatches": "Tomu neodpovídá žádná konverzace.",
   "incomingShareFile": "Sdílíte soubor",

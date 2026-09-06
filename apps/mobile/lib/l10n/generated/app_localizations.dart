@@ -236,6 +236,12 @@ abstract class AppLocalizations {
   /// **'Conversation'**
   String get incomingShareConversation;
 
+  /// No description provided for @incomingShareNoFileTargets.
+  ///
+  /// In en, this message translates to:
+  /// **'None of your accounts takes file attachments. Their servers have them turned off; text can still be shared.'**
+  String get incomingShareNoFileTargets;
+
   /// No description provided for @incomingShareSearch.
   ///
   /// In en, this message translates to:

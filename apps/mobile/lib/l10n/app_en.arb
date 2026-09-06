@@ -23,6 +23,7 @@
   "incomingShareTitle": "Share to a conversation",
   "incomingShareAccount": "Account",
   "incomingShareConversation": "Conversation",
+  "incomingShareNoFileTargets": "None of your accounts takes file attachments. Their servers have them turned off; text can still be shared.",
   "incomingShareSearch": "Search conversations",
   "incomingShareNoMatches": "No conversation matches that.",
   "incomingShareFile": "Sharing a file",
