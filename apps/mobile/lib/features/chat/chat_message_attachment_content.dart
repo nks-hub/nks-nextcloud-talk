@@ -218,7 +218,12 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
           _playing = true;
         });
       }
-    } on Object {
+    } on Object catch (error, stack) {
+      // The bubble can only say "it did not play". Which of the download, the
+      // credentials or the player refused it is in the log — a silent catch
+      // here already cost a day once, on a device where it was the only clue.
+      debugPrint('[voice] playback failed for ${widget.uri}: $error');
+      debugPrintStack(stackTrace: stack, maxFrames: 8);
       if (mounted) {
         setState(() {
           _loading = false;
