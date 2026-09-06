@@ -65,6 +65,17 @@ from the commit log. Nothing here has reached testers yet.
   "fotoaparát" and only the one in a call is a "kamera", the waiting room is
   always a "čekárna", and breakout rooms are always "oddělené místnosti".
 
+- Added: the desktop application can now install an update it finds. It offers
+  to download the Windows installer from the release, checks the file against
+  the release's own SHA-256 list before anything is run, and asks a second time
+  before starting it. A file whose checksum does not match is deleted and the
+  update refused. macOS is deliberately left with the link alone — an update
+  there has to be notarised, which a downloaded file is not. Off by default,
+  as the check itself is.
+- Fixed: the screen share is offered on Windows, macOS and Linux. The button
+  was drawn only on the two phones although the engine can capture a desktop
+  screen, so on a desktop the feature simply was not there.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
