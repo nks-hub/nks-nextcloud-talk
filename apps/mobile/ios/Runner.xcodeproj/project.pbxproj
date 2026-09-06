@@ -36,6 +36,7 @@
 		A5E000000000000000000002 /* AppleIncomingShareChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000102 /* AppleIncomingShareChannel.swift */; };
 		917AFDCEF28CCEE0482F1690 /* CallAudioInterruptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */; };
 		B1C0FE4001CA11F0AA010001 /* CallPushKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0FE4001CA11F0AA010002 /* CallPushKit.swift */; };
+		B1C0FE4001CA11F0AA010011 /* CallPictureInPicture.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0FE4001CA11F0AA010012 /* CallPictureInPicture.swift */; };
 		A5E000000000000000000003 /* AppleIncomingShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000101 /* AppleIncomingShareInbox.swift */; };
 		A5E000000000000000000004 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000103 /* ShareViewController.swift */; };
 		A5E000000000000000000005 /* AppleIncomingShareInboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */; };
@@ -148,6 +149,7 @@
 		A5E000000000000000000102 /* AppleIncomingShareChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareChannel.swift; sourceTree = "<group>"; };
 		4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAudioInterruptions.swift; sourceTree = "<group>"; };
 		B1C0FE4001CA11F0AA010002 /* CallPushKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPushKit.swift; sourceTree = "<group>"; };
+		B1C0FE4001CA11F0AA010012 /* CallPictureInPicture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPictureInPicture.swift; sourceTree = "<group>"; };
 		A5E000000000000000000103 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		A5E000000000000000000104 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A5E000000000000000000105 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
@@ -280,6 +282,7 @@
 				A5E000000000000000000102 /* AppleIncomingShareChannel.swift */,
 				4A22D974F28A45D0ED883163 /* CallAudioInterruptions.swift */,
 				B1C0FE4001CA11F0AA010002 /* CallPushKit.swift */,
+				B1C0FE4001CA11F0AA010012 /* CallPictureInPicture.swift */,
 				C04A91B12F00000000000002 /* ContactPickerChannel.swift */,
 				B34A0D100000000000000002 /* VoiceMessageTranscriber.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
@@ -695,6 +698,7 @@
 				A5E000000000000000000002 /* AppleIncomingShareChannel.swift in Sources */,
 				917AFDCEF28CCEE0482F1690 /* CallAudioInterruptions.swift in Sources */,
 				B1C0FE4001CA11F0AA010001 /* CallPushKit.swift in Sources */,
+				B1C0FE4001CA11F0AA010011 /* CallPictureInPicture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
