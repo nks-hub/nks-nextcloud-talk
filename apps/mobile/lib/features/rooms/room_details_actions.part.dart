@@ -78,6 +78,17 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
   /// for the other direction.
   bool get _canToggleGuests => _isModerator && _isGroupOrPublic;
 
+  /// Letting somebody in only exists where there is a room to let them into.
+  ///
+  /// Measured against Talk 24.0.2 on 6 September 2026 by posting an invented
+  /// user id, so the room type is the only thing under test: an owned GROUP
+  /// room answers `404` — the endpoint works, the user does not exist — while
+  /// the note-to-self room answers `400`, refusing the room before it ever
+  /// looks the user up. The button used to be offered there anyway, because
+  /// you are the owner of your own notes: it opened the picker, let a real
+  /// person be chosen, and only then failed.
+  bool get _canAddParticipants => _isModerator && _isGroupOrPublic;
+
   /// A password only exists on a public conversation: Talk answers `403`
   /// "When the conversation is not a public conversation".
   bool get _canSetPassword => _isModerator && _isPublic;

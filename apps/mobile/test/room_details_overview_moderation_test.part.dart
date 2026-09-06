@@ -101,6 +101,56 @@ void _registerOverviewAndModerationTests() {
     });
   }
 
+  // Talk refuses participants on a room that cannot have any, and it refuses
+  // them BY ROOM TYPE — measured on 6 September 2026 against Talk 24.0.2 by
+  // posting an invented user id, so the type is the only thing under test:
+  // an owned GROUP room answers 404 (the endpoint works, the user does not
+  // exist), the note-to-self room answers 400 before it looks the user up.
+  // The button was offered in notes-to-self anyway, because you own them: it
+  // opened the picker, let a real person be chosen, and only then failed.
+  for (final room in <String, ({int type, bool offered})>{
+    'a group conversation': (type: 2, offered: true),
+    'a public conversation': (type: 3, offered: true),
+    'notes to self': (type: 6, offered: false),
+    'a one-to-one conversation': (type: 1, offered: false),
+  }.entries) {
+    testWidgets('letting somebody in is offered in ${room.key}: '
+        '${room.value.offered}', (tester) async {
+      final wire = jsonDecode(conversation.rawJson) as Map<String, Object?>
+        ..['type'] = room.value.type
+        ..['participantType'] = 1;
+      final typed = conversation.copyWith(rawJson: jsonEncode(wire));
+
+      _growViewport(tester, height: 2600);
+      await tester.pumpWidget(
+        app(
+          home: RoomDetailsScreen(
+            account: account,
+            conversation: typed,
+            linkSharer: _RecordingLinkSharer(),
+          ),
+          client: participantsClient(const <Object?>[]),
+        ),
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('room-details-participants'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      expect(
+        find.byKey(const Key('room-details-add-participant')),
+        room.value.offered ? findsOneWidget : findsNothing,
+        reason: 'the server decides this by room type, so the button has to '
+            'as well',
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    });
+  }
+
   testWidgets('offers a retry when the participant list fails to load', (
     tester,
   ) async {

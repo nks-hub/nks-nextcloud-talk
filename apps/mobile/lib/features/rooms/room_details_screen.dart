@@ -513,7 +513,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                 // Adding someone was missing entirely until 5 September 2026:
                 // the list could be read and its attendees moderated, but
                 // nobody could be let in.
-                if (_isModerator)
+                if (_canAddParticipants)
                   TextButton.icon(
                     key: const Key('room-details-add-participant'),
                     onPressed: _busy ? null : _addParticipant,

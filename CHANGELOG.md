@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: the conversation details offered to add somebody to a conversation
+  that cannot have anybody added — your own notes, or a one-to-one. Choosing a
+  person there only failed afterwards. The button is no longer shown where the
+  server would refuse it.
 - Fixed: attachments could stop working altogether after an update, and stay
   that way. A file left waiting in the send queue from an older version could
   make the whole attachment machinery fail to start, and the message box then
