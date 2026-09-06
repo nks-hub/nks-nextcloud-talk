@@ -30,7 +30,9 @@ from the commit log. Nothing here has reached testers yet.
 - Changed: sharing a file or a link into the app no longer opens a form with
   two dropdowns. It shows the conversations themselves — avatar, name and the
   last message — grouped under their account, with a search box once there are
-  more than a few, and what you are sharing written under the title.
+  more than a few, and what you are sharing written under the title. Threads
+  are offered under their conversation, so a shared file can go straight into
+  one instead of into the room.
 - Fixed: the iOS release build could not be produced at all. The licence
   check that guards a release rejected it because the notice for one package
   the call code brought in was missing from the iPhone build; the check only
