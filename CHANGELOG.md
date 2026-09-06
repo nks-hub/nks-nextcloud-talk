@@ -90,6 +90,12 @@ from the commit log. Nothing here has reached testers yet.
   7 September with 1684 video frames decoded beside an avatar that never
   changed.
 
+- Added: a moderator can start and stop the recording of a call, where the
+  server offers recording at all. Everyone else does not see the button.
+  Nobody has recorded a real call with it yet — no server here has a recording
+  backend — so it is the button and the request that are proven, not the
+  recording.
+
 ## 0.1.0 (63) — 6 September 2026
 
 Twenty items, and all but three of them were found by USING the application —
