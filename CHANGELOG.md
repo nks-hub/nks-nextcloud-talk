@@ -52,6 +52,10 @@ from the commit log. Nothing here has reached testers yet.
   size the name was cut to a few dots or was not there at all. The name now
   keeps its room and the buttons that no longer fit move into a menu, the call
   buttons last.
+- Fixed: when a voice message in a conversation could not be played, the app
+  said the recording preview could not be played. That is the wording for the
+  clip you listen to before sending it; a message that already arrived is not a
+  preview.
 
 ## 0.1.0 (62) — 6 September 2026
 

@@ -291,6 +291,7 @@
   "voiceRecordingFailed": "The voice message could not be recorded.",
   "voiceInvalidRecording": "The recording is empty or unsupported.",
   "voicePlaybackFailed": "The recording preview could not be played.",
+  "voiceMessagePlaybackFailed": "The voice message could not be played.",
   "voicePlaybackPosition": "{position} of {duration}",
   "voiceSendFailed": "The voice message could not be queued.",
   "voiceCleanupFailed": "The recording could not be removed safely.",

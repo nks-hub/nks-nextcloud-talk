@@ -311,7 +311,10 @@ final class _VoiceAttachmentState extends ConsumerState<_VoiceAttachment> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _failed ? strings.voicePlaybackFailed : widget.name,
+                // `voicePlaybackFailed` says "recording preview", which is
+                // the composer's wording for the clip being reviewed before
+                // it is sent. A message in the timeline is not a preview.
+                _failed ? strings.voiceMessagePlaybackFailed : widget.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
