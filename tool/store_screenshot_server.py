@@ -275,6 +275,34 @@ def chat_json(token: str, language: str) -> list[dict]:
     return list(reversed(messages))
 
 
+def participants(language: str) -> list[dict]:
+    """Who is in the room the chat screenshot is taken in."""
+    people = [(USER, DISPLAY_NAME, 1)]
+    seen: set[str] = {USER}
+    for actor, display, _ in CHAT[language]:
+        if actor not in seen:
+            seen.add(actor)
+            people.append((actor, display, 3))
+    return [
+        {
+            "attendeeId": 300 + index,
+            "actorType": "users",
+            "actorId": actor,
+            "displayName": display,
+            "participantType": participant_type,
+            "lastPing": BASE_TIME - 60,
+            "sessionIds": [],
+            "permissions": 254,
+            "attendeePermissions": 0,
+            "inCall": 0,
+            "status": None,
+            "statusIcon": None,
+            "statusMessage": None,
+        }
+        for index, (actor, display, participant_type) in enumerate(people)
+    ]
+
+
 def capabilities() -> dict:
     return {
         "version": {
@@ -357,6 +385,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(
                 ocs([room_json(index, language) for index in range(len(ROOMS[language]))])
             )
+        if path.endswith("/participants"):
+            return self._send(ocs(participants(language)))
         if "/apps/spreed/api/v1/chat/" in path:
             token = path.split("/apps/spreed/api/v1/chat/")[1].split("/")[0]
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
