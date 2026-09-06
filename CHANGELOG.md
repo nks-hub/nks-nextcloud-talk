@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: sharing your screen now works in calls that go through a media
+  server, not only in direct ones. The other participants were never told a
+  screen had appeared, and the media server's reply to the share was being
+  discarded, so nothing was ever shown. Both directions were measured between
+  two devices in one call.
 - Fixed: a request that timed out could still take the application down
   moments later. A connection that failed after the app had already given up
   waiting for it had nowhere to report to and ended the process; the same held
