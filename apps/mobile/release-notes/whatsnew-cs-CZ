@@ -1,7 +1,7 @@
-Hovory už přenášejí zvuk. Připojte se z proužku hovoru a aplikace otevře
-mikrofon a spojí vás s ostatními. Server s MCU se ohlásí jako nepodporovaný
-místo aby tiše selhal, a pozná se dřív, než si aplikace řekne o mikrofon.
-Video a ovládání hovoru zatím nejsou.
+Hovory mají video a vlastní obrazovku s dlaždicí pro každého účastníka.
+Fungují i na serverech se samostatnou signalizací, s media serverem a přes
+TURN, ne jen na vestavěné cestě. Sdílení obrazovky jde oběma směry a výpadek
+sítě už hovor neukončí. Přibyly breakout místnosti a obraz v obraze.
 
-Dále opraveno: proužek nikdy nenabídl „Připojit se"; odepřený mikrofon se
-hlásil jako nedostupný; a tři chyby notifikací na macOS.
+Opraveno: tři pády, chybějící čas u záznamů o hovoru a kamera nabízená
+někomu, komu ji moderátor zakázal.

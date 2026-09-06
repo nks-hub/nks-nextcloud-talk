@@ -1,8 +1,8 @@
-Calls now carry audio. Join from the call banner and the app opens your
-microphone and connects you to the other participants. A server running an
-MCU is reported as unsupported instead of failing quietly, and it is
-recognised before the microphone is requested. Video and the call controls
-are not in this build yet.
+Calls carry video now, in a screen of their own with a tile per participant.
+They work on servers that run separate signalling, a media server or a TURN
+relay, not only on the built-in path. Screen sharing goes both ways, and a
+network drop no longer ends the call. Breakout rooms and picture-in-picture
+are new too.
 
-Also fixed: the banner could never offer "Join call"; a refused microphone
-was reported as unavailable; and three macOS notification faults.
+Fixed: three crashes, the missing time on call entries, and a camera offered
+to somebody whose moderator had turned it off.
