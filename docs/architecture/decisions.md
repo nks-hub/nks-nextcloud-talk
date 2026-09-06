@@ -454,5 +454,7 @@ Android accepts `ACTION_SEND` through a persistent native inbox. The URI grant i
 only a short-lived trust boundary: a bounded app-owned copy is created before
 handing over to Flutter and a repeated cold/warm delivery is deduplicated.
 Flutter selects the account and the room and uses the existing chat or attachment
-durable flow; no new share transport is created. The iOS Share Extension and App
-Intents stay deferred and must not be pretended to be done.
+durable flow; no new share transport is created. The iOS Share Extension is built
+on the same shape (an App Group inbox, a bounded copy, cold/warm dedup, text and
+file) and must not be pretended to be undone. App Intents on iOS stay deferred and
+must not be pretended to be done.
