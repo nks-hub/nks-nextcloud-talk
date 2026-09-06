@@ -18,10 +18,17 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased — the next build after 62
+## Unreleased — the next build after 63
 
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
+
+## 0.1.0 (63) — 6 September 2026
+
+Twenty items, and all but three of them were found by USING the application —
+on a Galaxy S9+ with a real account, on a tablet, and on a phone turned
+sideways. The store pictures were remade in the same evening, from a server
+that exists only for taking them.
 
 - Changed: forwarding a message now shows the conversations themselves —
   avatar, name and the last message — with a search box once there are several,
@@ -82,6 +89,10 @@ from the commit log. Nothing here has reached testers yet.
 - Fixed: the last conversation in the list is no longer left under the compose
   button. At 200 % text a short list does not scroll, so the last room's
   message could not be moved out from under it.
+- Changed: the pictures on the store page are new, and none of them shows a
+  real person, a real conversation or a real server any more. They are taken
+  from a server that exists only for that, so a picture cannot leak what it
+  should not. The listing gained tablet pictures and an English version.
 - New: the desktop can tell you when a newer build has been published. It is
   off until you turn it on in the settings, because the check asks GitHub and
   that tells GitHub the installation exists; when it finds something newer it

@@ -1,9 +1,5 @@
-Fixes found on a real phone.
+Fixes found on real devices.
 
-Voice messages now arrive as voice messages instead of plain files. An
-attachment you sent yourself can be opened and played again. The conversation's
-name is back in its header. On Android 10 and 11 the microphone closes when
-somebody calls you. And attachments can no longer be knocked out by a file left
-in the queue by an older version.
+On a tablet, and on a phone turned sideways, the app could open on an empty screen — the conversation list now stays until a conversation is open. Voice messages arrive as voice messages, and older ones that would not play repair themselves. The conversation's name is back in its header. On Android 10 and 11 the microphone closes when somebody calls you.
 
 Forwarding a message shows conversations with pictures and a search box.
