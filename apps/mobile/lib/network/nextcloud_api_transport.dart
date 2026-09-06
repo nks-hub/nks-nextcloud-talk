@@ -347,7 +347,35 @@ abstract class _HttpNextcloudApiBase {
       ..maxRedirects = 0;
     final effectiveTimeout = timeout ?? requestTimeout;
     try {
-      final response = await _client.send(request).timeout(effectiveTimeout);
+      // `Future.timeout` gives up waiting; it does not cancel what it waited
+      // for. The send keeps running, and once this side has stopped listening
+      // a late failure on it has nowhere to go but the zone — a FATAL crash
+      // for a request already reported as a timeout. So it keeps a listener
+      // of its own, which also drains a response that arrives too late
+      // instead of leaving its socket held open.
+      var abandoned = false;
+      final sending = _client.send(request);
+      unawaited(
+        sending.then(
+          (late) {
+            if (abandoned) {
+              unawaited(
+                late.stream.drain<void>().catchError((Object _, StackTrace _) {
+                  return null;
+                }),
+              );
+            }
+          },
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
+      final response = await sending.timeout(
+        effectiveTimeout,
+        onTimeout: () {
+          abandoned = true;
+          throw TimeoutException('Nextcloud request timed out');
+        },
+      );
       bool sessionInvalidated() =>
           !allowAfterClose &&
           ((_closed) ||

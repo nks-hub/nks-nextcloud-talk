@@ -53,13 +53,22 @@ final class ForegroundSyncLoop {
     _cancellation = cancellation;
     final runner = _run(cancellation);
     _runner = runner;
+    // `unawaited` only silences the analyzer; it attaches no error handler, so
+    // anything escaping the loop would sit on a future nobody listens to and
+    // reach `PlatformDispatcher.onError` as a FATAL crash. The loop already
+    // reports every failure of the task through `onError` and retries it —
+    // what can still escape is a throw from that callback itself, or from the
+    // wait between attempts, and neither is worth ending the application for.
+    // `stop()` still awaits `_runner` and still sees the error.
     unawaited(
-      runner.whenComplete(() {
-        if (identical(_runner, runner)) {
-          _runner = null;
-          _cancellation = null;
-        }
-      }),
+      runner
+          .whenComplete(() {
+            if (identical(_runner, runner)) {
+              _runner = null;
+              _cancellation = null;
+            }
+          })
+          .catchError((Object _, StackTrace _) {}),
     );
   }
 

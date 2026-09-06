@@ -23,6 +23,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Fixed: a request that timed out could still take the application down
+  moments later. A connection that failed after the app had already given up
+  waiting for it had nowhere to report to and ended the process; the same held
+  for a failure in the background synchronisation loop. Both are handled now,
+  and a reply that arrives too late no longer holds its connection open.
 - New: breakout rooms can be filled three ways, not one. When a moderator
   creates them they choose whether the server spreads everyone evenly, whether
   they assign each person to a room themselves, or whether people pick a room
