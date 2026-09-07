@@ -23,6 +23,16 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- New group/public conversations can use server presets and initial passwords.
+  The form shows the resulting settings and locks forced values; switching
+  presets starts from the server defaults instead of retaining the old preset.
+  Password policy errors stay in the form, while an uncertain create disables
+  repeat submission. Partial invitation failure still opens the created room.
+  Fresh policy, credential and account checks protect submission. All 44
+  targeted Flutter cases, 1,133 protocol cases, full analysis and a Windows
+  debug build passed. Existing-room public-toggle integration and live server
+  acceptance remain in progress; this does not close the whole preset work.
+
 - Conversation polls now support closing, reusable draft management and
   CSV/ODS export through the system save dialog. Publishing a draft creates a
   new poll and keeps the template. Current role, author, credential and thread
