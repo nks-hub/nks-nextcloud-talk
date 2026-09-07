@@ -5,6 +5,7 @@ Generic patterns only. The operator's own literal hosts and machine names live
 in a gitignored `.public-denylist` (one literal per line) and are checked only
 where that file exists — this file is public too.
 """
+import hashlib
 import os
 import re
 import subprocess
@@ -47,6 +48,22 @@ EXEMPT = (
     "CONTRIBUTING.md",
 )
 
+# Retain the exact author metadata from the verified flutter_webrtc 1.6.1
+# archive. Other lines, patterns and operator literals remain checked.
+UPSTREAM_AUTHOR_FILES = {
+    "packages/flutter_webrtc/ios/flutter_webrtc.podspec",
+    "packages/flutter_webrtc/macos/flutter_webrtc.podspec",
+}
+UPSTREAM_AUTHOR_SHA256 = "cc3bcf5f80a5af90fc005f09b303616710f5e539b8cc642e9cfbfa364bdb5db8"
+
+
+def is_upstream_author(rel, line):
+    return (
+        rel in UPSTREAM_AUTHOR_FILES
+        and hashlib.sha256(line.strip().encode("utf-8")).hexdigest()
+        == UPSTREAM_AUTHOR_SHA256
+    )
+
 
 def tracked():
     out = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT)
@@ -77,7 +94,7 @@ def main():
                 # Kotlin `this@label.call` and `name@2x.png` are not addresses.
                 if IMAGE_TLD.search(mail) or re.search(r"@\w+\.\w*[A-Z]", mail):
                     continue
-                if not ALLOWED_MAIL.search(mail):
+                if not ALLOWED_MAIL.search(mail) and not is_upstream_author(rel, line):
                     findings.append((rel, number, "e-mail address"))
             for literal in denylist:
                 if literal in line:

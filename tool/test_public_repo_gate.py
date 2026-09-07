@@ -7,15 +7,21 @@ clean tree says. That is not hypothetical: the checkout-path rule below was
 committed once in a form that matched none of the paths it was written for, and
 only a probe like this one caught it.
 
-Every literal here is invented. The file is on the gate's own exemption list
+The author declaration is retained from published flutter_webrtc metadata;
+the other probes are invented. The file is on the gate's own exemption list
 because, by construction, it contains strings the gate is meant to reject.
 
     python3 tool/test_public_repo_gate.py
 """
 import importlib.util
+import io
 import os
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _spec = importlib.util.spec_from_file_location(
@@ -108,6 +114,33 @@ class GateExemptionTest(unittest.TestCase):
             any("test_public_repo_gate" in entry for entry in gate.EXEMPT),
             "the probe file must be exempt or the gate fails on its own test",
         )
+
+    def test_upstream_author_exemption_is_exact_and_path_scoped(self) -> None:
+        author = "s.author           = { 'CloudWebRTC' => 'duanweiwei1982@gmail.com' }"
+        for rel in gate.UPSTREAM_AUTHOR_FILES:
+            self.assertTrue(gate.is_upstream_author(rel, author))
+            self.assertFalse(gate.is_upstream_author(rel, author + " # changed"))
+            self.assertFalse(
+                gate.is_upstream_author(rel, author.replace("1982", "1983"))
+            )
+        self.assertFalse(gate.is_upstream_author("apps/mobile/example.txt", author))
+
+    def test_operator_denylist_still_checks_upstream_metadata(self) -> None:
+        rel = "packages/flutter_webrtc/macos/flutter_webrtc.podspec"
+        author = "s.author           = { 'CloudWebRTC' => 'duanweiwei1982@gmail.com' }"
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, rel)
+            source.parent.mkdir(parents=True)
+            source.write_text(author + "\n", encoding="utf-8")
+            with patch.object(gate, "ROOT", directory), patch.object(
+                gate, "tracked", return_value=[rel]
+            ), redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(gate.main(), 0)
+                Path(directory, ".public-denylist").write_text(
+                    "CloudWebRTC\n", encoding="utf-8"
+                )
+                self.assertEqual(gate.main(), 1)
+                self.assertIn("denylisted literal", output.getvalue())
 
 
 if __name__ == "__main__":
