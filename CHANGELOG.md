@@ -102,8 +102,9 @@ from the commit log. Nothing here has reached testers yet.
   react — not the people whose reactions had been taken away, everybody. The
   application read the server's "use the usual permissions" as "this person may
   do nothing at all", and a reaction is the first thing that falls off that
-  cliff. The same mistake also hid the notification setting of a thread from
-  every ordinary participant.
+  cliff. The same mistake also hid a thread's notification setting, refused to
+  share a location, and refused to create a poll — for every ordinary
+  participant, on every server that names permissions at all.
 - Nothing users see: an incoming telephone call on Android 11 now has a
   measured answer instead of a guess. It mutes what this application is
   sending 34 ms after the phone starts ringing and unmutes it 100 ms after the
