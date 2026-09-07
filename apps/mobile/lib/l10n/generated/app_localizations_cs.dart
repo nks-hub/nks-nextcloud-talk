@@ -22,7 +22,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get onboardingBody =>
-      'Připojte libovolný podporovaný Nextcloud server. Účty, mezipaměť i práce na pozadí zůstávají přísně oddělené.';
+      'Připojte libovolný podporovaný Nextcloud server. Účty, jejich uložená data i práce na pozadí zůstávají přísně oddělené.';
 
   @override
   String get multiServerTitle => 'Připraveno pro více serverů';

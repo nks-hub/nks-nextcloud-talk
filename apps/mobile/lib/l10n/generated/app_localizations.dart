@@ -125,7 +125,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingBody.
   ///
   /// In en, this message translates to:
-  /// **'Connect any supported Nextcloud server. Accounts, cache and background work stay strictly separated.'**
+  /// **'Connect any supported Nextcloud server. Accounts, their stored data and background work stay strictly separated.'**
   String get onboardingBody;
 
   /// No description provided for @multiServerTitle.

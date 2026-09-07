@@ -4,7 +4,7 @@
   "dateHeaderYesterday": "Yesterday",
   "appTitle": "NKS Talk",
   "onboardingTitle": "Your conversations, one app",
-  "onboardingBody": "Connect any supported Nextcloud server. Accounts, cache and background work stay strictly separated.",
+  "onboardingBody": "Connect any supported Nextcloud server. Accounts, their stored data and background work stay strictly separated.",
   "multiServerTitle": "Built for multiple servers",
   "multiServerBody": "Add personal and work accounts without rebuilding the app or sharing their data.",
   "secureTitle": "Credentials stay on this device",

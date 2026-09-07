@@ -22,7 +22,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingBody =>
-      'Connect any supported Nextcloud server. Accounts, cache and background work stay strictly separated.';
+      'Connect any supported Nextcloud server. Accounts, their stored data and background work stay strictly separated.';
 
   @override
   String get multiServerTitle => 'Built for multiple servers';

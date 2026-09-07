@@ -4,7 +4,7 @@
   "dateHeaderYesterday": "Včera",
   "appTitle": "NKS Talk",
   "onboardingTitle": "Všechny konverzace v jedné aplikaci",
-  "onboardingBody": "Připojte libovolný podporovaný Nextcloud server. Účty, mezipaměť i práce na pozadí zůstávají přísně oddělené.",
+  "onboardingBody": "Připojte libovolný podporovaný Nextcloud server. Účty, jejich uložená data i práce na pozadí zůstávají přísně oddělené.",
   "multiServerTitle": "Připraveno pro více serverů",
   "multiServerBody": "Přidejte osobní i pracovní účty bez nového sestavení aplikace a bez sdílení jejich dat.",
   "secureTitle": "Přihlašovací údaje zůstávají v zařízení",
