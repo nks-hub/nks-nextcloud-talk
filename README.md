@@ -25,27 +25,6 @@ The repository already contains a runnable application in
 - an Android debug build and native runners for Android, iOS, Windows, macOS and
   Linux. Commit `cf13cce` closes the runners.
 
-The freshest automated state is `flutter analyze` with no findings, 354 passing
-Flutter tests with one credential-gated live skip and 569/569 tests of the
-`talk_protocol` package after the `d0660cc` fix. Commit `61decfb` closes the
-attachment runtime and its documented state. Commit `3c74165` closes native
-Android Web Push; the Kotlin unit gate passed 16/16 and the connected gate on
-the `chatujmePixel` emulator 15/15.
-
-The final debug APK of this session is at
-`apps\mobile\build\app\outputs\flutter-apk\app-debug.apk` with SHA-256
-`ce6d29b5c5748454f9b23df5d5cc034432a754e90eee647e3cdb12ac749ab924`.
-The `base.apk` currently installed on `emulator-5554` has the same hash.
-Installation and instrumentation are, however, not a signed-in live Talk smoke
-test: a fresh login, conversations and opening a room on this APK are not yet
-proven.
-
-The Windows release EXE has SHA-256
-`afe945cbce39151ae44761c88bbe76938e0c80eca71057ca35e3d514e2110afd`.
-The development machine is in a Visual Studio pending-reboot state, though, so
-this artifact is not evidence of a repeatable clean build through the default
-toolchain before the machine is restarted.
-
 The Windows build additionally needs a JDK and a configured `JAVA_HOME`. This is
 not because of Android: `sentry_flutter` depends on the `jni` package, which
 registers itself as an FFI plugin on Windows too, and its `find_package(JNI)`
@@ -81,9 +60,35 @@ and the GIF is not sent as an attachment. The only visible external GIPHY link i
 the attribution in the picker. Root history/read-unread, live outbox
 process-death, attachments, voice, real push delivery and calls remain separate
 unfinished slices.
-The exact state is tracked by the
-the maintainer notes and the
-their completion audit.
+
+Which of those slices is finished, and what evidence closed it, is tracked in
+the maintainer notes, which are not part of this repository.
+
+## Running the tests
+
+Measured on 7 September 2026 at `204683b`: `flutter analyze` reports no
+findings, `apps/mobile` passes 2071 tests with 3 skipped, and `talk_protocol`
+passes 1105.
+
+```
+flutter analyze
+cd apps/mobile        && flutter test
+cd packages/talk_protocol && dart test
+```
+
+**`talk_protocol` needs `dart test`, not `flutter test`.** It is a pure Dart
+package, and seven of its tests compile a probe with
+`Platform.resolvedExecutable … compile exe`. Under `flutter test` that
+executable is the Flutter tester rather than the Dart VM, so the compilation
+never returns and all seven die on the 30-second timeout — a red suite that
+looks like a defect and is only the wrong runner.
+
+The three skipped tests are live smokes against a real Nextcloud. They run
+when `NEXTCLOUD_TALK_ORIGIN`, `NEXTCLOUD_TALK_USERNAME` and
+`NEXTCLOUD_TALK_APP_PASSWORD` are set, and the room-scoped search additionally
+wants `NEXTCLOUD_TALK_TEST_ROOM_TOKEN` pointing at a conversation that has
+messages — against an empty room its assertion holds without proving anything.
+`NEXTCLOUD_TALK_SEARCH_TERM` overrides the search term, which defaults to `a`.
 
 ## Push without a per-server rebuild
 
