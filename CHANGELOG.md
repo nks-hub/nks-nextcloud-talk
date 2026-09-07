@@ -98,6 +98,10 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
+- Fixed: the row of call controls ran off the right edge of a phone once the
+  recording button joined it — seven round buttons and a labelled Leave do not
+  fit across 411 points. It breaks onto a second line now instead of being cut
+  off.
 - Fixed: on a server that lets a moderator take reactions away, NOBODY could
   react — not the people whose reactions had been taken away, everybody. The
   application read the server's "use the usual permissions" as "this person may
