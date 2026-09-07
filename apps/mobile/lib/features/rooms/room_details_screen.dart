@@ -26,6 +26,8 @@ import 'room_settings_service.dart';
 part 'room_details_actions.part.dart';
 part 'room_details_background.part.dart';
 part 'room_details_bots.part.dart';
+part 'room_details_breakout.part.dart';
+part 'room_details_breakout_widgets.part.dart';
 part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
@@ -130,6 +132,7 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
 final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with
         _RoomDetailsStateLogic,
+        _RoomBreakoutStateLogic,
         _RoomSipStateLogic,
         _RoomImportanceSensitivityStateLogic,
         _RoomBotsStateLogic {
