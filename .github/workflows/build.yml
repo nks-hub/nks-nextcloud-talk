@@ -96,6 +96,24 @@ jobs:
           flutter pub get
           flutter analyze lib test
           flutter test --reporter expanded
+      # The contract validators are the executable half of the fixtures under
+      # `contracts/`. Nothing ran them until 7 September 2026, and in that time
+      # the rich-chat one had drifted from the Dart it mirrors: it still denied
+      # reactions on `participantPermissions: 0` after the client stopped doing
+      # so, and a fixture written for the fixed behaviour sat red where nobody
+      # looked. Two implementations of one rule need something that compares
+      # them.
+      - name: Validate the protocol contracts
+        run: |
+          python3 -m pip install --quiet jsonschema openapi-spec-validator cryptography
+          for validator in contracts/*/validate_contract.py; do
+            echo "== $validator"
+            python3 "$validator"
+          done
+          for suite in contracts/*/test_validate_contract.py; do
+            echo "== $suite"
+            python3 "$suite"
+          done
       # This repository is public: nothing that names the operator's hosts,
       # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
       - name: Public repository gate
