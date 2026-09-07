@@ -15,8 +15,8 @@ import 'test_support.dart';
 /// FOUND LIVE on the reference server: opening a chat activates the room
 /// session, which bumps the account's session generation, and the ongoing-call
 /// banner asks for the signalling transport at that same moment. The answer was
-/// therefore discarded as a stale session and the banner reported "the call
-/// transport could not be resolved", with no join offered at all.
+/// therefore discarded as a stale session and the banner reported "this call
+/// cannot be joined right now", with no join offered at all.
 void main() {
   late AppDatabase database;
   late AccountRepository accounts;

@@ -230,7 +230,7 @@ void main() {
 
     expect(find.byKey(const Key('call-banner-join')), findsNothing);
     expect(
-      find.text('Sign in again to see how this call is signalled.'),
+      find.text('Sign in again before you can join the call.'),
       findsOneWidget,
     );
   });
@@ -263,7 +263,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Checking how this call is signalled…'), findsOneWidget);
+    expect(find.text('Checking where this call goes…'), findsOneWidget);
   });
 
   testWidgets('a lifecycle failure is localized and retry reloads the room', (
@@ -307,7 +307,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Sign in again to see how this call is signalled.'),
+      find.text('Sign in again before you can join the call.'),
       findsOneWidget,
     );
     expect(find.byKey(const Key('call-banner-join')), findsNothing);
