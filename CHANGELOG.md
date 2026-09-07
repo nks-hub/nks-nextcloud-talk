@@ -27,9 +27,12 @@ from the commit log. Nothing here has reached testers yet.
   file out of the share sheet now has tests — six of them, run on a real
   simulator. It had none, while the code it hands the file to had six, so
   everything proven was downstream of something unproven.
-- Known, not fixed: four tests of the iOS notification-route store fail, and
-  the build pipeline never ran them, so nobody knew. They may only fail because
-  the test host is unsigned; that has not been checked yet.
+- Nothing users see, and it turned out to be nothing wrong: four tests of the
+  iOS notification-route store looked broken. They were not — they only fail
+  when the test host is built unsigned, which strips the entitlement the
+  keychain needs. Run signed, both Apple test suites pass. What is real is that
+  the build pipeline runs neither of them and never has, so they had been red
+  in the one place anybody looked without anything to say so.
 
 ## 0.1.0 (64) — 7 September 2026
 
