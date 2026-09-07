@@ -98,6 +98,38 @@ void main() {
     },
   );
 
+  test(
+    'global recording policy is separate from the stored preset preference',
+    () async {
+      final config =
+          capabilities['ocs']['data']['capabilities']['spreed']['config']
+              as Map;
+      config['call'] = {'recording-consent': 0};
+      final options = await service.prepareCreation(accountId: 'account-a');
+      expect(options.recordingConsentPolicy, 0);
+      await service.createPreparedConversation(
+        options: options,
+        roomName: 'Room',
+        presetIdentifier: 'webinar',
+        password: 'secret',
+      );
+      expect(posts.single.bodyFields['recordingConsent'], '1');
+    },
+  );
+
+  test('changed global recording policy requires another review', () async {
+    final config =
+        capabilities['ocs']['data']['capabilities']['spreed']['config'] as Map;
+    config['call'] = {'recording-consent': 0};
+    final options = await service.prepareCreation(accountId: 'account-a');
+    config['call'] = {'recording-consent': 1};
+    await expectLater(
+      service.createPreparedConversation(options: options, roomName: 'Room'),
+      error(NewConversationError.contextChanged),
+    );
+    expect(posts, isEmpty);
+  });
+
   test('returns the created room when only some invitations failed', () async {
     create = (_) async =>
         http.Response(jsonEncode(createdConversation(status: 202)), 202);

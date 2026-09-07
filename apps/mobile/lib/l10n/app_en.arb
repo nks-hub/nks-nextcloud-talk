@@ -649,9 +649,14 @@
   "newConversationCreateGroupAction": "Create group conversation",
   "newConversationCreatePublicAction": "Create public conversation",
   "newConversationPresetLabel": "Conversation preset",
+  "roomDetailsPublicPasswordTitle": "Allow guests",
+  "roomDetailsPublicPasswordRequired": "Set a password before allowing guests. This server requires one.",
+  "roomDetailsPublicPasswordOptional": "Optional. Leave empty to allow guests without a password.",
+  "roomDetailsPublicPasswordRetained": "The previous password is still stored. Leave empty to keep it, or enter a new password.",
+  "roomDetailsPublicChangeUncertain": "The server did not confirm this change. Refresh the conversation settings before trying again.",
   "newConversationPresetDefault": "Server defaults",
   "newConversationSettingsSummary": "Conversation settings",
-  "newConversationForcedSetting": "{setting} (required by the server)",
+  "newConversationForcedSetting": "{setting} (set by the server)",
   "@newConversationForcedSetting": {
     "placeholders": { "setting": { "type": "String" } }
   },

@@ -12,6 +12,15 @@ void _registerAdministrationTests() {
       ..['type'] = 3;
     var posts = 0;
     final client = MockClient((request) async {
+      if (request.url.path.endsWith('/capabilities')) {
+        return http.Response(
+          jsonEncode(creationCapabilities(presets: false, password: false)),
+          200,
+        );
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/room')) {
+        return _ocsSuccess([posts == 0 ? _conversationRoomJson() : publicJson]);
+      }
       if (request.url.path.endsWith('/participants')) {
         return _ocsSuccess(const <Object?>[]);
       }
@@ -66,6 +75,21 @@ void _registerAdministrationTests() {
     );
     var deletes = 0;
     final client = MockClient((request) async {
+      if (request.url.path.endsWith('/capabilities')) {
+        return http.Response(
+          jsonEncode(creationCapabilities(presets: false, password: false)),
+          200,
+        );
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/room')) {
+        return _ocsSuccess([
+          {
+            ..._conversationRoomJson(),
+            'type': deletes == 0 ? 3 : 2,
+            'hasPassword': false,
+          },
+        ]);
+      }
       if (request.url.path.endsWith('/participants')) {
         return _ocsSuccess(const <Object?>[]);
       }

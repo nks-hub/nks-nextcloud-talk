@@ -21,6 +21,7 @@ part 'room_settings_message_expiration.part.dart';
 part 'room_settings_sip.part.dart';
 part 'room_settings_breakout.part.dart';
 part 'room_settings_recording.part.dart';
+part 'room_settings_public.part.dart';
 
 enum RoomSettingsError {
   accountMissing,
@@ -36,6 +37,7 @@ enum RoomSettingsError {
   serviceUnavailable,
   invalidResponse,
   network,
+  ambiguous,
 }
 
 final class RoomSettingsException implements Exception {
@@ -74,6 +76,9 @@ final class RoomSettingsService {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
+  final _publicOrigins = Expando<_AuthContext>();
+  final _publicUsed = Expando<bool>();
+  final _publicPending = <({String accountId, String roomToken})>{};
   final Map<({String accountId, String roomToken}), Future<void>>
   _readMutationTails = {};
 
@@ -576,26 +581,6 @@ final class RoomSettingsService {
       case LeaveRoomHttpFailure(:final kind):
         throw RoomSettingsException(_mapHttpFailure(kind));
     }
-  }
-
-  /// Turns a group conversation into a public one or back again. The server
-  /// answers with the refreshed room on some of these endpoints and with
-  /// nothing on others, so the caller gets whatever it sent back.
-  Future<ConversationRoom?> setPublic({
-    required String accountId,
-    required String roomToken,
-    required bool public,
-  }) {
-    return _administer(
-      accountId: accountId,
-      roomToken: roomToken,
-      build: (ids) => SetRoomPublicRequest(
-        accountId: ids.accountId,
-        server: ids.server,
-        roomToken: ids.roomToken,
-        public: public,
-      ),
-    );
   }
 
   /// Sets or clears the password of a public conversation.

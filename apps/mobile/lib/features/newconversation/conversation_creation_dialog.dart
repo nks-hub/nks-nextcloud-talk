@@ -289,7 +289,20 @@ final class _ConversationCreationDialogState
                       !options.supportsPassword)
                     Text(strings.newConversationErrorUnavailable),
                   if (options.catalog != null)
-                    _CreationSummary(parameters: parameters, forced: forced),
+                    _CreationSummary(
+                      parameters: {
+                        ...parameters,
+                        if (options.recordingConsentPolicy == 0 ||
+                            options.recordingConsentPolicy == 1)
+                          'recordingConsent': options.recordingConsentPolicy!,
+                      },
+                      forced: {
+                        ...forced,
+                        if (options.recordingConsentPolicy == 0 ||
+                            options.recordingConsentPolicy == 1)
+                          'recordingConsent',
+                      },
+                    ),
                 ],
               ],
             ),

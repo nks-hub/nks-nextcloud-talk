@@ -635,9 +635,14 @@
   "newConversationCreateGroupAction": "Vytvořit skupinovou konverzaci",
   "newConversationCreatePublicAction": "Vytvořit veřejnou konverzaci",
   "newConversationPresetLabel": "Předvolba konverzace",
+  "roomDetailsPublicPasswordTitle": "Povolit hosty",
+  "roomDetailsPublicPasswordRequired": "Před povolením hostů nastavte heslo. Tento server ho vyžaduje.",
+  "roomDetailsPublicPasswordOptional": "Nepovinné. Nechte prázdné, pokud mají hosté vstupovat bez hesla.",
+  "roomDetailsPublicPasswordRetained": "Původní heslo je stále uložené. Nechte prázdné pro jeho zachování, nebo zadejte nové heslo.",
+  "roomDetailsPublicChangeUncertain": "Server tuto změnu nepotvrdil. Před dalším pokusem obnovte nastavení konverzace.",
   "newConversationPresetDefault": "Výchozí nastavení serveru",
   "newConversationSettingsSummary": "Nastavení konverzace",
-  "newConversationForcedSetting": "{setting} (vyžaduje server)",
+  "newConversationForcedSetting": "{setting} (nastavuje server)",
   "@newConversationForcedSetting": {
     "placeholders": { "setting": { "type": "String" } }
   },

@@ -3392,6 +3392,36 @@ abstract class AppLocalizations {
   /// **'Conversation preset'**
   String get newConversationPresetLabel;
 
+  /// No description provided for @roomDetailsPublicPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow guests'**
+  String get roomDetailsPublicPasswordTitle;
+
+  /// No description provided for @roomDetailsPublicPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a password before allowing guests. This server requires one.'**
+  String get roomDetailsPublicPasswordRequired;
+
+  /// No description provided for @roomDetailsPublicPasswordOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Leave empty to allow guests without a password.'**
+  String get roomDetailsPublicPasswordOptional;
+
+  /// No description provided for @roomDetailsPublicPasswordRetained.
+  ///
+  /// In en, this message translates to:
+  /// **'The previous password is still stored. Leave empty to keep it, or enter a new password.'**
+  String get roomDetailsPublicPasswordRetained;
+
+  /// No description provided for @roomDetailsPublicChangeUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not confirm this change. Refresh the conversation settings before trying again.'**
+  String get roomDetailsPublicChangeUncertain;
+
   /// No description provided for @newConversationPresetDefault.
   ///
   /// In en, this message translates to:
@@ -3407,7 +3437,7 @@ abstract class AppLocalizations {
   /// No description provided for @newConversationForcedSetting.
   ///
   /// In en, this message translates to:
-  /// **'{setting} (required by the server)'**
+  /// **'{setting} (set by the server)'**
   String newConversationForcedSetting(String setting);
 
   /// No description provided for @newConversationTypeLabel.

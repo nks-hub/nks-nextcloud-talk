@@ -164,9 +164,18 @@ final class _ParticipantTile extends StatelessWidget {
 /// field holds a secret, and a controller outliving its dialog would keep it
 /// in memory after the dialog is gone.
 final class _PasswordDialog extends StatefulWidget {
-  const _PasswordDialog({required this.strings});
+  const _PasswordDialog({
+    required this.strings,
+    this.allowEmpty = false,
+    this.title,
+    this.helperText,
+  });
 
   final AppLocalizations strings;
+
+  final bool allowEmpty;
+  final String? title;
+  final String? helperText;
 
   @override
   State<_PasswordDialog> createState() => _PasswordDialogState();
@@ -175,6 +184,7 @@ final class _PasswordDialog extends StatefulWidget {
 final class _PasswordDialogState extends State<_PasswordDialog> {
   final TextEditingController _controller = TextEditingController();
   bool _obscured = true;
+  bool _emptyError = false;
 
   @override
   void dispose() {
@@ -188,7 +198,7 @@ final class _PasswordDialogState extends State<_PasswordDialog> {
     final strings = widget.strings;
     return AlertDialog(
       key: const Key('room-details-password-dialog'),
-      title: Text(strings.roomDetailsPasswordDialogTitle),
+      title: Text(widget.title ?? strings.roomDetailsPasswordDialogTitle),
       // Large text can make the body taller than the screen; without this
       // the actions are pushed off the bottom and the dialog cannot be
       // answered at all.
@@ -202,6 +212,12 @@ final class _PasswordDialogState extends State<_PasswordDialog> {
         enableSuggestions: false,
         decoration: InputDecoration(
           labelText: strings.roomDetailsPasswordFieldLabel,
+          helperText: widget.helperText,
+          helperMaxLines: 5,
+          errorText: _emptyError
+              ? strings.newConversationPasswordMissing
+              : null,
+          errorMaxLines: 5,
           suffixIcon: IconButton(
             key: const Key('room-details-password-reveal'),
             icon: Icon(
@@ -224,8 +240,8 @@ final class _PasswordDialogState extends State<_PasswordDialog> {
             final value = _controller.text;
             // An empty value would silently clear the protection instead of
             // setting one; that is what the separate removal action is for.
-            if (value.isEmpty) {
-              Navigator.of(context).pop();
+            if (value.isEmpty && !widget.allowEmpty) {
+              setState(() => _emptyError = true);
               return;
             }
             Navigator.of(context).pop(value);

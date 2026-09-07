@@ -76,7 +76,8 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
   /// Making a conversation public is only offered for a group conversation,
   /// and making it private only for a public one — the server answers `400`
   /// for the other direction.
-  bool get _canToggleGuests => _isModerator && _isGroupOrPublic;
+  bool get _canToggleGuests =>
+      const {1, 2}.contains(_room?.participantType) && _isGroupOrPublic;
 
   /// Letting somebody in only exists where there is a room to let them into.
   ///
@@ -506,35 +507,6 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       }
       setState(() => _room = room ?? _patchCachedRoom(_room, fallback()));
     }, errorMessage: errorMessage ?? _actionErrorMessage);
-  }
-
-  Future<void> _toggleGuests(bool value) async {
-    if (!value &&
-        !await _confirm(
-          key: 'room-details-guests-close-dialog',
-          confirmKey: 'room-details-guests-close-confirm',
-          title: (strings) => strings.roomDetailsGuestsCloseDialogTitle,
-          message: (strings) => strings.roomDetailsGuestsCloseDialogMessage,
-          confirmLabel: (strings) =>
-              strings.roomDetailsGuestsCloseDialogConfirm,
-        )) {
-      return;
-    }
-    await _administer(
-      () => ref
-          .read(roomSettingsServiceProvider)
-          .setPublic(
-            accountId: widget.account.id,
-            roomToken: widget.conversation.token,
-            public: value,
-          ),
-      // Turning guests off also drops any password, because a password only
-      // exists on a public conversation.
-      fallback: () => {
-        'type': value ? _roomTypePublic : _roomTypeGroup,
-        if (!value) 'hasPassword': false,
-      },
-    );
   }
 
   Future<void> _shareGuestLink() async {

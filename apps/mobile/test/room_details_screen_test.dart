@@ -22,6 +22,7 @@ import 'package:nextcloudtalk/platform/media/image_attachment_picker.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'accessibility_probe.dart';
+import 'conversation_creation_test_support.dart';
 import 'test_support.dart';
 
 part 'room_details_administration_test.part.dart';
@@ -33,6 +34,7 @@ part 'room_details_conversation_tags_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
+part 'room_details_public_test.part.dart';
 part 'room_details_sip_info_test.part.dart';
 part 'room_details_shared_items_test.part.dart';
 part 'room_details_test_support.part.dart';
@@ -87,6 +89,7 @@ void main() {
 
   _registerOverviewAndModerationTests();
   _registerAdministrationTests();
+  _registerPublicPasswordTests();
   _registerAvatarAndBanTests();
   _registerBackgroundTests();
   _registerCallNotificationTests();

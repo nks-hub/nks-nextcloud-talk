@@ -7,6 +7,7 @@ final class ConversationCreationOptions {
     required this.supportsPassword,
     required this.forcePasswords,
     required this.supportsExtendedFields,
+    this.recordingConsentPolicy,
   });
 
   final String accountId;
@@ -14,6 +15,7 @@ final class ConversationCreationOptions {
   final bool supportsPassword;
   final bool forcePasswords;
   final bool supportsExtendedFields;
+  final int? recordingConsentPolicy;
 
   Map<String, int> effectiveParameters(
     String? preset,
@@ -81,6 +83,17 @@ extension _PreparedConversationCreation on HttpNewConversationService {
       }
       final config = spreed['config'];
       final conversations = config is Map ? config['conversations'] : null;
+      final call = config is Map ? config['call'] : null;
+      final consentPolicy = call is Map ? call['recording-consent'] : null;
+      if ((call != null && call is! Map) ||
+          (call is Map &&
+              call.containsKey('recording-consent') &&
+              (consentPolicy is! int ||
+                  !const {0, 1, 2}.contains(consentPolicy)))) {
+        throw const NewConversationException(
+          NewConversationError.invalidResponse,
+        );
+      }
       if (conversations != null && conversations is! Map) {
         throw const NewConversationException(
           NewConversationError.invalidResponse,
@@ -118,6 +131,7 @@ extension _PreparedConversationCreation on HttpNewConversationService {
           'conversation-creation-password',
         ),
         forcePasswords: forced == true,
+        recordingConsentPolicy: consentPolicy as int?,
         supportsExtendedFields: capabilities.supportsTalk(
           'conversation-creation-all',
         ),
@@ -328,6 +342,7 @@ bool _sameCreationPolicy(
 ) {
   if (a.supportsPassword != b.supportsPassword ||
       a.forcePasswords != b.forcePasswords ||
+      a.recordingConsentPolicy != b.recordingConsentPolicy ||
       a.supportsExtendedFields != b.supportsExtendedFields) {
     return false;
   }

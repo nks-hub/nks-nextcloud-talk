@@ -32,6 +32,7 @@ part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
+part 'room_details_public.part.dart';
 part 'room_details_shared_items.part.dart';
 part 'room_details_sip.part.dart';
 part 'room_details_support.part.dart';
@@ -133,6 +134,7 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
     with
         _RoomDetailsStateLogic,
         _RoomBreakoutStateLogic,
+        _RoomPublicStateLogic,
         _RoomSipStateLogic,
         _RoomImportanceSensitivityStateLogic,
         _RoomBotsStateLogic {

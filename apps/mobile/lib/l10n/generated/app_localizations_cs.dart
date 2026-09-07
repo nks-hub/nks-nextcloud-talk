@@ -1846,6 +1846,25 @@ class AppLocalizationsCs extends AppLocalizations {
   String get newConversationPresetLabel => 'Předvolba konverzace';
 
   @override
+  String get roomDetailsPublicPasswordTitle => 'Povolit hosty';
+
+  @override
+  String get roomDetailsPublicPasswordRequired =>
+      'Před povolením hostů nastavte heslo. Tento server ho vyžaduje.';
+
+  @override
+  String get roomDetailsPublicPasswordOptional =>
+      'Nepovinné. Nechte prázdné, pokud mají hosté vstupovat bez hesla.';
+
+  @override
+  String get roomDetailsPublicPasswordRetained =>
+      'Původní heslo je stále uložené. Nechte prázdné pro jeho zachování, nebo zadejte nové heslo.';
+
+  @override
+  String get roomDetailsPublicChangeUncertain =>
+      'Server tuto změnu nepotvrdil. Před dalším pokusem obnovte nastavení konverzace.';
+
+  @override
   String get newConversationPresetDefault => 'Výchozí nastavení serveru';
 
   @override
@@ -1853,7 +1872,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String newConversationForcedSetting(String setting) {
-    return '$setting (vyžaduje server)';
+    return '$setting (nastavuje server)';
   }
 
   @override

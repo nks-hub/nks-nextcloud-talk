@@ -206,6 +206,7 @@ String _actionErrorMessage(AppLocalizations strings, RoomSettingsError code) {
     RoomSettingsError.serviceUnavailable ||
     RoomSettingsError.invalidResponse ||
     RoomSettingsError.network => strings.roomDetailsActionErrorGeneric,
+    RoomSettingsError.ambiguous => strings.roomDetailsPublicChangeUncertain,
   };
 }
 

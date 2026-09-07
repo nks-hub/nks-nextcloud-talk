@@ -66,7 +66,7 @@ Map<String, dynamic> creationCapabilities({
       if (password) 'conversation-creation-password',
       if (all) 'conversation-creation-all',
     ],
-    'config': {
+    'config': <String, Object?>{
       'conversations': {'force-passwords': force},
     },
   };

@@ -1845,6 +1845,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newConversationPresetLabel => 'Conversation preset';
 
   @override
+  String get roomDetailsPublicPasswordTitle => 'Allow guests';
+
+  @override
+  String get roomDetailsPublicPasswordRequired =>
+      'Set a password before allowing guests. This server requires one.';
+
+  @override
+  String get roomDetailsPublicPasswordOptional =>
+      'Optional. Leave empty to allow guests without a password.';
+
+  @override
+  String get roomDetailsPublicPasswordRetained =>
+      'The previous password is still stored. Leave empty to keep it, or enter a new password.';
+
+  @override
+  String get roomDetailsPublicChangeUncertain =>
+      'The server did not confirm this change. Refresh the conversation settings before trying again.';
+
+  @override
   String get newConversationPresetDefault => 'Server defaults';
 
   @override
@@ -1852,7 +1871,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String newConversationForcedSetting(String setting) {
-    return '$setting (required by the server)';
+    return '$setting (set by the server)';
   }
 
   @override

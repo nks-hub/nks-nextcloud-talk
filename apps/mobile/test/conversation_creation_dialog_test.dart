@@ -79,7 +79,7 @@ void main() {
       );
       expect(
         find.text(
-          'Participant permissions (required by the server): Send messages',
+          'Participant permissions (set by the server): Send messages',
         ),
         findsOneWidget,
       );
@@ -202,6 +202,27 @@ void main() {
         isNotNull,
       );
       expect(created, isNull);
+    },
+  );
+
+  testWidgets(
+    'server-wide recording policy overrides the visible preset setting',
+    (tester) async {
+      service.options = ConversationCreationOptions(
+        accountId: 'account-a',
+        catalog: creationCatalog(),
+        supportsPassword: true,
+        forcePasswords: false,
+        supportsExtendedFields: true,
+        recordingConsentPolicy: 0,
+      );
+      await open(tester);
+      await preset(tester, 'Webinar');
+      expect(
+        find.text('Recording consent (set by the server): Not required'),
+        findsOneWidget,
+      );
+      expect(find.text('Recording consent: Required'), findsNothing);
     },
   );
 
