@@ -18,10 +18,16 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased — the next build after 64
+## 0.1.0 (65) — 7 September 2026
 
-Collected as the work lands so the next release notes are not reconstructed
-from the commit log. These changes are not published in the testing tracks.
+Android alpha is published through the Google Play Publishing API, which
+reports version code 65 completed. The local Windows installation is updated
+and its account data preserved. Both were built locally, not through CI.
+TestFlight is pending: BroadcastExtension still needs its existing App Group
+assigned in Apple Developer provisioning before an archive can be exported.
+The iOS build and simulator launch passed on the local Apple build host;
+no IPA has been uploaded. This release follows an explicit immediate-release
+exception; incomplete TODO items are not counted as completed release points.
 
 - Idle-presence handling is in progress: a focused window releases chat
   presence after two minutes without user input. Keyboard, pointer, touch,
