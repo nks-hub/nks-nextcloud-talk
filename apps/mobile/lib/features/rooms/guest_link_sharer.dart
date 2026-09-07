@@ -1,4 +1,5 @@
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/foundation.dart';
 
 /// Hands a conversation's guest link to the system share sheet.
 ///
@@ -20,7 +21,12 @@ final class PlatformGuestLinkSharer implements GuestLinkSharer {
         ShareParams(uri: uri, subject: subject),
       );
       return result.status != ShareResultStatus.unavailable;
-    } on Object {
+    } on Object catch (error) {
+      // The caller shows a generic failure, which is right — there is nothing
+      // useful to tell somebody whose share sheet refused. The reason still
+      // has to reach the log, or nobody can tell a missing share target from a
+      // platform channel that threw.
+      debugPrint('[guest-link] sharing failed: $error');
       return false;
     }
   }

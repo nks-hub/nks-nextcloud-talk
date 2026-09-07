@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
@@ -81,8 +82,20 @@ final class PollService implements PollSender {
       await _prepare(key, access: _PollAccess.create);
       return true;
     } on PollServiceException {
+      // The room or the server genuinely does not admit a poll. Expected, and
+      // the menu row is right to stay away.
       return false;
-    } on Object {
+    } on Object catch (error) {
+      // Anything else took the poll off the menu for a reason nobody could
+      // see: `_prepare` reads the credential vault, the cached room and the
+      // capabilities, so a keychain hiccup or one damaged cached row removed
+      // the feature silently. The row still goes — a poll that cannot be
+      // prepared cannot be created — but the reason reaches the log now. The
+      // same swallowed `on Object` cost a day twice on 6 September, on a file
+      // share and on voice playback.
+      debugPrint(
+        '[poll] availability check for ${key.roomToken} failed: $error',
+      );
       return false;
     }
   }

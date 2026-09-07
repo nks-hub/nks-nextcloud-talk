@@ -83,7 +83,11 @@ extension _ChatRepositoryReadMarkers on ChatRepository {
             response.request.roomToken) {
           return ChatMergeOutcome.rejected;
         }
-      } on Object {
+      } on Object catch (error) {
+        // `rejected` reaches the caller either way, but on its own it cannot
+        // tell a room whose JSON no longer parses from one whose token does
+        // not match the request — and those two want opposite fixes.
+        debugPrint('[chat] read-marker room rejected: $error');
         return ChatMergeOutcome.rejected;
       }
 

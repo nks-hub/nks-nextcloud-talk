@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../core/giphy_reference.dart';
@@ -329,14 +330,26 @@ final class AccountRepository {
             .get();
     final rooms = <ConversationRoom>[];
     final invalidTokens = <String>[];
+    Object? firstFailure;
     for (final conversation in cached) {
       try {
         rooms.add(ConversationRoom.fromJson(jsonDecode(conversation.rawJson)));
-      } on Object {
+      } on Object catch (error) {
+        firstFailure ??= error;
         invalidTokens.add(conversation.token);
       }
     }
     if (invalidTokens.isNotEmpty) {
+      // Loudly, because the next line DELETES these rows. One damaged row is
+      // ordinary; a change to what `ConversationRoom.fromJson` accepts fails
+      // every row at once and empties the whole cache, and from the outside
+      // that looks like "the sync returns nothing" rather than like a parser
+      // that stopped agreeing with the database. The count is what tells the
+      // two apart, so it is logged with the first reason.
+      debugPrint(
+        '[accounts] dropping ${invalidTokens.length} of ${cached.length} '
+        'cached conversations for ${account.id}: $firstFailure',
+      );
       await _database.transaction(() async {
         for (final token in invalidTokens) {
           await (_database.delete(_database.cachedConversations)..where(
