@@ -546,8 +546,17 @@ def resolve_capabilities(
     )
     threads = base and "threads" in global_features
     reactions = base and "reactions" in global_features
+    # A bare 0 is the server's "use the defaults", which include reacting — NOT
+    # "nothing is allowed". Testing the bit over a bare zero refuses every
+    # permission at once, which on a server advertising `react-permission` took
+    # reactions away from every ordinary participant. This mirrors
+    # `RichChatCapabilityProfile.resolve` in
+    # `packages/talk_protocol/lib/src/rich_chat/profile.dart`; the two must
+    # agree, and this one lagged the Dart fix because no pipeline runs it.
     reaction_permission = (
-        "react-permission" not in global_features or permissions & 256 == 256
+        "react-permission" not in global_features
+        or permissions == 0
+        or permissions & 256 == 256
     )
     pinned = base and "pinned-messages" in global_features
     return {
