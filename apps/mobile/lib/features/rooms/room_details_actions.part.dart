@@ -447,7 +447,7 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     }
     final timer = _room?.lobbyTimer ?? 0;
     return timer > 0
-        ? strings.roomDetailsLobbyOnUntil(_formatLobbyTimer(timer))
+        ? strings.roomDetailsLobbyOnUntil(_formatLobbyTimer(context, timer))
         : strings.roomDetailsLobbyOn;
   }
 

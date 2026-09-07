@@ -310,7 +310,7 @@ final class _LobbyDialogState extends State<_LobbyDialog> {
             label: Text(
               until == null
                   ? strings.roomDetailsLobbyTimerPick
-                  : _formatLobbyTimer(until.millisecondsSinceEpoch ~/ 1000),
+                  : _formatLobbyTimer(context, until.millisecondsSinceEpoch ~/ 1000),
             ),
             onPressed: _pick,
           ),

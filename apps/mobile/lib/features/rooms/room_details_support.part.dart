@@ -132,17 +132,21 @@ ConversationRoom? _patchCachedRoom(
   }
 }
 
-/// Renders a UNIX timestamp as a local date and time, without pulling in a
-/// locale-aware formatter for one label.
-// ponytail: ISO-ish local time, not a localized format — swap in `intl`'s
-// DateFormat if the label ever needs to read naturally in every locale.
-String _formatLobbyTimer(int secondsSinceEpoch) {
+/// Renders a UNIX timestamp as a local date and time in the reader's locale.
+///
+/// `MaterialLocalizations` already ships with the app for both languages, so
+/// this needs no formatter package of its own. It also answers the twelve- or
+/// twenty-four-hour question from the device rather than assuming.
+String _formatLobbyTimer(BuildContext context, int secondsSinceEpoch) {
   final at = DateTime.fromMillisecondsSinceEpoch(
     secondsSinceEpoch * 1000,
   ).toLocal();
-  String pad(int value) => value.toString().padLeft(2, '0');
-  return '${at.year}-${pad(at.month)}-${pad(at.day)} '
-      '${pad(at.hour)}:${pad(at.minute)}';
+  final localizations = MaterialLocalizations.of(context);
+  final time = localizations.formatTimeOfDay(
+    TimeOfDay.fromDateTime(at),
+    alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+  );
+  return '${localizations.formatShortDate(at)} $time';
 }
 
 Set<String> _decodeTalkFeatures(String source) {

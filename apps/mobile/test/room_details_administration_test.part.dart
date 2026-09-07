@@ -415,9 +415,22 @@ void _registerAdministrationTests() {
       forConversation: lobbied,
       client: client,
     );
+    final lobbySubtitle = _textByKey(tester, 'room-details-lobby-subtitle');
+    expect(lobbySubtitle, startsWith('Only moderators until '));
+    // The date is the reader's, not ISO. `1893456000` is 1 January 2030 UTC,
+    // so the local date is either that day or the last of 2029 depending on
+    // where the test runs — both carry a month name, which the old
+    // `2030-01-01 01:00` shape never did. Asserted as a shape rather than a
+    // literal because the timezone is the machine's.
     expect(
-      _textByKey(tester, 'room-details-lobby-subtitle'),
-      startsWith('Only moderators until '),
+      lobbySubtitle,
+      matches(
+        RegExp(
+          r'(Jan|Dec)\s+\d{1,2},?\s+(2029|2030).*\d{1,2}:\d{2}',
+          caseSensitive: false,
+        ),
+      ),
+      reason: 'the lobby deadline must be formatted for the locale',
     );
 
     await tester.tap(find.byKey(const Key('room-details-lobby-toggle')));
