@@ -21,17 +21,25 @@ to them. Only what is documented from App Store Connect is stated for them.
 ## Unreleased — the next build after 64
 
 Collected as the work lands so the next release notes are not reconstructed
-from the commit log. Nothing here has reached testers yet.
+from the commit log. These changes are not published in the testing tracks.
 
 - New group/public conversations can use server presets and initial passwords.
   The form shows the resulting settings and locks forced values; switching
   presets starts from the server defaults instead of retaining the old preset.
   Password policy errors stay in the form, while an uncertain create disables
   repeat submission. Partial invitation failure still opens the created room.
-  Fresh policy, credential and account checks protect submission. All 44
-  targeted Flutter cases, 1,133 protocol cases, full analysis and a Windows
-  debug build passed. Existing-room public-toggle integration and live server
-  acceptance remain in progress; this does not close the whole preset work.
+  Fresh policy, credential and account checks protect submission. Existing
+  rooms can become public with a password in one request. A fresh read confirms
+  the result because the mutation response may contain stale password metadata.
+  Making a room private retains its stored password; reopening explains that
+  behavior. Server-wide recording-consent policy is shown without replacing
+  the room's stored preset preference.
+  Live creation, public/private transitions, preset readback and original web
+  settings checks passed; owned test rooms were removed. All 2,240 local Flutter
+  tests passed with five skips, alongside 1,133 protocol tests and full analysis.
+  Windows release, Android release, signed macOS and iOS simulator builds passed;
+  Apple checks ran on a Mac, not CI. The local Windows verification installation
+  retains build number 64 and is not a new store or tagged release.
 
 - Conversation polls now support closing, reusable draft management and
   CSV/ODS export through the system save dialog. Publishing a draft creates a
