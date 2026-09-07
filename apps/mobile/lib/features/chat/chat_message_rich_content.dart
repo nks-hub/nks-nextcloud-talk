@@ -489,7 +489,7 @@ final class _RichObjectPill extends StatelessWidget {
     final strings = AppLocalizations.of(context);
     void openPoll() {
       final message = pollScope.message;
-      bool current() {
+      bool messageCurrent() {
         if (!context.mounted) return false;
         final currentScope = context
             .getInheritedWidgetOfExactType<_PollViewerScope>();
@@ -507,15 +507,24 @@ final class _RichObjectPill extends StatelessWidget {
                 pollId;
       }
 
-      if (!current()) return;
+      if (!messageCurrent()) return;
+      final owner = PollInteractionScope.maybeOf(context);
+      if (owner != null &&
+          (owner.roomKey.accountId != pollScope.account.id ||
+              owner.roomKey.roomToken != message.roomToken.value)) {
+        return;
+      }
+      final sender = ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(pollServiceProvider);
+      // The validated poll ID stays pinned; the room outlives recycled cells.
+      final isCurrent = owner?.isCurrent ?? messageCurrent;
       unawaited(
         showDialog<void>(
           context: context,
           builder: (_) => PollViewerDialog(
-            sender: ProviderScope.containerOf(
-              context,
-              listen: false,
-            ).read(pollServiceProvider),
+            sender: sender,
             roomKey: (
               accountId: pollScope.account.id,
               roomToken: message.roomToken.value,
@@ -524,7 +533,7 @@ final class _RichObjectPill extends StatelessWidget {
                   : message.threadId,
             ),
             pollId: pollId,
-            isCurrent: current,
+            isCurrent: isCurrent,
           ),
         ),
       );

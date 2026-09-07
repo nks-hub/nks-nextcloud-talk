@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
+import 'package:nextcloudtalk/features/chat/poll_dialog.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_screen.dart';
 import 'package:nextcloudtalk/features/shareditems/shared_items_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -13,6 +14,48 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'replacing the account cancels the old page and retires its poll scope',
+    (tester) async {
+      final oldPage = Completer<SharedItemsPageResponse>();
+      Future<void>? oldAbort;
+      final requestedAccounts = <String>[];
+      final service = _FakeSharedItemsService(
+        overviewHandler: (accountId, _) async {
+          requestedAccounts.add(accountId);
+          return _overview({
+            SharedItemType.file: [110],
+          });
+        },
+        pageHandler: (accountId, _, type, _, abort) {
+          if (accountId == _account.id) {
+            oldAbort = abort;
+            return oldPage.future;
+          }
+          return _page(type: type, messageIds: [112]);
+        },
+      );
+      await _pumpScreen(tester, service, settle: false);
+      await tester.pump();
+      final oldScope = tester.widget<PollInteractionScope>(
+        find.byType(PollInteractionScope),
+      );
+      await _pumpScreen(
+        tester,
+        service,
+        account: _account.copyWith(id: 'account-b'),
+        conversation: _conversation.copyWith(accountId: 'account-b'),
+      );
+      expect(oldScope.isCurrent(), isFalse);
+      expect(requestedAccounts, ['account-a', 'account-b']);
+      await expectLater(oldAbort, completes);
+      expect(find.byKey(const Key('shared-item-112')), findsOneWidget);
+      oldPage.complete(_page(type: SharedItemType.file, messageIds: [110]));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('shared-item-110')), findsNothing);
+      expect(find.byKey(const Key('shared-item-112')), findsOneWidget);
+    },
+  );
   testWidgets('shows available categories and the selected page', (
     tester,
   ) async {
@@ -200,6 +243,8 @@ Future<void> _pumpScreen(
   SharedItemsService service, {
   bool settle = true,
   double textScaleFactor = 1,
+  StoredAccount account = _account,
+  CachedConversation conversation = _conversation,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -207,9 +252,9 @@ Future<void> _pumpScreen(
       child: localizedTestApp(
         home: MediaQuery(
           data: MediaQueryData(textScaler: TextScaler.linear(textScaleFactor)),
-          child: const SharedItemsScreen(
-            account: _account,
-            conversation: _conversation,
+          child: SharedItemsScreen(
+            account: account,
+            conversation: conversation,
           ),
         ),
       ),

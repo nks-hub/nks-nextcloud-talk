@@ -420,6 +420,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   Widget build(BuildContext context) {
+    final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));
     final operationsValue = ref.watch(textSendOperationsProvider(_key));
     final statusesValue = ref.watch(outgoingMessageStatusesProvider(_key));
@@ -696,124 +697,128 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       ),
     ];
 
-    return Column(
-      key: const Key('chat-room-pane'),
-      children: [
-        if (widget.showHeader)
-          _ChatHeader(
+    return PollInteractionScope(
+      roomKey: interactionKey,
+      isCurrent: () => mounted && _key == interactionKey,
+      child: Column(
+        key: const Key('chat-room-pane'),
+        children: [
+          if (widget.showHeader)
+            _ChatHeader(
+              account: widget.account,
+              conversation: widget.conversation,
+            ),
+          PinnedMessageBanner(
             account: widget.account,
-            conversation: widget.conversation,
+            conversation: liveConversation,
+            pinned: pinned,
+            canHide: profileCanHidePin,
+            onOpen: (messageId) => unawaited(_jumpToMessage(messageId)),
+            onHide: (messageId) => unawaited(_hidePinnedMessage(messageId)),
           ),
-        PinnedMessageBanner(
-          account: widget.account,
-          conversation: liveConversation,
-          pinned: pinned,
-          canHide: profileCanHidePin,
-          onOpen: (messageId) => unawaited(_jumpToMessage(messageId)),
-          onHide: (messageId) => unawaited(_hidePinnedMessage(messageId)),
-        ),
-        if (profileCanSchedule && scheduledMessageCount(liveConversation) > 0)
-          ListTile(
-            key: const Key('open-scheduled-messages'),
-            dense: true,
-            leading: const Icon(Icons.schedule_send_outlined),
-            title: Text(strings.scheduledMessagesOpen),
-            onTap: () => unawaited(_openScheduledMessages()),
-          ),
-        if (_syncing)
-          LinearProgressIndicator(
-            minHeight: 3,
-            semanticsLabel: AppLocalizations.of(context).syncing,
-          ),
-        if (error != null) _ChatErrorNotice(error: error, onRetry: _sync),
-        Expanded(
-          child: showInitialLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  children: [
-                    _pointerSelectable(
-                      _ChatTimeline(
-                        account: widget.account,
-                        conversation: widget.conversation,
-                        threadId: widget.threadId,
-                        inlineReplies:
-                            ref.watch(replyLayoutProvider) ==
-                            ReplyLayout.inline,
-                        messages: messages,
-                        blocks: scopeBlocks,
-                        pending: pending,
-                        hasOlder: scope?.hasHistory ?? false,
-                        loadingOlder: _loadingOlder,
-                        controller: _scrollController,
-                        onLoadOlder: () => unawaited(_loadOlder()),
-                        onRetry: _sync,
-                        onResend: _confirmResend,
-                        onCancel: (operation) =>
-                            unawaited(_cancelPending(operation)),
-                        onOpenThread: _openThread,
-                        onMessageActions: handleMessageActions,
-                        onReplySwipe: canReplyToMessage ? _startReply : null,
-                        onReactionTap: handleReactionTap,
-                        onJumpToMessage: (messageId) =>
-                            unawaited(_jumpToMessage(messageId)),
-                        jumpTargetId: _jumpTargetId,
-                        jumpTargetKey: _jumpTargetKey,
-                        highlightedMessageId: _highlightedMessageId,
-                        deliveryStates: deliveryStates,
-                        lastCommonRead: _cursorValue(scope?.lastCommonRead),
-                        anchorMessageId: _anchorMessageId,
-                      ),
-                    ),
-                    if (_awayFromNewest)
-                      Positioned(
-                        right: 16,
-                        bottom: 16,
-                        child: _JumpToNewestButton(
-                          onPressed: () => unawaited(_jumpToNewest()),
+          if (profileCanSchedule && scheduledMessageCount(liveConversation) > 0)
+            ListTile(
+              key: const Key('open-scheduled-messages'),
+              dense: true,
+              leading: const Icon(Icons.schedule_send_outlined),
+              title: Text(strings.scheduledMessagesOpen),
+              onTap: () => unawaited(_openScheduledMessages()),
+            ),
+          if (_syncing)
+            LinearProgressIndicator(
+              minHeight: 3,
+              semanticsLabel: AppLocalizations.of(context).syncing,
+            ),
+          if (error != null) _ChatErrorNotice(error: error, onRetry: _sync),
+          Expanded(
+            child: showInitialLoading
+                ? const Center(child: CircularProgressIndicator())
+                : Stack(
+                    children: [
+                      _pointerSelectable(
+                        _ChatTimeline(
+                          account: widget.account,
+                          conversation: widget.conversation,
+                          threadId: widget.threadId,
+                          inlineReplies:
+                              ref.watch(replyLayoutProvider) ==
+                              ReplyLayout.inline,
+                          messages: messages,
+                          blocks: scopeBlocks,
+                          pending: pending,
+                          hasOlder: scope?.hasHistory ?? false,
+                          loadingOlder: _loadingOlder,
+                          controller: _scrollController,
+                          onLoadOlder: () => unawaited(_loadOlder()),
+                          onRetry: _sync,
+                          onResend: _confirmResend,
+                          onCancel: (operation) =>
+                              unawaited(_cancelPending(operation)),
+                          onOpenThread: _openThread,
+                          onMessageActions: handleMessageActions,
+                          onReplySwipe: canReplyToMessage ? _startReply : null,
+                          onReactionTap: handleReactionTap,
+                          onJumpToMessage: (messageId) =>
+                              unawaited(_jumpToMessage(messageId)),
+                          jumpTargetId: _jumpTargetId,
+                          jumpTargetKey: _jumpTargetKey,
+                          highlightedMessageId: _highlightedMessageId,
+                          deliveryStates: deliveryStates,
+                          lastCommonRead: _cursorValue(scope?.lastCommonRead),
+                          anchorMessageId: _anchorMessageId,
                         ),
                       ),
-                  ],
-                ),
-        ),
-        if (_emojiPickerOpen && !readOnly)
-          _InlineEmojiPanel(
-            accountId: AccountId.parse(_key.accountId),
-            usageStore: ref.read(emojiUsageStoreProvider),
-            labels: _emojiPickerLabels(strings),
-            onClose: _closeEmojiPicker,
-            onSelected: _insertEmoji,
+                      if (_awayFromNewest)
+                        Positioned(
+                          right: 16,
+                          bottom: 16,
+                          child: _JumpToNewestButton(
+                            onPressed: () => unawaited(_jumpToNewest()),
+                          ),
+                        ),
+                    ],
+                  ),
           ),
-        ChatTypingBanner(names: typingNames),
-        _ChatComposer(
-          replyTo: _replyTo,
-          onCancelReply: () => setState(() => _replyTo = null),
-          controller: _composer,
-          focusNode: _composerFocusNode,
-          // A thread opens beside an existing conversation instead of
-          // replacing it, so it reads as a reply the user is about to type —
-          // but only where a hardware keyboard is the norm. Auto-raising the
-          // soft keyboard on a phone would be hostile.
-          autofocus: widget.threadId != null && context.sendsOnEnter,
-          sending: _sending,
-          hasAttachment: () => _mediaComposerController.hasPreparedAttachment,
-          onSubmit: _send,
-          onPasteImage: (image) => _mediaComposerController.attachImageBytes(
-            image.bytes,
-            mimeType: image.mimeType,
-            displayName: image.displayName,
+          if (_emojiPickerOpen && !readOnly)
+            _InlineEmojiPanel(
+              accountId: AccountId.parse(_key.accountId),
+              usageStore: ref.read(emojiUsageStoreProvider),
+              labels: _emojiPickerLabels(strings),
+              onClose: _closeEmojiPicker,
+              onSelected: _insertEmoji,
+            ),
+          ChatTypingBanner(names: typingNames),
+          _ChatComposer(
+            replyTo: _replyTo,
+            onCancelReply: () => setState(() => _replyTo = null),
+            controller: _composer,
+            focusNode: _composerFocusNode,
+            // A thread opens beside an existing conversation instead of
+            // replacing it, so it reads as a reply the user is about to type —
+            // but only where a hardware keyboard is the norm. Auto-raising the
+            // soft keyboard on a phone would be hostile.
+            autofocus: widget.threadId != null && context.sendsOnEnter,
+            sending: _sending,
+            hasAttachment: () => _mediaComposerController.hasPreparedAttachment,
+            onSubmit: _send,
+            onPasteImage: (image) => _mediaComposerController.attachImageBytes(
+              image.bytes,
+              mimeType: image.mimeType,
+              displayName: image.displayName,
+            ),
+            postingBlock: postingAccess.block,
+            mentionSource: mentionSource?.valueOrNull,
+            mediaComposer: attachmentDependencies == null
+                ? const SizedBox.shrink()
+                : _buildMediaComposer(
+                    attachmentDependencies,
+                    leadingAction: leadingComposerAction,
+                    idleActions: idleComposerActions,
+                    trailingActions: trailingComposerActions,
+                  ),
           ),
-          postingBlock: postingAccess.block,
-          mentionSource: mentionSource?.valueOrNull,
-          mediaComposer: attachmentDependencies == null
-              ? const SizedBox.shrink()
-              : _buildMediaComposer(
-                  attachmentDependencies,
-                  leadingAction: leadingComposerAction,
-                  idleActions: idleComposerActions,
-                  trailingActions: trailingComposerActions,
-                ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

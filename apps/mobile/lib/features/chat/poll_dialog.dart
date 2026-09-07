@@ -12,6 +12,26 @@ part 'poll_viewer_dialog.dart';
 part 'poll_management_actions.dart';
 part 'poll_drafts_dialog.dart';
 
+/// Holds an opened poll in its room scope even when the source cell is recycled.
+final class PollInteractionScope extends InheritedWidget {
+  const PollInteractionScope({
+    super.key,
+    required this.roomKey,
+    required this.isCurrent,
+    required super.child,
+  });
+
+  final bool Function() isCurrent;
+  final PollRoomKey roomKey;
+
+  static PollInteractionScope? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PollInteractionScope>();
+
+  @override
+  bool updateShouldNotify(PollInteractionScope oldWidget) =>
+      isCurrent != oldWidget.isCurrent;
+}
+
 String _pollError(AppLocalizations strings, PollServiceError error) =>
     switch (error) {
       PollServiceError.unsupported => strings.pollUnsupported,

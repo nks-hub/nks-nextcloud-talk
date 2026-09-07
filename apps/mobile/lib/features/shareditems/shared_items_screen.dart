@@ -9,6 +9,7 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../chat/chat_message_content.dart';
 import '../chat/chat_room_pane.dart';
+import '../chat/poll_dialog.dart';
 import '../search/message_search_thread_screen.dart';
 import 'shared_items_service.dart';
 
@@ -47,6 +48,17 @@ final class _SharedItemsScreenState extends ConsumerState<SharedItemsScreen> {
   void initState() {
     super.initState();
     unawaited(_loadOverview());
+  }
+
+  @override
+  void didUpdateWidget(covariant SharedItemsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.account.id != widget.account.id ||
+        oldWidget.conversation.token != widget.conversation.token) {
+      _navigationGeneration++;
+      _openingMessage = false;
+      unawaited(_loadOverview());
+    }
   }
 
   @override
@@ -326,27 +338,39 @@ final class _SharedItemsScreenState extends ConsumerState<SharedItemsScreen> {
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
-    return Scaffold(
-      key: const Key('shared-items-screen'),
-      appBar: AppBar(title: Text(strings.sharedItemsTitle)),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              if (_types.isNotEmpty) _categoryPicker(strings),
-              Expanded(child: _content(strings)),
-            ],
-          ),
-          if (_openingMessage)
-            const Positioned(
-              left: 0,
-              top: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                key: Key('shared-items-message-progress'),
-              ),
+    final roomKey = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+      threadId: null,
+    );
+    return PollInteractionScope(
+      roomKey: roomKey,
+      isCurrent: () =>
+          mounted &&
+          widget.account.id == roomKey.accountId &&
+          widget.conversation.token == roomKey.roomToken,
+      child: Scaffold(
+        key: const Key('shared-items-screen'),
+        appBar: AppBar(title: Text(strings.sharedItemsTitle)),
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                if (_types.isNotEmpty) _categoryPicker(strings),
+                Expanded(child: _content(strings)),
+              ],
             ),
-        ],
+            if (_openingMessage)
+              const Positioned(
+                left: 0,
+                top: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  key: Key('shared-items-message-progress'),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
