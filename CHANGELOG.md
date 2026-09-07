@@ -80,6 +80,11 @@ from the commit log. Nothing here has reached testers yet.
   it exists to keep out — so on a build server that half matched nothing while
   the summary read the same as a complete local run. It names the scope now,
   and the pipeline restores the list from a secret when one is configured.
+- That gate now has a test. Each of its eight rules is probed against lines it
+  must reject and lines it must not, because a rule that matches nothing
+  reports the same "no findings" as a clean repository — and one rule had
+  shipped that morning in exactly that state. Breaking a rule on purpose was
+  tried; the suite catches it.
 
 ## 0.1.0 (64) — 7 September 2026
 
