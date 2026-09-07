@@ -134,6 +134,11 @@ void main() {
 
     expect(find.byKey(const Key('call-banner')), findsOneWidget);
     expect(find.text('02:05'), findsOneWidget);
+    expect(
+      find.text('The call runs through this Nextcloud.'),
+      findsOneWidget,
+      reason: 'the internal transport fills the same slot as the external one',
+    );
 
     now = callStart.add(const Duration(minutes: 2, seconds: 6));
     await tester.pump(const Duration(seconds: 1));

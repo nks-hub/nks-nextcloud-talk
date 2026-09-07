@@ -18,10 +18,17 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased — the next build after 63
+## Unreleased — the next build after 64
 
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
+
+## 0.1.0 (64) — 7 September 2026
+
+Twenty-six items, and most of them were found by reading rather than by using:
+two read-only audits took the falsifiable sentences out of the project's own
+notes and checked them against the code. Nine defects came out of that, and the
+worst of them had been shipped for weeks without anybody noticing.
 
 - Fixed: the settings asked the server about relay servers far too often. After
   the settings screen had been opened once, every arriving message sent another
