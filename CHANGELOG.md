@@ -51,6 +51,20 @@ from the commit log. Nothing here has reached testers yet.
   never be committed. Seven more links, in the architecture documents, pointed
   at research notes that are not published; they say so now instead of
   pretending to be links.
+- **Reacting was denied by half the project.** The client stopped reading a
+  server's `permissions: 0` as "nothing allowed" when that defect was fixed,
+  but the Python validator that mirrors the same rule for the contract
+  fixtures did not — and the fixture written for the fixed behaviour had been
+  sitting red ever since, because no pipeline had ever run those validators.
+  Nobody would have seen it. The rule now matches the client, and the pipeline
+  runs all thirteen validators; putting the defect back was tried, and the
+  step fails.
+- The commands the architecture documents give for running those validators
+  are commands a reader can run. They had been written with a local
+  token-proxy wrapper and absolute paths into one machine's SDK directory, so
+  every documented verification in the repository was unrunnable by anybody
+  else. The repository gate now rejects both, and was checked by reinstating
+  the leak.
 
 ## 0.1.0 (64) — 7 September 2026
 
