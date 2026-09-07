@@ -117,6 +117,42 @@ definitions:
         flutter analyze lib test
         flutter test --reporter expanded
 
+    # The Apple unit suites, which nothing ran until 7 September 2026 — this
+    # file had no `xcodebuild test` at all, so `RunnerTests` could have been red
+    # for weeks with nothing to say so.
+    #
+    # DO NOT ADD `CODE_SIGNING_ALLOWED=NO` HERE. It is on the macOS BUILD step
+    # for a good reason and it is poison for these tests: an unsigned host
+    # embeds no entitlements, `Runner.entitlements` never reaches the app, and
+    # the four `PushNotificationRouteStore` tests fail on a keychain query the
+    # system refuses. That looks exactly like a broken route store and is not
+    # one. A simulator build signs itself ad-hoc, so nothing has to be fetched
+    # or unlocked here.
+    #
+    # The destination is resolved to a UDID rather than written as a name:
+    # `OS:latest` resolves against the newest SDK, which on a machine whose
+    # simulators lag behind it names a runtime with no devices, and xcodebuild
+    # exits 70 without saying why.
+    - &test_apple
+      name: Test the Apple targets
+      script: |
+        set -e
+        cd apps/mobile
+        flutter build ios --config-only --simulator
+        udid=$(xcrun simctl list devices available --json           | python3 -c 'import json,sys;
+        devices = json.load(sys.stdin)["devices"]
+        for runtime, entries in sorted(devices.items()):
+            if "iOS" not in runtime:
+                continue
+            for entry in entries:
+                if entry.get("isAvailable") and "iPhone" in entry["name"]:
+                    print(entry["udid"]); raise SystemExit
+        raise SystemExit("no available iPhone simulator")')
+        echo "Testing on simulator $udid"
+        for scheme in Runner ShareExtensionTests; do
+          xcodebuild test -workspace ios/Runner.xcworkspace -scheme "$scheme"             -destination "platform=iOS Simulator,id=$udid"
+        done
+
 workflows:
   ios-testflight:
     name: iOS TestFlight
@@ -149,6 +185,9 @@ workflows:
       - *test_app
       - name: Install pods
         script: cd apps/mobile/ios && pod install
+      # After the pods, because the workspace has to exist, and before the
+      # signing, because these need no identity of their own.
+      - *test_apple
       # Script-based, not the declarative `ios_signing:` block: that one only
       # FETCHES an existing profile and fails with "No matching profiles found
       # for bundle identifier … and distribution type app_store" when there is
