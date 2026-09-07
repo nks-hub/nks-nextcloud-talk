@@ -827,7 +827,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatHistoryGapNotice.
   ///
   /// In en, this message translates to:
-  /// **'Some messages between here are missing'**
+  /// **'Some messages are missing here'**
   String get chatHistoryGapNotice;
 
   /// No description provided for @readOnlyConversation.
@@ -1013,7 +1013,7 @@ abstract class AppLocalizations {
   /// No description provided for @threadManagementConversationMissing.
   ///
   /// In en, this message translates to:
-  /// **'This conversation is not available in the local cache yet.'**
+  /// **'This conversation is not available on this device yet.'**
   String get threadManagementConversationMissing;
 
   /// No description provided for @threadManagementDetailTitle.
@@ -2165,7 +2165,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsCallRelayOnlyDescription.
   ///
   /// In en, this message translates to:
-  /// **'Send calls through the TURN server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.'**
+  /// **'Send calls through the relay server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.'**
   String get settingsCallRelayOnlyDescription;
 
   /// No description provided for @settingsReplyLayoutInline.
@@ -4745,7 +4745,7 @@ abstract class AppLocalizations {
   /// No description provided for @roomDetailsAvatarColorDefault.
   ///
   /// In en, this message translates to:
-  /// **'Follow bright or dark mode'**
+  /// **'Follow light or dark mode'**
   String get roomDetailsAvatarColorDefault;
 
   /// No description provided for @roomDetailsChatBackgroundAction.
@@ -5417,13 +5417,13 @@ abstract class AppLocalizations {
   /// No description provided for @pollChecking.
   ///
   /// In en, this message translates to:
-  /// **'Checking poll support'**
+  /// **'Checking poll support…'**
   String get pollChecking;
 
   /// No description provided for @pollLoading.
   ///
   /// In en, this message translates to:
-  /// **'Loading poll'**
+  /// **'Loading poll…'**
   String get pollLoading;
 
   /// No description provided for @pollReloadAction.

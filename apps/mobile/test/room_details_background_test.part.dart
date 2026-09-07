@@ -54,7 +54,7 @@ void _registerBackgroundTests() {
       tester,
       () =>
           _textByKey(tester, 'room-details-chat-background-subtitle') ==
-          'Follow bright or dark mode',
+          'Follow light or dark mode',
     );
     expect(await tester.runAsync(() => store.read(key)), isNull);
   });

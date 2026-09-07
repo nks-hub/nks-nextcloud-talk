@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// English on a Czech screen.
 const Set<String> _sharedWithEnglish = {
   'appTitle',
+  'callAudioRouteBluetooth',
   'emojiPickerTitle',
   'giphyPoweredBy',
   'locationCoordinates',

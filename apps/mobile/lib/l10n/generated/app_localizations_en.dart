@@ -409,7 +409,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get silentSendOn => 'Sending without notification';
 
   @override
-  String get chatHistoryGapNotice => 'Some messages between here are missing';
+  String get chatHistoryGapNotice => 'Some messages are missing here';
 
   @override
   String get readOnlyConversation => 'This conversation is read-only.';
@@ -520,7 +520,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get threadManagementConversationMissing =>
-      'This conversation is not available in the local cache yet.';
+      'This conversation is not available on this device yet.';
 
   @override
   String get threadManagementDetailTitle => 'Thread details';
@@ -1168,7 +1168,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsCallRelayOnlyDescription =>
-      'Send calls through the TURN server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.';
+      'Send calls through the relay server your Nextcloud administrator set up instead of connecting directly. Slower, but it gets through a network that blocks direct connections. Applies to the next call.';
 
   @override
   String get settingsReplyLayoutInline => 'In the conversation';
@@ -2614,7 +2614,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsAvatarColorLabel => 'Background colour';
 
   @override
-  String get roomDetailsAvatarColorDefault => 'Follow bright or dark mode';
+  String get roomDetailsAvatarColorDefault => 'Follow light or dark mode';
 
   @override
   String get roomDetailsChatBackgroundAction => 'Chat background';
@@ -2986,10 +2986,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollMenuAction => 'Poll';
 
   @override
-  String get pollChecking => 'Checking poll support';
+  String get pollChecking => 'Checking poll support…';
 
   @override
-  String get pollLoading => 'Loading poll';
+  String get pollLoading => 'Loading poll…';
 
   @override
   String get pollReloadAction => 'Try again';

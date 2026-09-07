@@ -60,7 +60,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get checkingServer => 'Kontrola serveru…';
 
   @override
-  String get openingLogin => 'Otevírá se bezpečné přihlášení';
+  String get openingLogin => 'Otevírá se bezpečné přihlášení…';
 
   @override
   String get waitingForLogin => 'Dokončete přihlášení v prohlížeči';
@@ -525,7 +525,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get threadManagementConversationMissing =>
-      'Tato konverzace ještě není v místní mezipaměti.';
+      'Tato konverzace zatím není v tomto zařízení dostupná.';
 
   @override
   String get threadManagementDetailTitle => 'Detail vlákna';
@@ -698,7 +698,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get confirmingAttachment => 'Potvrzování přílohy…';
 
   @override
-  String get cancellingUpload => 'Rušení nahrávání';
+  String get cancellingUpload => 'Rušení nahrávání…';
 
   @override
   String get imageSent => 'Příloha byla odeslána';
@@ -737,7 +737,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String replyingTo(Object name) {
-    return 'Odpověď uživateli $name';
+    return 'Odpověď pro $name';
   }
 
   @override
@@ -1168,7 +1168,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsCallRelayOnlyDescription =>
-      'Posílat hovory přes TURN server, který nastavil správce tvého Nextcloudu, místo přímého spojení. Je to pomalejší, ale projde to sítí, která přímé spojení blokuje. Projeví se u dalšího hovoru.';
+      'Posílat hovory přes přenosový server, který nastavil správce vašeho Nextcloudu, místo přímého spojení. Je to pomalejší, ale projde to sítí, která přímé spojení blokuje. Projeví se u dalšího hovoru.';
 
   @override
   String get settingsReplyLayoutInline => 'V konverzaci';
@@ -1240,7 +1240,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get settingsDesktopAutostartChecking =>
-      'Kontrola systémového automatického spuštění';
+      'Kontrola systémového automatického spuštění…';
 
   @override
   String get settingsDesktopAutostartOnSubtitle =>
@@ -1270,7 +1270,7 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
-  String get settingsUpdateCheckChecking => 'Zjišťuje se to…';
+  String get settingsUpdateCheckChecking => 'Dotaz na GitHub…';
 
   @override
   String get settingsUpdateCheckUpToDate => 'Nic novějšího zatím nevyšlo.';
@@ -1378,7 +1378,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'O oprávnění notifikací se nepodařilo požádat.';
 
   @override
-  String get settingsPushTransportProxy => 'Vlastní proxy';
+  String get settingsPushTransportProxy => 'Proxy aplikace';
 
   @override
   String get settingsPushTransportProxySubtitle =>
@@ -1900,7 +1900,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String roomDetailsRemoveDialogMessage(String name) {
-    return '$name ztratí přístup do této konverzace, dokud ho někdo znovu nepozve.';
+    return '$name ztratí přístup do této konverzace, dokud nedostane novou pozvánku.';
   }
 
   @override
@@ -1928,7 +1928,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callStartVideo => 'Zahájit hovor s videem';
 
   @override
-  String get callBannerLeave => 'Odpojit se z hovoru';
+  String get callBannerLeave => 'Opustit hovor';
 
   @override
   String get callBannerMute => 'Ztlumit mikrofon';
@@ -1952,7 +1952,7 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callAudioRouteEarpiece => 'Sluchátko telefonu';
 
   @override
-  String get callAudioRouteBluetooth => 'Bluetooth sluchátka';
+  String get callAudioRouteBluetooth => 'Bluetooth';
 
   @override
   String get callAudioRouteWiredHeadset => 'Drátová sluchátka';
@@ -2155,7 +2155,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsDeleteRejected =>
-      'Tuto konverzaci nelze smazat. Konverzaci jeden na jednoho lze jen opustit.';
+      'Tuto konverzaci nelze smazat. Soukromou konverzaci lze jen opustit.';
 
   @override
   String get saveImage => 'Uložit obrázek';
@@ -2364,7 +2364,7 @@ class AppLocalizationsCs extends AppLocalizations {
       'Odkaz přestane fungovat a hosté, kteří přes něj přišli, ztratí přístup. Pozvaných účastníků se to netýká.';
 
   @override
-  String get roomDetailsGuestsCloseDialogConfirm => 'Změnit na soukromou';
+  String get roomDetailsGuestsCloseDialogConfirm => 'Zakázat hosty';
 
   @override
   String get roomDetailsInviteLinkAction => 'Sdílet odkaz pro hosty';
@@ -2555,7 +2555,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get roomDetailsSipNotConfigured =>
-      'SIP připojení není na tomto serveru nakonfigurované.';
+      'SIP připojení není na tomto serveru nastavené.';
 
   @override
   String get roomDetailsSipDialInHeader => 'Údaje pro telefonické připojení';
@@ -2640,7 +2640,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String roomDetailsBanDialogMessage(String name) {
-    return '$name bude z konverzace odebrán a nepřipojí se zpět, dokud ban nezrušíte.';
+    return '$name ztratí přístup do konverzace a nepřipojí se zpět, dokud ban nezrušíte.';
   }
 
   @override
@@ -2659,7 +2659,8 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsBansEmpty => 'Nikdo není zabanovaný.';
 
   @override
-  String get roomDetailsBansLoadError => 'Seznam zákazů se nepodařilo načíst.';
+  String get roomDetailsBansLoadError =>
+      'Seznam zabanovaných účastníků se nepodařilo načíst.';
 
   @override
   String get roomDetailsUnbanAction => 'Zrušit ban';
@@ -2987,10 +2988,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pollMenuAction => 'Anketa';
 
   @override
-  String get pollChecking => 'Ověřování podpory anket';
+  String get pollChecking => 'Ověřování podpory anket…';
 
   @override
-  String get pollLoading => 'Načítání ankety';
+  String get pollLoading => 'Načítání ankety…';
 
   @override
   String get pollReloadAction => 'Zkusit znovu';
@@ -3017,7 +3018,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String typingOneOther(String first, String second, String third) {
-    return '$first, $second, $third a jeden další píší…';
+    return '$first, $second, $third a někdo další píší…';
   }
 
   @override
