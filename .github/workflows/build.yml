@@ -114,6 +114,20 @@ jobs:
             echo "== $suite"
             python3 "$suite"
           done
+      # The scanner reports a rule and a line, never the value it matched, so a
+      # secret does not escape into the log by being reported. It had run
+      # nowhere until 7 September 2026 and was red the whole time on a fixture
+      # token spelled `secret …`; the false positive is gone and a planted
+      # credential was checked to still trip it.
+      # The two suites next to it are the tests OF the gates — the license gate
+      # runs from Gradle in the android job, but nothing had ever checked that
+      # either gate still does what it claims.
+      - name: Secret log scan and the gates' own tests
+        working-directory: apps/mobile
+        run: |
+          python3 tool/secret_log_scan.py
+          python3 tool/test_secret_log_scan.py
+          python3 tool/test_release_license_gate.py
       # This repository is public: nothing that names the operator's hosts,
       # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
       - name: Public repository gate
