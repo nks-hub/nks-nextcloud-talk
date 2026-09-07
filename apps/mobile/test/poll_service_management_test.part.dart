@@ -363,10 +363,12 @@ final class _ManagedPollServer {
 
   Future<http.Response> _handle(http.Request request) async {
     await beforeReply?.call(request);
-    if (request.url.path.endsWith('/cloud/capabilities'))
+    if (request.url.path.endsWith('/cloud/capabilities')) {
       return _capabilities(features);
-    if (request.url.path.endsWith('/cloud/user'))
+    }
+    if (request.url.path.endsWith('/cloud/user')) {
       return _reply({'id': 'canonical-user', 'displayname': 'User'});
+    }
     if (request.url.path.endsWith('/api/v4/room')) {
       final room =
           Map<String, Object?>.from(
@@ -377,15 +379,17 @@ final class _ManagedPollServer {
             ..addAll(roomOverrides);
       return _reply([room]);
     }
-    if (!request.url.path.contains('/poll/'))
+    if (!request.url.path.contains('/poll/')) {
       throw StateError('Unexpected endpoint');
+    }
     if (request.method != 'GET') {
       mutations.add(request);
       if (failMutation) throw http.ClientException('connection lost');
     }
     final segments = request.url.pathSegments;
-    if (segments.last == 'drafts')
+    if (segments.last == 'drafts') {
       return _reply(polls.values.where((p) => p['status'] == 2).toList());
+    }
     if (segments.contains('export')) {
       return segments.last == 'csv'
           ? http.Response(
