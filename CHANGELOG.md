@@ -65,6 +65,12 @@ from the commit log. Nothing here has reached testers yet.
   every documented verification in the repository was unrunnable by anybody
   else. The repository gate now rejects both, and was checked by reinstating
   the leak.
+- The secret scanner runs in the pipeline, and is no longer red. It had been
+  failing on a test's fixture token — the word `secret` in an assertion about
+  URL-encoding, not a credential — and since nothing ran the scanner, nothing
+  said so. The fixture is reworded rather than the rule relaxed; a planted
+  credential still trips it. The two suites that test the gates themselves run
+  now too.
 
 ## 0.1.0 (64) — 7 September 2026
 
