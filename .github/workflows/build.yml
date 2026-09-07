@@ -140,8 +140,24 @@ jobs:
           python3 tool/test_release_license_gate.py
       # This repository is public: nothing that names the operator's hosts,
       # machines, accounts or identifiers may be committed (CONTRIBUTING.md).
+      #
+      # The gate has two halves. The generic patterns are in the script and
+      # always run. The operator's own literal hosts and machine names live in
+      # `.public-denylist`, which is gitignored because committing it would
+      # publish the exact strings it exists to keep out — so in CI that half
+      # ran on nothing, and the summary line said "0 finding(s)" either way.
+      # It now says which half it checked, and the file is restored here from
+      # a secret when one is configured. Without the secret the step still
+      # runs and still says so in its own output; it is a weaker check, not a
+      # silent one.
       - name: Public repository gate
-        run: python3 tool/public_repo_gate.py
+        env:
+          PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
+        run: |
+          if [ -n "$PUBLIC_DENYLIST" ]; then
+            printf '%s\n' "$PUBLIC_DENYLIST" > .public-denylist
+          fi
+          python3 tool/public_repo_gate.py
 
   android:
     name: android
