@@ -23,6 +23,15 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. These changes are not published in the testing tracks.
 
+- Permission administration has validated request/response and HTTP transport
+  support for room defaults, individual attendee rights and @all permissions.
+  It preserves inheritance versus explicit restrictions, enforces advertised
+  and forced masks, and rejects successful responses for a different target.
+  Twenty-one new protocol and seven network cases pass; the complete protocol
+  suite has 1,154 passes and local Flutter has 2,247 passes with five skips.
+  Role-aware service admission, editors and live two-user acceptance are still
+  in progress; this does not expose a completed permission editor yet.
+
 - New group/public conversations can use server presets and initial passwords.
   The form shows the resulting settings and locks forced values; switching
   presets starts from the server defaults instead of retaining the old preset.
