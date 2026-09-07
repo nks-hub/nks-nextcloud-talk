@@ -41,7 +41,7 @@ void main() {
     int maximumInstallerBytes = 64 * 1024 * 1024,
   }) {
     final built = UpdateInstallerService(
-      client: client,
+      clientFactory: () => client,
       downloadTimeout: downloadTimeout,
       maximumInstallerBytes: maximumInstallerBytes,
     );

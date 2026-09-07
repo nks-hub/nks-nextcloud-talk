@@ -43,15 +43,21 @@ bool _isGitHubControlledHost(Uri uri) {
       host.endsWith('.githubusercontent.com');
 }
 
-/// Lets a caller stop an in-progress download. Checked between chunks rather
-/// than closing a socket outright, which is enough for a person pressing
-/// "cancel" and keeps the download loop simple to reason about.
+/// Aborts the current HTTP request, including stalled headers or body reads.
 final class DownloadCancellation {
-  bool _cancelled = false;
+  final Completer<void> _abort = Completer<void>();
 
-  bool get isCancelled => _cancelled;
+  bool get isCancelled => _abort.isCompleted;
 
-  void cancel() => _cancelled = true;
+  Future<void> get _abortTrigger => _abort.future;
+
+  void cancel() {
+    if (!_abort.isCompleted) _abort.complete();
+  }
+
+  void _check() {
+    if (isCancelled) throw const _Cancelled();
+  }
 }
 
 final class _Cancelled implements Exception {
@@ -100,21 +106,27 @@ final class UpdateInstallUnavailable extends UpdateInstallResult {
 /// may never leave.
 final class UpdateInstallerService {
   UpdateInstallerService({
-    http.Client? client,
+    http.Client Function()? clientFactory,
     this.downloadTimeout = const Duration(minutes: 5),
     this.maximumInstallerBytes = 64 * 1024 * 1024,
     this.maximumSha256SumsBytes = 16 * 1024,
-  }) : _client = client ?? http.Client();
+  }) : _clientFactory = clientFactory ?? http.Client.new;
 
-  final http.Client _client;
+  final http.Client Function() _clientFactory;
   final Duration downloadTimeout;
   final int maximumInstallerBytes;
   final int maximumSha256SumsBytes;
+  final Map<DownloadCancellation, http.Client> _downloads = {};
 
   static const _maxRedirects = 5;
   static final _sha256SumsLine = RegExp(r'^([0-9a-fA-F]{64})\s+\*?(.+)$');
 
-  void close() => _client.close();
+  void close() {
+    for (final download in _downloads.entries) {
+      download.key.cancel();
+      download.value.close();
+    }
+  }
 
   /// Downloads the installer [release] points at, fetches the release's
   /// `SHA256SUMS`, and refuses to hand back a file whose hash does not match
@@ -135,19 +147,36 @@ final class UpdateInstallerService {
     }
     final cancel = cancellation ?? DownloadCancellation();
     final fileName = _assetFileName(installerUri);
-
+    var timedOut = false;
+    final client = _clientFactory();
+    _downloads[cancel] = client;
+    // AbortableRequest registers only after openUrl. Close this operation's
+    // HTTP connections too; the cancellation race below bounds pending TLS.
+    unawaited(cancel._abortTrigger.then((_) => client.close()));
+    final deadline = Timer(downloadTimeout, () {
+      timedOut = true;
+      cancel.cancel();
+    });
     try {
+      cancel._check();
       return await _downloadAndVerify(
+        client: client,
         installerUri: installerUri,
         sumsUri: sumsUri,
         fileName: fileName,
         onProgress: onProgress,
         cancellation: cancel,
-      ).timeout(downloadTimeout);
-    } on _Cancelled {
-      return const UpdateInstallCancelled();
+      );
     } on Object {
+      if (cancel.isCancelled && !timedOut) {
+        return const UpdateInstallCancelled();
+      }
       return const UpdateInstallUnavailable();
+    } finally {
+      deadline.cancel();
+      _downloads.remove(cancel);
+      cancel.cancel();
+      client.close();
     }
   }
 
@@ -169,36 +198,52 @@ final class UpdateInstallerService {
   }
 
   Future<UpdateInstallResult> _downloadAndVerify({
+    required http.Client client,
     required Uri installerUri,
     required Uri sumsUri,
     required String fileName,
     required void Function(int receivedBytes, int? totalBytes)? onProgress,
     required DownloadCancellation cancellation,
   }) async {
-    final expectedHash = await _expectedHash(sumsUri, fileName);
+    final expectedHash = await _expectedHash(
+      client,
+      sumsUri,
+      fileName,
+      cancellation,
+    );
+    cancellation._check();
     if (expectedHash == null) {
       return const UpdateInstallVerificationFailed();
     }
-    if (cancellation.isCancelled) {
-      throw const _Cancelled();
-    }
-
     final file = await _downloadToTemp(
+      client,
       installerUri,
       fileName: fileName,
       onProgress: onProgress,
       cancellation: cancellation,
     );
-    final actualHash = sha256.convert(await file.readAsBytes()).toString();
-    if (actualHash != expectedHash) {
-      await _deleteQuietlyWithParent(file);
-      return const UpdateInstallVerificationFailed();
+    var verified = false;
+    try {
+      cancellation._check();
+      final actualHash = sha256.convert(await file.readAsBytes()).toString();
+      cancellation._check();
+      if (actualHash != expectedHash) {
+        return const UpdateInstallVerificationFailed();
+      }
+      verified = true;
+      return UpdateInstallReady(file);
+    } finally {
+      if (!verified) await _deleteQuietlyWithParent(file);
     }
-    return UpdateInstallReady(file);
   }
 
-  Future<String?> _expectedHash(Uri sumsUri, String fileName) async {
-    final response = await _open(sumsUri);
+  Future<String?> _expectedHash(
+    http.Client client,
+    Uri sumsUri,
+    String fileName,
+    DownloadCancellation cancellation,
+  ) async {
+    final response = await _open(client, sumsUri, cancellation);
     if (response.statusCode != 200) {
       throw const FormatException('SHA256SUMS could not be read.');
     }
@@ -213,6 +258,7 @@ final class UpdateInstallerService {
   }
 
   Future<File> _downloadToTemp(
+    http.Client client,
     Uri installerUri, {
     required String fileName,
     required void Function(int receivedBytes, int? totalBytes)? onProgress,
@@ -221,7 +267,7 @@ final class UpdateInstallerService {
     final dir = await Directory.systemTemp.createTemp('nks-talk-update-');
     final file = File('${dir.path}${Platform.pathSeparator}$fileName');
     try {
-      final response = await _open(installerUri);
+      final response = await _open(client, installerUri, cancellation);
       if (response.statusCode != 200) {
         throw const FormatException('Installer download failed.');
       }
@@ -234,9 +280,7 @@ final class UpdateInstallerService {
       var received = 0;
       try {
         await for (final chunk in response.stream) {
-          if (cancellation.isCancelled) {
-            throw const _Cancelled();
-          }
+          cancellation._check();
           received += chunk.length;
           if (received > maximumInstallerBytes) {
             throw const FormatException('Installer is larger than expected.');
@@ -274,14 +318,28 @@ final class UpdateInstallerService {
   /// first request — can be checked against [_isGitHubControlledHost] before
   /// it is trusted.
   Future<http.StreamedResponse> _open(
-    Uri uri, {
+    http.Client client,
+    Uri uri,
+    DownloadCancellation cancellation, {
     int redirectsLeft = _maxRedirects,
   }) async {
-    final request = http.Request('GET', uri)
-      ..headers['User-Agent'] = 'NKS-Talk/$appVersionName'
-      ..followRedirects = false
-      ..maxRedirects = 0;
-    final response = await _client.send(request);
+    cancellation._check();
+    final request =
+        http.AbortableRequest(
+            'GET',
+            uri,
+            abortTrigger: cancellation._abortTrigger,
+          )
+          ..headers['User-Agent'] = 'NKS-Talk/$appVersionName'
+          ..followRedirects = false
+          ..maxRedirects = 0;
+    // IOClient may still be awaiting openUrl when its client is closed.
+    // Unblock this await too, so the caller can finish its file cleanup.
+    final response = await Future.any<http.StreamedResponse>([
+      client.send(request),
+      cancellation._abortTrigger.then((_) => throw const _Cancelled()),
+    ]);
+    cancellation._check();
     if (response.statusCode >= 300 && response.statusCode < 400) {
       final location = response.headers['location'];
       if (location == null || redirectsLeft <= 0) {
@@ -291,7 +349,12 @@ final class UpdateInstallerService {
       if (!_isGitHubControlledHost(target)) {
         throw const FormatException('Redirect left GitHub.');
       }
-      return _open(target, redirectsLeft: redirectsLeft - 1);
+      return _open(
+        client,
+        target,
+        cancellation,
+        redirectsLeft: redirectsLeft - 1,
+      );
     }
     return response;
   }

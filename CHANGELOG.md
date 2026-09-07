@@ -23,6 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Cancelling a Windows update download now returns even when the server stops
+  responding. The deadline stops the HTTP transfer, waits for temporary-file
+  cleanup and prevents a late download from becoming an installable update.
+  Waiting for a TLS handshake is bounded too; closing the underlying stalled
+  TLS socket remains a known Dart runtime limitation.
+
 - Nothing users see: the part of the iOS share extension that actually takes a
   file out of the share sheet now has tests — six of them, run on a real
   simulator. It had none, while the code it hands the file to had six, so

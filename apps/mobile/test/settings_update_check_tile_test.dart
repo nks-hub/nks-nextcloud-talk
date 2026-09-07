@@ -297,7 +297,7 @@ Widget _tile({
       ),
       if (installerClient != null)
         updateInstallerServiceProvider.overrideWithValue(
-          UpdateInstallerService(client: installerClient),
+          UpdateInstallerService(clientFactory: () => installerClient),
         ),
     ],
     child: localizedTestApp(
