@@ -38,7 +38,14 @@ MARKDOWN_PATTERNS = [
     ("24-hex id in docs", re.compile(r"(?<![0-9a-f])[0-9a-f]{24}(?![0-9a-f])")),
 ]
 # The IP bogon lists in the gateway's own policy code are the one legitimate home of private ranges.
-EXEMPT = ("services/push_gateway/internal/identityproof/", "tool/public_repo_gate.py", "CONTRIBUTING.md")
+# `test_public_repo_gate.py` is here for the same reason this file is: its
+# probes are, by construction, the strings the rules reject.
+EXEMPT = (
+    "services/push_gateway/internal/identityproof/",
+    "tool/public_repo_gate.py",
+    "tool/test_public_repo_gate.py",
+    "CONTRIBUTING.md",
+)
 
 
 def tracked():
