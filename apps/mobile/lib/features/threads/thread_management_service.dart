@@ -464,9 +464,17 @@ final class ThreadManagementService {
 
   bool _canChangeNotifications(_ThreadRoomContext context) {
     final permissions = context.room.permissions;
+    // A bare 0 means "use the server's defaults", not "nothing is allowed" —
+    // the same reading `ChatPostingAccess` carries, and the reason the bit test
+    // needs a guard: over a bare zero it refuses everything at once, so an
+    // ordinary participant could not touch a thread's notification level at
+    // all. The lobby bit is deliberately NOT given the same benefit: the
+    // defaults include chatting, they do not include walking past a lobby,
+    // which is the one thing a lobby is for.
+    final mayChat = permissions == 0 || permissions & _chatPermission != 0;
     return context.profile.threadMetadata &&
         context.room.readOnly == 0 &&
-        permissions & _chatPermission == _chatPermission &&
+        mayChat &&
         (context.room.lobbyState == 0 ||
             permissions & _ignoreLobbyPermission == _ignoreLobbyPermission);
   }

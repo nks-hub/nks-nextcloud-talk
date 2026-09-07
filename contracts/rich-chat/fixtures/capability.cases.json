@@ -136,13 +136,40 @@
       "talkLocalFeatures": [],
       "federated": false,
       "moderator": false,
-      "participantPermissions": 0,
+      "participantPermissions": 128,
       "expected": {
         "mentions": true,
         "threadMetadata": false,
         "threadMessageFetch": false,
         "reactions": true,
         "canReact": false,
+        "edit": false,
+        "delete": false,
+        "deleteAny": false,
+        "pin": false,
+        "hidePinned": false,
+        "reminders": false,
+        "scheduled": false,
+        "privateReply": false
+      }
+    },
+    {
+      "id": "react-permission-default-permissions",
+      "talkFeatures": [
+        "chat-v2",
+        "reactions",
+        "react-permission"
+      ],
+      "talkLocalFeatures": [],
+      "federated": false,
+      "moderator": false,
+      "participantPermissions": 0,
+      "expected": {
+        "mentions": true,
+        "threadMetadata": false,
+        "threadMessageFetch": false,
+        "reactions": true,
+        "canReact": true,
         "edit": false,
         "delete": false,
         "deleteAny": false,

@@ -46,8 +46,15 @@ final class RichChatCapabilityProfile {
         global.contains('chat-replies');
     final threads = base && global.contains('threads');
     final reactions = base && global.contains('reactions');
+    // A bare 0 is the server's "use the defaults", which include reacting —
+    // NOT "nothing is allowed". Testing the bit over a bare zero refuses every
+    // permission at once, which on a server that advertises `react-permission`
+    // took reactions away from every ordinary participant. The same mistake in
+    // the same file once made reactions unavailable to everybody, that time by
+    // reading the per-participant override instead of the effective value.
     final reactionPermission =
         !global.contains('react-permission') ||
+        participantPermissions == 0 ||
         participantPermissions & _reactPermission == _reactPermission;
     final pinned = base && global.contains('pinned-messages');
     return RichChatCapabilityProfile._(

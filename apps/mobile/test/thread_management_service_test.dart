@@ -256,6 +256,66 @@ void main() {
     },
   );
 
+  test(
+    'a room with the default permissions still lets the level be changed',
+    () async {
+      // FOUND BY AUDIT, 7 September 2026: `permissions: 0` is the server
+      // saying "use the defaults", which include chatting — not "nothing is
+      // allowed". The bit test had no guard for it, so `0 & 128 == 128` came
+      // out false and an ordinary participant lost the notification control
+      // entirely. `ChatPostingAccess` had carried the guard, and its comment,
+      // since August; this path did not.
+      await _insertRoom(database, accountId: _accountId, permissions: 0);
+      var mutations = 0;
+      final api = _api((request) {
+        mutations++;
+        return _fixtureResponse('thread-notify-success');
+      });
+      addTearDown(api.close);
+
+      await service(api).setNotificationLevel(
+        accountId: _accountId,
+        roomToken: _roomToken,
+        threadId: 120,
+        level: 3,
+      );
+      expect(mutations, 1);
+    },
+  );
+
+  test(
+    'a room that really withholds chat still refuses the level change',
+    () async {
+      // The other half of the same guard: a NON-zero permission set without
+      // the chat bit is a real refusal and must stay one, or the guard would
+      // have replaced a wrong "no" with a wrong "yes".
+      await _insertRoom(database, accountId: _accountId, permissions: 16);
+      var mutations = 0;
+      final api = _api((request) {
+        mutations++;
+        return _fixtureResponse('thread-notify-success');
+      });
+      addTearDown(api.close);
+
+      await expectLater(
+        service(api).setNotificationLevel(
+          accountId: _accountId,
+          roomToken: _roomToken,
+          threadId: 120,
+          level: 3,
+        ),
+        throwsA(
+          isA<ThreadManagementException>().having(
+            (error) => error.code,
+            'code',
+            ThreadManagementError.permissionDenied,
+          ),
+        ),
+      );
+      expect(mutations, 0);
+    },
+  );
+
   test('401 mutation reauthenticates only the target account', () async {
     const accountB = 'account-b';
     await _insertAccount(accounts, accountB, loginName: 'user-b');
