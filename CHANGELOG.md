@@ -47,6 +47,9 @@ from the commit log. Nothing here has reached testers yet.
   All 17 macOS native tests have now run successfully with Apple Development
   signing. The previous launch failure came from an ad-hoc signature carrying
   restricted entitlements; the README documents the working test command.
+  The same missing CocoaPods workspace link and WebRTC lock entries have been
+  recovered for iOS. On the combined capture tree, signed simulator runs pass
+  all 40 Runner tests and all 6 ShareExtensionTests.
 
 - Cancelling a Windows update download now returns even when the server stops
   responding. The deadline stops the HTTP transfer, waits for temporary-file
