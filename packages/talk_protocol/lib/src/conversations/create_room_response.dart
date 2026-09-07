@@ -14,20 +14,41 @@ sealed class CreateConversationResponse {
   int get statusCode;
 }
 
-/// HTTP 200 with OCS success and a validated newly created room.
+/// A validated existing, created, or partially invited conversation.
 final class CreateConversationSuccess extends CreateConversationResponse {
   CreateConversationSuccess._({
     required CreateConversationRequest request,
     required this.room,
+    required this.statusCode,
+    required this.invalidParticipants,
   }) : super(request);
 
   @override
-  int get statusCode => 200;
+  final int statusCode;
 
   final ConversationRoom room;
+  final Map<String, List<String>> invalidParticipants;
 
   @override
   String toString() => 'CreateConversationSuccess()';
+}
+
+/// A definitive server refusal, distinct from a lost mutation response.
+final class CreateConversationRejected extends CreateConversationResponse {
+  const CreateConversationRejected._({
+    required CreateConversationRequest request,
+    required this.statusCode,
+    required this.error,
+    required this.message,
+  }) : super(request);
+
+  @override
+  final int statusCode;
+  final String? error;
+  final String? message;
+
+  @override
+  String toString() => 'CreateConversationRejected(statusCode: $statusCode)';
 }
 
 /// HTTP 401. The account must reauthenticate before another authenticated call.
@@ -87,6 +108,40 @@ CreateConversationResponse decodeCreateConversationResponse({
   required Object? json,
 }) {
   switch (statusCode) {
+    case 400 || 403 || 404:
+      final envelope = _parseOcsEnvelope(json);
+      if (envelope.status != 'failure' || envelope.statusCode != statusCode) {
+        protocolFailure(_responseCode, r'$.ocs.meta');
+      }
+      final data = envelope.data is List && (envelope.data as List).isEmpty
+          ? <String, Object?>{}
+          : requireObject(
+              envelope.data,
+              path: r'$.ocs.data',
+              code: _responseCode,
+            );
+      final error = data['error'];
+      final message = data['message'];
+      return CreateConversationRejected._(
+        request: request,
+        statusCode: statusCode,
+        error: error == null
+            ? null
+            : requireString(
+                error,
+                path: r'$.ocs.data.error',
+                code: _responseCode,
+                maxLength: 128,
+              ),
+        message: message == null
+            ? null
+            : requireString(
+                message,
+                path: r'$.ocs.data.message',
+                code: _responseCode,
+                maxLength: 4096,
+              ),
+      );
     case 401:
       _parseOcsEnvelope(json);
       return CreateConversationReauthenticationRequired._(request: request);
@@ -105,8 +160,12 @@ CreateConversationResponse decodeCreateConversationResponse({
     // Talk answers a created room with 201, not 200; measured against
     // Nextcloud 34.0.1, where `POST v4/room` returned 201 for both a group
     // and a public room. Accepting only 200 made every creation fail.
-    case 200 || 201:
-      return _decodeSuccessOrOcsFailure(request: request, json: json);
+    case 200 || 201 || 202:
+      return _decodeSuccessOrOcsFailure(
+        request: request,
+        statusCode: statusCode,
+        json: json,
+      );
     default:
       protocolFailure(
         TalkProtocolErrorCode.unsupportedHttpStatus,
@@ -117,15 +176,19 @@ CreateConversationResponse decodeCreateConversationResponse({
 
 CreateConversationResponse _decodeSuccessOrOcsFailure({
   required CreateConversationRequest request,
+  required int statusCode,
   required Object? json,
 }) {
   final envelope = _parseOcsEnvelope(json);
   if (envelope.status != 'ok' ||
-      (envelope.statusCode != 200 && envelope.statusCode != 201)) {
+      !const {200, 201, 202}.contains(envelope.statusCode)) {
     return CreateConversationOcsFailure._(
       request: request,
       ocsStatusCode: envelope.statusCode,
     );
+  }
+  if (statusCode != 200 && statusCode != envelope.statusCode) {
+    protocolFailure(_responseCode, r'$.ocs.meta');
   }
 
   final session = JsonFreezeSession(
@@ -137,7 +200,56 @@ CreateConversationResponse _decodeSuccessOrOcsFailure({
     path: r'$.ocs.data',
     session: session,
   );
-  return CreateConversationSuccess._(request: request, room: room);
+  final invalid = <String, List<String>>{};
+  if (envelope.statusCode == 202) {
+    final data = requireObject(
+      envelope.data,
+      path: r'$.ocs.data',
+      code: _responseCode,
+    );
+    final entries = requireObject(
+      data['invalidParticipants'],
+      path: r'$.ocs.data.invalidParticipants',
+      code: _responseCode,
+    );
+    if (entries.length > 32) {
+      protocolFailure(_responseCode, r'$.ocs.data.invalidParticipants');
+    }
+    var count = 0;
+    for (final entry in entries.entries) {
+      if (entry.key.length > 128) {
+        protocolFailure(_responseCode, r'$.ocs.data.invalidParticipants');
+      }
+      final items = requireList(
+        entry.value,
+        path: r'$.ocs.data.invalidParticipants[]',
+        code: _responseCode,
+      );
+      count += items.length;
+      if (count > 5000) {
+        protocolFailure(_responseCode, r'$.ocs.data.invalidParticipants');
+      }
+      invalid[entry.key] = List.unmodifiable(
+        items.map(
+          (item) => requireString(
+            item,
+            path: r'$.ocs.data.invalidParticipants[][]',
+            code: _responseCode,
+            maxLength: 1024,
+          ),
+        ),
+      );
+    }
+    if (count == 0) {
+      protocolFailure(_responseCode, r'$.ocs.data.invalidParticipants');
+    }
+  }
+  return CreateConversationSuccess._(
+    request: request,
+    room: room,
+    statusCode: statusCode,
+    invalidParticipants: Map.unmodifiable(invalid),
+  );
 }
 
 ({String status, int statusCode, Object? data}) _parseOcsEnvelope(

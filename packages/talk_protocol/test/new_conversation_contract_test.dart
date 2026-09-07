@@ -370,6 +370,98 @@ void main() {
   });
 
   group('decodeCreateConversationResponse', () {
+    test('retains actual creation status and partial invitations', () {
+      for (final status in [200, 201, 202]) {
+        final response =
+            decodeCreateConversationResponse(
+                  request: _createRequest(),
+                  statusCode: status,
+                  json: {
+                    'ocs': {
+                      'meta': {'status': 'ok', 'statuscode': status},
+                      'data': {
+                        ..._syntheticRoom(),
+                        if (status == 202)
+                          'invalidParticipants': {
+                            'users': ['missing-user'],
+                            'groups': <String>[],
+                          },
+                      },
+                    },
+                  },
+                )
+                as CreateConversationSuccess;
+        expect(response.statusCode, status);
+        expect(response.room.token.value, 'newroom01');
+        expect(response.invalidParticipants.isEmpty, status != 202);
+        expect(response.toString(), isNot(contains('missing-user')));
+      }
+    });
+
+    test(
+      'classifies password refusal without including the hint in diagnostics',
+      () {
+        final response =
+            decodeCreateConversationResponse(
+                  request: _createRequest(),
+                  statusCode: 400,
+                  json: {
+                    'ocs': {
+                      'meta': {'status': 'failure', 'statuscode': 400},
+                      'data': {
+                        'error': 'password',
+                        'message': 'Password policy hint',
+                      },
+                    },
+                  },
+                )
+                as CreateConversationRejected;
+        expect(response.error, 'password');
+        expect(response.message, 'Password policy hint');
+        expect(response.toString(), isNot(contains('policy hint')));
+      },
+    );
+
+    test(
+      'rejects contradictory errors and malformed partial invitation details',
+      () {
+        expect(
+          () => decodeCreateConversationResponse(
+            request: _createRequest(),
+            statusCode: 400,
+            json: {
+              'ocs': {
+                'meta': {'status': 'ok', 'statuscode': 200},
+                'data': {'error': 'password'},
+              },
+            },
+          ),
+          throwsA(isA<TalkProtocolException>()),
+        );
+        for (final invalid in <Object?>[
+          null,
+          [],
+          {},
+          {
+            'users': ['x', 3],
+          },
+        ]) {
+          expect(
+            () => decodeCreateConversationResponse(
+              request: _createRequest(),
+              statusCode: 202,
+              json: {
+                'ocs': {
+                  'meta': {'status': 'ok', 'statuscode': 202},
+                  'data': {..._syntheticRoom(), 'invalidParticipants': invalid},
+                },
+              },
+            ),
+            throwsA(isA<TalkProtocolException>()),
+          );
+        }
+      },
+    );
     test('parses the newly created room on OCS 201', () {
       final response = decodeCreateConversationResponse(
         request: _createRequest(),
