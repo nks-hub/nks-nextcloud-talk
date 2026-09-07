@@ -85,6 +85,12 @@ from the commit log. Nothing here has reached testers yet.
   reports the same "no findings" as a clean repository — and one rule had
   shipped that morning in exactly that state. Breaking a rule on purpose was
   tried; the suite catches it.
+- **The lobby deadline is written the way you read dates.** It had been
+  `2030-01-01 01:00` for everybody, and the code comment beside it said to
+  localize the label once the app needed to read naturally in more than one
+  language — which it had for weeks. It now uses the date and time formats the
+  system already carries for Czech and English, including whether you use a
+  24-hour clock.
 
 ## 0.1.0 (64) — 7 September 2026
 
