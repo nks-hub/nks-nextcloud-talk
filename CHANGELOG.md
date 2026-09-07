@@ -34,6 +34,8 @@ from the commit log. Nothing here has reached testers yet.
   cleanup and prevents a late download from becoming an installable update.
   Waiting for a TLS handshake is bounded too; closing the underlying stalled
   TLS socket remains a known Dart runtime limitation.
+  The transfer tests also use separate temporary directories so concurrent
+  test files cannot delete each other's downloads.
 
 - Nothing users see: the part of the iOS share extension that actually takes a
   file out of the share sheet now has tests — six of them, run on a real

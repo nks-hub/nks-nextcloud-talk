@@ -30,7 +30,16 @@ void main() {
       .map((directory) => directory.path)
       .toSet();
 
-  setUp(() {
+  setUp(() async {
+    final previousOverrides = IOOverrides.current;
+    final temporary = await Directory.systemTemp.createTemp(
+      'talk-transfer-tests-',
+    );
+    IOOverrides.global = _TransferDirectories(temporary);
+    addTearDown(() async {
+      IOOverrides.global = previousOverrides;
+      await temporary.delete(recursive: true);
+    });
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
   });
@@ -183,6 +192,15 @@ void main() {
       });
     }
   }
+}
+
+final class _TransferDirectories extends IOOverrides {
+  _TransferDirectories(this.temporary);
+
+  final Directory temporary;
+
+  @override
+  Directory getSystemTempDirectory() => temporary;
 }
 
 /// Sends through a real socket while keeping release URL validation enabled.
