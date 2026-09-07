@@ -23,6 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+Verification for this source batch: 2,143 Flutter tests passed with three
+skips, all 1,107 protocol tests passed, and analysis and the Windows debug build
+completed successfully. The Android release-signed test APK verified language
+changes and restart without removing the stored account. A service ANR on both
+the old and new emulator builds remains under separate investigation.
+
 - Calls are refused before joining or opening media when the server requires
   end-to-end encryption this app does not implement. The reason is shown in
   English or Czech, and rejected native answers release their exact call ID.
