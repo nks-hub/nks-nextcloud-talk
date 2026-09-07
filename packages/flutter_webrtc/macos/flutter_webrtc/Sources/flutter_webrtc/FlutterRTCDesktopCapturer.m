@@ -214,12 +214,16 @@ NSArray<RTCDesktopSource*>* _captureSources;
 }
 
 #if TARGET_OS_OSX
+- (Class)desktopCapturerClass {
+  return [RTCDesktopCapturer class];
+}
+
 - (RTCDesktopCapturer *)legacyCapturerWithSource:(RTCDesktopSource *)source
                                 captureDelegate:(id<RTCVideoCapturerDelegate>)delegate {
   if (source != nil) {
-    return [[RTCDesktopCapturer alloc] initWithSource:source delegate:self captureDelegate:delegate];
+    return [[[self desktopCapturerClass] alloc] initWithSource:source delegate:self captureDelegate:delegate];
   }
-  return [[RTCDesktopCapturer alloc] initWithDefaultScreen:self captureDelegate:delegate];
+  return [[[self desktopCapturerClass] alloc] initWithDefaultScreen:self captureDelegate:delegate];
 }
 #endif
 

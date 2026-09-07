@@ -2,7 +2,6 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <flutter_webrtc/FlutterScreenCaptureKitCapturer.h>
 #import <flutter_webrtc/FlutterRTCDesktopCapturer.h>
-#import <objc/runtime.h>
 
 @interface FlutterScreenCaptureKitCapturer (Testing)
 - (void)requestShareableContent:(void (^)(SCShareableContent *, NSError *))completion;
@@ -11,8 +10,32 @@
 @end
 
 @interface FlutterWebRTCPlugin (CaptureTesting)
+- (Class)desktopCapturerClass;
 - (RTCDesktopCapturer *)legacyCapturerWithSource:(RTCDesktopSource *)source
                                 captureDelegate:(id<RTCVideoCapturerDelegate>)delegate;
+@end
+
+@interface LegacyCapture : NSObject
+@property(nonatomic, strong) id selectedSource;
+@property(nonatomic) BOOL usedDefault;
+@end
+@implementation LegacyCapture
+- (instancetype)initWithSource:(id)source delegate:(id)delegate captureDelegate:(id)frames {
+  self = [super init];
+  if (self) self.selectedSource = source;
+  return self;
+}
+- (instancetype)initWithDefaultScreen:(id)delegate captureDelegate:(id)frames {
+  self = [super init];
+  if (self) self.usedDefault = YES;
+  return self;
+}
+@end
+
+@interface CapturePlugin : FlutterWebRTCPlugin
+@end
+@implementation CapturePlugin
+- (Class)desktopCapturerClass { return [LegacyCapture class]; }
 @end
 
 @interface CaptureDisplay : NSObject
@@ -65,9 +88,42 @@
 }
 @end
 
+@interface CaptureFrames : NSObject <RTCVideoCapturerDelegate>
+@property(nonatomic, strong) XCTestExpectation *firstFrame;
+@property(nonatomic) BOOL receivedFrame;
+@end
+@implementation CaptureFrames
+- (void)capturer:(RTCVideoCapturer *)capturer didCaptureVideoFrame:(RTCVideoFrame *)frame {
+  if (!self.receivedFrame && frame.width > 0 && frame.height > 0) {
+    self.receivedFrame = YES;
+    [self.firstFrame fulfill];
+  }
+}
+@end
+
 @interface ScreenCaptureTests : XCTestCase
 @end
 @implementation ScreenCaptureTests
+- (void)testRealScreenCaptureDeliversFramesWhenAuthorized {
+  XCTSkipIf(!CGPreflightScreenCaptureAccess(),
+            @"Screen recording permission is not granted to the test host");
+  CaptureFrames *frames = [CaptureFrames new];
+  frames.firstFrame = [self expectationWithDescription:@"screen frame"];
+  FlutterScreenCaptureKitCapturer *capturer = [[FlutterScreenCaptureKitCapturer alloc] initWithDelegate:frames];
+  XCTestExpectation *started = [self expectationWithDescription:@"real capture started"];
+  __block NSError *startError = nil;
+  [capturer startCaptureWithFPS:10 sourceId:nil onStarted:^(NSError *error) {
+    startError = error;
+    [started fulfill];
+  }];
+  [self waitForExpectations:@[started] timeout:15];
+  XCTAssertNil(startError);
+  if (startError == nil) [self waitForExpectations:@[frames.firstFrame] timeout:15];
+  XCTestExpectation *stopped = [self expectationWithDescription:@"real capture stopped"];
+  [capturer stopCaptureWithCompletion:^{ [stopped fulfill]; }];
+  [self waitForExpectations:@[stopped] timeout:15];
+}
+
 - (SCShareableContent *)contentWithIds:(NSArray<NSNumber *> *)ids {
   NSMutableArray *displays = [NSMutableArray array];
   for (NSNumber *number in ids) {
@@ -169,33 +225,12 @@
 }
 
 - (void)testLegacyCapturerReceivesExplicitSource {
-  Method selected = class_getInstanceMethod([RTCDesktopCapturer class], @selector(initWithSource:delegate:captureDelegate:));
-  Method defaultScreen = class_getInstanceMethod([RTCDesktopCapturer class], @selector(initWithDefaultScreen:captureDelegate:));
-  __block id receivedSource = nil;
-  __block BOOL usedDefault = NO;
-  IMP selectedReplacement = imp_implementationWithBlock(^id(id object, id source, id delegate, id frames) {
-    receivedSource = source;
-    return [NSObject new];
-  });
-  IMP defaultReplacement = imp_implementationWithBlock(^id(id object, id delegate, id frames) {
-    usedDefault = YES;
-    return [NSObject new];
-  });
-  IMP originalSelected = method_setImplementation(selected, selectedReplacement);
-  IMP originalDefault = method_setImplementation(defaultScreen, defaultReplacement);
-  @try {
-    FlutterWebRTCPlugin *plugin = [FlutterWebRTCPlugin new];
-    id source = [NSObject new];
-    [plugin legacyCapturerWithSource:source captureDelegate:nil];
-    XCTAssertEqual(receivedSource, source);
-    XCTAssertFalse(usedDefault);
-    [plugin legacyCapturerWithSource:nil captureDelegate:nil];
-    XCTAssertTrue(usedDefault);
-  } @finally {
-    method_setImplementation(selected, originalSelected);
-    method_setImplementation(defaultScreen, originalDefault);
-    imp_removeBlock(selectedReplacement);
-    imp_removeBlock(defaultReplacement);
-  }
+  CapturePlugin *plugin = [CapturePlugin new];
+  id source = [NSObject new];
+  LegacyCapture *selected = (LegacyCapture *)[plugin legacyCapturerWithSource:source captureDelegate:nil];
+  XCTAssertEqual(selected.selectedSource, source);
+  XCTAssertFalse(selected.usedDefault);
+  LegacyCapture *defaultScreen = (LegacyCapture *)[plugin legacyCapturerWithSource:nil captureDelegate:nil];
+  XCTAssertTrue(defaultScreen.usedDefault);
 }
 @end
