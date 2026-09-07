@@ -7,7 +7,13 @@ import 'package:nextcloudtalk/features/settings/app_lock/app_lock_controller.dar
 import 'package:nextcloudtalk/features/settings/app_lock/app_lock_store.dart';
 
 void main() {
-  test('desktop bypasses storage and device authentication', () async {
+  test('a platform with no device to ask bypasses storage and the check', () {
+    // This used to be named "desktop bypasses…" and that was the defect: the
+    // gate listed Android and iOS and shortcut everything else to "not
+    // supported" WITHOUT ASKING, so Windows Hello and Touch ID never got the
+    // question even though `local_auth_windows` and `local_auth_darwin` are
+    // bundled and registered in both runners. Only the web has no device to
+    // ask; the gate says so now, and this test keeps that one exclusion.
     final store = _MemoryAppLockStore(readError: StateError('must not read'));
     final authenticator = _FakeAuthenticator(supported: true);
     final container = _container(
@@ -17,13 +23,29 @@ void main() {
     );
     addTearDown(container.dispose);
 
+    return container.read(appLockControllerProvider.notifier).ready.then((_) {
+      expect(
+        container.read(appLockControllerProvider).phase,
+        AppLockPhase.disabled,
+      );
+      expect(authenticator.supportChecks, 0);
+    });
+  });
+
+  test('a desktop is asked whether it has a device lock', () async {
+    // The behaviour the gate used to make impossible: the platform is asked,
+    // and a desktop that answers yes gets the setting like a phone does.
+    final authenticator = _FakeAuthenticator(supported: true);
+    final container = _container(
+      store: _MemoryAppLockStore(),
+      authenticator: authenticator,
+    );
+    addTearDown(container.dispose);
+
     await container.read(appLockControllerProvider.notifier).ready;
 
-    expect(
-      container.read(appLockControllerProvider).phase,
-      AppLockPhase.disabled,
-    );
-    expect(authenticator.supportChecks, 0);
+    expect(authenticator.supportChecks, 1, reason: 'it was actually asked');
+    expect(container.read(appLockControllerProvider).supported, isTrue);
   });
 
   test('a preference read error fails closed', () async {

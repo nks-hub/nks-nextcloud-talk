@@ -29,6 +29,7 @@ final class QrLoginScannerScreen extends StatefulWidget {
   }) {
     return Navigator.of(context).push<QrLoginPayload>(
       MaterialPageRoute<QrLoginPayload>(
+        settings: const RouteSettings(name: '/onboarding/qr'),
         builder: (context) =>
             QrLoginScannerScreen(onOpenSettings: onOpenSettings),
       ),

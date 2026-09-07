@@ -28,6 +28,13 @@ void main() {
       'NSLocationWhenInUseUsageDescription',
       // local_auth, app-lock authentication
       'NSFaceIDUsageDescription',
+      // Speech, transcribing a voice message —
+      // `VoiceMessageTranscriber.swift` calls
+      // `SFSpeechRecognizer.requestAuthorization`. The key was in the plist
+      // and NOT in this list, which is the exact gap the list exists to close:
+      // deleting it would have reproduced 90683, and only after altool had
+      // reported success.
+      'NSSpeechRecognitionUsageDescription',
     ];
     for (final key in required) {
       final at = contents.indexOf('<key>$key</key>');

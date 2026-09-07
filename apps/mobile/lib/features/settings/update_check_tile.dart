@@ -119,6 +119,9 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        // Large text makes the body taller than the window; without this the
+        // actions are pushed off the bottom and the dialog cannot be answered.
+        scrollable: true,
         title: Text(strings.settingsUpdateCheckDownloadConfirmTitle),
         content: Text(strings.settingsUpdateCheckDownloadConfirmBody),
         actions: [
@@ -162,6 +165,7 @@ final class UpdateCheckSettingsTile extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: Text(strings.settingsUpdateCheckInstallConfirmTitle),
         content: Text(strings.settingsUpdateCheckInstallConfirmBody),
         actions: [

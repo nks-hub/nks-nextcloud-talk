@@ -804,6 +804,9 @@ final class _BreakoutAmountDialogState extends State<_BreakoutAmountDialog> {
     final strings = widget.strings;
     return AlertDialog(
       key: const Key('room-details-breakout-create-dialog'),
+      // Three radio rows and a title do not fit at 200 % text; without this
+      // the buttons leave the screen and the dialog cannot be answered.
+      scrollable: true,
       title: Text(strings.roomDetailsBreakoutCreateDialogTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1022,6 +1025,7 @@ final class _BreakoutBroadcastDialogState
     final strings = widget.strings;
     return AlertDialog(
       key: const Key('room-details-breakout-broadcast-dialog'),
+      scrollable: true,
       title: Text(strings.roomDetailsBreakoutBroadcast),
       content: TextField(
         key: const Key('room-details-breakout-broadcast-field'),

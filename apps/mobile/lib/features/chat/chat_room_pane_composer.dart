@@ -133,6 +133,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     final strings = AppLocalizations.of(context);
     final result = await Navigator.of(context).push<RemoteFilePickerResult>(
       MaterialPageRoute<RemoteFilePickerResult>(
+        // Named like every other pushed route: the navigator observers report
+        // nothing for a route without one, so an unnamed screen is invisible
+        // to the diagnostics that exist to say where people got stuck.
+        settings: const RouteSettings(name: '/chat/remote-file'),
         builder: (_) => RemoteFilePickerScreen(
           accountId: targetKey.accountId,
           roomToken: targetKey.roomToken,

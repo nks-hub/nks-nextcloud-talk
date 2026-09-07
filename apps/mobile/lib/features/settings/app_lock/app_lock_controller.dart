@@ -50,13 +50,17 @@ final class AppLockState {
   }
 }
 
-final appLockMobilePlatformProvider = Provider<bool>((ref) {
-  if (kIsWeb) {
-    return false;
-  }
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
-});
+/// Whether this platform can be asked about a device lock at all.
+///
+/// Not "is it a phone". `local_auth_windows` and `local_auth_darwin` are both
+/// bundled and both registered in the runners, so Windows Hello and Touch ID
+/// answer `isDeviceSupported()` like Android and iOS do — the gate used to
+/// name the two phones and shortcut the desktops to "not supported" WITHOUT
+/// ASKING, which hid the app lock from every desktop that has a device lock.
+/// The same shape as the screen-share button that was gated to the phones
+/// while the engine could capture a desktop screen.
+/// Only the web is excluded outright: there is no device to ask.
+final appLockMobilePlatformProvider = Provider<bool>((ref) => !kIsWeb);
 
 final appLockStoreProvider = Provider<AppLockStore>((ref) {
   return SecureAppLockStore();
