@@ -118,6 +118,10 @@ from the commit log. Nothing here has reached testers yet.
   hovoru se nepodařilo zjistit", which tells nobody anything they can do. They
   now name the thing: this Nextcloud, or a separate call server, or that the
   connection to it dropped.
+- Changed: the first screen a new person sees no longer says "cache". It said
+  accounts, cache and background work stay strictly apart; it now says accounts,
+  their stored data and background work. The word survives only where it names
+  what will actually be deleted.
 - Changed: the English settled on one spelling. It had been mixing British and
   American — "colour" and "licences" beside "favorites" — and now reads British
   throughout.
