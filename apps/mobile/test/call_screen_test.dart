@@ -68,9 +68,11 @@ CallJoinState _joined({
   CallPublishingRights publishing = const CallPublishingRights(),
   String? videoTrackId,
   String? screenTrackId,
+  bool canManageRecording = false,
 }) => CallJoinState(
   phase: CallJoinPhase.joined,
   publishing: publishing,
+  canManageRecording: canManageRecording,
   media: CallMediaState(
     phase: CallMediaPhase.connected,
     connectedPeers: 1,
@@ -109,6 +111,7 @@ Future<_FakePictureInPicture> _pumpCallScreen(
   CallPublishingRights publishing = const CallPublishingRights(),
   String? videoTrackId,
   String? screenTrackId,
+  bool canManageRecording = false,
 }) async {
   // A phone-sized surface: on the default test window the third tile of
   // the grid is below the fold and is not built at all.
@@ -125,6 +128,7 @@ Future<_FakePictureInPicture> _pumpCallScreen(
               publishing: publishing,
               videoTrackId: videoTrackId,
               screenTrackId: screenTrackId,
+              canManageRecording: canManageRecording,
             ),
           ),
         ),
@@ -240,6 +244,46 @@ void main() {
       reason: 'audio was not taken away, so the microphone stays',
     );
     expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+  });
+
+  testWidgets('every control fits across a phone, recording and all', (
+    tester,
+  ) async {
+    // MEASURED ON A PHYSICAL 1080x2220 PHONE, 7 September 2026: the control
+    // strip ran 23 physical pixels off the right edge — a debug build drew the
+    // yellow-and-black bar over it, a release build simply cut it off. Adding
+    // the recording button took the row from six controls to seven, and a Row
+    // clips rather than breaks; it is a Wrap now.
+    // WHAT THIS TEST DOES AND DOES NOT PROVE, said plainly because a test that
+    // passes either way is worse than none: it pins that seven controls and a
+    // leave button lay out without overflowing at 411 dp. It does NOT
+    // reproduce the device's 23 pixels — with the Row put back it still
+    // passes, so something on the phone made the strip wider than this
+    // fixture does, and what that is has not been found. The device is the
+    // only place the original defect has been seen.
+    // The pump helper sets the surface itself, so the density goes through it:
+    // 1080 physical pixels at 2.625 is the 411 dp the phone actually reports.
+    // Passing the size here instead would be silently overwritten, and the
+    // test would pass at 1080 logical pixels where everything fits.
+    await _pumpCallScreen(
+      tester,
+      devicePixelRatio: 2.625,
+      publishing: const CallPublishingRights(video: true, screen: true),
+      canManageRecording: true,
+    );
+
+    expect(find.byKey(const Key('call-screen-share-screen')), findsOneWidget);
+    expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+    // `takeException` is how an overflow reaches a test: `RenderFlex` reports
+    // it through the error reporter rather than by throwing at the call site.
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'nothing may run off the edge of the phone',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
   });
 
   testWidgets('the desktops are offered the screen share too', (tester) async {

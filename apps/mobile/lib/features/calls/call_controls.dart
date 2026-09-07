@@ -56,8 +56,16 @@ final class CallControls extends ConsumerWidget {
     CallJoinController controller() =>
         ref.read(callJoinControllerProvider(roomKey).notifier);
     final busy = join.isBusy;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    // Wrap, not Row. A Row here clips: the controls grew to seven when call
+    // recording arrived and the strip ran 23 physical pixels off the right
+    // edge of a 1080x2220 phone — a yellow-and-black bar in a debug build and
+    // a silent truncation in a release one. A Wrap nested in the call screen's
+    // own Wrap still breaks, because `RenderWrap` hands a child the wrap's own
+    // maximum width; inside the banner's Row it is unbounded and behaves
+    // exactly like the Row it replaces.
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         IconButton(
           key: Key('$keyPrefix-mute'),
