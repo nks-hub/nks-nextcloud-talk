@@ -23,14 +23,24 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
-- The poll API layer now supports closing polls, managing reusable drafts and
-  bounded CSV/ODS downloads. Publishing a draft creates a new poll and keeps
-  the template. Current role, author, credential and thread checks protect
-  every operation; uncertain writes are not retried automatically. The full
-  protocol suite passes 1,120 tests and 28 targeted service/network cases pass.
-  UI and final live round-trip verification are in progress.
+- Conversation polls now support closing, reusable draft management and
+  CSV/ODS export through the system save dialog. Publishing a draft creates a
+  new poll and keeps the template. Current role, author, credential and thread
+  checks protect every operation; uncertain writes are not retried automatically.
+  Poll dialogs survive chat-cell recycling after closing or voting, while
+  leaving their account, room or thread disables further actions. Header
+  rendering uses cached eligibility without starting permission requests.
+  Two-account live service tests, official web readback and the Android
+  draft/vote/close/save flow passed; saved export bytes match the app output.
 
-Verification for this source batch: 2,143 Flutter tests passed with three
+Poll batch verification at `fce2b359`: 2,186 Flutter tests passed with four
+skips, all 1,120 protocol tests passed, and full analysis, checks-only CI and
+the Windows debug build succeeded. Signed Android, macOS and iOS simulator
+test builds succeeded; Apple verification ran locally on a Mac, not CI.
+iOS startup and eleven final Mac regression tests passed. Authenticated Apple
+poll and native-save interaction remains unverified by this batch.
+
+Earlier locale/call batch verification: 2,143 Flutter tests passed with three
 skips, all 1,107 protocol tests passed, and analysis and the Windows debug build
 completed successfully. The Android release-signed test APK verified language
 changes and restart without removing the stored account. A service ANR on both
