@@ -32,7 +32,9 @@ from the commit log. Nothing here has reached testers yet.
   when the test host is built unsigned, which strips the entitlement the
   keychain needs. Run signed, both Apple test suites pass. What is real is that
   the build pipeline runs neither of them and never has, so they had been red
-  in the one place anybody looked without anything to say so.
+  in the one place anybody looked without anything to say so. The pipeline runs
+  both suites now — written, not yet run, since a build server is the only
+  thing that can verify a build server.
 
 ## 0.1.0 (64) — 7 September 2026
 
