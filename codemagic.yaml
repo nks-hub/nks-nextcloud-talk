@@ -217,10 +217,13 @@ workflows:
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - apps/mobile/build/ios/ipa/*.ipa
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
+    # NO `publishing:` BLOCK, DELIBERATELY. This workflow builds, tests and
+    # signs an IPA and leaves it as an artefact; it does not ship it. The
+    # owner's standing instruction is that iOS and macOS are released by hand
+    # from a Mac and never from CI, and `submit_to_testflight: true` stood
+    # here doing exactly the opposite on every tag build until 7 September 2026.
+    # Restoring it is one block — do that only if the owner changes that rule,
+    # not because a build looks incomplete without it.
 
   macos-release:
     name: macOS build
@@ -362,9 +365,21 @@ workflows:
       # have to guess when a Codemagic build was started and how long it takes.
       # Nothing to guess if the build uploads when it is done. Only on a tag
       # build - a branch build has no release to attach to.
+      # NO LONGER ATTACHES ANYTHING, since 7 September 2026. The owner's
+      # standing instruction is that macOS and iOS are released by hand from a
+      # Mac and never from CI; this step uploaded a signed zip to the GitHub
+      # release on every tag build, which is releasing macOS from CI. The build,
+      # the signing and the sandbox check above all stay — verifying a build is
+      # not publishing it, and they are what catch an unsigned or unsandboxed
+      # app. The zip remains an artefact of the run, so it can still be
+      # downloaded by hand and released from the Mac.
+      # To restore publishing, drop the `exit 0` below; do that only on the
+      # owner's word.
       - name: Attach the zip to the GitHub release
         script: |
           set -e
+          echo "macOS is released by hand from a Mac, never from CI - not attaching."
+          exit 0
           if [ -z "$CM_TAG" ]; then
             echo "Not a tag build - nothing to attach."
             exit 0
