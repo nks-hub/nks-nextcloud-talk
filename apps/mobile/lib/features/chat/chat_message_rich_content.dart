@@ -489,6 +489,25 @@ final class _RichObjectPill extends StatelessWidget {
     final strings = AppLocalizations.of(context);
     void openPoll() {
       final message = pollScope.message;
+      bool current() {
+        if (!context.mounted) return false;
+        final currentScope = context
+            .getInheritedWidgetOfExactType<_PollViewerScope>();
+        final parameterKey = node.parameterKey;
+        if (currentScope == null ||
+            currentScope.account.id != pollScope.account.id ||
+            currentScope.message.roomToken != message.roomToken ||
+            currentScope.message.messageId != message.messageId) {
+          return false;
+        }
+        final currentParameter =
+            currentScope.message.messageParameters[parameterKey];
+        return currentParameter is ChatRichObjectParameter &&
+            currentScope.validatedPollId(currentParameter, parameterKey) ==
+                pollId;
+      }
+
+      if (!current()) return;
       unawaited(
         showDialog<void>(
           context: context,
@@ -505,6 +524,7 @@ final class _RichObjectPill extends StatelessWidget {
                   : message.threadId,
             ),
             pollId: pollId,
+            isCurrent: current,
           ),
         ),
       );

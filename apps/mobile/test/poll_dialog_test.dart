@@ -3,16 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/chat/poll_dialog.dart';
-import 'package:nextcloudtalk/features/chat/poll_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
+import 'poll_test_support.dart';
 
 void main() {
   testWidgets('creates a poll and submits a real selected vote', (
     tester,
   ) async {
-    final sender = _FakePollSender();
+    final sender = FakePollSender();
     await tester.pumpWidget(
       localizedTestApp(
         home: Scaffold(
@@ -56,7 +56,7 @@ void main() {
   testWidgets('keeps ambiguous create visible and does not retry', (
     tester,
   ) async {
-    final sender = _FakePollSender(failCreate: true);
+    final sender = FakePollSender(failCreate: true);
     await tester.pumpWidget(
       localizedTestApp(
         home: PollComposerDialog(
@@ -82,7 +82,7 @@ void main() {
   testWidgets('viewer loads later and disables radio while voting', (
     tester,
   ) async {
-    final sender = _FakePollSender()..voteCompleter = Completer<TalkPoll>();
+    final sender = FakePollSender()..voteCompleter = Completer<TalkPoll>();
     await tester.pumpWidget(
       localizedTestApp(
         home: PollViewerDialog(
@@ -113,73 +113,7 @@ void main() {
           .onPressed,
       isNull,
     );
-    sender.voteCompleter!.complete(_pollFixture(votedSelf: const [1]));
+    sender.voteCompleter!.complete(pollFixture(votedSelf: const [1]));
     await tester.pumpAndSettle();
   });
 }
-
-final class _FakePollSender implements PollSender {
-  _FakePollSender({this.failCreate = false});
-  final bool failCreate;
-  int createCalls = 0;
-  String? createdQuestion;
-  List<int>? votedOptions;
-  int loadCalls = 0;
-  Completer<TalkPoll>? voteCompleter;
-
-  @override
-  Future<bool> isAvailable(PollRoomKey key) async => true;
-
-  @override
-  Future<TalkPoll> load({required PollRoomKey key, required int pollId}) async {
-    loadCalls++;
-    return _poll(votedSelf: const []);
-  }
-
-  @override
-  Future<TalkPoll> create({
-    required PollRoomKey key,
-    required String question,
-    required List<String> options,
-    required PollResultMode resultMode,
-    required int maxVotes,
-  }) async {
-    createCalls++;
-    createdQuestion = question;
-    if (failCreate) {
-      throw const PollServiceException(PollServiceError.ambiguous);
-    }
-    return _poll(votedSelf: const []);
-  }
-
-  @override
-  Future<TalkPoll> vote({
-    required PollRoomKey key,
-    required TalkPoll poll,
-    required List<int> optionIds,
-  }) async {
-    votedOptions = optionIds;
-    if (voteCompleter != null) {
-      return voteCompleter!.future;
-    }
-    return _poll(votedSelf: optionIds);
-  }
-
-  TalkPoll _poll({required List<int> votedSelf}) =>
-      _pollFixture(votedSelf: votedSelf);
-}
-
-TalkPoll _pollFixture({required List<int> votedSelf}) => TalkPoll.fromJson({
-  'id': 7,
-  'question': 'Lunch?',
-  'options': ['Pizza', 'Salad'],
-  'actorType': 'users',
-  'actorId': 'fixture-user',
-  'actorDisplayName': 'Fixture User',
-  'status': 0,
-  'resultMode': 0,
-  'maxVotes': 1,
-  'votedSelf': votedSelf,
-  'votes': votedSelf.isEmpty ? <Object?>[] : {'option-1': 1},
-  'numVoters': votedSelf.isEmpty ? 0 : 1,
-});

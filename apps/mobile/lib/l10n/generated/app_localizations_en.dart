@@ -2985,6 +2985,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pollMenuAction => 'Poll';
 
   @override
+  String get pollEndAction => 'End poll';
+
+  @override
+  String get pollEndConfirm =>
+      'End this poll? Participants will no longer be able to vote.';
+
+  @override
+  String get pollClosed => 'Poll ended';
+
+  @override
+  String get pollExportAction => 'Export results';
+
+  @override
+  String get pollExportCsv => 'Export CSV';
+
+  @override
+  String get pollExportOds => 'Export ODS';
+
+  @override
+  String get pollExportSaved => 'Results saved';
+
+  @override
+  String get pollExportFailed => 'The results could not be saved.';
+
+  @override
+  String get pollDraftsTitle => 'Poll drafts';
+
+  @override
+  String get pollSaveDraft => 'Save draft';
+
+  @override
+  String get pollDraftSaved => 'Draft saved';
+
+  @override
+  String get pollEditDraft => 'Edit draft';
+
+  @override
+  String get pollNewDraft => 'New draft';
+
+  @override
+  String get pollPublishDraft => 'Publish as new poll';
+
+  @override
+  String get pollPublishDraftConfirm =>
+      'This creates a new poll. The draft remains available.';
+
+  @override
+  String get pollDeleteDraft => 'Delete draft';
+
+  @override
+  String get pollDeleteDraftConfirm => 'Delete this reusable draft?';
+
+  @override
+  String get pollDraftsEmpty => 'No drafts in this conversation.';
+
+  @override
+  String get pollMaxVotes => 'Maximum votes';
+
+  @override
+  String get pollUnlimitedVotes => 'No limit';
+
+  @override
+  String get pollTextTooLong => 'The poll text is too long.';
+
+  @override
   String get pollChecking => 'Checking poll support…';
 
   @override

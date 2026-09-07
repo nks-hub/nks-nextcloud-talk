@@ -5,19 +5,24 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     if (_sending || _isReadOnlyNow()) {
       return;
     }
+    final key = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+      threadId: widget.threadId,
+    );
+    final sender = ref.read(pollServiceProvider);
+    bool current() =>
+        mounted &&
+        widget.account.id == key.accountId &&
+        widget.conversation.token == key.roomToken &&
+        widget.threadId == key.threadId;
     final created = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => PollComposerDialog(
-        sender: ref.read(pollServiceProvider),
-        roomKey: (
-          accountId: widget.account.id,
-          roomToken: widget.conversation.token,
-          threadId: widget.threadId,
-        ),
-      ),
+      builder: (dialogContext) =>
+          PollComposerDialog(sender: sender, roomKey: key, isCurrent: current),
     );
-    if (created == true && mounted) {
+    if (created == true && current()) {
       await _sync();
     }
   }

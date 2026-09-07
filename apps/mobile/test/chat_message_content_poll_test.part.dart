@@ -35,7 +35,7 @@ final _invalidPollMessage = ChatMessage.fromJson(<String, Object?>{
   },
 });
 
-final class _ContentPollSender implements PollSender {
+final class _ContentPollSender extends FakePollSender {
   final List<int> loadedPollIds = [];
 
   @override

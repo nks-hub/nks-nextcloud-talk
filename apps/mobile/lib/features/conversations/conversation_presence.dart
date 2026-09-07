@@ -10,6 +10,7 @@ import '../calls/call_banner.dart';
 import '../calls/call_start_button.dart';
 import '../chat/chat_room_pane.dart';
 import '../chat/chat_background_surface.dart';
+import '../chat/poll_draft_actions.dart';
 import '../rooms/room_details_screen.dart';
 import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
@@ -398,25 +399,26 @@ List<ConversationHeaderAction> _headerActions(
   VoidCallback? onOpenDetails,
 }) {
   final strings = AppLocalizations.of(context);
+  bool isCurrent() => switch (ref.context.widget) {
+    PresenceChatRoomScreen(
+      account: final currentAccount,
+      conversation: final currentRoom,
+    ) ||
+    PresenceChatRoomPane(
+      account: final currentAccount,
+      conversation: final currentRoom,
+    ) =>
+      currentAccount.id == account.id &&
+          currentRoom.token == conversation.token,
+    _ => false,
+  };
   return [
     ...callStartActions(
       context,
       ref,
       accountId: account.id,
       conversation: conversation,
-      isCurrent: () => switch (ref.context.widget) {
-        PresenceChatRoomScreen(
-          account: final currentAccount,
-          conversation: final currentRoom,
-        ) ||
-        PresenceChatRoomPane(
-          account: final currentAccount,
-          conversation: final currentRoom,
-        ) =>
-          currentAccount.id == account.id &&
-              currentRoom.token == conversation.token,
-        _ => false,
-      },
+      isCurrent: isCurrent,
     ),
     ConversationHeaderAction(
       id: const Key('open-room-search'),
@@ -462,6 +464,16 @@ List<ConversationHeaderAction> _headerActions(
               ),
             ),
           ),
+    ),
+    ...pollDraftActions(
+      context,
+      ref,
+      roomKey: (
+        accountId: account.id,
+        roomToken: conversation.token,
+        threadId: null,
+      ),
+      isCurrent: isCurrent,
     ),
   ];
 }

@@ -2987,6 +2987,72 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pollMenuAction => 'Anketa';
 
   @override
+  String get pollEndAction => 'Ukončit anketu';
+
+  @override
+  String get pollEndConfirm =>
+      'Ukončit anketu? Účastníci už nebudou moci hlasovat.';
+
+  @override
+  String get pollClosed => 'Anketa ukončena';
+
+  @override
+  String get pollExportAction => 'Exportovat výsledky';
+
+  @override
+  String get pollExportCsv => 'Exportovat CSV';
+
+  @override
+  String get pollExportOds => 'Exportovat ODS';
+
+  @override
+  String get pollExportSaved => 'Výsledky uloženy';
+
+  @override
+  String get pollExportFailed => 'Výsledky se nepodařilo uložit.';
+
+  @override
+  String get pollDraftsTitle => 'Koncepty anket';
+
+  @override
+  String get pollSaveDraft => 'Uložit koncept';
+
+  @override
+  String get pollDraftSaved => 'Koncept uložen';
+
+  @override
+  String get pollEditDraft => 'Upravit koncept';
+
+  @override
+  String get pollNewDraft => 'Nový koncept';
+
+  @override
+  String get pollPublishDraft => 'Zveřejnit jako novou anketu';
+
+  @override
+  String get pollPublishDraftConfirm =>
+      'Vznikne nová anketa. Koncept zůstane k dispozici.';
+
+  @override
+  String get pollDeleteDraft => 'Smazat koncept';
+
+  @override
+  String get pollDeleteDraftConfirm =>
+      'Smazat tento opakovaně použitelný koncept?';
+
+  @override
+  String get pollDraftsEmpty => 'V této konverzaci nejsou žádné koncepty.';
+
+  @override
+  String get pollMaxVotes => 'Nejvýše hlasů';
+
+  @override
+  String get pollUnlimitedVotes => 'Bez omezení';
+
+  @override
+  String get pollTextTooLong => 'Text ankety je příliš dlouhý.';
+
+  @override
   String get pollChecking => 'Ověřování podpory anket…';
 
   @override

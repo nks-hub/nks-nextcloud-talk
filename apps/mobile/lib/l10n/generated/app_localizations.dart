@@ -5414,6 +5414,132 @@ abstract class AppLocalizations {
   /// **'Poll'**
   String get pollMenuAction;
 
+  /// No description provided for @pollEndAction.
+  ///
+  /// In en, this message translates to:
+  /// **'End poll'**
+  String get pollEndAction;
+
+  /// No description provided for @pollEndConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'End this poll? Participants will no longer be able to vote.'**
+  String get pollEndConfirm;
+
+  /// No description provided for @pollClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll ended'**
+  String get pollClosed;
+
+  /// No description provided for @pollExportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Export results'**
+  String get pollExportAction;
+
+  /// No description provided for @pollExportCsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Export CSV'**
+  String get pollExportCsv;
+
+  /// No description provided for @pollExportOds.
+  ///
+  /// In en, this message translates to:
+  /// **'Export ODS'**
+  String get pollExportOds;
+
+  /// No description provided for @pollExportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Results saved'**
+  String get pollExportSaved;
+
+  /// No description provided for @pollExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The results could not be saved.'**
+  String get pollExportFailed;
+
+  /// No description provided for @pollDraftsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Poll drafts'**
+  String get pollDraftsTitle;
+
+  /// No description provided for @pollSaveDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Save draft'**
+  String get pollSaveDraft;
+
+  /// No description provided for @pollDraftSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved'**
+  String get pollDraftSaved;
+
+  /// No description provided for @pollEditDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit draft'**
+  String get pollEditDraft;
+
+  /// No description provided for @pollNewDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'New draft'**
+  String get pollNewDraft;
+
+  /// No description provided for @pollPublishDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as new poll'**
+  String get pollPublishDraft;
+
+  /// No description provided for @pollPublishDraftConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This creates a new poll. The draft remains available.'**
+  String get pollPublishDraftConfirm;
+
+  /// No description provided for @pollDeleteDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete draft'**
+  String get pollDeleteDraft;
+
+  /// No description provided for @pollDeleteDraftConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this reusable draft?'**
+  String get pollDeleteDraftConfirm;
+
+  /// No description provided for @pollDraftsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No drafts in this conversation.'**
+  String get pollDraftsEmpty;
+
+  /// No description provided for @pollMaxVotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum votes'**
+  String get pollMaxVotes;
+
+  /// No description provided for @pollUnlimitedVotes.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get pollUnlimitedVotes;
+
+  /// No description provided for @pollTextTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'The poll text is too long.'**
+  String get pollTextTooLong;
+
   /// No description provided for @pollChecking.
   ///
   /// In en, this message translates to:

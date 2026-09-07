@@ -14,6 +14,7 @@ import 'package:nextcloudtalk/features/chat/poll_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
+import 'poll_test_support.dart';
 
 part 'chat_message_content_poll_test.part.dart';
 
