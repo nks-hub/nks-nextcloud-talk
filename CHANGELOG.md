@@ -98,10 +98,10 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
-- Fixed: the row of call controls ran off the right edge of a phone once the
-  recording button joined it — seven round buttons and a labelled Leave do not
-  fit across 411 points. It breaks onto a second line now instead of being cut
-  off.
+- Fixed: the call controls ran off the right edge of a phone once the recording
+  button joined them. The strip in the banner above a conversation was the one
+  being cut off — eight buttons on one line — and it had never had a test.
+  Both it and the call screen's own controls break onto a second line now.
 - Fixed: on a server that lets a moderator take reactions away, NOBODY could
   react — not the people whose reactions had been taken away, everybody. The
   application read the server's "use the usual permissions" as "this person may
