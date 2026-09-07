@@ -224,10 +224,20 @@ final class PushRegistrationCoordinator {
       accountId: AccountId.parse(accountId),
       server: server,
       gateway: _gateway,
-      // ponytail: no credential/capability rotation tracking exists yet in
-      // this app, so both stay pinned at 1. Add real generations if an
-      // app-password refresh or a capability change needs to force a
-      // re-registration without a full account remove/re-add.
+      // ponytail: pinned at 1, so the runtime's re-registration trigger never
+      // fires. The machinery on the other side is real —
+      // `refreshPushAccountAuthority` rejects a lower generation as stale and
+      // rebinds on a higher one — and it simply never sees a change.
+      //
+      // Tracking is NOT missing from the app, which is what an earlier version
+      // of this comment claimed: `chat_repository.dart` bumps the
+      // `chatCapabilities` row's `credentialGeneration` whenever an account
+      // leaves the reauthentication lane, and its `generation` on a capability
+      // change too. That counter belongs to the chat runtime, not to push, and
+      // whether push should consume it is an open question rather than a
+      // wiring job — the two subsystems bind different things. Until it is
+      // answered, an app-password refresh forces a push re-registration only
+      // through a full account remove and re-add.
       credentialGeneration: 1,
       capabilityGeneration: 1,
       cloudId: '${resolved.account.loginName}@${server.uri.host}',

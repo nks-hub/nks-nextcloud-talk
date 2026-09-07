@@ -179,10 +179,16 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// ponytail: Nextcloud Talk has no documented forward endpoint in
   /// `docs/architecture/chat-messages-api.md`, and the upstream clients
   /// implement forwarding as a plain send of the original text into the target
-  /// room. This reuses `ChatService.sendText` for exactly that. Deliberate
-  /// simplification: quoted attribution of the original author and forwarding
-  /// of rich objects (files, polls, locations) are not carried over — those
-  /// need a documented contract first.
+  /// room. This reuses `ChatService.sendText` for exactly that.
+  ///
+  /// A single file attachment IS carried over, and has been since the message
+  /// share landed: `_forwardableFilePath` reads the `file` parameter's own
+  /// path and `RemoteFileShareService.shareIntoRoom` shares it again, because
+  /// the text of such a message is only a `{file}` placeholder. What is still
+  /// deliberately left out is quoted attribution of the original author, and
+  /// polls, locations and contacts — Talk has no re-share for those, so
+  /// `_forwardableAsText` does not offer the action at all rather than sending
+  /// a label that is not the object.
   /// The account's own note-to-self room, when the cached list has one and
   /// this is not it. Talk creates the room server-side; the app only reads it.
   CachedConversation? _noteToSelf() {
