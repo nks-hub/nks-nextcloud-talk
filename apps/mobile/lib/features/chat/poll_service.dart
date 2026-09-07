@@ -9,6 +9,9 @@ import '../../data/chat_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
 
+part 'poll_service_management.dart';
+part 'poll_service_authority.dart';
+
 const int _chatPermission = 128;
 const int _ignoreLobbyPermission = 8;
 const int _roomTypeGroup = 2;
@@ -26,6 +29,39 @@ enum PollServiceError {
   unavailable,
   ambiguous,
   invalidResponse,
+  invalidInput,
+  notFound,
+}
+
+final class PollManagementAccess {
+  const PollManagementAccess({
+    this.canListDrafts = false,
+    this.canCreateDraft = false,
+    this.canEditDraft = false,
+    this.canDeleteDraft = false,
+    this.canPublish = false,
+    this.canClose = false,
+    this.canExport = false,
+  });
+
+  final bool canListDrafts;
+  final bool canCreateDraft;
+  final bool canEditDraft;
+  final bool canDeleteDraft;
+  final bool canPublish;
+  final bool canClose;
+  final bool canExport;
+}
+
+final class PollExportFile {
+  const PollExportFile({
+    required this.bytes,
+    required this.fileName,
+    required this.mimeType,
+  });
+  final Uint8List bytes;
+  final String fileName;
+  final String mimeType;
 }
 
 final class PollServiceException implements Exception {
@@ -51,6 +87,38 @@ abstract interface class PollSender {
     required TalkPoll poll,
     required List<int> optionIds,
   });
+
+  Future<PollManagementAccess> managementAccess({
+    required PollRoomKey key,
+    TalkPoll? poll,
+  });
+  Future<TalkPoll> close({required PollRoomKey key, required TalkPoll poll});
+  Future<List<TalkPoll>> listDrafts({required PollRoomKey key});
+  Future<TalkPoll> createDraft({
+    required PollRoomKey key,
+    required String question,
+    required List<String> options,
+    required PollResultMode resultMode,
+    required int maxVotes,
+  });
+  Future<TalkPoll> editDraft({
+    required PollRoomKey key,
+    required TalkPoll draft,
+    required String question,
+    required List<String> options,
+    required PollResultMode resultMode,
+    required int maxVotes,
+  });
+  Future<void> deleteDraft({required PollRoomKey key, required TalkPoll draft});
+  Future<TalkPoll> publishDraft({
+    required PollRoomKey key,
+    required TalkPoll draft,
+  });
+  Future<PollExportFile> export({
+    required PollRoomKey key,
+    required TalkPoll poll,
+    required PollExportFormat format,
+  });
 }
 
 final class PollService implements PollSender {
@@ -75,6 +143,65 @@ final class PollService implements PollSender {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
+  final Expando<_PreparedPoll> _pollOrigins = Expando<_PreparedPoll>();
+
+  @override
+  Future<PollManagementAccess> managementAccess({
+    required PollRoomKey key,
+    TalkPoll? poll,
+  }) => _managementAccess(key: key, poll: poll);
+  @override
+  Future<TalkPoll> close({required PollRoomKey key, required TalkPoll poll}) =>
+      _close(key: key, poll: poll);
+  @override
+  Future<List<TalkPoll>> listDrafts({required PollRoomKey key}) =>
+      _listDrafts(key);
+  @override
+  Future<TalkPoll> createDraft({
+    required PollRoomKey key,
+    required String question,
+    required List<String> options,
+    required PollResultMode resultMode,
+    required int maxVotes,
+  }) => _createDraft(
+    key: key,
+    question: question,
+    options: options,
+    resultMode: resultMode,
+    maxVotes: maxVotes,
+  );
+  @override
+  Future<TalkPoll> editDraft({
+    required PollRoomKey key,
+    required TalkPoll draft,
+    required String question,
+    required List<String> options,
+    required PollResultMode resultMode,
+    required int maxVotes,
+  }) => _editDraft(
+    key: key,
+    draft: draft,
+    question: question,
+    options: options,
+    resultMode: resultMode,
+    maxVotes: maxVotes,
+  );
+  @override
+  Future<void> deleteDraft({
+    required PollRoomKey key,
+    required TalkPoll draft,
+  }) => _deleteDraft(key: key, draft: draft);
+  @override
+  Future<TalkPoll> publishDraft({
+    required PollRoomKey key,
+    required TalkPoll draft,
+  }) => _publishDraft(key: key, draft: draft);
+  @override
+  Future<PollExportFile> export({
+    required PollRoomKey key,
+    required TalkPoll poll,
+    required PollExportFormat format,
+  }) => _export(key: key, poll: poll, format: format);
 
   @override
   Future<bool> isAvailable(PollRoomKey key) async {
@@ -129,7 +256,12 @@ final class PollService implements PollSender {
         loginName: context.loginName,
         appPassword: context.appPassword,
       );
-      return await _confirmed(response, key.accountId, dispatched: dispatched);
+      return await _confirmed(
+        response,
+        key.accountId,
+        context: context,
+        dispatched: dispatched,
+      );
     } on PollServiceException {
       rethrow;
     } on NextcloudApiException catch (error) {
@@ -168,7 +300,12 @@ final class PollService implements PollSender {
         loginName: context.loginName,
         appPassword: context.appPassword,
       );
-      return await _confirmed(response, key.accountId, dispatched: false);
+      return await _confirmed(
+        response,
+        key.accountId,
+        context: context,
+        dispatched: false,
+      );
     } on PollServiceException {
       rethrow;
     } on NextcloudApiException catch (error) {
@@ -200,6 +337,7 @@ final class PollService implements PollSender {
     var dispatched = false;
     try {
       final context = await _prepare(key, access: _PollAccess.readVote);
+      _requireOrigin(key, poll, context);
       final request = PollVoteRequest(
         accountId: AccountId.parse(key.accountId),
         requestId: ChatRequestId.parse(_uuid.v4()),
@@ -215,7 +353,12 @@ final class PollService implements PollSender {
         loginName: context.loginName,
         appPassword: context.appPassword,
       );
-      return await _confirmed(response, key.accountId, dispatched: dispatched);
+      return await _confirmed(
+        response,
+        key.accountId,
+        context: context,
+        dispatched: dispatched,
+      );
     } on PollServiceException {
       rethrow;
     } on NextcloudApiException catch (error) {
@@ -241,6 +384,7 @@ final class PollService implements PollSender {
   Future<_PreparedPoll> _prepare(
     PollRoomKey key, {
     required _PollAccess access,
+    bool forceCapabilities = false,
   }) async {
     final account = await _accounts.getAccount(key.accountId);
     final conversation = await _chat.getConversation(
@@ -257,11 +401,12 @@ final class PollService implements PollSender {
     try {
       var room = await _validateCachedContext(key, access: access);
       final server = ServerBase.parse(account.serverUrl);
-      final capabilities = await _api.getAuthenticatedCapabilities(
+      final capabilities = (await _api.getAuthenticatedCapabilitiesWithSource(
         server: server,
         loginName: account.loginName,
         appPassword: password,
-      );
+        forceRefresh: forceCapabilities,
+      )).snapshot;
       if (!capabilities.talkFeatures.contains('talk-polls') ||
           (access == _PollAccess.create &&
               key.threadId != null &&
@@ -272,12 +417,16 @@ final class PollService implements PollSender {
       // while it is in flight, so validate the current cache again before the
       // mutation is allowed to leave the process.
       room = await _validateCachedContext(key, access: access);
-      return _PreparedPoll(
+      final prepared = _PreparedPoll(
+        accountId: key.accountId,
         server: server,
         room: room,
         loginName: account.loginName,
         appPassword: password,
+        features: capabilities.talkFeatures,
       );
+      await _validateIdentity(prepared);
+      return prepared;
     } on PollServiceException {
       rethrow;
     } on NextcloudApiException catch (error) {
@@ -309,11 +458,12 @@ final class PollService implements PollSender {
     final room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     if (room.token.value != key.roomToken ||
         (room.lobbyState != 0 &&
+            !_isPollModerator(room) &&
             room.permissions & _ignoreLobbyPermission !=
                 _ignoreLobbyPermission)) {
       throw const PollServiceException(PollServiceError.contextMissing);
     }
-    if (access == _PollAccess.create &&
+    if (access != _PollAccess.readVote &&
         (room.readOnly != 0 ||
             (room.type != _roomTypeGroup && room.type != _roomTypePublic) ||
             // A bare 0 is the server's "use the defaults", which include chat.
@@ -323,7 +473,7 @@ final class PollService implements PollSender {
                 room.permissions & _chatPermission != _chatPermission))) {
       throw const PollServiceException(PollServiceError.contextMissing);
     }
-    if (access == _PollAccess.readVote || key.threadId == null) {
+    if (access != _PollAccess.create || key.threadId == null) {
       return room;
     }
     if (room.isFederated) {
@@ -359,10 +509,13 @@ final class PollService implements PollSender {
     PollResponse response,
     String accountId, {
     required bool dispatched,
+    required _PreparedPoll context,
   }) async {
     final poll = response.poll;
     if (response.classification == PollResponseClassification.confirmed &&
         poll != null) {
+      await _validateIdentity(context);
+      _pollOrigins[poll] = context;
       return poll;
     }
     if (response.classification ==
@@ -375,8 +528,8 @@ final class PollService implements PollSender {
       PollResponseClassification.permissionDenied =>
         PollServiceError.permissionDenied,
       PollResponseClassification.rateLimited => PollServiceError.rateLimited,
-      PollResponseClassification.invalidInput ||
-      PollResponseClassification.notFound => PollServiceError.invalidResponse,
+      PollResponseClassification.invalidInput => PollServiceError.invalidInput,
+      PollResponseClassification.notFound => PollServiceError.notFound,
       PollResponseClassification.serviceUnavailable =>
         dispatched ? PollServiceError.ambiguous : PollServiceError.unavailable,
       PollResponseClassification.confirmed => PollServiceError.invalidResponse,
@@ -384,17 +537,23 @@ final class PollService implements PollSender {
   }
 }
 
-enum _PollAccess { create, readVote }
+enum _PollAccess { create, writeDraft, readVote }
 
 final class _PreparedPoll {
   const _PreparedPoll({
+    required this.accountId,
     required this.server,
     required this.room,
     required this.loginName,
     required this.appPassword,
+    required this.features,
+    this.userId,
   });
+  final String accountId;
   final ServerBase server;
   final ConversationRoom room;
   final String loginName;
   final String appPassword;
+  final Set<String> features;
+  final String? userId;
 }

@@ -14,6 +14,8 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'poll_service_management_test.part.dart';
+
 void main() {
   late AppDatabase database;
   late AccountRepository accounts;
@@ -40,6 +42,17 @@ void main() {
   });
 
   tearDown(() => database.close());
+
+  _registerPollManagementTests(
+    () => (
+      database: database,
+      accounts: accounts,
+      chat: chat,
+      vault: vault,
+      account: account,
+      conversation: conversation,
+    ),
+  );
 
   test(
     'capability-gated create reaches one POST and confirms the poll',
