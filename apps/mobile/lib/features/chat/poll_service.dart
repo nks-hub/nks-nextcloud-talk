@@ -303,7 +303,11 @@ final class PollService implements PollSender {
     if (access == _PollAccess.create &&
         (room.readOnly != 0 ||
             (room.type != _roomTypeGroup && room.type != _roomTypePublic) ||
-            room.permissions & _chatPermission != _chatPermission)) {
+            // A bare 0 is the server's "use the defaults", which include chat.
+            // Testing the bit over it refuses everything at once, which would
+            // stop an ordinary participant creating a poll at all.
+            (room.permissions != 0 &&
+                room.permissions & _chatPermission != _chatPermission))) {
       throw const PollServiceException(PollServiceError.contextMissing);
     }
     if (access == _PollAccess.readVote || key.threadId == null) {

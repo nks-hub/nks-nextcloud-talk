@@ -238,7 +238,12 @@ final class LocationShareService implements LocationShareSender {
       if (conversation.accountId != accountId ||
           room.token.value != roomToken ||
           room.readOnly != 0 ||
-          room.permissions & _chatPermission != _chatPermission ||
+          // A bare 0 is the server's "use the defaults", which include chat —
+          // testing the bit over it refuses every permission at once. The
+          // lobby bit below deliberately gets no such benefit: the defaults do
+          // not include walking past a lobby.
+          (room.permissions != 0 &&
+              room.permissions & _chatPermission != _chatPermission) ||
           (room.lobbyState != 0 &&
               room.permissions & _ignoreLobbyPermission !=
                   _ignoreLobbyPermission)) {

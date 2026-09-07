@@ -171,7 +171,11 @@ void main() {
 
     for (final entry in const <String, Map<String, Object?>>{
       'read-only room': {'readOnly': 1},
-      'missing chat permission': {'permissions': 0},
+      // 16 is a real permission set that withholds chat. It used to be 0 here,
+      // which is the server's "use the defaults" and includes chat — so this
+      // case was asserting the defect rather than the rule. See the test below
+      // it.
+      'missing chat permission': {'permissions': 16},
       'active lobby without bypass': {'lobbyState': 1, 'permissions': 128},
     }.entries) {
       test('rejects ${entry.key} before HTTP', () async {
