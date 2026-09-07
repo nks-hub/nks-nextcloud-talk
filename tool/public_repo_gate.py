@@ -77,7 +77,18 @@ def main():
                     findings.append((rel, number, "denylisted literal"))
     for rel, number, name in findings:
         print(f"{rel}:{number}: {name}")
-    print(f"public repository gate: {len(findings)} finding(s)")
+    # Say which of the two halves ran. Without the denylist the gate still
+    # checks every generic pattern, but not one operator literal — and a bare
+    # "0 finding(s)" reads identically either way, which is how a weaker check
+    # passes for a full one. It is absent in CI unless the file is restored
+    # there, because it cannot be committed: it is a list of the very strings
+    # it exists to keep out.
+    scope = (
+        f"{len(denylist)} operator literal(s)"
+        if denylist
+        else "generic patterns only, no .public-denylist"
+    )
+    print(f"public repository gate: {len(findings)} finding(s) [{scope}]")
     return 1 if findings else 0
 
 
