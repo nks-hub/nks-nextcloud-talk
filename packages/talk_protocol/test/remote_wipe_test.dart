@@ -46,11 +46,17 @@ void main() {
     });
 
     test('carries the token in the body, never in the URL or toString', () {
-      final built = request(password: 'secret token/value');
+      // The word is `placeholder` rather than `secret` so that
+      // `tool/secret_log_scan.py` reads the line as a fixture; the space and
+      // the slash are what the test is about, and they survive the rename. It
+      // must also be a word the URL does not contain on its own — `example`
+      // would make the two `isNot(contains(...))` assertions pass for the
+      // wrong reason, because the host is `host.example.invalid`.
+      final built = request(password: 'placeholder token/value');
 
-      expect(utf8.decode(built.bodyBytes), 'token=secret+token%2Fvalue');
-      expect(built.uri.toString(), isNot(contains('secret')));
-      expect(built.toString(), isNot(contains('secret')));
+      expect(utf8.decode(built.bodyBytes), 'token=placeholder+token%2Fvalue');
+      expect(built.uri.toString(), isNot(contains('placeholder')));
+      expect(built.toString(), isNot(contains('placeholder')));
     });
 
     test('refuses an empty or oversized token', () {
