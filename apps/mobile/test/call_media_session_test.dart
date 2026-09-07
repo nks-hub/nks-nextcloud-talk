@@ -1381,8 +1381,8 @@ void main() {
   );
   test('a reconnect waits for the new session instead of ending the call', () async {
     // Measured live on 6 September 2026: eighteen seconds of airplane mode in
-    // an MCU call ended it outright — "the call signalling ended, so the audio
-    // stopped" and a Join button where the call had been. The flag is set
+    // an MCU call ended it outright — "the connection to the call server
+    // dropped, so the audio stopped" and a Join button where the call had been. The flag is set
     // while the lane refuses to carry SDP; what follows it is a full hello
     // with a new room epoch, which is exactly the rebuild the flag asks for.
     final media = session(

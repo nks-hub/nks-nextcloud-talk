@@ -611,31 +611,31 @@ abstract class AppLocalizations {
   /// No description provided for @emojiManageFavorites.
   ///
   /// In en, this message translates to:
-  /// **'Manage favorites'**
+  /// **'Manage favourites'**
   String get emojiManageFavorites;
 
   /// No description provided for @emojiFinishManagingFavorites.
   ///
   /// In en, this message translates to:
-  /// **'Finish managing favorites'**
+  /// **'Finish managing favourites'**
   String get emojiFinishManagingFavorites;
 
   /// No description provided for @emojiFavoriteModeHint.
   ///
   /// In en, this message translates to:
-  /// **'Tap emoji to add or remove favorites'**
+  /// **'Tap emoji to add or remove favourites'**
   String get emojiFavoriteModeHint;
 
   /// No description provided for @emojiAddFavoriteLabel.
   ///
   /// In en, this message translates to:
-  /// **'Add to favorites'**
+  /// **'Add to favourites'**
   String get emojiAddFavoriteLabel;
 
   /// No description provided for @emojiRemoveFavoriteLabel.
   ///
   /// In en, this message translates to:
-  /// **'Remove from favorites'**
+  /// **'Remove from favourites'**
   String get emojiRemoveFavoriteLabel;
 
   /// No description provided for @emojiSearchHint.
@@ -659,13 +659,13 @@ abstract class AppLocalizations {
   /// No description provided for @emojiNoFavorites.
   ///
   /// In en, this message translates to:
-  /// **'No favorite emoji'**
+  /// **'No favourite emoji'**
   String get emojiNoFavorites;
 
   /// No description provided for @emojiCategoryFavorites.
   ///
   /// In en, this message translates to:
-  /// **'Favorites'**
+  /// **'Favourites'**
   String get emojiCategoryFavorites;
 
   /// No description provided for @emojiCategoryRecent.
@@ -1949,7 +1949,7 @@ abstract class AppLocalizations {
   /// No description provided for @roomDetailsFavoriteLabel.
   ///
   /// In en, this message translates to:
-  /// **'Favorite conversation'**
+  /// **'Favourite conversation'**
   String get roomDetailsFavoriteLabel;
 
   /// No description provided for @roomDetailsImportantLabel.
@@ -2119,12 +2119,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add account'**
   String get settingsAddAccount;
-
-  /// No description provided for @settingsRemoveAccountUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.'**
-  String get settingsRemoveAccountUnavailable;
 
   /// No description provided for @settingsProfileSection.
   ///
@@ -3755,7 +3749,7 @@ abstract class AppLocalizations {
   /// No description provided for @callBannerAudioSignalingLost.
   ///
   /// In en, this message translates to:
-  /// **'The call signalling ended, so the audio stopped.'**
+  /// **'The connection to the call server dropped, so the audio stopped.'**
   String get callBannerAudioSignalingLost;
 
   /// No description provided for @callBannerMcuUnsupported.
@@ -3773,25 +3767,25 @@ abstract class AppLocalizations {
   /// No description provided for @callBannerSignalingUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'This conversation has no signalling session, so its call cannot be joined.'**
+  /// **'The server has not opened a call in this conversation, so it cannot be joined.'**
   String get callBannerSignalingUnavailable;
 
   /// No description provided for @callBannerTransportChecking.
   ///
   /// In en, this message translates to:
-  /// **'Checking how this call is signalled…'**
+  /// **'Checking where this call goes…'**
   String get callBannerTransportChecking;
 
   /// No description provided for @callBannerTransportUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'The call transport could not be resolved.'**
+  /// **'This call cannot be joined right now. Try again in a moment.'**
   String get callBannerTransportUnavailable;
 
   /// No description provided for @callBannerTransportReauth.
   ///
   /// In en, this message translates to:
-  /// **'Sign in again to see how this call is signalled.'**
+  /// **'Sign in again before you can join the call.'**
   String get callBannerTransportReauth;
 
   /// No description provided for @callBannerTransportRoomUnavailable.
@@ -3803,13 +3797,13 @@ abstract class AppLocalizations {
   /// No description provided for @callTransportInternal.
   ///
   /// In en, this message translates to:
-  /// **'the built-in signalling'**
+  /// **'this Nextcloud'**
   String get callTransportInternal;
 
   /// No description provided for @callTransportExternalHpb.
   ///
   /// In en, this message translates to:
-  /// **'a separate signalling server'**
+  /// **'a separate call server'**
   String get callTransportExternalHpb;
 
   /// No description provided for @messageActionNoteToSelf.
@@ -4901,7 +4895,7 @@ abstract class AppLocalizations {
   /// Explanation of the per-account tag assignment.
   ///
   /// In en, this message translates to:
-  /// **'Choose the tags used to organize this conversation for your account.'**
+  /// **'Choose the tags used to organise this conversation for your account.'**
   String get roomDetailsConversationTagsDialogHint;
 
   /// Empty state when the user owns no custom conversation tags.

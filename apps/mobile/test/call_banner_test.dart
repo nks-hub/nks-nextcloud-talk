@@ -186,7 +186,7 @@ void main() {
       reason: 'media exists, so the button must act',
     );
     expect(
-      find.text('The call runs through a separate signalling server.'),
+      find.text('The call runs through a separate call server.'),
       findsOneWidget,
       reason: 'the banner names the transport in words, not as an acronym',
     );
@@ -210,8 +210,8 @@ void main() {
 
     expect(
       find.text(
-        'This conversation has no signalling session, '
-        'so its call cannot be joined.',
+        'The server has not opened a call in this conversation, '
+        'so it cannot be joined.',
       ),
       findsOneWidget,
     );
@@ -356,7 +356,9 @@ void main() {
 
     expect(find.byKey(const Key('call-banner-join')), findsNothing);
     expect(
-      find.text('The call transport could not be resolved.'),
+      find.text(
+        'This call cannot be joined right now. Try again in a moment.',
+      ),
       findsOneWidget,
     );
     expect(

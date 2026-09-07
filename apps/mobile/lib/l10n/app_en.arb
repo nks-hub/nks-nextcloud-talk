@@ -88,16 +88,16 @@
   "openEmojiPicker": "Open emoji picker",
   "emojiPickerTitle": "Emoji",
   "emojiPickerCloseTooltip": "Close emoji picker",
-  "emojiManageFavorites": "Manage favorites",
-  "emojiFinishManagingFavorites": "Finish managing favorites",
-  "emojiFavoriteModeHint": "Tap emoji to add or remove favorites",
-  "emojiAddFavoriteLabel": "Add to favorites",
-  "emojiRemoveFavoriteLabel": "Remove from favorites",
+  "emojiManageFavorites": "Manage favourites",
+  "emojiFinishManagingFavorites": "Finish managing favourites",
+  "emojiFavoriteModeHint": "Tap emoji to add or remove favourites",
+  "emojiAddFavoriteLabel": "Add to favourites",
+  "emojiRemoveFavoriteLabel": "Remove from favourites",
   "emojiSearchHint": "Search emoji",
   "emojiNoResults": "No emoji found",
   "emojiNoRecents": "No recently used emoji",
-  "emojiNoFavorites": "No favorite emoji",
-  "emojiCategoryFavorites": "Favorites",
+  "emojiNoFavorites": "No favourite emoji",
+  "emojiCategoryFavorites": "Favourites",
   "emojiCategoryRecent": "Recent",
   "emojiCategorySmileys": "Smileys",
   "emojiCategoryPeople": "People",
@@ -355,7 +355,13 @@
   "roomDetailsAddParticipantSearch": "Search for people and groups",
   "roomDetailsAddParticipantEmpty": "Nobody matches",
   "roomDetailsAddParticipantAdded": "{name} was added",
-  "@roomDetailsAddParticipantAdded": {"placeholders": {"name": {"type": "String"}}},
+  "@roomDetailsAddParticipantAdded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "roomDetailsParticipantsCount": "{count, plural, =1{1 participant} other{{count} participants}}",
   "@roomDetailsParticipantsCount": {
     "placeholders": {
@@ -381,7 +387,7 @@
   "roomDetailsDescriptionFieldLabel": "Description",
   "roomDetailsSave": "Save",
   "roomDetailsNotificationDialogTitle": "Notification level",
-  "roomDetailsFavoriteLabel": "Favorite conversation",
+  "roomDetailsFavoriteLabel": "Favourite conversation",
   "roomDetailsImportantLabel": "Important conversation",
   "roomDetailsImportantSubtitle": "Notify me even while Do Not Disturb is active",
   "roomDetailsSensitiveLabel": "Sensitive conversation",
@@ -410,7 +416,6 @@
   "settingsAccountSelected": "Active",
   "settingsAccountsLoadFailed": "Accounts could not be loaded.",
   "settingsAddAccount": "Add account",
-  "settingsRemoveAccountUnavailable": "Removing an account isn't supported yet. Sign out of it on the server if you need to revoke access.",
   "settingsProfileSection": "Profile",
   "settingsOpenProfile": "Profile and status",
   "settingsOpenProfileSubtitle": "View your profile and manage your availability",
@@ -695,18 +700,36 @@
   "callBannerReact": "Send a reaction",
   "callBannerOpenCallView": "Open the call view",
   "callScreenTitle": "Call ({count})",
-  "@callScreenTitle": {"placeholders": {"count": {"type": "int"}}},
+  "@callScreenTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "callBannerCameraOn": "Turn camera on",
   "callBannerCameraOff": "Turn camera off",
   "callParticipantsTitle": "In the call ({count})",
-  "@callParticipantsTitle": {"placeholders": {"count": {"type": "int"}}},
+  "@callParticipantsTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "callParticipantsYou": "You",
   "callScreenSharedBy": "{name} is sharing their screen",
   "callBannerShareScreen": "Share your screen",
   "callBannerStopSharing": "Stop sharing your screen",
   "callBannerStartRecording": "Start recording",
   "callBannerStopRecording": "Stop recording",
-  "@callScreenSharedBy": {"placeholders": {"name": {"type": "String"}}},
+  "@callScreenSharedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "callParticipantConnected": "Audio connected",
   "callParticipantConnecting": "Connecting…",
   "callParticipantMuted": "Muted",
@@ -727,16 +750,16 @@
   "callBannerMicrophoneDenied": "The microphone was refused. Allow it in the system settings and join again.",
   "callBannerMicrophoneUnavailable": "The microphone could not be opened.",
   "callBannerAudioFailed": "The call audio could not be established.",
-  "callBannerAudioSignalingLost": "The call signalling ended, so the audio stopped.",
+  "callBannerAudioSignalingLost": "The connection to the call server dropped, so the audio stopped.",
   "callBannerMcuUnsupported": "This server routes calls through a central media server, which this app cannot join yet.",
   "callBannerJoinFailed": "Joining the call failed.",
-  "callBannerSignalingUnavailable": "This conversation has no signalling session, so its call cannot be joined.",
-  "callBannerTransportChecking": "Checking how this call is signalled…",
-  "callBannerTransportUnavailable": "The call transport could not be resolved.",
-  "callBannerTransportReauth": "Sign in again to see how this call is signalled.",
+  "callBannerSignalingUnavailable": "The server has not opened a call in this conversation, so it cannot be joined.",
+  "callBannerTransportChecking": "Checking where this call goes…",
+  "callBannerTransportUnavailable": "This call cannot be joined right now. Try again in a moment.",
+  "callBannerTransportReauth": "Sign in again before you can join the call.",
   "callBannerTransportRoomUnavailable": "This conversation is no longer available on the server.",
-  "callTransportInternal": "the built-in signalling",
-  "callTransportExternalHpb": "a separate signalling server",
+  "callTransportInternal": "this Nextcloud",
+  "callTransportExternalHpb": "a separate call server",
   "messageActionNoteToSelf": "Send to Note to self",
   "messageActionForward": "Forward",
   "messageActionPrivateReply": "Reply privately",
@@ -918,7 +941,13 @@
   "roomDetailsBreakoutStopped": "Created, not started",
   "roomDetailsBreakoutStarted": "Started",
   "roomDetailsBreakoutAssistanceRequested": "Started — {rooms} asks for a moderator",
-  "@roomDetailsBreakoutAssistanceRequested": {"placeholders": {"rooms": {"type": "String"}}},
+  "@roomDetailsBreakoutAssistanceRequested": {
+    "placeholders": {
+      "rooms": {
+        "type": "String"
+      }
+    }
+  },
   "roomDetailsBreakoutCreate": "Create breakout rooms",
   "roomDetailsBreakoutCreateDialogTitle": "How many breakout rooms?",
   "roomDetailsBreakoutModeAutomatic": "Spread everyone evenly",
@@ -926,14 +955,26 @@
   "roomDetailsBreakoutModeFree": "Let people pick a room",
   "roomDetailsBreakoutAssignTitle": "Who goes where",
   "roomDetailsBreakoutAssignRoom": "Room {number}",
-  "@roomDetailsBreakoutAssignRoom": {"placeholders": {"number": {"type": "int"}}},
+  "@roomDetailsBreakoutAssignRoom": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "roomDetailsBreakoutAssignUnassigned": "Not assigned",
   "roomDetailsBreakoutAssignConfirm": "Create",
   "roomDetailsBreakoutSwitch": "Move to another room",
   "roomDetailsBreakoutSwitchTitle": "Which room?",
   "roomDetailsBreakoutSwitchEmpty": "No breakout room is open right now.",
   "roomDetailsBreakoutSwitched": "You are now in {name}.",
-  "@roomDetailsBreakoutSwitched": {"placeholders": {"name": {"type": "String"}}},
+  "@roomDetailsBreakoutSwitched": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "roomDetailsBreakoutStart": "Start the breakout rooms",
   "roomDetailsBreakoutStop": "Stop the breakout rooms",
   "roomDetailsBreakoutBroadcast": "Message all breakout rooms",
@@ -1173,7 +1214,7 @@
   "@roomDetailsConversationTagsDialogTitle": {
     "description": "Title of the conversation tag assignment dialog."
   },
-  "roomDetailsConversationTagsDialogHint": "Choose the tags used to organize this conversation for your account.",
+  "roomDetailsConversationTagsDialogHint": "Choose the tags used to organise this conversation for your account.",
   "@roomDetailsConversationTagsDialogHint": {
     "description": "Explanation of the per-account tag assignment."
   },
@@ -1454,8 +1495,23 @@
   "federationInvitationDeclined": "Invitation declined.",
   "federationInvitationGone": "This invitation is no longer available.",
   "federationInvitationFailed": "The invitation could not be processed. Try again later.",
-  "@federationInvitationsCount": {"placeholders": {"count": {"type": "int"}}},
-  "@federationInvitationFrom": {"placeholders": {"inviter": {"type": "String"}, "server": {"type": "String"}}},
+  "@federationInvitationsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@federationInvitationFrom": {
+    "placeholders": {
+      "inviter": {
+        "type": "String"
+      },
+      "server": {
+        "type": "String"
+      }
+    }
+  },
   "openConversationsPasswordTitle": "This conversation has a password",
   "openConversationsPasswordLabel": "Conversation password",
   "openConversationsJoined": "You joined the conversation.",

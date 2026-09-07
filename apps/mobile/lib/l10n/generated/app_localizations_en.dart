@@ -301,19 +301,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emojiPickerCloseTooltip => 'Close emoji picker';
 
   @override
-  String get emojiManageFavorites => 'Manage favorites';
+  String get emojiManageFavorites => 'Manage favourites';
 
   @override
-  String get emojiFinishManagingFavorites => 'Finish managing favorites';
+  String get emojiFinishManagingFavorites => 'Finish managing favourites';
 
   @override
-  String get emojiFavoriteModeHint => 'Tap emoji to add or remove favorites';
+  String get emojiFavoriteModeHint => 'Tap emoji to add or remove favourites';
 
   @override
-  String get emojiAddFavoriteLabel => 'Add to favorites';
+  String get emojiAddFavoriteLabel => 'Add to favourites';
 
   @override
-  String get emojiRemoveFavoriteLabel => 'Remove from favorites';
+  String get emojiRemoveFavoriteLabel => 'Remove from favourites';
 
   @override
   String get emojiSearchHint => 'Search emoji';
@@ -325,10 +325,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emojiNoRecents => 'No recently used emoji';
 
   @override
-  String get emojiNoFavorites => 'No favorite emoji';
+  String get emojiNoFavorites => 'No favourite emoji';
 
   @override
-  String get emojiCategoryFavorites => 'Favorites';
+  String get emojiCategoryFavorites => 'Favourites';
 
   @override
   String get emojiCategoryRecent => 'Recent';
@@ -1046,7 +1046,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roomDetailsNotificationDialogTitle => 'Notification level';
 
   @override
-  String get roomDetailsFavoriteLabel => 'Favorite conversation';
+  String get roomDetailsFavoriteLabel => 'Favourite conversation';
 
   @override
   String get roomDetailsImportantLabel => 'Important conversation';
@@ -1142,10 +1142,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAddAccount => 'Add account';
-
-  @override
-  String get settingsRemoveAccountUnavailable =>
-      'Removing an account isn\'t supported yet. Sign out of it on the server if you need to revoke access.';
 
   @override
   String get settingsProfileSection => 'Profile';
@@ -2051,7 +2047,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callBannerAudioSignalingLost =>
-      'The call signalling ended, so the audio stopped.';
+      'The connection to the call server dropped, so the audio stopped.';
 
   @override
   String get callBannerMcuUnsupported =>
@@ -2062,29 +2058,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get callBannerSignalingUnavailable =>
-      'This conversation has no signalling session, so its call cannot be joined.';
+      'The server has not opened a call in this conversation, so it cannot be joined.';
 
   @override
-  String get callBannerTransportChecking =>
-      'Checking how this call is signalled…';
+  String get callBannerTransportChecking => 'Checking where this call goes…';
 
   @override
   String get callBannerTransportUnavailable =>
-      'The call transport could not be resolved.';
+      'This call cannot be joined right now. Try again in a moment.';
 
   @override
   String get callBannerTransportReauth =>
-      'Sign in again to see how this call is signalled.';
+      'Sign in again before you can join the call.';
 
   @override
   String get callBannerTransportRoomUnavailable =>
       'This conversation is no longer available on the server.';
 
   @override
-  String get callTransportInternal => 'the built-in signalling';
+  String get callTransportInternal => 'this Nextcloud';
 
   @override
-  String get callTransportExternalHpb => 'a separate signalling server';
+  String get callTransportExternalHpb => 'a separate call server';
 
   @override
   String get messageActionNoteToSelf => 'Send to Note to self';
@@ -2706,7 +2701,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get roomDetailsConversationTagsDialogHint =>
-      'Choose the tags used to organize this conversation for your account.';
+      'Choose the tags used to organise this conversation for your account.';
 
   @override
   String get roomDetailsConversationTagsEmpty =>

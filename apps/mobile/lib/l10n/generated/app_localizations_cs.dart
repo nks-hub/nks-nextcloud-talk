@@ -1144,10 +1144,6 @@ class AppLocalizationsCs extends AppLocalizations {
   String get settingsAddAccount => 'Přidat účet';
 
   @override
-  String get settingsRemoveAccountUnavailable =>
-      'Odebrání účtu zatím není podporováno. Přístup zrušíte odhlášením na serveru.';
-
-  @override
   String get settingsProfileSection => 'Profil';
 
   @override
@@ -2050,7 +2046,7 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get callBannerAudioSignalingLost =>
-      'Signalizace hovoru skončila, zvuk se zastavil.';
+      'Spojení se serverem hovoru se přerušilo, zvuk se zastavil.';
 
   @override
   String get callBannerMcuUnsupported =>
@@ -2061,29 +2057,28 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get callBannerSignalingUnavailable =>
-      'Tato konverzace nemá signalizační relaci, hovor v ní tedy nejde připojit.';
+      'Server hovor v této konverzaci neotevřel, připojit se k němu nejde.';
 
   @override
-  String get callBannerTransportChecking =>
-      'Zjišťování, jak je hovor signalizován…';
+  String get callBannerTransportChecking => 'Zjišťování, kudy hovor půjde…';
 
   @override
   String get callBannerTransportUnavailable =>
-      'Transport hovoru se nepodařilo zjistit.';
+      'K hovoru se teď nedá připojit. Zkuste to za chvíli.';
 
   @override
   String get callBannerTransportReauth =>
-      'Přihlaste se znovu, aby šlo zjistit signalizaci hovoru.';
+      'Přihlaste se znovu, abyste se mohli k hovoru připojit.';
 
   @override
   String get callBannerTransportRoomUnavailable =>
       'Tato konverzace už na serveru není dostupná.';
 
   @override
-  String get callTransportInternal => 'vestavěnou signalizaci';
+  String get callTransportInternal => 'tento Nextcloud';
 
   @override
-  String get callTransportExternalHpb => 'samostatný signalizační server';
+  String get callTransportExternalHpb => 'samostatný server pro hovory';
 
   @override
   String get messageActionNoteToSelf => 'Poslat do Poznámek pro sebe';
