@@ -75,6 +75,11 @@ from the commit log. Nothing here has reached testers yet.
   inbox, push state machine, notification filter, call audio focus, contact
   picker and attachment saver. They were green and had simply never been part
   of a build. Nothing about them changed.
+- The repository gate now says which half of itself it ran. Its list of the
+  operator's own hostnames cannot be committed — it would publish the strings
+  it exists to keep out — so on a build server that half matched nothing while
+  the summary read the same as a complete local run. It names the scope now,
+  and the pipeline restores the list from a secret when one is configured.
 
 ## 0.1.0 (64) — 7 September 2026
 
