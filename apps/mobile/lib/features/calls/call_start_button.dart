@@ -31,6 +31,7 @@ List<ConversationHeaderAction> callStartActions(
   WidgetRef ref, {
   required String accountId,
   required CachedConversation conversation,
+  required bool Function() isCurrent,
 }) {
   final policy = ConversationCallStartPolicy.fromConversation(conversation);
   if (!policy.canStart) {
@@ -41,9 +42,19 @@ List<ConversationHeaderAction> callStartActions(
   final join = ref.watch(callJoinControllerProvider(key));
   final busy = join.isBusy || join.phase == CallJoinPhase.joined;
   Future<void> start({required bool withCamera}) async {
+    if (!context.mounted || !ref.context.mounted || !isCurrent()) return;
+    final current = ref.read(callJoinControllerProvider(key));
+    if (current.isBusy || current.phase == CallJoinPhase.joined) return;
     final controller = ref.read(callJoinControllerProvider(key).notifier);
     await controller.join();
-    if (withCamera) {
+    if (!context.mounted || !ref.context.mounted || !isCurrent()) return;
+    if (withCamera &&
+        identical(
+          ref.read(callJoinControllerProvider(key).notifier),
+          controller,
+        ) &&
+        ref.read(callJoinControllerProvider(key)).phase ==
+            CallJoinPhase.joined) {
       await controller.setCameraEnabled(true);
     }
   }

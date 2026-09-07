@@ -404,6 +404,19 @@ List<ConversationHeaderAction> _headerActions(
       ref,
       accountId: account.id,
       conversation: conversation,
+      isCurrent: () => switch (ref.context.widget) {
+        PresenceChatRoomScreen(
+          account: final currentAccount,
+          conversation: final currentRoom,
+        ) ||
+        PresenceChatRoomPane(
+          account: final currentAccount,
+          conversation: final currentRoom,
+        ) =>
+          currentAccount.id == account.id &&
+              currentRoom.token == conversation.token,
+        _ => false,
+      },
     ),
     ConversationHeaderAction(
       id: const Key('open-room-search'),

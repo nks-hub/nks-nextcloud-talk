@@ -79,6 +79,21 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
     final elapsed = call?.elapsed(now: widget.now());
     _syncTicker(running: elapsed != null);
     if (call == null) {
+      final error = ref.watch(
+        callJoinControllerProvider(key).select((join) => join.lifecycleError),
+      );
+      if (error == CallLifecycleError.endToEndEncryptionUnsupported) {
+        return Padding(
+          key: const Key('call-banner-encryption-unsupported'),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              AppLocalizations.of(context).callBannerEncryptionUnsupported,
+            ),
+          ),
+        );
+      }
       return const SizedBox.shrink();
     }
 
