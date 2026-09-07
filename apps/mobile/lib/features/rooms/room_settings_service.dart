@@ -22,6 +22,8 @@ part 'room_settings_sip.part.dart';
 part 'room_settings_breakout.part.dart';
 part 'room_settings_recording.part.dart';
 part 'room_settings_public.part.dart';
+part 'room_settings_access_context.part.dart';
+part 'room_settings_permissions.part.dart';
 
 enum RoomSettingsError {
   accountMissing,
@@ -78,7 +80,9 @@ final class RoomSettingsService {
   final Uuid _uuid;
   final _publicOrigins = Expando<_AuthContext>();
   final _publicUsed = Expando<bool>();
-  final _publicPending = <({String accountId, String roomToken})>{};
+  final _accessChangesPending = <({String accountId, String roomToken})>{};
+  final _permissionOrigins = Expando<_AuthContext>();
+  final _permissionUsed = Expando<bool>();
   final Map<({String accountId, String roomToken}), Future<void>>
   _readMutationTails = {};
 

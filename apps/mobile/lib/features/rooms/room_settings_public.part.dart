@@ -31,7 +31,7 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
 
     check();
     final context = await _authContext(accountId);
-    await _validatePublicIdentity(context);
+    await _validateAccessIdentity(context);
     check();
     final server = ServerBase.parse(context.account.serverUrl);
     final read = await _call(
@@ -58,9 +58,9 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
         forced is! bool) {
       throw const RoomSettingsException(RoomSettingsError.invalidResponse);
     }
-    final room = await _publicRoom(context, roomToken, abortTrigger);
+    final room = await _readAccessRoom(context, roomToken, abortTrigger);
     check();
-    await _validatePublicIdentity(context);
+    await _validateAccessIdentity(context);
     check();
     _requirePublicModerator(room);
     final access = RoomPublicAccess._(
@@ -85,7 +85,7 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
     bool Function()? isCurrent,
   }) async {
     final key = (accountId: accountId, roomToken: roomToken);
-    if (!_publicPending.add(key)) {
+    if (!_accessChangesPending.add(key)) {
       throw const RoomSettingsException(RoomSettingsError.rejected);
     }
     var dispatched = false;
@@ -113,7 +113,7 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
         throw const RoomSettingsException(RoomSettingsError.rejected);
       }
       if (prepared != null) {
-        await _validatePublicIdentity(_publicOrigins[prepared]!);
+        await _validateAccessIdentity(_publicOrigins[prepared]!);
       }
       final fresh = await preparePublicChange(
         accountId: accountId,
@@ -152,7 +152,7 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
       } on TalkProtocolException {
         throw const RoomSettingsException(RoomSettingsError.preconditionFailed);
       }
-      await _validatePublicIdentity(context);
+      await _validateAccessIdentity(context);
       check();
       _publicUsed[used] = true;
       dispatched = true;
@@ -185,12 +185,12 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
         rejected = response.statusCode >= 400 && response.statusCode < 500;
         _classifyAdministration(response);
       }
-      await _validatePublicIdentity(context);
+      await _validateAccessIdentity(context);
       check();
       // Spreed's atomic public transition updates the stored hash before its
       // in-memory Room object; the mutation response can retain hasPassword=false.
-      final room = await _publicRoom(context, roomToken, abortTrigger);
-      await _validatePublicIdentity(context);
+      final room = await _readAccessRoom(context, roomToken, abortTrigger);
+      await _validateAccessIdentity(context);
       check();
       if (room.token.value != roomToken ||
           room.type != (public ? 3 : 2) ||
@@ -205,50 +205,7 @@ extension RoomSettingsPublicAccess on RoomSettingsService {
       rethrow;
     } finally {
       if (used != null && rejected) _publicUsed[used] = false;
-      _publicPending.remove(key);
-    }
-  }
-
-  Future<ConversationRoom> _publicRoom(
-    _AuthContext context,
-    String token,
-    Future<void>? abort,
-  ) async {
-    final response = await _call(
-      () => _api.getConversations(
-        conversationRequest: ConversationListRequest(
-          accountId: AccountId.parse(context.account.id),
-          requestId: ConversationRequestId.parse(_uuid.v4()),
-          server: ServerBase.parse(context.account.serverUrl),
-          mode: ConversationFetchMode.full,
-          includeLastMessage: false,
-        ),
-        loginName: context.account.loginName,
-        appPassword: context.appPassword,
-        abortTrigger: abort,
-      ),
-    );
-    if (response is! ConversationListSuccess) {
-      throw RoomSettingsException(
-        response.statusCode == 401
-            ? RoomSettingsError.reauthenticationRequired
-            : RoomSettingsError.roomMissing,
-      );
-    }
-    final matches = response.rooms.where((room) => room.token.value == token);
-    if (matches.length != 1) {
-      throw const RoomSettingsException(RoomSettingsError.roomMissing);
-    }
-    return matches.single;
-  }
-
-  Future<void> _validatePublicIdentity(_AuthContext expected) async {
-    final current = await _authContext(expected.account.id);
-    if (!current.account.selected ||
-        current.account.loginName != expected.account.loginName ||
-        current.account.serverUrl != expected.account.serverUrl ||
-        current.appPassword != expected.appPassword) {
-      throw const RoomSettingsException(RoomSettingsError.accountMissing);
+      _accessChangesPending.remove(key);
     }
   }
 }
