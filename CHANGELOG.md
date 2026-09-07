@@ -113,6 +113,14 @@ from the commit log. Nothing here has reached testers yet.
   out loud.
 - Fixed: the settings could tell you that removing an account is not supported
   yet. It has been supported for weeks.
+- Changed: the call banner stopped saying "transport". Seven messages used the
+  word for what is really "where the call goes", and one of them read "Transport
+  hovoru se nepodařilo zjistit", which tells nobody anything they can do. They
+  now name the thing: this Nextcloud, or a separate call server, or that the
+  connection to it dropped.
+- Changed: the English settled on one spelling. It had been mixing British and
+  American — "colour" and "licences" beside "favorites" — and now reads British
+  throughout.
 - Added: the app lock works on Windows and macOS. It was offered only on
   phones, and the desktops were never even asked whether they had Windows Hello
   or Touch ID — the plugins for both had been shipped and registered all along.
