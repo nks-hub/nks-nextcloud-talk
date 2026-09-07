@@ -157,6 +157,7 @@ jobs:
           if [ -n "$PUBLIC_DENYLIST" ]; then
             printf '%s\n' "$PUBLIC_DENYLIST" > .public-denylist
           fi
+          python3 tool/test_public_repo_gate.py
           python3 tool/public_repo_gate.py
 
   android:
