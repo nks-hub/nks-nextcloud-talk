@@ -22,6 +22,15 @@ PATTERNS = [
     # Generic account names used by fixtures and hosted CI are not operator paths.
     ("home path", re.compile(r"(?:/Users/|/home/)(?!(?:user|builder|runner)\b)[a-z][a-z0-9_-]*\b|C:\\Users\\(?!(?:runneradmin|user)\\)[A-Za-z]")),
     ("sudo -u user", re.compile(r"sudo -u (?!<)[A-Za-z]")),
+    # A drive-rooted path through somebody's checkout root. Deliberately not
+    # "any drive path": `C:\build\Release` in an install script's help and
+    # `C:\incoming\report.csv` in a filename-sanitizing test are examples a
+    # reader understands, and a gate that flags those gets ignored. What is
+    # never an example is a path that walks through a working copy.
+    ("local checkout path", re.compile(r"\b[A-Za-z]:\\(?:[^\\\s]+\\)*?(?:sources?|repos?|projects?|work|dev|workspace)\\", re.I)),
+    # Private developer tooling. A documented command has to be one a reader
+    # can run; `rtk` is a local proxy that exists on one machine.
+    ("private tool wrapper", re.compile(r"(?:^|[`$(\s])rtk\s")),
     ("Apple team id", re.compile(r"DEVELOPMENT_TEAM = [A-Z0-9]{10}\b")),
     ("signing identity", re.compile(r"Developer ID Application: [^$<\"]")),
 ]

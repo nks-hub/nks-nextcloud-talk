@@ -541,8 +541,8 @@ or background scheduler scenario.
 Local fixtures:
 
 ```powershell
-rtk proxy python contracts\chat-messages\validate_contract.py
-rtk proxy python contracts\chat-messages\test_validate_contract.py
+python contracts\chat-messages\validate_contract.py
+python contracts\chat-messages\test_validate_contract.py
 ```
 
 The read-only live smoke test performs exactly two GET requests with no
@@ -550,7 +550,7 @@ read/presence side effect:
 
 ```powershell
 $env:NEXTCLOUD_TALK_TEST_ROOM_TOKEN = '<dedicated-read-room-token>'
-rtk proxy python contracts\chat-messages\validate_contract.py `
+python contracts\chat-messages\validate_contract.py `
   --live-origin https://nextcloud.example.com
 ```
 
@@ -559,7 +559,7 @@ synthetic message and a bounded catch-up has to find it:
 
 ```powershell
 $env:NEXTCLOUD_TALK_WRITE_TEST_ROOM_TOKEN = '<dedicated-write-room-token>'
-rtk proxy python contracts\chat-messages\validate_contract.py `
+python contracts\chat-messages\validate_contract.py `
   --live-origin https://nextcloud.example.com `
   --live-write
 ```

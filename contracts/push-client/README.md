@@ -33,9 +33,9 @@ encrypted PKCS#8, RSA, DSA, EC and OpenSSH private-key headers.
 From the repository root:
 
 ```powershell
-rtk proxy python contracts\push-client\validate_contract.py
-rtk proxy python -m unittest discover -s contracts\push-client -p test_*.py
-rtk proxy python -m ruff check contracts\push-client
+python contracts\push-client\validate_contract.py
+python -m unittest discover -s contracts\push-client -p test_*.py
+python -m ruff check contracts\push-client
 ```
 
 The expected validator summary:

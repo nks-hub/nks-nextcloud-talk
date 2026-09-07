@@ -202,8 +202,8 @@ The release probe builds and runs the signaling scenario as a real AOT
 executable. Contract validation runs with:
 
 ```powershell
-rtk proxy python contracts\signaling\validate_contract.py
-rtk proxy python -m unittest discover -s contracts\signaling -p "test_*.py" -v
+python contracts\signaling\validate_contract.py
+python -m unittest discover -s contracts\signaling -p "test_*.py" -v
 ```
 
 ## What this slice does not prove

@@ -305,11 +305,11 @@ no fresh vCard.
 ## Runnable verification
 
 ```powershell
-rtk proxy python contracts\attachment-upload\validate_contract.py
-rtk proxy python contracts\attachment-upload\test_validate_contract.py
-rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
-rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
-rtk C:\work\sources\flutter-sdk\flutter\bin\flutter.bat test `
+python contracts\attachment-upload\validate_contract.py
+python contracts\attachment-upload\test_validate_contract.py
+dart analyze --fatal-infos
+dart test
+flutter test `
   test\attachment_transport_test.dart `
   test\attachment_repository_test.dart `
   test\attachment_service_test.dart `

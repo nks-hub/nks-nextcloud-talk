@@ -168,13 +168,13 @@ the signed-in response must not be shared and must not overwrite a global cache.
 Local validation from the repository root:
 
 ```powershell
-rtk proxy python contracts\client-bootstrap\validate_contract.py
+python contracts\client-bootstrap\validate_contract.py
 ```
 
 The read-only live smoke test:
 
 ```powershell
-rtk proxy python contracts\client-bootstrap\validate_contract.py `
+python contracts\client-bootstrap\validate_contract.py `
   --live-origin <NEXTCLOUD_ORIGIN>
 ```
 

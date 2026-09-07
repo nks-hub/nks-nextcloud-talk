@@ -329,7 +329,7 @@ order initial full → first empty evidence → second empty evidence.
 Local validation from the repository root:
 
 ```powershell
-rtk proxy python contracts\conversation-list\validate_contract.py
+python contracts\conversation-list\validate_contract.py
 ```
 
 Pure Dart verification from `packages/talk_protocol`:
@@ -343,7 +343,7 @@ The optional live smoke test loads credentials only from the variables
 `NEXTCLOUD_TALK_USERNAME` and `NEXTCLOUD_TALK_APP_PASSWORD`:
 
 ```powershell
-rtk proxy python contracts\conversation-list\validate_contract.py `
+python contracts\conversation-list\validate_contract.py `
   --live-origin <NEXTCLOUD_ORIGIN>
 ```
 

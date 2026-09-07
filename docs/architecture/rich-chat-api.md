@@ -171,10 +171,10 @@ D-006.
 ## Runnable verification
 
 ```powershell
-rtk proxy python contracts\rich-chat\validate_contract.py
-rtk proxy python contracts\rich-chat\test_validate_contract.py
-rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat analyze --fatal-infos
-rtk C:\work\sources\flutter-sdk\flutter\bin\dart.bat test
+python contracts\rich-chat\validate_contract.py
+python contracts\rich-chat\test_validate_contract.py
+dart analyze --fatal-infos
+dart test
 ```
 
 The current local result:
