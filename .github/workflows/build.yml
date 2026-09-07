@@ -96,6 +96,16 @@ jobs:
           flutter pub get
           flutter analyze lib test
           flutter test --reporter expanded
+      # Sixty-eight Kotlin unit tests across ten classes — the share inbox, the
+      # push state machine, the notification filter and ids, the call audio
+      # focus, the contact picker channel, the attachment saver. No pipeline
+      # ran them until 7 September 2026. It goes after `Test apps/mobile`
+      # because that step's `flutter pub get` writes the `local.properties`
+      # that `settings.gradle.kts` needs, and the same job already drives
+      # Gradle for the manifest-merge test.
+      - name: Test the Android unit suite
+        working-directory: apps/mobile/android
+        run: ./gradlew :app:testDebugUnitTest --console=plain
       # The contract validators are the executable half of the fixtures under
       # `contracts/`. Nothing ran them until 7 September 2026, and in that time
       # the rich-chat one had drifted from the Dart it mirrors: it still denied
