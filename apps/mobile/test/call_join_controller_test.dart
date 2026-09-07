@@ -142,7 +142,10 @@ final class _RecordingEngine implements CallMediaEngine {
   Future<bool> requestScreenConsent() async => true;
 
   @override
-  Future<CallLocalVideo> openScreen() async {
+  Future<List<CallScreenSource>> screenSources() async => const [];
+
+  @override
+  Future<CallLocalVideo> openScreen({CallScreenSource? source}) async {
     throw const CallMediaException(CallMediaError.screenShareUnavailable);
   }
 

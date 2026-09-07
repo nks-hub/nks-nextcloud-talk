@@ -109,7 +109,15 @@ final class _FakeEngine implements CallMediaEngine {
   Future<bool> requestScreenConsent() async => true;
 
   @override
-  Future<CallLocalVideo> openScreen() async {
+  Future<List<CallScreenSource>> screenSources() async => const [];
+
+  CallScreenSource? selectedScreenSource;
+  Completer<void>? screenStartup;
+
+  @override
+  Future<CallLocalVideo> openScreen({CallScreenSource? source}) async {
+    selectedScreenSource = source;
+    await screenStartup?.future;
     final error = screenError;
     if (error != null) {
       throw CallMediaException(error);

@@ -2,6 +2,42 @@ part of 'call_media_session_test.dart';
 
 extension _ScreenMediaSessionTests on _MediaSessionTests {
   void _registerScreenSharing() {
+    for (final mcu in [false, true]) {
+      test(
+        'leaving during screen startup never publishes (MCU: $mcu)',
+        () async {
+          final media = session(
+            _update(
+              localPeerId: _local,
+              participants: [_participant(_remote)],
+              topology: mcu
+                  ? SignalingTopology.externalMcu
+                  : SignalingTopology.externalPeerToPeer,
+            ),
+            withControl: mcu,
+          );
+          addTearDown(media.dispose);
+          await media.start();
+          final connectionCount = engine.connections.length;
+          engine.screenStartup = Completer<void>();
+          final sharing = media.setScreenSharing(true);
+          await pumpEventQueue();
+
+          final leaving = media.dispose();
+          engine.screenStartup!.complete();
+          await Future.wait([sharing, leaving]);
+
+          expect(engine.screens.single.disposed, isTrue);
+          expect(engine.connections, hasLength(connectionCount));
+          expect(
+            sent.where((message) => message.roomType == 'screen'),
+            isEmpty,
+          );
+          expect(media.state, CallMediaState.idle);
+        },
+      );
+    }
+
     test('sharing this screen opens a send-only connection per peer', () async {
       final media = session(
         _update(localPeerId: _local, participants: [_participant(_remote)]),
@@ -10,7 +46,13 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       await media.start();
       expect(engine.connections, hasLength(1));
 
-      await media.setScreenSharing(true);
+      const source = CallScreenSource(
+        id: 'screen-1',
+        name: 'Display 1',
+        isWindow: false,
+      );
+      await media.setScreenSharing(true, source: source);
+      expect(engine.selectedScreenSource, same(source));
       await pumpEventQueue();
       expect(engine.screens, hasLength(1));
       expect(media.state.screenSharing, isTrue);
@@ -70,7 +112,16 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
       addTearDown(media.dispose);
       await media.start();
 
-      await media.setScreenSharing(true);
+      await expectLater(
+        media.setScreenSharing(true),
+        throwsA(
+          isA<CallMediaException>().having(
+            (error) => error.code,
+            'code',
+            CallMediaError.screenSharePermissionDenied,
+          ),
+        ),
+      );
       await pumpEventQueue();
       expect(media.state.screenSharing, isFalse);
       expect(engine.connections, hasLength(1));

@@ -8,6 +8,7 @@ import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'call_join_controller.dart';
 import 'call_media_engine.dart';
+import 'call_screen_share_button.dart';
 import 'call_transport_service.dart';
 
 /// The same six the web client offers, in the same order.
@@ -153,32 +154,13 @@ final class CallControls extends ConsumerWidget {
             icon: const Icon(Icons.videocam_off_outlined),
             selectedIcon: const Icon(Icons.videocam_rounded),
           ),
-        // Sharing this device's screen. The engine reaches every platform it
-        // runs on: Android through a MediaProjection, iOS through the
-        // Broadcast Upload Extension the system's own picker starts, and the
-        // desktops through `getDisplayMedia` with the consent macOS asks for
-        // in `requestScreenConsent`. The button used to be gated to the two
-        // phones, which hid a share the engine could have made and left four
-        // cells of the call matrix unfillable — on Windows and macOS the
-        // control was simply not drawn.
-        // `publish-screen` is a permission and never a call flag, so it has to
-        // be asked for separately: without it the button would walk the user
-        // through the system's recording consent for a share nobody receives.
+        // Check publish-screen before offering capture or a source picker.
         if (join.publishing.screen)
-          IconButton(
-            key: Key('$keyPrefix-share-screen'),
-            tooltip: join.media.screenSharing
-                ? strings.callBannerStopSharing
-                : strings.callBannerShareScreen,
+          CallScreenShareButton(
+            buttonKey: Key('$keyPrefix-share-screen'),
+            roomKey: roomKey,
+            join: join,
             color: color,
-            isSelected: join.media.screenSharing,
-            onPressed: busy
-                ? null
-                : () => unawaited(
-                    controller().setScreenSharing(!join.media.screenSharing),
-                  ),
-            icon: const Icon(Icons.screen_share_outlined),
-            selectedIcon: const Icon(Icons.stop_screen_share_rounded),
           ),
         // Moderator-only, and only where the server advertises
         // `recording-v1` — see `CallJoinState.canManageRecording`. A

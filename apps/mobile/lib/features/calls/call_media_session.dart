@@ -122,6 +122,7 @@ final class CallMediaSession {
   int? _boundRoomEpoch;
   bool _started = false;
   bool _disposed = false;
+  Future<void>? _disposal;
 
   CallMediaState get state => _state;
 
@@ -129,7 +130,8 @@ final class CallMediaSession {
 
   Future<void> setCameraEnabled(bool enabled) => _setCameraEnabled(enabled);
 
-  Future<void> setScreenSharing(bool sharing) => _setScreenSharing(sharing);
+  Future<void> setScreenSharing(bool sharing, {CallScreenSource? source}) =>
+      _setScreenSharing(sharing, source: source);
 
   Future<void> setMicrophoneMuted(bool muted) => _setMicrophoneMuted(muted);
 
@@ -212,11 +214,13 @@ final class CallMediaSession {
   }
 
   Future<void> dispose() {
-    return _enqueue(() async {
-      if (_disposed) {
-        return;
-      }
-      _disposed = true;
+    final disposal = _disposal;
+    if (disposal != null) {
+      return disposal;
+    }
+    // Pending capture must see Leave before its queued cleanup can run.
+    _disposed = true;
+    return _disposal = _enqueue(() async {
       await _routeChanges?.cancel();
       _routeChanges = null;
       _reactionTimer?.cancel();

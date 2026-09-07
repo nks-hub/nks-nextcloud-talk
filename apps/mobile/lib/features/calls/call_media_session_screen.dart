@@ -40,7 +40,7 @@ extension _CallMediaSessionScreen on CallMediaSession {
   /// opens one per peer and offers on it; stopping sends the web client's own
   /// `unshareScreen` (which carries no payload) before closing them. A screen
   /// that cannot be opened leaves the call as it was.
-  Future<void> _setScreenSharing(bool sharing) {
+  Future<void> _setScreenSharing(bool sharing, {CallScreenSource? source}) {
     return _enqueue(() async {
       if (_disposed || sharing == (_screen != null)) {
         return;
@@ -52,10 +52,10 @@ extension _CallMediaSessionScreen on CallMediaSession {
       }
       final CallLocalVideo screen;
       try {
-        screen = await _engine.openScreen();
+        screen = await _engine.openScreen(source: source);
       } on CallMediaException catch (error) {
         debugPrint('[call] screen share refused: ${error.code.name}');
-        return;
+        rethrow;
       }
       if (_disposed) {
         await screen.dispose();

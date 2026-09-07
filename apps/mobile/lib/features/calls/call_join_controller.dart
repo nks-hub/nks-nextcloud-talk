@@ -157,10 +157,7 @@ base class CallJoinController
     }
     unawaited(
       lifecycle
-          .updateFlags(
-            accountId: arg.accountId,
-            roomToken: arg.roomToken,
-          )
+          .updateFlags(accountId: arg.accountId, roomToken: arg.roomToken)
           .then<void>((_) {}, onError: (Object _, StackTrace _) {}),
     );
   }
@@ -386,28 +383,57 @@ base class CallJoinController
   /// Starts or stops sharing this device's screen into the joined call. The
   /// foreground service Android needs for a capture runs for exactly as long
   /// as the share does.
-  Future<void> setScreenSharing(bool sharing) async {
+  Future<CallMediaError?> setScreenSharing(
+    bool sharing, {
+    Future<CallScreenSource?> Function()? chooseSource,
+  }) async {
+    if (_disposed) return null;
     final session = _session;
     if (session == null || state.phase != CallJoinPhase.joined) {
-      return;
+      return null;
     }
+    bool current() =>
+        !_disposed &&
+        identical(_session, session) &&
+        state.phase == CallJoinPhase.joined;
+
     final service = ref.read(callScreenShareServiceProvider);
-    if (sharing) {
-      // The order Android 14 insists on: consent, then the foreground
-      // service, then the capture. Starting the service first is refused,
-      // because the permission it needs only exists once the user has said
-      // yes (measured on the Android 14 emulator: a SecurityException that
-      // took the whole app down).
-      if (!await ref.read(callMediaEngineProvider).requestScreenConsent()) {
-        return;
+    var serviceStarted = false;
+    try {
+      CallScreenSource? source;
+      if (sharing) {
+        if (!state.publishing.screen) {
+          return CallMediaError.screenShareUnavailable;
+        }
+        // Android 14 requires consent before the foreground service starts.
+        if (!await ref.read(callMediaEngineProvider).requestScreenConsent()) {
+          return current() ? CallMediaError.screenSharePermissionDenied : null;
+        }
+        if (!current()) return null;
+        if (usesDesktopScreenSourcePicker) {
+          if (chooseSource == null) {
+            return CallMediaError.screenShareUnavailable;
+          }
+          source = await chooseSource();
+          if (source == null || !current()) return null;
+          if (!state.publishing.screen) {
+            return CallMediaError.screenShareUnavailable;
+          }
+        }
+        if (!await service.start()) {
+          return current() ? CallMediaError.screenShareUnavailable : null;
+        }
+        serviceStarted = true;
+        if (!current()) return null;
       }
-      if (!await service.start()) {
-        return;
+      await session.setScreenSharing(sharing, source: source);
+      return null;
+    } on CallMediaException catch (error) {
+      return current() ? error.code : null;
+    } finally {
+      if (!sharing || (serviceStarted && !session.state.screenSharing)) {
+        await service.stop();
       }
-    }
-    await session.setScreenSharing(sharing);
-    if (!sharing || !state.media.screenSharing) {
-      await service.stop();
     }
   }
 
@@ -481,10 +507,11 @@ base class CallJoinController
     _hold(false);
     final subscription = _mediaStates;
     _mediaStates = null;
-    await subscription?.cancel();
     final session = _session;
     _session = null;
-    await session?.dispose();
+    final disposal = session?.dispose();
+    await subscription?.cancel();
+    await disposal;
     if (leaveServer) {
       await _leaveServer();
     }

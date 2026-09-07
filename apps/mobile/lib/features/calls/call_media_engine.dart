@@ -8,7 +8,31 @@
 /// the plugin.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+
+bool get usesDesktopScreenSourcePicker =>
+    !kIsWeb &&
+    const [
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+    ].contains(defaultTargetPlatform);
+
+/// A native capture source; its opaque id is passed back to the same engine.
+final class CallScreenSource {
+  const CallScreenSource({
+    required this.id,
+    required this.name,
+    required this.isWindow,
+    this.thumbnail,
+  });
+
+  final String id;
+  final String name;
+  final bool isWindow;
+  final Uint8List? thumbnail;
+}
 
 /// An SDP blob with its role. `type` is `offer` or `answer` exactly as it
 /// travels on the wire.
@@ -216,11 +240,14 @@ abstract interface class CallMediaEngine {
   /// `true` and [openScreen] does the asking.
   Future<bool> requestScreenConsent();
 
+  /// Enumerates desktop sources after the caller obtains capture permission.
+  Future<List<CallScreenSource>> screenSources();
+
   /// Opens this device's screen for sharing, reusing the consent above.
   /// Throws [CallMediaException] with
   /// [CallMediaError.screenSharePermissionDenied] or
   /// [CallMediaError.screenShareUnavailable].
-  Future<CallLocalVideo> openScreen();
+  Future<CallLocalVideo> openScreen({CallScreenSource? source});
 
   /// A connection to one peer. With [audio] `null` it sends nothing and only
   /// receives — the shape of a screen share, which Talk carries on a second

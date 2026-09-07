@@ -1,10 +1,8 @@
 part of 'call_media_session.dart';
 
 /// Both peers choose the offerer from the same session-id namespace.
-bool _isOfferer({
-  required String localPeerId,
-  required String remotePeerId,
-}) => remotePeerId.compareTo(localPeerId) < 0;
+bool _isOfferer({required String localPeerId, required String remotePeerId}) =>
+    remotePeerId.compareTo(localPeerId) < 0;
 
 extension _CallMediaSessionSignaling on CallMediaSession {
   /// The one connection that carries this side's media to the MCU. Offered

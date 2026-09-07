@@ -23,6 +23,17 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Desktop screen sharing now lists monitors and windows and requires an
+  explicit selection and confirmation. Capture failures are shown without
+  ending the call, and leaving during capture startup discards the late track
+  before it can be shared. The picker and call integration pass 75 targeted
+  Flutter tests.
+  The local WebRTC patch preserves the selected monitor on older macOS,
+  rejects a display that disappeared and reports capture startup failures.
+  Native macOS tests pass 23 cases; the real-frame probe is skipped when
+  Screen Recording permission is absent. Pending native startup still has to
+  return before call cleanup can finish.
+
 - The Gradle wrapper now carries its executable bit, allowing the Android unit
   suite to start on Linux CI. Manual CI runs can also run only the Ubuntu
   checks, without rebuilding Android, Linux and Windows distribution files.

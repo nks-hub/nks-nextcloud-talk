@@ -85,3 +85,7 @@ Thumbs.db
 Local.xcconfig
 /docs/private/
 .public-denylist
+
+# Downloaded native SDKs for the vendored WebRTC wrapper.
+/packages/flutter_webrtc/third_party/downloads/
+/packages/flutter_webrtc/third_party/libwebrtc/
