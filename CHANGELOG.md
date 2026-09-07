@@ -37,6 +37,14 @@ from the commit log. Nothing here has reached testers yet.
   and never has, so they had been red in the one place anybody looked without
   anything to say so. The pipeline runs both now; the commands it runs are the
   ones that passed, but the pipeline itself has still not run.
+- The README now says how to run the tests, and says the true numbers. It had
+  been claiming 354 Flutter tests and 569 protocol tests; there are 2071 and
+  1105. It also carried the SHA-256 of a debug APK from somebody's build
+  directory and a note about a machine waiting for a reboot, neither of which
+  is a fact about the repository. The new section names the trap that had kept
+  the count from being rechecked: `talk_protocol` is a pure Dart package, and
+  running it with `flutter test` turns seven passing tests red for no reason
+  other than the runner.
 
 ## 0.1.0 (64) — 7 September 2026
 
