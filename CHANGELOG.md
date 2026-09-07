@@ -98,6 +98,13 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
+- Added: the app lock works on Windows and macOS. It was offered only on
+  phones, and the desktops were never even asked whether they had Windows Hello
+  or Touch ID — the plugins for both had been shipped and registered all along.
+- Fixed: four dialogs could not be answered at 200 % text, because their
+  buttons were pushed off the bottom of the screen: creating breakout rooms,
+  sending a message to all of them, and the two that ask before an update is
+  downloaded and installed.
 - Fixed: the call controls ran off the right edge of a phone once the recording
   button joined them. The strip in the banner above a conversation was the one
   being cut off — eight buttons on one line — and it had never had a test.
