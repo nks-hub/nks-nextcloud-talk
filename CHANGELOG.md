@@ -29,8 +29,14 @@ from the commit log. These changes are not published in the testing tracks.
   and forced masks, and rejects successful responses for a different target.
   Twenty-one new protocol and seven network cases pass; the complete protocol
   suite has 1,154 passes and local Flutter has 2,247 passes with five skips.
-  Role-aware service admission, editors and live two-user acceptance are still
-  in progress; this does not expose a completed permission editor yet.
+  Role-aware service admission now revalidates the account, server policy,
+  moderator role and attendee identity, then verifies mutations by fresh reads.
+  Default changes require confirmation of the attendee-override reset, and
+  editing a self-joined attendee requires confirmation of regular membership.
+  Ambiguous writes are not replayed automatically. Thirty new service tests
+  pass; the full Flutter suite has 2,277 passes with five skips, clean analysis
+  and a successful Windows debug build. Editors and live two-user acceptance
+  remain in progress.
 
 - New group/public conversations can use server presets and initial passwords.
   The form shows the resulting settings and locks forced values; switching
