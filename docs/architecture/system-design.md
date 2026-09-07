@@ -193,7 +193,8 @@ iOS:
 - PushKit VoIP uses a separate token and delivery lifecycle.
 
 The detailed platform boundary and the test matrix are in the
-[push analysis](../research/push-fcm.md). The historical push-v2 gateway contract
+push analysis, which is in the maintainer notes and not part of this
+repository. The historical push-v2 gateway contract
 is not implemented as an Android service.
 
 ## Dependency rules

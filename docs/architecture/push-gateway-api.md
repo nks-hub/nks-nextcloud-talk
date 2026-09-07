@@ -5,7 +5,8 @@ Verification date: 23 August 2026.
 Product state: a historical, runnably verified variant of Notifications push-v2.
 For Android it was replaced by the direct Notifications Web Push flow per
 [D-025](decisions-technical.md#d-025-android-over-notifications-web-push) and the
-[current push analysis](../research/push-fcm.md). The gateway is neither
+current push analysis, which is in the maintainer notes and not part of this
+repository. The gateway is neither
 implemented nor deployed as a mandatory part of the Android application. The
 document remains evidence of historical wire compatibility. A future iOS APNs
 relay and the PushKit branch require a separate contract and a new stack

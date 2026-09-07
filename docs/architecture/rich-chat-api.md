@@ -18,7 +18,8 @@ Per D-028, Giphy is sent as a textual `resourceUrl` reference and the bubble
 hides it and renders it inline through the account-scoped Nextcloud References
 resolver. The historical attachment variant D-028a is no longer the product flow.
 The detailed contract is in the
-[Giphy integration](../research/giphy-integration.md).
+Giphy integration note, which is in the maintainer notes and not part of this
+repository.
 
 ## Scope
 

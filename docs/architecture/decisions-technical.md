@@ -87,7 +87,8 @@ after a delayed history fetch.
 iOS preserves the edge-swipe back and Android both the system and the predictive
 back. Gestures are only shortcuts with a visible alternative. A touch target is
 at least 44 pt on iOS and 48 dp on Android. The detailed checkpoint is in the
-[mobile design](../plans/2026-08-22-original-flutter-client-design.md).
+mobile design, which is in the maintainer notes and not part of this
+repository.
 
 Windows, macOS and Linux are not a separate client. The same Flutter codebase
 additionally has to pass a window resize, keyboard navigation, focus/hover states
@@ -290,7 +291,8 @@ standalone AGPL implementation of Web Push, not a thin bridge.
 A duplicate or delayed payload may only idempotently wake an account-scoped OCS
 catch-up. The subscription endpoint, the auth secret, the activation token and
 the payload must not be logged. The exact flow and the test matrix are in the
-[push analysis](../research/push-fcm.md).
+push analysis, which is in the maintainer notes and not part of this
+repository.
 
 If the signed-in capabilities do not contain `webpush`, the client must not read
 the VAPID key, ask for the notification permission or start a registration. An

@@ -30,7 +30,8 @@ expresses the client invariants JSON Schema cannot describe.
 The OpenAPI 3.1 is in
 [`contracts/conversation-list/openapi.json`](../../contracts/conversation-list/openapi.json).
 The accepted mapping of the contract into the pure Dart runtime is described by
-the [Dart conversation runtime design](../plans/2026-08-22-dart-conversation-runtime-design.md).
+the Dart conversation runtime design, which is in the maintainer notes and not
+part of this repository.
 The implementation is in
 [`packages/talk_protocol/lib/src/conversations`](../../packages/talk_protocol/lib/src/conversations).
 

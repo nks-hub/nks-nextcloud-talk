@@ -273,9 +273,9 @@ contract fixture.
 
 <!-- markdownlint-enable MD013 -->
 
-The detailed source evidence is in the
-[protocol matrix](../research/protocol-parity.md#verified-replay-semantics). Next
-to the kind, the contract registry must also store the revision; a change of a
+The detailed source evidence is in the protocol matrix, which is in the
+maintainer notes and not part of this repository. Next to the kind, the
+contract registry must also store the revision; a change of a
 capability or of the supported server line must not silently replay an old queued
 operation under the new semantics.
 

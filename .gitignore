@@ -8,6 +8,7 @@
 /[A-Z]*.md
 !/README.md
 !/CHANGELOG.md
+!/CONTRIBUTING.md
 **/AGENTS.md
 **/CLAUDE.md
 
