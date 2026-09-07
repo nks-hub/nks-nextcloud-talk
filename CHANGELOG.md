@@ -23,6 +23,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- The poll API layer now supports closing polls, managing reusable drafts and
+  bounded CSV/ODS downloads. Publishing a draft creates a new poll and keeps
+  the template. Current role, author, credential and thread checks protect
+  every operation; uncertain writes are not retried automatically. The full
+  protocol suite passes 1,120 tests and 28 targeted service/network cases pass.
+  UI and final live round-trip verification are in progress.
+
 Verification for this source batch: 2,143 Flutter tests passed with three
 skips, all 1,107 protocol tests passed, and analysis and the Windows debug build
 completed successfully. The Android release-signed test APK verified language
