@@ -254,13 +254,12 @@ void main() {
     // yellow-and-black bar over it, a release build simply cut it off. Adding
     // the recording button took the row from six controls to seven, and a Row
     // clips rather than breaks; it is a Wrap now.
-    // WHAT THIS TEST DOES AND DOES NOT PROVE, said plainly because a test that
-    // passes either way is worse than none: it pins that seven controls and a
-    // leave button lay out without overflowing at 411 dp. It does NOT
-    // reproduce the device's 23 pixels — with the Row put back it still
-    // passes, so something on the phone made the strip wider than this
-    // fixture does, and what that is has not been found. The device is the
-    // only place the original defect has been seen.
+    // WHAT THIS TEST DOES AND DOES NOT PROVE: it pins that seven controls and
+    // a leave button lay out without overflowing at 411 dp. It is NOT where
+    // the reported 23 pixels came from — that was the BANNER's row, which had
+    // no test at all and is pinned now by `the joined banner controls fit
+    // across a phone` in `call_banner_test.dart`. This screen wraps and always
+    // did; the banner did not.
     // The pump helper sets the surface itself, so the density goes through it:
     // 1080 physical pixels at 2.625 is the 411 dp the phone actually reports.
     // Passing the size here instead would be silently overwritten, and the

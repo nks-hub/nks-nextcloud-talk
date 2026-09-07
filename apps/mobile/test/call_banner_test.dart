@@ -12,8 +12,10 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/call_session_repository.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/calls/call_banner.dart';
+import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
+import 'package:nextcloudtalk/features/calls/call_media_session.dart';
 import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_list_actions.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -688,6 +690,81 @@ void main() {
     );
     handle.dispose();
   });
+
+  testWidgets('the joined banner controls fit across a phone', (tester) async {
+    // THE BANNER'S CONTROL ROW HAD NO TEST AT ALL — nothing in the suite
+    // rendered it in the joined state, which is why nobody saw it grow. It is
+    // eight buttons on one line: the "open the call view" icon plus everything
+    // `CallControls` draws, and call recording made that seven rather than six
+    // on 7 September 2026. The row on the call SCREEN wraps; this one is a
+    // plain `Row(mainAxisAlignment: end)` and clips instead.
+    // 1080 physical pixels at 2.625 is the 411 dp the reporting phone has.
+    tester.view.physicalSize = const Size(1080, 2220);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(database),
+          credentialVaultProvider.overrideWithValue(vault),
+          callTransportProvider.overrideWith(
+            (ref, key) async => CallTransport.internal,
+          ),
+          callLifecycleStatusProvider.overrideWith(
+            (ref, key) async => _readyLifecycle(key),
+          ),
+          callJoinControllerProvider.overrideWith(
+            () => _FrozenBannerJoin(
+              const CallJoinState(
+                phase: CallJoinPhase.joined,
+                publishing: CallPublishingRights(video: true, screen: true),
+                canManageRecording: true,
+                media: CallMediaState(
+                  phase: CallMediaPhase.connected,
+                  connectedPeers: 1,
+                  peers: 2,
+                ),
+              ),
+            ),
+          ),
+        ],
+        child: localizedTestApp(
+          home: Scaffold(
+            body: OngoingCallBanner(
+              account: account,
+              conversation: conversation(),
+              now: () => callStart,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('call-banner-open')), findsOneWidget);
+    expect(find.byKey(const Key('call-banner-mute')), findsOneWidget);
+    expect(find.byKey(const Key('call-banner-recording')), findsOneWidget);
+    // An overflow reaches a test through the error reporter, not by throwing
+    // where it happens, so this is the only way to see it.
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'the banner may not run off the edge of a phone',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+}
+
+final class _FrozenBannerJoin extends CallJoinController {
+  _FrozenBannerJoin(this.frozen);
+
+  final CallJoinState frozen;
+
+  @override
+  CallJoinState build(CallRoomKey arg) => frozen;
 }
 
 CallLifecycleRoomStatus _readyLifecycle(CallRoomKey key) {

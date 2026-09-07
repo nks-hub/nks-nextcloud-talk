@@ -244,9 +244,14 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
           // The controls of a joined call get a line of their own: four icons
           // beside the Leave button left the status text one letter per line on
           // a phone (measured on 5 September 2026).
+          // A Wrap rather than a Row, because the line outgrew the phone: with
+          // call recording there are eight buttons here, and at 411 dp they
+          // overflowed by 4.6 points in a test and by 23 physical pixels on the
+          // reporting device. A Row clips; this breaks onto a second line.
           if (joinable && joined && join.media.phase != CallMediaPhase.failed)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 IconButton(
                   key: const Key('call-banner-open'),
