@@ -278,6 +278,8 @@ String _callLifecycleErrorText(Object? error, AppLocalizations strings) {
     return strings.callBannerTransportUnavailable;
   }
   return switch (error.code) {
+    CallLifecycleError.endToEndEncryptionUnsupported =>
+      strings.callBannerEncryptionUnsupported,
     CallLifecycleError.accountMissing ||
     CallLifecycleError.credentialMissing ||
     CallLifecycleError.reauthenticationRequired =>
@@ -303,7 +305,10 @@ String? _callJoinStatusText(CallJoinState join, AppLocalizations strings) {
     return strings.callBannerSignalingUnavailable;
   }
   if (join.lifecycleError != null) {
-    return strings.callBannerJoinFailed;
+    return join.lifecycleError ==
+            CallLifecycleError.endToEndEncryptionUnsupported
+        ? strings.callBannerEncryptionUnsupported
+        : strings.callBannerJoinFailed;
   }
   final mediaError = join.mediaError;
   if (mediaError != null) {

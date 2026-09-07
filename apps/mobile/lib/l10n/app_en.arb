@@ -753,6 +753,7 @@
   "callBannerAudioSignalingLost": "The connection to the call server dropped, so the audio stopped.",
   "callBannerMcuUnsupported": "This server routes calls through a central media server, which this app cannot join yet.",
   "callBannerJoinFailed": "Joining the call failed.",
+  "callBannerEncryptionUnsupported": "This app does not support end-to-end encrypted calls yet.",
   "callBannerSignalingUnavailable": "The server has not opened a call in this conversation, so it cannot be joined.",
   "callBannerTransportChecking": "Checking where this call goes…",
   "callBannerTransportUnavailable": "This call cannot be joined right now. Try again in a moment.",

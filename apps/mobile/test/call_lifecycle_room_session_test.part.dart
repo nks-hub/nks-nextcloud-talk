@@ -42,6 +42,69 @@ void _registerCallLifecycleRoomSessionTests() {
     ]);
   });
 
+  for (final policy in <Object?>[true, null, 'true']) {
+    test(
+      'leave releases its owned seat after E2EE policy becomes ${policy.runtimeType}: $policy',
+      () async {
+        final harness = await _CallHarness.create();
+        addTearDown(harness.dispose);
+        await harness.service.join(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        );
+        harness.server.callPolicy = {'end-to-end-encryption': policy};
+
+        await expectLater(
+          harness.service.leave(accountId: 'account-a', roomToken: 'rooma123'),
+          _lifecycleFailure(
+            policy == true
+                ? CallLifecycleError.endToEndEncryptionUnsupported
+                : CallLifecycleError.invalidResponse,
+          ),
+        );
+        expect(harness.server.requestSequence, [
+          'active POST',
+          'call POST',
+          'active DELETE',
+        ]);
+        expect(
+          await harness.database
+              .select(harness.database.callLifecycleSessions)
+              .get(),
+          isEmpty,
+        );
+        await harness.service.dispose();
+        expect(
+          harness.server.activeRoomRequests.where(
+            (request) => request.method == 'DELETE',
+          ),
+          hasLength(1),
+        );
+      },
+    );
+  }
+
+  test('a refused leave cannot release a different room seat', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+    await harness.service.join(accountId: 'account-a', roomToken: 'rooma123');
+    await harness.seedRoom(token: 'roomb123');
+    harness.server.callPolicy = {'end-to-end-encryption': true};
+
+    await expectLater(
+      harness.service.leave(accountId: 'account-a', roomToken: 'roomb123'),
+      _lifecycleFailure(CallLifecycleError.endToEndEncryptionUnsupported),
+    );
+    expect(harness.server.requestSequence, ['active POST', 'call POST']);
+    expect(
+      await harness.database
+          .select(harness.database.callLifecycleSessions)
+          .get(),
+      hasLength(1),
+    );
+    await harness.service.dispose();
+  });
+
   test('call 401 purges state and releases the active session', () async {
     final harness = await _CallHarness.create(
       onCall: (_, _) async => _ocsResponse(401, <String, Object?>{}),

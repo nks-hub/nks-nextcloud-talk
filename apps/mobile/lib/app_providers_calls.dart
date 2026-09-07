@@ -179,16 +179,71 @@ final callKitChannelProvider = Provider<CallKitChannel?>((ref) {
   final channel = CallKitChannel(onVoipToken: registration.installVoipToken);
   ref.onDispose(channel.dispose);
   unawaited(channel.checkLaunchVoipToken());
-  channel.answered.listen((ring) {
+  bindCallKitActions(ref, channel);
+  return channel;
+});
+
+/// Routes native answers through the same capability gate as in-app calls.
+void bindCallKitActions(Ref ref, CallKitChannel channel) {
+  var disposed = false;
+  final rings = <CallRoomKey, CallKitRing>{};
+  final listeners = <CallRoomKey, ProviderSubscription<CallJoinState>>{};
+
+  void release(CallRoomKey key, CallKitRing ring) {
+    if (disposed || !identical(rings[key], ring)) return;
+    rings.remove(key);
+    listeners.remove(key)?.close();
+    unawaited(channel.endCall(ring.callId));
+  }
+
+  Future<void> answer(CallKitRing ring) async {
     final key = (accountId: ring.accountId, roomToken: ring.roomToken);
-    unawaited(ref.read(callJoinControllerProvider(key).notifier).join());
+    rings[key] = ring;
+    listeners.remove(key)?.close();
+    // Native answers may precede the first Flutter call screen. Keep the
+    // controller alive until this exact ring ends or the join is refused.
+    listeners[key] = ref.listen(callJoinControllerProvider(key), (_, next) {
+      if (next.phase == CallJoinPhase.failed ||
+          next.phase == CallJoinPhase.idle) {
+        release(key, ring);
+      }
+    });
+    try {
+      await ref.read(callJoinControllerProvider(key).notifier).join();
+      if (disposed || !identical(rings[key], ring)) return;
+      final phase = ref.read(callJoinControllerProvider(key)).phase;
+      if (phase == CallJoinPhase.failed || phase == CallJoinPhase.idle) {
+        release(key, ring);
+      }
+    } on Object {
+      // An unexpected join failure must also release the native call screen.
+      release(key, ring);
+    }
+  }
+
+  final answered = channel.answered.listen((ring) {
+    unawaited(answer(ring));
   });
-  channel.ended.listen((ring) {
+  final ended = channel.ended.listen((ring) {
     if (ring == null) {
+      rings.clear();
+      for (final listener in listeners.values) {
+        listener.close();
+      }
+      listeners.clear();
       return;
     }
     final key = (accountId: ring.accountId, roomToken: ring.roomToken);
+    final current = rings[key];
+    if (current != null && current.callId != ring.callId) return;
+    rings.remove(key);
+    listeners.remove(key)?.close();
     unawaited(ref.read(callJoinControllerProvider(key).notifier).leave());
   });
-  return channel;
-});
+  ref.onDispose(() {
+    disposed = true;
+    rings.clear();
+    unawaited(answered.cancel());
+    unawaited(ended.cancel());
+  });
+}

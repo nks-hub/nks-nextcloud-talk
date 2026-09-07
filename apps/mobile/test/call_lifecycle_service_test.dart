@@ -20,6 +20,53 @@ part 'call_lifecycle_room_session_test.part.dart';
 void main() {
   _registerCallLifecycleRoomSessionTests();
 
+  test('refuses required E2EE before activating or joining the call', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+    harness.server.callPolicy = {'end-to-end-encryption': true};
+
+    await expectLater(
+      harness.service.join(accountId: 'account-a', roomToken: 'rooma123'),
+      _lifecycleFailure(CallLifecycleError.endToEndEncryptionUnsupported),
+    );
+    expect(harness.server.callRequests, isEmpty);
+    expect(harness.server.activeRoomRequests, isEmpty);
+    expect(
+      await harness.database
+          .select(harness.database.callLifecycleSessions)
+          .get(),
+      isEmpty,
+    );
+  });
+
+  test('malformed E2EE policy cannot fall back to an ordinary call', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+    for (final value in <Object?>[null, 'true', 'false', 0, 1, [], {}]) {
+      harness.server.callPolicy = {'end-to-end-encryption': value};
+
+      await expectLater(
+        harness.service.join(accountId: 'account-a', roomToken: 'rooma123'),
+        _lifecycleFailure(CallLifecycleError.invalidResponse),
+      );
+      expect(harness.server.callRequests, isEmpty);
+      expect(harness.server.activeRoomRequests, isEmpty);
+    }
+  });
+
+  test('explicitly disabled E2EE preserves the ordinary join', () async {
+    final harness = await _CallHarness.create();
+    addTearDown(harness.dispose);
+    harness.server.callPolicy = {'end-to-end-encryption': false};
+
+    final state = await harness.service.join(
+      accountId: 'account-a',
+      roomToken: 'rooma123',
+    );
+    expect(state.phase, CallLifecyclePhase.joined);
+    expect(harness.server.callMethods, ['POST']);
+  });
+
   test(
     'persists every mutation before dispatch and completes the lifecycle',
     () async {
@@ -592,6 +639,7 @@ final class _CallServer {
   final List<http.Request> activeRoomRequests = <http.Request>[];
   final List<String> requestSequence = <String>[];
   bool extraFeature = false;
+  Map<String, Object?> callPolicy = const {};
 
   List<String> get callMethods =>
       callRequests.map((request) => request.method).toList(growable: false);
@@ -599,7 +647,9 @@ final class _CallServer {
   Future<http.Response> _handle(http.Request request) async {
     if (request.url.path.contains('/cloud/capabilities')) {
       return http.Response(
-        jsonEncode(_capabilities(extraFeature: extraFeature)),
+        jsonEncode(
+          _capabilities(extraFeature: extraFeature, callPolicy: callPolicy),
+        ),
         200,
       );
     }
@@ -657,6 +707,7 @@ http.Response _activeRoomResponse(
 
 Map<String, Object?> _capabilities({
   required bool extraFeature,
+  Map<String, Object?> callPolicy = const {},
 }) => <String, Object?>{
   'ocs': <String, Object?>{
     'meta': <String, Object?>{
@@ -685,7 +736,11 @@ Map<String, Object?> _capabilities({
           ],
           'features-local': <Object?>[],
           'config': <String, Object?>{
-            'call': <String, Object?>{'enabled': true, 'recording-consent': 0},
+            'call': <String, Object?>{
+              'enabled': true,
+              'recording-consent': 0,
+              ...callPolicy,
+            },
           },
           'version': '24.0.2',
         },

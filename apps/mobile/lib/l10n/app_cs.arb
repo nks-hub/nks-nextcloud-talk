@@ -697,6 +697,7 @@
   "callBannerAudioSignalingLost": "Spojení se serverem hovoru se přerušilo, zvuk se zastavil.",
   "callBannerMcuUnsupported": "Tento server vede hovory přes centrální přenosový server. K takovému hovoru se aplikace zatím neumí připojit.",
   "callBannerJoinFailed": "Připojení k hovoru se nezdařilo.",
+  "callBannerEncryptionUnsupported": "Tato aplikace zatím nepodporuje hovory s koncovým šifrováním.",
   "callBannerSignalingUnavailable": "Server hovor v této konverzaci neotevřel, připojit se k němu nejde.",
   "callBannerTransportChecking": "Zjišťování, kudy hovor půjde…",
   "callBannerTransportUnavailable": "K hovoru se teď nedá připojit. Zkuste to za chvíli.",

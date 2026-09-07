@@ -2057,6 +2057,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerJoinFailed => 'Joining the call failed.';
 
   @override
+  String get callBannerEncryptionUnsupported =>
+      'This app does not support end-to-end encrypted calls yet.';
+
+  @override
   String get callBannerSignalingUnavailable =>
       'The server has not opened a call in this conversation, so it cannot be joined.';
 

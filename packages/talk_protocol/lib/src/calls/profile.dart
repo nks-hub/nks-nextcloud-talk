@@ -13,9 +13,11 @@ final class CallCapabilityProfile {
     required this.silent,
     required this.recordingConsent,
     required this.recordingConsentMode,
+    required this.endToEndEncryption,
   }) : revision =
            'call-v4:${enabled ? 1 : 0}:${silent ? 1 : 0}:'
-           '${recordingConsent ? 1 : 0}:$recordingConsentMode';
+           '${recordingConsent ? 1 : 0}:$recordingConsentMode'
+           '${endToEndEncryption ? ':e2ee' : ''}';
 
   factory CallCapabilityProfile.fromSnapshot(CapabilitySnapshot snapshot) {
     if (snapshot.context != CapabilityContext.authenticated) {
@@ -24,6 +26,7 @@ final class CallCapabilityProfile {
 
     var callEnabled = false;
     var recordingConsentMode = 0;
+    var endToEndEncryption = false;
     final rawSpreed = snapshot.capabilities['spreed'];
     if (rawSpreed != null) {
       final spreed = requireObject(
@@ -61,6 +64,13 @@ final class CallCapabilityProfile {
               maximum: 2,
             );
           }
+          if (call.containsKey('end-to-end-encryption')) {
+            endToEndEncryption = requireBool(
+              call['end-to-end-encryption'],
+              path: r'$.capabilities.spreed.config.call.end-to-end-encryption',
+              code: TalkProtocolErrorCode.invalidCallProfile,
+            );
+          }
         }
       }
     }
@@ -80,6 +90,7 @@ final class CallCapabilityProfile {
       silent: silent,
       recordingConsent: recordingConsent,
       recordingConsentMode: recordingConsentMode,
+      endToEndEncryption: endToEndEncryption,
     );
   }
 
@@ -90,6 +101,9 @@ final class CallCapabilityProfile {
   /// 0: not required, 1: required, 2: configured per conversation.
   final int recordingConsentMode;
 
+  /// Whether the authenticated server requires encrypted call media.
+  final bool endToEndEncryption;
+
   /// Stable non-secret revision persisted with a lifecycle authority.
   final String revision;
 
@@ -97,7 +111,8 @@ final class CallCapabilityProfile {
   String toString() =>
       'CallCapabilityProfile(enabled: $enabled, silent: $silent, '
       'recordingConsent: $recordingConsent, '
-      'recordingConsentMode: $recordingConsentMode)';
+      'recordingConsentMode: $recordingConsentMode, '
+      'endToEndEncryption: $endToEndEncryption)';
 }
 
 Never _profileFailure(String path) =>

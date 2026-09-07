@@ -21,6 +21,7 @@ enum CallLifecycleError {
   credentialMissing,
   roomMissing,
   unsupported,
+  endToEndEncryptionUnsupported,
   consentRequired,
   forbidden,
   rejected,
@@ -328,7 +329,24 @@ final class CallLifecycleService {
     required String roomToken,
     required bool endForEveryone,
   }) async {
-    final context = await _prepare(accountId, roomToken);
+    final _CallContext context;
+    try {
+      context = await _prepare(accountId, roomToken);
+    } on CallLifecycleException catch (error) {
+      if (error.code == CallLifecycleError.endToEndEncryptionUnsupported ||
+          error.code == CallLifecycleError.unsupported ||
+          error.code == CallLifecycleError.invalidResponse) {
+        // Admission policy cannot retain a seat this instance already owns.
+        // Deactivating its exact lease also releases the server's call seat.
+        final held = _roomSessions[accountId];
+        if (held != null && held.lease.roomToken.value == roomToken) {
+          _roomSessions.remove(accountId);
+          await _deactivateRoomSession(held);
+          await _sessions.delete(accountId: accountId, roomToken: roomToken);
+        }
+      }
+      rethrow;
+    }
     if (endForEveryone && !context.policy.canEndForEveryone) {
       throw const CallLifecycleException(CallLifecycleError.forbidden);
     }
@@ -662,6 +680,11 @@ final class CallLifecycleService {
 
     try {
       final profile = CallCapabilityProfile.fromSnapshot(capabilities);
+      if (profile.endToEndEncryption) {
+        throw const CallLifecycleException(
+          CallLifecycleError.endToEndEncryptionUnsupported,
+        );
+      }
       if (!profile.enabled) {
         throw const CallLifecycleException(CallLifecycleError.unsupported);
       }

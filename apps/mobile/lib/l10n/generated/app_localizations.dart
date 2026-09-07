@@ -3764,6 +3764,12 @@ abstract class AppLocalizations {
   /// **'Joining the call failed.'**
   String get callBannerJoinFailed;
 
+  /// No description provided for @callBannerEncryptionUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This app does not support end-to-end encrypted calls yet.'**
+  String get callBannerEncryptionUnsupported;
+
   /// No description provided for @callBannerSignalingUnavailable.
   ///
   /// In en, this message translates to:

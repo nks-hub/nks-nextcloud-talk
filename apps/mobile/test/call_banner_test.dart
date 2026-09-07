@@ -361,9 +361,7 @@ void main() {
 
     expect(find.byKey(const Key('call-banner-join')), findsNothing);
     expect(
-      find.text(
-        'This call cannot be joined right now. Try again in a moment.',
-      ),
+      find.text('This call cannot be joined right now. Try again in a moment.'),
       findsOneWidget,
     );
     expect(
@@ -697,6 +695,64 @@ void main() {
     );
     handle.dispose();
   });
+
+  for (final language in ['en', 'cs']) {
+    for (final joining in [false, true]) {
+      testWidgets('E2EE refusal is explained in $language (joining: $joining)', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              appDatabaseProvider.overrideWithValue(database),
+              credentialVaultProvider.overrideWithValue(vault),
+              callTransportProvider.overrideWith(
+                (ref, key) async => CallTransport.internal,
+              ),
+              callLifecycleStatusProvider.overrideWith((ref, key) async {
+                if (!joining) {
+                  throw const CallLifecycleException(
+                    CallLifecycleError.endToEndEncryptionUnsupported,
+                  );
+                }
+                return _readyLifecycle(key);
+              }),
+              callJoinControllerProvider.overrideWith(
+                () => _FrozenBannerJoin(
+                  joining
+                      ? const CallJoinState(
+                          phase: CallJoinPhase.failed,
+                          lifecycleError:
+                              CallLifecycleError.endToEndEncryptionUnsupported,
+                        )
+                      : const CallJoinState(),
+                ),
+              ),
+            ],
+            child: localizedTestApp(
+              locale: Locale(language),
+              home: Scaffold(
+                body: OngoingCallBanner(
+                  account: account,
+                  conversation: conversation(),
+                  now: () => callStart,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            language == 'cs'
+                ? 'Tato aplikace zatím nepodporuje hovory s koncovým šifrováním.'
+                : 'This app does not support end-to-end encrypted calls yet.',
+          ),
+          findsOneWidget,
+        );
+      });
+    }
+  }
 
   testWidgets('the joined banner controls fit across a phone', (tester) async {
     // THE BANNER'S CONTROL ROW HAD NO TEST AT ALL — nothing in the suite

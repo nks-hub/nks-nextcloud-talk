@@ -2056,6 +2056,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerJoinFailed => 'Připojení k hovoru se nezdařilo.';
 
   @override
+  String get callBannerEncryptionUnsupported =>
+      'Tato aplikace zatím nepodporuje hovory s koncovým šifrováním.';
+
+  @override
   String get callBannerSignalingUnavailable =>
       'Server hovor v této konverzaci neotevřel, připojit se k němu nejde.';
 

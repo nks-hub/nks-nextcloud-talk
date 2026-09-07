@@ -52,6 +52,31 @@ void main() {
         _protocolFailure(TalkProtocolErrorCode.invalidCallProfile),
       );
     });
+
+    test('binds the authenticated E2EE policy into the call revision', () {
+      final absent = CallCapabilityProfile.fromSnapshot(_capabilities());
+      final disabled = CallCapabilityProfile.fromSnapshot(
+        _capabilities(callPolicy: {'end-to-end-encryption': false}),
+      );
+      final required = CallCapabilityProfile.fromSnapshot(
+        _capabilities(callPolicy: {'end-to-end-encryption': true}),
+      );
+
+      expect(disabled.revision, absent.revision);
+      expect(required.revision, isNot(disabled.revision));
+    });
+
+    test('rejects a present E2EE policy unless it is a boolean', () {
+      for (final value in <Object?>[null, 'true', 'false', 0, 1, [], {}]) {
+        expect(
+          () => CallCapabilityProfile.fromSnapshot(
+            _capabilities(callPolicy: {'end-to-end-encryption': value}),
+          ),
+          _protocolFailure(TalkProtocolErrorCode.invalidCallProfile),
+          reason: 'Malformed E2EE policy: $value',
+        );
+      }
+    });
   });
 
   group('call v4 requests', () {
@@ -255,6 +280,7 @@ CapabilitySnapshot _capabilities({
   },
   bool callEnabled = true,
   int recordingConsentMode = 2,
+  Map<String, Object?> callPolicy = const {},
 }) => CapabilitySnapshot.fromJson(<String, Object?>{
   'ocs': <String, Object?>{
     'meta': <String, Object?>{
@@ -278,6 +304,7 @@ CapabilitySnapshot _capabilities({
             'call': <String, Object?>{
               'enabled': callEnabled,
               'recording-consent': recordingConsentMode,
+              ...callPolicy,
             },
           },
         },
