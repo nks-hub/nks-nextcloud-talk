@@ -199,6 +199,51 @@ void main() {
   );
 
   testWidgets(
+    'software keyboard edits renew activity but restored drafts do not',
+    (tester) async {
+      await pumpRoom(tester, desktop: false);
+      final composer = find.byKey(const Key('chat-composer'));
+      await tester.showKeyboard(composer);
+      final activity = ProviderScope.containerOf(
+        tester.element(composer),
+      ).read(windowActivityProvider)!;
+      await tester.pump(const Duration(minutes: 2));
+      expect(activity.value, isFalse);
+      tester.widget<TextField>(composer).controller!.text = 'Restored draft';
+      await tester.pump();
+      expect(activity.value, isFalse);
+      tester.testTextInput.enterText('User entered text');
+      await tester.pump();
+      expect(activity.value, isTrue);
+      await settle(tester);
+    },
+  );
+
+  testWidgets(
+    'keyboard content insertion renews activity without text changes',
+    (tester) async {
+      await pumpRoom(tester, desktop: false);
+      final composer = find.byKey(const Key('chat-composer'));
+      await tester.showKeyboard(composer);
+      final activity = ProviderScope.containerOf(
+        tester.element(composer),
+      ).read(windowActivityProvider)!;
+      await tester.pump(const Duration(minutes: 2));
+      expect(activity.value, isFalse);
+      final field = tester.widget<TextField>(composer);
+      field.contentInsertionConfiguration!.onContentInserted(
+        const KeyboardInsertedContent(
+          mimeType: 'image/png',
+          uri: 'content://keyboard/attachment',
+        ),
+      );
+      expect(activity.value, isTrue);
+      expect(field.controller!.text, isEmpty);
+      await settle(tester);
+    },
+  );
+
+  testWidgets(
     'opening the root room does not autofocus on desktop',
     (tester) async {
       await pumpRoom(tester, desktop: true);

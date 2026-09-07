@@ -83,6 +83,13 @@ void main() {
     );
   });
 
+  testWidgets(
+    'idle focused pane syncs without clearing notifications or reads',
+    (tester) async {
+      await _verifySuppressedRootRead(tester, idleWindow: true);
+    },
+  );
+
   testWidgets('hidden root pane never moves the read marker', (tester) async {
     await _verifySuppressedRootRead(
       tester,
@@ -337,6 +344,7 @@ Future<void> _verifySuppressedRootRead(
   AppLifecycleState lifecycleState = AppLifecycleState.resumed,
   int? jumpToMessageId,
   bool disposeBeforeResponse = false,
+  bool idleWindow = false,
 }) async {
   final database = openTestDatabase();
   addTearDown(database.close);
@@ -405,7 +413,15 @@ Future<void> _verifySuppressedRootRead(
         return http.Response(jsonEncode(_readMarkerResponse(target)), 200);
       }
       if (request.url.queryParameters['lookIntoFuture'] == '0') {
+        if (idleWindow) {
+          expect(request.url.queryParameters['noStatusUpdate'], '1');
+          expect(request.url.queryParameters['markNotificationsAsRead'], '0');
+        }
         return http.Response('', 304);
+      }
+      if (idleWindow) {
+        expect(request.url.queryParameters['noStatusUpdate'], '1');
+        expect(request.url.queryParameters['markNotificationsAsRead'], '0');
       }
       futureRequests++;
       if (futureRequests == 1 && disposeBeforeResponse) {
@@ -443,6 +459,7 @@ Future<void> _verifySuppressedRootRead(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (idleWindow) windowActiveProvider.overrideWithValue(false),
         appDatabaseProvider.overrideWithValue(database),
         credentialVaultProvider.overrideWithValue(vault),
         nextcloudApiProvider.overrideWithValue(api),
@@ -604,19 +621,8 @@ Future<void> _verifyLiveBridge(
       }
 
       futureTimeouts.add(request.url.queryParameters['timeout']);
-      final interactiveCatchUp = const <int>{
-        1,
-        3,
-        4,
-      }.contains(futureTimeouts.length);
-      expect(
-        request.url.queryParameters['noStatusUpdate'],
-        interactiveCatchUp ? '0' : '1',
-      );
-      expect(
-        request.url.queryParameters['markNotificationsAsRead'],
-        interactiveCatchUp ? '1' : '0',
-      );
+      expect(request.url.queryParameters['noStatusUpdate'], '1');
+      expect(request.url.queryParameters['markNotificationsAsRead'], '0');
       switch (futureTimeouts.length) {
         case 1:
           expect(request.url.queryParameters['lastKnownMessageId'], '109');

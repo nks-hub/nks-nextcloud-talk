@@ -284,6 +284,8 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         widget.jumpToMessageId == null &&
         _pendingJumpMessageId == null &&
         _jumpTargetId == null &&
+        TickerMode.valuesOf(context).enabled &&
+        ref.read(windowActiveProvider) &&
         _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
   }
 

@@ -263,7 +263,7 @@ final class _EditMessageDialogState extends State<_EditMessageDialog> {
   }
 }
 
-final class _ChatComposer extends StatelessWidget {
+final class _ChatComposer extends ConsumerWidget {
   const _ChatComposer({
     required this.controller,
     required this.focusNode,
@@ -392,7 +392,7 @@ final class _ChatComposer extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -443,6 +443,9 @@ final class _ChatComposer extends StatelessWidget {
                       child: TextField(
                         key: const Key('chat-composer'),
                         controller: controller,
+                        onChanged: (_) => ref
+                            .read(windowActivityProvider)
+                            ?.recordInteraction(),
                         focusNode: focusNode,
                         autofocus: autofocus,
                         minLines: 1,
@@ -468,8 +471,12 @@ final class _ChatComposer extends StatelessWidget {
                                 'image/webp',
                                 'image/bmp',
                               ],
-                              onContentInserted: (content) =>
-                                  unawaited(_insertKeyboardContent(content)),
+                              onContentInserted: (content) {
+                                ref
+                                    .read(windowActivityProvider)
+                                    ?.recordInteraction();
+                                unawaited(_insertKeyboardContent(content));
+                              },
                             ),
                         decoration: InputDecoration(
                           labelText: strings.messageHint,
