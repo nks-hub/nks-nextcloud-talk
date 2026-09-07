@@ -17,9 +17,12 @@ extension AppMetrics on BuildContext {
   /// Width of the conversation list pane. Nextcloud's own navigation column is
   /// a flat 300 regardless of window size; the wider touch values only pay off
   /// when the row has to stay readable under a finger.
-  // ponytail: fixed per platform, not a draggable splitter. Add the splitter
-  // when someone actually asks to resize it — it needs its own Dart-side
-  // persistence, since the window bounds live in the native runner.
+  // The DEFAULT width only. Somebody did ask, and the splitter exists: the
+  // person's own width lives in `conversation_list_width.txt` through
+  // `ListPanePreferenceStore`, bounded by `kMinListPaneWidth` and
+  // `kMaxListPaneWidth` (240 and 520), and the workspace prefers it over this
+  // value. This comment used to say the splitter was not worth building yet,
+  // which was true when it was written and misleading for days afterwards.
   double get listPaneWidth =>
       _pointerFirst ? 300 : (MediaQuery.sizeOf(this).width >= 1100 ? 390 : 330);
 
