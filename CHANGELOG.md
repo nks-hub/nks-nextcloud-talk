@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Device languages without a translation now fall back to English instead of
+  Czech. Supported language and region variants still follow the device's
+  ordered preferences, including changes while the app is running.
+
 - Desktop screen sharing now lists monitors and windows and requires an
   explicit selection and confirmation. Capture failures are shown without
   ending the call, and leaving during capture startup discards the late track
