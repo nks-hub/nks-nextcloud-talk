@@ -468,6 +468,7 @@ List<ConversationHeaderAction> _headerActions(
     ...pollDraftActions(
       context,
       ref,
+      available: pollDraftEntryAvailable(account, conversation),
       roomKey: (
         accountId: account.id,
         roomToken: conversation.token,

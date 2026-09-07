@@ -12,6 +12,7 @@ class FakePollSender implements PollSender {
 
   final bool failCreate;
   PollManagementAccess access;
+  int managementAccessCalls = 0;
   TalkPoll? loadedPoll;
   int createCalls = 0;
   String? createdQuestion;
@@ -39,7 +40,10 @@ class FakePollSender implements PollSender {
   Future<PollManagementAccess> managementAccess({
     required PollRoomKey key,
     TalkPoll? poll,
-  }) async => access;
+  }) async {
+    managementAccessCalls++;
+    return access;
+  }
 
   @override
   Future<TalkPoll> load({required PollRoomKey key, required int pollId}) async {
