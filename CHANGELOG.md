@@ -23,6 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- Calls are refused before joining or opening media when the server requires
+  end-to-end encryption this app does not implement. The reason is shown in
+  English or Czech, and rejected native answers release their exact call ID.
+  A server policy change cannot retain a call session the app already owns.
+  This is an unsupported-call guard, not support for encrypted call media.
+
 - Device languages without a translation now fall back to English instead of
   Czech. Supported language and region variants still follow the device's
   ordered preferences, including changes while the app is running.
