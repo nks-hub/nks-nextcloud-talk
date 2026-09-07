@@ -98,6 +98,10 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
+- Known, not fixed: the Czech and English text was audited on 6 September and
+  the audit reported covering every string. It did not — it read about 644 of
+  the 912 that existed that day, so roughly 270 have never been read by
+  anybody. What it did find was real and is fixed; the sweep itself is owed.
 - Added: the app lock works on Windows and macOS. It was offered only on
   phones, and the desktops were never even asked whether they had Windows Hello
   or Touch ID — the plugins for both had been shipped and registered all along.
