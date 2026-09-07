@@ -1843,6 +1843,110 @@ class AppLocalizationsCs extends AppLocalizations {
       'Vytvořit veřejnou konverzaci';
 
   @override
+  String get newConversationPresetLabel => 'Předvolba konverzace';
+
+  @override
+  String get newConversationPresetDefault => 'Výchozí nastavení serveru';
+
+  @override
+  String get newConversationSettingsSummary => 'Nastavení konverzace';
+
+  @override
+  String newConversationForcedSetting(String setting) {
+    return '$setting (vyžaduje server)';
+  }
+
+  @override
+  String get newConversationTypeLabel => 'Typ konverzace';
+
+  @override
+  String get newConversationTypeGroup => 'Soukromá skupina';
+
+  @override
+  String get newConversationTypePublic => 'Veřejná konverzace';
+
+  @override
+  String get newConversationPasswordOptional => 'Heslo (nepovinné)';
+
+  @override
+  String get newConversationPasswordRequired => 'Heslo (povinné)';
+
+  @override
+  String get newConversationPasswordMissing =>
+      'Zadejte heslo pro tuto veřejnou konverzaci.';
+
+  @override
+  String newConversationPartialInvitations(int count) {
+    return 'Konverzace byla vytvořena, ale $count pozvánek se nepodařilo odeslat.';
+  }
+
+  @override
+  String get newConversationCreationUncertain =>
+      'Server nepotvrdil, zda konverzace vznikla. Před dalším pokusem zkontrolujte seznam konverzací.';
+
+  @override
+  String get newConversationPolicyChanged =>
+      'Nastavení serveru se změnilo. Před vytvořením konverzace zkontrolujte nové nastavení.';
+
+  @override
+  String get newConversationPermissionsLabel => 'Oprávnění účastníků';
+
+  @override
+  String get newConversationMentionPermissionsLabel =>
+      'Kdo může zmínit všechny';
+
+  @override
+  String get newConversationRecordingConsentLabel => 'Souhlas s nahráváním';
+
+  @override
+  String get newConversationRecordingConsentOptional => 'Není vyžadován';
+
+  @override
+  String get newConversationRecordingConsentRequired => 'Povinný';
+
+  @override
+  String get newConversationModeratorsOnly => 'Pouze moderátoři';
+
+  @override
+  String get newConversationPermissionStartCalls => 'Zahajovat hovory';
+
+  @override
+  String get newConversationPermissionJoinCalls => 'Připojovat se k hovorům';
+
+  @override
+  String get newConversationPermissionIgnoreLobby => 'Obcházet čekárnu';
+
+  @override
+  String get newConversationPermissionAudio => 'Mikrofon';
+
+  @override
+  String get newConversationPermissionVideo => 'Kamera';
+
+  @override
+  String get newConversationPermissionScreen => 'Sdílení obrazovky';
+
+  @override
+  String get newConversationPermissionChat => 'Posílat zprávy';
+
+  @override
+  String get newConversationPermissionReact => 'Reagovat na zprávy';
+
+  @override
+  String get newConversationPermissionsNone => 'Žádná oprávnění účastníků';
+
+  @override
+  String get newConversationDiscoveryLabel => 'Vyhledání konverzace';
+
+  @override
+  String get newConversationDiscoveryParticipants => 'Pouze účastníci';
+
+  @override
+  String get newConversationDiscoveryUsers => 'Uživatelé serveru';
+
+  @override
+  String get newConversationDiscoveryEveryone => 'Kdokoli';
+
+  @override
   String get newConversationErrorAccountMissing =>
       'Tento účet už není dostupný.';
 

@@ -1842,6 +1842,110 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newConversationCreatePublicAction => 'Create public conversation';
 
   @override
+  String get newConversationPresetLabel => 'Conversation preset';
+
+  @override
+  String get newConversationPresetDefault => 'Server defaults';
+
+  @override
+  String get newConversationSettingsSummary => 'Conversation settings';
+
+  @override
+  String newConversationForcedSetting(String setting) {
+    return '$setting (required by the server)';
+  }
+
+  @override
+  String get newConversationTypeLabel => 'Conversation type';
+
+  @override
+  String get newConversationTypeGroup => 'Private group';
+
+  @override
+  String get newConversationTypePublic => 'Public conversation';
+
+  @override
+  String get newConversationPasswordOptional => 'Password (optional)';
+
+  @override
+  String get newConversationPasswordRequired => 'Password (required)';
+
+  @override
+  String get newConversationPasswordMissing =>
+      'Enter a password for this public conversation.';
+
+  @override
+  String newConversationPartialInvitations(int count) {
+    return 'The conversation was created, but $count invitations failed.';
+  }
+
+  @override
+  String get newConversationCreationUncertain =>
+      'The server did not confirm whether the conversation was created. Check the conversation list before trying again.';
+
+  @override
+  String get newConversationPolicyChanged =>
+      'The server settings changed. Review the updated settings before creating the conversation.';
+
+  @override
+  String get newConversationPermissionsLabel => 'Participant permissions';
+
+  @override
+  String get newConversationMentionPermissionsLabel =>
+      'Who can mention everyone';
+
+  @override
+  String get newConversationRecordingConsentLabel => 'Recording consent';
+
+  @override
+  String get newConversationRecordingConsentOptional => 'Not required';
+
+  @override
+  String get newConversationRecordingConsentRequired => 'Required';
+
+  @override
+  String get newConversationModeratorsOnly => 'Moderators only';
+
+  @override
+  String get newConversationPermissionStartCalls => 'Start calls';
+
+  @override
+  String get newConversationPermissionJoinCalls => 'Join calls';
+
+  @override
+  String get newConversationPermissionIgnoreLobby => 'Bypass the lobby';
+
+  @override
+  String get newConversationPermissionAudio => 'Microphone';
+
+  @override
+  String get newConversationPermissionVideo => 'Camera';
+
+  @override
+  String get newConversationPermissionScreen => 'Screen sharing';
+
+  @override
+  String get newConversationPermissionChat => 'Send messages';
+
+  @override
+  String get newConversationPermissionReact => 'React to messages';
+
+  @override
+  String get newConversationPermissionsNone => 'No participant permissions';
+
+  @override
+  String get newConversationDiscoveryLabel => 'Conversation discovery';
+
+  @override
+  String get newConversationDiscoveryParticipants => 'Participants only';
+
+  @override
+  String get newConversationDiscoveryUsers => 'Server users';
+
+  @override
+  String get newConversationDiscoveryEveryone => 'Everyone';
+
+  @override
   String get newConversationErrorAccountMissing =>
       'This account is no longer available.';
 

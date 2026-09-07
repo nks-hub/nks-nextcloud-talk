@@ -350,6 +350,45 @@ ConversationRecipient _decodeRecipient(Map<String, Object?> item) {
 }
 
 final class _FakeNewConversationService implements NewConversationService {
+  @override
+  Future<ConversationCreationOptions> prepareCreation({
+    required String accountId,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  }) async => ConversationCreationOptions(
+    accountId: accountId,
+    supportsPassword: false,
+    forcePasswords: false,
+    supportsExtendedFields: false,
+  );
+
+  @override
+  Future<ConversationCreationResult> createPreparedConversation({
+    required ConversationCreationOptions options,
+    required String roomName,
+    String? presetIdentifier,
+    Map<String, int> userParameters = const {},
+    String password = '',
+    ConversationRecipient? groupRecipient,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  }) async {
+    final token = groupRecipient == null
+        ? await createStandaloneConversation(
+            accountId: options.accountId,
+            type: userParameters['roomType'] == 3
+                ? StandaloneConversationType.public
+                : StandaloneConversationType.group,
+            roomName: roomName,
+          )
+        : await createConversation(
+            accountId: options.accountId,
+            recipient: groupRecipient,
+            roomName: roomName,
+          );
+    return ConversationCreationResult(roomToken: token);
+  }
+
   List<ConversationRecipient> searchResult = const [];
   NewConversationException? searchError;
   String? lastAccountId;

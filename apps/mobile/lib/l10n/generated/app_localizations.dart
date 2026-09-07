@@ -3386,6 +3386,198 @@ abstract class AppLocalizations {
   /// **'Create public conversation'**
   String get newConversationCreatePublicAction;
 
+  /// No description provided for @newConversationPresetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation preset'**
+  String get newConversationPresetLabel;
+
+  /// No description provided for @newConversationPresetDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Server defaults'**
+  String get newConversationPresetDefault;
+
+  /// No description provided for @newConversationSettingsSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation settings'**
+  String get newConversationSettingsSummary;
+
+  /// No description provided for @newConversationForcedSetting.
+  ///
+  /// In en, this message translates to:
+  /// **'{setting} (required by the server)'**
+  String newConversationForcedSetting(String setting);
+
+  /// No description provided for @newConversationTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation type'**
+  String get newConversationTypeLabel;
+
+  /// No description provided for @newConversationTypeGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Private group'**
+  String get newConversationTypeGroup;
+
+  /// No description provided for @newConversationTypePublic.
+  ///
+  /// In en, this message translates to:
+  /// **'Public conversation'**
+  String get newConversationTypePublic;
+
+  /// No description provided for @newConversationPasswordOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Password (optional)'**
+  String get newConversationPasswordOptional;
+
+  /// No description provided for @newConversationPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Password (required)'**
+  String get newConversationPasswordRequired;
+
+  /// No description provided for @newConversationPasswordMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a password for this public conversation.'**
+  String get newConversationPasswordMissing;
+
+  /// No description provided for @newConversationPartialInvitations.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation was created, but {count} invitations failed.'**
+  String newConversationPartialInvitations(int count);
+
+  /// No description provided for @newConversationCreationUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not confirm whether the conversation was created. Check the conversation list before trying again.'**
+  String get newConversationCreationUncertain;
+
+  /// No description provided for @newConversationPolicyChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The server settings changed. Review the updated settings before creating the conversation.'**
+  String get newConversationPolicyChanged;
+
+  /// No description provided for @newConversationPermissionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Participant permissions'**
+  String get newConversationPermissionsLabel;
+
+  /// No description provided for @newConversationMentionPermissionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can mention everyone'**
+  String get newConversationMentionPermissionsLabel;
+
+  /// No description provided for @newConversationRecordingConsentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording consent'**
+  String get newConversationRecordingConsentLabel;
+
+  /// No description provided for @newConversationRecordingConsentOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Not required'**
+  String get newConversationRecordingConsentOptional;
+
+  /// No description provided for @newConversationRecordingConsentRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get newConversationRecordingConsentRequired;
+
+  /// No description provided for @newConversationModeratorsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderators only'**
+  String get newConversationModeratorsOnly;
+
+  /// No description provided for @newConversationPermissionStartCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Start calls'**
+  String get newConversationPermissionStartCalls;
+
+  /// No description provided for @newConversationPermissionJoinCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Join calls'**
+  String get newConversationPermissionJoinCalls;
+
+  /// No description provided for @newConversationPermissionIgnoreLobby.
+  ///
+  /// In en, this message translates to:
+  /// **'Bypass the lobby'**
+  String get newConversationPermissionIgnoreLobby;
+
+  /// No description provided for @newConversationPermissionAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get newConversationPermissionAudio;
+
+  /// No description provided for @newConversationPermissionVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get newConversationPermissionVideo;
+
+  /// No description provided for @newConversationPermissionScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen sharing'**
+  String get newConversationPermissionScreen;
+
+  /// No description provided for @newConversationPermissionChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Send messages'**
+  String get newConversationPermissionChat;
+
+  /// No description provided for @newConversationPermissionReact.
+  ///
+  /// In en, this message translates to:
+  /// **'React to messages'**
+  String get newConversationPermissionReact;
+
+  /// No description provided for @newConversationPermissionsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No participant permissions'**
+  String get newConversationPermissionsNone;
+
+  /// No description provided for @newConversationDiscoveryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation discovery'**
+  String get newConversationDiscoveryLabel;
+
+  /// No description provided for @newConversationDiscoveryParticipants.
+  ///
+  /// In en, this message translates to:
+  /// **'Participants only'**
+  String get newConversationDiscoveryParticipants;
+
+  /// No description provided for @newConversationDiscoveryUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Server users'**
+  String get newConversationDiscoveryUsers;
+
+  /// No description provided for @newConversationDiscoveryEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get newConversationDiscoveryEveryone;
+
   /// No description provided for @newConversationErrorAccountMissing.
   ///
   /// In en, this message translates to:

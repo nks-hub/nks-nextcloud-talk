@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
-import '../../core/text_prompt_dialog.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'new_conversation_service.dart';
+import 'conversation_creation_dialog.dart';
 import 'open_conversations_sheet.dart';
 
 const Duration _searchDebounce = Duration(milliseconds: 300);
@@ -62,16 +62,40 @@ final class _NewConversationScreenState
   int _searchGeneration = 0;
   _SearchState _state = const _SearchIdle();
   bool _creating = false;
+  var _lifetime = 0;
+  Completer<void>? _creationAbort;
+
+  @override
+  void didUpdateWidget(covariant NewConversationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.accountId != widget.accountId) {
+      _lifetime++;
+      _searchGeneration++;
+      _debounce?.cancel();
+      _searchController.clear();
+      _state = const _SearchIdle();
+      _creating = false;
+      _cancelCreation();
+    }
+  }
+
+  void _cancelCreation() {
+    final abort = _creationAbort;
+    if (abort != null && !abort.isCompleted) abort.complete();
+    _creationAbort = null;
+  }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _cancelCreation();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
+    _searchGeneration++;
     final term = value.trim();
     if (term.isEmpty) {
       setState(() => _state = const _SearchIdle());
@@ -102,22 +126,19 @@ final class _NewConversationScreenState
   }
 
   Future<void> _selectRecipient(ConversationRecipient recipient) async {
-    String? roomName;
+    if (_creating) return;
     if (recipient.shareType == RecipientShareType.group) {
-      roomName = await _promptRoomName(
-        initialValue: recipient.label,
-        title: AppLocalizations.of(context).newConversationNameDialogTitle,
+      await _openCreation(
+        StandaloneConversationType.group,
+        recipient: recipient,
       );
-      if (roomName == null) {
-        return;
-      }
+      return;
     }
 
     await _runCreation(
       (service) => service.createConversation(
         accountId: widget.accountId,
         recipient: recipient,
-        roomName: roomName,
       ),
     );
   }
@@ -125,26 +146,55 @@ final class _NewConversationScreenState
   Future<void> _createStandaloneConversation(
     StandaloneConversationType type,
   ) async {
-    final strings = AppLocalizations.of(context);
-    final roomName = await _promptRoomName(
-      initialValue: '',
-      title: switch (type) {
-        StandaloneConversationType.group =>
-          strings.newConversationNameDialogTitle,
-        StandaloneConversationType.public =>
-          strings.newConversationPublicNameDialogTitle,
-      },
-    );
-    if (roomName == null) {
-      return;
+    await _openCreation(type);
+  }
+
+  Future<void> _openCreation(
+    StandaloneConversationType type, {
+    ConversationRecipient? recipient,
+  }) async {
+    if (_creating) return;
+    final accountId = widget.accountId;
+    final lifetime = _lifetime;
+    final abort = Completer<void>();
+    _creationAbort = abort;
+    bool current() =>
+        mounted && _lifetime == lifetime && widget.accountId == accountId;
+    final service = ref.read(newConversationServiceProvider);
+    setState(() => _creating = true);
+    try {
+      final result = await showDialog<ConversationCreationResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => ConversationCreationDialog(
+          service: service,
+          accountId: accountId,
+          initialType: type,
+          recipient: recipient,
+          isCurrent: current,
+          abortTrigger: abort.future,
+        ),
+      );
+      if (!mounted || !current() || result == null) return;
+      if (result.failedInvitationCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                context,
+              ).newConversationPartialInvitations(result.failedInvitationCount),
+            ),
+          ),
+        );
+      }
+      widget.onConversationCreated(result.roomToken);
+    } finally {
+      if (!abort.isCompleted) abort.complete();
+      if (current()) {
+        _creationAbort = null;
+        setState(() => _creating = false);
+      }
     }
-    await _runCreation(
-      (service) => service.createStandaloneConversation(
-        accountId: widget.accountId,
-        type: type,
-        roomName: roomName,
-      ),
-    );
   }
 
   Future<void> _browseOpenConversations() async {
@@ -164,45 +214,29 @@ final class _NewConversationScreenState
   Future<void> _runCreation(
     Future<ConversationToken> Function(NewConversationService service) create,
   ) async {
+    if (_creating) return;
+    final lifetime = _lifetime;
+    bool current() => mounted && lifetime == _lifetime;
     setState(() => _creating = true);
     final service = ref.read(newConversationServiceProvider);
     try {
       final token = await create(service);
-      if (!mounted) {
+      if (!mounted || !current()) {
         return;
       }
       widget.onConversationCreated(token);
     } on NewConversationException catch (error) {
-      if (!mounted) {
+      if (!mounted || !current()) {
         return;
       }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(_errorMessage(error.code))));
     } finally {
-      if (mounted) {
+      if (current()) {
         setState(() => _creating = false);
       }
     }
-  }
-
-  Future<String?> _promptRoomName({
-    required String initialValue,
-    required String title,
-  }) async {
-    final strings = AppLocalizations.of(context);
-    final name = await showTextPromptDialog(
-      context: context,
-      title: title,
-      initialValue: initialValue,
-      fieldLabel: strings.newConversationNameLabel,
-      cancelLabel: strings.cancel,
-      confirmLabel: strings.newConversationCreate,
-      maxLength: 200,
-      emptyErrorText: strings.newConversationErrorRoomNameRequired,
-    );
-    final trimmed = name?.trim();
-    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   @override
@@ -307,30 +341,7 @@ final class _NewConversationScreenState
 
   String _errorMessage(NewConversationError error) {
     final strings = AppLocalizations.of(context);
-    return switch (error) {
-      NewConversationError.accountMissing =>
-        strings.newConversationErrorAccountMissing,
-      NewConversationError.credentialMissing =>
-        strings.newConversationErrorCredentialMissing,
-      NewConversationError.invalidSearchTerm =>
-        strings.newConversationErrorInvalidSearchTerm,
-      NewConversationError.roomNameRequired =>
-        strings.newConversationErrorRoomNameRequired,
-      NewConversationError.reauthenticationRequired =>
-        strings.newConversationErrorReauthenticationRequired,
-      NewConversationError.unavailable =>
-        strings.newConversationErrorUnavailable,
-      NewConversationError.passwordRequired =>
-        strings.newConversationErrorPasswordRejected,
-      NewConversationError.ocsFailure => strings.newConversationErrorOcsFailure,
-      NewConversationError.rateLimited =>
-        strings.newConversationErrorRateLimited,
-      NewConversationError.serviceUnavailable =>
-        strings.newConversationErrorServiceUnavailable,
-      NewConversationError.invalidResponse =>
-        strings.newConversationErrorInvalidResponse,
-      NewConversationError.network => strings.newConversationErrorNetwork,
-    };
+    return creationErrorText(strings, error);
   }
 }
 

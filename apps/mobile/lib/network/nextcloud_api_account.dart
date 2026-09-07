@@ -574,6 +574,29 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     );
   }
 
+  Future<RoomPresetCatalog> getRoomPresets({
+    required RoomPresetsRequest request,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final payload = await _sendJson(
+      _authenticatedOcsRequest(
+        'GET',
+        request.uri,
+        loginName: loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      ),
+      allowedStatusCodes: const {200},
+      maximumBytes: roomPresetsMaximumBytes,
+    );
+    return decodeRoomPresetsResponse(
+      statusCode: payload.statusCode,
+      json: payload.json,
+    );
+  }
+
   /// Creates a new one-to-one or group conversation for a picked recipient.
   Future<CreateConversationResponse> createConversation({
     required CreateConversationRequest createRequest,
@@ -590,9 +613,9 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       ..bodyFields = createRequest.formBody;
     final payload = await _sendJson(
       request,
-      allowedStatusCodes: const {200, 201, 401, 429, 503},
+      allowedStatusCodes: const {200, 201, 202, 400, 401, 403, 404, 429, 503},
       maximumBytes: _createConversationMaximumBytes,
-      parseBodyForStatusCodes: const {200, 201, 401},
+      parseBodyForStatusCodes: const {200, 201, 202, 400, 401, 403, 404},
     );
     return decodeCreateConversationResponse(
       request: createRequest,

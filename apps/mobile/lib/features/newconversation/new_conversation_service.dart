@@ -1,11 +1,15 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'dart:convert';
+
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/account_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/nextcloud_api.dart';
+
+part 'conversation_creation.dart';
 
 enum NewConversationError {
   accountMissing,
@@ -25,14 +29,19 @@ enum NewConversationError {
   serviceUnavailable,
   invalidResponse,
   network,
+  unsupported,
+  contextChanged,
+  cancelled,
+  ambiguous,
 }
 
 enum StandaloneConversationType { group, public }
 
 final class NewConversationException implements Exception {
-  const NewConversationException(this.code);
+  const NewConversationException(this.code, {this.safeMessage});
 
   final NewConversationError code;
+  final String? safeMessage;
 
   @override
   String toString() => 'NewConversationException(${code.name})';
@@ -40,6 +49,22 @@ final class NewConversationException implements Exception {
 
 /// Looks up recipients and creates conversations, scoped to one account.
 abstract interface class NewConversationService {
+  Future<ConversationCreationOptions> prepareCreation({
+    required String accountId,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  });
+
+  Future<ConversationCreationResult> createPreparedConversation({
+    required ConversationCreationOptions options,
+    required String roomName,
+    String? presetIdentifier,
+    Map<String, int> userParameters = const {},
+    String password = '',
+    ConversationRecipient? groupRecipient,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  });
   Future<List<ConversationRecipient>> searchRecipients({
     required String accountId,
     required String searchTerm,
@@ -103,6 +128,36 @@ final class HttpNewConversationService implements NewConversationService {
   final CredentialVault _credentials;
   final HttpNextcloudApi _api;
   final Uuid _uuid;
+  final _creationCredentials = Expando<_AccountCredentials>();
+  final _creationInFlight = Expando<bool>();
+
+  @override
+  Future<ConversationCreationOptions> prepareCreation({
+    required String accountId,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  }) => _prepareCreation(accountId, abortTrigger, isCurrent);
+
+  @override
+  Future<ConversationCreationResult> createPreparedConversation({
+    required ConversationCreationOptions options,
+    required String roomName,
+    String? presetIdentifier,
+    Map<String, int> userParameters = const {},
+    String password = '',
+    ConversationRecipient? groupRecipient,
+    Future<void>? abortTrigger,
+    bool Function()? isCurrent,
+  }) => _createPrepared(
+    options: options,
+    roomName: roomName,
+    presetIdentifier: presetIdentifier,
+    userParameters: userParameters,
+    password: password,
+    groupRecipient: groupRecipient,
+    abortTrigger: abortTrigger,
+    isCurrent: isCurrent,
+  );
 
   @override
   Future<List<ConversationRecipient>> searchRecipients({
@@ -283,6 +338,12 @@ final class HttpNewConversationService implements NewConversationService {
 
     return switch (response) {
       CreateConversationSuccess(:final room) => room.token,
+      CreateConversationRejected(:final error) =>
+        throw NewConversationException(
+          error == 'password'
+              ? NewConversationError.passwordRequired
+              : NewConversationError.ocsFailure,
+        ),
       CreateConversationReauthenticationRequired() =>
         throw const NewConversationException(
           NewConversationError.reauthenticationRequired,
