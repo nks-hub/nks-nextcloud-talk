@@ -74,13 +74,15 @@ def main():
     denylist = []
     deny_path = os.path.join(ROOT, ".public-denylist")
     if os.path.exists(deny_path):
-        denylist = [l.strip() for l in io_open(deny_path) if l.strip() and not l.startswith("#")]
+        with io_open(deny_path) as source:
+            denylist = [l.strip() for l in source if l.strip() and not l.startswith("#")]
     findings = []
     for rel in tracked():
         if rel.endswith(SKIP) or rel.startswith(EXEMPT):
             continue
         try:
-            text = io_open(os.path.join(ROOT, rel)).read()
+            with io_open(os.path.join(ROOT, rel)) as source:
+                text = source.read()
         except (OSError, UnicodeDecodeError):
             continue
         checks = list(PATTERNS)
