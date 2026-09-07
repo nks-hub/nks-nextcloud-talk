@@ -71,6 +71,10 @@ from the commit log. Nothing here has reached testers yet.
   said so. The fixture is reworded rather than the rule relaxed; a planted
   credential still trips it. The two suites that test the gates themselves run
   now too.
+- The Android unit suite runs in the pipeline: 68 tests covering the share
+  inbox, push state machine, notification filter, call audio focus, contact
+  picker and attachment saver. They were green and had simply never been part
+  of a build. Nothing about them changed.
 
 ## 0.1.0 (64) — 7 September 2026
 
