@@ -45,6 +45,12 @@ from the commit log. Nothing here has reached testers yet.
   the count from being rechecked: `talk_protocol` is a pure Dart package, and
   running it with `flutter test` turns seven passing tests red for no reason
   other than the runner.
+- The repository has a `CONTRIBUTING.md`. The README had linked to one since
+  the beginning and it had never existed: `.gitignore` hides every uppercase
+  Markdown file at the root, so the file could be written and would silently
+  never be committed. Seven more links, in the architecture documents, pointed
+  at research notes that are not published; they say so now instead of
+  pretending to be links.
 
 ## 0.1.0 (64) — 7 September 2026
 
