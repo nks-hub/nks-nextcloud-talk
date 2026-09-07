@@ -95,7 +95,7 @@
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
 		335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeneratedPluginRegistrant.swift; sourceTree = "<group>"; };
-		33CC10ED2044A3C60003C045 /* nextcloudtalk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "nextcloudtalk.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		33CC10ED2044A3C60003C045 /* nextcloudtalk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = nextcloudtalk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		33CC10F02044A3C60003C045 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		33CC10F22044A3C60003C045 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Runner/Assets.xcassets; sourceTree = "<group>"; };
 		33CC10F52044A3C60003C045 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
@@ -115,11 +115,11 @@
 		912AC026A647D935D20DCD40 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		9F80C3327552760A8029AE73 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
-		A1000000000000000000000C /* ApplePushDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ApplePushDelivery.swift; path = "../ios/Runner/ApplePushDelivery.swift"; sourceTree = SOURCE_ROOT; };
-		A1000000000000000000000D /* PushDeviceKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushDeviceKeyStore.swift; path = "../ios/Runner/PushDeviceKeyStore.swift"; sourceTree = SOURCE_ROOT; };
-		A1000000000000000000000E /* PushEnvelopeDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushEnvelopeDecryptor.swift; path = "../ios/Runner/PushEnvelopeDecryptor.swift"; sourceTree = SOURCE_ROOT; };
-		A1000000000000000000000F /* PushNotificationRouteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushNotificationRouteStore.swift; path = "../ios/Runner/PushNotificationRouteStore.swift"; sourceTree = SOURCE_ROOT; };
-		A10000000000000000000010 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotificationService.swift; path = "../ios/NotificationServiceExtension/NotificationService.swift"; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000000C /* ApplePushDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ApplePushDelivery.swift; path = ../ios/Runner/ApplePushDelivery.swift; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000000D /* PushDeviceKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushDeviceKeyStore.swift; path = ../ios/Runner/PushDeviceKeyStore.swift; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000000E /* PushEnvelopeDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushEnvelopeDecryptor.swift; path = ../ios/Runner/PushEnvelopeDecryptor.swift; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000000F /* PushNotificationRouteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PushNotificationRouteStore.swift; path = ../ios/Runner/PushNotificationRouteStore.swift; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000010 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotificationService.swift; path = ../ios/NotificationServiceExtension/NotificationService.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000012 /* NotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000013 /* NotificationServiceExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -363,13 +363,13 @@
 							};
 						};
 					};
-					A10000000000000000000016 = {
-						CreatedOnToolsVersion = 15.0;
-						ProvisioningStyle = Automatic;
-					};
 					33CC111A2044C6BA0003C045 = {
 						CreatedOnToolsVersion = 9.2;
 						ProvisioningStyle = Manual;
+					};
+					A10000000000000000000016 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -383,7 +383,7 @@
 			);
 			mainGroup = 33CC10E42044A3C60003C045;
 			packageReferences = (
-				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */,
+				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
 			);
 			productRefGroup = 33CC10EE2044A3C60003C045 /* Products */;
 			projectDirPath = "";
@@ -481,7 +481,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		9E649B0CDA925678D95FBA03 /* [CP] Check Pods Manifest.lock */ = {
@@ -503,7 +503,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		CD6FAC8A8670C5BC7E96DA69 /* [CP] Embed Pods Frameworks */ = {
@@ -1001,7 +1001,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage" */ = {
+		781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage;
 		};

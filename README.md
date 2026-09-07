@@ -70,10 +70,15 @@ Measured on 7 September 2026 at `204683b`: `flutter analyze` reports no
 findings, `apps/mobile` passes 2071 tests with 3 skipped, and `talk_protocol`
 passes 1105.
 
-```
+From the repository root:
+
+```sh
+cd apps/mobile
 flutter analyze
-cd apps/mobile        && flutter test
-cd packages/talk_protocol && dart test
+flutter test
+cd ../../packages/talk_protocol
+dart test
+cd ../..
 ```
 
 **`talk_protocol` needs `dart test`, not `flutter test`.** It is a pure Dart
@@ -89,6 +94,29 @@ when `NEXTCLOUD_TALK_ORIGIN`, `NEXTCLOUD_TALK_USERNAME` and
 wants `NEXTCLOUD_TALK_TEST_ROOM_TOKEN` pointing at a conversation that has
 messages — against an empty room its assertion holds without proving anything.
 `NEXTCLOUD_TALK_SEARCH_TERM` overrides the search term, which defaults to `a`.
+
+The macOS native suite has 17 tests, verified on 7 September 2026. Its host
+requires Apple Development signing: macOS refuses an ad-hoc signature with
+the app's APNs and shared-keychain entitlements before any test can start.
+Keep those entitlements and use a development identity in the login keychain.
+
+For API-based provisioning, set `APPLE_TEAM_ID`, `ASC_KEY_PATH`, `ASC_KEY_ID`
+and `ASC_ISSUER_ID` to your team's credentials, then run from `apps/mobile`:
+
+```sh
+xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner \
+  -destination 'platform=macOS' -parallel-testing-enabled NO \
+  CODE_SIGN_IDENTITY='Apple Development' \
+  APPLE_TEAM_ID="$APPLE_TEAM_ID" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+  -authenticationKeyPath "$ASC_KEY_PATH" \
+  -authenticationKeyID "$ASC_KEY_ID" \
+  -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+```
+
+The provisioning flags register this Mac and create development profiles if
+needed. An Xcode account with existing profiles can replace the API arguments.
+This command runs tests locally; it does not publish an Apple build.
 
 ## Push without a per-server rebuild
 

@@ -23,6 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- The macOS workspace now includes its CocoaPods project and locks the WebRTC
+  plugin and native SDK. These changes had existed only on the build machine.
+  All 17 macOS native tests have now run successfully with Apple Development
+  signing. The previous launch failure came from an ad-hoc signature carrying
+  restricted entitlements; the README documents the working test command.
+
 - Cancelling a Windows update download now returns even when the server stops
   responding. The deadline stops the HTTP transfer, waits for temporary-file
   cleanup and prevents a late download from becoming an installable update.

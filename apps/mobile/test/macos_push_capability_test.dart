@@ -63,6 +63,22 @@ void main() {
     );
     expect(project, contains('[CP] Embed Pods Frameworks'));
     expect(project, contains('Pods_Runner.framework in Frameworks'));
+    final workspace = read(
+      '$macos${separator}Runner.xcworkspace${separator}contents.xcworkspacedata',
+    );
+    expect(
+      workspace,
+      contains('group:Pods/Pods.xcodeproj'),
+      reason: 'xcodebuild must resolve the Pods targets from a clean checkout',
+    );
+  });
+
+  test('macOS locks the WebRTC plugin and its native SDK', () {
+    final lock = read('$macos${separator}Podfile.lock');
+    expect(lock, contains('  - flutter_webrtc ('));
+    expect(lock, contains('  - WebRTC-SDK ('));
+    expect(lock, contains('  flutter_webrtc:'));
+    expect(lock, contains('  WebRTC-SDK:'));
   });
 
   test('macOS location access is foreground and sandbox scoped', () {
