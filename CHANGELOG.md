@@ -23,6 +23,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. Nothing here has reached testers yet.
 
+- The Gradle wrapper now carries its executable bit, allowing the Android unit
+  suite to start on Linux CI. Manual CI runs can also run only the Ubuntu
+  checks, without rebuilding Android, Linux and Windows distribution files.
+
 - The macOS workspace now includes its CocoaPods project and locks the WebRTC
   plugin and native SDK. These changes had existed only on the build machine.
   All 17 macOS native tests have now run successfully with Apple Development

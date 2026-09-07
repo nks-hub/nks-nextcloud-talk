@@ -118,6 +118,11 @@ The provisioning flags register this Mac and create development profiles if
 needed. An Xcode account with existing profiles can replace the API arguments.
 This command runs tests locally; it does not publish an Apple build.
 
+For the Ubuntu CI checks without packaging new artifacts, run
+`gh workflow run build.yml --ref main -f tests_only=true`. The default manual
+run still builds Android, Linux and Windows, including native Windows checks;
+publishing remains restricted to release tags. Apple tests run on a Mac.
+
 ## Push without a per-server rebuild
 
 The supported server line starts at Talk 22 (Nextcloud 32), see D-047.
