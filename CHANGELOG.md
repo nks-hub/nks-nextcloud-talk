@@ -28,13 +28,15 @@ from the commit log. Nothing here has reached testers yet.
   simulator. It had none, while the code it hands the file to had six, so
   everything proven was downstream of something unproven.
 - Nothing users see, and it turned out to be nothing wrong: four tests of the
-  iOS notification-route store looked broken. They were not — they only fail
-  when the test host is built unsigned, which strips the entitlement the
-  keychain needs. Run signed, both Apple test suites pass. What is real is that
-  the build pipeline runs neither of them and never has, so they had been red
-  in the one place anybody looked without anything to say so. The pipeline runs
-  both suites now — written, not yet run, since a build server is the only
-  thing that can verify a build server.
+  iOS notification-route store looked broken. They were not. Both suites were
+  run twice on a Mac, on one simulator, changing one thing between the runs:
+  signed, 39 of 39 and 6 of 6 pass; with signing switched off, exactly those
+  four fail and nothing else does. Unsigned bundles lose their signature — the
+  log lists each `_CodeSignature` it removes — and with it the entitlement the
+  keychain needs. What is real is that the build pipeline runs neither suite
+  and never has, so they had been red in the one place anybody looked without
+  anything to say so. The pipeline runs both now; the commands it runs are the
+  ones that passed, but the pipeline itself has still not run.
 
 ## 0.1.0 (64) — 7 September 2026
 
