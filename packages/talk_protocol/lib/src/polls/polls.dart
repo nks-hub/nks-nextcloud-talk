@@ -9,6 +9,10 @@ import '../json_value.dart';
 import '../protocol_exception.dart';
 import '../server_base.dart';
 
+part 'management_requests.dart';
+part 'management_response.dart';
+part 'export.dart';
+
 const int pollMaximumResponseBytes = 2 * 1024 * 1024;
 
 enum PollResultMode {
@@ -204,18 +208,37 @@ final class PollCreateRequest extends PollRequest {
     this.threadId,
   }) : question = question.trim(),
        options = List.unmodifiable(options.map((value) => value.trim())) {
-    if (this.question.isEmpty || utf8.encode(this.question).length > 32000) {
-      _requestFailure(r'$.question');
-    }
-    if (this.options.length < 2 ||
-        this.options.any((value) => value.isEmpty) ||
-        utf8.encode(jsonEncode(this.options)).length > 60000) {
-      _requestFailure(r'$.options');
-    }
-    if (maxVotes < 0 || (maxVotes > this.options.length && maxVotes != 0)) {
-      _requestFailure(r'$.maxVotes');
-    }
+    _validatePollForm(this.question, this.options, maxVotes);
     if (threadId != null && threadId! < 1) _requestFailure(r'$.threadId');
+  }
+
+  /// Stable Talk creates a new poll from a reusable draft; it has no publish API.
+  factory PollCreateRequest.fromDraft({
+    required AccountId accountId,
+    required ChatRequestId requestId,
+    required ServerBase server,
+    required ConversationToken roomToken,
+    required bool pollsAvailable,
+    required bool draftsAvailable,
+    required bool canPublishDraft,
+    required TalkPoll draft,
+    int? threadId,
+  }) {
+    if (!draftsAvailable) _requestFailure(r'$.capabilities.talk-polls-drafts');
+    if (!canPublishDraft) _requestFailure(r'$.permissions.publishDraft');
+    if (draft.status != PollStatus.draft) _requestFailure(r'$.draft.status');
+    return PollCreateRequest(
+      accountId: accountId,
+      requestId: requestId,
+      server: server,
+      roomToken: roomToken,
+      pollsAvailable: pollsAvailable,
+      question: draft.question,
+      options: draft.options,
+      resultMode: draft.resultMode,
+      maxVotes: draft.maxVotes,
+      threadId: threadId,
+    );
   }
   final String question;
   final List<String> options;
@@ -315,56 +338,34 @@ PollResponse decodePollResponse({
   required Uint8List body,
   required int confirmedStatusCode,
 }) {
-  final failure = switch (statusCode) {
-    400 => PollResponseClassification.invalidInput,
-    401 => PollResponseClassification.reauthenticationRequired,
-    403 => PollResponseClassification.permissionDenied,
-    404 => PollResponseClassification.notFound,
-    429 => PollResponseClassification.rateLimited,
-    500 || 502 || 503 || 504 => PollResponseClassification.serviceUnavailable,
-    _ => null,
-  };
+  final failure = _pollFailureClassification(statusCode);
   if (failure != null) return PollResponse(classification: failure, poll: null);
-  if (statusCode != confirmedStatusCode) {
-    throw const TalkProtocolException(
-      TalkProtocolErrorCode.unsupportedHttpStatus,
-      path: r'$.statusCode',
-    );
-  }
-  if (body.isEmpty || body.length > pollMaximumResponseBytes) {
-    _responseFailure(r'$.body');
-  }
-  Object? decoded;
-  try {
-    decoded = jsonDecode(utf8.decode(body));
-  } on FormatException {
-    _responseFailure(r'$.body');
-  }
-  final root = requireObject(
-    decoded,
-    path: r'$',
-    code: TalkProtocolErrorCode.invalidPollResponse,
-  );
-  final ocs = requireObject(
-    root['ocs'],
-    path: r'$.ocs',
-    code: TalkProtocolErrorCode.invalidPollResponse,
-  );
-  final meta = requireObject(
-    ocs['meta'],
-    path: r'$.ocs.meta',
-    code: TalkProtocolErrorCode.invalidPollResponse,
-  );
-  if (meta['status'] != 'ok' || meta['statuscode'] != confirmedStatusCode) {
-    _responseFailure(r'$.ocs.meta');
-  }
-  final poll = TalkPoll.fromJson(ocs['data']);
+  final expectedStatus = switch (request) {
+    PollCreateRequest() => 201,
+    PollVoteRequest() ||
+    PollShowRequest() ||
+    PollCloseRequest() ||
+    PollDraftCreateRequest() ||
+    PollDraftEditRequest() => 200,
+    _ => _responseFailure(r'$.request'),
+  };
+  _requirePollStatus(statusCode, expectedStatus);
+  if (confirmedStatusCode != expectedStatus) _responseFailure(r'$.statusCode');
+  final poll = TalkPoll.fromJson(_decodePollData(body, expectedStatus));
   final expectedPollId = switch (request) {
-    PollVoteRequest(:final pollId) || PollShowRequest(:final pollId) => pollId,
-    PollCreateRequest() => null,
+    PollVoteRequest(:final pollId) ||
+    PollShowRequest(:final pollId) ||
+    PollCloseRequest(:final pollId) ||
+    PollDraftEditRequest(:final pollId) => pollId,
+    _ => null,
   };
   if (expectedPollId != null && poll.id != expectedPollId) {
     _responseFailure(r'$.ocs.data.id');
+  }
+  if ((request is PollCloseRequest && poll.status != PollStatus.closed) ||
+      ((request is PollDraftCreateRequest || request is PollDraftEditRequest) &&
+          poll.status != PollStatus.draft)) {
+    _responseFailure(r'$.ocs.data.status');
   }
   return PollResponse(
     classification: PollResponseClassification.confirmed,
