@@ -676,6 +676,36 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  Future<PermissionUpdateResponse> updateConversationPermissions({
+    required PermissionUpdateRequest permissionRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request =
+        _request(
+            permissionRequest.httpMethod,
+            permissionRequest.uri,
+            abortTrigger,
+          )
+          ..headers.addAll({
+            ...permissionRequest.headers,
+            'Accept': 'application/json',
+            'Authorization': _basicAuthorization(loginName, appPassword),
+          })
+          ..bodyFields = permissionRequest.formBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 400, 401, 403, 404, 429, 503},
+      maximumBytes: permissionUpdateMaximumBytes,
+    );
+    return decodePermissionUpdateResponse(
+      request: permissionRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   Future<RoomAdministrationResponse> administerRoom({
     required RoomAdministrationRequest administrationRequest,
     required String loginName,

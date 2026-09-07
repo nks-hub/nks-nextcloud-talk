@@ -52,6 +52,7 @@ export 'src/participants/active_session.dart';
 export 'src/participants/models.dart';
 export 'src/participants/request.dart';
 export 'src/participants/response.dart';
+export 'src/permissions/permissions.dart';
 export 'src/polls/polls.dart';
 export 'src/protocol_exception.dart';
 export 'src/push/crypto_material.dart';
