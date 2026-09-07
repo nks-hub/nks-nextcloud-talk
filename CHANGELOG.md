@@ -103,10 +103,16 @@ from the commit log. Nothing here has reached testers yet.
   returned nothing — it says how many it dropped and why now. A poll could also
   quietly vanish from the attachment menu after a passing glitch, and neither
   the log nor the crash reporter said anything at all.
-- Known, not fixed: the Czech and English text was audited on 6 September and
-  the audit reported covering every string. It did not — it read about 644 of
-  the 912 that existed that day, so roughly 270 have never been read by
-  anybody. What it did find was real and is fixed; the sweep itself is owed.
+- Changed: every one of the 932 pieces of text in the app was read in both
+  languages, and twenty-one were wrong. Four spoke about a woman as though she
+  were a man. "Vlastní proxy" said the proxy was yours when it is the app's.
+  One asked you to leave a call in a phrase Czech does not use that way, and
+  one sentence was still on first-name terms with you while the rest of the app
+  was not. The audit before this one had reported covering everything while
+  reading about two thirds of it, which is why it was done again and counted
+  out loud.
+- Fixed: the settings could tell you that removing an account is not supported
+  yet. It has been supported for weeks.
 - Added: the app lock works on Windows and macOS. It was offered only on
   phones, and the desktops were never even asked whether they had Windows Hello
   or Touch ID — the plugins for both had been shipped and registered all along.
