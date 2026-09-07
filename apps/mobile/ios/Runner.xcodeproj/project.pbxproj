@@ -46,6 +46,9 @@
 		A5E000000000000000000012 /* SocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000112 /* SocketConnection.swift */; };
 		A5E000000000000000000013 /* SampleUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000113 /* SampleUploader.swift */; };
 		A5E000000000000000000014 /* BroadcastExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000118 /* BroadcastExtension.appex */; settings = {ATTRIBUTES = (RemoveHeaderOnCopy, ); }; };
+		A5E000000000000000000601 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000103 /* ShareViewController.swift */; };
+		A5E000000000000000000602 /* AppleIncomingShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000101 /* AppleIncomingShareInbox.swift */; };
+		A5E000000000000000000603 /* ShareViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E000000000000000000604 /* ShareViewControllerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +72,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A5E000000000000000000401;
 			remoteInfo = ShareExtension;
+		};
+		A5E000000000000000000521 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
+			remoteInfo = Runner;
 		};
 		A5E000000000000000000511 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -163,6 +173,8 @@
 		A5E000000000000000000116 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A5E000000000000000000118 /* BroadcastExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BroadcastExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIncomingShareInboxTests.swift; sourceTree = "<group>"; };
+		A5E000000000000000000604 /* ShareViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewControllerTests.swift; sourceTree = "<group>"; };
+		A5E000000000000000000605 /* ShareExtensionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShareExtensionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -198,6 +210,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A5E000000000000000000312 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E000000000000000000322 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -264,6 +283,7 @@
 				34B630F28A4C4E2744551061 /* NotificationServiceExtension.appex */,
 				A5E000000000000000000108 /* ShareExtension.appex */,
 				A5E000000000000000000118 /* BroadcastExtension.appex */,
+				A5E000000000000000000605 /* ShareExtensionTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -353,6 +373,7 @@
 			isa = PBXGroup;
 			children = (
 				A5E000000000000000000109 /* AppleIncomingShareInboxTests.swift */,
+				A5E000000000000000000604 /* ShareViewControllerTests.swift */,
 			);
 			path = ShareExtensionTests;
 			sourceTree = "<group>";
@@ -409,6 +430,23 @@
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A5E000000000000000000621 /* ShareExtensionTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A5E000000000000000000622 /* Build configuration list for PBXNativeTarget "ShareExtensionTests" */;
+			buildPhases = (
+				A5E000000000000000000321 /* Sources */,
+				A5E000000000000000000322 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A5E000000000000000000522 /* PBXTargetDependency */,
+			);
+			name = ShareExtensionTests;
+			productName = ShareExtensionTests;
+			productReference = A5E000000000000000000605 /* ShareExtensionTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		6ED32A04E0AADF60AAD85F18 /* NotificationServiceExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5136983D54871DAF7216334D /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */;
@@ -453,6 +491,10 @@
 					A5E000000000000000000411 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					A5E000000000000000000621 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 97C146ED1CF9000F007C117D;
+					};
 				};
 			};
 			buildConfigurationList = 97C146E91CF9000F007C117D /* Build configuration list for PBXProject "Runner" */;
@@ -477,6 +519,7 @@
 				6ED32A04E0AADF60AAD85F18 /* NotificationServiceExtension */,
 				A5E000000000000000000401 /* ShareExtension */,
 				A5E000000000000000000411 /* BroadcastExtension */,
+				A5E000000000000000000621 /* ShareExtensionTests */,
 			);
 		};
 /* End PBXProject section */
@@ -736,6 +779,11 @@
 			target = A5E000000000000000000411 /* BroadcastExtension */;
 			targetProxy = A5E000000000000000000511 /* PBXContainerItemProxy */;
 		};
+		A5E000000000000000000522 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 97C146ED1CF9000F007C117D /* Runner */;
+			targetProxy = A5E000000000000000000521 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -754,6 +802,16 @@
 			files = (
 				A5E000000000000000000003 /* AppleIncomingShareInbox.swift in Sources */,
 				A5E000000000000000000004 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5E000000000000000000321 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5E000000000000000000601 /* ShareViewController.swift in Sources */,
+				A5E000000000000000000602 /* AppleIncomingShareInbox.swift in Sources */,
+				A5E000000000000000000603 /* ShareViewControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1319,6 +1377,56 @@
 			};
 			name = Profile;
 		};
+		A5E000000000000000000623 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.ShareExtensionTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
+			};
+			name = Debug;
+		};
+		A5E000000000000000000624 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.ShareExtensionTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
+			};
+			name = Release;
+		};
+		A5E000000000000000000625 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nkshub.nextcloudtalk.ShareExtensionTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1368,6 +1476,16 @@
 				A5E000000000000000000413 /* Debug */,
 				A5E000000000000000000414 /* Release */,
 				A5E000000000000000000415 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A5E000000000000000000622 /* Build configuration list for PBXNativeTarget "ShareExtensionTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A5E000000000000000000623 /* Debug */,
+				A5E000000000000000000624 /* Release */,
+				A5E000000000000000000625 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

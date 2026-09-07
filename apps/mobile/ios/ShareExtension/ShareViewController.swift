@@ -64,14 +64,11 @@ final class ShareViewController: UIViewController {
     do {
       let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
       let providers = items.flatMap { $0.attachments ?? [] }
-      let fileProviders = providers.filter(isFileProvider)
-      guard fileProviders.count <= 1 else {
-        throw AppleIncomingShareError.invalidFile
-      }
-      let text = try await sharedText(from: items, providers: providers, excluding: fileProviders.first)
+      let fileProvider = try singleFileProvider(in: providers)
+      let text = try await sharedText(from: items, providers: providers, excluding: fileProvider)
       let inbox = try AppleIncomingShareInbox()
       capturedInbox = inbox
-      if let provider = fileProviders.first {
+      if let provider = fileProvider {
         capturedShare = try await captureFile(provider, text: text, inbox: inbox)
       } else {
         capturedShare = try inbox.capture(
@@ -149,7 +146,17 @@ final class ShareViewController: UIViewController {
     }
   }
 
-  private func captureFile(
+  /// The one attachment to treat as the shared file, or nil for a text-only share.
+  /// Throws when the share sheet handed over more than one file.
+  func singleFileProvider(in providers: [NSItemProvider]) throws -> NSItemProvider? {
+    let fileProviders = providers.filter(isFileProvider)
+    guard fileProviders.count <= 1 else {
+      throw AppleIncomingShareError.invalidFile
+    }
+    return fileProviders.first
+  }
+
+  func captureFile(
     _ provider: NSItemProvider,
     text: String?,
     inbox: AppleIncomingShareInbox
