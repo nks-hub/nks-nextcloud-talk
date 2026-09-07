@@ -98,6 +98,11 @@ from the commit log. Nothing here has reached testers yet.
   backend — so it is the button and the request that are proven, not the
   recording.
 
+- Fixed: four failures that used to disappear without a word. The worst could
+  empty the whole list of saved conversations and look like a server that
+  returned nothing — it says how many it dropped and why now. A poll could also
+  quietly vanish from the attachment menu after a passing glitch, and neither
+  the log nor the crash reporter said anything at all.
 - Known, not fixed: the Czech and English text was audited on 6 September and
   the audit reported covering every string. It did not — it read about 644 of
   the 912 that existed that day, so roughly 270 have never been read by
