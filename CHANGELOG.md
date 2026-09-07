@@ -23,6 +23,17 @@ to them. Only what is documented from App Store Connect is stated for them.
 Collected as the work lands so the next release notes are not reconstructed
 from the commit log. These changes are not published in the testing tracks.
 
+- Idle-presence handling is in progress: a focused window releases chat
+  presence after two minutes without user input. Keyboard, pointer, touch,
+  accessibility and software-keyboard text/content input renew activity;
+  incoming updates and restored drafts do not. Joined calls keep their session.
+  Passive-capable servers no longer have notifications cleared by chat fetches,
+  and automatic read markers require an active, visible chat. Hidden-route
+  signaling, legacy-server behavior and final multi-device acceptance remain
+  open; this is not a completed or published release point. The reviewed core
+  passes 2,287 Flutter tests with five skips, full analysis and a Windows debug
+  build.
+
 - Permission administration has validated request/response and HTTP transport
   support for room defaults, individual attendee rights and @all permissions.
   It preserves inheritance versus explicit restrictions, enforces advertised
