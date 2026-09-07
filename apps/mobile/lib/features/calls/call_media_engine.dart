@@ -178,6 +178,19 @@ abstract interface class CallPeerConnection {
 
   Future<void> addIceCandidate(CallIceCandidate candidate);
 
+  /// Sends `{"type": type, "payload": payload}` on Talk's `status` data
+  /// channel — the small JSON side channel the web client keeps on a call's
+  /// own peer connection (never on a screen share) for `audioOn`/
+  /// `audioOff`/`videoOn`/`videoOff` notices, alongside the `mute`/`unmute`
+  /// signalling message this side already sends. `payload` is omitted from
+  /// the frame when null, the way `JSON.stringify` drops an `undefined`
+  /// value upstream.
+  ///
+  /// False when this connection opened no such channel (a screen share) or
+  /// it is not open yet; the caller does not retry — the state rides on the
+  /// next change, same as the signalling message already does.
+  bool sendStatus(String type, {Object? payload});
+
   Future<void> close();
 }
 
@@ -231,5 +244,12 @@ abstract interface class CallMediaEngine {
     /// (`null`). Every connection offers to receive video, so a participant
     /// who sends it is seen without any negotiation on this side.
     required void Function(CallRemoteVideo? video) onRemoteVideo,
+
+    /// Fires for every `{type, payload}` frame a peer sends on Talk's
+    /// `status` data channel — `audioOn`/`audioOff`/`videoOn`/`videoOff` and
+    /// the like. `null` opens no channel at all on this connection, the
+    /// shape a screen share has upstream: Talk keeps the channel only on the
+    /// call's own `video`-room connection, never on a `screen` one.
+    void Function(String type, Object? payload)? onStatusMessage,
   });
 }

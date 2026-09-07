@@ -108,6 +108,7 @@ final class CallPeerState {
     this.video,
     this.screen,
     this.audioMuted = false,
+    this.speaking = false,
   });
 
   final String peerId;
@@ -122,8 +123,14 @@ final class CallPeerState {
   /// The peer's shared screen while they share one; owned by the session.
   final CallRemoteVideo? screen;
 
-  /// Whether the peer said their microphone is off (`mute {name: audio}`).
+  /// Whether the peer said their microphone is off (`mute {name: audio}`, or
+  /// the `audioOff` twin on Talk's status data channel).
   final bool audioMuted;
+
+  /// Whether the peer's status channel currently says they are talking
+  /// (`speaking`/`stoppedSpeaking`). No UI reads this yet — see the call
+  /// session notes for where wiring it stops.
+  final bool speaking;
 
   /// When this side first saw the peer in the call. A peer still connecting
   /// long after that is most likely a departed session the server has not
@@ -242,6 +249,9 @@ final class CallMediaSession {
   bool _handRaised = false;
   final Set<String> _raisedHands = <String>{};
   final Set<String> _peerAudioMuted = <String>{};
+
+  /// Peers whose status channel currently says they are talking.
+  final Set<String> _speakingPeers = <String>{};
   CallReaction? _reaction;
   Timer? _reactionTimer;
   CallLocalVideo? _video;
@@ -525,6 +535,10 @@ final class CallMediaSession {
           }),
         ),
         onRemoteVideo: (video) => unawaited(video?.dispose()),
+        // Nothing meaningful arrives on the publish connection itself; this
+        // side's own status frames go out on it, to every subscriber, via
+        // _announceMedia below.
+        onStatusMessage: (type, payload) {},
       );
       if (_disposed || !identical(_publisher, publisher)) {
         await connection.close();
@@ -747,6 +761,9 @@ final class CallMediaSession {
         ),
         onRemoteVideo: (video) =>
             unawaited(_enqueue(() => _recordRemoteVideo(peer, video))),
+        onStatusMessage: (type, payload) => unawaited(
+          _enqueue(() async => _receiveStatus(peer.peerId, type, payload)),
+        ),
       );
       if (_disposed || !identical(_peers[peer.peerId], peer)) {
         await connection.close();
@@ -1511,6 +1528,7 @@ final class CallMediaSession {
     final peer = _peers.remove(peerId);
     _raisedHands.remove(peerId);
     _peerAudioMuted.remove(peerId);
+    _speakingPeers.remove(peerId);
     await peer?.video?.dispose();
     peer?.video = null;
     await peer?.connection?.close();
@@ -1558,11 +1576,26 @@ final class CallMediaSession {
   /// microphone with audio flowing, and a camera turned on stayed an avatar
   /// until this message was sent). Sent when a peer appears and on every
   /// change; a system interruption counts as muted, like the track it closes.
+  ///
+  /// The SAME fact also goes out as `audioOn`/`audioOff`/`videoOn`/`videoOff`
+  /// on Talk's `status` data channel — the peer-to-peer side channel the web
+  /// client keeps beside this very signalling message (confirmed from its
+  /// `LocalStateBroadcaster`, which fires both from the same mute/unmute and
+  /// camera on/off events). Both paths carry the same two facts; sending on
+  /// both is what upstream itself does; sending on only one is the way a
+  /// participant that never toggles anything again stays a muted avatar to a
+  /// peer that missed, or does not read, the other one.
   Future<void> _announceMedia(String peerId) async {
+    // Talk's status channel lives on the publisher under an MCU (which fans
+    // the frame out to every subscriber) and on the peer's own connection in
+    // the mesh; sending it once per recipient re-sends the same MCU frame,
+    // which is harmless — every subscriber reads the same state either way.
+    final statusConnection = (_mcu ? _publisher : _peers[peerId])?.connection;
     for (final (name, on) in [
       ('audio', !(_userMuted || _interrupted)),
       ('video', _video != null),
     ]) {
+      statusConnection?.sendStatus('$name${on ? 'On' : 'Off'}');
       try {
         await _send(
           peerId: peerId,
@@ -1572,6 +1605,44 @@ final class CallMediaSession {
       } on CallMediaException {
         // The state rides along with the next change instead.
       }
+    }
+  }
+
+  /// A peer's frame arriving on Talk's status data channel: exactly the six
+  /// messages a live two-Chrome capture on 7 September 2026 ever saw the web
+  /// client send on it, and nothing else (confirmed against
+  /// `LocalStateBroadcaster.ts`/`webrtc.js` — raised hands and reactions
+  /// arrive over the signalling connection instead, which this side already
+  /// reads).
+  ///
+  /// `audioOn`/`audioOff` are the same fact the `mute`/`unmute` signalling
+  /// message already carries, so both fold into [_peerAudioMuted].
+  /// `speaking`/`stoppedSpeaking` have no other source in this app at all —
+  /// folded into [_speakingPeers], read by [CallPeerState.speaking]; no
+  /// widget shows it yet, which is as far as this stops.
+  /// `videoOn`/`videoOff` have nothing further to update: this side already
+  /// shows a peer's camera from the track itself (`onRemoteVideo`) rather
+  /// than from a hint, so there is no separate "camera off" flag for it to
+  /// feed.
+  void _receiveStatus(String peerId, String type, Object? payload) {
+    if (!_peers.containsKey(peerId)) {
+      return;
+    }
+    final bool changed;
+    switch (type) {
+      case 'audioOn':
+        changed = _peerAudioMuted.remove(peerId);
+      case 'audioOff':
+        changed = _peerAudioMuted.add(peerId);
+      case 'speaking':
+        changed = _speakingPeers.add(peerId);
+      case 'stoppedSpeaking':
+        changed = _speakingPeers.remove(peerId);
+      default:
+        return;
+    }
+    if (changed) {
+      _publish();
     }
   }
 
@@ -1694,6 +1765,7 @@ final class CallMediaSession {
               video: peer.video,
               screen: _screens[peer.peerId]?.video,
               audioMuted: _peerAudioMuted.contains(peer.peerId),
+              speaking: _speakingPeers.contains(peer.peerId),
             ),
         ],
       ),

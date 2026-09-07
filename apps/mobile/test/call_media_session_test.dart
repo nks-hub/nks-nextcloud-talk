@@ -350,6 +350,12 @@ void main() {
       expect(raise.payload?.wire['timestamp'], isA<int>());
       expect(media.state.handRaised, isTrue);
       expect(media.state.raisedHands, 0, reason: 'our own hand is not counted');
+      // A raised hand is a signalling message only: a live capture never saw
+      // one on Talk's status data channel, alongside a reaction.
+      expect(
+        engine.connections.single.sentStatus.map((frame) => frame.type),
+        isNot(contains('raiseHand')),
+      );
 
       updates.add(
         _update(
@@ -1043,6 +1049,155 @@ void main() {
     ]);
   });
 
+  // A live two-Chrome capture on 7 September 2026 saw exactly six frame
+  // types on Talk's `status` data channel and nothing else: audioOn/Off,
+  // videoOn/Off, speaking/stoppedSpeaking. These tests cover the peer-to-peer
+  // side of that channel; the ordinary `mute`/`unmute`/`raiseHand` signalling
+  // messages it rides beside are covered above and in the hand-raise test.
+  group('status data channel', () {
+    test(
+      'opens on a call connection and never on a screen share',
+      () async {
+        final media = session(
+          _update(localPeerId: _local, participants: [_participant(_remote)]),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+
+        final call = engine.connections.single;
+        expect(call.onStatusMessage, isNotNull);
+
+        await media.setScreenSharing(true);
+        final share = engine.connections.last;
+        expect(share.onStatusMessage, isNull);
+        expect(share.sendStatus('audioOn'), isFalse);
+      },
+    );
+
+    test(
+      'the microphone toggle sends audioOff and audioOn',
+      () async {
+        final media = session(
+          _update(localPeerId: _local, participants: [_participant(_remote)]),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final connection = engine.connections.single;
+        // The initial announce when the peer was created.
+        expect(connection.sentStatus.map((frame) => frame.type), [
+          'audioOn',
+          'videoOff',
+        ]);
+
+        // Every announce carries both facts, like the mute/unmute pair above.
+        await media.setMicrophoneMuted(true);
+        expect(
+          connection.sentStatus.map((frame) => frame.type).toList().sublist(2),
+          ['audioOff', 'videoOff'],
+        );
+
+        await media.setMicrophoneMuted(false);
+        expect(
+          connection.sentStatus.map((frame) => frame.type).toList().sublist(4),
+          ['audioOn', 'videoOff'],
+        );
+      },
+    );
+
+    test('the camera toggle sends videoOn and videoOff', () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      final connection = engine.connections.single;
+
+      await media.setCameraEnabled(true);
+      expect(connection.sentStatus.last, (type: 'videoOn', payload: null));
+
+      await media.setCameraEnabled(false);
+      expect(connection.sentStatus.last, (type: 'videoOff', payload: null));
+    });
+
+    test(
+      'through an MCU this side sends once, on the publisher',
+      () async {
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+          ),
+          withControl: true,
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final publisher = engine.connections.single;
+        expect(publisher.onStatusMessage, isNotNull);
+
+        await media.setMicrophoneMuted(true);
+        expect(publisher.sentStatus.map((frame) => frame.type), contains('audioOff'));
+      },
+    );
+
+    test(
+      'an incoming audioOff/audioOn frame updates the same state the '
+      'mute/unmute signalling message does',
+      () async {
+        final media = session(
+          _update(localPeerId: _local, participants: [_participant(_remote)]),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final connection = engine.connections.single;
+
+        connection.receiveStatus('audioOff');
+        await pumpEventQueue();
+        expect(media.state.participants.single.audioMuted, isTrue);
+
+        connection.receiveStatus('audioOn');
+        await pumpEventQueue();
+        expect(media.state.participants.single.audioMuted, isFalse);
+      },
+    );
+
+    test(
+      'an incoming speaking/stoppedSpeaking frame updates the peer state',
+      () async {
+        final media = session(
+          _update(localPeerId: _local, participants: [_participant(_remote)]),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final connection = engine.connections.single;
+
+        expect(media.state.participants.single.speaking, isFalse);
+        connection.receiveStatus('speaking');
+        await pumpEventQueue();
+        expect(media.state.participants.single.speaking, isTrue);
+
+        connection.receiveStatus('stoppedSpeaking');
+        await pumpEventQueue();
+        expect(media.state.participants.single.speaking, isFalse);
+      },
+    );
+
+    test('a peer that leaves the call is forgotten', () async {
+      final media = session(
+        _update(localPeerId: _local, participants: [_participant(_remote)]),
+      );
+      addTearDown(media.dispose);
+      await media.start();
+      engine.connections.single.receiveStatus('speaking');
+      await pumpEventQueue();
+      expect(media.state.participants.single.speaking, isTrue);
+
+      updates.add(_update(localPeerId: _local, participants: []));
+      await pumpEventQueue();
+      expect(media.state.participants, isEmpty);
+    });
+  });
+
   // The web client keys a peer connection by `sid`; a message with a foreign
   // or missing one opens a new connection or is dropped.
   test('every message to a peer carries the sid of its connection', () async {
@@ -1473,6 +1628,7 @@ final class _FakeEngine implements CallMediaEngine {
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
+    void Function(String type, Object? payload)? onStatusMessage,
   }) async {
     final connection = _FakeConnection(
       audio: audio,
@@ -1482,6 +1638,7 @@ final class _FakeEngine implements CallMediaEngine {
       onIceCandidate: onIceCandidate,
       onConnectionState: onConnectionState,
       onRemoteVideo: onRemoteVideo,
+      onStatusMessage: onStatusMessage,
       index: connections.length + 1,
     );
     connections.add(connection);
@@ -1559,6 +1716,7 @@ final class _FakeConnection implements CallPeerConnection {
     required this.onIceCandidate,
     required this.onConnectionState,
     required this.onRemoteVideo,
+    this.onStatusMessage,
     required this.index,
   });
 
@@ -1569,7 +1727,26 @@ final class _FakeConnection implements CallPeerConnection {
   final void Function(CallIceCandidate candidate) onIceCandidate;
   final void Function(CallMediaConnectionState state) onConnectionState;
   final void Function(CallRemoteVideo? video) onRemoteVideo;
+  final void Function(String type, Object? payload)? onStatusMessage;
   final int index;
+
+  /// Every `sendStatus` call this connection accepted, in order. Stays empty
+  /// when [onStatusMessage] was never given — a screen-share connection,
+  /// which opens no channel and therefore never sends on one.
+  final sentStatus = <({String type, Object? payload})>[];
+
+  @override
+  bool sendStatus(String type, {Object? payload}) {
+    if (onStatusMessage == null) {
+      return false;
+    }
+    sentStatus.add((type: type, payload: payload));
+    return true;
+  }
+
+  /// Test hook: the peer's own frame arriving on the status channel.
+  void receiveStatus(String type, {Object? payload}) =>
+      onStatusMessage?.call(type, payload);
 
   int createdOffers = 0;
   int createdAnswers = 0;

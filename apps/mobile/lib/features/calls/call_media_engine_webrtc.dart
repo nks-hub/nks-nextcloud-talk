@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -167,6 +168,7 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
+    void Function(String type, Object? payload)? onStatusMessage,
   }) async {
     final stream = (audio as _WebRtcLocalAudio?)?.stream;
     final oneWay = sendOnly || video != null;
@@ -277,7 +279,26 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         onRemoteVideo(null);
       }
     };
-    return _WebRtcPeerConnection(connection, stream, sendOnly: oneWay);
+    rtc.RTCDataChannel? statusChannel;
+    if (onStatusMessage != null) {
+      // Never fatal: the call still works without it, carrying the same
+      // audio/video state over the `mute`/`unmute` signalling message alone.
+      try {
+        statusChannel = await connection.createDataChannel(
+          'status',
+          rtc.RTCDataChannelInit(),
+        );
+      } on Object catch (error) {
+        debugPrint('[call] status channel failed: $error');
+      }
+    }
+    return _WebRtcPeerConnection(
+      connection,
+      stream,
+      sendOnly: oneWay,
+      statusChannel: statusChannel,
+      onStatusMessage: onStatusMessage,
+    );
   }
 }
 
@@ -525,7 +546,43 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
     this._connection,
     this._localStream, {
     required this._sendOnly,
-  });
+    this._statusChannel,
+    void Function(String type, Object? payload)? onStatusMessage,
+  }) {
+    final channel = _statusChannel;
+    if (channel == null) {
+      return;
+    }
+    channel.onMessage = (message) {
+      if (message.isBinary) {
+        return;
+      }
+      final decoded = _decodeStatusMessage(message.text);
+      if (decoded != null) {
+        onStatusMessage?.call(decoded.type, decoded.payload);
+      }
+    };
+    // Both sides open this channel as soon as their connection exists, so it
+    // is still `connecting` while the offer/answer and ICE are outstanding.
+    // A send attempted before it opens is queued and flushed here instead of
+    // lost — losing it would mean the far side never learns this side's
+    // audio/video state at all when it never changes again for the rest of
+    // the call, which is the exact defect this channel exists to fix.
+    channel.onDataChannelState = (state) {
+      if (state == rtc.RTCDataChannelState.RTCDataChannelOpen) {
+        _flushPendingStatus();
+      }
+    };
+    // Talk's own `speaking`/`stoppedSpeaking` frames come from an analyser on
+    // the raw microphone buffer, which this plugin exposes on no platform it
+    // supports. This samples the same fact a coarser way — the outbound
+    // audio level WebRTC's own stats already compute — on whichever
+    // connection actually carries this side's microphone; a screen share or
+    // a receive-only MCU subscriber has no local stream and starts no timer.
+    if (_localStream != null) {
+      _startSpeakingMonitor();
+    }
+  }
 
   /// A share offers nothing back. Without this the plugin's default offer
   /// constraints add a receive-only audio and video line to every offer, and
@@ -544,6 +601,105 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
   /// web's stream still had no video track).
   final rtc.MediaStream? _localStream;
   bool _closed = false;
+
+  /// `null` on a screen-share connection, which never opens one.
+  rtc.RTCDataChannel? _statusChannel;
+
+  /// Frames [sendStatus] could not send yet because the channel was still
+  /// negotiating; flushed in declaration order once it opens.
+  final List<String> _pendingStatusFrames = <String>[];
+
+  Timer? _speakingPoll;
+  Timer? _stoppedSpeakingTimer;
+  bool _speaking = false;
+
+  /// hark.js's own border for "loud enough to count as speech" is -70dBov;
+  /// this is the same idea on the 0..1 linear `audioLevel` WebRTC's stats
+  /// report instead of hark's raw analyser reading, so the two numbers are
+  /// not directly comparable.
+  /// ponytail: an estimate, not a measurement — nobody has held this against
+  /// a real microphone yet. Raise it if speaking fires on room noise, lower
+  /// it if quiet speech never crosses it.
+  static const _speakingThreshold = 0.02;
+
+  void _startSpeakingMonitor() {
+    _speakingPoll = Timer.periodic(
+      const Duration(milliseconds: 300),
+      (_) => unawaited(_pollSpeaking()),
+    );
+  }
+
+  Future<void> _pollSpeaking() async {
+    if (_closed) {
+      return;
+    }
+    double? level;
+    try {
+      for (final report in await _connection.getStats()) {
+        if (report.type == 'media-source' &&
+            report.values['kind'] == 'audio') {
+          final value = report.values['audioLevel'];
+          if (value is num) {
+            level = value.toDouble();
+          }
+          break;
+        }
+      }
+    } on Object {
+      return;
+    }
+    if (_closed || level == null) {
+      return;
+    }
+    if (level >= _speakingThreshold) {
+      _stoppedSpeakingTimer?.cancel();
+      _stoppedSpeakingTimer = null;
+      if (!_speaking) {
+        _speaking = true;
+        sendStatus('speaking');
+      }
+      return;
+    }
+    // hark.js waits a second of quiet before calling it stopped, so a short
+    // pause between words does not flap the indicator on and off.
+    if (_speaking && _stoppedSpeakingTimer == null) {
+      _stoppedSpeakingTimer = Timer(const Duration(seconds: 1), () {
+        _stoppedSpeakingTimer = null;
+        _speaking = false;
+        sendStatus('stoppedSpeaking');
+      });
+    }
+  }
+
+  @override
+  bool sendStatus(String type, {Object? payload}) {
+    final channel = _statusChannel;
+    if (channel == null) {
+      return false;
+    }
+    final frame = jsonEncode(<String, Object?>{
+      'type': type,
+      'payload': ?payload,
+    });
+    if (channel.state != rtc.RTCDataChannelState.RTCDataChannelOpen) {
+      _pendingStatusFrames.add(frame);
+      return false;
+    }
+    unawaited(channel.send(rtc.RTCDataChannelMessage(frame)));
+    return true;
+  }
+
+  void _flushPendingStatus() {
+    final channel = _statusChannel;
+    if (channel == null || _pendingStatusFrames.isEmpty) {
+      return;
+    }
+    final pending = List<String>.of(_pendingStatusFrames);
+    _pendingStatusFrames.clear();
+    for (final frame in pending) {
+      unawaited(channel.send(rtc.RTCDataChannelMessage(frame)));
+    }
+  }
 
   /// The transceiver handed back by `addTransceiver` must not be kept: the
   /// plugin disposes that wrapper once the connection negotiates ("RtpTransceiver
@@ -661,10 +817,26 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
       return;
     }
     _closed = true;
+    _speakingPoll?.cancel();
+    _speakingPoll = null;
+    _stoppedSpeakingTimer?.cancel();
+    _stoppedSpeakingTimer = null;
     _connection.onIceCandidate = null;
     _connection.onConnectionState = null;
     _connection.onTrack = null;
     _connection.onRemoveTrack = null;
+    final channel = _statusChannel;
+    _statusChannel = null;
+    _pendingStatusFrames.clear();
+    if (channel != null) {
+      channel.onMessage = null;
+      channel.onDataChannelState = null;
+      try {
+        await channel.close();
+      } on Object {
+        // The connection closing below takes it down regardless.
+      }
+    }
     try {
       await _connection.close();
     } on Object {
@@ -699,6 +871,26 @@ final class _WebRtcPeerConnection implements CallPeerConnection {
       throw const CallMediaException(CallMediaError.engineFailure);
     }
   }
+}
+
+/// A status channel frame, exactly as talk-web's `Peer.prototype.sendDirectly`
+/// writes it: `{"type": "...", "payload": ...}`. `null` for anything else —
+/// a stray frame is ignored rather than guessed at.
+({String type, Object? payload})? _decodeStatusMessage(String text) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map<String, Object?>) {
+    return null;
+  }
+  final type = decoded['type'];
+  if (type is! String || type.isEmpty) {
+    return null;
+  }
+  return (type: type, payload: decoded['payload']);
 }
 
 /// Logs the outbound video counters of a send-only connection a few times

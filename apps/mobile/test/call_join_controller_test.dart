@@ -155,6 +155,7 @@ final class _RecordingEngine implements CallMediaEngine {
     required void Function(CallIceCandidate candidate) onIceCandidate,
     required void Function(CallMediaConnectionState state) onConnectionState,
     required void Function(CallRemoteVideo? video) onRemoteVideo,
+    void Function(String type, Object? payload)? onStatusMessage,
   }) async {
     throw const CallMediaException(CallMediaError.engineFailure);
   }
