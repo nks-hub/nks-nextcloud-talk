@@ -28,6 +28,8 @@ from the commit log. Nothing here has reached testers yet.
   English or Czech, and rejected native answers release their exact call ID.
   A server policy change cannot retain a call session the app already owns.
   This is an unsupported-call guard, not support for encrypted call media.
+  The explanation also appears when starting the first call in a room. A
+  pending video join cannot turn the camera on after switching rooms or accounts.
 
 - Device languages without a translation now fall back to English instead of
   Czech. Supported language and region variants still follow the device's
