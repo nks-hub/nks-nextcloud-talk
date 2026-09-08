@@ -222,6 +222,12 @@ extension _CallMediaSessionSignaling on CallMediaSession {
         message.roomType != CallMediaSession._roomType) {
       return;
     }
+    if (_mcu &&
+        message.sid != null &&
+        (_retiredSubscriberSids[sender.value]?.contains(message.sid) ??
+            false)) {
+      return;
+    }
     switch (message.type) {
       case 'offer':
         await _receiveOffer(
@@ -456,11 +462,10 @@ extension _CallMediaSessionSignaling on CallMediaSession {
   }
 
   Future<void> _recordConnectionState(
-    String peerId,
+    _MediaPeer peer,
     CallMediaConnectionState state,
   ) async {
-    final peer = _peers[peerId];
-    if (peer == null) {
+    if (!identical(_peers[peer.peerId], peer)) {
       return;
     }
     final previous = peer.state;
@@ -474,7 +479,17 @@ extension _CallMediaSessionSignaling on CallMediaSession {
     if (state == CallMediaConnectionState.failed &&
         previous != CallMediaConnectionState.failed &&
         peer.connection != null) {
-      await _offer(peer, iceRestart: true);
+      if (_mcu) {
+        // HPB treats an offer as a publication, including a recv-only offer.
+        // A subscriber must request a new server offer instead.
+        (_retiredSubscriberSids[peer.peerId] ??= {}).add(peer.sid);
+        _peers.remove(peer.peerId);
+        await peer.video?.dispose();
+        await peer.connection?.close();
+        await _subscribe(peer.peerId);
+      } else {
+        await _offer(peer, iceRestart: true);
+      }
     }
   }
 

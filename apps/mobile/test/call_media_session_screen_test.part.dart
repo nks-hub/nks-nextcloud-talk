@@ -274,6 +274,128 @@ extension _ScreenMediaSessionTests on _MediaSessionTests {
     );
 
     test(
+      'a failed MCU subscriber requests an offer without publishing',
+      () async {
+        final media = session(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+          ),
+          withControl: true,
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        final publisher = engine.connections.single;
+        updates.add(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'remote-publisher',
+              }, sid: 'mcu-old-subscriber'),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        final subscriber = engine.connections.last;
+        sent.clear();
+        subscriber.emitConnectionState(CallMediaConnectionState.failed);
+        await pumpEventQueue();
+        expect(sent.where((message) => message.type == 'offer'), isEmpty);
+        final request = sent.singleWhere(
+          (message) => message.type == 'requestoffer',
+        );
+        expect(request.recipient?.value, _remote);
+        expect(request.sid, isNot('mcu-old-subscriber'));
+        expect(subscriber.closed, isTrue);
+        expect(publisher.closed, isFalse);
+        expect(publisher.createdOffers, 1);
+        engine.connectionError = CallMediaError.engineFailure;
+        updates.add(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'setup-fails',
+              }, sid: 'failed-new-handle'),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        engine.connectionError = null;
+        updates.add(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'retired-offer',
+              }, sid: 'mcu-old-subscriber'),
+              _message(_remote, 'candidate', {
+                'candidate': {
+                  'candidate': 'candidate:retired',
+                  'sdpMid': 'audio',
+                  'sdpMLineIndex': 0,
+                },
+              }, sid: 'mcu-old-subscriber'),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        expect(engine.connections, hasLength(2));
+        updates.add(
+          _update(
+            localPeerId: _local,
+            participants: [_participant(_remote)],
+            topology: SignalingTopology.externalMcu,
+            messages: [
+              _message(_remote, 'offer', {
+                'type': 'offer',
+                'sdp': 'replacement-offer',
+              }, sid: 'new-janus-handle'),
+            ],
+          ),
+        );
+        await pumpEventQueue();
+        final replacement = engine.connections.last;
+        expect(replacement, isNot(same(subscriber)));
+        expect(replacement.remoteCandidates, isEmpty);
+        expect(
+          sent.lastWhere((message) => message.type == 'answer').sid,
+          'new-janus-handle',
+        );
+        replacement.emitConnectionState(CallMediaConnectionState.connected);
+        await pumpEventQueue();
+        sent.clear();
+        subscriber.emitConnectionState(CallMediaConnectionState.failed);
+        subscriber.emitIceCandidate(
+          const CallIceCandidate(
+            candidate: 'candidate:late',
+            sdpMid: 'audio',
+            sdpMLineIndex: 0,
+          ),
+        );
+        subscriber.receiveStatus('audioOff');
+        subscriber.receiveStatus('speaking');
+        await pumpEventQueue();
+        expect(sent, isEmpty);
+        expect(replacement.closed, isFalse);
+        expect(media.state.participants.single.connected, isTrue);
+        expect(media.state.participants.single.audioMuted, isFalse);
+        expect(media.state.participants.single.speaking, isFalse);
+      },
+    );
+
+    test(
       'through an MCU the screen is published once, not per participant',
       () async {
         final media = session(

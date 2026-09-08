@@ -72,6 +72,7 @@ final class _FakeInterruptions implements CallAudioInterruptions {
 
 final class _FakeEngine implements CallMediaEngine {
   int microphoneOpens = 0;
+  CallMediaError? connectionError;
   CallMediaError? microphoneError;
   final List<_FakeAudio> audio = <_FakeAudio>[];
   final List<_FakeConnection> connections = <_FakeConnection>[];
@@ -138,6 +139,9 @@ final class _FakeEngine implements CallMediaEngine {
     required void Function(CallRemoteVideo? video) onRemoteVideo,
     void Function(String type, Object? payload)? onStatusMessage,
   }) async {
+    if (connectionError case final error?) {
+      throw CallMediaException(error);
+    }
     final connection = _FakeConnection(
       audio: audio,
       video: video,

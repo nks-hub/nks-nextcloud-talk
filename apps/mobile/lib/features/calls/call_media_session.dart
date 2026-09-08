@@ -98,6 +98,7 @@ final class CallMediaSession {
   final CallMediaEngine _engine;
   final CallAudioInterruptions _interruptions;
   final Map<String, _MediaPeer> _peers = {};
+  final Map<String, Set<String>> _retiredSubscriberSids = {};
   final StreamController<CallMediaState> _states =
       StreamController<CallMediaState>.broadcast(sync: true);
 
@@ -344,6 +345,9 @@ final class CallMediaSession {
     for (final gone in _peers.keys.toSet().difference(expected)) {
       await _closePeer(gone);
     }
+    _retiredSubscriberSids.removeWhere(
+      (peerId, _) => !expected.contains(peerId),
+    );
     if (_mcu) {
       await _ensurePublisher(localPeerId.value, iceServers);
     }
@@ -400,15 +404,23 @@ final class CallMediaSession {
         // only; a participant's connection just listens.
         audio: _mcu ? null : audio,
         onIceCandidate: (candidate) => unawaited(
-          _enqueue(() => _sendLocalCandidate(peer.peerId, candidate)),
+          _enqueue(() async {
+            if (identical(_peers[peer.peerId], peer)) {
+              await _sendLocalCandidate(peer.peerId, candidate);
+            }
+          }),
         ),
         onConnectionState: (state) => unawaited(
-          _enqueue(() async => _recordConnectionState(peer.peerId, state)),
+          _enqueue(() async => _recordConnectionState(peer, state)),
         ),
         onRemoteVideo: (video) =>
             unawaited(_enqueue(() => _recordRemoteVideo(peer, video))),
         onStatusMessage: (type, payload) => unawaited(
-          _enqueue(() async => _receiveStatus(peer.peerId, type, payload)),
+          _enqueue(() async {
+            if (identical(_peers[peer.peerId], peer)) {
+              _receiveStatus(peer.peerId, type, payload);
+            }
+          }),
         ),
       );
       if (_disposed || !identical(_peers[peer.peerId], peer)) {
@@ -442,6 +454,7 @@ final class CallMediaSession {
   }
 
   Future<void> _closeAllPeers() async {
+    _retiredSubscriberSids.clear();
     await _stopSharing();
     for (final peerId in _peers.keys.toList(growable: false)) {
       await _closePeer(peerId);
