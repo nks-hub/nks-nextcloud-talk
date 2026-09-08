@@ -27,6 +27,7 @@ import 'media/chat_attachment_opener.dart';
 import 'media/chat_attachment_exporter.dart';
 
 part 'chat_message_attachment_content.dart';
+part 'chat_message_voice_content.dart';
 part 'chat_message_giphy_content.dart';
 part 'chat_message_reference_content.dart';
 part 'chat_message_rich_content.dart';
