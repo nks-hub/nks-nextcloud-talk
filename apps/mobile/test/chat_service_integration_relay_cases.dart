@@ -202,6 +202,157 @@ extension _ChatServiceRelayCases on _ChatServiceIntegrationSuite {
       expect(relay.isTrusted, isTrue);
     });
 
+    for (final payloadKind in ['attachment', 'refresh', 'invalid room']) {
+      test(
+        'queued relay text cannot skip $payloadKind awaiting HTTP',
+        () async {
+          final server = _RelayFakeServer(<int>[110]);
+          final fallbackStarted = Completer<void>();
+          final releaseFallback = Completer<void>();
+          var holdFallback = false;
+          String? fallbackAnchor;
+          final api = HttpNextcloudApi(
+            client: MockClient((request) async {
+              if (holdFallback &&
+                  request.url.queryParameters['lookIntoFuture'] == '1') {
+                fallbackAnchor ??=
+                    request.url.queryParameters['lastKnownMessageId'];
+                if (!fallbackStarted.isCompleted) fallbackStarted.complete();
+                await releaseFallback.future;
+              }
+              return server.handle(request);
+            }),
+          );
+          addTearDown(api.close);
+          addTearDown(() {
+            if (!releaseFallback.isCompleted) releaseFallback.complete();
+          });
+          final service = ChatService(
+            accounts: accounts,
+            chat: chat,
+            credentials: credentials,
+            api: api,
+          );
+          await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+          final relay = service.bindRelay(
+            accountId: 'account-a',
+            roomToken: 'rooma123',
+          )..activate(1);
+          addTearDown(relay.close);
+          await _waitForChatCondition(() => relay.isTrusted);
+          holdFallback = true;
+          server.messages.addAll([111, 112]);
+          server.fileMessages.add(111);
+          final payload = switch (payloadKind) {
+            'attachment' => <String, Object?>{
+              'comments': [_relayComment(111, filePath: _relayFilePath)],
+            },
+            'refresh' => <String, Object?>{'refresh': true},
+            _ => _relayChat([111], roomToken: 'roomb999'),
+          };
+          relay
+            ..receive(1, payload)
+            ..receive(1, _relayChat([112]));
+          await fallbackStarted.future.timeout(const Duration(seconds: 2));
+          final beforeFallback = await _messageIds();
+          final trustedDuringFallback = relay.isTrusted;
+          releaseFallback.complete();
+          await _waitForChatCondition(() => relay.isTrusted);
+          expect(beforeFallback, [110]);
+          expect(fallbackAnchor, '110');
+          expect(trustedDuringFallback, isFalse);
+          expect(await _messageIds(), [110, 111, 112]);
+          expect(await _filePathOf(111), _servedFilePath);
+          expect(relay.isTrusted, isTrue);
+        },
+      );
+    }
+
+    test(
+      'epoch change during relay preparation discards the old payload',
+      () async {
+        final server = _RelayFakeServer([110]);
+        final preparationStarted = Completer<void>();
+        final releasePreparation = Completer<void>();
+        var holdPreparation = false;
+        var now = DateTime.utc(2026, 9, 8);
+        final api = HttpNextcloudApi(
+          clock: () => now,
+          client: MockClient((request) async {
+            if (holdPreparation &&
+                request.url.path.endsWith('/cloud/capabilities')) {
+              holdPreparation = false;
+              preparationStarted.complete();
+              await releasePreparation.future;
+            }
+            return server.handle(request);
+          }),
+        );
+        addTearDown(api.close);
+        addTearDown(() {
+          if (!releasePreparation.isCompleted) releasePreparation.complete();
+        });
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        final relay = service.bindRelay(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        )..activate(1);
+        addTearDown(relay.close);
+        await _waitForChatCondition(() => relay.isTrusted);
+        now = now.add(const Duration(minutes: 6));
+        holdPreparation = true;
+        relay.receive(1, _relayChat([111]));
+        await preparationStarted.future.timeout(const Duration(seconds: 2));
+        relay.activate(2);
+        releasePreparation.complete();
+        await _waitForChatCondition(() => relay.isTrusted);
+        expect(await _messageIds(), [110]);
+        server.messages.add(112);
+        final requestsBeforeRelay = server.futureRequests;
+        final delivered = chat
+            .watchMessages(accountId: 'account-a', roomToken: 'rooma123')
+            .firstWhere((rows) => rows.any((row) => row.messageId == 112));
+        relay.receive(2, _relayChat([112]));
+        await delivered.timeout(const Duration(seconds: 2));
+        expect(await _messageIds(), [110, 112]);
+        expect(server.futureRequests, requestsBeforeRelay);
+      },
+    );
+
+    test(
+      'deactivated relay discards a payload already queued for merge',
+      () async {
+        final server = _RelayFakeServer([110]);
+        final api = HttpNextcloudApi(client: MockClient(server.handle));
+        addTearDown(api.close);
+        final service = ChatService(
+          accounts: accounts,
+          chat: chat,
+          credentials: credentials,
+          api: api,
+        );
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        final relay = service.bindRelay(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+        )..activate(1);
+        addTearDown(relay.close);
+        await _waitForChatCondition(() => relay.isTrusted);
+        relay
+          ..receive(1, _relayChat([111]))
+          ..deactivate();
+        await service.syncRoom(accountId: 'account-a', roomToken: 'rooma123');
+        expect(await _messageIds(), [110]);
+        expect(relay.isTrusted, isFalse);
+      },
+    );
+
     test('a suspended account stops accepting relayed messages', () async {
       final server = _RelayFakeServer(<int>[110]);
       final api = HttpNextcloudApi(client: MockClient(server.handle));
@@ -303,8 +454,7 @@ Map<String, Object?> _relayComment(
 const String _relayFilePath = 'voice-message.m4a';
 
 /// The path every chat read gives for the same file.
-const String _servedFilePath =
-    'Talk/room-rooma123/user-b/voice-message.m4a';
+const String _servedFilePath = 'Talk/room-rooma123/user-b/voice-message.m4a';
 
 /// A chat endpoint that answers from a mutable message list, so a test can
 /// decide which messages the HTTP transport can see and which ones only the

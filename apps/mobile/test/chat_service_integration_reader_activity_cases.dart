@@ -126,7 +126,7 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
         addTearDown(hidden.close);
         addTearDown(active.close);
         final pending = hidden.synchronize();
-        await _waitForReaderCondition(() => hidden.debugWaitingForReader);
+        await _waitForChatCondition(() => hidden.debugWaitingForReader);
         expect(reads, 0);
         await active.synchronize().timeout(const Duration(seconds: 2));
         final activeReads = reads;
@@ -180,7 +180,7 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
         readFlags.clear();
         binding.setReaderActive(false);
         final waiting = binding.synchronize();
-        await _waitForReaderCondition(() => binding.debugWaitingForReader);
+        await _waitForChatCondition(() => binding.debugWaitingForReader);
         await accounts.updateTalkFeatures('account-a', updatedFeatures.toSet());
         now = now.add(const Duration(minutes: 6));
         binding.setReaderActive(true);
@@ -264,7 +264,7 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
             await poll.timeout(const Duration(seconds: 2));
             await aborted.future.timeout(const Duration(seconds: 2));
             final resumed = binding.synchronize();
-            await _waitForReaderCondition(() => binding.debugWaitingForReader);
+            await _waitForChatCondition(() => binding.debugWaitingForReader);
             expect(polls, 1);
             binding.setReaderActive(true);
             await resumed.timeout(const Duration(seconds: 2));
@@ -314,7 +314,7 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
         final firstPoll = first.synchronize(),
             secondPoll = second.synchronize();
         await started.future.timeout(const Duration(seconds: 2));
-        await _waitForReaderCondition(
+        await _waitForChatCondition(
           () => first.debugSharedPollReaderCount == 2,
         );
         first.setReaderActive(false);
@@ -346,7 +346,7 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
         );
         addTearDown(binding.close);
         final pending = binding.synchronize();
-        await _waitForReaderCondition(() => binding.debugWaitingForReader);
+        await _waitForChatCondition(() => binding.debugWaitingForReader);
         binding.close();
         await pending.timeout(const Duration(seconds: 2));
         expect(binding.debugActiveCancellationCycleCount, 0);
@@ -354,12 +354,4 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
       },
     );
   }
-}
-
-Future<void> _waitForReaderCondition(bool Function() condition) async {
-  for (var attempt = 0; attempt < 500; attempt++) {
-    if (condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 2));
-  }
-  fail('Reader state did not reach the expected condition');
 }

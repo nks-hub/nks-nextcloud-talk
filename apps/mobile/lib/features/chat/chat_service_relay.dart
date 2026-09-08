@@ -14,6 +14,9 @@ enum _ChatRelayApplication {
   /// The payload cannot be merged on its own and the room has to be fetched:
   /// a bare `refresh`, or a scope the relay does not deliver messages for.
   fetchRequired,
+
+  /// The payload lost its epoch or trusted stream while waiting to merge.
+  discarded,
 }
 
 /// The High Performance Backend chat relay, as the chat sync engine's second
@@ -68,6 +71,21 @@ final class ChatRelayBinding {
 
   /// Whether the relay currently owns delivery for this room.
   bool get isTrusted => _trusted && !_closed;
+
+  bool _mayMerge(int epoch) {
+    if (_closed || _epoch != epoch) return false;
+    if (!_trusted) {
+      _sawWhileUntrusted = true;
+      return false;
+    }
+    return true;
+  }
+
+  void _dropTrust(int epoch) {
+    if (_closed || _epoch != epoch) return;
+    _trusted = false;
+    _wake();
+  }
 
   /// The signalling session has this room confirmed on [epoch]. Called on
   /// every update while the relay is live; only an epoch change or a lost
@@ -160,15 +178,17 @@ final class ChatRelayBinding {
   Future<void> _apply(int epoch, Map<String, Object?> chat) async {
     try {
       final outcome = await _service._applyRelayChat(
-        accountId: accountId,
-        roomToken: roomToken,
+        binding: this,
+        epoch: epoch,
         chat: chat,
       );
-      if (_closed || _epoch != epoch) {
+      if (_closed ||
+          _epoch != epoch ||
+          outcome == _ChatRelayApplication.discarded) {
         return;
       }
       if (outcome == _ChatRelayApplication.fetchRequired) {
-        await _service.syncRoom(accountId: accountId, roomToken: roomToken);
+        await _establishTrust(epoch);
       }
       _wake();
       return;
@@ -179,9 +199,7 @@ final class ChatRelayBinding {
     }
     // Whatever the relay could not merge cleanly is handed back to HTTP,
     // which re-reads from the confirmed anchor and so cannot skip a message.
-    _trusted = false;
-    _sawWhileUntrusted = false;
-    _wake();
+    _dropTrust(epoch);
     unawaited(_establishTrust(epoch));
   }
 
@@ -202,56 +220,72 @@ extension _ChatServiceRelay on ChatService {
   /// thread's messages, so a relayed room message says nothing about where
   /// its future cursor may be moved to; those scopes are fetched instead.
   Future<_ChatRelayApplication> _applyRelayChat({
-    required String accountId,
-    required String roomToken,
+    required ChatRelayBinding binding,
+    required int epoch,
     required Map<String, Object?> chat,
   }) {
+    final accountId = binding.accountId;
+    final roomToken = binding.roomToken;
     return _serializeRoom<_ChatRelayApplication>(
       _roomKey(accountId, roomToken),
       () async {
-        final prepared = await _prepare(accountId, roomToken);
-        final relay = decodeChatRelayEvent(
-          chat,
-          roomToken: prepared.room.token,
-        );
-        if (relay.comments.isEmpty) {
-          return relay.refreshRequested
-              ? _ChatRelayApplication.fetchRequired
-              : _ChatRelayApplication.nothingNew;
+        if (!binding._mayMerge(epoch)) {
+          return _ChatRelayApplication.discarded;
         }
-        if (relay.comments.any(_carriesFile)) {
-          return _ChatRelayApplication.fetchRequired;
-        }
-        final scope = (await _chat.getNetworkScope(
-          accountId: prepared.account.id,
-          roomToken: prepared.conversation.token,
-          threadId: null,
-        ))!;
-        final response = chatRelayGetResponse(
-          request: ChatFetchRequest(
-            accountId: AccountId.parse(prepared.account.id),
-            requestId: ChatRequestId.parse(_uuid.v4()),
-            server: prepared.authority.server,
+        try {
+          final prepared = await _prepare(accountId, roomToken);
+          final relay = decodeChatRelayEvent(
+            chat,
             roomToken: prepared.room.token,
-            profile: prepared.profile,
-            direction: ChatFetchDirection.future,
-            cursor: ChatCursor.parse(scope.futureCursor),
-            lastCommonRead: ChatCursor.parse(scope.lastCommonRead),
-            limit: ChatService._pageSize,
-            includeLastKnown: false,
-            timeoutSeconds: 0,
-            interactive: true,
+          );
+          if (relay.comments.isEmpty) {
+            if (relay.refreshRequested) binding._dropTrust(epoch);
+            return relay.refreshRequested
+                ? _ChatRelayApplication.fetchRequired
+                : _ChatRelayApplication.nothingNew;
+          }
+          if (relay.comments.any(_carriesFile)) {
+            binding._dropTrust(epoch);
+            return _ChatRelayApplication.fetchRequired;
+          }
+          final scope = (await _chat.getNetworkScope(
+            accountId: prepared.account.id,
+            roomToken: prepared.conversation.token,
             threadId: null,
-            futureConverged: scope.futureConverged,
-          ),
-          comments: relay.comments,
-        );
-        if (response == null) {
-          return _ChatRelayApplication.nothingNew;
+          ))!;
+          final response = chatRelayGetResponse(
+            request: ChatFetchRequest(
+              accountId: AccountId.parse(prepared.account.id),
+              requestId: ChatRequestId.parse(_uuid.v4()),
+              server: prepared.authority.server,
+              roomToken: prepared.room.token,
+              profile: prepared.profile,
+              direction: ChatFetchDirection.future,
+              cursor: ChatCursor.parse(scope.futureCursor),
+              lastCommonRead: ChatCursor.parse(scope.lastCommonRead),
+              limit: ChatService._pageSize,
+              includeLastKnown: false,
+              timeoutSeconds: 0,
+              interactive: true,
+              threadId: null,
+              futureConverged: scope.futureConverged,
+            ),
+            comments: relay.comments,
+          );
+          if (response == null) {
+            return _ChatRelayApplication.nothingNew;
+          }
+          await _ensurePreparedContextCurrent(prepared);
+          if (!binding._mayMerge(epoch)) {
+            return _ChatRelayApplication.discarded;
+          }
+          await _applyGetResponse(prepared, response);
+          return _ChatRelayApplication.merged;
+        } on Object {
+          // Invalidate inside the room tail, before the next queued payload.
+          binding._dropTrust(epoch);
+          rethrow;
         }
-        await _ensurePreparedContextCurrent(prepared);
-        await _applyGetResponse(prepared, response);
-        return _ChatRelayApplication.merged;
       },
     );
   }
@@ -272,9 +306,8 @@ extension _ChatServiceRelay on ChatService {
   /// render the FULL path. Only the relay does not. So a payload with an
   /// attachment is fetched instead of merged; text, which is everything else,
   /// still costs no request at all.
-  bool _carriesFile(ChatMessage message) => message.messageParameters.values.any(
-    (parameter) => parameter.type == 'file',
-  );
+  bool _carriesFile(ChatMessage message) => message.messageParameters.values
+      .any((parameter) => parameter.type == 'file');
 
   /// The long poll's stand-down. While a trusted relay covers this room's
   /// root scope, the poll waits on the relay instead of holding an HTTP

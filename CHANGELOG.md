@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Relay messages queued behind an attachment or refresh can no longer advance
+  the chat cursor past an unverified HTTP gap. Trust is withdrawn in the room
+  mutation queue and checked again before each merge, including after a session
+  change during preparation. HTTP fallback restores the missing messages and
+  their server-provided attachment paths before relay delivery resumes.
+
 - Inactive chat panes pause live reads on older servers that cannot preserve
   notifications during fetching. Returning to the chat resumes reading; modern
   servers keep passive synchronization. Shared polls stop only when their last

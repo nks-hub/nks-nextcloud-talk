@@ -1,5 +1,13 @@
 part of 'chat_service_integration_test.dart';
 
+Future<void> _waitForChatCondition(bool Function() condition) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('Chat state did not reach the expected condition');
+}
+
 final class _ChatServiceIntegrationSuite {
   late AppDatabase database;
   late AccountRepository accounts;
