@@ -2100,6 +2100,14 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerCameraOff => 'Vypnout kameru';
 
   @override
+  String get callBannerCameraDenied =>
+      'Přístup ke kameře nebyl povolen. Hovor pokračuje bez videa.';
+
+  @override
+  String get callBannerCameraUnavailable =>
+      'Kameru se nepodařilo spustit. Hovor pokračuje bez videa.';
+
+  @override
   String callParticipantsTitle(int count) {
     return 'V hovoru ($count)';
   }

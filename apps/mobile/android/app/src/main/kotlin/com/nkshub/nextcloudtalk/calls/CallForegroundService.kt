@@ -19,9 +19,10 @@ import com.nkshub.nextcloudtalk.R
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-/** Keeps user-accepted call audio eligible after the Activity loses visibility. */
-class CallForegroundService : Service() {
+/** Keeps accepted audio and explicitly enabled video eligible after visibility is lost. */
+open class CallForegroundService : Service() {
     private var generation = 0L
+    private var notification: Notification? = null
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -32,6 +33,7 @@ class CallForegroundService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        activeService = this
         try {
             val manager = getSystemService(NotificationManager::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -52,7 +54,7 @@ class CallForegroundService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 ))
             }
-            val notification = builder
+            notification = builder
                 .setSmallIcon(android.R.drawable.sym_action_call)
                 .setContentTitle(getString(R.string.call_notification_title))
                 .setContentText(getString(R.string.call_notification_text))
@@ -60,11 +62,7 @@ class CallForegroundService : Service() {
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setOngoing(true)
                 .build()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
+            promoteForOwners()
             foreground = true
             val callbacks = pending.values.toList()
             pending.clear()
@@ -73,12 +71,33 @@ class CallForegroundService : Service() {
             // Android 12/14 may revoke foreground-start eligibility between callbacks.
             foreground = false
             owners.clear()
+            cameraOwners.clear()
+            if (activeService === this) activeService = null
             val callbacks = pending.values.toList()
             pending.clear()
             callbacks.forEach { it(false) }
             stopSelf()
         }
         return START_NOT_STICKY
+    }
+
+    private fun promoteForOwners() {
+        val current = notification ?: throw IllegalStateException("Call notification is absent")
+        var types = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        } else 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && cameraOwners.isNotEmpty()) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        }
+        promoteNotification(current, types)
+    }
+
+    protected open fun promoteNotification(notification: Notification, types: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, types)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onDestroy() {
@@ -88,6 +107,8 @@ class CallForegroundService : Service() {
         }
         foreground = false
         owners.clear()
+        cameraOwners.clear()
+        if (activeService === this) activeService = null
         val callbacks = pending.values.toList()
         pending.clear()
         callbacks.forEach { it(false) }
@@ -102,8 +123,10 @@ class CallForegroundService : Service() {
         private const val EXTRA_GENERATION = "call-generation"
         private var currentGeneration = 0L
         private val owners = mutableSetOf<String>()
+        private val cameraOwners = mutableSetOf<String>()
         private val pending = mutableMapOf<String, (Boolean) -> Unit>()
         private var foreground = false
+        private var activeService: CallForegroundService? = null
 
         fun start(context: Context, owner: String, completion: (Boolean) -> Unit) {
             if (owners.contains(owner)) {
@@ -129,10 +152,35 @@ class CallForegroundService : Service() {
 
         fun stop(context: Context, owner: String) {
             if (!owners.remove(owner)) return
+            val hadCamera = cameraOwners.remove(owner)
             pending.remove(owner)?.invoke(false)
             if (owners.isEmpty()) {
                 foreground = false
+                activeService = null
                 context.stopService(Intent(context, CallForegroundService::class.java))
+            } else if (hadCamera) {
+                try {
+                    activeService?.promoteForOwners()
+                } catch (_: RuntimeException) {
+                    // Stopping one owner must not stop another owner's microphone.
+                }
+            }
+        }
+
+        fun setCameraEnabled(owner: String, enabled: Boolean): Boolean {
+            val service = activeService
+            if (!foreground || !owners.contains(owner) || service == null ||
+                service.generation != currentGeneration) return false
+            val previous = cameraOwners.contains(owner)
+            if (previous == enabled) return true
+            if (enabled) cameraOwners.add(owner) else cameraOwners.remove(owner)
+            return try {
+                service.promoteForOwners()
+                true
+            } catch (_: RuntimeException) {
+                // A rejected camera upgrade leaves the already-running audio service intact.
+                if (previous) cameraOwners.add(owner) else cameraOwners.remove(owner)
+                false
             }
         }
     }
@@ -147,6 +195,7 @@ class CallForegroundChannel(
     private val owners = mutableSetOf<String>()
     private var permissionOwner: String? = null
     private var permissionResult: MethodChannel.Result? = null
+    private var cameraPermission = false
     private var disposed = false
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -166,9 +215,38 @@ class CallForegroundChannel(
                 } else {
                     permissionOwner = owner
                     permissionResult = result
+                    cameraPermission = false
                     try {
                         activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_CODE)
                     } catch (error: RuntimeException) {
+                        finishPermission("unavailable")
+                    }
+                }
+            }
+            "setCameraEnabled" -> {
+                val enabled = call.argument<Any>("enabled") as? Boolean
+                if (enabled == null) {
+                    result.error("invalid-camera-state", "A camera state is required.", null)
+                    return
+                }
+                if (disposed || !owners.contains(owner)) {
+                    result.success("unavailable")
+                    return
+                }
+                if (!enabled) {
+                    if (permissionOwner == owner && cameraPermission) finishPermission("unavailable")
+                    updateCamera(owner, false, result)
+                } else if (!isResumed() || permissionResult != null) {
+                    result.success("unavailable")
+                } else if (activity.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    updateCamera(owner, true, result)
+                } else {
+                    permissionOwner = owner
+                    permissionResult = result
+                    cameraPermission = true
+                    try {
+                        activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST_CODE)
+                    } catch (_: RuntimeException) {
                         finishPermission("unavailable")
                     }
                 }
@@ -184,7 +262,8 @@ class CallForegroundChannel(
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray): Boolean {
-        if (requestCode != REQUEST_CODE) return false
+        if (requestCode != REQUEST_CODE && requestCode != CAMERA_REQUEST_CODE) return false
+        if (permissionResult == null || (requestCode == CAMERA_REQUEST_CODE) != cameraPermission) return true
         if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
             finishPermission("permission-denied")
         } else if (isResumed()) {
@@ -198,19 +277,33 @@ class CallForegroundChannel(
 
     fun onResume() {
         val owner = permissionOwner ?: return
+        val permission = if (cameraPermission) Manifest.permission.CAMERA else Manifest.permission.RECORD_AUDIO
         if (disposed || !isResumed() ||
-            activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+            activity.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) return
         val result = permissionResult ?: return
+        val camera = cameraPermission
         permissionOwner = null
         permissionResult = null
-        start(owner, result)
+        cameraPermission = false
+        if (camera) updateCamera(owner, true, result) else start(owner, result)
     }
 
     private fun finishPermission(status: String) {
         val result = permissionResult
         permissionOwner = null
         permissionResult = null
+        cameraPermission = false
         result?.success(status)
+    }
+
+    private fun updateCamera(owner: String, enabled: Boolean, result: MethodChannel.Result) {
+        if (disposed || !owners.contains(owner) ||
+            (enabled && (!isResumed() ||
+                activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED))) {
+            result.success("unavailable")
+            return
+        }
+        result.success(if (CallForegroundService.setCameraEnabled(owner, enabled)) "started" else "unavailable")
     }
 
     private fun start(owner: String, result: MethodChannel.Result) {
@@ -244,5 +337,6 @@ class CallForegroundChannel(
 
     companion object {
         const val REQUEST_CODE = 4110
+        const val CAMERA_REQUEST_CODE = 4111
     }
 }

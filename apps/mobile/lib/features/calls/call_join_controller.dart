@@ -129,6 +129,9 @@ base class CallJoinController
   bool _joinedServer = false;
   bool _disposed = false;
   ({CallForegroundService service, String owner})? _foregroundCall;
+  int _cameraEpoch = 0;
+  bool _enablingCamera = false;
+  CallMediaError? _cameraError;
   Future<void>? _teardownPending;
   StateController<Set<ChatRoomSignalingKey>>? _heldRooms;
 
@@ -334,7 +337,7 @@ base class CallJoinController
             ? CallJoinPhase.failed
             : CallJoinPhase.joined,
         media: media,
-        mediaError: media.error,
+        mediaError: media.error ?? _cameraError,
         publishing: _moderator.publishing,
         canManageRecording: _moderator.canManageRecording,
         recordingActive: _moderator.recordingActive,
@@ -509,10 +512,63 @@ base class CallJoinController
   /// Turns this participant's camera on or off in the joined call.
   Future<void> setCameraEnabled(bool enabled) async {
     final session = _session;
-    if (session == null || state.phase != CallJoinPhase.joined) {
+    final foreground = _foregroundCall;
+    if (session == null ||
+        foreground == null ||
+        state.phase != CallJoinPhase.joined ||
+        (enabled &&
+            (_enablingCamera ||
+                session.state.cameraOn ||
+                !state.publishing.video))) {
       return;
     }
-    await session.setCameraEnabled(enabled);
+    final epoch = ++_cameraEpoch;
+    _enablingCamera = enabled;
+    _setCameraError(null);
+    bool current() =>
+        !_disposed &&
+        epoch == _cameraEpoch &&
+        identical(_session, session) &&
+        _foregroundCall?.owner == foreground.owner &&
+        state.phase == CallJoinPhase.joined;
+    try {
+      if (enabled) {
+        await foreground.service.setCameraEnabled(foreground.owner, true);
+        if (!current()) return;
+      }
+      await session.setCameraEnabled(enabled);
+      if (!current()) return;
+      if (!enabled || !session.state.cameraOn) {
+        await foreground.service.setCameraEnabled(foreground.owner, false);
+        if (enabled && current()) {
+          _setCameraError(CallMediaError.cameraUnavailable);
+        }
+      }
+    } on CallMediaException catch (error) {
+      if (!current()) return;
+      try {
+        await foreground.service.setCameraEnabled(foreground.owner, false);
+      } on CallMediaException {
+        // A camera-type failure must not tear down the microphone owner.
+      }
+      if (current()) _setCameraError(error.code);
+    } finally {
+      if (epoch == _cameraEpoch) _enablingCamera = false;
+    }
+  }
+
+  void _setCameraError(CallMediaError? error) {
+    _cameraError = error;
+    state = CallJoinState(
+      phase: state.phase,
+      media: state.media,
+      mediaError: state.media.error ?? error,
+      lifecycleError: state.lifecycleError,
+      signalingUnavailable: state.signalingUnavailable,
+      publishing: state.publishing,
+      canManageRecording: state.canManageRecording,
+      recordingActive: state.recordingActive,
+    );
   }
 
   Future<void> leave() async {
@@ -586,6 +642,9 @@ base class CallJoinController
 
   Future<void> _performTeardown({required bool leaveServer}) async {
     _hold(false);
+    _cameraEpoch++;
+    _enablingCamera = false;
+    _cameraError = null;
     final foreground = _foregroundCall;
     _foregroundCall = null;
     final subscription = _mediaStates;

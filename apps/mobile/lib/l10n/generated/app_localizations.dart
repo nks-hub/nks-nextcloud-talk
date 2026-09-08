@@ -3848,6 +3848,18 @@ abstract class AppLocalizations {
   /// **'Turn camera off'**
   String get callBannerCameraOff;
 
+  /// No description provided for @callBannerCameraDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera access was not granted. The call continues without video.'**
+  String get callBannerCameraDenied;
+
+  /// No description provided for @callBannerCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera could not be started. The call continues without video.'**
+  String get callBannerCameraUnavailable;
+
   /// No description provided for @callParticipantsTitle.
   ///
   /// In en, this message translates to:

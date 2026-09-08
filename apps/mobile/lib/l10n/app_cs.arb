@@ -717,6 +717,8 @@
   "callScreenTitle": "Hovor ({count})",
   "callBannerCameraOn": "Zapnout kameru",
   "callBannerCameraOff": "Vypnout kameru",
+  "callBannerCameraDenied": "Přístup ke kameře nebyl povolen. Hovor pokračuje bez videa.",
+  "callBannerCameraUnavailable": "Kameru se nepodařilo spustit. Hovor pokračuje bez videa.",
   "callParticipantsTitle": "V hovoru ({count})",
   "callParticipantsYou": "Vy",
   "callScreenSharedBy": "{name} sdílí obrazovku",

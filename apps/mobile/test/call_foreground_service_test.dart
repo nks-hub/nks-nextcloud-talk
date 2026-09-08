@@ -12,6 +12,44 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
+    'camera foreground upgrade and downgrade retain the exact owner',
+    () async {
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return 'started';
+      });
+      await service.setCameraEnabled('camera-owner', true);
+      await service.setCameraEnabled('camera-owner', false);
+      expect(calls.map((call) => call.method), [
+        'setCameraEnabled',
+        'setCameraEnabled',
+      ]);
+      expect(calls.map((call) => call.arguments), [
+        {'owner': 'camera-owner', 'enabled': true},
+        {'owner': 'camera-owner', 'enabled': false},
+      ]);
+    },
+  );
+
+  test('camera denial is distinct from microphone denial', () async {
+    messenger.setMockMethodCallHandler(
+      channel,
+      (_) async => 'permission-denied',
+    );
+    await expectLater(
+      service.setCameraEnabled('camera-owner', true),
+      throwsA(
+        isA<CallMediaException>().having(
+          (error) => error.code,
+          'code',
+          CallMediaError.cameraPermissionDenied,
+        ),
+      ),
+    );
+  });
+
+  test(
     'foreground acknowledgement and cleanup use the same exact call owner',
     () async {
       final calls = <MethodCall>[];

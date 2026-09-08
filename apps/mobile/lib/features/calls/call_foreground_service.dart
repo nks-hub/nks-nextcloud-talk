@@ -6,6 +6,7 @@ import 'call_media_engine.dart';
 
 abstract interface class CallForegroundService {
   Future<void> start(String owner);
+  Future<void> setCameraEnabled(String owner, bool enabled);
   Future<void> stop(String owner);
 }
 
@@ -45,6 +46,26 @@ final class AndroidCallForegroundService implements CallForegroundService {
   }
 
   @override
+  Future<void> setCameraEnabled(String owner, bool enabled) async {
+    try {
+      final status = await _channel.invokeMethod<String>('setCameraEnabled', {
+        'owner': owner,
+        'enabled': enabled,
+      });
+      if (status == 'started') return;
+      throw CallMediaException(
+        status == 'permission-denied'
+            ? CallMediaError.cameraPermissionDenied
+            : CallMediaError.cameraUnavailable,
+      );
+    } on MissingPluginException {
+      throw const CallMediaException(CallMediaError.cameraUnavailable);
+    } on PlatformException {
+      throw const CallMediaException(CallMediaError.cameraUnavailable);
+    }
+  }
+
+  @override
   Future<void> stop(String owner) async {
     try {
       await _channel.invokeMethod<void>('stop', {'owner': owner});
@@ -56,11 +77,13 @@ final class AndroidCallForegroundService implements CallForegroundService {
   }
 }
 
-/// Other platforms do not require an Android microphone foreground service.
+/// Other platforms do not require an Android call foreground service.
 final class NoCallForegroundService implements CallForegroundService {
   const NoCallForegroundService();
   @override
   Future<void> start(String owner) async {}
+  @override
+  Future<void> setCameraEnabled(String owner, bool enabled) async {}
   @override
   Future<void> stop(String owner) async {}
 }

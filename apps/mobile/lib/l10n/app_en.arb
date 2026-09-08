@@ -752,6 +752,8 @@
   },
   "callBannerCameraOn": "Turn camera on",
   "callBannerCameraOff": "Turn camera off",
+  "callBannerCameraDenied": "Camera access was not granted. The call continues without video.",
+  "callBannerCameraUnavailable": "The camera could not be started. The call continues without video.",
   "callParticipantsTitle": "In the call ({count})",
   "@callParticipantsTitle": {
     "placeholders": {

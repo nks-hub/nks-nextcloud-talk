@@ -2100,6 +2100,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerCameraOff => 'Turn camera off';
 
   @override
+  String get callBannerCameraDenied =>
+      'Camera access was not granted. The call continues without video.';
+
+  @override
+  String get callBannerCameraUnavailable =>
+      'The camera could not be started. The call continues without video.';
+
+  @override
   String callParticipantsTitle(int count) {
     return 'In the call ($count)';
   }

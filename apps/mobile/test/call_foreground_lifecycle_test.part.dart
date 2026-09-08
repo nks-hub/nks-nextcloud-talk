@@ -2,6 +2,130 @@ part of 'call_lifecycle_service_test.dart';
 
 void _registerCallForegroundLifecycleTests() {
   test(
+    'duplicate camera enable shares admission and camera off cancels it',
+    () async {
+      final ready = Completer<void>();
+      final foreground = _ForegroundCalls(cameraGate: ready.future);
+      final engine = _CameraForegroundEngine();
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        holdSettings: true,
+      );
+      addTearDown(fixture.close);
+      await fixture.controller.join();
+      final pending = fixture.controller.setCameraEnabled(true);
+      await fixture.controller.setCameraEnabled(true);
+      expect(foreground.cameraChanges.map((change) => change.$2), [true]);
+      await fixture.controller.setCameraEnabled(false);
+      ready.complete();
+      await pending;
+      expect(engine.cameraOpens, 0);
+      expect(foreground.cameraChanges.map((change) => change.$2), [
+        true,
+        false,
+      ]);
+      expect(foreground.active, {foreground.started.single});
+    },
+  );
+  test(
+    'camera waits for its foreground type and rolls back a failed capture',
+    () async {
+      final ready = Completer<void>();
+      final foreground = _ForegroundCalls(cameraGate: ready.future);
+      final engine = _CameraForegroundEngine(failCamera: true);
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        holdSettings: true,
+      );
+      addTearDown(fixture.close);
+      await fixture.controller.join();
+      final turningOn = fixture.controller.setCameraEnabled(true);
+      await pumpEventQueue();
+      expect(engine.cameraOpens, 0);
+      expect(foreground.cameraChanges.map((change) => change.$2), [true]);
+      ready.complete();
+      await turningOn;
+      expect(engine.cameraOpens, 1);
+      expect(foreground.cameraChanges.map((change) => change.$2), [
+        true,
+        false,
+      ]);
+      expect(foreground.active, {foreground.started.single});
+      expect(engine.audio.disposed, isFalse);
+    },
+  );
+
+  test(
+    'camera foreground denial leaves the microphone and server seat running',
+    () async {
+      final foreground = _ForegroundCalls(cameraDenied: true);
+      final engine = _CameraForegroundEngine();
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        holdSettings: true,
+      );
+      addTearDown(fixture.close);
+      await fixture.controller.join();
+      await fixture.controller.setCameraEnabled(true);
+      expect(engine.cameraOpens, 0);
+      expect(engine.audio.disposed, isFalse);
+      expect(foreground.active, {foreground.started.single});
+      final state = fixture.container.read(
+        callJoinControllerProvider(_ForegroundJoinFixture.key),
+      );
+      expect(state.phase, CallJoinPhase.joined);
+      expect(state.mediaError, CallMediaError.cameraPermissionDenied);
+      expect(
+        fixture.rest.server.callMethods.where((method) => method != 'GET'),
+        ['POST'],
+      );
+    },
+  );
+
+  test('a late camera permission cannot reopen media after leaving', () async {
+    final ready = Completer<void>();
+    final foreground = _ForegroundCalls(cameraGate: ready.future);
+    final engine = _CameraForegroundEngine();
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      engine,
+      holdSettings: true,
+    );
+    addTearDown(fixture.close);
+    await fixture.controller.join();
+    final turningOn = fixture.controller.setCameraEnabled(true);
+    await pumpEventQueue();
+    await fixture.controller.leave();
+    ready.complete();
+    await turningOn;
+    expect(engine.cameraOpens, 0);
+    expect(foreground.active, isEmpty);
+  });
+
+  test('camera off downgrades only after its track is disposed', () async {
+    final foreground = _ForegroundCalls();
+    final engine = _CameraForegroundEngine();
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      engine,
+      holdSettings: true,
+    );
+    addTearDown(fixture.close);
+    await fixture.controller.join();
+    await fixture.controller.setCameraEnabled(true);
+    expect(engine.cameraOpens, 1);
+    await fixture.controller.setCameraEnabled(true);
+    expect(foreground.cameraChanges.map((change) => change.$2), [true]);
+    foreground.beforeCameraDisable = () =>
+        expect(engine.video.disposed, isTrue);
+    await fixture.controller.setCameraEnabled(false);
+    expect(foreground.cameraChanges.map((change) => change.$2), [true, false]);
+    expect(engine.audio.disposed, isFalse);
+  });
+  test(
     'media disposal failure still stops its foreground owner and REST seat',
     () async {
       final foreground = _ForegroundCalls();
@@ -113,13 +237,36 @@ void _registerCallForegroundLifecycleTests() {
 }
 
 final class _ForegroundCalls implements CallForegroundService {
-  _ForegroundCalls({this.startGate, this.stopGate, this.denied = false});
+  _ForegroundCalls({
+    this.startGate,
+    this.stopGate,
+    this.denied = false,
+    this.cameraGate,
+    this.cameraDenied = false,
+  });
   final Future<void>? startGate;
   final Future<void>? stopGate;
+  final Future<void>? cameraGate;
+  final bool cameraDenied;
+  final cameraChanges = <(String, bool)>[];
+  void Function()? beforeCameraDisable;
   final bool denied;
   final started = <String>[], stopped = <String>[];
   final active = <String>{};
   final firstStart = Completer<void>(), firstStop = Completer<void>();
+
+  @override
+  Future<void> setCameraEnabled(String owner, bool enabled) async {
+    cameraChanges.add((owner, enabled));
+    if (!enabled) {
+      beforeCameraDisable?.call();
+      return;
+    }
+    await cameraGate;
+    if (cameraDenied) {
+      throw const CallMediaException(CallMediaError.cameraPermissionDenied);
+    }
+  }
 
   @override
   Future<void> start(String owner) async {
@@ -139,6 +286,56 @@ final class _ForegroundCalls implements CallForegroundService {
     if (stopped.length == 1) await stopGate;
     active.remove(owner);
   }
+}
+
+final class _CameraForegroundEngine implements CallMediaEngine {
+  _CameraForegroundEngine({this.failCamera = false});
+  final bool failCamera;
+  final audio = _CameraForegroundAudio();
+  final video = _CameraForegroundVideo();
+  int cameraOpens = 0;
+  @override
+  Future<CallLocalAudio> openMicrophone() async => audio;
+  @override
+  Future<CallLocalVideo> openCamera() async {
+    cameraOpens++;
+    if (failCamera) {
+      throw const CallMediaException(CallMediaError.cameraUnavailable);
+    }
+    return video;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _CameraForegroundAudio implements CallLocalAudio {
+  bool disposed = false;
+  @override
+  Stream<void> get routeChanges => const Stream.empty();
+  @override
+  Future<List<CallAudioRoute>> routes() async => [];
+  @override
+  Future<void> selectRoute(CallAudioRoute route) async {}
+  @override
+  Future<void> setMuted(bool muted) async {}
+  @override
+  Future<void> setSpeakerphone(bool on) async {}
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+  }
+}
+
+final class _CameraForegroundVideo implements CallLocalVideo {
+  bool disposed = false;
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _DelayedMicrophone implements CallMediaEngine {

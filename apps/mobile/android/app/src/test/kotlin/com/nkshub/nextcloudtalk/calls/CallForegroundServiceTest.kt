@@ -25,7 +25,7 @@ import java.time.Duration
 @Config(sdk = [34])
 class CallForegroundServiceTest {
     private val context: Context = RuntimeEnvironment.getApplication()
-    private var service: ServiceController<CallForegroundService>? = null
+    private var service: ServiceController<out CallForegroundService>? = null
     private var channel: CallForegroundChannel? = null
 
     @After fun cleanup() {
@@ -46,8 +46,147 @@ class CallForegroundServiceTest {
         assertNotNull(notification)
         assertTrue(notification.flags and Notification.FLAG_ONGOING_EVENT != 0)
         assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
-        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA,
             context.packageManager.getServiceInfo(ComponentName(context, CallForegroundService::class.java), 0).foregroundServiceType)
+    }
+
+    @Test fun cameraGrantWaitsForResumedOwnerAndDowngradesInBackground() {
+        var resumed = true
+        startChannel { resumed }
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA)
+        val result = Reply()
+        channel!!.onMethodCall(cameraCall(true), result)
+        assertNull(result.value)
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+        resumed = false
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA)
+        channel!!.onRequestPermissionsResult(CallForegroundChannel.CAMERA_REQUEST_CODE, intArrayOf(0))
+        assertNull(result.value)
+        resumed = true
+        channel!!.onResume()
+        assertEquals("started", result.value)
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA,
+            service!!.get().foregroundServiceType)
+        resumed = false
+        val stoppedCamera = Reply()
+        channel!!.onMethodCall(cameraCall(false), stoppedCamera)
+        assertEquals("started", stoppedCamera.value)
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+    }
+
+    @Test fun backgroundCameraUpgradeIsRefusedEvenWithPermission() {
+        var resumed = true
+        startChannel { resumed }
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA)
+        resumed = false
+        val result = Reply()
+        channel!!.onMethodCall(cameraCall(true), result)
+        assertEquals("unavailable", result.value)
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+    }
+
+    @Test fun cameraOffCancelsPendingGrantWithoutStoppingAudio() {
+        startChannel()
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA)
+        val pending = Reply()
+        channel!!.onMethodCall(cameraCall(true), pending)
+        val disable = Reply()
+        channel!!.onMethodCall(cameraCall(false), disable)
+        assertEquals("unavailable", pending.value)
+        assertEquals("started", disable.value)
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA)
+        channel!!.onRequestPermissionsResult(CallForegroundChannel.CAMERA_REQUEST_CODE, intArrayOf(0))
+        channel!!.onResume()
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+        assertNull(shadowOf(RuntimeEnvironment.getApplication()).nextStoppedService)
+    }
+
+    @Test fun deniedCameraLeavesAudioOwnerRunning() {
+        startChannel()
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA)
+        val result = Reply()
+        channel!!.onMethodCall(cameraCall(true), result)
+        channel!!.onRequestPermissionsResult(CallForegroundChannel.CAMERA_REQUEST_CODE, intArrayOf(-1))
+        assertEquals("permission-denied", result.value)
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+        assertNull(shadowOf(RuntimeEnvironment.getApplication()).nextStoppedService)
+        var alive = false
+        CallForegroundService.start(context, "first") { alive = it }
+        assertTrue(alive)
+    }
+
+    @Test fun lateCameraGrantCannotReviveAStoppedOwner() {
+        startChannel()
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA)
+        val result = Reply()
+        channel!!.onMethodCall(cameraCall(true), result)
+        channel!!.onMethodCall(MethodCall("stop", mapOf("owner" to "first")), Reply())
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA)
+        channel!!.onRequestPermissionsResult(CallForegroundChannel.CAMERA_REQUEST_CODE, intArrayOf(0))
+        channel!!.onResume()
+        assertEquals("unavailable", result.value)
+        assertFalse(CallForegroundService.setCameraEnabled("first", true))
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+    }
+
+    @Test fun cameraDemandIsAggregatedAcrossExactOwners() {
+        CallForegroundService.start(context, "first") {}
+        service = Robolectric.buildService(CallForegroundService::class.java).create()
+        service!!.startCommand(0, 1)
+        assertTrue(CallForegroundService.setCameraEnabled("first", true))
+        CallForegroundService.start(context, "second") {}
+        assertTrue(CallForegroundService.setCameraEnabled("second", true))
+        CallForegroundService.stop(context, "first")
+        assertFalse(CallForegroundService.setCameraEnabled("first", false))
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA,
+            service!!.get().foregroundServiceType)
+        assertTrue(CallForegroundService.setCameraEnabled("second", false))
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+    }
+
+    @Test fun rejectedPromotionRollsBackCameraButKeepsMicrophone() {
+        CallForegroundService.start(context, "first") {}
+        service = Robolectric.buildService(RejectCameraForegroundService::class.java).create()
+        service!!.startCommand(0, 1)
+        assertFalse(CallForegroundService.setCameraEnabled("first", true))
+        assertEquals(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, service!!.get().foregroundServiceType)
+        assertTrue(CallForegroundService.setCameraEnabled("first", false))
+        var secondStarted = false
+        CallForegroundService.start(context, "second") { secondStarted = it }
+        assertTrue(secondStarted)
+        assertNull(shadowOf(RuntimeEnvironment.getApplication()).nextStoppedService)
+    }
+
+    @Test @Config(sdk = [29]) fun audioOnlyOnAndroidTenDoesNotActivateDeclaredCameraType() {
+        startChannel()
+        assertEquals(0, service!!.get().foregroundServiceType)
+    }
+
+    @Test @Config(sdk = [29]) fun cameraOnAndroidTenUsesNoUnsupportedForegroundType() {
+        startChannel()
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA)
+        val enabled = Reply()
+        channel!!.onMethodCall(cameraCall(true), enabled)
+        assertEquals("started", enabled.value)
+        assertEquals(0, service!!.get().foregroundServiceType)
+        val disabled = Reply()
+        channel!!.onMethodCall(cameraCall(false), disabled)
+        assertEquals("started", disabled.value)
+        assertEquals(0, service!!.get().foregroundServiceType)
+    }
+
+    private fun cameraCall(enabled: Boolean) = MethodCall("setCameraEnabled",
+        mapOf("owner" to "first", "enabled" to enabled))
+
+    private fun startChannel(resumed: () -> Boolean = { true }) {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        channel = CallForegroundChannel(activity, resumed)
+        val result = Reply()
+        channel!!.onMethodCall(MethodCall("start", mapOf("owner" to "first")), result)
+        service = Robolectric.buildService(CallForegroundService::class.java).create()
+        service!!.startCommand(0, 1)
+        assertEquals("started", result.value)
     }
 
     @Test fun stoppingAnOldOwnerDoesNotStopAnotherCall() {
@@ -153,5 +292,14 @@ class CallForegroundServiceTest {
         override fun success(result: Any?) { value = result }
         override fun error(code: String, message: String?, details: Any?) { fail(code) }
         override fun notImplemented() { fail("Unexpected method") }
+    }
+}
+
+class RejectCameraForegroundService : CallForegroundService() {
+    override fun promoteNotification(notification: Notification, types: Int) {
+        if (types and ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA != 0) {
+            throw SecurityException("Synthetic camera type rejection")
+        }
+        super.promoteNotification(notification, types)
     }
 }

@@ -337,10 +337,8 @@ String? _callJoinStatusText(CallJoinState join, AppLocalizations strings) {
       CallMediaError.topologyUnsupported => strings.callBannerMcuUnsupported,
       CallMediaError.signalingLost => strings.callBannerAudioSignalingLost,
       CallMediaError.engineFailure => strings.callBannerAudioFailed,
-      // A camera problem never ends a call; these are here only because the
-      // switch is exhaustive.
-      CallMediaError.cameraPermissionDenied ||
-      CallMediaError.cameraUnavailable ||
+      CallMediaError.cameraPermissionDenied => strings.callBannerCameraDenied,
+      CallMediaError.cameraUnavailable => strings.callBannerCameraUnavailable,
       CallMediaError.screenSharePermissionDenied ||
       CallMediaError.screenShareUnavailable => strings.callBannerAudioFailed,
     };

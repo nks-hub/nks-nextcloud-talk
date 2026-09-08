@@ -15,6 +15,7 @@
          a runtime permission: the consent is the system's own capture dialog. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
@@ -186,7 +187,7 @@
         <service
             android:name=".calls.CallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="microphone"/>
+            android:foregroundServiceType="microphone|camera"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
