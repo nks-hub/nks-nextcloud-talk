@@ -275,6 +275,9 @@ final class _SharedItemsScreenState extends ConsumerState<SharedItemsScreen> {
                   accountId: widget.account.id,
                   roomToken: widget.conversation.token,
                   threadId: threadId,
+                  readerIsActive: () =>
+                      _ownsNavigation(route, generation) &&
+                      ref.read(windowActiveProvider),
                 ),
           );
         } on MessageSearchThreadException catch (failure) {

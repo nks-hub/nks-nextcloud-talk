@@ -1,11 +1,90 @@
 part of 'chat_service.dart';
 
 extension _ChatServiceFetch on ChatService {
+  Future<ChatSynchronizationResult> _syncRoom({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+    required bool joinExisting,
+    bool automatic = false,
+    bool Function()? readerIsActive,
+  }) {
+    final key =
+        '${_scopeSyncKey(accountId, roomToken, threadId)}/${automatic ? 'automatic' : 'explicit'}';
+    final existing = _syncInFlight[key];
+    if (joinExisting && existing != null) {
+      // Joining somebody else's sync is not this caller's wait; measuring it
+      // would report the tail of a request that started earlier.
+      return existing;
+    }
+    final started = DateTime.now();
+    final read = _ChatReadAdmission(
+      this,
+      accountId,
+      roomToken,
+      readerIsActive ??
+          (automatic
+              ? () => _hasActiveReader(accountId, roomToken)
+              : () => true),
+      requiresActiveOwner: readerIsActive != null,
+    );
+    late final Future<ChatSynchronizationResult> operation;
+    operation = _serializeRoom<ChatSynchronizationResult>(
+      _roomKey(accountId, roomToken),
+      () async {
+        return _withRoomErrorPersistence(accountId, roomToken, () async {
+          try {
+            return await read.run(() async {
+              final prepared = await _prepare(
+                accountId,
+                roomToken,
+                threadId: threadId,
+                abortTrigger: read.abortTrigger,
+              );
+              return (await _resolveAndSynchronizePrepared(
+                prepared,
+                abortTrigger: read.abortTrigger,
+                probe: read,
+              )).result;
+            });
+          } on _ChatReadDeferred {
+            return ChatSynchronizationResult.deferred;
+          } on _ChatSynchronizationStale {
+            return ChatSynchronizationResult.incomplete;
+          }
+        }, threadId: threadId);
+      },
+    );
+    if (joinExisting) _syncInFlight[key] = operation;
+    operation
+        .then(
+          (_) => performanceTelemetry.record(
+            operation: TracedOperation.roomOpen,
+            started: started,
+            outcome: TracedOutcome.completed,
+          ),
+          onError: (Object error, StackTrace stackTrace) =>
+              performanceTelemetry.record(
+                operation: TracedOperation.roomOpen,
+                started: started,
+                outcome: TracedOutcome.failed,
+              ),
+        )
+        .ignore();
+    operation.whenComplete(() {
+      read.close();
+      if (identical(_syncInFlight[key], operation)) {
+        _syncInFlight.remove(key);
+      }
+    }).ignore();
+    return operation;
+  }
+
   Future<({_PreparedChat prepared, ChatSynchronizationResult result})>
   _resolveAndSynchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
-    _ChatSynchronizationProbe? probe,
+    _ChatReadGuard? probe,
   }) async {
     var resolved = prepared;
     if (resolved.threadId != null &&
@@ -45,7 +124,7 @@ extension _ChatServiceFetch on ChatService {
   Future<_PreparedChat> _hydrateUnknownThreadFromRoot(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
-    _ChatSynchronizationProbe? probe,
+    _ChatReadGuard? probe,
   }) async {
     final threadId = prepared.threadId;
     if (threadId == null) {
@@ -96,7 +175,7 @@ extension _ChatServiceFetch on ChatService {
   Future<ChatSynchronizationResult> _synchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
-    _ChatSynchronizationProbe? probe,
+    _ChatReadGuard? probe,
   }) async {
     await _chat.recoverInterruptedTextSends(prepared.account.id);
     var scope = (await _chat.getNetworkScope(
@@ -138,7 +217,7 @@ extension _ChatServiceFetch on ChatService {
     _PreparedChat prepared, {
     required bool includeLastKnown,
     Future<void>? abortTrigger,
-    _ChatSynchronizationProbe? probe,
+    _ChatReadGuard? probe,
   }) async {
     await _ensurePreparedContextCurrent(prepared);
     final scope = (await _chat.getNetworkScope(
@@ -179,7 +258,7 @@ extension _ChatServiceFetch on ChatService {
   Future<ChatSynchronizationResult> _catchUpFuture(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
-    _ChatSynchronizationProbe? probe,
+    _ChatReadGuard? probe,
   }) async {
     for (var page = 0; page < ChatService._maximumCatchUpPages; page++) {
       await _ensurePreparedContextCurrent(prepared);

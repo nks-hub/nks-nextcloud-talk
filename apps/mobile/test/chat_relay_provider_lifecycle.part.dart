@@ -58,6 +58,10 @@ void _registerRelayProviderLifecycleTests() {
       );
       addTearDown(container.dispose);
       _showTypingFixtureRoom(container);
+      final reader = container
+          .read(chatServiceProvider)
+          .bindLiveRoom(accountId: 'account-a', roomToken: 'rooma123');
+      addTearDown(reader.close);
 
       const key = (accountId: 'account-a', roomToken: 'rooma123');
       final subscription = container.listen(

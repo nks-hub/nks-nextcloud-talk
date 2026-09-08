@@ -132,6 +132,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   int _giphyGeneration = 0;
   bool _syncing = false;
   bool _loadingOlder = false;
+  int _historyGeneration = 0;
   bool _sending = false;
   bool _initialAttemptFinished = false;
   bool _giphyRequested = false;
@@ -275,6 +276,8 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     );
     _composer.clear();
     _replyTo = null;
+    _historyGeneration++;
+    _loadingOlder = false;
     _sendGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;

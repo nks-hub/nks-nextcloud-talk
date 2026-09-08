@@ -437,6 +437,7 @@ final class _UploadFixture {
       'conversation-v4',
       'chat-v2',
       'chat-reference-id',
+      'chat-keep-notifications',
     ],
   );
 }

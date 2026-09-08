@@ -210,6 +210,8 @@ void _registerAttachmentServiceLifecycleTests() {
                 deletedParentMessageId: 42,
                 threadId: 77,
               );
+
+              return ChatSynchronizationResult.converged;
             },
       );
       addTearDown(service.close);
@@ -338,6 +340,8 @@ void _registerAttachmentServiceLifecycleTests() {
                 throw StateError('Synthetic first catch-up failure');
               }
               await fixture.cacheConfirmation(messageId: 110);
+
+              return ChatSynchronizationResult.converged;
             },
       );
       addTearDown(service.close);
@@ -456,6 +460,8 @@ void _registerAttachmentServiceLifecycleTests() {
               } else if (confirmFirstJob) {
                 await fixture.cacheConfirmation(messageId: 114);
               }
+
+              return ChatSynchronizationResult.converged;
             },
       );
       addTearDown(service.close);
@@ -558,6 +564,8 @@ void _registerAttachmentServiceLifecycleTests() {
               required threadId,
             }) async {
               initialCatchUps++;
+
+              return ChatSynchronizationResult.converged;
             },
       );
       addTearDown(initialService.close);
@@ -590,6 +598,8 @@ void _registerAttachmentServiceLifecycleTests() {
             }) async {
               resumedCatchUps++;
               await fixture.cacheConfirmation(messageId: 115);
+
+              return ChatSynchronizationResult.converged;
             },
       );
       addTearDown(resumedService.close);
@@ -640,11 +650,9 @@ void _registerAttachmentServiceLifecycleTests() {
         fail('Unexpected request: ${request.method} ${request.url}');
       }),
       catchUpConfirmation:
-          ({
-            required accountId,
-            required roomToken,
-            required threadId,
-          }) async {},
+          ({required accountId, required roomToken, required threadId}) async {
+            return ChatSynchronizationResult.converged;
+          },
       persistTransition:
           ({
             required account,
@@ -708,6 +716,8 @@ void _registerAttachmentServiceLifecycleTests() {
               lastCatchUpStarted.complete();
               await releaseLastCatchUp.future;
             }
+
+            return ChatSynchronizationResult.converged;
           },
     );
     addTearDown(() async {
@@ -737,6 +747,8 @@ void _registerAttachmentServiceLifecycleTests() {
       catchUpConfirmation:
           ({required accountId, required roomToken, required threadId}) async {
             restartedCatchUps++;
+
+            return ChatSynchronizationResult.converged;
           },
     );
     addTearDown(restarted.close);

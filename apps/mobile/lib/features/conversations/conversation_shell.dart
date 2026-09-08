@@ -700,6 +700,9 @@ final class _MessageSearchRouteState
                   accountId: widget.accountId,
                   roomToken: result.roomToken.value,
                   threadId: threadId,
+                  readerIsActive: () =>
+                      _ownsCompletion(route, generation) &&
+                      ref.read(windowActiveProvider),
                 ),
           );
         } on MessageSearchThreadException catch (error) {

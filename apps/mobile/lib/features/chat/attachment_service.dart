@@ -10,8 +10,10 @@ import '../../data/app_database.dart';
 import '../../data/attachment_repository.dart';
 import '../../data/credential_vault.dart';
 import '../../network/attachment_transport.dart';
+import 'chat_service.dart';
 
 part 'attachment_service_runtime.part.dart';
+part 'attachment_service_confirmation.part.dart';
 part 'attachment_service_support.part.dart';
 
 typedef ReleaseDurableAttachmentSource =
@@ -26,7 +28,7 @@ typedef PersistAttachmentTransition =
       required DateTime updatedAt,
     });
 typedef CatchUpAttachmentConfirmation =
-    Future<void> Function({
+    Future<ChatSynchronizationResult> Function({
       required AccountId accountId,
       required ConversationToken roomToken,
       required int? threadId,
@@ -352,6 +354,10 @@ final class AttachmentService with _AttachmentServiceRuntime {
   final Map<AttachmentPersistenceKey, Timer> _confirmationRetryTimers = {};
   @override
   final Map<AttachmentPersistenceKey, int> _confirmationRetryCounts = {};
+  @override
+  final Set<AttachmentPersistenceKey> _deferredConfirmations = {};
+  @override
+  final Set<AttachmentPersistenceKey> _confirmationResumeRequests = {};
   @override
   final Map<AttachmentPersistenceKey, AttachmentVerifiedSource>
   _verifiedSources = {};
@@ -795,6 +801,31 @@ final class AttachmentService with _AttachmentServiceRuntime {
     }
   }
 
+  Future<void> resumeDeferredConfirmations({
+    required String accountId,
+    required String roomToken,
+  }) async {
+    await _ready;
+    if (_closed || _suspendedAccounts.contains(AccountId.parse(accountId))) {
+      return;
+    }
+    for (final key in {
+      ..._deferredConfirmations,
+      ..._confirmationCatchUps.keys,
+    }) {
+      final job = _jobForKey(key);
+      if (key.accountId != accountId ||
+          job?.draft.roomToken.value != roomToken) {
+        continue;
+      }
+      if (_confirmationCatchUps.containsKey(key)) {
+        _confirmationResumeRequests.add(key);
+      } else if (_deferredConfirmations.remove(key)) {
+        _queueConfirmationCatchUp(key);
+      }
+    }
+  }
+
   Future<void> completeReauthentication({
     required AccountId accountId,
     required int credentialGeneration,
@@ -921,6 +952,8 @@ final class AttachmentService with _AttachmentServiceRuntime {
       _confirmationCatchUps.values.toList(growable: false),
     );
     _confirmationRetryCounts.clear();
+    _deferredConfirmations.clear();
+    _confirmationResumeRequests.clear();
     for (final entry in _verifiedSources.entries.toList(growable: false)) {
       try {
         await _transport.releaseSource(entry.value);

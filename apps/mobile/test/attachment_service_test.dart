@@ -11,6 +11,7 @@ import 'package:nextcloudtalk/core/attachment_upload_telemetry.dart';
 import 'package:nextcloudtalk/data/attachment_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/attachment_service.dart';
+import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/network/attachment_transport.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -21,10 +22,12 @@ part 'attachment_service_scheduler_test.part.dart';
 part 'attachment_service_recovery_test.part.dart';
 part 'attachment_service_test_support.part.dart';
 part 'attachment_service_account_suspend_test.part.dart';
+part 'attachment_service_deferred_confirmation_test.part.dart';
 
 void main() {
   _registerAttachmentServiceLifecycleTests();
   _registerAttachmentServiceSchedulerTests();
   _registerAttachmentServiceRecoveryTests();
   _registerAttachmentServiceAccountSuspendTests();
+  _registerDeferredConfirmationTests();
 }

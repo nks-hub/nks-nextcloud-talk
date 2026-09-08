@@ -18,6 +18,7 @@ import 'test_support.dart';
 
 part 'chat_service_integration_support.dart';
 part 'chat_service_integration_sync_cases.dart';
+part 'chat_service_integration_refresh_cases.dart';
 part 'chat_service_integration_poll_cases.dart';
 part 'chat_service_integration_lifecycle_send_cases.dart';
 part 'chat_service_integration_connectivity_cases.dart';
@@ -29,6 +30,8 @@ part 'chat_service_integration_account_suspend_cases.dart';
 part 'chat_service_integration_relay_cases.dart';
 part 'chat_service_integration_relay_baseline_cases.dart';
 part 'chat_service_integration_reader_activity_cases.dart';
+part 'chat_service_integration_background_reader_cases.dart';
+part 'chat_service_integration_read_admission_race_cases.dart';
 
 void main() {
   final suite = _ChatServiceIntegrationSuite();
@@ -37,6 +40,7 @@ void main() {
   tearDown(suite.dispose);
 
   suite.registerSyncCases();
+  suite.registerRefreshCases();
   suite.registerPollCases();
   suite.registerLifecycleSendCases();
   suite.registerConnectivityCases();
@@ -48,4 +52,6 @@ void main() {
   suite.registerRelayCases();
   suite.registerRelayBaselineCases();
   suite.registerReaderActivityCases();
+  suite.registerBackgroundReaderCases();
+  suite.registerReadAdmissionRaceCases();
 }

@@ -4,12 +4,14 @@ extension _ChatReaderActivityCases on _ChatServiceIntegrationSuite {
   ChatService _readerService(http.Client client, {DateTime Function()? clock}) {
     final api = HttpNextcloudApi(client: client, clock: clock);
     addTearDown(api.close);
-    return ChatService(
+    final service = ChatService(
       accounts: accounts,
       chat: chat,
       credentials: credentials,
       api: api,
     );
+    addTearDown(service.close);
+    return service;
   }
 
   void registerReaderActivityCases() {

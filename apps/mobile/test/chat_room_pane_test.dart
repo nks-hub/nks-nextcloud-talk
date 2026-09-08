@@ -16,10 +16,13 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_opener.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/chat_service.dart';
 import 'package:nextcloudtalk/features/chat/message_translation_service.dart';
 import 'package:nextcloudtalk/features/chat/outgoing_message_status.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_presence.dart';
@@ -34,6 +37,8 @@ part 'chat_room_pane_interactions.part.dart';
 part 'chat_room_pane_poll_menu.part.dart';
 part 'chat_room_pane_rendering.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
+part 'chat_room_pane_send_scope.part.dart';
+part 'chat_room_pane_history_scope.part.dart';
 
 late AppDatabase database;
 late AccountRepository accounts;
@@ -105,6 +110,8 @@ void main() {
   _registerChatRoomPaneInteractionTests();
   _registerChatRoomPanePollMenuTests();
   _registerChatRoomPaneThreadContextTests();
+  _registerChatRoomPaneSendScopeTests();
+  _registerChatRoomPaneHistoryScopeTests();
 }
 
 /// The thread layout, for tests that walk into a thread pane from a derived

@@ -529,6 +529,8 @@ void _registerAttachmentServiceSchedulerTests() {
               catchUpStarted.complete();
             }
             await releaseCatchUp.future;
+
+            return ChatSynchronizationResult.converged;
           },
     );
     addTearDown(service.close);
@@ -597,11 +599,9 @@ void _registerAttachmentServiceSchedulerTests() {
       identifierFactory: _SequentialIdentifierFactory(),
       confirmationRetryDelays: const <Duration>[],
       catchUpConfirmation:
-          ({
-            required accountId,
-            required roomToken,
-            required threadId,
-          }) async {},
+          ({required accountId, required roomToken, required threadId}) async {
+            return ChatSynchronizationResult.converged;
+          },
     );
     addTearDown(service.close);
 
@@ -670,11 +670,9 @@ void _registerAttachmentServiceSchedulerTests() {
         }
       },
       catchUpConfirmation:
-          ({
-            required accountId,
-            required roomToken,
-            required threadId,
-          }) async {},
+          ({required accountId, required roomToken, required threadId}) async {
+            return ChatSynchronizationResult.converged;
+          },
     );
     final first = await initialService.enqueue(
       fixture.request(normalMaximum: 32),
@@ -703,11 +701,9 @@ void _registerAttachmentServiceSchedulerTests() {
       identifierFactory: identifiers,
       confirmationRetryDelays: const <Duration>[],
       catchUpConfirmation:
-          ({
-            required accountId,
-            required roomToken,
-            required threadId,
-          }) async {},
+          ({required accountId, required roomToken, required threadId}) async {
+            return ChatSynchronizationResult.converged;
+          },
     );
     addTearDown(resumedService.close);
     await resumedService

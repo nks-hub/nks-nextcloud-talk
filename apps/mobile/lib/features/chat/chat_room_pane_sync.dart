@@ -380,31 +380,35 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     if (scope?.hasHistory != true) {
       return false;
     }
+    final targetKey = _key;
+    final generation = ++_historyGeneration;
+    bool isCurrent() =>
+        mounted && generation == _historyGeneration && targetKey == _key;
     _update(() => _loadingOlder = true);
     try {
       await ref
           .read(chatServiceProvider)
           .loadOlder(
-            accountId: widget.account.id,
-            roomToken: widget.conversation.token,
-            threadId: widget.threadId,
+            readerIsActive: () => isCurrent() && _readerIsActive(),
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            threadId: targetKey.threadId,
           );
-      if (mounted) {
-        _update(() => _localError = null);
-      }
+      if (!isCurrent()) return false;
+      _update(() => _localError = null);
       return true;
     } on ChatServiceException catch (error) {
-      if (mounted) {
+      if (isCurrent()) {
         _update(() => _localError = error.code);
       }
       return false;
     } on Object {
-      if (mounted) {
+      if (isCurrent()) {
         _update(() => _localError = ChatServiceError.invalidResponse);
       }
       return false;
     } finally {
-      if (mounted) {
+      if (isCurrent()) {
         _update(() => _loadingOlder = false);
       }
     }

@@ -132,6 +132,8 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
       );
       expect(await chat.roomsWithPendingTextSends(), hasLength(1));
 
+      final admitted = await database.select(database.textSendOperations).get();
+
       final sent = <String>[];
       final onlineApi = HttpNextcloudApi(
         client: MockClient((request) async {
@@ -144,16 +146,18 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
             );
           }
           if (request.method == 'GET') {
-            return http.Response('', 304);
+            fail('A headless legacy drain must not fetch chat');
           }
           sent.add(request.bodyFields['message']!);
+          final response = _sendResponse(
+            referenceId: request.bodyFields['referenceId']!,
+            message: request.bodyFields['message']!,
+          );
+          ((response['ocs'] as Map)['data'] as Map)['id'] = 120 + sent.length;
+          ((response['ocs'] as Map)['data'] as Map)['threadId'] =
+              120 + sent.length;
           return http.Response(
-            jsonEncode(
-              _sendResponse(
-                referenceId: request.bodyFields['referenceId']!,
-                message: request.bodyFields['message']!,
-              ),
-            ),
+            jsonEncode(response),
             201,
             headers: const <String, String>{'X-Chat-Last-Common-Read': '110'},
           );
@@ -168,9 +172,23 @@ extension _ChatServiceOfflineOutboxCases on _ChatServiceIntegrationSuite {
         api: onlineApi,
       ).drainPendingSends();
 
-      expect(sent, ['first in the tunnel', 'second in the tunnel']);
       final states = await database.select(database.textSendOperations).get();
+      expect(
+        sent,
+        ['first in the tunnel', 'second in the tunnel'],
+        reason: states
+            .map(
+              (row) =>
+                  '${row.outboxState}/${row.attemptCount}/${row.errorClass}',
+            )
+            .join(', '),
+      );
       expect(states.map((row) => row.outboxState), ['completed', 'completed']);
+      expect(states.map((row) => row.attemptCount), everyElement(1));
+      expect(
+        {for (final row in states) row.operationId: row.referenceId},
+        {for (final row in admitted) row.operationId: row.referenceId},
+      );
       expect(await chat.roomsWithPendingTextSends(), isEmpty);
     });
 

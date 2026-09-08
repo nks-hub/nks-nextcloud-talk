@@ -201,6 +201,9 @@ void main() {
             return http.Response(jsonEncode(_capabilities()), 200);
           }
           if (request.url.host == 'a.example.invalid') {
+            if (request.url.queryParameters['timeout'] != '30') {
+              return http.Response('', 304);
+            }
             if (!pollReached.isCompleted) {
               pollReached.complete();
             }
@@ -216,10 +219,13 @@ void main() {
         roomToken: 'rooma123',
       );
       addTearDown(binding.close);
-      final pollForA = service.syncRoom(
-        accountId: 'account-a',
-        roomToken: 'rooma123',
-      );
+      addTearDown(() {
+        if (!pollAnswer.isCompleted) {
+          pollAnswer.complete(http.Response('', 304));
+        }
+      });
+      await binding.synchronize();
+      final pollForA = binding.synchronize();
       await pollReached.future;
 
       await service.catchUpRoom(accountId: 'account-b', roomToken: 'rooma123');
@@ -243,6 +249,7 @@ Map<String, Object?> _capabilities() => capabilitiesJson(
     'conversation-v4',
     'chat-v2',
     'chat-reference-id',
+    'chat-keep-notifications',
   ],
 );
 

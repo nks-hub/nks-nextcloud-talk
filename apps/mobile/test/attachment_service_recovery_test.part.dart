@@ -798,7 +798,7 @@ void _registerAttachmentServiceRecoveryTests() {
                   messageId: 120,
                   deletedParentMessageId: 41,
                 );
-                return;
+                return ChatSynchronizationResult.converged;
               }
               if (!exactCatchUpStarted.isCompleted) {
                 exactCatchUpStarted.complete();
@@ -808,6 +808,8 @@ void _registerAttachmentServiceRecoveryTests() {
                 messageId: 121,
                 deletedParentMessageId: 42,
               );
+
+              return ChatSynchronizationResult.converged;
             },
         releaseSource: (source) async {
           releaseCalls++;

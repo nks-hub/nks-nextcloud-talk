@@ -460,9 +460,11 @@ const String _servedFilePath = 'Talk/room-rooma123/user-b/voice-message.m4a';
 /// decide which messages the HTTP transport can see and which ones only the
 /// relay delivered.
 final class _RelayFakeServer {
-  _RelayFakeServer(List<int> messages) : messages = <int>[...messages];
+  _RelayFakeServer(List<int> messages, {this.passive = true})
+    : messages = <int>[...messages];
 
   final List<int> messages;
+  final bool passive;
 
   /// Ids the endpoint answers with a file rich object, always carrying the
   /// path as the user's own tree has it.
@@ -472,7 +474,19 @@ final class _RelayFakeServer {
 
   Future<http.Response> handle(http.Request request) async {
     if (request.url.path.endsWith('/cloud/capabilities')) {
-      return http.Response(jsonEncode(_chatCapabilities()), 200);
+      return http.Response(
+        jsonEncode(
+          _chatCapabilities(
+            talkFeatures: [
+              'conversation-v4',
+              'chat-v2',
+              'chat-reference-id',
+              if (passive) 'chat-keep-notifications',
+            ],
+          ),
+        ),
+        200,
+      );
     }
     final query = request.url.queryParameters;
     final anchor = int.parse(query['lastKnownMessageId'] ?? '0');

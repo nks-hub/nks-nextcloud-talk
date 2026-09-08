@@ -21,6 +21,7 @@ part 'chat_service_private_reply.dart';
 part 'chat_service_relay.dart';
 part 'chat_service_runtime.dart';
 part 'chat_service_fetch.dart';
+part 'chat_service_read_admission.dart';
 
 enum ChatServiceError {
   accountMissing,
@@ -79,6 +80,28 @@ final class ChatService {
   final Set<ChatLiveRoomBinding> _liveBindings = {};
   final Set<ChatRelayBinding> _relayBindings = {};
   final Set<String> _suspendedAccounts = {};
+  final Set<_ChatReadAdmission> _readAdmissions = {};
+  final _readerWakes =
+      StreamController<({String accountId, String roomToken})>.broadcast();
+  bool _closed = false;
+
+  Stream<({String accountId, String roomToken})> get readerWakeEvents =>
+      _readerWakes.stream;
+
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    for (final binding in _liveBindings.toList()) {
+      binding.close();
+    }
+    for (final relay in _relayBindings.toList()) {
+      relay.close();
+    }
+    for (final read in _readAdmissions.toList()) {
+      read.close();
+    }
+    await _readerWakes.close();
+  }
 
   Stream<List<OutgoingMessageStatus>> watchOutgoingMessageStatuses({
     required String accountId,
@@ -112,6 +135,7 @@ final class ChatService {
       readerActive: readerActive,
     );
     _liveBindings.add(binding);
+    _readerActivityChanged(accountId, roomToken, wake: readerActive);
     if (_suspendedAccounts.contains(accountId)) {
       binding.close();
     }
@@ -219,7 +243,15 @@ final class ChatService {
         return;
       }
       try {
-        await syncRoom(accountId: accountId, roomToken: roomToken);
+        final result = await _syncRoom(
+          accountId: accountId,
+          roomToken: roomToken,
+          joinExisting: true,
+          automatic: true,
+        );
+        if (result == ChatSynchronizationResult.deferred) {
+          await _drainWithoutReading(accountId, roomToken);
+        }
       } on ChatServiceException {
         // Recorded on the room by syncRoom; the next wake tries again.
       } on _ChatSynchronizationCancelled {
@@ -232,68 +264,14 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     int? threadId,
+    bool Function()? readerIsActive,
   }) => _syncRoom(
     accountId: accountId,
     roomToken: roomToken,
     threadId: threadId,
-    joinExisting: true,
+    joinExisting: readerIsActive == null,
+    readerIsActive: readerIsActive,
   );
-
-  Future<ChatSynchronizationResult> _syncRoom({
-    required String accountId,
-    required String roomToken,
-    int? threadId,
-    required bool joinExisting,
-  }) {
-    final key = _scopeSyncKey(accountId, roomToken, threadId);
-    final existing = _syncInFlight[key];
-    if (joinExisting && existing != null) {
-      // Joining somebody else's sync is not this caller's wait; measuring it
-      // would report the tail of a request that started earlier.
-      return existing;
-    }
-    final started = DateTime.now();
-    late final Future<ChatSynchronizationResult> operation;
-    operation = _serializeRoom<ChatSynchronizationResult>(
-      _roomKey(accountId, roomToken),
-      () async {
-        return _withRoomErrorPersistence(accountId, roomToken, () async {
-          try {
-            final prepared = await _prepare(
-              accountId,
-              roomToken,
-              threadId: threadId,
-            );
-            return (await _resolveAndSynchronizePrepared(prepared)).result;
-          } on _ChatSynchronizationStale {
-            return ChatSynchronizationResult.incomplete;
-          }
-        }, threadId: threadId);
-      },
-    );
-    if (joinExisting) _syncInFlight[key] = operation;
-    operation
-        .then(
-          (_) => performanceTelemetry.record(
-            operation: TracedOperation.roomOpen,
-            started: started,
-            outcome: TracedOutcome.completed,
-          ),
-          onError: (Object error, StackTrace stackTrace) =>
-              performanceTelemetry.record(
-                operation: TracedOperation.roomOpen,
-                started: started,
-                outcome: TracedOutcome.failed,
-              ),
-        )
-        .ignore();
-    operation.whenComplete(() {
-      if (identical(_syncInFlight[key], operation)) {
-        _syncInFlight.remove(key);
-      }
-    }).ignore();
-    return operation;
-  }
 
   /// Brings a room up to date for a background reconciler, such as the
   /// attachment confirmation loop waiting for its own `file_shared` message.
@@ -313,10 +291,12 @@ final class ChatService {
     if (joined != null && joined != ChatSynchronizationResult.deferred) {
       return joined;
     }
-    return syncRoom(
+    return _syncRoom(
       accountId: accountId,
       roomToken: roomToken,
       threadId: threadId,
+      joinExisting: true,
+      automatic: true,
     );
   }
 
@@ -324,100 +304,16 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     int? threadId,
-  }) {
-    final key = _roomKey(accountId, roomToken);
-    return _serializeRoom<void>(key, () {
-      return _withRoomErrorPersistence(accountId, roomToken, () async {
-        try {
-          var prepared = await _prepare(
-            accountId,
-            roomToken,
-            threadId: threadId,
-          );
-          if (prepared.threadId != null &&
-              prepared.namedThread == null &&
-              prepared.networkThreadId == null) {
-            prepared = await _hydrateUnknownThreadFromRoot(prepared);
-          }
-          try {
-            final scope = await _chat.getNetworkScope(
-              accountId: accountId,
-              roomToken: roomToken,
-              threadId: prepared.networkThreadId,
-            );
-            if (scope?.hasHistory ?? false) {
-              await _fetchHistoryPage(prepared, includeLastKnown: false);
-            }
-          } on _UnknownThreadNotFound {
-            await _hydrateUnknownThreadFromRoot(prepared);
-          }
-        } on _ChatSynchronizationStale {
-          return;
-        }
-      }, threadId: threadId);
-    });
-  }
+    bool Function()? readerIsActive,
+  }) => _loadOlder(accountId, roomToken, threadId, readerIsActive);
 
-  /// Re-reads one message from the server and overwrites its cached row.
-  ///
-  /// Nothing else re-reads a message the cache already holds, so a row that
-  /// was persisted wrong stays wrong for as long as the cache lives. That is
-  /// what the HPB relay left behind until build 63: it renders a file the way
-  /// the SHARE sees it, so an attachment sent from this account carries a path
-  /// no download can resolve. Asking for that one message repairs the row in
-  /// place.
-  ///
-  /// Returns whether a message came back. The cursors are untouched — this
-  /// applies a single message the way an edit does, so it cannot disturb the
-  /// poll of an open room.
+  /// Refreshes one cached message without moving cursors.
+  /// Legacy servers defer this repair until the room has an active reader.
   Future<bool> refreshMessage({
     required String accountId,
     required String roomToken,
     required int messageId,
-  }) async {
-    if (messageId < 1) {
-      return false;
-    }
-    final prepared = await _prepare(accountId, roomToken);
-    final request = ChatFetchRequest(
-      accountId: AccountId.parse(accountId),
-      requestId: ChatRequestId.parse(_uuid.v4()),
-      server: prepared.authority.server,
-      roomToken: prepared.room.token,
-      profile: prepared.profile,
-      direction: ChatFetchDirection.history,
-      cursor: ChatCursor.parse(messageId.toString()),
-      lastCommonRead: ChatCursor.parse('0'),
-      limit: 1,
-      includeLastKnown: true,
-      timeoutSeconds: 0,
-      // Interactive would mean `markNotificationsAsRead=1` and a status
-      // update: re-reading one message to repair its file path would then
-      // clear the whole room's pending notifications on the server, which
-      // nobody asked for. This reads, it does not visit.
-      interactive: !prepared.profile.backgroundCatchUp,
-    );
-    final response = await _api.getChat(
-      chatRequest: request,
-      loginName: prepared.account.loginName,
-      appPassword: prepared.appPassword,
-    );
-    if (response.classification != ChatGetClassification.messages) {
-      return false;
-    }
-    for (final message in response.messages) {
-      if (message.messageId != messageId) {
-        continue;
-      }
-      await _chat.applyMessageMutation(
-        accountId: accountId,
-        server: prepared.authority.server,
-        message: message,
-      );
-      return true;
-    }
-    return false;
-  }
+  }) => _refreshMessage(accountId, roomToken, messageId);
 
   /// [replyTo] answers a specific root message. Talk turns that into a thread,
   /// so it is mutually exclusive with sending inside an existing [threadId].
@@ -696,7 +592,7 @@ final class ChatService {
   }
 
   void _ensureAccountActive(String accountId) {
-    if (_suspendedAccounts.contains(accountId)) {
+    if (_closed || _suspendedAccounts.contains(accountId)) {
       throw const _ChatSynchronizationCancelled();
     }
   }
@@ -911,6 +807,7 @@ final class ChatService {
     try {
       final result = await action();
       _ensureAccountActive(accountId);
+      if (result == ChatSynchronizationResult.deferred) return result;
       await _chat.clearRoomError(
         accountId: accountId,
         roomToken: roomToken,

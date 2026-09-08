@@ -65,6 +65,7 @@ final class ChatRelayBinding {
   int? _epoch;
   bool _trusted = false;
   bool _establishing = false;
+  bool _retryOnReaderWake = false;
   bool _sawWhileUntrusted = false;
   bool _closed = false;
   Completer<void>? _idle;
@@ -97,6 +98,16 @@ final class ChatRelayBinding {
     _epoch = epoch;
     _trusted = false;
     unawaited(_establishTrust(epoch));
+  }
+
+  void _readerBecameActive() {
+    final epoch = _epoch;
+    if (_closed || epoch == null || _trusted) return;
+    if (_establishing) {
+      _retryOnReaderWake = true;
+    } else {
+      activate(epoch);
+    }
   }
 
   /// A relayed `data.chat` payload arrived on [epoch].
@@ -144,6 +155,7 @@ final class ChatRelayBinding {
       return;
     }
     _establishing = true;
+    _retryOnReaderWake = false;
     try {
       for (var round = 0; round < _maximumTrustRounds; round++) {
         _sawWhileUntrusted = false;
@@ -156,6 +168,7 @@ final class ChatRelayBinding {
             accountId: accountId,
             roomToken: roomToken,
             joinExisting: false,
+            automatic: true,
           );
           if (result != ChatSynchronizationResult.converged) return;
         } on Object {
@@ -175,7 +188,9 @@ final class ChatRelayBinding {
     } finally {
       _establishing = false;
       final currentEpoch = _epoch;
-      if (!_closed && currentEpoch != null && currentEpoch != epoch) {
+      if (!_closed &&
+          currentEpoch != null &&
+          (currentEpoch != epoch || (_retryOnReaderWake && !_trusted))) {
         unawaited(_establishTrust(currentEpoch));
       }
     }

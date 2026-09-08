@@ -361,13 +361,13 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         _update(() => _localError = null);
       }
     } on ChatServiceException catch (error) {
-      _restoreSentDraft(sentDraft);
       if (_isCurrentSendScope(targetKey, generation)) {
+        _restoreSentDraft(sentDraft);
         _update(() => _localError = error.code);
       }
     } on Object {
-      _restoreSentDraft(sentDraft);
       if (_isCurrentSendScope(targetKey, generation)) {
+        _restoreSentDraft(sentDraft);
         _update(() => _localError = ChatServiceError.invalidResponse);
       }
     } finally {

@@ -267,6 +267,10 @@ extension _ChatServiceLiveRuntime on ChatService {
           throw const _ChatSynchronizationStale();
         }
         final outcome = await _applyGetResponse(prepared, response);
+        if (outcome != ChatMergeOutcome.stale &&
+            outcome != ChatMergeOutcome.lobby) {
+          await _processPending(prepared);
+        }
         return _chatReadResult(outcome);
       },
     );
@@ -369,6 +373,7 @@ final class ChatLiveRoomBinding {
   void setReaderActive(bool active) {
     if (_closed || active == _readerActive) return;
     _readerActive = active;
+    _service._readerActivityChanged(accountId, roomToken, wake: active);
     if (active) {
       _wakeReader();
     } else if (_prepared?.profile.backgroundCatchUp != true) {
@@ -492,6 +497,7 @@ final class ChatLiveRoomBinding {
     _activeCancellationCycle?.cancel();
     _wakeReader();
     _service._liveBindings.remove(this);
+    _service._readerActivityChanged(accountId, roomToken, wake: false);
   }
 }
 
@@ -530,7 +536,7 @@ final class _SharedLivePoll {
   bool completed = false;
 }
 
-final class _ChatSynchronizationProbe {
+final class _ChatSynchronizationProbe implements _ChatReadGuard {
   _ChatSynchronizationProbe({
     required this.binding,
     required this.generation,
@@ -568,6 +574,7 @@ final class _ChatSynchronizationProbe {
     }
   }
 
+  @override
   void ensureFetchAllowed(_PreparedChat prepared) {
     ensureActive();
     if (!prepared.profile.backgroundCatchUp && !binding._readerActive) {
@@ -575,6 +582,7 @@ final class _ChatSynchronizationProbe {
     }
   }
 
+  @override
   void ensureActive() {
     if (_cancellation.cancelled ||
         binding._closed ||

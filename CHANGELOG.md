@@ -20,6 +20,17 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Background reconciliation, relay baselines and attachment-path repair now
+  defer reads on legacy servers until that account and room have an active
+  reader. Modern servers keep passive synchronization. Deferred attachment
+  confirmations retain their retry budget and resume when reading resumes;
+  headless text sends still drain without clearing notifications. Reader return
+  during cancellation no longer loses the relay wake-up. Explicit navigation
+  and history reads remain bound to the original pane throughout async work.
+
+- A late send failure no longer restores a draft into a disposed composer or
+  another conversation after switching rooms.
+
 - Call-session recovery now refreshes conversations with the active account's
   session cookies and rejects stale responses after that session ends. A cancelled
   full refresh cannot reuse an old cached session. Inactive room metadata remains
