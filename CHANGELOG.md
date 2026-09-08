@@ -20,6 +20,15 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Calls reacquire a live signaling session after permission dialogs. Ended
+  sessions cannot be reused just because their Talk session ID still matches;
+  terminal signaling stops media instead of leaving it waiting indefinitely.
+
+- Explicitly enabling video promotes the Android call service to camera mode.
+  Video can continue while the app is hidden; audio-only calls do not request
+  camera access. Camera permission or service errors leave audio running and
+  show a localized explanation.
+
 - Android call audio uses an ongoing microphone foreground service so the
   system keeps its network access when the screen sleeps or the app is hidden.
   Permission, foreground admission and per-call cleanup are checked before
