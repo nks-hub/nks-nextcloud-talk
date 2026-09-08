@@ -43,7 +43,12 @@ void main() {
     await database.close();
   });
 
-  Future<void> mount(WidgetTester tester, {String language = 'en'}) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    String language = 'en',
+    CallLifecycleError refusal =
+        CallLifecycleError.endToEndEncryptionUnsupported,
+  }) async {
     admission = Completer<bool>();
     await tester.pumpWidget(
       ProviderScope(
@@ -52,7 +57,7 @@ void main() {
             (ref, key) async => false,
           ),
           callJoinControllerProvider.overrideWith(
-            () => _StartController(controllers, admission.future),
+            () => _StartController(controllers, admission.future, refusal),
           ),
         ],
         child: localizedTestApp(
@@ -68,6 +73,42 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'outgoing admission is visible before the server reports a call',
+    (tester) async {
+      await mount(tester);
+      await tester.tap(find.byKey(const Key('start-call-audio')));
+      await tester.pump();
+      expect(find.byKey(const Key('call-banner')), findsOneWidget);
+      expect(find.text('Joining the call…'), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('start-call-audio')))
+            .onPressed,
+        isNull,
+      );
+      admission.complete(false);
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('outgoing join failure stays visible without server call state', (
+    tester,
+  ) async {
+    await mount(tester, refusal: CallLifecycleError.network);
+    await tester.tap(find.byKey(const Key('start-call-audio')));
+    admission.complete(false);
+    await tester.pumpAndSettle();
+    expect(find.text('Joining the call failed.'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('start-call-audio')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   for (final language in ['en', 'cs']) {
     testWidgets(
@@ -259,10 +300,11 @@ final class _Header extends ConsumerWidget {
 }
 
 final class _StartController extends CallJoinController {
-  _StartController(this.controllers, this.admission);
+  _StartController(this.controllers, this.admission, this.refusal);
 
   final Map<CallRoomKey, _StartController> controllers;
   final Future<bool> admission;
+  final CallLifecycleError refusal;
   int joinCalls = 0;
   int cameraStarts = 0;
   bool disposed = false;
@@ -283,10 +325,7 @@ final class _StartController extends CallJoinController {
     if (disposed) return;
     state = allowed
         ? const CallJoinState(phase: CallJoinPhase.joined)
-        : const CallJoinState(
-            phase: CallJoinPhase.failed,
-            lifecycleError: CallLifecycleError.endToEndEncryptionUnsupported,
-          );
+        : CallJoinState(phase: CallJoinPhase.failed, lifecycleError: refusal);
   }
 
   @override

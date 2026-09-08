@@ -72,6 +72,7 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
       roomToken: widget.conversation.token,
     );
     final call = ConversationCallState.fromConversation(widget.conversation);
+    final join = ref.watch(callJoinControllerProvider(key));
     final persistedLifecycle = ref.watch(callLifecyclePersistedProvider(key));
     final lifecycle = call != null || persistedLifecycle.valueOrNull == true
         ? ref.watch(callLifecycleStatusProvider(key))
@@ -79,9 +80,7 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
     final elapsed = call?.elapsed(now: widget.now());
     _syncTicker(running: elapsed != null);
     if (call == null) {
-      final error = ref.watch(
-        callJoinControllerProvider(key).select((join) => join.lifecycleError),
-      );
+      final error = join.lifecycleError;
       if (error == CallLifecycleError.endToEndEncryptionUnsupported) {
         return Padding(
           key: const Key('call-banner-encryption-unsupported'),
@@ -94,12 +93,16 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
           ),
         );
       }
-      return const SizedBox.shrink();
+      if (join.phase == CallJoinPhase.idle) {
+        return const SizedBox.shrink();
+      }
     }
 
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final transport = ref.watch(callTransportProvider(key));
+    final transport = call != null
+        ? ref.watch(callTransportProvider(key))
+        : const AsyncLoading<CallTransport>();
     final resolved = transport.valueOrNull;
     final boundLifecycle = lifecycle?.valueOrNull;
     final lifecycleReady = boundLifecycle?.matches(key) ?? false;
@@ -143,13 +146,10 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
             null => (strings.callBannerTransportChecking, false),
           };
 
-    final join = ref.watch(callJoinControllerProvider(key));
     final joined =
         join.phase == CallJoinPhase.joined ||
         join.phase == CallJoinPhase.leaving;
-    final statusText = joinable
-        ? (_callJoinStatusText(join, strings) ?? status)
-        : status;
+    final statusText = _callJoinStatusText(join, strings) ?? status;
     // A reaction from another participant rides on the status line for a
     // moment; the session clears it again.
     final reaction = join.media.reaction;
@@ -212,18 +212,20 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        shownStatus,
-                        key: const Key('call-banner-transport'),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onPrimaryContainer,
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          shownStatus,
+                          key: const Key('call-banner-transport'),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onPrimaryContainer),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              if (joinable) ...[
+              if (joinable || joined) ...[
                 const SizedBox(width: 12),
                 FilledButton(
                   key: const Key('call-banner-join'),
