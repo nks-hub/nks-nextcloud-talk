@@ -20,6 +20,20 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Outgoing calls show joining progress and admission failures before the
+  server reports a running call. Existing call errors remain visible while
+  transport status refreshes, and a joined call keeps its Leave action.
+
+- A rejected call session is renewed once before retrying a definitive 404.
+  Shared room holders remain intact, stale responses cannot restore old
+  cookies, and signaling is rebound before the microphone starts. Uncertain
+  call mutations are not retried automatically.
+
+- Failed HPB subscriptions request a new server offer instead of publishing
+  their receive-only media description over the caller's outgoing stream.
+  Retired subscription messages and callbacks cannot alter the replacement
+  connection; the publisher and screen sharing remain intact.
+
 - Image attachments fit their decoded aspect ratio within the available width
   and height limit, including missing or stale server dimensions and EXIF
   rotation. Image-only and captioned messages share one bounded filename below
