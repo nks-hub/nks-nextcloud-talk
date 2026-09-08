@@ -228,7 +228,7 @@ final class CallLifecycleService {
       authority: context.authority,
       allowSessionMismatch: true,
     );
-    final activeContext = await _activateRoomSession(context);
+    var activeContext = await _activateRoomSession(context);
     try {
       var existing = existingBeforeActivation;
       if (existing != null &&
@@ -246,58 +246,66 @@ final class CallLifecycleService {
         return existing;
       }
 
-      var state = CallLifecycleState.beginJoin(
-        authority: activeContext.authority,
-        flags: flags,
-        updatedAt: _utcNow(),
-      );
-      await _sessions.persist(state);
-      final request = JoinCallRequest(
-        context: CallRequestContext(
-          authority: state.authority,
-          mutationSequence: state.mutationSequence,
-        ),
-        flags: flags,
-        silent: silent,
-        recordingConsent: recordingConsent,
-        silentFor: silentFor,
-      );
-      final response = await _mutate(
-        state: state,
-        send: () => _api.joinCall(
-          joinRequest: request,
-          loginName: activeContext.account.loginName,
-          appPassword: activeContext.appPassword,
-        ),
-      );
-      switch (response.classification) {
-        case CallResponseClassification.confirmed:
-          state = state.confirm(updatedAt: _utcNow());
-          await _sessions.persist(state);
-          return state;
-        case CallResponseClassification.serverFailure:
-          await _markUncertain(state);
-        case CallResponseClassification.reauthenticationRequired:
-          await _dropForReauthentication(accountId, roomToken);
-        case CallResponseClassification.rejected:
-          await _sessions.delete(accountId: accountId, roomToken: roomToken);
-          throw CallLifecycleException(
-            response.errorCode == 'consent'
-                ? CallLifecycleError.consentRequired
-                : CallLifecycleError.rejected,
-          );
-        case CallResponseClassification.forbidden:
-          await _sessions.delete(accountId: accountId, roomToken: roomToken);
-          throw const CallLifecycleException(CallLifecycleError.forbidden);
-        case CallResponseClassification.sessionMissing:
-          await _sessions.delete(accountId: accountId, roomToken: roomToken);
-          throw const CallLifecycleException(CallLifecycleError.roomMissing);
-        case CallResponseClassification.conflict:
-          await _sessions.delete(accountId: accountId, roomToken: roomToken);
-          throw const CallLifecycleException(CallLifecycleError.conflict);
-        case CallResponseClassification.rateLimited:
-          await _sessions.delete(accountId: accountId, roomToken: roomToken);
-          throw const CallLifecycleException(CallLifecycleError.rateLimited);
+      var refreshedRejectedSession = false;
+      while (true) {
+        var state = CallLifecycleState.beginJoin(
+          authority: activeContext.authority,
+          flags: flags,
+          updatedAt: _utcNow(),
+        );
+        await _sessions.persist(state);
+        final request = JoinCallRequest(
+          context: CallRequestContext(
+            authority: state.authority,
+            mutationSequence: state.mutationSequence,
+          ),
+          flags: flags,
+          silent: silent,
+          recordingConsent: recordingConsent,
+          silentFor: silentFor,
+        );
+        final response = await _mutate(
+          state: state,
+          send: () => _api.joinCall(
+            joinRequest: request,
+            loginName: activeContext.account.loginName,
+            appPassword: activeContext.appPassword,
+          ),
+        );
+        switch (response.classification) {
+          case CallResponseClassification.confirmed:
+            state = state.confirm(updatedAt: _utcNow());
+            await _sessions.persist(state);
+            return state;
+          case CallResponseClassification.serverFailure:
+            await _markUncertain(state);
+          case CallResponseClassification.reauthenticationRequired:
+            await _dropForReauthentication(accountId, roomToken);
+          case CallResponseClassification.rejected:
+            await _sessions.delete(accountId: accountId, roomToken: roomToken);
+            throw CallLifecycleException(
+              response.errorCode == 'consent'
+                  ? CallLifecycleError.consentRequired
+                  : CallLifecycleError.rejected,
+            );
+          case CallResponseClassification.forbidden:
+            await _sessions.delete(accountId: accountId, roomToken: roomToken);
+            throw const CallLifecycleException(CallLifecycleError.forbidden);
+          case CallResponseClassification.sessionMissing:
+            await _sessions.delete(accountId: accountId, roomToken: roomToken);
+            if (!refreshedRejectedSession) {
+              refreshedRejectedSession = true;
+              activeContext = await _refreshRejectedRoomSession(activeContext);
+              continue;
+            }
+            throw const CallLifecycleException(CallLifecycleError.roomMissing);
+          case CallResponseClassification.conflict:
+            await _sessions.delete(accountId: accountId, roomToken: roomToken);
+            throw const CallLifecycleException(CallLifecycleError.conflict);
+          case CallResponseClassification.rateLimited:
+            await _sessions.delete(accountId: accountId, roomToken: roomToken);
+            throw const CallLifecycleException(CallLifecycleError.rateLimited);
+        }
       }
     } on Object {
       await _releaseRoomSession(activeContext);

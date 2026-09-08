@@ -86,6 +86,58 @@ extension _CallLifecycleRoomSession on CallLifecycleService {
     }
   }
 
+  Future<_CallContext> _refreshRejectedRoomSession(_CallContext context) async {
+    final accountId = context.authority.accountId.value;
+    final held = _roomSessions[accountId];
+    if (held == null || !held.matches(context)) {
+      throw const CallLifecycleException(CallLifecycleError.roomMissing);
+    }
+    try {
+      final activation = await _api.refreshRoomSession(
+        lease: held.lease,
+        rejectedSessionId: context.authority.nextcloudSessionId,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      );
+      final response = activation.response;
+      if (response is ActiveRoomSessionReauthenticationRequired) {
+        await _dropForReauthentication(accountId, held.lease.roomToken.value);
+      }
+      if (response is ActiveRoomSessionForbidden) {
+        throw const CallLifecycleException(CallLifecycleError.forbidden);
+      }
+      if (response is ActiveRoomSessionMissing) {
+        throw const CallLifecycleException(CallLifecycleError.roomMissing);
+      }
+      if (response is ActiveRoomSessionConflict) {
+        throw const CallLifecycleException(CallLifecycleError.conflict);
+      }
+      if (response is ActiveRoomSessionHttpFailure) {
+        throw const CallLifecycleException(
+          CallLifecycleError.serviceUnavailable,
+        );
+      }
+      if (response is! ActiveRoomSessionSuccess ||
+          response.room.token != held.lease.roomToken ||
+          response.room.sessionId.value == '0') {
+        throw const CallLifecycleException(CallLifecycleError.invalidResponse);
+      }
+      if (_disposed) {
+        throw const CallLifecycleException(CallLifecycleError.network);
+      }
+      _roomSessions[accountId] = _CallRoomSession.fromContext(
+        context,
+        lease: held.lease,
+        sessionId: response.room.sessionId,
+      );
+      return context.withSession(response.room.sessionId);
+    } on NextcloudApiException catch (error) {
+      throw CallLifecycleException(_mapApiError(error));
+    } on TalkProtocolException {
+      throw const CallLifecycleException(CallLifecycleError.invalidResponse);
+    }
+  }
+
   Future<void> _releaseRoomSession(_CallContext context) async {
     final accountId = context.authority.accountId.value;
     final held = _roomSessions[accountId];

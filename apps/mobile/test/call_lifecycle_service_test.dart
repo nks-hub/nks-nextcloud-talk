@@ -3,12 +3,18 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/call_session_repository.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
+import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
+import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
+import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -16,9 +22,13 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 part 'call_lifecycle_room_session_test.part.dart';
+part 'call_lifecycle_stale_session_test.part.dart';
+part 'call_join_session_rebind_test.part.dart';
 
 void main() {
   _registerCallLifecycleRoomSessionTests();
+  _registerCallLifecycleStaleSessionTests();
+  _registerCallJoinSessionRebindTests();
 
   test('refuses required E2EE before activating or joining the call', () async {
     final harness = await _CallHarness.create();
@@ -639,6 +649,7 @@ final class _CallServer {
   final List<http.Request> activeRoomRequests = <http.Request>[];
   final List<String> requestSequence = <String>[];
   bool extraFeature = false;
+  bool signalingEnabled = false;
   Map<String, Object?> callPolicy = const {};
 
   List<String> get callMethods =>
@@ -648,10 +659,17 @@ final class _CallServer {
     if (request.url.path.contains('/cloud/capabilities')) {
       return http.Response(
         jsonEncode(
-          _capabilities(extraFeature: extraFeature, callPolicy: callPolicy),
+          _capabilities(
+            extraFeature: extraFeature,
+            callPolicy: callPolicy,
+            signalingEnabled: signalingEnabled,
+          ),
         ),
         200,
       );
+    }
+    if (signalingEnabled && request.url.path.endsWith('/signaling/settings')) {
+      return _ocsResponse(503, <String, Object?>{});
     }
     if (request.url.path.contains('/apps/spreed/api/v4/call/')) {
       final index = callRequests.length;
@@ -708,6 +726,7 @@ http.Response _activeRoomResponse(
 Map<String, Object?> _capabilities({
   required bool extraFeature,
   Map<String, Object?> callPolicy = const {},
+  bool signalingEnabled = false,
 }) => <String, Object?>{
   'ocs': <String, Object?>{
     'meta': <String, Object?>{
@@ -732,6 +751,7 @@ Map<String, Object?> _capabilities({
             'in-call-flags',
             'silent-call',
             'recording-consent',
+            if (signalingEnabled) 'signaling-v3',
             if (extraFeature) 'synthetic-capability-drift',
           ],
           'features-local': <Object?>[],

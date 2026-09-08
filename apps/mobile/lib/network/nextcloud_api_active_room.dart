@@ -104,6 +104,58 @@ mixin _NextcloudApiActiveRoom on _HttpNextcloudApiBase {
     }
   });
 
+  /// Reasserts a server-rejected session without releasing its other holders.
+  Future<ActiveRoomSessionActivation> refreshRoomSession({
+    required ActiveRoomSessionLease lease,
+    required ConversationSessionId rejectedSessionId,
+    required String loginName,
+    required String appPassword,
+  }) => _serializeAccountSession(lease.accountId, () async {
+    if (_roomSessionBlocked(lease.accountId) || !_ownsRoomSession(lease)) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
+    }
+    final current = _activeRoomSessionRooms[lease.accountId];
+    if (current == null) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
+    }
+    if (current.room.sessionId != rejectedSessionId) {
+      return ActiveRoomSessionActivation(response: current, lease: lease);
+    }
+    // Keep holder identity, but fence responses sent with the rejected cookie.
+    _accountSessionGenerations[lease.accountId] =
+        (_accountSessionGenerations[lease.accountId] ?? 0) + 1;
+    final activeRequest = ActiveRoomSessionRequest(
+      accountId: lease.accountId,
+      server: lease.server,
+      roomToken: lease.roomToken,
+    );
+    final request = _request('POST', activeRequest.uri, null)
+      ..headers.addAll({
+        ...activeRequest.headers,
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: const {200, 400, 401, 403, 404, 409, 429, 503},
+      maximumBytes: _activeRoomSessionMaximumBytes,
+      sessionAccountId: lease.accountId,
+      sessionServer: lease.server,
+    );
+    final response = decodeActiveRoomSessionResponse(
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+    if (_roomSessionBlocked(lease.accountId) || !_ownsRoomSession(lease)) {
+      throw const NextcloudApiException(NextcloudApiError.cancelled);
+    }
+    if (response is ActiveRoomSessionSuccess &&
+        response.room.token == lease.roomToken &&
+        response.room.sessionId.value != '0') {
+      _activeRoomSessionRooms[lease.accountId] = response;
+    }
+    return ActiveRoomSessionActivation(response: response, lease: lease);
+  });
+
   Future<void> deactivateRoomSession({
     required ActiveRoomSessionLease lease,
     required String loginName,

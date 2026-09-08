@@ -209,7 +209,7 @@ base class CallJoinController
     // window losing focus for as long as this call lives.
     _hold(true);
     final lease = await ref.read(chatRoomSignalingProvider(arg).future);
-    final signaling = lease.session;
+    var signaling = lease.session;
     if (_disposed) {
       return;
     }
@@ -226,8 +226,12 @@ base class CallJoinController
     // container is already tearing down, and reading a provider there throws.
     final lifecycle = ref.read(callLifecycleServiceProvider);
     _lifecycle = lifecycle;
+    final CallLifecycleState joined;
     try {
-      await lifecycle.join(accountId: arg.accountId, roomToken: arg.roomToken);
+      joined = await lifecycle.join(
+        accountId: arg.accountId,
+        roomToken: arg.roomToken,
+      );
       _joinedServer = true;
     } on CallLifecycleException catch (error) {
       _hold(false);
@@ -242,6 +246,36 @@ base class CallJoinController
     if (_disposed) {
       unawaited(_leaveServer());
       return;
+    }
+
+    if (lease.nextcloudSessionId != joined.authority.nextcloudSessionId.value) {
+      // A definitive REST 404 can renew the shared room. Its lifecycle holder
+      // keeps it alive while the chat replaces the old signaling authority.
+      ChatRoomSignalingLease? rebound;
+      try {
+        ref.invalidate(chatRoomSignalingProvider(arg));
+        rebound = await ref.read(chatRoomSignalingProvider(arg).future);
+      } on Object {
+        // Failed provider admission must release the confirmed REST call seat.
+      }
+      if (_disposed) {
+        unawaited(_leaveServer());
+        return;
+      }
+      signaling = rebound?.session;
+      if (signaling == null ||
+          rebound?.nextcloudSessionId !=
+              joined.authority.nextcloudSessionId.value) {
+        await _leaveServer();
+        _hold(false);
+        if (!_disposed) {
+          state = const CallJoinState(
+            phase: CallJoinPhase.failed,
+            signalingUnavailable: true,
+          );
+        }
+        return;
+      }
     }
 
     _moderator = await _readModeratorState();
