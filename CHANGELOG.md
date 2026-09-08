@@ -20,6 +20,23 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Android call audio uses an ongoing microphone foreground service so the
+  system keeps its network access when the screen sleeps or the app is hidden.
+  Permission, foreground admission and per-call cleanup are checked before
+  opening the microphone; a retry cannot stop a newer call's service.
+
+- Android WebRTC gathers through the system default route instead of binding
+  sockets to conflicting physical and VPN interfaces. VPN policy and the
+  existing relay preference remain in effect.
+
+- A newly confirmed HPB session re-announces existing call membership once,
+  including admission after room-session renewal. Ordinary participant updates
+  do not trigger repeated announcements.
+
+- After an interrupted media exchange, HPB reconnects with fresh signaling
+  authority instead of resuming an ambiguous media session. Old media frames
+  are not replayed; clean resumptions keep their existing session and peers.
+
 - Outgoing calls show joining progress and admission failures before the
   server reports a running call. Existing call errors remain visible while
   transport status refreshes, and a joined call keeps its Leave action.
