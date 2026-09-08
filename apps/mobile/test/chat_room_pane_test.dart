@@ -39,6 +39,7 @@ part 'chat_room_pane_rendering.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
 part 'chat_room_pane_send_scope.part.dart';
 part 'chat_room_pane_history_scope.part.dart';
+part 'chat_room_pane_image_geometry.part.dart';
 
 late AppDatabase database;
 late AccountRepository accounts;
@@ -112,6 +113,7 @@ void main() {
   _registerChatRoomPaneThreadContextTests();
   _registerChatRoomPaneSendScopeTests();
   _registerChatRoomPaneHistoryScopeTests();
+  _registerChatRoomPaneImageGeometryTests();
 }
 
 /// The thread layout, for tests that walk into a thread pane from a derived

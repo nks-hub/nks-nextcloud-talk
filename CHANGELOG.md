@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- History scrolling preserves a visible message when existing rows change
+  height or the viewport is resized. Layout corrections run before painting,
+  retain newer user scroll input and do not stop flings. Newer messages in the
+  separate arrival sliver and the newest boundary keep their existing behavior.
+  Missing image dimensions and caption presentation are separate follow-ups.
+
 - Returning to a desktop window restores focus to its visible, writable chat
   composer without changing the draft or selection. Dialogs, other editors,
   newer focus choices and blocked conversations retain control; queued focus

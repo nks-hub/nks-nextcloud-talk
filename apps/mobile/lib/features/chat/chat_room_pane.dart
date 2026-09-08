@@ -35,6 +35,7 @@ import 'chat_message_actions_service.dart';
 import 'chat_background_surface.dart';
 import 'chat_pin_reminder_schedule.dart';
 import 'chat_message_content.dart';
+import 'chat_scroll_controller.dart';
 import 'message_translation_dialog.dart';
 import 'location_share_service.dart';
 import 'poll_dialog.dart';
@@ -69,6 +70,7 @@ part 'chat_room_pane_timeline_states.dart';
 part 'chat_room_pane_notices.dart';
 part 'chat_room_pane_sync.dart';
 part 'chat_room_pane_timeline.dart';
+part 'chat_room_pane_bubbles.dart';
 part 'chat_room_pane_typing.dart';
 part 'chat_room_pane_widgets.dart';
 
@@ -121,7 +123,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   bool _emojiPickerOpen = false;
   bool _emojiPickerPending = false;
   ui.FlutterView? _view;
-  final ScrollController _scrollController = ScrollController();
+  final ChatScrollController _scrollController = ChatScrollController();
   final GlobalKey _jumpTargetKey = GlobalKey();
   final ChatMediaComposerController _mediaComposerController =
       ChatMediaComposerController();
@@ -279,6 +281,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _replyTo = null;
     _historyGeneration++;
     _loadingOlder = false;
+    _scrollController.resetExtentTracking();
     _sendGeneration++;
     _composerFocusGeneration++;
     _giphyGeneration++;
