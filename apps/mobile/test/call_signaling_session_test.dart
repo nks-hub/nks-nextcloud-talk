@@ -28,6 +28,60 @@ void main() {
 
   tearDown(() => database.close());
 
+  test(
+    'same-room admission replaces a terminal runtime even before lane disposal',
+    () async {
+      await _insertAccount(accounts, credentials, accountId: 'account-a');
+      final api = HttpNextcloudApi(client: _ExternalSettingsClient());
+      final sockets = _FakeSocketConnector();
+      final coordinator = CallSignalingCoordinator(
+        accounts: accounts,
+        sessions: sessions,
+        credentials: credentials,
+        api: api,
+        socketConnector: sockets,
+        refreshConversationSession: (_, _) async =>
+            ConversationSessionId.parse('session-a'),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        api.close();
+      });
+      final original = await coordinator.start(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        nextcloudSessionId: 'session-a',
+      );
+      await _waitFor(
+        original,
+        (u) => u.phase == SignalingAccountPhase.hpbAwaitingWelcome,
+      );
+      final socket = await sockets.waitForSocket(0);
+      socket.addFrame(
+        jsonEncode({
+          'type': 'bye',
+          'bye': {'reason': 'session_closed'},
+        }),
+      );
+      await _waitFor(
+        original,
+        (u) => u.phase == SignalingAccountPhase.terminated,
+      );
+      expect(original.current.failure, isNull);
+      final replacement = await coordinator.start(
+        accountId: 'account-a',
+        roomToken: 'rooma123',
+        nextcloudSessionId: 'session-a',
+      );
+      expect(identical(original, replacement), isFalse);
+      await _waitFor(
+        replacement,
+        (u) => u.phase == SignalingAccountPhase.hpbAwaitingWelcome,
+      );
+      expect(sockets.sockets, hasLength(2));
+    },
+  );
+
   for (final refreshedId in ['0', 'valid-refreshed-session']) {
     test(
       'HPB refresh ${refreshedId == '0' ? 'rejects inactive' : 'accepts active'} conversation session',

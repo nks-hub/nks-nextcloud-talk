@@ -2,6 +2,46 @@ part of 'call_media_session_test.dart';
 
 extension _MediaMembershipTests on _MediaSessionTests {
   void _registerMembership() {
+    for (final phase in [
+      SignalingAccountPhase.terminated,
+      SignalingAccountPhase.unsupported,
+      SignalingAccountPhase.reauthenticationRequired,
+    ]) {
+      test(
+        'terminal initial signaling $phase refuses media before microphone',
+        () async {
+          final media = session(
+            _update(localPeerId: _local, phase: phase, roomConfirmed: false),
+          );
+          addTearDown(media.dispose);
+          await media.start();
+          expect(media.state.phase, CallMediaPhase.failed);
+          expect(media.state.error, CallMediaError.signalingLost);
+          expect(engine.microphoneOpens, 0);
+        },
+      );
+    }
+    test(
+      'terminal signaling update closes existing media instead of preparing forever',
+      () async {
+        final media = session(
+          _update(localPeerId: _local, participants: [_participant(_remote)]),
+        );
+        addTearDown(media.dispose);
+        await media.start();
+        updates.add(
+          _update(
+            localPeerId: _local,
+            phase: SignalingAccountPhase.terminated,
+            roomConfirmed: false,
+          ),
+        );
+        await pumpEventQueue();
+        expect(media.state.phase, CallMediaPhase.failed);
+        expect(media.state.error, CallMediaError.signalingLost);
+        expect(engine.connections.single.closed, isTrue);
+      },
+    );
     for (final topology in [
       SignalingTopology.externalMcu,
       SignalingTopology.externalPeerToPeer,

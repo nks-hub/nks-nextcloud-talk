@@ -155,6 +155,15 @@ final class CallMediaSession {
         return;
       }
       _started = true;
+      if (_initial.isTerminal || _initial.failure != null) {
+        _emit(
+          const CallMediaState(
+            phase: CallMediaPhase.failed,
+            error: CallMediaError.signalingLost,
+          ),
+        );
+        return;
+      }
       // An MCU needs the server to ask for offers on this side's behalf;
       // without that channel the call would only ever hear itself.
       if (_initial.topology == SignalingTopology.externalMcu &&
@@ -258,7 +267,7 @@ final class CallMediaSession {
     if (_disposed || _state.phase == CallMediaPhase.failed) {
       return;
     }
-    if (update.failure != null) {
+    if (update.failure != null || update.isTerminal) {
       await _failAndStop(CallMediaError.signalingLost);
       return;
     }

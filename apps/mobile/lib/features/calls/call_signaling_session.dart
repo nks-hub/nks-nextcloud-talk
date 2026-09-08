@@ -107,6 +107,11 @@ final class CallSignalingUpdate {
 
   final CallSignalingFailure? failure;
 
+  bool get isTerminal =>
+      phase == SignalingAccountPhase.terminated ||
+      phase == SignalingAccountPhase.reauthenticationRequired ||
+      phase == SignalingAccountPhase.unsupported;
+
   /// Whether relayed chat may be trusted right now: an external HPB that
   /// advertised `chat-relay` and has this room confirmed on a live session.
   bool get chatRelayActive =>
@@ -168,6 +173,9 @@ final class CallSignalingSession {
   CallSignalingKey get key => _lane.key;
 
   CallSignalingUpdate get current => _lane.current;
+
+  bool get isActive =>
+      !_lane._disposed && !_lane._failed && !current.isTerminal;
 
   Stream<CallSignalingUpdate> get updates => _lane.updates;
 
@@ -256,6 +264,7 @@ final class CallSignalingCoordinator {
       final parsedSessionId = ConversationSessionId.parse(nextcloudSessionId);
       final existing = _lanes[accountId];
       if (existing != null &&
+          existing.handle.isActive &&
           existing.key.roomToken == roomToken &&
           existing.authority.nextcloudSessionId == parsedSessionId) {
         existing.retain();

@@ -2,6 +2,83 @@ part of 'call_lifecycle_service_test.dart';
 
 void _registerCallForegroundLifecycleTests() {
   test(
+    'no live signaling replacement releases foreground and REST without microphone',
+    () async {
+      final permission = Completer<void>();
+      final foreground = _ForegroundCalls(startGate: permission.future);
+      var microphones = 0;
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        _DelayedMicrophone(() async {
+          microphones++;
+        }),
+        holdSettings: true,
+      );
+      addTearDown(() async {
+        if (!permission.isCompleted) permission.complete();
+        await fixture.close();
+      });
+      final joining = fixture.controller.join();
+      await foreground.firstStart.future;
+      await fixture.coordinator.dispose();
+      permission.complete();
+      await joining;
+      final state = fixture.container.read(
+        callJoinControllerProvider(_ForegroundJoinFixture.key),
+      );
+      expect(state.phase, CallJoinPhase.failed);
+      expect(state.signalingUnavailable, isTrue);
+      expect(microphones, 0);
+      expect(foreground.active, isEmpty);
+      expect(fixture.rest.server.callMethods.where((m) => m != 'GET'), [
+        'POST',
+        'DELETE',
+      ]);
+    },
+  );
+  test(
+    'permission delay cannot bind media to the replaced chat signaling lease',
+    () async {
+      final permission = Completer<void>();
+      final foreground = _ForegroundCalls(startGate: permission.future);
+      final engine = _CameraForegroundEngine();
+      final fixture = await _ForegroundJoinFixture.create(
+        foreground,
+        engine,
+        holdSettings: true,
+      );
+      addTearDown(() async {
+        if (!permission.isCompleted) permission.complete();
+        await fixture.close();
+      });
+      const key = _ForegroundJoinFixture.key;
+      final original = await fixture.container.read(
+        chatRoomSignalingProvider(key).future,
+      );
+      final joining = fixture.controller.join();
+      await foreground.firstStart.future;
+      fixture.container.invalidate(chatRoomSignalingProvider(key));
+      final replacement = await fixture.container.read(
+        chatRoomSignalingProvider(key).future,
+      );
+      expect(identical(original.session, replacement.session), isFalse);
+      expect(replacement.nextcloudSessionId, original.nextcloudSessionId);
+      permission.complete();
+      await joining;
+      await pumpEventQueue();
+      expect(
+        fixture.container.read(callJoinControllerProvider(key)).phase,
+        CallJoinPhase.joined,
+      );
+      expect(engine.audio.disposed, isFalse);
+      expect(foreground.active, {foreground.started.single});
+      expect(fixture.rest.server.callMethods.where((m) => m != 'GET'), [
+        'POST',
+      ]);
+    },
+  );
+
+  test(
     'duplicate camera enable shares admission and camera off cancels it',
     () async {
       final ready = Completer<void>();

@@ -11,6 +11,7 @@ import '../chat/chat_room_signaling.dart';
 import '../rooms/room_settings_service.dart';
 import 'call_lifecycle_service.dart';
 import 'call_foreground_service.dart';
+import 'call_signaling_session.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_transport_service.dart';
@@ -318,6 +319,30 @@ base class CallJoinController
       return;
     }
 
+    // Permission UI can outlive a signaling lane without changing the Talk SID.
+    try {
+      signaling = await _reacquireSignaling(
+        joined.authority.nextcloudSessionId.value,
+      );
+    } on Object {
+      signaling = null;
+    }
+    if (_disposed || _foregroundCall?.owner != foreground.owner) {
+      await foreground.service.stop(foreground.owner);
+      unawaited(_leaveServer());
+      return;
+    }
+    if (signaling == null) {
+      await _teardown(leaveServer: true);
+      if (!_disposed) {
+        state = const CallJoinState(
+          phase: CallJoinPhase.failed,
+          signalingUnavailable: true,
+        );
+      }
+      return;
+    }
+
     final session = CallMediaSession(
       initial: signaling.current,
       updates: signaling.updates,
@@ -351,6 +376,24 @@ base class CallJoinController
       return;
     }
     ref.invalidate(callLifecycleStatusProvider(arg));
+  }
+
+  Future<CallSignalingSession?> _reacquireSignaling(
+    String nextcloudSessionId,
+  ) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final lease = await ref.read(chatRoomSignalingProvider(arg).future);
+      if (_disposed) return null;
+      final current = ref.read(chatRoomSignalingProvider(arg)).valueOrNull;
+      if (!identical(current, lease)) continue;
+      final session = lease.session;
+      if (lease.nextcloudSessionId == nextcloudSessionId &&
+          session?.isActive == true) {
+        return session;
+      }
+      if (attempt == 0) ref.invalidate(chatRoomSignalingProvider(arg));
+    }
+    return null;
   }
 
   /// Mutes or unmutes this participant's microphone in the joined call.
