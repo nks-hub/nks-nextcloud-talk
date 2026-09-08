@@ -18,6 +18,16 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- Covered chats no longer claim presence just because the app window remains
+  active. Visible root/thread panes share room ownership, while a joined call
+  retains its own session. Returning to the chat restores its presence.
+  Dialog-covered chats do not mark new messages read or emit queued screen-reader
+  announcements. Navigation and ownership regressions pass, as do 2,298 Flutter
+  tests with five skips, full analysis and a Windows debug build. Real call
+  continuity and the remaining idle compatibility checks are still open.
+
 ## 0.1.0 (65) — 7 September 2026
 
 Android alpha is published through the Google Play Publishing API, which
