@@ -127,50 +127,68 @@ void main() {
       },
     );
 
-    test('successful resume preserves ambiguous outbound renegotiation', () {
-      final authority = signalingAuthority();
-      final prepared = _planHelloAfterDisconnect(
-        nowMicros: 15000,
-        reconnectMicros: 1015000,
-        requestNumber: 525,
-        outboundPossiblySent: true,
-      );
-      var snapshot = prepared.snapshot;
-      final send = snapshot.accounts[signalingAccountA]!.pendingHpbFrame!;
-      snapshot = commitSignaling(
-        snapshot,
-        completeHpbFrameSend(
+    test(
+      'ambiguous outbound selects a fresh hello inside the resume window',
+      () {
+        final authority = signalingAuthority();
+        final prepared = _planHelloAfterDisconnect(
+          nowMicros: 15000,
+          reconnectMicros: 1015000,
+          requestNumber: 525,
+          outboundPossiblySent: true,
+        );
+        expect(prepared.hello.isResume, isFalse);
+        expect(prepared.account.renegotiationRequired, isTrue);
+        final previousRoomEpoch = prepared.account.roomEpoch;
+        var snapshot = prepared.snapshot;
+        final send = snapshot.accounts[signalingAccountA]!.pendingHpbFrame!;
+        snapshot = commitSignaling(
+          snapshot,
+          completeHpbFrameSend(
+            snapshot,
+            accountId: signalingAccountA,
+            authority: authority,
+            effect: send,
+          ),
+        );
+
+        final renewed = applyHpbServerFrame(
           snapshot,
           accountId: signalingAccountA,
           authority: authority,
-          effect: send,
-        ),
-      );
+          connectionEpoch: 2,
+          roomEpoch: snapshot.accounts[signalingAccountA]!.roomEpoch,
+          frame: decodeHpbFrame(<String, Object?>{
+            'id': send.frame.requestId.value,
+            'type': 'hello',
+            'hello': <String, Object?>{
+              'version': '2.0',
+              'sessionid': 'hpb-session-new',
+              'resumeid': 'hpb-resume-new',
+            },
+          }),
+          nowMicros: 1015300,
+          nextRequestId: signalingRequestId(530),
+          sendEffectId: signalingEffectId(530),
+        );
+        snapshot = commitSignaling(snapshot, renewed);
 
-      final resumed = applyHpbServerFrame(
-        snapshot,
-        accountId: signalingAccountA,
-        authority: authority,
-        connectionEpoch: 2,
-        roomEpoch: snapshot.accounts[signalingAccountA]!.roomEpoch,
-        frame: decodeHpbFrame(<String, Object?>{
-          'id': send.frame.requestId.value,
-          'type': 'hello',
-          'hello': <String, Object?>{
-            'version': '2.0',
-            'sessionid': 'hpb-session-a',
-          },
-        }),
-        nowMicros: 1015300,
-      );
-      snapshot = commitSignaling(snapshot, resumed);
-
-      expect(resumed.outcome, SignalingRuntimeOutcome.resumed);
-      expect(
-        snapshot.accounts[signalingAccountA]!.renegotiationRequired,
-        isTrue,
-      );
-    });
+        expect(renewed.outcome, SignalingRuntimeOutcome.roomJoining);
+        expect(
+          snapshot.accounts[signalingAccountA]!.roomEpoch,
+          previousRoomEpoch + 1,
+        );
+        expect(
+          snapshot.accounts[signalingAccountA]!.hpbSessionId!.value,
+          'hpb-session-new',
+        );
+        expect(snapshot.accounts[signalingAccountA]!.roomConfirmed, isFalse);
+        expect(
+          snapshot.accounts[signalingAccountA]!.renegotiationRequired,
+          isFalse,
+        );
+      },
+    );
 
     test('a process restart leaves no federated state behind', () {
       var snapshot = externalReadySignalingSnapshot();

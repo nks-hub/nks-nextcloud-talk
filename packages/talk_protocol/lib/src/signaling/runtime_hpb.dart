@@ -427,6 +427,9 @@ SignalingRuntimeResult _planHello(
   }
   final canResume =
       !forceFull &&
+      // Resume retains server MCU handles and queued SDP. Unknown media
+      // delivery needs a fresh server session, not just a local epoch reset.
+      !account.renegotiationRequired &&
       account.hpbResumeId != null &&
       account.hpbSessionId != null &&
       account.helloVersion != null &&

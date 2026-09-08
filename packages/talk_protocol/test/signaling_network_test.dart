@@ -8,7 +8,10 @@ import 'package:test/test.dart';
 
 import 'support/signaling_test_support.dart';
 
+part 'signaling_media_reconnect_test.part.dart';
+
 void main() {
+  _registerMediaReconnectNetworkTests();
   test(
     'internal signaling executes a real pull and batch POST',
     () async {
@@ -182,6 +185,17 @@ void main() {
       });
       expect(initial.room['roomid'], signalingRoomA.value);
 
+      final beforeResume = snapshot.accounts[signalingAccountA]!;
+      final peer = signalingParticipant(peerId: 'preserved-peer', inCall: 7);
+      snapshot = SignalingRuntimeSnapshot(
+        accounts: {
+          ...snapshot.accounts,
+          signalingAccountA: beforeResume.copyWith(
+            participants: {peer.peerId: peer},
+          ),
+        },
+      );
+
       await initial.pair.server.close(
         WebSocketStatus.goingAway,
         'synthetic network transition',
@@ -221,6 +235,18 @@ void main() {
       );
       expect(snapshot.accounts[signalingAccountA]!.roomConfirmed, isTrue);
       expect(snapshot.accounts[signalingAccountA]!.connectionEpoch, 2);
+      expect(
+        snapshot.accounts[signalingAccountA]!.roomEpoch,
+        beforeResume.roomEpoch,
+      );
+      expect(
+        snapshot.accounts[signalingAccountA]!.participants[peer.peerId],
+        same(peer),
+      );
+      expect(
+        snapshot.accounts[signalingAccountA]!.renegotiationRequired,
+        isFalse,
+      );
 
       await resumed.pair.server.close();
       await _expectRemoteClose(resumed.pair.clientEvents);
