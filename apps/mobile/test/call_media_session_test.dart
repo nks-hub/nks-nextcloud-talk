@@ -11,6 +11,7 @@ import 'package:talk_protocol/talk_protocol.dart';
 part 'call_media_session_screen_test.part.dart';
 part 'call_media_session_controls_test.part.dart';
 part 'call_media_session_support_test.part.dart';
+part 'call_media_session_membership_test.part.dart';
 
 /// The mesh offerer role is decided by the ordered pair of session ids, so the
 /// fixtures deliberately sit on both sides of `alice`.
@@ -39,6 +40,7 @@ final class _MediaSessionTests {
     _registerScreenSharing();
     _registerControls();
     _registerRecovery();
+    _registerMembership();
   }
 
   CallMediaSession session(
@@ -773,7 +775,11 @@ final class _MediaSessionTests {
         );
         addTearDown(media.dispose);
         await media.start();
-        expect(rebuilds, 0, reason: 'the first session is not a rebuild');
+        expect(
+          rebuilds,
+          1,
+          reason: 'first HPB admission also needs membership',
+        );
 
         updates.add(
           _update(
@@ -783,7 +789,7 @@ final class _MediaSessionTests {
           ),
         );
         await pumpEventQueue();
-        expect(rebuilds, 1);
+        expect(rebuilds, 2);
 
         // The same epoch again is an ordinary update, not a reconnect: announcing
         // on every one of them would put a request on the server for each poll.
@@ -795,7 +801,7 @@ final class _MediaSessionTests {
           ),
         );
         await pumpEventQueue();
-        expect(rebuilds, 1);
+        expect(rebuilds, 2);
       },
     );
   }

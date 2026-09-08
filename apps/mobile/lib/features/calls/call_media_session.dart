@@ -121,6 +121,7 @@ final class CallMediaSession {
   CallMediaState _state = CallMediaState.idle;
   Future<void> _serial = Future<void>.value();
   int? _boundRoomEpoch;
+  String? _boundLocalPeerId;
   bool _started = false;
   bool _disposed = false;
   Future<void>? _disposal;
@@ -296,28 +297,17 @@ final class CallMediaSession {
       _emit(const CallMediaState(phase: CallMediaPhase.preparing));
       return;
     }
-    // A new room epoch means the relay stream restarted, so every peer
-    // connection built against the previous one is stale.
-    //
-    // It also means this side has a NEW signalling session id, and that is
-    // where a reconnected call used to stall. Read off the wire on
-    // 6 September 2026: after the hello both sides are told `room/leave` for
-    // the old session and `room/join` for the new one — but a room join says
-    // only that a session is in the ROOM. Membership of the CALL travels in
-    // `participants/update`, and the server sends that when Talk's backend
-    // reports a change. Nothing changed there — the Nextcloud session was
-    // never lost, only the signalling one — so nobody is told either side is
-    // still in the call, and neither opens a connection to the other. Asking
-    // Talk again over REST does not help: it answers that both are in the
-    // call, which is true and therefore not a change worth broadcasting
-    // (measured, same night). The recovery has to make the membership really
-    // change, and that decision is not made here.
-    final rebuilt =
-        _boundRoomEpoch != null && _boundRoomEpoch != update.roomEpoch;
+    // REST join can precede the first HPB room admission. Reasserting flags
+    // after admission broadcasts call membership to that signaling identity.
+    final bindingChanged =
+        _boundRoomEpoch != update.roomEpoch ||
+        _boundLocalPeerId != localPeerId.value;
+    final rebuilt = _boundRoomEpoch != null && bindingChanged;
     if (rebuilt) {
       await _closeAllPeers();
     }
     _boundRoomEpoch = update.roomEpoch;
+    _boundLocalPeerId = localPeerId.value;
 
     _iceServers = update.iceServers
         .map(
@@ -375,7 +365,9 @@ final class CallMediaSession {
       await _openShare(peerId);
     }
 
-    if (rebuilt) {
+    if (rebuilt ||
+        (bindingChanged &&
+            update.transport == SignalingTransportKind.externalHpb)) {
       _onSignalingRebuilt?.call();
     }
 
