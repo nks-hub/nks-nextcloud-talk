@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Returning to a desktop window restores focus to its visible, writable chat
+  composer without changing the draft or selection. Dialogs, other editors,
+  newer focus choices and blocked conversations retain control; queued focus
+  cannot cross room changes or disposal. Initial root-room focus and mobile
+  keyboard behavior are unchanged.
+
 - Background reconciliation, relay baselines and attachment-path repair now
   defer reads on legacy servers until that account and room have an active
   reader. Modern servers keep passive synchronization. Deferred attachment

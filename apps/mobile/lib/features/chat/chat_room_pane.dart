@@ -117,6 +117,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   /// Owned explicitly so the emoji panel can hand focus back to the composer
   /// on desktop instead of leaving the caret nowhere once the panel closes.
   final FocusNode _composerFocusNode = FocusNode();
+  int _composerFocusGeneration = 0;
   bool _emojiPickerOpen = false;
   bool _emojiPickerPending = false;
   ui.FlutterView? _view;
@@ -279,6 +280,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _historyGeneration++;
     _loadingOlder = false;
     _sendGeneration++;
+    _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
     _highlightTimer?.cancel();
@@ -352,6 +354,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     _view = null;
     _syncGeneration++;
     _sendGeneration++;
+    _composerFocusGeneration++;
     _giphyGeneration++;
     _jumpGeneration++;
     _liveBinding?.close();
@@ -397,8 +400,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     if (state == AppLifecycleState.resumed) {
       unawaited(_restartLiveSync());
       _scheduleTypingActivitySync();
+      _restoreComposerFocusAfterResume();
       return;
     }
+    _composerFocusGeneration++;
     // The process can be killed from here on, so the draft cannot wait for
     // its debounce.
     unawaited(_flushDraft(_key, _composer.text));

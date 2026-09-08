@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,170 +20,202 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
-/// Covers the composer focus rules: auto-focusing a freshly opened thread on
-/// desktop only, and keeping (or restoring) the caret across the emoji
-/// panel on desktop.
+part 'chat_room_composer_resume_test.part.dart';
+
+/// Builds the real chat pane with a desktop or touch input theme.
 ///
 /// `desktop` is faked through `Theme.of(context).visualDensity` (compact vs.
 /// standard) — the exact signal `context.sendsOnEnter` reads — rather than
 /// `debugDefaultTargetPlatformOverride`.
-void main() {
-  Future<
-    ({
-      StoredAccount account,
-      CachedConversation conversation,
-      ValueNotifier<CachedConversation> selected,
-    })
-  >
-  pumpRoom(
-    WidgetTester tester, {
-    required bool desktop,
-    int? threadId,
-    Size physicalSize = const Size(1400, 900),
-    double devicePixelRatio = 1,
-    double textScaleFactor = 1,
-  }) async {
-    final database = openTestDatabase();
-    addTearDown(database.close);
-    final accounts = AccountRepository(database);
-    final chat = ChatRepository(database);
-    final vault = MemoryCredentialVault();
-    final account = await accounts.upsertAccount(
-      accountId: 'account-a',
-      serverUrl: 'https://cloud.example.invalid',
-      loginName: 'fixture-user-a',
-      serverProductName: 'Nextcloud',
-      createdAt: DateTime.utc(2026),
-    );
-    vault.values[account.id] = 'fixture-app-password-never-use';
+Future<
+  ({
+    StoredAccount account,
+    AppDatabase database,
+    CachedConversation conversation,
+    ValueNotifier<CachedConversation> selected,
+  })
+>
+pumpRoom(
+  WidgetTester tester, {
+  required bool desktop,
+  int? threadId,
+  Size physicalSize = const Size(1400, 900),
+  double devicePixelRatio = 1,
+  double textScaleFactor = 1,
+  bool readOnly = false,
+  Widget Function(Widget child)? wrapRoom,
+  Map<String, Object?> roomOverrides = const {},
+}) async {
+  final database = openTestDatabase();
+  addTearDown(database.close);
+  final accounts = AccountRepository(database);
+  final chat = ChatRepository(database);
+  final vault = MemoryCredentialVault();
+  final account = await accounts.upsertAccount(
+    accountId: 'account-a',
+    serverUrl: 'https://cloud.example.invalid',
+    loginName: 'fixture-user-a',
+    serverProductName: 'Nextcloud',
+    createdAt: DateTime.utc(2026),
+  );
+  vault.values[account.id] = 'fixture-app-password-never-use';
 
-    final roomWire = _roomJson();
-    final room = ConversationRoom.fromJson(roomWire);
-    await database
-        .into(database.cachedConversations)
-        .insert(
-          CachedConversationsCompanion.insert(
-            accountId: account.id,
-            token: room.token.value,
-            displayName: room.displayName,
-            description: room.description,
-            lastActivity: room.lastActivity,
-            unreadMessages: room.unreadMessages,
-            favorite: room.isFavorite,
-            rawJson: jsonEncode(roomWire),
-          ),
-        );
-    final conversation = (await chat.getConversation(
-      accountId: account.id,
-      roomToken: room.token.value,
-    ))!;
-    final selected = ValueNotifier(conversation);
-    addTearDown(selected.dispose);
-    await chat.ensureRootScope(account: account, conversation: conversation);
-    if (threadId != null) {
-      await chat.ensureThreadScope(
-        account: account,
-        conversation: conversation,
-        threadId: threadId,
+  final roomWire = _roomJson();
+  roomWire.addAll(roomOverrides);
+  if (readOnly) roomWire['readOnly'] = 1;
+  final room = ConversationRoom.fromJson(roomWire);
+  await database
+      .into(database.cachedConversations)
+      .insert(
+        CachedConversationsCompanion.insert(
+          accountId: account.id,
+          token: room.token.value,
+          displayName: room.displayName,
+          description: room.description,
+          lastActivity: room.lastActivity,
+          unreadMessages: room.unreadMessages,
+          favorite: room.isFavorite,
+          readOnly: Value(room.readOnly),
+          rawJson: jsonEncode(roomWire),
+        ),
       );
-    }
-
-    final api = HttpNextcloudApi(
-      client: MockClient((request) async {
-        if (request.url.path.endsWith('/cloud/capabilities')) {
-          return http.Response(
-            jsonEncode(
-              capabilitiesJson(
-                talkFeatures: const <String>[
-                  'conversation-v4',
-                  'chat-v2',
-                  'chat-read-marker',
-                  'chat-read-last',
-                  'chat-keep-notifications',
-                ],
-              ),
-            ),
-            200,
-          );
-        }
-        if (request.url.path.contains('/avatar/')) {
-          return http.Response('', 404);
-        }
-        return http.Response('', 304);
-      }),
+  final conversation = (await chat.getConversation(
+    accountId: account.id,
+    roomToken: room.token.value,
+  ))!;
+  final selected = ValueNotifier(conversation);
+  addTearDown(selected.dispose);
+  await chat.ensureRootScope(account: account, conversation: conversation);
+  if (threadId != null) {
+    await chat.ensureThreadScope(
+      account: account,
+      conversation: conversation,
+      threadId: threadId,
     );
-    addTearDown(api.close);
+  }
 
-    // The default 800x600 test surface clips the emoji panel plus the
-    // composer below it; a desktop window is never that short.
-    tester.view.devicePixelRatio = devicePixelRatio;
-    tester.view.physicalSize = physicalSize;
-    addTearDown(tester.view.reset);
+  final api = HttpNextcloudApi(
+    client: MockClient((request) async {
+      if (request.url.path.endsWith('/cloud/capabilities')) {
+        return http.Response(
+          jsonEncode(
+            capabilitiesJson(
+              talkFeatures: const <String>[
+                'conversation-v4',
+                'chat-v2',
+                'chat-read-marker',
+                'chat-read-last',
+                'chat-keep-notifications',
+              ],
+            ),
+          ),
+          200,
+        );
+      }
+      if (request.url.path.contains('/avatar/')) {
+        return http.Response('', 404);
+      }
+      return http.Response('', 304);
+    }),
+  );
+  addTearDown(api.close);
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appDatabaseProvider.overrideWithValue(database),
-          credentialVaultProvider.overrideWithValue(vault),
-          nextcloudApiProvider.overrideWithValue(api),
-          connectivityWakeEventsProvider.overrideWithValue(
-            const Stream<void>.empty(),
-          ),
-        ],
-        child: localizedTestApp(
-          // `context.sendsOnEnter` reads `Theme.of(context).visualDensity`
-          // directly, so setting it here is enough.
-          theme: ThemeData(
-            visualDensity: desktop
-                ? VisualDensity.compact
-                : VisualDensity.standard,
-          ),
-          home: MediaQuery.withClampedTextScaling(
-            minScaleFactor: textScaleFactor,
-            maxScaleFactor: textScaleFactor,
-            child: Scaffold(
-              body: ValueListenableBuilder<CachedConversation>(
-                valueListenable: selected,
-                builder: (context, conversation, _) => ChatRoomPane(
+  // The default 800x600 test surface clips the emoji panel plus the
+  // composer below it; a desktop window is never that short.
+  tester.view.devicePixelRatio = devicePixelRatio;
+  tester.view.physicalSize = physicalSize;
+  addTearDown(tester.view.reset);
+
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        credentialVaultProvider.overrideWithValue(vault),
+        nextcloudApiProvider.overrideWithValue(api),
+        connectivityWakeEventsProvider.overrideWithValue(
+          const Stream<void>.empty(),
+        ),
+      ],
+      child: localizedTestApp(
+        // `context.sendsOnEnter` reads `Theme.of(context).visualDensity`
+        // directly, so setting it here is enough.
+        theme: ThemeData(
+          visualDensity: desktop
+              ? VisualDensity.compact
+              : VisualDensity.standard,
+        ),
+        home: MediaQuery.withClampedTextScaling(
+          minScaleFactor: textScaleFactor,
+          maxScaleFactor: textScaleFactor,
+          child: Scaffold(
+            body: ValueListenableBuilder<CachedConversation>(
+              valueListenable: selected,
+              builder: (context, conversation, _) {
+                final pane = ChatRoomPane(
                   account: account,
                   conversation: conversation,
                   threadId: threadId,
-                ),
-              ),
+                );
+                return wrapRoom?.call(pane) ?? pane;
+              },
             ),
           ),
         ),
       ),
+    ),
+  );
+  // The live sync loop behind `ChatRoomPane` uses real `Timer`s, which a
+  // plain `tester.pump(duration)` never drives — only `runAsync` lets them
+  // actually fire, the same pattern every other `ChatRoomPane` test uses.
+  for (var attempt = 0; attempt < 5; attempt++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 1)),
     );
-    // The live sync loop behind `ChatRoomPane` uses real `Timer`s, which a
-    // plain `tester.pump(duration)` never drives — only `runAsync` lets them
-    // actually fire, the same pattern every other `ChatRoomPane` test uses.
-    for (var attempt = 0; attempt < 5; attempt++) {
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 1)),
-      );
-    }
-    return (account: account, conversation: conversation, selected: selected);
   }
-
-  /// Unmounts the tree before the test body returns, so a drift stream's
-  /// close timer cannot trip the pending-timer check on a LATER test.
-  Future<void> settle(WidgetTester tester) async {
+  addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
-  }
+  });
+  return (
+    account: account,
+    database: database,
+    conversation: conversation,
+    selected: selected,
+  );
+}
 
-  bool composerHasFocus(WidgetTester tester) {
-    final textField = tester.widget<TextField>(
-      find.byKey(const Key('chat-composer')),
-    );
-    return textField.focusNode!.hasFocus;
-  }
+/// Unmounts the tree before the test body returns, so a drift stream's
+/// close timer cannot trip the pending-timer check on a LATER test.
+Future<void> settle(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
+}
 
-  Rect composerRect(WidgetTester tester) =>
-      tester.getRect(find.byKey(const Key('chat-composer')));
+bool composerHasFocus(WidgetTester tester) {
+  final textField = tester.widget<TextField>(
+    find.byKey(const Key('chat-composer')),
+  );
+  return textField.focusNode!.hasFocus;
+}
+
+Rect composerRect(WidgetTester tester) =>
+    tester.getRect(find.byKey(const Key('chat-composer')));
+
+Future<void> restoreWindow(WidgetTester tester) async {
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  await tester.pump();
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+  await tester.pump();
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pump();
+  await tester.pump();
+}
+
+void main() {
+  _registerResumeFocusTests();
 
   // The touch side of the same rule is not mounted here on purpose. Both
   // production call sites read `context.sendsOnEnter`, and that flag already

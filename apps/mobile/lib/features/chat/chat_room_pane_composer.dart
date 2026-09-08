@@ -1,6 +1,40 @@
 part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneComposer on _ChatRoomPaneState {
+  void _restoreComposerFocusAfterResume() {
+    if (!mounted || !context.sendsOnEnter) return;
+    final key = _key;
+    final generation = ++_composerFocusGeneration;
+    final focusManager = FocusManager.instance;
+    final focusAtResume = focusManager.primaryFocus;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          generation != _composerFocusGeneration ||
+          key != _key ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+          !context.sendsOnEnter ||
+          !_readerIsActive() ||
+          !ChatPostingAccess.fromCachedConversation(
+            _readLiveConversation(),
+          ).canPost ||
+          _composerFocusNode.context == null ||
+          !_composerFocusNode.canRequestFocus ||
+          _composerFocusNode.hasFocus) {
+        return;
+      }
+      focusManager.applyFocusChangesIfNeeded();
+      if (focusManager.primaryFocus != focusAtResume) return;
+      final focusedContext = focusManager.primaryFocus?.context;
+      if (focusedContext != null &&
+          (focusedContext.widget is EditableText ||
+              focusedContext.findAncestorWidgetOfExactType<EditableText>() !=
+                  null)) {
+        return;
+      }
+      _composerFocusNode.requestFocus();
+    });
+  }
+
   Future<void> _openPollComposer() async {
     if (_sending || _isReadOnlyNow()) {
       return;
