@@ -57,6 +57,7 @@ void _registerRelayProviderLifecycleTests() {
         ],
       );
       addTearDown(container.dispose);
+      _showTypingFixtureRoom(container);
 
       const key = (accountId: 'account-a', roomToken: 'rooma123');
       final subscription = container.listen(

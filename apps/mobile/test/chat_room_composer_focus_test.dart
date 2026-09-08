@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_pane.dart';
+import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
@@ -196,6 +198,98 @@ void main() {
       await settle(tester);
     },
     timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  testWidgets('covering a chat releases presence and returning restores it', (
+    tester,
+  ) async {
+    await pumpRoom(tester, desktop: true);
+    final composer = find.byKey(const Key('chat-composer'));
+    final context = tester.element(composer);
+    final container = ProviderScope.containerOf(context);
+    const room = (accountId: 'account-a', roomToken: 'rooma123');
+    final navigator = Navigator.of(context);
+    try {
+      expect(container.read(chatRoomSessionWantedProvider(room)), isTrue);
+      unawaited(
+        navigator.push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Covering screen')),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(container.read(windowActiveProvider), isTrue);
+      expect(container.read(chatRoomSessionWantedProvider(room)), isFalse);
+      container.read(callHeldRoomsProvider.notifier).state = {room};
+      expect(container.read(chatRoomSessionWantedProvider(room)), isTrue);
+      container.read(callHeldRoomsProvider.notifier).state = {};
+      expect(container.read(chatRoomSessionWantedProvider(room)), isFalse);
+      navigator.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(container.read(chatRoomSessionWantedProvider(room)), isTrue);
+    } finally {
+      await settle(tester);
+    }
+  });
+
+  testWidgets(
+    'root to thread navigation transfers visibility and restores it',
+    (tester) async {
+      final fixture = await pumpRoom(tester, desktop: true);
+      final context = tester.element(find.byKey(const Key('chat-composer')));
+      final container = ProviderScope.containerOf(context);
+      final navigator = Navigator.of(context);
+      const room = (accountId: 'account-a', roomToken: 'rooma123');
+      final originalOwner = container
+          .read(chatRoomVisibilityProvider)
+          .keys
+          .single;
+      final wantedStates = <bool>[];
+      final presence = container.listen(
+        chatRoomSessionWantedProvider(room),
+        (_, next) => wantedStates.add(next),
+        fireImmediately: true,
+      );
+      try {
+        unawaited(
+          navigator.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => Scaffold(
+                body: ChatRoomPane(
+                  account: fixture.account,
+                  conversation: fixture.conversation,
+                  threadId: 42,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump();
+        final threadOwners = container.read(chatRoomVisibilityProvider);
+        expect(threadOwners.values, [room]);
+        expect(threadOwners.keys.single, isNot(same(originalOwner)));
+        expect(container.read(chatRoomSessionWantedProvider(room)), isTrue);
+        navigator.pop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(Duration.zero);
+        expect(container.read(chatRoomVisibilityProvider), {
+          originalOwner: room,
+        });
+        expect(container.read(chatRoomSessionWantedProvider(room)), isTrue);
+        expect(wantedStates, everyElement(isTrue));
+      } finally {
+        presence.close();
+        await settle(tester);
+      }
+    },
   );
 
   testWidgets(

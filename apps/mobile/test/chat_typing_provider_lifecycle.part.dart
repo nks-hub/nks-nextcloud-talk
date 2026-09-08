@@ -1,5 +1,13 @@
 part of 'chat_typing_indicator_test.dart';
 
+void _showTypingFixtureRoom(ProviderContainer container) {
+  final room = _sessionZeroConversation();
+  container.read(chatRoomVisibilityProvider.notifier).setVisible(Object(), (
+    accountId: room.accountId,
+    roomToken: room.token,
+  ));
+}
+
 void _registerTypingProviderLifecycleTests() {
   test('session zero activates the room before peer typing', () async {
     final database = openTestDatabase();
@@ -49,6 +57,7 @@ void _registerTypingProviderLifecycleTests() {
       ],
     );
     addTearDown(container.dispose);
+    _showTypingFixtureRoom(container);
     final states = <ChatTypingState>[];
     final subscription = container.listen(chatTypingStateProvider(key), (
       _,
@@ -129,6 +138,7 @@ void _registerTypingProviderLifecycleTests() {
       ],
     );
     addTearDown(container.dispose);
+    _showTypingFixtureRoom(container);
     final subscription = container.listen(
       chatTypingStateProvider(key),
       (_, _) {},
@@ -184,6 +194,7 @@ void _registerTypingProviderLifecycleTests() {
       ],
     );
     addTearDown(container.dispose);
+    _showTypingFixtureRoom(container);
     final subscription = container.listen(
       chatTypingStateProvider(
         chatTypingRoomKeyFor(
@@ -260,6 +271,7 @@ void _registerTypingProviderLifecycleTests() {
       ],
     );
     addTearDown(container.dispose);
+    _showTypingFixtureRoom(container);
     final key = chatTypingRoomKeyFor(
       account: account,
       conversation: _sessionZeroConversation(),
@@ -344,6 +356,7 @@ void _registerTypingProviderLifecycleTests() {
       ],
     );
     addTearDown(container.dispose);
+    _showTypingFixtureRoom(container);
     final key = chatTypingRoomKeyFor(
       account: account,
       conversation: _sessionZeroConversation(),

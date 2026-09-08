@@ -76,16 +76,41 @@ final callHeldRoomsProvider = StateProvider<Set<ChatRoomSignalingKey>>(
   (ref) => const {},
 );
 
+/// Each visible pane owns one entry; root and thread panes can share a room.
+final class ChatRoomVisibility
+    extends StateNotifier<Map<Object, ChatRoomSignalingKey>> {
+  ChatRoomVisibility() : super(const {});
+
+  /// Null releases only this pane, without affecting another pane or a call.
+  void setVisible(Object owner, ChatRoomSignalingKey? room) {
+    if (!mounted || state[owner] == room) return;
+    final owners = {...state}..remove(owner);
+    if (room != null) owners[owner] = room;
+    state = Map.unmodifiable(owners);
+  }
+}
+
+final chatRoomVisibilityProvider =
+    StateNotifierProvider<
+      ChatRoomVisibility,
+      Map<Object, ChatRoomSignalingKey>
+    >((ref) => ChatRoomVisibility());
+
 /// Whether the room's session should exist right now: while the window is
-/// active (presence is the point) or while a call holds the room. Derived so
+/// active and the chat is visible, or while a call holds the room. Derived so
 /// the session provider rebuilds only when the answer changes, not on every
 /// focus change during a call.
 final chatRoomSessionWantedProvider = Provider.autoDispose
     .family<bool, ChatRoomSignalingKey>((ref, key) {
-      return ref.watch(windowActiveProvider) ||
-          ref.watch(
-            callHeldRoomsProvider.select((rooms) => rooms.contains(key)),
-          );
+      final heldByCall = ref.watch(
+        callHeldRoomsProvider.select((rooms) => rooms.contains(key)),
+      );
+      final visible = ref.watch(
+        chatRoomVisibilityProvider.select(
+          (owners) => owners.containsValue(key),
+        ),
+      );
+      return heldByCall || (visible && ref.watch(windowActiveProvider));
     });
 
 final chatRoomSignalingProvider = FutureProvider.autoDispose

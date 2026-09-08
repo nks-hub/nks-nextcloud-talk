@@ -171,6 +171,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
       generation == _syncGeneration &&
       key == _key &&
       TickerMode.valuesOf(context).enabled &&
+      ModalRoute.isCurrentOf(context) != false &&
       _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
 
   void _setSyncing(int generation, bool value) {
@@ -285,6 +286,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
         _pendingJumpMessageId == null &&
         _jumpTargetId == null &&
         TickerMode.valuesOf(context).enabled &&
+        ModalRoute.isCurrentOf(context) != false &&
         ref.read(windowActiveProvider) &&
         _isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState);
   }

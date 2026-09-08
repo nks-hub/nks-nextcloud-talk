@@ -20,6 +20,7 @@ import 'test_support.dart';
 
 part 'chat_room_connectivity_wake_test.part.dart';
 part 'chat_room_read_marker_serialization_test.part.dart';
+part 'chat_room_announcement_visibility_test.part.dart';
 
 void main() {
   testWidgets('root pane keeps background long poll silent and converges', (
@@ -97,6 +98,12 @@ void main() {
     );
   });
 
+  testWidgets('a dialog-covered chat never marks new incoming messages read', (
+    tester,
+  ) async {
+    await _verifySuppressedRootRead(tester, coveredByDialog: true);
+  });
+
   testWidgets(
     'jumping to an older message never marks the newer message read',
     (tester) async {
@@ -112,6 +119,7 @@ void main() {
 
   _registerConnectivityWakeTest();
   _registerReadMarkerSerializationTest();
+  _registerAnnouncementVisibilityTests();
 }
 
 Future<void> _verifyThreadRead(
@@ -345,6 +353,7 @@ Future<void> _verifySuppressedRootRead(
   int? jumpToMessageId,
   bool disposeBeforeResponse = false,
   bool idleWindow = false,
+  bool coveredByDialog = false,
 }) async {
   final database = openTestDatabase();
   addTearDown(database.close);
@@ -424,7 +433,7 @@ Future<void> _verifySuppressedRootRead(
         expect(request.url.queryParameters['markNotificationsAsRead'], '0');
       }
       futureRequests++;
-      if (futureRequests == 1 && disposeBeforeResponse) {
+      if (futureRequests == 1 && (disposeBeforeResponse || coveredByDialog)) {
         return delayedResponse.future;
       }
       if (futureRequests == 1) {
@@ -480,6 +489,28 @@ Future<void> _verifySuppressedRootRead(
   if (lifecycleState != AppLifecycleState.resumed) {
     await tester.pump(const Duration(milliseconds: 100));
     expect(futureRequests, 0);
+  } else if (coveredByDialog) {
+    await _pumpUntil(tester, () => futureRequests == 1);
+    unawaited(
+      showDialog<void>(
+        context: tester.element(find.byType(ChatRoomPane)),
+        builder: (_) => const AlertDialog(content: Text('Covering dialog')),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    delayedResponse.complete(
+      http.Response(
+        jsonEncode(_externalRootMessagesResponse()),
+        200,
+        headers: const {
+          'X-Chat-Last-Given': '120',
+          'X-Chat-Last-Common-Read': '110',
+        },
+      ),
+    );
+    await _pumpUntil(tester, () => futureRequests >= 2);
+    await tester.pump(const Duration(milliseconds: 100));
   } else if (disposeBeforeResponse) {
     await _pumpUntil(tester, () => futureRequests == 1);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -526,6 +557,8 @@ Future<void> _verifyLiveBridge(
   WidgetTester tester, {
   required int? threadId,
   IncomingMessageAnnouncement? incomingMessageAnnounce,
+  Duration announcementDebounce = Duration.zero,
+  Future<void> Function()? beforeCleanup,
 }) async {
   final database = openTestDatabase();
   addTearDown(database.close);
@@ -670,7 +703,7 @@ Future<void> _verifyLiveBridge(
               ? null
               : IncomingMessageAnnouncementController(
                   announce: incomingMessageAnnounce,
-                  debounce: Duration.zero,
+                  debounce: announcementDebounce,
                 ),
         ),
       ),
@@ -793,6 +826,8 @@ Future<void> _verifyLiveBridge(
     expect(isolatedScope?.futureCursor, '109');
   }
   expect(tester.takeException(), isNull);
+
+  await beforeCleanup?.call();
 
   await tester.pumpWidget(const SizedBox.shrink());
   steadyPollResponse.complete(http.Response('', 304));

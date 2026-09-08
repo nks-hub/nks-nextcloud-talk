@@ -28,6 +28,9 @@ void main() {
     );
     const chat = (accountId: 'account-a', roomToken: 'rooma123');
     const call = (accountId: 'account-a', roomToken: 'roomb123');
+    container
+        .read(chatRoomVisibilityProvider.notifier)
+        .setVisible(Object(), chat);
     container.listen(chatRoomSessionWantedProvider(chat), (_, _) {});
     container.listen(chatRoomSessionWantedProvider(call), (_, _) {});
     container.read(callHeldRoomsProvider.notifier).state = {call};

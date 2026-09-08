@@ -110,6 +110,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   static const double _jumpToNewestAnimatedExtent = 600;
 
   final TextEditingController _composer = TextEditingController();
+  final Object _visibilityOwner = Object();
+  ChatRoomVisibility? _roomVisibility;
+  int _visibilityGeneration = 0;
 
   /// Owned explicitly so the emoji panel can hand focus back to the composer
   /// on desktop instead of leaving the caret nowhere once the panel closes.
@@ -262,6 +265,7 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
       _scheduleTypingActivitySync();
       return;
     }
+    _scheduleRoomVisibility();
     unawaited(
       _flushDraft((
         accountId: oldWidget.account.id,
@@ -296,6 +300,27 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _view = View.of(context);
+    _scheduleRoomVisibility();
+  }
+
+  void _scheduleRoomVisibility() {
+    final ChatRoomVisibility visibility =
+        _roomVisibility ?? ref.read(chatRoomVisibilityProvider.notifier);
+    _roomVisibility = visibility;
+    final generation = ++_visibilityGeneration;
+    final visible =
+        TickerMode.valuesOf(context).enabled &&
+        ModalRoute.isCurrentOf(context) != false;
+    final room = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
+    // Riverpod state must not change while the route's widgets are building.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && generation == _visibilityGeneration) {
+        visibility.setVisible(_visibilityOwner, visible ? room : null);
+      }
+    });
   }
 
   @override
@@ -308,11 +333,15 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
   @override
   void activate() {
     super.activate();
+    _scheduleRoomVisibility();
     _scheduleTypingActivitySync();
   }
 
   @override
   void dispose() {
+    _visibilityGeneration++;
+    final visibility = _roomVisibility;
+    scheduleMicrotask(() => visibility?.setVisible(_visibilityOwner, null));
     WidgetsBinding.instance.removeObserver(this);
     _view = null;
     _syncGeneration++;

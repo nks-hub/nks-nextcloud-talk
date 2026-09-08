@@ -11,6 +11,14 @@ import 'package:talk_protocol/talk_protocol.dart';
 const _key = (accountId: 'account-a', roomToken: 'rooma123');
 
 void main() {
+  test('a focused window without a visible chat does not claim presence', () {
+    final container = ProviderContainer(
+      overrides: [windowActiveProvider.overrideWithValue(true)],
+    );
+    addTearDown(container.dispose);
+    expect(container.read(chatRoomSessionWantedProvider(_key)), isFalse);
+  });
+
   test('a server without signalling admits no room signalling session', () {
     expect(chatRoomSignalingAllowed(_capabilities()), isTrue);
     expect(
