@@ -57,6 +57,11 @@ final class WebRtcCallMediaEngine implements CallMediaEngine {
         )
         .toList(growable: false),
     'sdpSemantics': 'unified-plan',
+    // WebRTC port_allocator.h: DISABLE_ADAPTER_ENUMERATION (0x400) gathers on
+    // ANY addresses. Android chooses the route, including split-VPN policy,
+    // without binding a TURN socket to a conflicting physical/VPN interface.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+      'portAllocatorFlags': 0x400,
     // Only where a relay actually exists. `relay` tells ICE to discard every
     // candidate that is not a relayed one, so on a server whose administrator
     // configured no TURN server it leaves ICE with nothing at all and the call

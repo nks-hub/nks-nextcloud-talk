@@ -1302,6 +1302,8 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       return conf;
     }
 
+    PortAllocatorOptions.apply(map.toMap(), conf);
+
     // iceTransportPolicy (public api)
     if (map.hasKey("iceTransportPolicy")
             && map.getType("iceTransportPolicy") == ObjectType.String) {

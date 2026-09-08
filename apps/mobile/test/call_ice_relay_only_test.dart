@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine_webrtc.dart';
@@ -25,6 +26,34 @@ void main() {
       credential: 'secret',
     ),
   ];
+
+  test('Android uses the OS default route with or without relay-only', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final relayOnly in [false, true]) {
+      final configuration = WebRtcCallMediaEngine.connectionConfiguration(
+        servers,
+        relayOnly: relayOnly,
+      );
+      expect(configuration['portAllocatorFlags'], 0x400);
+      expect(configuration.containsKey('networkIgnoreMask'), isFalse);
+      expect(configuration.containsKey('disableNetworkMonitor'), isFalse);
+    }
+  });
+
+  test('other platforms retain their native adapter allocation policy', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final platform in TargetPlatform.values) {
+      if (platform == TargetPlatform.android) continue;
+      debugDefaultTargetPlatformOverride = platform;
+      expect(
+        WebRtcCallMediaEngine.connectionConfiguration(
+          servers,
+        ).containsKey('portAllocatorFlags'),
+        isFalse,
+      );
+    }
+  });
 
   test('a call relays only when the policy says so', () {
     final ordinary = WebRtcCallMediaEngine.connectionConfiguration(servers);
@@ -99,8 +128,10 @@ void main() {
 
     expect(await store.read(), isFalse);
     await store.write(true);
-    expect(await FileCallRelayPreferenceStore(directory: directory).read(),
-        isTrue);
+    expect(
+      await FileCallRelayPreferenceStore(directory: directory).read(),
+      isTrue,
+    );
     await store.write(false);
     expect(await store.read(), isFalse);
   });
