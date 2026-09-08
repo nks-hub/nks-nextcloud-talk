@@ -74,7 +74,7 @@ final class ChatService {
   final HttpNextcloudApi _api;
   final Uuid _uuid;
   final Map<String, Future<void>> _roomTails = {};
-  final Map<String, Future<void>> _syncInFlight = {};
+  final Map<String, Future<ChatSynchronizationResult>> _syncInFlight = {};
   final Map<String, _SharedLivePoll> _liveNetworkPolls = {};
   final Set<ChatLiveRoomBinding> _liveBindings = {};
   final Set<ChatRelayBinding> _relayBindings = {};
@@ -228,35 +228,50 @@ final class ChatService {
     }
   }
 
-  Future<void> syncRoom({
+  Future<ChatSynchronizationResult> syncRoom({
     required String accountId,
     required String roomToken,
     int? threadId,
+  }) => _syncRoom(
+    accountId: accountId,
+    roomToken: roomToken,
+    threadId: threadId,
+    joinExisting: true,
+  );
+
+  Future<ChatSynchronizationResult> _syncRoom({
+    required String accountId,
+    required String roomToken,
+    int? threadId,
+    required bool joinExisting,
   }) {
     final key = _scopeSyncKey(accountId, roomToken, threadId);
     final existing = _syncInFlight[key];
-    if (existing != null) {
+    if (joinExisting && existing != null) {
       // Joining somebody else's sync is not this caller's wait; measuring it
       // would report the tail of a request that started earlier.
       return existing;
     }
     final started = DateTime.now();
-    late final Future<void> operation;
-    operation = _serializeRoom<void>(_roomKey(accountId, roomToken), () async {
-      await _withRoomErrorPersistence(accountId, roomToken, () async {
-        try {
-          final prepared = await _prepare(
-            accountId,
-            roomToken,
-            threadId: threadId,
-          );
-          await _resolveAndSynchronizePrepared(prepared);
-        } on _ChatSynchronizationStale {
-          return;
-        }
-      }, threadId: threadId);
-    });
-    _syncInFlight[key] = operation;
+    late final Future<ChatSynchronizationResult> operation;
+    operation = _serializeRoom<ChatSynchronizationResult>(
+      _roomKey(accountId, roomToken),
+      () async {
+        return _withRoomErrorPersistence(accountId, roomToken, () async {
+          try {
+            final prepared = await _prepare(
+              accountId,
+              roomToken,
+              threadId: threadId,
+            );
+            return (await _resolveAndSynchronizePrepared(prepared)).result;
+          } on _ChatSynchronizationStale {
+            return ChatSynchronizationResult.incomplete;
+          }
+        }, threadId: threadId);
+      },
+    );
+    if (joinExisting) _syncInFlight[key] = operation;
     operation
         .then(
           (_) => performanceTelemetry.record(
@@ -289,13 +304,14 @@ final class ChatService {
   /// discarded as stale and repeated. Joining it costs nothing and observes
   /// exactly the same messages. Interactive callers keep using [syncRoom],
   /// which never waits on somebody else's poll.
-  Future<void> catchUpRoom({
+  Future<ChatSynchronizationResult> catchUpRoom({
     required String accountId,
     required String roomToken,
     int? threadId,
   }) async {
-    if (await _awaitLiveNetworkPoll(accountId, roomToken, threadId)) {
-      return;
+    final joined = await _awaitLiveNetworkPoll(accountId, roomToken, threadId);
+    if (joined != null && joined != ChatSynchronizationResult.deferred) {
+      return joined;
     }
     return syncRoom(
       accountId: accountId,
@@ -454,7 +470,7 @@ final class ChatService {
           if (!prepared.capabilitiesVerifiedOnline) {
             throw const ChatServiceException(ChatServiceError.network);
           }
-          prepared = await _resolveAndSynchronizePrepared(prepared);
+          prepared = (await _resolveAndSynchronizePrepared(prepared)).prepared;
         }
         final effectiveReplyTo =
             replyTo ??
@@ -787,7 +803,7 @@ final class ChatService {
     }
   }
 
-  Future<void> _applyGetResponse(
+  Future<ChatMergeOutcome> _applyGetResponse(
     _PreparedChat prepared,
     ChatGetResponse response,
   ) async {
@@ -811,7 +827,7 @@ final class ChatService {
       case ChatGetClassification.lobby:
         // Closed, not broken: the room pane already shows the lobby notice
         // from the room state, so a 412 poll is simply nothing to merge.
-        return;
+        return outcome;
       case ChatGetClassification.messages:
       case ChatGetClassification.invisibleCursorAdvance:
       case ChatGetClassification.commonReadOnly:
@@ -820,6 +836,7 @@ final class ChatService {
           throw const ChatServiceException(ChatServiceError.invalidResponse);
         }
     }
+    return outcome;
   }
 
   Future<void> _processPending(_PreparedChat prepared) async {

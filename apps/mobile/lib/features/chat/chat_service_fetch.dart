@@ -1,7 +1,8 @@
 part of 'chat_service.dart';
 
 extension _ChatServiceFetch on ChatService {
-  Future<_PreparedChat> _resolveAndSynchronizePrepared(
+  Future<({_PreparedChat prepared, ChatSynchronizationResult result})>
+  _resolveAndSynchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
     _ChatSynchronizationProbe? probe,
@@ -16,8 +17,9 @@ extension _ChatServiceFetch on ChatService {
         probe: probe,
       );
     }
+    late ChatSynchronizationResult result;
     try {
-      await _synchronizePrepared(
+      result = await _synchronizePrepared(
         resolved,
         abortTrigger: abortTrigger,
         probe: probe,
@@ -28,7 +30,7 @@ extension _ChatServiceFetch on ChatService {
         abortTrigger: abortTrigger,
         probe: probe,
       );
-      await _synchronizePrepared(
+      result = await _synchronizePrepared(
         resolved,
         abortTrigger: abortTrigger,
         probe: probe,
@@ -37,7 +39,7 @@ extension _ChatServiceFetch on ChatService {
     if (resolved.threadId != null && resolved.namedThread == null) {
       resolved = resolved.asNamedThread();
     }
-    return resolved;
+    return (prepared: resolved, result: result);
   }
 
   Future<_PreparedChat> _hydrateUnknownThreadFromRoot(
@@ -91,7 +93,7 @@ extension _ChatServiceFetch on ChatService {
     throw const ChatServiceException(ChatServiceError.invalidResponse);
   }
 
-  Future<void> _synchronizePrepared(
+  Future<ChatSynchronizationResult> _synchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
     _ChatSynchronizationProbe? probe,
@@ -110,7 +112,11 @@ extension _ChatServiceFetch on ChatService {
         probe: probe,
       );
     }
-    await _catchUpFuture(prepared, abortTrigger: abortTrigger, probe: probe);
+    var result = await _catchUpFuture(
+      prepared,
+      abortTrigger: abortTrigger,
+      probe: probe,
+    );
     probe?.ensureActive();
     await _processPending(prepared);
     scope = (await _chat.getNetworkScope(
@@ -119,8 +125,13 @@ extension _ChatServiceFetch on ChatService {
       threadId: prepared.networkThreadId,
     ))!;
     if (!scope.futureConverged) {
-      await _catchUpFuture(prepared, abortTrigger: abortTrigger, probe: probe);
+      result = await _catchUpFuture(
+        prepared,
+        abortTrigger: abortTrigger,
+        probe: probe,
+      );
     }
+    return result;
   }
 
   Future<void> _fetchHistoryPage(
@@ -165,7 +176,7 @@ extension _ChatServiceFetch on ChatService {
     await _applyGetResponse(prepared, response);
   }
 
-  Future<void> _catchUpFuture(
+  Future<ChatSynchronizationResult> _catchUpFuture(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
     _ChatSynchronizationProbe? probe,
@@ -201,11 +212,14 @@ extension _ChatServiceFetch on ChatService {
         abortTrigger: abortTrigger,
       );
       await _ensurePreparedContextCurrent(prepared);
-      await _applyGetResponse(prepared, response);
-      if (response.classification == ChatGetClassification.notModified ||
-          response.classification == ChatGetClassification.commonReadOnly) {
-        return;
+      final outcome = await _applyGetResponse(prepared, response);
+      if (outcome == ChatMergeOutcome.stale ||
+          response.classification == ChatGetClassification.notModified ||
+          response.classification == ChatGetClassification.commonReadOnly ||
+          response.classification == ChatGetClassification.lobby) {
+        return _chatReadResult(outcome);
       }
     }
+    return ChatSynchronizationResult.incomplete;
   }
 }

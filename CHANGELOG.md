@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Relay trust now requires a fresh HTTP synchronization started after its
+  current session and a confirmed database merge at the stream end. Lobby,
+  read-marker-only responses, stale 304s, exhausted page budgets and repeated
+  intervening traffic no longer count as convergence. A session replaced during
+  synchronization automatically starts its own baseline afterward.
+
 - Relay messages queued behind an attachment or refresh can no longer advance
   the chat cursor past an unverified HTTP gap. Trust is withdrawn in the room
   mutation queue and checked again before each merge, including after a session

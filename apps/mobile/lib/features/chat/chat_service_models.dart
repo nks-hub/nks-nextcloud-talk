@@ -1,5 +1,21 @@
 part of 'chat_service.dart';
 
+enum ChatSynchronizationResult {
+  /// HTTP catch-up reached the end of the current stream.
+  converged,
+
+  /// Work stopped without proving the current stream complete.
+  incomplete,
+
+  /// No HTTP read occurred; waiting on relay delivery is not a baseline.
+  deferred,
+}
+
+ChatSynchronizationResult _chatReadResult(ChatMergeOutcome outcome) =>
+    outcome == ChatMergeOutcome.converged
+    ? ChatSynchronizationResult.converged
+    : ChatSynchronizationResult.incomplete;
+
 final class _ChatSynchronizationCancelled implements Exception {
   const _ChatSynchronizationCancelled();
 }

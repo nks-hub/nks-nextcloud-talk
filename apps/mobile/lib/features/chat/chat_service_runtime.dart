@@ -3,9 +3,8 @@
 part of 'chat_service.dart';
 
 extension _ChatServiceLiveRuntime on ChatService {
-  /// Returns `true` when an in-flight live poll for the scope completed in
-  /// time, so its merge already applied whatever the server had.
-  Future<bool> _awaitLiveNetworkPoll(
+  /// Returns the joined poll's outcome, or null if no poll completed in time.
+  Future<ChatSynchronizationResult?> _awaitLiveNetworkPoll(
     String accountId,
     String roomToken,
     int? threadId,
@@ -36,13 +35,15 @@ extension _ChatServiceLiveRuntime on ChatService {
         continue;
       }
       try {
-        await poll.operation.timeout(ChatService._livePollJoinTimeout);
+        final result = await poll.operation.timeout(
+          ChatService._livePollJoinTimeout,
+        );
+        return poll.cancelled ? null : result;
       } on Object {
-        return false;
+        return null;
       }
-      return !poll.cancelled;
     }
-    return false;
+    return null;
   }
 
   Future<void> _synchronizeLiveBinding(
@@ -114,7 +115,7 @@ extension _ChatServiceLiveRuntime on ChatService {
           probe: probe,
         );
         probe.ensureActive();
-        return resolved;
+        return resolved.prepared;
       },
     );
   }
@@ -206,7 +207,7 @@ extension _ChatServiceLiveRuntime on ChatService {
     }
   }
 
-  Future<void> _runLiveNetworkPoll(
+  Future<ChatSynchronizationResult> _runLiveNetworkPoll(
     _PreparedChat prepared,
     _SharedLivePoll poll,
   ) async {
@@ -217,7 +218,7 @@ extension _ChatServiceLiveRuntime on ChatService {
     final relayWait = _relayIdleWait(prepared);
     if (relayWait != null) {
       await Future.any<void>(<Future<void>>[relayWait, poll.abort.future]);
-      return;
+      return ChatSynchronizationResult.deferred;
     }
     final scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
@@ -256,7 +257,7 @@ extension _ChatServiceLiveRuntime on ChatService {
       appPassword: prepared.appPassword,
       abortTrigger: poll.abort.future,
     );
-    await _serializeRoom<void>(
+    return _serializeRoom<ChatSynchronizationResult>(
       _roomKey(prepared.account.id, prepared.conversation.token),
       () async {
         if (poll.cancelled || !identical(_liveNetworkPolls[poll.key], poll)) {
@@ -265,7 +266,8 @@ extension _ChatServiceLiveRuntime on ChatService {
         if (!await _preparedContextIsCurrent(prepared)) {
           throw const _ChatSynchronizationStale();
         }
-        await _applyGetResponse(prepared, response);
+        final outcome = await _applyGetResponse(prepared, response);
+        return _chatReadResult(outcome);
       },
     );
   }
@@ -522,7 +524,7 @@ final class _SharedLivePoll {
 
   final String key;
   final Completer<void> abort;
-  late final Future<void> operation;
+  late final Future<ChatSynchronizationResult> operation;
   final Set<ChatLiveRoomBinding> bindings = {};
   bool cancelled = false;
   bool completed = false;

@@ -152,7 +152,12 @@ final class ChatRelayBinding {
           // for a background reconciler, but here it could join a poll that
           // is standing down for this very relay and return without having
           // read anything, which would establish trust on no evidence at all.
-          await _service.syncRoom(accountId: accountId, roomToken: roomToken);
+          final result = await _service._syncRoom(
+            accountId: accountId,
+            roomToken: roomToken,
+            joinExisting: false,
+          );
+          if (result != ChatSynchronizationResult.converged) return;
         } on Object {
           // The room stays on the long poll, which reports the failure and
           // retries on its own schedule.
@@ -162,16 +167,17 @@ final class ChatRelayBinding {
           return;
         }
         if (!_sawWhileUntrusted) {
-          break;
+          _trusted = true;
+          _wake();
+          return;
         }
       }
-      if (_closed || _epoch != epoch) {
-        return;
-      }
-      _trusted = true;
-      _wake();
     } finally {
       _establishing = false;
+      final currentEpoch = _epoch;
+      if (!_closed && currentEpoch != null && currentEpoch != epoch) {
+        unawaited(_establishTrust(currentEpoch));
+      }
     }
   }
 
