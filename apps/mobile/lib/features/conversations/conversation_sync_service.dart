@@ -96,6 +96,19 @@ final class ConversationSyncService {
     Future<void>? abortTrigger,
     bool forceFull = false,
   }) async {
+    await syncConfirmed(
+      accountId,
+      abortTrigger: abortTrigger,
+      forceFull: forceFull,
+    );
+  }
+
+  /// Returns false when this caller's requested refresh was cancelled.
+  Future<bool> syncConfirmed(
+    String accountId, {
+    Future<void>? abortTrigger,
+    bool forceFull = false,
+  }) async {
     final started = DateTime.now();
     // The outcome is decided on every exit, including the failures raised
     // deeper in the flight rather than by the transport here. Recording only
@@ -103,17 +116,19 @@ final class ConversationSyncService {
     // transport errors while silently dropping every classified failure.
     var outcome = TracedOutcome.completed;
     try {
-      await _syncFlights(
+      final completed = await _syncFlights(
         accountId,
         abortTrigger: abortTrigger,
         forceFull: forceFull,
       );
+      if (!completed) outcome = TracedOutcome.cancelled;
+      return completed;
     } on NextcloudApiException catch (error) {
       if (error.code == NextcloudApiError.cancelled) {
         // An abandoned sync is not a slow one; reported apart so a user who
         // closes the app mid-sync does not look like a failing server.
         outcome = TracedOutcome.cancelled;
-        return;
+        return false;
       }
       outcome = TracedOutcome.failed;
       await _fail(accountId, _classifyApiException(error));
@@ -129,7 +144,7 @@ final class ConversationSyncService {
     }
   }
 
-  Future<void> _syncFlights(
+  Future<bool> _syncFlights(
     String accountId, {
     required Future<void>? abortTrigger,
     required bool forceFull,
@@ -141,13 +156,12 @@ final class ConversationSyncService {
       final waiter = flight.tryWait(abortTrigger);
       if (waiter != null) {
         if (satisfiesRequestedMode) {
-          await waiter;
-          return;
+          return await waiter;
         }
 
         try {
           if (!await waiter) {
-            return;
+            return false;
           }
         } on ConversationSyncException {
           // A weaker flight cannot satisfy or fail the requested full refresh.
@@ -163,7 +177,7 @@ final class ConversationSyncService {
 
       final shouldRetry = await _waitForClosedFlight(flight, abortTrigger);
       if (!shouldRetry) {
-        return;
+        return false;
       }
     }
   }

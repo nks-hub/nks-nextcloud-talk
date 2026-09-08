@@ -28,6 +28,70 @@ void main() {
 
   tearDown(() => database.close());
 
+  for (final refreshedId in ['0', 'valid-refreshed-session']) {
+    test(
+      'HPB refresh ${refreshedId == '0' ? 'rejects inactive' : 'accepts active'} conversation session',
+      () async {
+        await _insertAccount(accounts, credentials, accountId: 'account-a');
+        final api = HttpNextcloudApi(client: _RefreshSettingsClient());
+        final sockets = _FakeSocketConnector();
+        final coordinator = CallSignalingCoordinator(
+          accounts: accounts,
+          sessions: sessions,
+          credentials: credentials,
+          api: api,
+          socketConnector: sockets,
+          refreshConversationSession: (_, _) async =>
+              ConversationSessionId.parse(refreshedId),
+        );
+        addTearDown(() async {
+          await coordinator.dispose();
+          api.close();
+        });
+        final session = await coordinator.start(
+          accountId: 'account-a',
+          roomToken: 'rooma123',
+          nextcloudSessionId: 'original-session',
+        );
+        final outcome = await _waitFor(
+          session,
+          (update) =>
+              update.failure != null ||
+              update.phase == SignalingAccountPhase.hpbAwaitingWelcome,
+        );
+        if (outcome.failure != null) {
+          expect(refreshedId, '0');
+          expect(outcome.failure, CallSignalingFailure.roomRefresh);
+          expect(sockets.sockets, isEmpty);
+        } else {
+          final socket = await sockets.waitForSocket(0);
+          socket.addFrame(_welcomeFrame());
+          final hello =
+              jsonDecode(await socket.waitForSent(0)) as Map<String, Object?>;
+          await _waitFor(
+            session,
+            (update) =>
+                update.phase == SignalingAccountPhase.hpbHelloPending &&
+                update.outcome == SignalingRuntimeOutcome.unchanged,
+          );
+          socket.addFrame(
+            _helloFrame(requestId: hello['id'] as String, withResumeId: true),
+          );
+          final room =
+              jsonDecode(await socket.waitForSent(1)) as Map<String, Object?>;
+          final sentSession =
+              (room['room'] as Map<String, Object?>)['sessionid'];
+          expect(
+            sentSession,
+            isNot('0'),
+            reason: 'Inactive metadata is not an HPB room-session authority',
+          );
+          expect(sentSession, refreshedId);
+        }
+      },
+    );
+  }
+
   test(
     'internal settings poll publishes participants and ambiguous batch state',
     () async {
@@ -651,6 +715,16 @@ final class _ExternalSettingsClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     return _ocsResponse(200, _settingsData('external'));
   }
+}
+
+final class _RefreshSettingsClient extends http.BaseClient {
+  int requests = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      ++requests == 1
+      ? _ocsResponse(404, <Object?>[])
+      : _ocsResponse(200, _settingsData('external'));
 }
 
 final class _HeldSettingsClient extends http.BaseClient {

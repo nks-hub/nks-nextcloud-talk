@@ -9,7 +9,10 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import 'test_support.dart';
 
+part 'signaling_conversation_cookie_test.part.dart';
+
 void main() {
+  _registerConversationCookieTests();
   SignalingSettingsRequest request({String accountId = 'account-a'}) {
     return SignalingSettingsRequest(
       context: SignalingRequestContext(

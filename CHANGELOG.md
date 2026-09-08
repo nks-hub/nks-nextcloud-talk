@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Call-session recovery now refreshes conversations with the active account's
+  session cookies and rejects stale responses after that session ends. A cancelled
+  full refresh cannot reuse an old cached session. Inactive room metadata remains
+  valid for activation, but its sentinel session ID can no longer be sent to HPB.
+  Server-selected signaling and the separate TURN privacy policy are unchanged.
+
 - Relay trust now requires a fresh HTTP synchronization started after its
   current session and a confirmed database merge at the stream end. Lobby,
   read-marker-only responses, stale 304s, exhausted page budgets and repeated

@@ -514,6 +514,8 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
       allowedStatusCodes: const {200, 401, 426, 429, 503},
       maximumBytes: _conversationMaximumBytes,
       parseBodyForStatusCodes: const {200, 401},
+      sessionAccountId: conversationRequest.accountId,
+      sessionServer: conversationRequest.server,
     );
     return decodeConversationListResponse(
       request: conversationRequest,

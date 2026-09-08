@@ -215,12 +215,16 @@ abstract class _HttpNextcloudApiBase {
     required Set<int> allowedStatusCodes,
     required int maximumBytes,
     Set<int>? parseBodyForStatusCodes,
+    AccountId? sessionAccountId,
+    ServerBase? sessionServer,
   }) async {
     final payload = await _sendBody(
       request,
       allowedStatusCodes: allowedStatusCodes,
       maximumBytes: maximumBytes,
       readBodyForStatusCodes: parseBodyForStatusCodes,
+      sessionAccountId: sessionAccountId,
+      sessionServer: sessionServer,
     );
     final shouldParse =
         parseBodyForStatusCodes?.contains(payload.statusCode) ?? true;

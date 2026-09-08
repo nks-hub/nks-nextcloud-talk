@@ -26,7 +26,11 @@ final class CallConversationSessionResolver {
     String roomToken,
   ) async {
     try {
-      await _conversations.sync(accountId, forceFull: true);
+      final completed = await _conversations.syncConfirmed(
+        accountId,
+        forceFull: true,
+      );
+      if (!completed) return null;
     } on ConversationSyncException catch (error) {
       throw CallLifecycleException(_mapSyncError(error.code));
     }

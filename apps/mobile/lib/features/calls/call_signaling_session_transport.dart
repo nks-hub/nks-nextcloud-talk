@@ -425,6 +425,7 @@ extension _CallSignalingLaneTransport on _CallSignalingLane {
                   _state.connectionEpoch != effect.context.connectionEpoch ||
                   _state.roomEpoch != effect.context.roomEpoch ||
                   session == null ||
+                  session.value == '0' ||
                   session == previousSession) {
                 _publishFailure(CallSignalingFailure.roomRefresh);
                 return;
