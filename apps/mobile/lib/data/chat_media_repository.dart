@@ -43,6 +43,14 @@ final class ChatMediaImage {
 
   final Uint8List body;
   final String contentType;
+  ({int width, int height})? _decodedDimensions;
+
+  ({int width, int height})? get decodedDimensions => _decodedDimensions;
+
+  void rememberDecodedDimensions({required int width, required int height}) {
+    assert(width > 0 && height > 0);
+    _decodedDimensions ??= (width: width, height: height);
+  }
 }
 
 final class ChatMediaFile {
@@ -520,7 +528,7 @@ bool _isAllowedPreviewUri(ServerBase server, Uri uri) {
       return false;
     }
   }
-  const allowedKeys = {'fileId', 'x', 'y', 'a'};
+  const allowedKeys = {'fileId', 'x', 'y', 'a', 'c'};
   if (uri.queryParametersAll.keys.any((key) => !allowedKeys.contains(key)) ||
       uri.queryParametersAll.values.any((values) => values.length != 1)) {
     return false;

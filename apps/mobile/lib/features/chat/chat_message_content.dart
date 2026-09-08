@@ -15,6 +15,7 @@ import '../../app_providers.dart';
 import '../../core/giphy_reference.dart';
 import '../../data/app_database.dart';
 import '../../data/chat_media_repository.dart';
+import '../../data/chat_media_cache.dart';
 import 'references/reference_resolver.dart';
 import '../../platform/media/voice_platform_adapters.dart';
 import '../../platform/media/voice_transcription.dart';
@@ -27,6 +28,7 @@ import 'media/chat_attachment_opener.dart';
 import 'media/chat_attachment_exporter.dart';
 
 part 'chat_message_attachment_content.dart';
+part 'chat_message_image_content.dart';
 part 'chat_message_voice_content.dart';
 part 'chat_message_giphy_content.dart';
 part 'chat_message_reference_content.dart';
@@ -81,6 +83,15 @@ final class ChatMessageContent extends StatelessWidget {
     final attachments = parsed.messageParameters.entries
         .where((entry) => entry.value.type == 'file')
         .toList(growable: false);
+    final imageOnly =
+        attachments.length == 1 &&
+        parsed.message.trim() == '{${attachments.single.key}}' &&
+        _previewUri(
+              account,
+              attachments.single.value,
+              _mimeType(attachments.single.value),
+            ) !=
+            null;
     final giphySelection = _giphyReferences(document);
     final references = _messageReferences(parsed, document);
     return _PollViewerScope(
@@ -101,32 +112,33 @@ final class ChatMessageContent extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            if (giphySelection.references.isEmpty)
-              if (attachments.isEmpty &&
-                  parsed.messageParameters.isEmpty &&
-                  isEmojiOnlyMessage(parsed.message))
-                Text(
-                  parsed.message.trim(),
-                  key: Key('chat-enlarged-emoji-${parsed.messageId}'),
-                  style: TextStyle(
-                    color: foregroundColor,
-                    fontSize: enlargedEmojiFontSize,
-                    height: 1.15,
-                  ),
-                )
+            if (!imageOnly)
+              if (giphySelection.references.isEmpty)
+                if (attachments.isEmpty &&
+                    parsed.messageParameters.isEmpty &&
+                    isEmojiOnlyMessage(parsed.message))
+                  Text(
+                    parsed.message.trim(),
+                    key: Key('chat-enlarged-emoji-${parsed.messageId}'),
+                    style: TextStyle(
+                      color: foregroundColor,
+                      fontSize: enlargedEmojiFontSize,
+                      height: 1.15,
+                    ),
+                  )
+                else
+                  RichChatDocumentContent(
+                    document: document,
+                    foregroundColor: foregroundColor,
+                  )
               else
-                RichChatDocumentContent(
+                _GiphyRichDocument(
+                  accountId: account.id,
                   document: document,
                   foregroundColor: foregroundColor,
-                )
-            else
-              _GiphyRichDocument(
-                accountId: account.id,
-                document: document,
-                foregroundColor: foregroundColor,
-                references: giphySelection.references,
-                hasOverflow: giphySelection.hasOverflow,
-              ),
+                  references: giphySelection.references,
+                  hasOverflow: giphySelection.hasOverflow,
+                ),
             for (var index = 0; index < references.length; index++)
               _ChatMessageReferenceContent(
                 account: account,
@@ -139,7 +151,7 @@ final class ChatMessageContent extends StatelessWidget {
                 foregroundColor: foregroundColor,
               ),
             for (var index = 0; index < attachments.length; index++) ...[
-              const SizedBox(height: 8),
+              if (!imageOnly || index > 0) const SizedBox(height: 8),
               _ChatAttachment(
                 key: Key('chat-attachment-${parsed.messageId}-$index'),
                 account: account,

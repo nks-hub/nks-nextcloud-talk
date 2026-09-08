@@ -36,6 +36,37 @@ void main() {
     '?fileId=$fileId&x=2048&y=2048&a=0',
   );
 
+  test(
+    'exact preview eviction survives reopening and preserves other versions',
+    () async {
+      final first = uriFor(
+        42,
+      ).replace(queryParameters: {...uriFor(42).queryParameters, 'c': 'v1'});
+      final next = first.replace(
+        queryParameters: {...first.queryParameters, 'c': 'v2'},
+      );
+      final cache = open();
+      await cache.write(accountId: 'account-a', uri: first, image: image(10));
+      await cache.write(accountId: 'account-a', uri: next, image: image(20));
+      await cache.write(accountId: 'account-b', uri: first, image: image(30));
+      await cache.evict(accountId: 'account-a', uri: first);
+      await cache.evict(accountId: 'account-a', uri: first);
+      expect(cache.length, 2);
+      expect(cache.byteLength, 70);
+      final restarted = open();
+      expect(await restarted.read(accountId: 'account-a', uri: first), isNull);
+      expect(
+        (await restarted.read(accountId: 'account-a', uri: next))?.body.length,
+        20,
+      );
+      expect(
+        (await restarted.read(accountId: 'account-b', uri: first))?.body.length,
+        30,
+      );
+      expect(restarted.length, 2);
+    },
+  );
+
   test('a preview written by one run is served to the next one', () async {
     final uri = uriFor(42);
     await open().write(accountId: 'account-a', uri: uri, image: image(64, 3));

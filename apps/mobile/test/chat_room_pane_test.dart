@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:drift/drift.dart' hide isNull;
@@ -16,6 +17,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
+import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
 import 'package:nextcloudtalk/features/chat/chat_background_surface.dart';
@@ -36,10 +38,12 @@ part 'chat_room_pane_desktop_input.part.dart';
 part 'chat_room_pane_interactions.part.dart';
 part 'chat_room_pane_poll_menu.part.dart';
 part 'chat_room_pane_rendering.part.dart';
+part 'chat_attachment_rendering_test.part.dart';
 part 'chat_room_pane_thread_context.part.dart';
 part 'chat_room_pane_send_scope.part.dart';
 part 'chat_room_pane_history_scope.part.dart';
 part 'chat_room_pane_image_geometry.part.dart';
+part 'chat_image_preview_layout_test.part.dart';
 
 late AppDatabase database;
 late AccountRepository accounts;
@@ -47,7 +51,7 @@ late MemoryCredentialVault vault;
 late StoredAccount account;
 late CachedConversation conversation;
 
-void main() {
+void main({bool imagesOnly = false}) {
   setUp(() async {
     database = openTestDatabase();
     accounts = AccountRepository(database);
@@ -106,14 +110,17 @@ void main() {
 
   tearDown(() => database.close());
 
-  _registerChatRoomPaneDesktopInputTests();
-  _registerChatRoomPaneRenderingTests();
-  _registerChatRoomPaneInteractionTests();
-  _registerChatRoomPanePollMenuTests();
-  _registerChatRoomPaneThreadContextTests();
-  _registerChatRoomPaneSendScopeTests();
-  _registerChatRoomPaneHistoryScopeTests();
+  if (!imagesOnly) {
+    _registerChatRoomPaneDesktopInputTests();
+    _registerChatRoomPaneRenderingTests();
+    _registerChatRoomPaneInteractionTests();
+    _registerChatRoomPanePollMenuTests();
+    _registerChatRoomPaneThreadContextTests();
+    _registerChatRoomPaneSendScopeTests();
+    _registerChatRoomPaneHistoryScopeTests();
+  }
   _registerChatRoomPaneImageGeometryTests();
+  _registerChatImagePreviewLayoutTests();
 }
 
 /// The thread layout, for tests that walk into a thread pane from a derived

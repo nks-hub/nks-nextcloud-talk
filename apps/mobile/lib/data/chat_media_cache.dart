@@ -24,11 +24,27 @@ final class ChatMediaCache {
   final int maximumEntries;
   final int maximumBytes;
   final Map<String, ChatMediaImage> _entries = <String, ChatMediaImage>{};
+  final Map<String, Future<void>> _pending = {};
   int _bytes = 0;
 
   int get length => _entries.length;
 
   int get byteLength => _bytes;
+
+  /// Orders a preview's complete cache fill and retry eviction across providers.
+  Future<T> withEntry<T>(String key, Future<T> Function() operation) {
+    final previous = _pending[key] ?? Future<void>.value();
+    final result = previous.then((_) => operation());
+    // An unsuccessful load must not prevent the next retry from taking its turn.
+    final settled = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _pending[key] = settled;
+    return result.whenComplete(() {
+      if (identical(_pending[key], settled)) _pending.remove(key);
+    });
+  }
 
   static String keyOf({required String accountId, required Uri uri}) =>
       '$accountId\u0000$uri';
@@ -78,6 +94,11 @@ final class ChatMediaCache {
   void clear() {
     _entries.clear();
     _bytes = 0;
+  }
+
+  void evict(String key) {
+    final removed = _entries.remove(key);
+    if (removed != null) _bytes -= removed.body.lengthInBytes;
   }
 }
 
@@ -203,6 +224,16 @@ final class ChatMediaDiskCache {
   int get byteLength => _bytes;
 
   int get length => _index.length;
+
+  Future<void> evict({required String accountId, required Uri uri}) async {
+    final Directory root;
+    try {
+      root = await _open();
+    } on FileSystemException {
+      return;
+    }
+    await _delete(_pathFor(root, accountId: accountId, uri: uri));
+  }
 
   Future<ChatMediaImage?> read({
     required String accountId,

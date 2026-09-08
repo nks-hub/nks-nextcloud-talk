@@ -20,11 +20,17 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Image attachments fit their decoded aspect ratio within the available width
+  and height limit, including missing or stale server dimensions and EXIF
+  rotation. Image-only and captioned messages share one bounded filename below
+  the preview. Warm previews reuse their decoded size, and etags isolate changed
+  files. Retry clears the exact RAM and disk entry after pending loads finish,
+  so an old request cannot restore a corrupt preview after eviction.
+
 - History scrolling preserves a visible message when existing rows change
   height or the viewport is resized. Layout corrections run before painting,
   retain newer user scroll input and do not stop flings. Newer messages in the
   separate arrival sliver and the newest boundary keep their existing behavior.
-  Missing image dimensions and caption presentation are separate follow-ups.
 
 - Returning to a desktop window restores focus to its visible, writable chat
   composer without changing the draft or selection. Dialogs, other editors,

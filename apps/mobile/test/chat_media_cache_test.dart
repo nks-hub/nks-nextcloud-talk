@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,8 +6,55 @@ import 'package:nextcloudtalk/data/chat_media_cache.dart';
 import 'package:nextcloudtalk/data/chat_media_repository.dart';
 
 void main() {
+  test(
+    'entry operations serialize after errors without blocking another key',
+    () async {
+      final cache = ChatMediaCache();
+      final held = Completer<void>();
+      final events = <String>[];
+      final first = cache.withEntry('first', () async {
+        events.add('load');
+        await held.future;
+        throw StateError('failed load');
+      });
+      final failure = expectLater(first, throwsStateError);
+      final retry = cache.withEntry('first', () async => events.add('evict'));
+      await cache.withEntry('second', () async => events.add('independent'));
+      expect(events, ['load', 'independent']);
+      held.complete();
+      await failure;
+      await retry;
+      expect(events, ['load', 'independent', 'evict']);
+      await cache.withEntry('first', () async => events.add('next'));
+      expect(events.last, 'next');
+    },
+  );
+
   ChatMediaImage image(int bytes) =>
       ChatMediaImage(body: Uint8List(bytes), contentType: 'image/png');
+
+  test('evicting one preview preserves other accounts and etag versions', () {
+    final cache = ChatMediaCache();
+    final uri = Uri.parse(
+      'https://cloud.example.invalid/index.php/core/preview?fileId=42&c=v1',
+    );
+    final first = ChatMediaCache.keyOf(accountId: 'account-a', uri: uri);
+    final otherAccount = ChatMediaCache.keyOf(accountId: 'account-b', uri: uri);
+    final otherVersion = ChatMediaCache.keyOf(
+      accountId: 'account-a',
+      uri: uri.replace(queryParameters: {'fileId': '42', 'c': 'v2'}),
+    );
+    cache.write(first, image(10));
+    cache.write(otherAccount, image(20));
+    cache.write(otherVersion, image(30));
+    cache.evict(first);
+    cache.evict(first);
+    expect(cache.read(first), isNull);
+    expect(cache.read(otherAccount), isNotNull);
+    expect(cache.read(otherVersion), isNotNull);
+    expect(cache.length, 2);
+    expect(cache.byteLength, 50);
+  });
 
   test('a stored preview is served again without a refetch', () {
     final cache = ChatMediaCache();

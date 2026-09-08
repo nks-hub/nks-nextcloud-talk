@@ -10,6 +10,50 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'test_support.dart';
 
 void main() {
+  test(
+    'accepts a scoped etag cache key but rejects repeated cache parameters',
+    () async {
+      final requests = <Uri>[];
+      final vault = MemoryCredentialVault()
+        ..values[_account.id] = 'fixture-app-password';
+      final repository = ChatMediaRepository(
+        vault,
+        client: _StreamingClient((request) async {
+          requests.add(request.url);
+          return http.StreamedResponse(
+            Stream.value(_pngSignature),
+            200,
+            headers: {'content-type': 'image/png'},
+          );
+        }),
+      );
+      addTearDown(repository.close);
+      final versioned = _previewUri.replace(
+        queryParameters: {
+          ..._previewUri.queryParameters,
+          'c': 'etag&version=1',
+        },
+      );
+      expect(
+        await repository.loadPreview(account: _account, uri: versioned),
+        isNotNull,
+      );
+      expect(requests, [versioned]);
+      final duplicated = Uri.parse('$versioned&c=another');
+      await expectLater(
+        repository.loadPreview(account: _account, uri: duplicated),
+        throwsA(
+          isA<ChatMediaRepositoryException>().having(
+            (error) => error.code,
+            'code',
+            ChatMediaRepositoryError.invalidUri,
+          ),
+        ),
+      );
+      expect(requests, [versioned]);
+    },
+  );
+
   test('loads an account-scoped preview with bounded authorization', () async {
     late http.BaseRequest captured;
     final vault = MemoryCredentialVault()

@@ -39,10 +39,13 @@ final class _ChatAttachment extends ConsumerWidget {
         : chatMediaProvider(
             ChatMediaProviderKey(account: account, uri: previewUri),
           );
-    final image = previewProvider == null ? null : ref.watch(previewProvider);
-    final loadedImage = image?.asData?.value;
-    final imageFailed =
-        image != null && !image.isLoading && loadedImage == null;
+    var image = previewProvider == null ? null : ref.watch(previewProvider);
+    if (image?.isLoading == true) {
+      final cached = ref
+          .read(chatMediaCacheProvider)
+          .read(ChatMediaCache.keyOf(accountId: account.id, uri: previewUri!));
+      if (cached != null) image = AsyncData(cached);
+    }
     final fullScreenPreviewUri = previewUri == null
         ? null
         : _fullScreenPreviewUri(previewUri);
@@ -84,18 +87,6 @@ final class _ChatAttachment extends ConsumerWidget {
             ),
           );
     final openAttachment = openImage ?? openFile;
-    final imageBox = _reservedImageBox(parameter);
-    Widget loadingImage() => Container(
-      key: Key('chat-image-loading-$messageId-$index'),
-      width: imageBox.width,
-      height: imageBox.height,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const CircularProgressIndicator(strokeWidth: 2),
-    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -108,80 +99,29 @@ final class _ChatAttachment extends ConsumerWidget {
             index: index,
             name: name,
           ),
-        if (loadedImage != null) ...[
-          Semantics(
-            key: Key('chat-open-image-$messageId-$index'),
-            image: true,
-            button: true,
-            label: '${strings.openImage}: $name',
-            onTap: openImage,
-            child: ExcludeSemantics(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: openImage,
-                    child: SizedBox(
-                      width: imageBox.width,
-                      height: imageBox.height,
-                      child: Image.memory(
-                        loadedImage.body,
-                        key: Key('chat-image-$messageId-$index'),
-                        fit: BoxFit.contain,
-                        gaplessPlayback: true,
-                        frameBuilder:
-                            (_, image, frame, wasSynchronouslyLoaded) =>
-                                _showAfterFirstImageFrame(
-                                  image: image,
-                                  frame: frame,
-                                  wasSynchronouslyLoaded:
-                                      wasSynchronouslyLoaded,
-                                  placeholder: loadingImage(),
-                                ),
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+        if (previewProvider != null)
+          _InlineChatImagePreview(
+            key: ValueKey('${account.id}\u0000$previewUri'),
+            parameter: parameter,
+            image: image!,
+            name: name,
+            messageId: messageId,
+            index: index,
+            onOpen: openImage,
+            onRetry: () async {
+              final cache = ref.read(chatMediaCacheProvider);
+              final disk = ref.read(chatMediaDiskCacheProvider);
+              final key = ChatMediaCache.keyOf(
+                accountId: account.id,
+                uri: previewUri!,
+              );
+              await cache.withEntry(key, () async {
+                cache.evict(key);
+                await disk.evict(accountId: account.id, uri: previewUri);
+              });
+              if (context.mounted) ref.invalidate(previewProvider);
+            },
           ),
-        ] else if (image?.isLoading ?? false) ...[
-          loadingImage(),
-        ] else if (imageFailed) ...[
-          Container(
-            key: Key('chat-image-error-$messageId-$index'),
-            width: imageBox.width,
-            constraints: BoxConstraints(minHeight: imageBox.height),
-            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.broken_image_outlined, color: scheme.error),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    strings.imageLoadFailed,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  key: Key('chat-image-retry-$messageId-$index'),
-                  onPressed: previewProvider == null
-                      ? null
-                      : () => ref.invalidate(previewProvider),
-                  tooltip: strings.retry,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
-            ),
-          ),
-        ],
         if (previewProvider == null &&
             voiceUri == null &&
             openAttachment != null)
@@ -370,28 +310,31 @@ const double _imageBoxMinEdge = 48;
 /// Box for pictures whose dimensions Talk did not send.
 const Size _imageBoxFallback = Size(240, 180);
 
-/// The bubble's size, fixed before the picture arrives.
-///
-/// The timeline is a reversed list anchored on the newest message. A bubble
-/// below the viewport that grows once its preview decodes moves the scroll
-/// range under the reader and drags them back down while they are reading
-/// history, so the loading placeholder, the picture and the error card all
-/// take the same box. Talk sends the picture's `width` and `height`; those
-/// scale into the bound, keeping the proportions. Without them a fixed box
-/// with `BoxFit.contain` still keeps the height stable.
-Size _reservedImageBox(ChatRichObjectParameter parameter) {
+/// Fits metadata or decoded dimensions into the available width and 320px cap.
+Size _reservedImageBox(
+  ChatRichObjectParameter parameter, {
+  Size? decoded,
+  double maxWidth = 420,
+}) {
   final width = _dimension(parameter.wire['width']);
   final height = _dimension(parameter.wire['height']);
-  if (width == null || height == null) {
-    return _imageBoxFallback;
-  }
+  final source =
+      decoded ??
+      (width != null && height != null
+          ? Size(width, height)
+          : _imageBoxFallback);
+  final availableWidth = math.min(_imageBoxBound.width, maxWidth);
+  if (availableWidth <= 0) return Size.zero;
   final scale = math.min(
     1.0,
-    math.min(_imageBoxBound.width / width, _imageBoxBound.height / height),
+    math.min(
+      availableWidth / source.width,
+      _imageBoxBound.height / source.height,
+    ),
   );
   return Size(
-    math.max(_imageBoxMinEdge, width * scale),
-    math.max(_imageBoxMinEdge, height * scale),
+    math.min(availableWidth, math.max(_imageBoxMinEdge, source.width * scale)),
+    math.max(_imageBoxMinEdge, source.height * scale),
   );
 }
 
@@ -463,7 +406,14 @@ Uri? _previewUri(
   // target shape.
   return server.uri.replace(
     pathSegments: [...server.uri.pathSegments, 'index.php', 'core', 'preview'],
-    queryParameters: {'fileId': '$fileId', 'x': '1024', 'y': '1024', 'a': '1'},
+    queryParameters: {
+      'fileId': '$fileId',
+      'x': '1024',
+      'y': '1024',
+      'a': '1',
+      if (parameter.wire['etag'] case final String etag when etag.isNotEmpty)
+        'c': etag,
+    },
   );
 }
 

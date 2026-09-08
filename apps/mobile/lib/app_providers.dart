@@ -895,31 +895,35 @@ final chatMediaProvider = FutureProvider.autoDispose
         accountId: key.account.id,
         uri: key.uri,
       );
-      final cached = cache.read(cacheKey);
-      if (cached != null) {
-        return cached;
-      }
       final disk = ref.watch(chatMediaDiskCacheProvider);
-      final persisted = await disk.read(
-        accountId: key.account.id,
-        uri: key.uri,
-      );
-      if (persisted != null) {
-        cache.write(cacheKey, persisted);
-        return persisted;
-      }
-      final loaded = await ref
-          .watch(chatMediaRepositoryProvider)
-          .loadPreview(account: key.account, uri: key.uri);
-      if (loaded != null) {
-        cache.write(cacheKey, loaded);
-        await disk.write(
+      final repository = ref.watch(chatMediaRepositoryProvider);
+      return cache.withEntry(cacheKey, () async {
+        final cached = cache.read(cacheKey);
+        if (cached != null) {
+          return cached;
+        }
+        final persisted = await disk.read(
           accountId: key.account.id,
           uri: key.uri,
-          image: loaded,
         );
-      }
-      return loaded;
+        if (persisted != null) {
+          cache.write(cacheKey, persisted);
+          return persisted;
+        }
+        final loaded = await repository.loadPreview(
+          account: key.account,
+          uri: key.uri,
+        );
+        if (loaded != null) {
+          cache.write(cacheKey, loaded);
+          await disk.write(
+            accountId: key.account.id,
+            uri: key.uri,
+            image: loaded,
+          );
+        }
+        return loaded;
+      });
     });
 
 final chatMessagesProvider = StreamProvider.autoDispose
