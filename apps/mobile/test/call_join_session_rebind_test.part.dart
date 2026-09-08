@@ -43,6 +43,9 @@ void _registerCallJoinSessionRebindTests() {
           callLifecycleServiceProvider.overrideWithValue(harness.service),
           callSignalingCoordinatorProvider.overrideWithValue(coordinator),
           callMediaEngineProvider.overrideWithValue(engine),
+          callForegroundServiceProvider.overrideWithValue(
+            const NoCallForegroundService(),
+          ),
           callAudioInterruptionsProvider.overrideWithValue(
             const SilentCallAudioInterruptions(),
           ),

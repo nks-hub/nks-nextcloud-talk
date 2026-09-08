@@ -13,6 +13,8 @@ import 'package:nextcloudtalk/data/chat_repository.dart';
 import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
+import 'package:nextcloudtalk/features/calls/call_foreground_service.dart';
+import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
@@ -24,11 +26,13 @@ import 'test_support.dart';
 part 'call_lifecycle_room_session_test.part.dart';
 part 'call_lifecycle_stale_session_test.part.dart';
 part 'call_join_session_rebind_test.part.dart';
+part 'call_foreground_lifecycle_test.part.dart';
 
 void main() {
   _registerCallLifecycleRoomSessionTests();
   _registerCallLifecycleStaleSessionTests();
   _registerCallJoinSessionRebindTests();
+  _registerCallForegroundLifecycleTests();
 
   test('refuses required E2EE before activating or joining the call', () async {
     final harness = await _CallHarness.create();
@@ -650,6 +654,7 @@ final class _CallServer {
   final List<String> requestSequence = <String>[];
   bool extraFeature = false;
   bool signalingEnabled = false;
+  Completer<void>? signalingGate;
   Map<String, Object?> callPolicy = const {};
 
   List<String> get callMethods =>
@@ -669,6 +674,7 @@ final class _CallServer {
       );
     }
     if (signalingEnabled && request.url.path.endsWith('/signaling/settings')) {
+      await signalingGate?.future;
       return _ocsResponse(503, <String, Object?>{});
     }
     if (request.url.path.contains('/apps/spreed/api/v4/call/')) {

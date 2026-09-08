@@ -3,12 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app_providers.dart';
 import '../../core/talk_features.dart';
 import '../chat/chat_room_signaling.dart';
 import '../rooms/room_settings_service.dart';
 import 'call_lifecycle_service.dart';
+import 'call_foreground_service.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_transport_service.dart';
@@ -126,6 +128,8 @@ base class CallJoinController
   CallLifecycleService? _lifecycle;
   bool _joinedServer = false;
   bool _disposed = false;
+  ({CallForegroundService service, String owner})? _foregroundCall;
+  Future<void>? _teardownPending;
   StateController<Set<ChatRoomSignalingKey>>? _heldRooms;
 
   @override
@@ -204,6 +208,9 @@ base class CallJoinController
       return;
     }
     state = const CallJoinState(phase: CallJoinPhase.joining);
+    final teardown = _teardownPending;
+    if (teardown != null) await teardown;
+    if (_disposed) return;
 
     // Held before the lease is asked for: the room session must survive the
     // window losing focus for as long as this call lives.
@@ -279,6 +286,34 @@ base class CallJoinController
     }
 
     _moderator = await _readModeratorState();
+    if (_disposed) {
+      unawaited(_leaveServer());
+      return;
+    }
+    final foreground = (
+      service: ref.read(callForegroundServiceProvider),
+      owner: const Uuid().v4(),
+    );
+    _foregroundCall = foreground;
+    try {
+      await foreground.service.start(foreground.owner);
+    } on CallMediaException catch (error) {
+      await _stopForegroundCall();
+      await _leaveServer();
+      _hold(false);
+      if (!_disposed) {
+        state = CallJoinState(
+          phase: CallJoinPhase.failed,
+          mediaError: error.code,
+        );
+      }
+      return;
+    }
+    if (_disposed || _foregroundCall?.owner != foreground.owner) {
+      await foreground.service.stop(foreground.owner);
+      unawaited(_leaveServer());
+      return;
+    }
 
     final session = CallMediaSession(
       initial: signaling.current,
@@ -538,17 +573,42 @@ base class CallJoinController
   }
 
   Future<void> _teardown({required bool leaveServer}) async {
+    final pending = _teardownPending;
+    if (pending != null) return pending;
+    final cleanup = _performTeardown(leaveServer: leaveServer);
+    _teardownPending = cleanup;
+    try {
+      await cleanup;
+    } finally {
+      if (identical(_teardownPending, cleanup)) _teardownPending = null;
+    }
+  }
+
+  Future<void> _performTeardown({required bool leaveServer}) async {
     _hold(false);
+    final foreground = _foregroundCall;
+    _foregroundCall = null;
     final subscription = _mediaStates;
     _mediaStates = null;
     final session = _session;
     _session = null;
     final disposal = session?.dispose();
-    await subscription?.cancel();
-    await disposal;
-    if (leaveServer) {
-      await _leaveServer();
+    try {
+      await subscription?.cancel();
+      await disposal;
+    } finally {
+      try {
+        await foreground?.service.stop(foreground.owner);
+      } finally {
+        if (leaveServer) await _leaveServer();
+      }
     }
+  }
+
+  Future<void> _stopForegroundCall() async {
+    final foreground = _foregroundCall;
+    _foregroundCall = null;
+    await foreground?.service.stop(foreground.owner);
   }
 
   Future<void> _leaveServer() async {

@@ -12,6 +12,11 @@ import android.os.Looper
 import com.nkshub.nextcloudtalk.attachments.AttachmentSaverActivityLifecycle
 import com.nkshub.nextcloudtalk.background.BackgroundDrain
 import com.nkshub.nextcloudtalk.calls.CallAudioFocus
+import com.nkshub.nextcloudtalk.calls.CallForegroundChannel
+import com.nkshub.nextcloudtalk.calls.CallForegroundService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import com.nkshub.nextcloudtalk.calls.CallPictureInPicture
 import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
 import com.nkshub.nextcloudtalk.calls.ScreenShareService
@@ -42,6 +47,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var callAudioFocusChannel: EventChannel? = null
     private var callPictureInPicture: CallPictureInPicture? = null
     private var screenShareChannel: MethodChannel? = null
+    private var callForegroundMethodChannel: MethodChannel? = null
+    private var callForegroundChannel: CallForegroundChannel? = null
     private var attachmentSaver: AttachmentSaverActivityLifecycle? = null
     private val shareExecutor = Executors.newSingleThreadExecutor()
     private val shareInbox by lazy { AndroidShareInbox(applicationContext) }
@@ -228,6 +235,18 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         screenShare.setMethodCallHandler(ScreenShareChannel(applicationContext))
         screenShareChannel = screenShare
+        val foreground = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CallForegroundService.CHANNEL_NAME)
+        val foregroundHandler = CallForegroundChannel(this) {
+            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        }
+        foreground.setMethodCallHandler(foregroundHandler)
+        callForegroundMethodChannel = foreground
+        callForegroundChannel = foregroundHandler
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onResume(owner: LifecycleOwner) {
+                foregroundHandler.onResume()
+            }
+        })
     }
 
     override fun onUserLeaveHint() {
@@ -341,6 +360,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (callForegroundChannel?.onRequestPermissionsResult(requestCode, grantResults) == true) return
         if (requestCode == CAMERA_PERMISSION_REQUEST) {
             // An empty result means the request was interrupted, not refused,
             // so the next attempt must be allowed to prompt again.
@@ -408,6 +428,10 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         callPictureInPicture = null
         screenShareChannel?.setMethodCallHandler(null)
         screenShareChannel = null
+        callForegroundChannel?.dispose()
+        callForegroundChannel = null
+        callForegroundMethodChannel?.setMethodCallHandler(null)
+        callForegroundMethodChannel = null
         disposeAttachmentSaver()
         shareExecutor.shutdown()
         super.onDestroy()

@@ -49,6 +49,7 @@ gradle.taskGraph.whenReady {
 }
 
 android {
+    testOptions.unitTests.isIncludeAndroidResources = true
     namespace = "com.nkshub.nextcloudtalk"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
@@ -90,6 +91,14 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+// AGP's resource-backed unit-test APK also consumes Flutter's copied assets.
+tasks.configureEach {
+    val unitPackage = Regex("package(.+)UnitTestForUnitTest").matchEntire(name)
+    if (unitPackage != null) {
+        dependsOn("copyFlutterAssets${unitPackage.groupValues[1]}")
     }
 }
 

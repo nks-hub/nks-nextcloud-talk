@@ -1,0 +1,5 @@
+<resources>
+    <string name="call_notification_channel">Ongoing calls</string>
+    <string name="call_notification_title">Call in progress</string>
+    <string name="call_notification_text">Tap to return to your call.</string>
+</resources>
