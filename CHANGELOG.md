@@ -23,10 +23,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 Android alpha is published through the Google Play Publishing API, which
 reports version code 65 completed. The local Windows installation is updated
 and its account data preserved. Both were built locally, not through CI.
-TestFlight is pending: BroadcastExtension still needs its existing App Group
-assigned in Apple Developer provisioning before an archive can be exported.
-The iOS build and simulator launch passed on the local Apple build host;
-no IPA has been uploaded. This release follows an explicit immediate-release
+TestFlight build 65 became available on 8 September after the BroadcastExtension
+App Group assignment was corrected. Archive/export and all four signatures
+passed on the local Apple build host. The official API reports VALID and
+IN_BETA_TESTING for both internal and external testing, with verified group
+membership and Czech/English notes. No Apple build or upload used CI.
+This release follows an explicit immediate-release
 exception; incomplete TODO items are not counted as completed release points.
 
 - Idle-presence handling is in progress: a focused window releases chat
