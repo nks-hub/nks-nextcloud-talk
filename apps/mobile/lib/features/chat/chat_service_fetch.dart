@@ -4,6 +4,7 @@ extension _ChatServiceFetch on ChatService {
   Future<_PreparedChat> _resolveAndSynchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
+    _ChatSynchronizationProbe? probe,
   }) async {
     var resolved = prepared;
     if (resolved.threadId != null &&
@@ -12,16 +13,26 @@ extension _ChatServiceFetch on ChatService {
       resolved = await _hydrateUnknownThreadFromRoot(
         resolved,
         abortTrigger: abortTrigger,
+        probe: probe,
       );
     }
     try {
-      await _synchronizePrepared(resolved, abortTrigger: abortTrigger);
+      await _synchronizePrepared(
+        resolved,
+        abortTrigger: abortTrigger,
+        probe: probe,
+      );
     } on _UnknownThreadNotFound {
       resolved = await _hydrateUnknownThreadFromRoot(
         resolved,
         abortTrigger: abortTrigger,
+        probe: probe,
       );
-      await _synchronizePrepared(resolved, abortTrigger: abortTrigger);
+      await _synchronizePrepared(
+        resolved,
+        abortTrigger: abortTrigger,
+        probe: probe,
+      );
     }
     if (resolved.threadId != null && resolved.namedThread == null) {
       resolved = resolved.asNamedThread();
@@ -32,6 +43,7 @@ extension _ChatServiceFetch on ChatService {
   Future<_PreparedChat> _hydrateUnknownThreadFromRoot(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
+    _ChatSynchronizationProbe? probe,
   }) async {
     final threadId = prepared.threadId;
     if (threadId == null) {
@@ -62,6 +74,7 @@ extension _ChatServiceFetch on ChatService {
         rootPrepared,
         includeLastKnown: scope.lastSyncedAtMillis == null,
         abortTrigger: abortTrigger,
+        probe: probe,
       );
     }
     final classification = await _validatedCachedRootIsNamedThread(
@@ -81,6 +94,7 @@ extension _ChatServiceFetch on ChatService {
   Future<void> _synchronizePrepared(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
+    _ChatSynchronizationProbe? probe,
   }) async {
     await _chat.recoverInterruptedTextSends(prepared.account.id);
     var scope = (await _chat.getNetworkScope(
@@ -93,9 +107,11 @@ extension _ChatServiceFetch on ChatService {
         prepared,
         includeLastKnown: true,
         abortTrigger: abortTrigger,
+        probe: probe,
       );
     }
-    await _catchUpFuture(prepared, abortTrigger: abortTrigger);
+    await _catchUpFuture(prepared, abortTrigger: abortTrigger, probe: probe);
+    probe?.ensureActive();
     await _processPending(prepared);
     scope = (await _chat.getNetworkScope(
       accountId: prepared.account.id,
@@ -103,7 +119,7 @@ extension _ChatServiceFetch on ChatService {
       threadId: prepared.networkThreadId,
     ))!;
     if (!scope.futureConverged) {
-      await _catchUpFuture(prepared, abortTrigger: abortTrigger);
+      await _catchUpFuture(prepared, abortTrigger: abortTrigger, probe: probe);
     }
   }
 
@@ -111,6 +127,7 @@ extension _ChatServiceFetch on ChatService {
     _PreparedChat prepared, {
     required bool includeLastKnown,
     Future<void>? abortTrigger,
+    _ChatSynchronizationProbe? probe,
   }) async {
     await _ensurePreparedContextCurrent(prepared);
     final scope = (await _chat.getNetworkScope(
@@ -121,6 +138,7 @@ extension _ChatServiceFetch on ChatService {
     if (!scope.hasHistory) {
       return;
     }
+    probe?.ensureFetchAllowed(prepared);
     final request = ChatFetchRequest(
       accountId: AccountId.parse(prepared.account.id),
       requestId: ChatRequestId.parse(_uuid.v4()),
@@ -150,6 +168,7 @@ extension _ChatServiceFetch on ChatService {
   Future<void> _catchUpFuture(
     _PreparedChat prepared, {
     Future<void>? abortTrigger,
+    _ChatSynchronizationProbe? probe,
   }) async {
     for (var page = 0; page < ChatService._maximumCatchUpPages; page++) {
       await _ensurePreparedContextCurrent(prepared);
@@ -158,6 +177,7 @@ extension _ChatServiceFetch on ChatService {
         roomToken: prepared.conversation.token,
         threadId: prepared.networkThreadId,
       ))!;
+      probe?.ensureFetchAllowed(prepared);
       final request = ChatFetchRequest(
         accountId: AccountId.parse(prepared.account.id),
         requestId: ChatRequestId.parse(_uuid.v4()),

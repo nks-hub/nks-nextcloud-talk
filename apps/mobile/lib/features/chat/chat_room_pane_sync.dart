@@ -3,6 +3,12 @@ part of 'chat_room_pane.dart';
 extension _ChatRoomPaneSync on _ChatRoomPaneState {
   Future<void> _sync() => _restartLiveSync();
 
+  bool _readerIsActive() =>
+      mounted &&
+      TickerMode.valuesOf(context).enabled &&
+      ModalRoute.isCurrentOf(context) != false &&
+      ref.read(windowActiveProvider);
+
   void _handleConnectivityWake() {
     if (!mounted ||
         !_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
@@ -52,6 +58,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
           accountId: widget.account.id,
           roomToken: widget.conversation.token,
           threadId: widget.threadId,
+          readerActive: _readerIsActive(),
         );
     var showProgress = true;
     late final ForegroundSyncLoop loop;

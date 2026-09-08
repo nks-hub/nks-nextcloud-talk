@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Inactive chat panes pause live reads on older servers that cannot preserve
+  notifications during fetching. Returning to the chat resumes reading; modern
+  servers keep passive synchronization. Shared polls stop only when their last
+  active reader leaves, and cancelled reads do not persist a network error.
+  Resuming an idle reader revalidates its account and capabilities before any
+  request. Non-live reconciliation and real idle/call acceptance remain open.
+
 - Covered chats no longer claim presence just because the app window remains
   active. Visible root/thread panes share room ownership, while a joined call
   retains its own session. Returning to the chat restores its presence.

@@ -319,6 +319,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && generation == _visibilityGeneration) {
         visibility.setVisible(_visibilityOwner, visible ? room : null);
+        _liveBinding?.setReaderActive(
+          visible && ref.read(windowActiveProvider),
+        );
       }
     });
   }
@@ -449,6 +452,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(windowActiveProvider, (_, _) {
+      _liveBinding?.setReaderActive(_readerIsActive());
+    });
     final interactionKey = _key;
     final messagesValue = ref.watch(chatMessagesProvider(_key));
     final operationsValue = ref.watch(textSendOperationsProvider(_key));

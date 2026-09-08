@@ -27,6 +27,7 @@ part 'chat_service_integration_thread_admission_cases.dart';
 part 'chat_service_integration_private_reply_cases.dart';
 part 'chat_service_integration_account_suspend_cases.dart';
 part 'chat_service_integration_relay_cases.dart';
+part 'chat_service_integration_reader_activity_cases.dart';
 
 void main() {
   final suite = _ChatServiceIntegrationSuite();
@@ -44,4 +45,5 @@ void main() {
   suite.registerPrivateReplyCases();
   suite.registerAccountSuspendCases();
   suite.registerRelayCases();
+  suite.registerReaderActivityCases();
 }

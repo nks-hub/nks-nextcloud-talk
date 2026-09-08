@@ -102,12 +102,14 @@ final class ChatService {
     required String accountId,
     required String roomToken,
     int? threadId,
+    bool readerActive = true,
   }) {
     final binding = ChatLiveRoomBinding._(
       service: this,
       accountId: accountId,
       roomToken: roomToken,
       threadId: threadId,
+      readerActive: readerActive,
     );
     _liveBindings.add(binding);
     if (_suspendedAccounts.contains(accountId)) {

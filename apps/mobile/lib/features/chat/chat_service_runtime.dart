@@ -76,7 +76,7 @@ extension _ChatServiceLiveRuntime on ChatService {
     await _withRoomErrorPersistence(
       binding.accountId,
       binding.roomToken,
-      () async {
+      () => probe.run(() async {
         prepared = await _prepare(
           binding.accountId,
           binding.roomToken,
@@ -90,7 +90,7 @@ extension _ChatServiceLiveRuntime on ChatService {
           prepared,
           probe,
         );
-      },
+      }),
       threadId: binding.threadId,
     );
     probe.ensureActive();
@@ -102,14 +102,16 @@ extension _ChatServiceLiveRuntime on ChatService {
     ChatLiveRoomBinding binding,
     _PreparedChat prepared,
     _ChatSynchronizationProbe probe,
-  ) {
+  ) async {
+    await probe.awaitFetchAllowed(prepared);
     return _serializeRoom<_PreparedChat>(
       _roomKey(binding.accountId, binding.roomToken),
       () async {
-        probe.ensureActive();
+        probe.ensureFetchAllowed(prepared);
         final resolved = await _resolveAndSynchronizePrepared(
           prepared,
           abortTrigger: probe.abortTrigger,
+          probe: probe,
         );
         probe.ensureActive();
         return resolved;
@@ -127,8 +129,11 @@ extension _ChatServiceLiveRuntime on ChatService {
       await _withRoomErrorPersistence(
         binding.accountId,
         binding.roomToken,
-        () async {
+        () => probe.run(() async {
           await _ensureLiveContextCurrent(binding, prepared, probe);
+          await probe.awaitFetchAllowed(prepared);
+          await _ensureLiveContextCurrent(binding, prepared, probe);
+          probe.ensureFetchAllowed(prepared);
           poll = _joinLiveNetworkPoll(binding, prepared);
           final completed = await Future.any<bool>([
             poll!.operation.then((_) => true),
@@ -139,7 +144,7 @@ extension _ChatServiceLiveRuntime on ChatService {
           }
           probe.ensureActive();
           await _ensureLiveContextCurrent(binding, prepared, probe);
-        },
+        }),
         threadId: binding.threadId,
       );
     } finally {
@@ -170,6 +175,7 @@ extension _ChatServiceLiveRuntime on ChatService {
     if (poll == null) {
       final abort = Completer<void>();
       final created = _SharedLivePoll(key: key, abort: abort);
+      created.bindings.add(binding);
       final operation = _runLiveNetworkPoll(prepared, created);
       created.operation = operation;
       _liveNetworkPolls[key] = created;
@@ -180,8 +186,9 @@ extension _ChatServiceLiveRuntime on ChatService {
         }
       }).ignore();
       poll = created;
+    } else {
+      poll.bindings.add(binding);
     }
-    poll.bindings.add(binding);
     return poll;
   }
 
@@ -235,6 +242,14 @@ extension _ChatServiceLiveRuntime on ChatService {
     );
 
     // The network wait deliberately stays outside the room mutation tail.
+    if (poll.cancelled ||
+        poll.abort.isCompleted ||
+        (!prepared.profile.backgroundCatchUp &&
+            !poll.bindings.any(
+              (owner) => !owner._closed && owner._readerActive,
+            ))) {
+      throw const _ChatSynchronizationCancelled();
+    }
     final response = await _api.getChat(
       chatRequest: request,
       loginName: prepared.account.loginName,
@@ -328,7 +343,9 @@ final class ChatLiveRoomBinding {
     required this.accountId,
     required this.roomToken,
     required this.threadId,
-  }) : _service = service;
+    required bool readerActive,
+  }) : _service = service,
+       _readerActive = readerActive;
 
   final ChatService _service;
   final String accountId;
@@ -343,6 +360,25 @@ final class ChatLiveRoomBinding {
   bool _closed = false;
   bool _requiresCapabilityNetworkRead = false;
   int _generation = 0;
+  bool _readerActive;
+  Completer<void>? _readerWake;
+
+  /// Visibility changes suspend legacy reads, not the binding's lifetime.
+  void setReaderActive(bool active) {
+    if (_closed || active == _readerActive) return;
+    _readerActive = active;
+    if (active) {
+      _wakeReader();
+    } else if (_prepared?.profile.backgroundCatchUp != true) {
+      _activeCancellationCycle?.cancel();
+    }
+  }
+
+  void _wakeReader() {
+    final wake = _readerWake;
+    _readerWake = null;
+    wake?.complete();
+  }
 
   Future<void> synchronize({Future<void>? abortTrigger}) {
     if (_closed) {
@@ -415,6 +451,14 @@ final class ChatLiveRoomBinding {
   int get debugActiveCancellationCycleCount =>
       _activeCancellationCycle == null ? 0 : 1;
 
+  @visibleForTesting
+  bool get debugWaitingForReader => _readerWake != null;
+
+  @visibleForTesting
+  int get debugSharedPollReaderCount => _service._liveNetworkPolls.values
+      .where((poll) => poll.bindings.contains(this))
+      .fold(0, (count, poll) => count + poll.bindings.length);
+
   void _bindExternalCancellation(Future<void>? cancellation) {
     if (cancellation == null) {
       return;
@@ -444,6 +488,7 @@ final class ChatLiveRoomBinding {
     _closed = true;
     _generation++;
     _activeCancellationCycle?.cancel();
+    _wakeReader();
     _service._liveBindings.remove(this);
   }
 }
@@ -497,6 +542,36 @@ final class _ChatSynchronizationProbe {
   Future<void> get cancellation => _cancellation.future;
 
   Future<void> get abortTrigger => _cancellation.future;
+
+  Future<T> run<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } on Object {
+      // A lifecycle abort must not be persisted as a failed network request.
+      ensureActive();
+      rethrow;
+    }
+  }
+
+  Future<void> awaitFetchAllowed(_PreparedChat prepared) async {
+    ensureActive();
+    if (prepared.profile.backgroundCatchUp) {
+      binding._wakeReader();
+      return;
+    }
+    while (!prepared.profile.backgroundCatchUp && !binding._readerActive) {
+      final wake = binding._readerWake ??= Completer<void>();
+      await Future.any<void>([wake.future, cancellation]);
+      ensureActive();
+    }
+  }
+
+  void ensureFetchAllowed(_PreparedChat prepared) {
+    ensureActive();
+    if (!prepared.profile.backgroundCatchUp && !binding._readerActive) {
+      throw const _ChatSynchronizationCancelled();
+    }
+  }
 
   void ensureActive() {
     if (_cancellation.cancelled ||
