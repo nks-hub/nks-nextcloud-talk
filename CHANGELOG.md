@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Your own absence can be set, edited and cleared from the profile,
+  where until now only somebody else's was visible. Both days are
+  inclusive, and a colleague standing in is offered only where the
+  server accepts one.
+
 - A moderator can decide who may find an open conversation: only the
   people in it, or anyone with an account on the server. The current
   scope is read back from the server, and where an instance already
