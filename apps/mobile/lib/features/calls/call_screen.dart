@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app_providers.dart';
@@ -78,6 +79,9 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
   bool _inPictureInPicture = false;
   bool _pictureInPictureAvailable = false;
   String? _windowTrackId;
+  String? _expandedTile;
+  LocalHistoryEntry? _tileHistory;
+  bool _disposing = false;
 
   @override
   void initState() {
@@ -95,10 +99,44 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
 
   @override
   void dispose() {
+    _disposing = true;
+    _tileHistory?.remove();
     unawaited(_pictureInPictureModes?.cancel());
     _setPictureInPictureAvailable(false);
     super.dispose();
   }
+
+  void _expand(String id) {
+    if (_expandedTile != null) return;
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+    _tileHistory = LocalHistoryEntry(
+      onRemove: () {
+        _tileHistory = null;
+        if (!_disposing && mounted) setState(() => _expandedTile = null);
+      },
+    );
+    route.addLocalHistoryEntry(_tileHistory!);
+    setState(() => _expandedTile = id);
+  }
+
+  Widget _expandable(String id, Widget tile, AppLocalizations strings) => Stack(
+    fit: StackFit.expand,
+    children: [
+      GestureDetector(onTap: () => _expand(id), child: tile),
+      Positioned(
+        top: 4,
+        right: 4,
+        child: IconButton.filledTonal(
+          key: Key('call-expand-$id'),
+          tooltip: strings.callScreenExpand,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          onPressed: () => _expand(id),
+          icon: const Icon(Icons.fullscreen_rounded),
+        ),
+      ),
+    ],
+  );
 
   bool _ended(CallJoinState join) =>
       join.phase == CallJoinPhase.idle || join.phase == CallJoinPhase.failed;
@@ -193,16 +231,40 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       _windowTrackId = windowTrack;
       unawaited(_pictureInPicture.setVideoTrack(windowTrack));
     }
-    final tiles = <Widget>[
-      _SelfTile(media: media, strings: strings),
+    final participantTiles = <String, Widget>{
+      'self': _SelfTile(media: media, strings: strings),
       for (final peer in media.participants)
-        _PeerTile(peer: peer, names: names, strings: strings),
-    ];
+        'peer-${peer.peerId}': _PeerTile(
+          peer: peer,
+          names: names,
+          strings: strings,
+        ),
+    };
+    final tiles = participantTiles.values.toList(growable: false);
     // A shared screen is worth the whole width; the participants share the
     // space below it.
     final sharing = media.participants
         .where((peer) => peer.screen != null)
         .toList(growable: false);
+    final screenTiles = <String, Widget>{
+      for (final peer in sharing)
+        'screen-${peer.peerId}': _Tile(
+          name: strings.callScreenSharedBy(_PeerTile.nameOf(peer, names)),
+          initial: '',
+          video: peer.screen!.build(context),
+          muted: false,
+          handRaised: false,
+          subtitle: null,
+        ),
+    };
+    final selected =
+        participantTiles[_expandedTile] ?? screenTiles[_expandedTile];
+    if (_expandedTile != null && selected == null) {
+      final missing = _expandedTile;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _expandedTile == missing) _tileHistory?.remove();
+      });
+    }
     final columns = tiles.length <= 1 ? 1 : 2;
     final gap = _inPictureInPicture ? 2.0 : 8.0;
     if (_inPictureInPicture) {
@@ -227,97 +289,133 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         ),
       );
     }
-    final grid = GridView.count(
+    final grid = CustomScrollView(
       key: const Key('call-grid'),
-      padding: EdgeInsets.all(gap),
-      crossAxisCount: columns,
-      mainAxisSpacing: gap,
-      crossAxisSpacing: gap,
-      childAspectRatio: 3 / 4,
-      children: tiles,
-    );
-    return Scaffold(
-      key: const Key('call-screen'),
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(strings.callScreenTitle(tiles.length)),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            for (final peer in sharing)
-              Padding(
-                key: Key('call-screen-shared-${peer.peerId}'),
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: _Tile(
-                    name: strings.callScreenSharedBy(
-                      _PeerTile.nameOf(peer, names),
-                    ),
-                    initial: '',
-                    video: peer.screen!.build(context),
-                    muted: false,
-                    handRaised: false,
-                    subtitle: null,
-                  ),
-                ),
-              ),
-            Expanded(child: grid),
-            if (media.reaction != null)
-              Padding(
-                key: const Key('call-screen-reaction'),
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '${media.reaction!.emoji}  '
-                  '${names['actor:${_actorKey(media, media.reaction!.peerId)}'] ?? ''}',
-                  style: const TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-              // Wrap, not Row: six round controls plus a labelled leave
-              // button do not fit across a 411 dp phone, and a Row simply
-              // clips — on the emulator the red button ran off the right
-              // edge reading "Leave c". Wrapping puts the button on its own
-              // line when it has to, which keeps every control at full size
-              // rather than shrinking the targets to fit.
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  CallControls(
-                    roomKey: roomKey,
-                    join: join,
-                    color: Colors.white,
-                    keyPrefix: 'call-screen',
-                  ),
-                  FilledButton.icon(
-                    key: const Key('call-screen-leave'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error,
-                      foregroundColor: Theme.of(context).colorScheme.onError,
-                    ),
-                    onPressed: join.isBusy
-                        ? null
-                        : () => unawaited(
-                            ref
-                                .read(
-                                  callJoinControllerProvider(roomKey).notifier,
-                                )
-                                .leave(),
-                          ),
-                    icon: const Icon(Icons.call_end_rounded),
-                    label: Text(strings.callBannerLeave),
-                  ),
-                ],
+      slivers: [
+        for (final entry in screenTiles.entries)
+          SliverToBoxAdapter(
+            child: Padding(
+              key: Key('call-screen-shared-${entry.key.substring(7)}'),
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: _expandable(entry.key, entry.value, strings),
               ),
             ),
-          ],
+          ),
+        SliverPadding(
+          padding: EdgeInsets.all(gap),
+          sliver: SliverGrid.count(
+            crossAxisCount: columns,
+            mainAxisSpacing: gap,
+            crossAxisSpacing: gap,
+            childAspectRatio: 3 / 4,
+            children: [
+              for (final entry in participantTiles.entries)
+                _expandable(entry.key, entry.value, strings),
+            ],
+          ),
+        ),
+      ],
+    );
+    return CallbackShortcuts(
+      bindings: {
+        if (selected != null)
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              _tileHistory?.remove(),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          key: const Key('call-screen'),
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(strings.callScreenTitle(tiles.length)),
+            actions: [
+              if (selected != null)
+                IconButton(
+                  key: const Key('call-collapse-tile'),
+                  tooltip: strings.close,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  onPressed: () => _tileHistory?.remove(),
+                  icon: const Icon(Icons.fullscreen_exit_rounded),
+                ),
+            ],
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: selected == null
+                      ? grid
+                      : SizedBox.expand(
+                          key: const Key('call-expanded-tile'),
+                          child: selected,
+                        ),
+                ),
+                if (media.reaction != null)
+                  Padding(
+                    key: const Key('call-screen-reaction'),
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '${media.reaction!.emoji}  '
+                      '${names['actor:${_actorKey(media, media.reaction!.peerId)}'] ?? ''}',
+                      style: const TextStyle(color: Colors.white, fontSize: 20),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                  // Wrap, not Row: six round controls plus a labelled leave
+                  // button do not fit across a 411 dp phone, and a Row simply
+                  // clips — on the emulator the red button ran off the right
+                  // edge reading "Leave c". Wrapping puts the button on its own
+                  // line when it has to, which keeps every control at full size
+                  // rather than shrinking the targets to fit.
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      CallControls(
+                        roomKey: roomKey,
+                        join: join,
+                        color: Colors.white,
+                        keyPrefix: 'call-screen',
+                      ),
+                      FilledButton.icon(
+                        key: const Key('call-screen-leave'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.error,
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onError,
+                        ),
+                        onPressed: join.isBusy
+                            ? null
+                            : () => unawaited(
+                                ref
+                                    .read(
+                                      callJoinControllerProvider(
+                                        roomKey,
+                                      ).notifier,
+                                    )
+                                    .leave(),
+                              ),
+                        icon: const Icon(Icons.call_end_rounded),
+                        label: Text(strings.callBannerLeave),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -744,6 +744,7 @@
   "callBannerOpenCallView": "Open the call view",
   "callScreenTitle": "Call ({count})",
   "callScreenEnded": "Call ended.",
+  "callScreenExpand": "Expand video",
   "@callScreenTitle": {
     "placeholders": {
       "count": {

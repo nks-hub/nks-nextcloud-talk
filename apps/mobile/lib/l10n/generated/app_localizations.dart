@@ -3842,6 +3842,12 @@ abstract class AppLocalizations {
   /// **'Call ended.'**
   String get callScreenEnded;
 
+  /// No description provided for @callScreenExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand video'**
+  String get callScreenExpand;
+
   /// No description provided for @callBannerCameraOn.
   ///
   /// In en, this message translates to:

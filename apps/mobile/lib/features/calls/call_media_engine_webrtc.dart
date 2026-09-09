@@ -297,7 +297,7 @@ final class _WebRtcLocalVideo implements CallLocalVideo {
   Widget buildPreview(BuildContext context) => rtc.RTCVideoView(
     _renderer,
     mirror: true,
-    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
   );
 
   @override
@@ -371,7 +371,7 @@ final class _WebRtcRemoteVideo implements CallRemoteVideo {
   @override
   Widget build(BuildContext context) => rtc.RTCVideoView(
     _renderer,
-    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
   );
 
   @override

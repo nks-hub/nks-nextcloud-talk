@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
@@ -29,6 +30,7 @@ final class _FrozenJoinController extends CallJoinController {
   CallJoinState build(CallRoomKey arg) => frozen;
 
   void fail() => state = const CallJoinState(phase: CallJoinPhase.failed);
+  void publish(CallJoinState next) => state = next;
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
@@ -189,6 +191,168 @@ _pushCallScreen(WidgetTester tester, {bool ended = false}) async {
 }
 
 void main() {
+  testWidgets('expanded peer follows identity through reorder and removal', (
+    tester,
+  ) async {
+    await _pumpCallScreen(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CallScreen)),
+    );
+    final controller =
+        container.read(callJoinControllerProvider(_key).notifier)
+            as _FrozenJoinController;
+    await tester.tap(find.byKey(const Key('call-expand-peer-peer-a')));
+    await tester.pumpAndSettle();
+    controller.publish(
+      CallJoinState(
+        phase: CallJoinPhase.joined,
+        media: CallMediaState(
+          phase: CallMediaPhase.connected,
+          participants: _joined().media.participants.reversed.toList(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-tile-peer-a')), findsOneWidget);
+    expect(find.byKey(const Key('call-tile-peer-b')), findsNothing);
+    controller.publish(
+      const CallJoinState(
+        phase: CallJoinPhase.joined,
+        media: CallMediaState(phase: CallMediaPhase.connected),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+    expect(find.byKey(const Key('call-tile-self')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('expanded call ending in PiP retains the end card until exit', (
+    tester,
+  ) async {
+    final call = await _pushCallScreen(tester);
+    await tester.tap(find.byKey(const Key('call-expand-self')));
+    await tester.pumpAndSettle();
+    call.pip.modes.add(true);
+    await tester.pumpAndSettle();
+    call.controller.fail();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen-pip-ended')), findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+    call.pip.modes.add(false);
+    await tester.pumpAndSettle();
+    expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Escape closes expansion while the app bar action has focus', (
+    tester,
+  ) async {
+    await _pumpCallScreen(tester);
+    await tester.tap(find.byKey(const Key('call-expand-self')));
+    await tester.pumpAndSettle();
+    final ink = find
+        .descendant(
+          of: find.byKey(const Key('call-collapse-tile')),
+          matching: find.byType(InkWell),
+        )
+        .first;
+    final focus = Focus.of(tester.element(ink));
+    focus.requestFocus();
+    await tester.pump();
+    expect(focus.hasPrimaryFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+  });
+
+  testWidgets(
+    'landscape sharing keeps controls visible and expands at large text',
+    (tester) async {
+      await _pumpCallScreen(tester, screenTrackId: 'screen-track');
+      tester.view.physicalSize = const Size(900, 400);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byKey(const Key('call-expand-screen-peer-b')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('call-expanded-tile')), findsOneWidget);
+      expect(
+        tester.getRect(find.byKey(const Key('call-screen-leave'))).bottom,
+        lessThanOrEqualTo(400),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'camera expansion fills the call body and Escape restores tiles',
+    (tester) async {
+      final pip = await _pumpCallScreen(tester);
+      await tester.tap(find.byKey(const Key('call-expand-peer-peer-a')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('call-expanded-tile')), findsOneWidget);
+      expect(find.byKey(const Key('call-tile-self')), findsNothing);
+      expect(find.byKey(const Key('fake-remote-video')), findsOneWidget);
+      expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+      expect(pip.armed, [true]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+      expect(find.byKey(const Key('call-tile-self')), findsOneWidget);
+      expect(pip.armed, [true]);
+    },
+  );
+
+  testWidgets('screen expansion closes when that share ends', (tester) async {
+    await _pumpCallScreen(tester, screenTrackId: 'screen-track');
+    await tester.tap(find.byKey(const Key('call-expand-screen-peer-b')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-expanded-tile')), findsOneWidget);
+    expect(find.byKey(const Key('fake-remote-video')), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CallScreen)),
+    );
+    (container.read(callJoinControllerProvider(_key).notifier)
+            as _FrozenJoinController)
+        .publish(_joined());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+    expect(find.byKey(const Key('call-tile-self')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Back closes the expanded tile before leaving the call view', (
+    tester,
+  ) async {
+    final call = await _pushCallScreen(tester);
+    await tester.tap(find.byKey(const Key('call-expand-self')));
+    await tester.pumpAndSettle();
+    await call.navigator.currentState!.maybePop();
+    await tester.pumpAndSettle();
+    expect(find.byType(CallScreen), findsOneWidget);
+    expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+    await tester.tap(find.byKey(const Key('call-expand-self')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('call-collapse-tile')));
+    await tester.pumpAndSettle();
+    expect(find.byType(CallScreen), findsOneWidget);
+    expect(find.byKey(const Key('call-expanded-tile')), findsNothing);
+  });
+
+  testWidgets('ending an expanded call removes the call route', (tester) async {
+    final call = await _pushCallScreen(tester);
+    await tester.tap(find.byKey(const Key('call-expand-self')));
+    await tester.pumpAndSettle();
+    call.controller.fail();
+    await tester.pumpAndSettle();
+    expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('ending a covered call removes its route, not the newer route', (
     tester,
   ) async {
