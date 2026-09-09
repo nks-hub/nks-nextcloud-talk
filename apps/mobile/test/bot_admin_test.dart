@@ -296,15 +296,32 @@ void main() {
     ) async {
       await pumpScreen(
         tester,
+        botRoute: (_) async => http.Response(_ocs(<Object?>[_failingBot]), 200),
+      );
+
+      expect(find.byKey(const Key('bot-admin-failure-4')), findsOneWidget);
+      expect(find.text('7 failures'), findsOneWidget);
+      expect(find.text('Connection refused'), findsOneWidget);
+      expect(find.textContaining('Last failure'), findsOneWidget);
+    });
+
+    testWidgets('a bot whose app is off is switched off, not failing', (
+      tester,
+    ) async {
+      await pumpScreen(
+        tester,
         botRoute: (_) async => http.Response(_ocs(<Object?>[_appBot]), 200),
       );
 
-      expect(find.byKey(const Key('bot-admin-failure-3')), findsOneWidget);
-      expect(find.text('1 failure'), findsOneWidget);
-      expect(find.text('App disabled'), findsOneWidget);
-      expect(find.textContaining('Last failure'), findsOneWidget);
-      // The synthesized state is its own label, not "disabled".
+      // Its own state, and the server's own words for why.
       expect(find.text('Unavailable, its app is not enabled'), findsOneWidget);
+      expect(find.byKey(const Key('bot-admin-switched-off-3')), findsOneWidget);
+      expect(find.text('App disabled'), findsOneWidget);
+      // None of the failure wording: that count of 1 is invented by the server
+      // and the moment is the moment of the request.
+      expect(find.byKey(const Key('bot-admin-failure-3')), findsNothing);
+      expect(find.text('1 failure'), findsNothing);
+      expect(find.textContaining('Last failure'), findsNothing);
       expect(find.text('Webhook host: no-such-app'), findsOneWidget);
     });
 
@@ -444,6 +461,22 @@ const Map<String, Object?> _appBot = <String, Object?>{
   'last_error_message': 'App disabled',
   'state': 3,
   'features': 4,
+};
+
+/// A bot the server has really counted webhook failures against, which is the
+/// case this build could not produce on a live server: Talk 22.0.17 logs the
+/// increment and then loses it at request shutdown.
+const Map<String, Object?> _failingBot = <String, Object?>{
+  'id': 4,
+  'name': 'Loopback bot',
+  'url': 'https://bots.example.invalid/gone',
+  'url_hash': '0b2e4a1c6d8f0a2c4e6a8c0e2a4c6e8a0c2e4a6c',
+  'description': 'Points at a URL that answers 404',
+  'error_count': 7,
+  'last_error_date': 1788965389,
+  'last_error_message': 'Connection refused',
+  'state': 1,
+  'features': 3,
 };
 
 final String _liveList = _ocs(<Object?>[_echoBot, _brokenBot, _appBot]);
