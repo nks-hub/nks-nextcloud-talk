@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -181,6 +182,69 @@ void main() {
           .data,
       'recovered',
     );
+  });
+
+  testWidgets('a line can be selected and copied out', (tester) async {
+    const source = 'alpha beta gamma';
+    final repository = _repository(utf8.encode(source), type: 'text/plain');
+    addTearDown(repository.close);
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map<Object?, Object?>)['text'] as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await _pump(tester, account, repository, type: 'text/plain');
+
+    // Reading a log in place is only useful if a line can be taken out of it.
+    final finder = find.byKey(const Key('text-attachment-content'));
+    // The centre of a wide, one-line block is past the end of the text, where
+    // a press selects nothing; the word itself is near the start.
+    await tester.longPressAt(tester.getTopLeft(finder) + const Offset(20, 8));
+    await tester.pumpAndSettle();
+    final state = tester.state<EditableTextState>(
+      find.descendant(of: finder, matching: find.byType(EditableText)),
+    );
+    expect(state.textEditingValue.selection.isCollapsed, isFalse);
+    expect(
+      state.textEditingValue.selection.textInside(source).trim(),
+      isNotEmpty,
+    );
+
+    state.copySelection(SelectionChangedCause.toolbar);
+    await tester.pump();
+    expect(copied, isNotEmpty);
+    expect(source, contains(copied.single));
+  });
+
+  testWidgets('a credential the server no longer accepts is reported', (
+    tester,
+  ) async {
+    final vault = MemoryCredentialVault()
+      ..values['account-a'] = 'fixture-app-password';
+    final repository = ChatMediaRepository(
+      vault,
+      wait: (_) async {},
+      client: MockClient((request) async => http.Response('', 401)),
+    );
+    addTearDown(repository.close);
+
+    await _pump(tester, account, repository, type: 'text/plain');
+
+    expect(find.byKey(const Key('text-attachment-failed')), findsOneWidget);
+    expect(find.byKey(const Key('text-attachment-content')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('handing the file to another app stays available', (

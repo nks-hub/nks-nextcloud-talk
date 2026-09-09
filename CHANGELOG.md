@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A text or Markdown attachment opens inside the app instead of being
+  handed to another one, with its markup left as text rather than
+  interpreted. A very long file shows its beginning and says so, an
+  unreadable encoding still opens, and passing the file to another app
+  stays one tap away.
+
 - Pinning a message asks how long it should stay pinned: until somebody
   unpins it, an hour, tomorrow morning or a week. Dismissing the question
   pins nothing, which it should not, because a pin replaces whatever the
