@@ -15,6 +15,7 @@ import 'package:nextcloudtalk/features/calls/call_picture_in_picture.dart';
 import 'package:nextcloudtalk/features/calls/call_screen.dart';
 import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 const CallRoomKey _key = (accountId: 'account-a', roomToken: 'rooma123');
@@ -694,5 +695,19 @@ void main() {
       isEmpty,
       reason: 'no video to draw is not a change worth a platform call',
     );
+  });
+
+  // The densest safety-critical screen in the app: mute, camera, screen share,
+  // recording, raise hand, reactions and leave all sit here, and a control a
+  // screen reader announces as just "button" is unusable in a live call. Every
+  // other screen with its own harness already carries this audit; the call
+  // screen did not.
+  testWidgets('every call control says what it does', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pumpCallScreen(tester);
+
+    expectEveryButtonNamed(tester, screen: 'the call screen');
+    expectReadingOrderFollowsLayout(tester, screen: 'the call screen');
+    semantics.dispose();
   });
 }

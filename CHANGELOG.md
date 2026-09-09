@@ -20,6 +20,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- The call screen is covered by the accessibility audit the other screens
+  already had. Nothing was wrong there today; the point is that a future
+  control without a spoken name now fails a test rather than reaching somebody
+  in a live call.
 - Widget tests that wait for real work wait on a clock, not on a count. Two of
   them failed intermittently in a loaded run and passed alone, because two
   hundred five-millisecond waits is a budget of one second and one second is
