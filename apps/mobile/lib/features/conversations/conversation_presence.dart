@@ -217,7 +217,19 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: avatarGap),
-              Expanded(child: ConversationPresenceTitle(conversation: current)),
+              Expanded(
+                child: ConversationPresenceTitle(
+                  conversation: current,
+                  // The same size the wide header already uses. `AppBar`'s own
+                  // `titleLarge` is 22sp, and next to the avatar, the back
+                  // affordance and three actions it left a 1080 px phone
+                  // showing eleven characters of the name - measured on an
+                  // API 34 device, where "NCloudTalk Test 2" read
+                  // "NCloudTal...". The room's name is what the screen is
+                  // about, so it gets the size that fits it.
+                  titleStyle: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
               ...conversationHeaderActions(
                 _headerActions(context, ref, account, current),
                 width: box.maxWidth,

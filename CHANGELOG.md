@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- The conversation name has room in the chat header. Next to the back
+  affordance, the avatar and the call controls it was shown at the app bar's
+  own title size, which on a phone left eleven characters of it - a room called
+  "NCloudTalk Test 2" read "NCloudTal...". It now uses the same size the wide
+  header already did.
 - A missed tap in a widget test is an error where it happens. Tapping a row
   below the test surface only warned, so the test went on waiting for something
   that would never come and failed as a timeout somewhere else entirely; that

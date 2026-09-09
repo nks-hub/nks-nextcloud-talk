@@ -9,6 +9,7 @@ import 'test_support.dart';
 void main() {
   CachedConversation conversation({
     int roomType = 1,
+    String displayName = 'Synthetic peer',
     String? status,
     String? statusIcon,
     String? statusMessage,
@@ -17,7 +18,7 @@ void main() {
     return CachedConversation(
       accountId: 'account-a',
       token: 'rooma123',
-      displayName: 'Synthetic peer',
+      displayName: displayName,
       description: 'Synthetic conversation A',
       lastActivity: 1724300000,
       unreadMessages: 0,
@@ -135,6 +136,58 @@ void main() {
 
     expect(find.bySemanticsLabel('Online'), findsOneWidget);
     handle.dispose();
+  });
+
+  // The chat header carries a back affordance, an avatar and three actions, so
+  // the name gets what is left. Measured on an API 34 phone (1080 px): the
+  // title area is 442 px wide, the avatar and its gap take 46 dp of it, and
+  // `AppBar`'s own 22sp title then showed eleven characters of
+  // "NCloudTalk Test 2".
+  testWidgets('an ordinary room name fits what the phone header leaves', (
+    tester,
+  ) async {
+    const name = 'NCloudTalk Test 2';
+    // The width the chat header leaves for the name on a 1080 px phone: the
+    // title area measured at 442 px on an API 34 device, less the avatar and
+    // its gap.
+    const available = 122.0;
+
+    // Read through the tree, not from `AppTheme.light()` beside it: a raw
+    // `ThemeData` carries a `TextTheme` whose sizes are still null, so both
+    // styles measure identically there and prove nothing.
+    Future<double> nameWidth({required bool small, double width = 1000}) async {
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                child: Builder(
+                  builder: (context) {
+                    final text = Theme.of(context).textTheme;
+                    return ConversationPresenceTitle(
+                      conversation: conversation(displayName: name),
+                      titleStyle: small ? text.titleMedium : text.titleLarge,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return tester.getSize(find.text(name)).width;
+    }
+
+    final wide = await nameWidth(small: false);
+    final narrow = await nameWidth(small: true);
+    expect(
+      wide,
+      greaterThan(available),
+      reason: "the AppBar's own title size is what truncated the name",
+    );
+    expect(narrow, lessThan(wide));
   });
 
   for (final brightness in Brightness.values) {
