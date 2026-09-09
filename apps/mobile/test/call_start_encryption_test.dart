@@ -10,6 +10,9 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/calls/call_banner.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
+import 'package:nextcloudtalk/features/calls/call_lifecycle_controller.dart';
+import 'package:nextcloudtalk/features/calls/call_picture_in_picture.dart';
+import 'package:nextcloudtalk/features/calls/call_participants_sheet.dart';
 import 'package:nextcloudtalk/features/calls/call_start_button.dart';
 import 'package:nextcloudtalk/features/calls/call_transport_service.dart';
 
@@ -46,6 +49,7 @@ void main() {
   Future<void> mount(
     WidgetTester tester, {
     String language = 'en',
+    bool hasCall = false,
     CallLifecycleError refusal =
         CallLifecycleError.endToEndEncryptionUnsupported,
   }) async {
@@ -53,6 +57,25 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          callTransportProvider.overrideWith(
+            (ref, key) async => CallTransport.externalHpb,
+          ),
+          callLifecycleStatusProvider.overrideWith(
+            (ref, key) async => CallLifecycleRoomStatus(
+              key: key,
+              status: CallLifecycleStatus(
+                ownSessionPresent: false,
+                peers: const [],
+                state: null,
+              ),
+            ),
+          ),
+          callParticipantNamesProvider.overrideWith(
+            (ref, key) async => const {},
+          ),
+          callPictureInPictureProvider.overrideWithValue(
+            const UnavailableCallPictureInPicture(),
+          ),
           callLifecyclePersistedProvider.overrideWith(
             (ref, key) async => false,
           ),
@@ -65,7 +88,7 @@ void main() {
           home: Scaffold(
             body: ValueListenableBuilder<_View>(
               valueListenable: view,
-              builder: (_, value, _) => _Header(view: value),
+              builder: (_, value, _) => _Header(view: value, hasCall: hasCall),
             ),
           ),
         ),
@@ -232,17 +255,88 @@ void main() {
     admission.complete(true);
     await tester.pumpAndSettle();
     expect(controllers.values.single.cameraStarts, 1);
+    expect(find.byKey(const Key('call-screen')), findsOneWidget);
     expect(
       find.byKey(const Key('call-banner-encryption-unsupported')),
       findsNothing,
     );
   });
+
+  testWidgets('an admitted audio call opens the participant grid', (
+    tester,
+  ) async {
+    await mount(tester);
+    await tester.tap(find.byKey(const Key('start-call-audio')));
+    admission.complete(true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen')), findsOneWidget);
+    expect(find.byKey(const Key('call-grid')), findsOneWidget);
+    expect(controllers.values.single.cameraStarts, 0);
+  });
+
+  testWidgets('accepting the banner call opens the participant grid', (
+    tester,
+  ) async {
+    await mount(tester, hasCall: true);
+    await tester.tap(find.byKey(const Key('call-banner-join')));
+    admission.complete(true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen')), findsOneWidget);
+    expect(controllers.values.single.joinCalls, 1);
+  });
+
+  testWidgets('late admission does not cover a newer route or start video', (
+    tester,
+  ) async {
+    await mount(tester);
+    final context = tester.element(find.byType(_Header));
+    await tester.tap(find.byKey(const Key('start-call-video')));
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Newer route')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    admission.complete(true);
+    await tester.pumpAndSettle();
+    expect(find.text('Newer route'), findsOneWidget);
+    expect(find.byKey(const Key('call-screen')), findsNothing);
+    expect(controllers.values.first.cameraStarts, 0);
+  });
+
+  testWidgets('a camera completing under a newer route cannot open the grid', (
+    tester,
+  ) async {
+    await mount(tester);
+    final context = tester.element(find.byType(_Header));
+    final controller = controllers.values.single;
+    controller.cameraStartup = Completer<void>();
+    await tester.tap(find.byKey(const Key('start-call-video')));
+    admission.complete(true);
+    await tester.pump();
+    expect(controller.cameraStarts, 1);
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Newer route')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.cameraStartup!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Newer route'), findsOneWidget);
+    expect(find.byKey(const Key('call-screen')), findsNothing);
+  });
 }
 
 final class _Header extends ConsumerWidget {
-  const _Header({required this.view});
+  const _Header({required this.view, this.hasCall = false});
 
   final _View view;
+  final bool hasCall;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -262,7 +356,7 @@ final class _Header extends ConsumerWidget {
       avatarVersion: '',
       isCustomAvatar: false,
       rawJson: jsonEncode({
-        'hasCall': false,
+        'hasCall': hasCall,
         'canStartCall': true,
         'readOnly': 0,
         'lobbyState': 0,
@@ -307,6 +401,7 @@ final class _StartController extends CallJoinController {
   final CallLifecycleError refusal;
   int joinCalls = 0;
   int cameraStarts = 0;
+  Completer<void>? cameraStartup;
   bool disposed = false;
 
   @override
@@ -331,5 +426,6 @@ final class _StartController extends CallJoinController {
   @override
   Future<void> setCameraEnabled(bool enabled) async {
     if (enabled) cameraStarts++;
+    await cameraStartup?.future;
   }
 }

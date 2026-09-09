@@ -3836,6 +3836,12 @@ abstract class AppLocalizations {
   /// **'Call ({count})'**
   String callScreenTitle(int count);
 
+  /// No description provided for @callScreenEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'Call ended.'**
+  String get callScreenEnded;
+
   /// No description provided for @callBannerCameraOn.
   ///
   /// In en, this message translates to:

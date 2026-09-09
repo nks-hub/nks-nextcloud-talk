@@ -715,6 +715,7 @@
   "callBannerReact": "Poslat reakci",
   "callBannerOpenCallView": "Otevřít zobrazení hovoru",
   "callScreenTitle": "Hovor ({count})",
+  "callScreenEnded": "Hovor skončil.",
   "callBannerCameraOn": "Zapnout kameru",
   "callBannerCameraOff": "Vypnout kameru",
   "callBannerCameraDenied": "Přístup ke kameře nebyl povolen. Hovor pokračuje bez videa.",

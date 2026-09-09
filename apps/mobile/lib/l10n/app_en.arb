@@ -743,6 +743,7 @@
   "callBannerReact": "Send a reaction",
   "callBannerOpenCallView": "Open the call view",
   "callScreenTitle": "Call ({count})",
+  "callScreenEnded": "Call ended.",
   "@callScreenTitle": {
     "placeholders": {
       "count": {

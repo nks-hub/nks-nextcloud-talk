@@ -12,6 +12,39 @@ import 'call_participants_sheet.dart';
 import 'call_picture_in_picture.dart';
 import 'call_transport_service.dart';
 
+/// Presents an admitted call while its initiating view still owns navigation.
+Future<void> joinCallAndPresent(
+  BuildContext context,
+  WidgetRef ref,
+  CallRoomKey key, {
+  required bool Function() isCurrent,
+  bool withCamera = false,
+}) async {
+  bool ownsView() => context.mounted && ref.context.mounted && isCurrent();
+  if (!ownsView()) return;
+  final origin = ModalRoute.of(context);
+  final navigator = Navigator.of(context);
+  bool canPresent() =>
+      ownsView() &&
+      (origin?.isCurrent ?? true) &&
+      identical(Navigator.of(context), navigator);
+  if (!canPresent()) return;
+  final state = ref.read(callJoinControllerProvider(key));
+  if (state.isBusy || state.phase == CallJoinPhase.joined) return;
+  final controller = ref.read(callJoinControllerProvider(key).notifier);
+  bool sameJoinedCall() =>
+      identical(
+        ref.read(callJoinControllerProvider(key).notifier),
+        controller,
+      ) &&
+      ref.read(callJoinControllerProvider(key)).phase == CallJoinPhase.joined;
+  await controller.join();
+  if (!canPresent() || !sameJoinedCall()) return;
+  if (withCamera) await controller.setCameraEnabled(true);
+  if (!context.mounted || !canPresent() || !sameJoinedCall()) return;
+  await showCallScreen(context, key);
+}
+
 /// Opens the full-screen view of a joined call.
 Future<void> showCallScreen(BuildContext context, CallRoomKey key) {
   return Navigator.of(context).push<void>(
@@ -43,6 +76,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
   late final CallPictureInPicture _pictureInPicture;
   StreamSubscription<bool>? _pictureInPictureModes;
   bool _inPictureInPicture = false;
+  bool _pictureInPictureAvailable = false;
   String? _windowTrackId;
 
   @override
@@ -52,16 +86,38 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
     _pictureInPictureModes = _pictureInPicture.active.listen((active) {
       if (mounted && active != _inPictureInPicture) {
         setState(() => _inPictureInPicture = active);
+        if (!active && _ended(ref.read(callJoinControllerProvider(roomKey)))) {
+          _removeCallRoute();
+        }
       }
     });
-    unawaited(_pictureInPicture.setAvailable(true));
   }
 
   @override
   void dispose() {
     unawaited(_pictureInPictureModes?.cancel());
-    unawaited(_pictureInPicture.setAvailable(false));
+    _setPictureInPictureAvailable(false);
     super.dispose();
+  }
+
+  bool _ended(CallJoinState join) =>
+      join.phase == CallJoinPhase.idle || join.phase == CallJoinPhase.failed;
+
+  void _setPictureInPictureAvailable(bool available) {
+    if (_pictureInPictureAvailable == available) return;
+    _pictureInPictureAvailable = available;
+    if (!available) {
+      _windowTrackId = null;
+      unawaited(_pictureInPicture.setVideoTrack(null));
+    }
+    unawaited(_pictureInPicture.setAvailable(available));
+  }
+
+  void _removeCallRoute() {
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive && !route.isFirst) {
+      Navigator.of(context).removeRoute(route);
+    }
   }
 
   /// The one picture a picture-in-picture window can hold: a shared screen if
@@ -88,23 +144,52 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final join = ref.watch(callJoinControllerProvider(roomKey));
+    final route = ModalRoute.of(context);
+    final ended = _ended(join);
+    _setPictureInPictureAvailable(!ended && (route?.isCurrent ?? true));
     final names =
         ref.watch(callParticipantNamesProvider(roomKey)).valueOrNull ??
         const <String, String>{};
     // The call ended (or failed) under this screen: nothing to show here any
     // more, the banner explains why.
     ref.listen(callJoinControllerProvider(roomKey), (previous, next) {
-      if (next.phase == CallJoinPhase.idle ||
-          next.phase == CallJoinPhase.failed) {
-        Navigator.of(context).maybePop();
+      if (_ended(next)) {
+        _setPictureInPictureAvailable(false);
+        if (!_inPictureInPicture) _removeCallRoute();
       }
     });
+    if (ended) {
+      if (!_inPictureInPicture) {
+        final endedKey = roomKey;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              roomKey == endedKey &&
+              !_inPictureInPicture &&
+              _ended(ref.read(callJoinControllerProvider(endedKey)))) {
+            _removeCallRoute();
+          }
+        });
+      }
+      return Scaffold(
+        key: const Key('call-screen-pip-ended'),
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              strings.callScreenEnded,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      );
+    }
     final media = join.media;
     // Recomputed on every build rather than watched: the participants list is
     // rebuilt whenever a track appears or goes away, and the port drops a
     // repeat of the same id on the platform side.
     final windowTrack = _windowTrack(media);
-    if (windowTrack != _windowTrackId) {
+    if (_pictureInPictureAvailable && windowTrack != _windowTrackId) {
       _windowTrackId = windowTrack;
       unawaited(_pictureInPicture.setVideoTrack(windowTrack));
     }

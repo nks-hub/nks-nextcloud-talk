@@ -21,6 +21,7 @@ import '../../data/app_database.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../conversations/conversation_header_actions.dart';
 import 'call_join_controller.dart';
+import 'call_screen.dart';
 import 'call_state.dart';
 
 /// A phone and, where the room allows video, a camera. Both start the call
@@ -41,23 +42,13 @@ List<ConversationHeaderAction> callStartActions(
   final key = (accountId: accountId, roomToken: conversation.token);
   final join = ref.watch(callJoinControllerProvider(key));
   final busy = join.isBusy || join.phase == CallJoinPhase.joined;
-  Future<void> start({required bool withCamera}) async {
-    if (!context.mounted || !ref.context.mounted || !isCurrent()) return;
-    final current = ref.read(callJoinControllerProvider(key));
-    if (current.isBusy || current.phase == CallJoinPhase.joined) return;
-    final controller = ref.read(callJoinControllerProvider(key).notifier);
-    await controller.join();
-    if (!context.mounted || !ref.context.mounted || !isCurrent()) return;
-    if (withCamera &&
-        identical(
-          ref.read(callJoinControllerProvider(key).notifier),
-          controller,
-        ) &&
-        ref.read(callJoinControllerProvider(key)).phase ==
-            CallJoinPhase.joined) {
-      await controller.setCameraEnabled(true);
-    }
-  }
+  Future<void> start({required bool withCamera}) => joinCallAndPresent(
+    context,
+    ref,
+    key,
+    isCurrent: isCurrent,
+    withCamera: withCamera,
+  );
 
   return [
     ConversationHeaderAction(

@@ -236,7 +236,18 @@ class _OngoingCallBannerState extends ConsumerState<OngoingCallBanner> {
                             callJoinControllerProvider(key).notifier,
                           );
                           unawaited(
-                            joined ? controller.leave() : controller.join(),
+                            joined
+                                ? controller.leave()
+                                : joinCallAndPresent(
+                                    context,
+                                    ref,
+                                    key,
+                                    isCurrent: () =>
+                                        mounted &&
+                                        widget.account.id == key.accountId &&
+                                        widget.conversation.token ==
+                                            key.roomToken,
+                                  ),
                           );
                         },
                   child: Text(

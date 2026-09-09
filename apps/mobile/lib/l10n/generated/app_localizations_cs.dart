@@ -2094,6 +2094,9 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get callScreenEnded => 'Hovor skončil.';
+
+  @override
   String get callBannerCameraOn => 'Zapnout kameru';
 
   @override

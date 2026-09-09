@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/app_providers.dart';
+import 'package:nextcloudtalk/l10n/generated/app_localizations.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_session.dart';
@@ -26,6 +27,8 @@ final class _FrozenJoinController extends CallJoinController {
 
   @override
   CallJoinState build(CallRoomKey arg) => frozen;
+
+  void fail() => state = const CallJoinState(phase: CallJoinPhase.failed);
 }
 
 final class _FakeRemoteVideo implements CallRemoteVideo {
@@ -61,7 +64,6 @@ final class _FakePictureInPicture implements CallPictureInPicture {
 
   @override
   Stream<bool> get active => modes.stream;
-
 }
 
 CallJoinState _joined({
@@ -144,7 +146,103 @@ Future<_FakePictureInPicture> _pumpCallScreen(
   return pictureInPicture;
 }
 
+Future<
+  ({
+    GlobalKey<NavigatorState> navigator,
+    _FrozenJoinController controller,
+    _FakePictureInPicture pip,
+  })
+>
+_pushCallScreen(WidgetTester tester, {bool ended = false}) async {
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final controller = _FrozenJoinController(
+    ended ? const CallJoinState(phase: CallJoinPhase.failed) : _joined(),
+  );
+  final pictureInPicture = _FakePictureInPicture();
+  addTearDown(pictureInPicture.modes.close);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        callJoinControllerProvider.overrideWith(() => controller),
+        callParticipantNamesProvider.overrideWith((ref, key) async => const {}),
+        callPictureInPictureProvider.overrideWithValue(pictureInPicture),
+      ],
+      child: MaterialApp(
+        navigatorKey: navigatorKey,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: Text('Chat')),
+      ),
+    ),
+  );
+  unawaited(
+    navigatorKey.currentState!.push<void>(
+      MaterialPageRoute<void>(builder: (_) => const CallScreen(roomKey: _key)),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return (
+    navigator: navigatorKey,
+    controller: controller,
+    pip: pictureInPicture,
+  );
+}
+
 void main() {
+  testWidgets('ending a covered call removes its route, not the newer route', (
+    tester,
+  ) async {
+    final call = await _pushCallScreen(tester);
+    unawaited(
+      call.navigator.currentState!.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Newer route')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(call.pip.armed, [
+      true,
+      false,
+    ], reason: 'a newer route must not enter call PiP');
+    call.controller.fail();
+    await tester.pumpAndSettle();
+    expect(find.text('Newer route'), findsOneWidget);
+    expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
+    expect(call.pip.armed, [true, false]);
+  });
+
+  testWidgets('an already ended call never arms picture in picture', (
+    tester,
+  ) async {
+    final call = await _pushCallScreen(tester, ended: true);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
+    expect(call.pip.armed, isEmpty);
+    expect(call.pip.windowTracks, isEmpty);
+  });
+
+  testWidgets('an ended pinned call never reveals the underlying chat', (
+    tester,
+  ) async {
+    final call = await _pushCallScreen(tester);
+    call.pip.modes.add(true);
+    await tester.pumpAndSettle();
+    call.controller.fail();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-screen-pip-ended')), findsOneWidget);
+    expect(find.text('Call ended.'), findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+    expect(find.byKey(const Key('fake-remote-video')), findsNothing);
+    expect(find.byKey(const Key('call-tile-peer-a')), findsNothing);
+    expect(call.pip.armed, [true, false]);
+    expect(call.pip.windowTracks.last, isNull);
+    call.pip.modes.add(false);
+    await tester.pumpAndSettle();
+    expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
+    expect(find.text('Chat'), findsOneWidget);
+  });
+
   testWidgets('the call screen shows one tile per participant and the controls', (
     tester,
   ) async {
