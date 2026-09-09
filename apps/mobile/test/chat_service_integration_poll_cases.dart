@@ -722,6 +722,7 @@ extension _ChatServicePollCases on _ChatServiceIntegrationSuite {
           message: 'Synthetic ordinary reply before named transition',
           threadId: 109,
         );
+        await _waitForOutboxSettled(chat);
         expect(
           capabilityRequests,
           2,

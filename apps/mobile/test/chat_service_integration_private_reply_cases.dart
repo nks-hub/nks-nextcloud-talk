@@ -261,6 +261,7 @@ extension _ChatServicePrivateReplyCases on _ChatServiceIntegrationSuite {
         replyToToken: _privateReplySourceToken.value,
         privateReplyEligibility: eligibility,
       );
+      await _waitForOutboxSettled(chat);
 
       final operation = await database
           .select(database.textSendOperations)

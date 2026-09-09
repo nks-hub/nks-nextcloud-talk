@@ -8,6 +8,18 @@ Future<void> _waitForChatCondition(bool Function() condition) async {
   fail('Chat state did not reach the expected condition');
 }
 
+/// Waits until nothing in the outbox is queued or on the wire.
+///
+/// A send returns as soon as the message is durable, so a test that looks at
+/// what the server saw waits for the outbox rather than for the send.
+Future<void> _waitForOutboxSettled(ChatRepository chat) async {
+  for (var attempt = 0; attempt < 500; attempt++) {
+    if ((await chat.roomsWithPendingTextSends()).isEmpty) return;
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+  fail('The outbox still holds an undelivered send');
+}
+
 final class _ChatServiceIntegrationSuite {
   late AppDatabase database;
   late AccountRepository accounts;
@@ -38,8 +50,13 @@ final class _ChatServiceIntegrationSuite {
 Future<void> _cacheConversation(
   AppDatabase database, {
   required String accountId,
+  String? token,
 }) async {
   final roomJson = _conversationRoomJson();
+  if (token != null) {
+    roomJson['token'] = token;
+    (roomJson['lastMessage']! as Map<String, Object?>)['token'] = token;
+  }
   final room = ConversationRoom.fromJson(roomJson);
   await database
       .into(database.cachedConversations)

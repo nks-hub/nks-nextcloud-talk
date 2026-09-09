@@ -155,6 +155,10 @@ int _nowSeconds() =>
 String _roomKey(String accountId, String roomToken) =>
     '$accountId\u0000$roomToken';
 
+/// Orders outbox admissions in a room without waiting on its requests. Keeps
+/// the account prefix so suspending an account still waits for it.
+String _admissionKey(String roomKey) => '$roomKey\u0000admit';
+
 String _scopeSyncKey(String accountId, String roomToken, int? threadId) =>
     '${_roomKey(accountId, roomToken)}\u0000${threadId ?? 'root'}';
 

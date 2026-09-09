@@ -30,10 +30,12 @@ import 'test_support.dart';
 
 part 'chat_composer_location_test.part.dart';
 part 'chat_composer_giphy_reopen_test.part.dart';
+part 'chat_composer_nonblocking_test.part.dart';
 
 void main() {
   _registerLocationComposerTests();
   _registerGiphyReopenTests();
+  _registerNonBlockingComposerTests();
   testWidgets(
     'media reply reaches finalize and clears its banner on enqueue',
     (tester) async {
@@ -504,6 +506,10 @@ final class _ComposerHarness {
     required this.vault,
     required this.api,
     required this.sentMessages,
+    required this.chatSendStarted,
+    required this.attachmentUploadStarted,
+    required this.chatSendHold,
+    required this.attachmentUploadHold,
     required this.sourceStore,
     required this.attachmentService,
     required this.attachmentClient,
@@ -519,6 +525,16 @@ final class _ComposerHarness {
   final MemoryCredentialVault vault;
   final HttpNextcloudApi api;
   final List<String> sentMessages;
+
+  /// Messages and uploads whose request has reached the fixture server,
+  /// answered or not.
+  final List<String> chatSendStarted;
+  final List<int> attachmentUploadStarted;
+
+  /// While one of these is pending, the matching fixture request stays open, so
+  /// a test can look at the composer with a send still on the wire.
+  final List<Completer<void>> chatSendHold;
+  final List<Completer<void>> attachmentUploadHold;
   final DurableAttachmentSourceStore sourceStore;
   final AttachmentService attachmentService;
   final http.Client attachmentClient;
@@ -565,6 +581,10 @@ final class _ComposerHarness {
     final vault = MemoryCredentialVault()
       ..values[account.id] = 'fixture-app-password';
     final sentMessages = <String>[];
+    final chatSendStarted = <String>[];
+    final attachmentUploadStarted = <int>[];
+    final chatSendHold = <Completer<void>>[];
+    final attachmentUploadHold = <Completer<void>>[];
     final uploadedAttachments = <List<int>>[];
     final finalizedFileNames = <String>[];
     final finalizedMetadata = <Map<String, Object?>>[];
@@ -578,6 +598,10 @@ final class _ComposerHarness {
         return http.Response.bytes(_attachmentProbeSuccess(), 200);
       }
       if (request.method == 'PUT') {
+        attachmentUploadStarted.add(request.bodyBytes.length);
+        if (attachmentUploadHold.isNotEmpty) {
+          await attachmentUploadHold.first.future;
+        }
         uploadedAttachments.add(List<int>.from(request.bodyBytes));
         return http.Response('', 201);
       }
@@ -614,6 +638,10 @@ final class _ComposerHarness {
           return http.Response(jsonEncode(_attachmentCapabilities()), 200);
         }
         if (request.method == 'POST') {
+          chatSendStarted.add(request.bodyFields['message']!);
+          if (chatSendHold.isNotEmpty) {
+            await chatSendHold.first.future;
+          }
           sentMessages.add(request.bodyFields['message']!);
           return http.Response.bytes(
             utf8.encode(
@@ -648,6 +676,10 @@ final class _ComposerHarness {
       vault: vault,
       api: api,
       sentMessages: sentMessages,
+      chatSendStarted: chatSendStarted,
+      attachmentUploadStarted: attachmentUploadStarted,
+      chatSendHold: chatSendHold,
+      attachmentUploadHold: attachmentUploadHold,
       sourceStore: sourceStore,
       attachmentService: attachmentService,
       attachmentClient: attachmentClient,

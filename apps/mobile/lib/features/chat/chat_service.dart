@@ -317,6 +317,13 @@ final class ChatService {
 
   /// [replyTo] answers a specific root message. Talk turns that into a thread,
   /// so it is mutually exclusive with sending inside an existing [threadId].
+  ///
+  /// Completes once the message is durably in the outbox, not once it reaches
+  /// the server: the composer is free for the next line while this one is
+  /// still on the wire. Delivery continues on the room lane, so the outbox is
+  /// still emptied in admission order and a later message cannot overtake an
+  /// earlier one. Everything after admission is reported through the
+  /// operation's own state, not by this future.
   Future<void> sendText({
     required String accountId,
     required String roomToken,
@@ -328,7 +335,10 @@ final class ChatService {
     PrivateReplyEligibilitySnapshot? privateReplyEligibility,
   }) {
     final key = _roomKey(accountId, roomToken);
-    return _serializeRoom<void>(key, () {
+    // Admission has a lane of its own. On the room lane it would queue behind
+    // the previous message's request, and a send into a tunnel would hold the
+    // composer for as long as that request takes to fail.
+    return _serializeRoom<void>(_admissionKey(key), () {
       return _withRoomErrorPersistence(accountId, roomToken, () async {
         final normalized = message.trim();
         if (normalized.isEmpty) {
@@ -366,7 +376,14 @@ final class ChatService {
           if (!prepared.capabilitiesVerifiedOnline) {
             throw const ChatServiceException(ChatServiceError.network);
           }
-          prepared = (await _resolveAndSynchronizePrepared(prepared)).prepared;
+          // Reads and applies server state, so it belongs on the room lane
+          // with every other synchronization. Where the message goes has to
+          // be known before it can be admitted, so this one send does wait.
+          prepared = await _serializeRoom<_PreparedChat>(
+            key,
+            () async => (await _resolveAndSynchronizePrepared(prepared))
+                .prepared,
+          );
         }
         final effectiveReplyTo =
             replyTo ??
@@ -410,10 +427,37 @@ final class ChatService {
           privateReplyEligibility: privateReplyEligibility,
         );
         if (prepared.capabilitiesVerifiedOnline) {
-          await _processPending(prepared);
+          unawaited(_deliverPending(prepared, threadId: threadId));
         }
       }, threadId: threadId);
     });
+  }
+
+  /// Empties the room's outbox after an admission, without the caller waiting
+  /// for it.
+  ///
+  /// On the room lane, so it stays ordered against synchronization and against
+  /// the deliveries of earlier admissions. A failure is recorded on the room
+  /// and on the operation exactly as a drain's would be, and the next wake
+  /// picks the rows up again.
+  Future<void> _deliverPending(
+    _PreparedChat prepared, {
+    int? threadId,
+  }) async {
+    final accountId = prepared.account.id;
+    final roomToken = prepared.room.token.value;
+    try {
+      await _serializeRoom<void>(_roomKey(accountId, roomToken), () {
+        return _withRoomErrorPersistence(
+          accountId,
+          roomToken,
+          () => _processPending(prepared),
+          threadId: threadId,
+        );
+      });
+    } on Object {
+      // Persisted by the wrapper, or the account went away underneath.
+    }
   }
 
   Future<void> resendText({

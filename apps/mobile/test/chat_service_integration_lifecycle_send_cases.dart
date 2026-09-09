@@ -563,6 +563,7 @@ extension _ChatServiceLifecycleSendCases on _ChatServiceIntegrationSuite {
         message: 'Synthetic reply',
         replyTo: 109,
       );
+      await _waitForOutboxSettled(chat);
 
       final operations = await chat
           .watchTextSendOperations(
@@ -680,6 +681,7 @@ extension _ChatServiceLifecycleSendCases on _ChatServiceIntegrationSuite {
           roomToken: 'rooma123',
           message: '  Synthetic text send  ',
         );
+        await _waitForOutboxSettled(chat);
 
         final pendingCatchUpView = await chat.getRootScope(
           accountId: 'account-a',

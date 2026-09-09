@@ -740,6 +740,7 @@ extension _ChatServiceOutboxCases on _ChatServiceIntegrationSuite {
         roomToken: 'rooma123',
         message: 'Possibly sent',
       );
+      await _waitForOutboxSettled(chat);
 
       final operations = await chat
           .watchTextSendOperations(
