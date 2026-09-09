@@ -1601,6 +1601,43 @@ class AppLocalizationsCs extends AppLocalizations {
   String get diagnosticsPushSection => 'Registrace push';
 
   @override
+  String get diagnosticsPushTransport => 'Cesta oznámení';
+
+  @override
+  String get diagnosticsPushTransportProxy => 'Proxy';
+
+  @override
+  String get diagnosticsPushTransportWebPush => 'Web Push';
+
+  @override
+  String get diagnosticsPushRetryPhase => 'Opakuje se do fáze';
+
+  @override
+  String get diagnosticsPushErrorClass => 'Poslední chyba';
+
+  @override
+  String get diagnosticsPushProviderToken => 'Token zařízení';
+
+  @override
+  String get diagnosticsPushProviderTokenPresent => 'Přijat';
+
+  @override
+  String get diagnosticsPushProviderTokenAbsent => 'Nepřijat';
+
+  @override
+  String get diagnosticsPushRegistrationRevision => 'Revize registrace';
+
+  @override
+  String get diagnosticsPushEffectPending => 'Probíhá krok';
+
+  @override
+  String get diagnosticsPushEffectRunning => 'Ano';
+
+  @override
+  String get diagnosticsPushProxyNotRunning =>
+      'Vybrána proxy, ale v tomto sestavení se nic neregistruje';
+
+  @override
   String get diagnosticsPushPhase => 'Fáze';
 
   @override

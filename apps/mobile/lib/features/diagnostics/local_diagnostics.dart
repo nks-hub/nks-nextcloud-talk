@@ -10,7 +10,9 @@ import 'package:talk_protocol/talk_protocol.dart';
 import '../../app_providers.dart';
 import '../../data/account_repository.dart';
 import '../../data/app_database.dart';
+import '../push/android_push_transport.dart';
 import '../push/android_web_push_bridge.dart';
+import '../push/push_registration_coordinator.dart';
 
 export '../../core/app_version.dart' show appBuildNumber, appVersionName;
 
@@ -61,7 +63,17 @@ const _uncancellableAttachmentPhases = <AttachmentJobPhase>{
 };
 
 /// Why a push registration state could not be reported.
-enum PushDiagnosticsGap { platformUnsupported, readFailed }
+enum PushDiagnosticsGap {
+  platformUnsupported,
+  readFailed,
+
+  /// The device is set to register through the proxy, but nothing is
+  /// registering: no gateway origin was built into this application, or the
+  /// stored transport has not been read yet. Reported as its own gap because
+  /// the alternative — showing the Web Push path's empty state — reads as a
+  /// broken registration when in fact that path is not the one in use.
+  proxyNotRunning,
+}
 
 enum MigrationDiagnosticsState { upToDate, upgradeRequired, newerThanApp }
 
@@ -110,6 +122,11 @@ final class OutboxDiagnostics {
 }
 
 /// Push registration of one account, or the reason it is not reportable.
+///
+/// Which half is filled in follows the transport the device is actually set
+/// to. Reporting the Web Push registration while the device registers through
+/// the proxy is what this type exists to stop: that state is legitimately
+/// empty on a proxy device and reads as a failure.
 @immutable
 final class PushDiagnostics {
   const PushDiagnostics.registered({
@@ -118,18 +135,31 @@ final class PushDiagnostics {
     required this.nextGeneration,
     required this.pendingEventCount,
   }) : gap = null,
-       failureCode = null;
+       failureCode = null,
+       proxy = null;
+
+  const PushDiagnostics.proxyRegistration(this.proxy)
+    : gap = null,
+      failureCode = null,
+      phase = null,
+      generation = null,
+      nextGeneration = null,
+      pendingEventCount = null;
 
   const PushDiagnostics.unavailable(this.gap, {this.failureCode})
     : phase = null,
       generation = null,
       nextGeneration = null,
-      pendingEventCount = null;
+      pendingEventCount = null,
+      proxy = null;
 
   final AndroidWebPushRegistrationPhase? phase;
   final int? generation;
   final int? nextGeneration;
   final int? pendingEventCount;
+
+  /// Set when the device registers through the proxy.
+  final PushProxyRegistrationDiagnostics? proxy;
   final PushDiagnosticsGap? gap;
 
   /// Platform error code or exception type behind a [PushDiagnosticsGap
@@ -219,12 +249,23 @@ final class LocalDiagnosticsLoader {
     required this.database,
     required this.accounts,
     this.push,
+    this.proxyPush,
+    this.proxySelected = false,
     this.clock = DateTime.now,
   });
 
   final AppDatabase database;
   final AccountRepository accounts;
   final AndroidWebPushPlatform? push;
+
+  /// Reads the proxy registration of one account. Null when nothing is
+  /// registering through the proxy on this device.
+  final PushProxyRegistrationDiagnostics? Function(String accountId)? proxyPush;
+
+  /// Whether the device is set to register through the proxy at all. Kept
+  /// apart from [proxyPush] so "proxy selected, nothing registering" can be
+  /// reported as itself instead of as the Web Push path's empty state.
+  final bool proxySelected;
   final DateTime Function() clock;
 
   Future<LocalDiagnostics> load(String accountId) async {
@@ -414,6 +455,14 @@ final class LocalDiagnosticsLoader {
   }
 
   Future<PushDiagnostics> _pushDiagnostics(String accountId) async {
+    if (proxySelected) {
+      final registration = proxyPush?.call(accountId);
+      return registration == null
+          ? const PushDiagnostics.unavailable(
+              PushDiagnosticsGap.proxyNotRunning,
+            )
+          : PushDiagnostics.proxyRegistration(registration);
+    }
     final platform = push;
     if (platform == null) {
       return const PushDiagnostics.unavailable(
@@ -490,9 +539,18 @@ DateTime? _instant(int? millis) {
 /// is cached, so what the screen shows is the state on disk right now.
 final localDiagnosticsProvider = FutureProvider.autoDispose
     .family<LocalDiagnostics, String>((ref, accountId) {
+      final proxy = ref.watch(androidPushRegistrationCoordinatorProvider);
       return LocalDiagnosticsLoader(
         database: ref.watch(appDatabaseProvider),
         accounts: ref.watch(accountRepositoryProvider),
         push: ref.watch(androidWebPushPlatformProvider),
+        proxyPush: proxy?.proxyDiagnostics,
+        // Read from the stored preference, not from whether a coordinator
+        // happens to exist: "proxy selected and nothing registering" is the
+        // state this screen was reporting as an empty Web Push phase.
+        proxySelected:
+            Platform.isAndroid &&
+            ref.watch(androidPushTransportProvider) ==
+                AndroidPushTransport.proxy,
       ).load(accountId);
     });

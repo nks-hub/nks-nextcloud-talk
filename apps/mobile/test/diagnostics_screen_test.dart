@@ -10,6 +10,7 @@ import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/diagnostics/diagnostics_screen.dart';
 import 'package:nextcloudtalk/features/diagnostics/local_diagnostics.dart';
 import 'package:nextcloudtalk/features/push/android_web_push_bridge.dart';
+import 'package:nextcloudtalk/features/push/push_registration_coordinator.dart';
 import 'package:nextcloudtalk/features/settings/settings_screen.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -412,6 +413,41 @@ Future<void> _seedFixture(AppDatabase database) async {
   );
 }
 
+/// A diagnostics record whose only interesting half is the push one, so a
+/// screen test can pin what the push section renders without seeding a
+/// database for everything around it.
+LocalDiagnostics _diagnosticsWith(PushDiagnostics push) => LocalDiagnostics(
+  operatingSystem: 'test',
+  database: const DatabaseDiagnostics(
+    expectedSchemaVersion: 18,
+    storedSchemaVersion: 18,
+    foreignKeyViolationCount: 0,
+  ),
+  conversationCount: 0,
+  messageCount: 0,
+  threadCount: 0,
+  textOutbox: const OutboxDiagnostics(
+    total: 0,
+    pending: 0,
+    failed: 0,
+    lastErrorClass: null,
+    lastErrorAt: null,
+  ),
+  attachmentOutbox: const OutboxDiagnostics(
+    total: 0,
+    pending: 0,
+    failed: 0,
+    lastErrorClass: null,
+    lastErrorAt: null,
+  ),
+  stalledAttachments: const <StalledAttachmentJob>[],
+  push: push,
+  lastSyncedAt: null,
+  lastSyncError: null,
+  talkFeatureCount: 0,
+  keyTalkFeatures: const <String, bool>{},
+);
+
 Widget _wrapDiagnostics({
   required AppDatabase database,
   required AndroidWebPushPlatform? push,
@@ -489,6 +525,151 @@ void main() {
       MigrationDiagnosticsState.upgradeRequired,
     );
     expect(diagnostics.database.foreignKeyViolationCount, 1);
+  });
+
+  test(
+    'a proxy device reports the proxy registration, not the Web Push one',
+    () async {
+      final database = openTestDatabase();
+      addTearDown(database.close);
+      await _seedFixture(database);
+
+      const registration = PushProxyRegistrationDiagnostics(
+        phase: PushAccountPhase.retryable,
+        retryPhase: PushAccountPhase.gatewayRegistering,
+        errorClass: 'network',
+        registrationRevision: 3,
+        registeredProviderGeneration: 2,
+        providerTokenInstalled: true,
+        effectPending: false,
+      );
+      final asked = <String>[];
+      final diagnostics = await LocalDiagnosticsLoader(
+        database: database,
+        accounts: AccountRepository(database),
+        proxySelected: true,
+        proxyPush: (accountId) {
+          asked.add(accountId);
+          return registration;
+        },
+      ).load('account-a');
+
+      expect(asked, ['account-a']);
+      expect(diagnostics.push.gap, isNull);
+      expect(diagnostics.push.proxy, same(registration));
+      // The Web Push half stays empty: it is not the path in use, and filling
+      // it in is exactly the misreport this exists to stop.
+      expect(diagnostics.push.phase, isNull);
+      expect(diagnostics.push.nextGeneration, isNull);
+    },
+  );
+
+  test('proxy selected with nothing registering says so', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+
+    final diagnostics = await LocalDiagnosticsLoader(
+      database: database,
+      accounts: AccountRepository(database),
+      proxySelected: true,
+    ).load('account-a');
+
+    expect(diagnostics.push.gap, PushDiagnosticsGap.proxyNotRunning);
+    expect(diagnostics.push.proxy, isNull);
+  });
+
+  test('an account the coordinator does not know is not invented', () async {
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+
+    final diagnostics = await LocalDiagnosticsLoader(
+      database: database,
+      accounts: AccountRepository(database),
+      proxySelected: true,
+      proxyPush: (_) => null,
+    ).load('account-a');
+
+    expect(diagnostics.push.gap, PushDiagnosticsGap.proxyNotRunning);
+  });
+
+  testWidgets('the proxy registration is shown without any secret', (
+    tester,
+  ) async {
+    _useTallSurface(tester);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localDiagnosticsProvider.overrideWith(
+            (ref, accountId) async => _diagnosticsWith(
+              const PushDiagnostics.proxyRegistration(
+                PushProxyRegistrationDiagnostics(
+                  phase: PushAccountPhase.retryable,
+                  retryPhase: PushAccountPhase.gatewayRegistering,
+                  errorClass: 'network',
+                  registrationRevision: 3,
+                  registeredProviderGeneration: 2,
+                  providerTokenInstalled: false,
+                  effectPending: true,
+                ),
+              ),
+            ),
+          ),
+        ],
+        child: localizedTestApp(
+          home: const DiagnosticsScreen(accountId: 'account-a'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Proxy'), findsOneWidget);
+    expect(find.text('retryable'), findsOneWidget);
+    expect(find.text('gatewayRegistering'), findsOneWidget);
+    expect(find.text('network'), findsOneWidget);
+    expect(find.text('Not received'), findsOneWidget);
+    expect(find.text('3'), findsWidgets);
+    expect(
+      find.byKey(const Key('diagnostics-push-next-generation')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a proxy build that registers nothing says that in place', (
+    tester,
+  ) async {
+    _useTallSurface(tester);
+    final database = openTestDatabase();
+    addTearDown(database.close);
+    await _seedFixture(database);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localDiagnosticsProvider.overrideWith(
+            (ref, accountId) async => _diagnosticsWith(
+              const PushDiagnostics.unavailable(
+                PushDiagnosticsGap.proxyNotRunning,
+              ),
+            ),
+          ),
+        ],
+        child: localizedTestApp(
+          home: const DiagnosticsScreen(accountId: 'account-a'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Proxy selected, but nothing is registering on this build'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the bundled third-party licences are reachable', (tester) async {

@@ -338,8 +338,72 @@ List<Widget> _pushEntries(AppLocalizations strings, PushDiagnostics push) {
           ),
         ),
       ];
-    case null:
+    case PushDiagnosticsGap.proxyNotRunning:
       return [
+        _Entry(
+          entryKey: const Key('diagnostics-push-unavailable'),
+          label: strings.diagnosticsPushPhase,
+          value: strings.diagnosticsPushProxyNotRunning,
+        ),
+      ];
+    case null:
+      final proxy = push.proxy;
+      if (proxy != null) {
+        return [
+          _Entry(
+            entryKey: const Key('diagnostics-push-transport'),
+            label: strings.diagnosticsPushTransport,
+            value: strings.diagnosticsPushTransportProxy,
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-phase'),
+            label: strings.diagnosticsPushPhase,
+            value: proxy.phase.name,
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-retry-phase'),
+            label: strings.diagnosticsPushRetryPhase,
+            value: proxy.retryPhase?.name ?? strings.diagnosticsValueNone,
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-error-class'),
+            label: strings.diagnosticsPushErrorClass,
+            value: proxy.errorClass ?? strings.diagnosticsValueNone,
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-provider-token'),
+            label: strings.diagnosticsPushProviderToken,
+            value: proxy.providerTokenInstalled
+                ? strings.diagnosticsPushProviderTokenPresent
+                : strings.diagnosticsPushProviderTokenAbsent,
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-registration-revision'),
+            label: strings.diagnosticsPushRegistrationRevision,
+            value: '${proxy.registrationRevision}',
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-generation'),
+            label: strings.diagnosticsPushGeneration,
+            value: proxy.registeredProviderGeneration == null
+                ? strings.diagnosticsValueNone
+                : '${proxy.registeredProviderGeneration}',
+          ),
+          _Entry(
+            entryKey: const Key('diagnostics-push-effect-pending'),
+            label: strings.diagnosticsPushEffectPending,
+            value: proxy.effectPending
+                ? strings.diagnosticsPushEffectRunning
+                : strings.diagnosticsValueNone,
+          ),
+        ];
+      }
+      return [
+        _Entry(
+          entryKey: const Key('diagnostics-push-transport'),
+          label: strings.diagnosticsPushTransport,
+          value: strings.diagnosticsPushTransportWebPush,
+        ),
         _Entry(
           entryKey: const Key('diagnostics-push-phase'),
           label: strings.diagnosticsPushPhase,

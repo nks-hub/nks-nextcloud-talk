@@ -1601,6 +1601,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsPushSection => 'Push registration';
 
   @override
+  String get diagnosticsPushTransport => 'Push path';
+
+  @override
+  String get diagnosticsPushTransportProxy => 'Proxy';
+
+  @override
+  String get diagnosticsPushTransportWebPush => 'Web Push';
+
+  @override
+  String get diagnosticsPushRetryPhase => 'Retrying towards';
+
+  @override
+  String get diagnosticsPushErrorClass => 'Last error';
+
+  @override
+  String get diagnosticsPushProviderToken => 'Device token';
+
+  @override
+  String get diagnosticsPushProviderTokenPresent => 'Received';
+
+  @override
+  String get diagnosticsPushProviderTokenAbsent => 'Not received';
+
+  @override
+  String get diagnosticsPushRegistrationRevision => 'Registration revision';
+
+  @override
+  String get diagnosticsPushEffectPending => 'Step in flight';
+
+  @override
+  String get diagnosticsPushEffectRunning => 'Yes';
+
+  @override
+  String get diagnosticsPushProxyNotRunning =>
+      'Proxy selected, but nothing is registering on this build';
+
+  @override
   String get diagnosticsPushPhase => 'Phase';
 
   @override

@@ -2948,6 +2948,78 @@ abstract class AppLocalizations {
   /// **'Push registration'**
   String get diagnosticsPushSection;
 
+  /// No description provided for @diagnosticsPushTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Push path'**
+  String get diagnosticsPushTransport;
+
+  /// No description provided for @diagnosticsPushTransportProxy.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy'**
+  String get diagnosticsPushTransportProxy;
+
+  /// No description provided for @diagnosticsPushTransportWebPush.
+  ///
+  /// In en, this message translates to:
+  /// **'Web Push'**
+  String get diagnosticsPushTransportWebPush;
+
+  /// No description provided for @diagnosticsPushRetryPhase.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrying towards'**
+  String get diagnosticsPushRetryPhase;
+
+  /// No description provided for @diagnosticsPushErrorClass.
+  ///
+  /// In en, this message translates to:
+  /// **'Last error'**
+  String get diagnosticsPushErrorClass;
+
+  /// No description provided for @diagnosticsPushProviderToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Device token'**
+  String get diagnosticsPushProviderToken;
+
+  /// No description provided for @diagnosticsPushProviderTokenPresent.
+  ///
+  /// In en, this message translates to:
+  /// **'Received'**
+  String get diagnosticsPushProviderTokenPresent;
+
+  /// No description provided for @diagnosticsPushProviderTokenAbsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Not received'**
+  String get diagnosticsPushProviderTokenAbsent;
+
+  /// No description provided for @diagnosticsPushRegistrationRevision.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration revision'**
+  String get diagnosticsPushRegistrationRevision;
+
+  /// No description provided for @diagnosticsPushEffectPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Step in flight'**
+  String get diagnosticsPushEffectPending;
+
+  /// No description provided for @diagnosticsPushEffectRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get diagnosticsPushEffectRunning;
+
+  /// No description provided for @diagnosticsPushProxyNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy selected, but nothing is registering on this build'**
+  String get diagnosticsPushProxyNotRunning;
+
   /// No description provided for @diagnosticsPushPhase.
   ///
   /// In en, this message translates to:

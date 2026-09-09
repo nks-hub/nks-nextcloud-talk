@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:flutter/foundation.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../data/account_repository.dart';
@@ -317,6 +318,39 @@ final class PushRegistrationCoordinator {
     }
   }
 
+  /// What this account's proxy registration looks like right now, for the
+  /// local diagnostics screen and nothing else.
+  ///
+  /// Everything here is a stage name, a counter or this package's own error
+  /// vocabulary. The device key, the provider token, the gateway address and
+  /// the server's registration are deliberately absent: the screen is meant to
+  /// be readable over somebody's shoulder and pasted into a report.
+  /// [providerTokenInstalled] is the one bit that matters and cannot be seen
+  /// any other way — without a token the state machine plans no effect at all,
+  /// so an account can sit in `waitingForToken` looking idle rather than
+  /// broken.
+  PushProxyRegistrationDiagnostics? proxyDiagnostics(String accountId) {
+    final AccountId parsed;
+    try {
+      parsed = AccountId.parse(accountId);
+    } on TalkProtocolException {
+      return null;
+    }
+    final account = _snapshot.accounts[parsed];
+    if (account == null) {
+      return null;
+    }
+    return PushProxyRegistrationDiagnostics(
+      phase: account.phase,
+      retryPhase: account.retryPhase,
+      errorClass: account.errorClass,
+      registrationRevision: account.registrationRevision,
+      registeredProviderGeneration: account.registeredProviderGeneration,
+      providerTokenInstalled: _snapshot.providerToken != null,
+      effectPending: account.pendingEffect != null,
+    );
+  }
+
   /// Whether no account is still mid-flight or stuck. The transport switch
   /// reads this after [unfollowAll] to tell a clean revocation from one that
   /// only got as far as a retry.
@@ -514,7 +548,9 @@ final class PushRegistrationCoordinator {
         rawPushToken: rawToken,
         pushProvider: _pushProvider,
         pushEnvironment: _pushEnvironment,
-        voipToken: _pushProvider == PushGatewayProvider.apns ? _voipToken : null,
+        voipToken: _pushProvider == PushGatewayProvider.apns
+            ? _voipToken
+            : null,
       );
     } on Object {
       return PushGatewayRegistrationCompletion.transientFailure(effect: effect);
@@ -628,4 +664,39 @@ final class PushRegistrationCoordinator {
     _retryBackoff.remove(accountId);
     return true;
   }
+}
+
+/// The proxy registration of one account, reduced to what may be shown.
+///
+/// See [PushRegistrationCoordinator.proxyDiagnostics] for what is deliberately
+/// not in here.
+@immutable
+final class PushProxyRegistrationDiagnostics {
+  const PushProxyRegistrationDiagnostics({
+    required this.phase,
+    required this.retryPhase,
+    required this.errorClass,
+    required this.registrationRevision,
+    required this.registeredProviderGeneration,
+    required this.providerTokenInstalled,
+    required this.effectPending,
+  });
+
+  final PushAccountPhase phase;
+
+  /// The stage a retryable, failed or reauthentication-blocked account will go
+  /// back to. Null while nothing is being retried.
+  final PushAccountPhase? retryPhase;
+
+  /// This package's own error vocabulary, never a server message.
+  final String? errorClass;
+
+  final int registrationRevision;
+  final int? registeredProviderGeneration;
+
+  /// Whether the push provider has handed this device a token at all.
+  final bool providerTokenInstalled;
+
+  /// Whether a registration step is in flight right now.
+  final bool effectPending;
 }

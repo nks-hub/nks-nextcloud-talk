@@ -11,6 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 const Set<String> _sharedWithEnglish = {
   'appTitle',
   'callAudioRouteBluetooth',
+  // Both push paths are named after the thing itself, in both languages.
+  'diagnosticsPushTransportProxy',
+  'diagnosticsPushTransportWebPush',
   'emojiPickerTitle',
   'giphyPoweredBy',
   'locationCoordinates',
