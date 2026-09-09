@@ -32,6 +32,15 @@ AOT_MEMBERS = (
     re.compile(r"^Payload/[^/]+\.app/Frameworks/App\.framework/App$"),  # iOS IPA
 )
 
+# The desktop snapshots. `PUSH_GATEWAY_ORIGIN` is read inside the Apple branch
+# of app_providers_push.dart, so the AOT compiler drops the string from a
+# Windows or Linux build and the gate would report a perfectly good artifact as
+# missing its origin.
+DESKTOP_MEMBERS = (
+    re.compile(r"(^|[\\/])data[\\/]app\.so$"),  # Windows runner
+    re.compile(r"(^|[\\/])lib[\\/]libapp\.so$"),  # Linux bundle
+)
+
 
 class GateError(Exception):
     """A build that must not be distributed."""
@@ -94,6 +103,11 @@ def check_defines(origin, define_files, defines):
     return actual
 
 
+def desktop_artifact(path):
+    """Whether this snapshot belongs to a platform that never registers."""
+    return any(pattern.search(path) for pattern in DESKTOP_MEMBERS)
+
+
 def check_artifact(origin, path):
     if not valid_origin(origin):
         raise GateError("--origin is not a bare https origin")
@@ -132,6 +146,13 @@ def main(argv=None):
             check_defines(args.origin, args.define_file, args.define)
             print(f"{DEFINE_NAME} present and expected")
         else:
+            if desktop_artifact(args.path):
+                print(
+                    f"{DEFINE_NAME} is not compiled into a desktop build and "
+                    "is not expected to be: only iOS and macOS register with "
+                    "the gateway, so the compiler drops the constant"
+                )
+                return 0
             where = check_artifact(args.origin, args.path)
             print(f"{DEFINE_NAME} compiled into {where}")
     except (GateError, OSError) as failure:

@@ -20,6 +20,19 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A missed tap in a widget test is an error where it happens. Tapping a row
+  below the test surface only warned, so the test went on waiting for something
+  that would never come and failed as a timeout somewhere else entirely; that
+  sent two people after a phantom defect. The whole suite runs unchanged with
+  the stricter setting.
+- `flutter test` in one checkout queues instead of colliding. Two runs fight
+  over one native asset, and the loser reports a permission problem that is
+  really a lock - and a killed run used to leave the checkout unusable until
+  someone found the orphaned process. The wrapper names the run it waits for
+  and steps over a lock whose owner is gone.
+- The push gateway check no longer fails a good Windows build. The gateway is
+  read only on iOS and macOS, so the compiler drops it from a desktop build;
+  the check now says that instead of reporting a missing origin.
 - The macOS build may open the camera in a call. Its sandbox carried the
   microphone entitlement but not `com.apple.security.device.camera`, and
   `Info.plist` had no `NSCameraUsageDescription`, while the call screen offers

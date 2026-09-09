@@ -125,3 +125,33 @@ def test_the_command_line_passes_a_good_build(tmp_path, capsys):
     path = write(tmp_path, "telemetry.env", f"{gate.DEFINE_NAME}={ORIGIN}\n")
     assert gate.main(["--origin", ORIGIN, "defines", "--define-file", path]) == 0
     assert gate.DEFINE_NAME in capsys.readouterr().out
+
+
+def test_a_windows_snapshot_is_not_judged(tmp_path, capsys):
+    # The constant lives in the Apple branch, so the compiler drops it from a
+    # Windows build. Reporting that as a missing origin sends the next release
+    # chasing a defect that is not there.
+    release = tmp_path / "windows" / "x64" / "runner" / "Release" / "data"
+    release.mkdir(parents=True)
+    snapshot = release / "app.so"
+    snapshot.write_bytes(b"no origin here")
+    assert gate.main(["--origin", ORIGIN, "artifact", str(snapshot)]) == 0
+    assert "not expected to be" in capsys.readouterr().out
+
+
+def test_a_linux_snapshot_is_not_judged(tmp_path, capsys):
+    bundle = tmp_path / "linux" / "x64" / "release" / "bundle" / "lib"
+    bundle.mkdir(parents=True)
+    snapshot = bundle / "libapp.so"
+    snapshot.write_bytes(b"no origin here")
+    assert gate.main(["--origin", ORIGIN, "artifact", str(snapshot)]) == 0
+
+
+def test_an_android_snapshot_is_still_judged(tmp_path):
+    # The guard keys on the desktop layouts only: an Android library is named
+    # libapp.so as well, and losing it would silence the check that matters.
+    android = tmp_path / "app" / "outputs" / "flutter-apk"
+    android.mkdir(parents=True)
+    snapshot = android / "libapp.so"
+    snapshot.write_bytes(b"no origin here")
+    assert gate.main(["--origin", ORIGIN, "artifact", str(snapshot)]) == 1

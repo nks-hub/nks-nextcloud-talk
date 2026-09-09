@@ -35,6 +35,19 @@ const int reminderInboxFanOutLimit = 4;
 typedef UpcomingReminderLister =
     Future<List<RichChatUpcomingReminder>> Function(String accountId);
 typedef UpcomingReminderRemover = Future<void> Function(ReminderInboxRow row);
+
+/// Puts the reminded message on screen once its account has been selected.
+///
+/// A seam, so that the account switch can be asserted without building a chat
+/// room: the real screen brings its own timers and its own network work into a
+/// test about a list.
+typedef ReminderMessagePresenter =
+    Future<void> Function(
+      BuildContext context, {
+      required StoredAccount account,
+      required CachedConversation conversation,
+      required int messageId,
+    });
 typedef ConversationNameLookup =
     Future<String?> Function(String accountId, String roomToken);
 
@@ -451,7 +464,10 @@ void openReminderInbox(BuildContext context) {
 
 /// Wires the inbox to the app's repositories and to navigation.
 final class ReminderInboxRoute extends ConsumerStatefulWidget {
-  const ReminderInboxRoute({super.key});
+  const ReminderInboxRoute({super.key, this.presentMessage = _pushChatRoom});
+
+  /// How the reminded message is shown. Overridden only by tests.
+  final ReminderMessagePresenter presentMessage;
 
   @override
   ConsumerState<ReminderInboxRoute> createState() => _ReminderInboxRouteState();
@@ -526,15 +542,11 @@ class _ReminderInboxRouteState extends ConsumerState<ReminderInboxRoute> {
           return;
         }
       }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          settings: const RouteSettings(name: '/reminders/message'),
-          builder: (context) => PresenceChatRoomScreen(
-            account: account,
-            conversation: conversation,
-            jumpToMessageId: row.messageId,
-          ),
-        ),
+      await widget.presentMessage(
+        context,
+        account: account,
+        conversation: conversation,
+        messageId: row.messageId,
       );
     } finally {
       if (mounted) {
@@ -559,4 +571,22 @@ class _ReminderInboxRouteState extends ConsumerState<ReminderInboxRoute> {
         ),
       );
   }
+}
+
+Future<void> _pushChatRoom(
+  BuildContext context, {
+  required StoredAccount account,
+  required CachedConversation conversation,
+  required int messageId,
+}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/reminders/message'),
+      builder: (context) => PresenceChatRoomScreen(
+        account: account,
+        conversation: conversation,
+        jumpToMessageId: messageId,
+      ),
+    ),
+  );
 }

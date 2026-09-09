@@ -376,6 +376,58 @@ void main() {
       expect(find.byKey(_rowA), findsOneWidget);
     });
 
+    // The shell underneath this route tracks one selected account, so opening
+    // a row that belongs to the other one has to switch first. Asserted through
+    // the presenter seam: pushing the real room drags its timers and its
+    // network work into a test about a list, and that is what made the earlier
+    // version of this test hang.
+    testWidgets('opening a row selects the row account first', (
+      tester,
+    ) async {
+      final seen = <String>[];
+      await tester.pumpWidget(
+        fixture.app(
+          presentMessage:
+              (
+                context,
+                {
+                  required account,
+                  required conversation,
+                  required messageId,
+                }
+              ) async {
+                seen.add('${account.id}|${conversation.token}|$messageId');
+              },
+        ),
+      );
+      await _pumpUntilFound(tester, _rowB);
+
+      await tester.tap(find.byKey(_rowB));
+      await _pumpUntil(tester, () => seen.isNotEmpty);
+
+      // The second account's query streams close only when the scope goes, and
+      // drift closes them on a grace timer. Tearing the tree down here lets
+      // that timer fire inside the test; left to the harness it is still
+      // pending at disposal and fails the test on the way out, saying nothing
+      // about what was being tested.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // The presenter is handed the row's own account, and by then the switch
+      // has been written: the route awaits `selectAccount` before it presents.
+      // Read outside the fake clock, because a drift query on it leaves a
+      // cleanup timer behind and the tree is disposed with it still pending.
+      expect(seen, <String>['account-b|hqowhbbz|79988']);
+      String? stored;
+      await tester.runAsync(() async {
+        stored = [
+          for (final account in await fixture.repository.listAccounts())
+            if (account.selected) account.id,
+        ].singleOrNull;
+      });
+      expect(stored, 'account-b');
+    });
+
     testWidgets('one server refusing leaves the other row listed', (
       tester,
     ) async {
@@ -423,6 +475,7 @@ Future<void> _pumpUntil(
 final class _RouteFixture {
   _RouteFixture({
     required this.database,
+    required this.repository,
     required this.credentials,
     required this.api,
     required this.accounts,
@@ -433,6 +486,7 @@ final class _RouteFixture {
   });
 
   final AppDatabase database;
+  final AccountRepository repository;
   final MemoryCredentialVault credentials;
   final HttpNextcloudApi api;
   final List<StoredAccount> accounts;
@@ -529,6 +583,7 @@ final class _RouteFixture {
 
     return _RouteFixture(
       database: database,
+      repository: repository,
       credentials: credentials,
       api: api,
       accounts: accounts,
@@ -539,7 +594,10 @@ final class _RouteFixture {
     );
   }
 
-  Widget app({NavigatorObserver? observer}) => ProviderScope(
+  Widget app({
+    NavigatorObserver? observer,
+    ReminderMessagePresenter? presentMessage,
+  }) => ProviderScope(
     overrides: <Override>[
       appDatabaseProvider.overrideWithValue(database),
       credentialVaultProvider.overrideWithValue(credentials),
@@ -572,7 +630,9 @@ final class _RouteFixture {
       ),
     ],
     child: localizedTestApp(
-      home: const ReminderInboxRoute(),
+      home: presentMessage == null
+          ? const ReminderInboxRoute()
+          : ReminderInboxRoute(presentMessage: presentMessage),
       navigatorObservers: <NavigatorObserver>[?observer],
     ),
   );
