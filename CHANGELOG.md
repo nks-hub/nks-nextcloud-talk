@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Pinning a message asks how long it should stay pinned: until somebody
+  unpins it, an hour, tomorrow morning or a week. Dismissing the question
+  pins nothing, which it should not, because a pin replaces whatever the
+  conversation had pinned before.
+
 - A conversation can be pinned to the Android home screen from its own
   menu, where until now only the four most recent ones appeared by
   themselves. The action is offered only where the launcher accepts
