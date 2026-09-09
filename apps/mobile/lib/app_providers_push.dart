@@ -370,6 +370,43 @@ final windowsNotificationServiceProvider =
 
 /// Asks Apple platforms for notification permission, keeps the APNs device
 /// token, and
+/// Keeps the Notification Service Extension supplied with the names of the
+/// rooms each signed-in account knows.
+///
+/// The extension decrypts a push that carries a room token and no name, so
+/// without this it cannot attribute a notification to anybody and iOS shows an
+/// ordinary application banner instead of a message from a conversation.
+/// Watching the cached conversations rather than the sync means a room that is
+/// renamed, joined or left is reflected without a second code path.
+///
+/// Apple only: Android builds its own notifications in process and already has
+/// the name to hand.
+final appleConversationIdentityProvider = Provider<void>((ref) {
+  final coordinator = ref.watch(applePushCoordinatorProvider);
+  if (coordinator == null) {
+    return;
+  }
+  ref.listen<AsyncValue<List<StoredAccount>>>(accountsProvider, (_, next) {
+    for (final account in next.valueOrNull ?? const <StoredAccount>[]) {
+      ref.listen<AsyncValue<List<CachedConversation>>>(
+        conversationsProvider(account.id),
+        (_, rooms) {
+          final named = <String, String>{
+            for (final room in rooms.valueOrNull ?? const <CachedConversation>[])
+              if (room.displayName.trim().isNotEmpty)
+                room.token: room.displayName.trim(),
+          };
+          if (named.isEmpty) {
+            return;
+          }
+          unawaited(coordinator.recordConversationNames(account.id, named));
+        },
+        fireImmediately: true,
+      );
+    }
+  }, fireImmediately: true);
+});
+
 /// hands every token to [applePushRegistrationCoordinatorProvider] so it can
 /// register (or refresh) push v2.
 final applePushCoordinatorProvider = Provider<ApplePushCoordinator?>((ref) {

@@ -20,6 +20,66 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  group('conversation names for the notification extension', () {
+    test('sends one batch and reports what was stored', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return 2;
+          });
+
+      final stored = await coordinator.recordConversationNames('account-a', {
+        'hqowhbbz': 'Tym NKS',
+        'anamaxxe': 'Vyvoj',
+      });
+
+      expect(stored, 2);
+      expect(calls.single.method, 'recordConversationNames');
+      final arguments = calls.single.arguments as Map<Object?, Object?>;
+      expect(arguments['accountId'], 'account-a');
+      expect(arguments['rooms'], <Object?>[
+        <String, String>{'token': 'hqowhbbz', 'name': 'Tym NKS'},
+        <String, String>{'token': 'anamaxxe', 'name': 'Vyvoj'},
+      ]);
+    });
+
+    test('nothing to say is not a platform call', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return 0;
+          });
+
+      expect(await coordinator.recordConversationNames('account-a', {}), 0);
+      expect(await coordinator.recordConversationNames('', {'a': 'b'}), 0);
+      expect(calls, isEmpty);
+    });
+
+    // A Keychain that refuses to write leaves the ordinary notification in
+    // place; it must not take a conversation sync down with it.
+    test('a refusing platform is not an error the caller has to handle', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            throw PlatformException(code: 'keychain');
+          });
+
+      expect(
+        await coordinator.recordConversationNames('account-a', {'t': 'Room'}),
+        isNull,
+      );
+    });
+
+    test('a platform without the channel answers nothing', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+
+      expect(
+        await coordinator.recordConversationNames('account-a', {'t': 'Room'}),
+        isNull,
+      );
+    });
+  });
+
   test('requests permission and fetches the token once granted', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

@@ -358,6 +358,8 @@ final class AppleDeepLinkDelivery {
         self?.destroyDeviceKey(call.arguments, result)
       case "recordDeviceKeyAccount":
         self?.recordDeviceKeyAccount(call.arguments, result)
+      case "recordConversationNames":
+        self?.recordConversationNames(call.arguments, result)
       case "getLaunchNotificationOpen":
         let open = self?.pushOpens.takeLaunchOpen()
         result(open)
@@ -458,6 +460,50 @@ final class AppleDeepLinkDelivery {
   /// decrypts a push, instead of it being reconstructed later from a server
   /// host — which is ambiguous with two accounts on one server. `arguments`
   /// must be `{"handle": String, "accountId": String}`.
+  /// Leaves the names of the rooms this account knows where the Notification
+  /// Service Extension can read them.
+  ///
+  /// The extension gets a room token from the push and nothing else, so
+  /// without this a communication notification would have no one to attribute
+  /// the message to. Sent as a batch because the app learns about rooms in
+  /// batches: one conversation sync, one call.
+  private func recordConversationNames(_ arguments: Any?, _ result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any],
+      let accountId = args["accountId"] as? String, !accountId.isEmpty,
+      let rooms = args["rooms"] as? [[String: Any]]
+    else {
+      result(
+        FlutterError(
+          code: "invalid_arguments",
+          message: "Missing accountId or rooms",
+          details: nil
+        )
+      )
+      return
+    }
+    var written = 0
+    for room in rooms {
+      guard let token = room["token"] as? String, !token.isEmpty else {
+        continue
+      }
+      // An empty name is a removal, not a blank room: a room that lost its
+      // name must stop attributing notifications to the old one.
+      let name = (room["name"] as? String) ?? ""
+      if name.isEmpty {
+        ConversationIdentityStore.production.forget(accountId: accountId, roomToken: token)
+        continue
+      }
+      if ConversationIdentityStore.production.remember(
+        accountId: accountId,
+        roomToken: token,
+        displayName: name
+      ) {
+        written += 1
+      }
+    }
+    result(written)
+  }
+
   private func recordDeviceKeyAccount(_ arguments: Any?, _ result: @escaping FlutterResult) {
     guard let args = arguments as? [String: Any],
       let handle = args["handle"] as? String, !handle.isEmpty,

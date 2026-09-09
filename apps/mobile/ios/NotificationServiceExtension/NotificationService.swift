@@ -1,3 +1,4 @@
+import Intents
 import Security
 import UserNotifications
 
@@ -25,7 +26,12 @@ final class NotificationService: UNNotificationServiceExtension {
       ?? UNMutableNotificationContent()
     bestAttemptContent = content
 
-    defer { contentHandler(content) }
+    // What actually reaches iOS. A communication notification is a separate
+    // copy rather than an edit of `content`, so the one place that delivers
+    // has to be able to send either; calling the handler twice is a defect,
+    // not a fallback.
+    var delivered: UNNotificationContent = content
+    defer { contentHandler(delivered) }
 
     guard let subjectBase64 = request.content.userInfo["nc-subject"] as? String,
       let ciphertext = Data(base64Encoded: subjectBase64)
@@ -45,11 +51,14 @@ final class NotificationService: UNNotificationServiceExtension {
     if let subject = payload["subject"] as? String, !subject.isEmpty {
       content.body = subject
     }
-    // ponytail: the encrypted payload only ever carries an app id ("spreed"
-    // for every Talk push), never a room name — Nextcloud's push envelope is
-    // deliberately minimal for privacy. A real conversation title would need
-    // an authenticated API round-trip from inside the extension, which risks
-    // blowing the ~30s NSE time budget; skipped until that's needed.
+    // The encrypted payload only ever carries an app id ("spreed" for every
+    // Talk push), never a room name — Nextcloud's push envelope is
+    // deliberately minimal for privacy, and `PushWakeUpPayload` refuses any
+    // key beyond app, subject, type, id and nid. The title below therefore
+    // names the application; the room's own name reaches the banner through
+    // the communication intent further down, from what the app cached, rather
+    // than through an authenticated round-trip that would risk the extension's
+    // time budget.
     //
     // Matches Android's AndroidWebPushNotifier.kt exactly (own app: the
     // display name; anything else: the raw app id) so the two platforms
@@ -80,7 +89,63 @@ final class NotificationService: UNNotificationServiceExtension {
       // Matches AppDelegate's registered category — without this the banner
       // offers no Reply/Mark-as-read actions at all.
       content.categoryIdentifier = "TALK_MESSAGE"
+
+      // A communication notification, when the app has told us what this room
+      // is called. iOS then shows it as a message from somebody rather than
+      // from an application, which is what "Allow Notifications from People"
+      // in a Focus filters on.
+      if let named = Self.asCommunication(
+        content,
+        accountId: accountId,
+        roomToken: roomToken
+      ) {
+        delivered = named
+      }
     }
+  }
+
+  /// The same content, attributed to the room, or `nil` to keep it as it is.
+  ///
+  /// Every step is allowed to fail into the ordinary notification: a room the
+  /// app has never cached has no name here, donating can be refused, and
+  /// `updating(from:)` throws when the intent does not describe a message.
+  /// None of those is worth losing the notification over.
+  private static func asCommunication(
+    _ content: UNNotificationContent,
+    accountId: String,
+    roomToken: String
+  ) -> UNNotificationContent? {
+    guard
+      let name = ConversationIdentityStore.production.displayName(
+        accountId: accountId,
+        roomToken: roomToken
+      )
+    else {
+      return nil
+    }
+    let handle = INPersonHandle(value: "\(accountId)|\(roomToken)", type: .unknown)
+    let sender = INPerson(
+      personHandle: handle,
+      nameComponents: nil,
+      displayName: name,
+      image: nil,
+      contactIdentifier: nil,
+      customIdentifier: handle.value
+    )
+    let intent = INSendMessageIntent(
+      recipients: nil,
+      outgoingMessageType: .outgoingMessageText,
+      content: nil,
+      speakableGroupName: nil,
+      conversationIdentifier: handle.value,
+      serviceName: nil,
+      sender: sender,
+      attachments: nil
+    )
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .incoming
+    interaction.donate(completion: nil)
+    return try? content.updating(from: intent)
   }
 
   override func serviceExtensionTimeWillExpire() {

@@ -147,6 +147,40 @@ final class ApplePushCoordinator {
     }
   }
 
+  /// Tells the Notification Service Extension what the account's rooms are
+  /// called.
+  ///
+  /// The push the extension decrypts carries a room token and no name, so
+  /// without this a notification cannot say who it is from. Sent as a batch,
+  /// because rooms are learned in batches. An empty name removes the room, so
+  /// a renamed-to-nothing room stops being attributed to its old name.
+  ///
+  /// Returns how many the platform stored, or `null` where the channel is not
+  /// implemented - Android has its own notification path and answers nothing.
+  Future<int?> recordConversationNames(
+    String accountId,
+    Map<String, String> namesByToken,
+  ) async {
+    if (accountId.isEmpty || namesByToken.isEmpty) {
+      return 0;
+    }
+    try {
+      return await _channel.invokeMethod<int>('recordConversationNames', {
+        'accountId': accountId,
+        'rooms': [
+          for (final entry in namesByToken.entries)
+            {'token': entry.key, 'name': entry.value},
+        ],
+      });
+    } on PlatformException {
+      // A Keychain that refuses to write is not worth failing a sync over: the
+      // notification simply stays the ordinary kind.
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   Future<Object?> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
       case 'deviceTokenChanged':

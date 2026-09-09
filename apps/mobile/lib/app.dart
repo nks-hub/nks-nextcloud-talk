@@ -94,6 +94,8 @@ final class _AppHome extends ConsumerWidget {
     // Nextcloud's live channel, on every platform the app runs on.
     ref.watch(clientPushCoordinatorProvider);
     ref.watch(applePushCoordinatorProvider);
+    // Keeps the notification extension able to name a room.
+    ref.watch(appleConversationIdentityProvider);
     ref.watch(deepLinkCoordinatorProvider);
     final accounts = ref.watch(accountsProvider);
     return accounts.when(
