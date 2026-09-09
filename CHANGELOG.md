@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A moderator can decide who may find an open conversation: only the
+  people in it, or anyone with an account on the server. The current
+  scope is read back from the server, and where an instance already
+  publishes a conversation to guest accounts, that setting stays
+  visible and can be taken back.
+
 - A picture is shown even when the server has one broken preview of it. A
   server can keep a record of a preview it can no longer open and then answer
   with an error page that claims to be an image; refusing that is right, but
