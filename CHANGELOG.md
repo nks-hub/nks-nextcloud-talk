@@ -20,10 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
-- A picture somebody just sent no longer arrives as an empty box on the
-  other side. The server answers the preview request with an error for the
-  first seconds after a share, and that one answer used to stand until the
-  reader pressed retry; it is now repeated for a few seconds first.
+- A picture is shown even when the server has one broken preview of it. A
+  server can keep a record of a preview it can no longer open and then answer
+  with an error page that claims to be an image; refusing that is right, but
+  the picture used to be lost with it. The same picture is now asked for at
+  half the box, which keeps its shape, and a preview that only fails for a
+  moment is asked for again instead of standing as a failure.
 
 - Opening a picture full size falls back to the size the chat already shows
   when the server has no larger preview of it. Tall screenshots opened to an

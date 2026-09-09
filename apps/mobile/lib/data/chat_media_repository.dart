@@ -222,6 +222,11 @@ final class ChatMediaRepository {
       try {
         return await _loadImage(account: account, uri: uri);
       } on ChatMediaRepositoryException catch (failure) {
+        if (failure.code == ChatMediaRepositoryError.invalidResponse) {
+          final smaller = _halvedPreviewUri(uri);
+          if (smaller == null) rethrow;
+          return _loadImage(account: account, uri: smaller);
+        }
         if (attempt == previewRetries.length ||
             failure.code != ChatMediaRepositoryError.unavailable) {
           rethrow;
@@ -580,6 +585,32 @@ bool _isAllowedPreviewUri(ServerBase server, Uri uri) {
       height >= 1 &&
       height <= 2048 &&
       (crop == '0' || crop == '1');
+}
+
+/// The same picture at half the box, or null when there is nothing to halve.
+///
+/// Measured on the reference instance, 9 September 2026: a server can record a
+/// preview it cannot open afterwards. It then answers 200 with an image
+/// content type and an HTML error page in the body — its log says "Unable to
+/// open preview stream" — and it does so for one box only: the same file came
+/// back correctly at 512 and at 2048 while 1024 stayed broken, and deleting
+/// the stored preview files did not help because the record is in its file
+/// cache. Refusing the HTML is right, but showing a broken picture over one
+/// bad cache entry is not, so the smaller box is worth one try. It keeps the
+/// aspect ratio, unlike dropping the aspect flag, and it is smaller to fetch.
+Uri? _halvedPreviewUri(Uri uri) {
+  final width = int.tryParse(uri.queryParameters['x'] ?? '');
+  final height = int.tryParse(uri.queryParameters['y'] ?? '');
+  if (width == null || height == null || width < 2 || height < 2) {
+    return null;
+  }
+  return uri.replace(
+    queryParameters: <String, String>{
+      ...uri.queryParameters,
+      'x': '${width ~/ 2}',
+      'y': '${height ~/ 2}',
+    },
+  );
 }
 
 bool _matchesImageSignature(String contentType, Uint8List body) {

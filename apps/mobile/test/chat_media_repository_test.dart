@@ -108,7 +108,51 @@ void main() {
     expect(waited, isEmpty);
   });
 
-  test('a refusal about this request is not retried', () async {
+  test('a page where a picture should be falls back to a smaller box', () async {
+    final asked = <Uri>[];
+    final vault = MemoryCredentialVault()
+      ..values[_account.id] = 'fixture-app-password';
+    final repository = ChatMediaRepository(
+      vault,
+      wait: (_) async {},
+      client: _StreamingClient((request) async {
+        asked.add(request.url);
+        if (request.url.queryParameters['x'] == '1024') {
+          return http.StreamedResponse(
+            Stream<List<int>>.value(utf8.encode('<!DOCTYPE html><html>')),
+            200,
+            headers: const <String, String>{'content-type': 'image/png'},
+          );
+        }
+        return http.StreamedResponse(
+          Stream<List<int>>.value(_pngSignature),
+          200,
+          headers: const <String, String>{'content-type': 'image/png'},
+        );
+      }),
+    );
+    addTearDown(repository.close);
+    final large = _previewUri.replace(
+      queryParameters: <String, String>{
+        ..._previewUri.queryParameters,
+        'x': '1024',
+        'y': '1024',
+      },
+    );
+
+    expect(
+      await repository.loadPreview(account: _account, uri: large),
+      isNotNull,
+    );
+    expect(asked.map((uri) => uri.queryParameters['x']), ['1024', '512']);
+    expect(
+      asked.last.queryParameters['a'],
+      large.queryParameters['a'],
+      reason: 'the smaller box keeps the aspect ratio of the original request',
+    );
+  });
+
+  test('a refusal about this request is not waited out', () async {
     var requests = 0;
     final waited = <Duration>[];
     final vault = MemoryCredentialVault()
@@ -137,7 +181,11 @@ void main() {
         ),
       ),
     );
-    expect(requests, 1);
+    expect(
+      requests,
+      2,
+      reason: 'the smaller box is tried once, then the failure stands',
+    );
     expect(waited, isEmpty);
   });
 
