@@ -20,6 +20,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Large text keeps the conversation name in the header. The rule that gives
+  the name its share was already written to grow with the text size, but
+  nothing checked it; at 200 % the header now provably folds its actions into
+  the menu instead of squeezing the name out.
 - The call screen is covered by the accessibility audit the other screens
   already had. Nothing was wrong there today; the point is that a future
   control without a spoken name now fails a test rather than reaching somebody

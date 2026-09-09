@@ -63,6 +63,60 @@ void main() {
     expect(tapped, ['details']);
   });
 
+  // Somebody who needs large text needs the name more than anyone, not less:
+  // at 200 % the same eleven characters are half as many words. The floor is
+  // written to scale with the text scaler, and nothing asserted that until now.
+  testWidgets('the name floor grows with the text size', (tester) async {
+    late double plain;
+    late double doubled;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            plain = conversationTitleFloor(context, avatarExtent: 36, gap: 10);
+            return MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: Builder(
+                builder: (context) {
+                  doubled = conversationTitleFloor(
+                    context,
+                    avatarExtent: 36,
+                    gap: 10,
+                  );
+                  return const SizedBox.shrink();
+                },
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    // The avatar and its gap are fixed; only the name's share doubles.
+    expect(doubled - 46, (plain - 46) * 2);
+  });
+
+  testWidgets('at 200 % text a phone header still keeps the name and the '
+      'actions', (tester) async {
+    // The floor at 200 %: the avatar, its gap and twice the name's share.
+    const floor = 36 + 10 + 168.0;
+    await tester.pumpWidget(
+      host(conversationHeaderActions(actions(), width: 355, titleFloor: floor)),
+    );
+
+    // Two slots, so one icon and the overflow - and the name keeps 259 of the
+    // 355, above its floor. Folding four actions is the point: squeezing the
+    // name out instead is the defect this whole rule exists for.
+    expect(find.byType(IconButton), findsNWidgets(2));
+    await tester.tap(find.byKey(const Key('conversation-header-overflow')));
+    await tester.pumpAndSettle();
+    for (final name in ['video', 'search', 'threads', 'details']) {
+      expect(find.byKey(Key(name)), findsOneWidget);
+    }
+  });
+
   testWidgets('a header with room for nothing still offers every action', (
     tester,
   ) async {

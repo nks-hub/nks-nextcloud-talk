@@ -17,6 +17,7 @@ import 'package:nextcloudtalk/features/conversations/conversation_list_actions.d
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import 'accessibility_probe.dart';
 import 'test_support.dart';
 
 const _markUnreadTalkFeatures = {'chat-v2', 'chat-read-marker', 'chat-unread'};
@@ -167,6 +168,29 @@ void main() {
       statusCode,
     );
   }
+
+  // The screen the app opens on, and the one every other screen is reached
+  // through. It carries the unread badges, the favourite and archive markers
+  // and the row actions, none of which a screen reader can guess from a shape.
+  testWidgets('every conversation row control says what it does', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await setTalkFeatures(const {'chat-v2'});
+    final conversation = await insertConversation(token: 'roomaudit');
+
+    await tester.pumpWidget(
+      app(
+        conversations: [conversation],
+        client: MockClient((request) async => http.Response('', 404)),
+      ),
+    );
+    await tester.pump();
+
+    expectEveryButtonNamed(tester, screen: 'the conversation list');
+    expectReadingOrderFollowsLayout(tester, screen: 'the conversation list');
+    semantics.dispose();
+  });
 
   testWidgets('the last conversation is not left under the compose button', (
     tester,
