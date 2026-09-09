@@ -99,6 +99,20 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
       _isGroupOrPublic &&
       _talkFeatures.contains(_readOnlyCapability);
 
+  /// Discovery is a group/public conversation setting: Talk answers `400`
+  /// for a one-to-one one, exactly as it does for read-only.
+  bool get _canSetListable =>
+      _isModerator &&
+      _isGroupOrPublic &&
+      _talkFeatures.contains(_listableCapability);
+
+  /// What the server last said. An undocumented value is shown as the
+  /// closed scope rather than guessed at, so a stranger value can never read
+  /// as "everyone can find this".
+  RoomListableScope get _listableScope =>
+      RoomListableScope.fromWire(_room?.listable ?? 0) ??
+      RoomListableScope.participantsOnly;
+
   bool get _canSetLobby =>
       _isModerator &&
       _isGroupOrPublic &&
@@ -612,6 +626,60 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
                 : RoomReadOnlyState.readWrite,
           ),
       fallback: () => {'readOnly': value ? 1 : 0},
+    );
+  }
+
+  /// Guest-app users are not ordinary users and the instance may not run that
+  /// app at all, and Talk publishes no capability that says so. So the third
+  /// scope is offered only where the server already reports it — a setting
+  /// made in another client stays visible and can be taken back, and this
+  /// client never invents an audience of its own.
+  Future<void> _changeListableScope() async {
+    final current = _listableScope;
+    final choices = <RoomListableScope>[
+      RoomListableScope.participantsOnly,
+      RoomListableScope.regularUsers,
+      if (current == RoomListableScope.everyone) RoomListableScope.everyone,
+    ];
+    final strings = AppLocalizations.of(context);
+    final chosen = await showDialog<RoomListableScope>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        key: const Key('room-details-listable-dialog'),
+        title: Text(strings.roomDetailsListableLabel),
+        children: [
+          for (final scope in choices)
+            SimpleDialogOption(
+              key: Key('room-details-listable-${scope.name}'),
+              onPressed: () => Navigator.of(dialogContext).pop(scope),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 24,
+                    child: scope == current
+                        ? const Icon(Icons.check, size: 20)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_listableScopeLabel(strings, scope))),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == current || !mounted) {
+      return;
+    }
+    await _administer(
+      () => ref
+          .read(roomSettingsServiceProvider)
+          .setListableScope(
+            accountId: widget.account.id,
+            roomToken: widget.conversation.token,
+            scope: chosen,
+          ),
+      fallback: () => {'listable': chosen.wireValue},
     );
   }
 

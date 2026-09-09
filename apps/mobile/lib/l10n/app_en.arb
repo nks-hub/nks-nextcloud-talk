@@ -1116,6 +1116,13 @@
   "roomDetailsSipMeetingId": "Meeting ID",
   "roomDetailsSipPersonalPin": "Your PIN",
   "roomDetailsSipPinUnavailable": "The server has not provided your PIN yet.",
+  "roomDetailsListableLabel": "Who can find this conversation",
+  "@roomDetailsListableLabel": {
+    "description": "Opens the discovery scope of an open conversation."
+  },
+  "roomDetailsListableParticipants": "Only its participants",
+  "roomDetailsListableRegular": "Anyone with an account",
+  "roomDetailsListableEveryone": "Everyone, guest accounts included",
   "roomDetailsReadOnlyToggleLabel": "Read-only",
   "@roomDetailsReadOnlyToggleLabel": {
     "description": "Label of the read-only switch."

@@ -312,6 +312,49 @@ void main() {
     });
   });
 
+  group('SetRoomListableRequest', () {
+    test('PUTs the documented scope values', () {
+      for (final (scope, wire) in <(RoomListableScope, String)>[
+        (RoomListableScope.participantsOnly, '0'),
+        (RoomListableScope.regularUsers, '1'),
+        (RoomListableScope.everyone, '2'),
+      ]) {
+        final request = SetRoomListableRequest(
+          accountId: _accountId(),
+          server: _server(),
+          roomToken: _token(),
+          scope: scope,
+        );
+
+        expect(request.httpMethod, 'PUT');
+        expect(
+          request.uri.toString(),
+          '$_v4Base/rooma123/listable?format=json',
+        );
+        expect(request.formBody, {'scope': wire});
+      }
+    });
+
+    test('reads a wire value back, and refuses one the server never sends', () {
+      expect(RoomListableScope.fromWire(0), RoomListableScope.participantsOnly);
+      expect(RoomListableScope.fromWire(1), RoomListableScope.regularUsers);
+      expect(RoomListableScope.fromWire(2), RoomListableScope.everyone);
+      expect(RoomListableScope.fromWire(3), isNull);
+      expect(RoomListableScope.fromWire(-1), isNull);
+    });
+
+    test('never renders the room token in its description', () {
+      final request = SetRoomListableRequest(
+        accountId: _accountId(),
+        server: _server(),
+        roomToken: _token(),
+        scope: RoomListableScope.regularUsers,
+      );
+
+      expect(request.toString(), 'SetRoomListableRequest(scope: regularUsers)');
+    });
+  });
+
   group('SetRoomEmojiAvatarRequest', () {
     test('POSTs the emoji to the v1 avatar endpoint', () {
       final request = SetRoomEmojiAvatarRequest(

@@ -2719,6 +2719,18 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsSipPinUnavailable => 'Server zatím váš PIN neposkytl.';
 
   @override
+  String get roomDetailsListableLabel => 'Kdo konverzaci najde';
+
+  @override
+  String get roomDetailsListableParticipants => 'Jen její účastníci';
+
+  @override
+  String get roomDetailsListableRegular => 'Kdokoli s účtem';
+
+  @override
+  String get roomDetailsListableEveryone => 'Všichni včetně hostovských účtů';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Jen ke čtení';
 
   @override

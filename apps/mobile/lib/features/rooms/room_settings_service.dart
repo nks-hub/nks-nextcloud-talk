@@ -673,6 +673,28 @@ final class RoomSettingsService {
     );
   }
 
+  /// Decides who may find this conversation without being in it. Needs the
+  /// server's `listable-rooms` capability, which the caller gates on.
+  ///
+  /// Discovery, not publication: a conversation can be open to registered
+  /// users without admitting a guest through a link, and the other way round.
+  Future<ConversationRoom?> setListableScope({
+    required String accountId,
+    required String roomToken,
+    required RoomListableScope scope,
+  }) {
+    return _administer(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (ids) => SetRoomListableRequest(
+        accountId: ids.accountId,
+        server: ids.server,
+        roomToken: ids.roomToken,
+        scope: scope,
+      ),
+    );
+  }
+
   /// Sets a single emoji as the conversation avatar. Needs the server's
   /// `avatar` capability, which the caller gates on.
   Future<ConversationRoom?> setEmojiAvatar({

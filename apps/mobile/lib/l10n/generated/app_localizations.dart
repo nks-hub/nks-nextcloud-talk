@@ -4928,6 +4928,30 @@ abstract class AppLocalizations {
   /// **'The server has not provided your PIN yet.'**
   String get roomDetailsSipPinUnavailable;
 
+  /// Opens the discovery scope of an open conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Who can find this conversation'**
+  String get roomDetailsListableLabel;
+
+  /// No description provided for @roomDetailsListableParticipants.
+  ///
+  /// In en, this message translates to:
+  /// **'Only its participants'**
+  String get roomDetailsListableParticipants;
+
+  /// No description provided for @roomDetailsListableRegular.
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with an account'**
+  String get roomDetailsListableRegular;
+
+  /// No description provided for @roomDetailsListableEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone, guest accounts included'**
+  String get roomDetailsListableEveryone;
+
   /// Label of the read-only switch.
   ///
   /// In en, this message translates to:

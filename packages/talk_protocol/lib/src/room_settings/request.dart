@@ -346,6 +346,33 @@ enum RoomReadOnlyState {
   final int wireValue;
 }
 
+/// Who may find a conversation that they are not in.
+///
+/// The wire values come from the official iOS client's `NCTypes.h`, which the
+/// server shares: 0 participants only, 1 regular users, 2 everyone. This is
+/// not the public/guest-link toggle — a conversation can be public without
+/// being discoverable, and discoverable without being public — and
+/// [everyone] additionally reaches guest-app users, which is why it is only
+/// offered where the instance runs that app.
+enum RoomListableScope {
+  participantsOnly(0),
+  regularUsers(1),
+  everyone(2);
+
+  const RoomListableScope(this.wireValue);
+
+  static RoomListableScope? fromWire(int value) {
+    for (final scope in RoomListableScope.values) {
+      if (scope.wireValue == value) {
+        return scope;
+      }
+    }
+    return null;
+  }
+
+  final int wireValue;
+}
+
 final RegExp _hexColorPattern = RegExp(r'^[0-9A-Fa-f]{6}$');
 
 /// 128 bits of hex from a cryptographic source. Used as a multipart boundary,
@@ -626,6 +653,46 @@ final class SetRoomReadOnlyRequest extends RoomAdministrationRequest {
 
   @override
   String toString() => 'SetRoomReadOnlyRequest(state: ${state.name})';
+}
+
+/// Opens a conversation to people who are not in it, or closes it again.
+///
+/// `PUT /ocs/v2.php/apps/spreed/api/v4/room/{token}/listable` with a single
+/// `scope` form field, from Talk `docs/conversation.md`, section "Open a
+/// conversation to registered users". Requires the server's `listable-rooms`
+/// capability; the server answers `400` for a one-to-one conversation or an
+/// unknown scope, `403` for a non-moderator and `404` for an unknown room.
+///
+/// Discovery is not publication: this says who may *find* the conversation in
+/// the open-conversation list, while `public` says whether a link admits a
+/// guest. The caller decides which scopes to offer —
+/// [RoomListableScope.everyone] means guest-app users, so it belongs only on
+/// an instance that runs that app.
+final class SetRoomListableRequest extends RoomAdministrationRequest {
+  SetRoomListableRequest({
+    required super.accountId,
+    required super.server,
+    required super.roomToken,
+    required this.scope,
+    super.userAgent = roomSettingsContractUserAgent,
+  }) {
+    _validateUserAgent(userAgent, r'$.headers.userAgent');
+  }
+
+  final RoomListableScope scope;
+
+  @override
+  String get httpMethod => 'PUT';
+
+  @override
+  Map<String, String>? get formBody =>
+      UnmodifiableMapView({'scope': scope.wireValue.toString()});
+
+  @override
+  Uri get uri => _roomUri(server, roomToken, 'listable');
+
+  @override
+  String toString() => 'SetRoomListableRequest(scope: ${scope.name})';
 }
 
 /// Sets a single emoji, with an optional background colour, as the

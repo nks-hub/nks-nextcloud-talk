@@ -220,3 +220,11 @@ ConversationRoom? _parseCachedRoom(CachedConversation conversation) {
     return null;
   }
 }
+
+String _listableScopeLabel(AppLocalizations strings, RoomListableScope scope) {
+  return switch (scope) {
+    RoomListableScope.participantsOnly => strings.roomDetailsListableParticipants,
+    RoomListableScope.regularUsers => strings.roomDetailsListableRegular,
+    RoomListableScope.everyone => strings.roomDetailsListableEveryone,
+  };
+}

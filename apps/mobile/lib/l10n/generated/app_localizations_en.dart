@@ -2720,6 +2720,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server has not provided your PIN yet.';
 
   @override
+  String get roomDetailsListableLabel => 'Who can find this conversation';
+
+  @override
+  String get roomDetailsListableParticipants => 'Only its participants';
+
+  @override
+  String get roomDetailsListableRegular => 'Anyone with an account';
+
+  @override
+  String get roomDetailsListableEveryone => 'Everyone, guest accounts included';
+
+  @override
   String get roomDetailsReadOnlyToggleLabel => 'Read-only';
 
   @override

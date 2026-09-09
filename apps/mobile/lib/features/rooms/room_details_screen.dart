@@ -57,6 +57,7 @@ const int _notificationNever = 3;
 /// capability at all.
 const String _avatarCapability = 'avatar';
 const String _readOnlyCapability = 'read-only-rooms';
+const String _listableCapability = 'listable-rooms';
 const String _lobbyCapability = 'webinary-lobby';
 const String _breakoutCapability = 'breakout-rooms-v1';
 const String _breakoutObjectType = 'room';
@@ -456,6 +457,17 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               value: _readOnly != 0,
               onChanged: _busy ? null : _toggleReadOnly,
+            ),
+          if (_canSetListable)
+            ListTile(
+              key: const Key('room-details-listable'),
+              leading: const Icon(Icons.travel_explore_outlined),
+              title: Text(strings.roomDetailsListableLabel),
+              subtitle: Text(
+                _listableScopeLabel(strings, _listableScope),
+                key: const Key('room-details-listable-subtitle'),
+              ),
+              onTap: _busy ? null : _changeListableScope,
             ),
           if (_canManageBots) _buildBotsSection(context),
           if (_canBan)

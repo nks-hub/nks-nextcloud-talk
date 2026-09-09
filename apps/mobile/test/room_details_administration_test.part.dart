@@ -808,6 +808,122 @@ void _registerAdministrationTests() {
     },
   );
 
+  testWidgets('discovery needs the listable-rooms feature', (tester) async {
+    await openDetails(
+      tester,
+      forAccount: account,
+      forConversation: conversation,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-listable')), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+
+    final capable = await withCapabilities({'listable-rooms'});
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: conversation,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(find.byKey(const Key('room-details-listable')), findsOneWidget);
+    expect(
+      _textByKey(tester, 'room-details-listable-subtitle'),
+      'Only its participants',
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('opening discovery to accounts sends scope 1 and reads back', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'listable-rooms'});
+    final sent = <Map<String, String>>[];
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/participants')) {
+        return _ocsSuccess(const <Object?>[]);
+      }
+      if (request.method == 'PUT' && request.url.path.endsWith('/listable')) {
+        sent.add(request.bodyFields);
+        return _ocsSuccess(
+          Map<String, Object?>.from(_conversationRoomJson())
+            ..['listable'] = int.parse(request.bodyFields['scope']!),
+        );
+      }
+      return http.Response('', 404);
+    });
+
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: conversation,
+      client: client,
+    );
+    await tester.tap(find.byKey(const Key('room-details-listable')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('room-details-listable-dialog')),
+      findsOneWidget,
+    );
+    // The guest-app scope is not offered while the server does not report it.
+    expect(
+      find.byKey(const Key('room-details-listable-everyone')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('room-details-listable-regularUsers')),
+    );
+    await _pumpUntil(
+      tester,
+      () =>
+          _textByKey(tester, 'room-details-listable-subtitle') ==
+          'Anyone with an account',
+    );
+
+    expect(sent, [
+      {'scope': '1'},
+    ]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  testWidgets('a scope the server already reports stays offered', (
+    tester,
+  ) async {
+    final capable = await withCapabilities({'listable-rooms'});
+    final open = conversation.copyWith(
+      rawJson: jsonEncode(
+        Map<String, Object?>.from(_conversationRoomJson())..['listable'] = 2,
+      ),
+    );
+
+    await openDetails(
+      tester,
+      forAccount: capable,
+      forConversation: open,
+      client: participantsClient(const <Object?>[]),
+    );
+    expect(
+      _textByKey(tester, 'room-details-listable-subtitle'),
+      'Everyone, guest accounts included',
+    );
+    await tester.tap(find.byKey(const Key('room-details-listable')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('room-details-listable-everyone')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('room-details-listable-everyone')));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('the read-only switch needs the read-only-rooms feature', (
     tester,
   ) async {

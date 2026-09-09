@@ -113,6 +113,7 @@ final class ConversationRoom {
     required this.attendeePin,
     required this.remoteServer,
     required this.readOnly,
+    required this.listable,
     required this.lobbyState,
     required this.lobbyTimer,
     required this.hasCall,
@@ -188,6 +189,12 @@ final class ConversationRoom {
 
   final String? remoteServer;
   final int readOnly;
+
+  /// Who may find this conversation without being in it: 0 its
+  /// participants, 1 registered users, 2 everyone the instance knows,
+  /// which includes guest-app users. Discovery only — being findable is
+  /// not the same as admitting a guest through a link.
+  final int listable;
 
   /// Webinar lobby state, `0` for no lobby and `1` for a lobby that only
   /// moderators can pass (Talk `docs/constants.md`, "Webinar lobby states").
@@ -315,7 +322,7 @@ ConversationRoom parseConversationRoom(
   final lastMessage = _optionalPreview(room, 'lastMessage', path);
   _requireInt(room, 'lastPing', path);
   final lastReadMessage = _requireInt(room, 'lastReadMessage', path);
-  _requireInt(room, 'listable', path);
+  final listable = _requireInt(room, 'listable', path);
   _requireString(room, 'liveTranscriptionLanguageId', path);
   final lobbyState = _requireInt(room, 'lobbyState', path);
   final lobbyTimer = _requireInt(room, 'lobbyTimer', path);
@@ -443,6 +450,7 @@ ConversationRoom parseConversationRoom(
     attendeePin: attendeePin,
     remoteServer: remoteServer,
     readOnly: readOnly,
+    listable: listable,
     lobbyState: lobbyState,
     lobbyTimer: lobbyTimer,
     hasCall: hasCall,
