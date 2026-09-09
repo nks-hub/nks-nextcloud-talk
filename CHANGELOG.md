@@ -20,6 +20,14 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A meeting can be scheduled from a conversation. Pick one of your calendars,
+  a moment and how long it lasts, and the server writes the event, puts the
+  conversation's call address into it and invites the participants. A moment
+  in the past is refused before anything is sent, and the button locks itself
+  on the first tap: the server writes a second event if it is asked twice, so
+  when an answer never arrives the app says to check the calendar instead of
+  trying again.
+
 - Local diagnostics now report the push path the device is actually set to,
   instead of always reporting the Web Push one. On a device registering
   through the proxy that state is legitimately empty, and the screen read it
