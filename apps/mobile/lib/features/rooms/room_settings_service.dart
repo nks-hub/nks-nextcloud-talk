@@ -26,6 +26,7 @@ part 'room_settings_meeting.part.dart';
 part 'room_settings_public.part.dart';
 part 'room_settings_access_context.part.dart';
 part 'room_settings_permissions.part.dart';
+part 'room_settings_unbind.part.dart';
 part 'room_settings_email_invitations.part.dart';
 
 enum RoomSettingsError {

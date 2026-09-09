@@ -2969,6 +2969,24 @@ class AppLocalizationsCs extends AppLocalizations {
   }
 
   @override
+  String get roomDetailsUnbindAction => 'Zachovat konverzaci';
+
+  @override
+  String get roomDetailsUnbindHint =>
+      'Odpojí ji od události, pro kterou vznikla, takže zůstane i potom';
+
+  @override
+  String get roomDetailsUnbindConfirm =>
+      'Konverzace zůstane i poté, co událost, ke které patří, zmizí. Odsud to nejde vzít zpět.';
+
+  @override
+  String get roomDetailsUnbindDone => 'Konverzace teď stojí samostatně';
+
+  @override
+  String get roomDetailsUnbindKeptAsPhoneRoom =>
+      'Konverzace je zachována jako trvalá telefonní místnost';
+
+  @override
   String get roomDetailsListableLabel => 'Kdo konverzaci najde';
 
   @override
@@ -3733,4 +3751,26 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get newConversationErrorPasswordRejected =>
       'Heslo konverzace nesouhlasí.';
+
+  @override
+  String get reminderInboxTitle => 'Připomínky';
+
+  @override
+  String get reminderInboxEmpty => 'Nemáte naplánovanou žádnou připomínku.';
+
+  @override
+  String get reminderInboxUnavailable => 'Připomínky se nepodařilo načíst.';
+
+  @override
+  String reminderInboxAccountsUnavailable(String accounts) {
+    return 'Nepodařilo se načíst připomínky účtů: $accounts';
+  }
+
+  @override
+  String reminderInboxDue(String time) {
+    return 'Termín $time';
+  }
+
+  @override
+  String get reminderInboxRemoveFailed => 'Připomínku se nepodařilo odebrat.';
 }

@@ -2970,6 +2970,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get roomDetailsUnbindAction => 'Keep this conversation';
+
+  @override
+  String get roomDetailsUnbindHint =>
+      'Detach it from the event it was made for, so it stays afterwards';
+
+  @override
+  String get roomDetailsUnbindConfirm =>
+      'The conversation will stay after the event it belongs to is gone. This cannot be undone from here.';
+
+  @override
+  String get roomDetailsUnbindDone => 'The conversation now stands on its own';
+
+  @override
+  String get roomDetailsUnbindKeptAsPhoneRoom =>
+      'The conversation is kept, as a permanent phone room';
+
+  @override
   String get roomDetailsListableLabel => 'Who can find this conversation';
 
   @override
@@ -3727,4 +3745,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get newConversationErrorPasswordRejected =>
       'The conversation password is wrong.';
+
+  @override
+  String get reminderInboxTitle => 'Reminders';
+
+  @override
+  String get reminderInboxEmpty => 'No reminders are pending.';
+
+  @override
+  String get reminderInboxUnavailable => 'Reminders could not be read.';
+
+  @override
+  String reminderInboxAccountsUnavailable(String accounts) {
+    return 'Reminders could not be read for: $accounts';
+  }
+
+  @override
+  String reminderInboxDue(String time) {
+    return 'Due $time';
+  }
+
+  @override
+  String get reminderInboxRemoveFailed => 'The reminder could not be removed.';
 }

@@ -5366,6 +5366,36 @@ abstract class AppLocalizations {
   /// **'{minutes, plural, =1{1 minute} other{{minutes} minutes}}'**
   String roomDetailsMeetingDurationMinutes(int minutes);
 
+  /// No description provided for @roomDetailsUnbindAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this conversation'**
+  String get roomDetailsUnbindAction;
+
+  /// No description provided for @roomDetailsUnbindHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Detach it from the event it was made for, so it stays afterwards'**
+  String get roomDetailsUnbindHint;
+
+  /// No description provided for @roomDetailsUnbindConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation will stay after the event it belongs to is gone. This cannot be undone from here.'**
+  String get roomDetailsUnbindConfirm;
+
+  /// No description provided for @roomDetailsUnbindDone.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation now stands on its own'**
+  String get roomDetailsUnbindDone;
+
+  /// No description provided for @roomDetailsUnbindKeptAsPhoneRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'The conversation is kept, as a permanent phone room'**
+  String get roomDetailsUnbindKeptAsPhoneRoom;
+
   /// Opens the discovery scope of an open conversation.
   ///
   /// In en, this message translates to:
@@ -6649,6 +6679,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The conversation password is wrong.'**
   String get newConversationErrorPasswordRejected;
+
+  /// No description provided for @reminderInboxTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get reminderInboxTitle;
+
+  /// No description provided for @reminderInboxEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reminders are pending.'**
+  String get reminderInboxEmpty;
+
+  /// No description provided for @reminderInboxUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders could not be read.'**
+  String get reminderInboxUnavailable;
+
+  /// No description provided for @reminderInboxAccountsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders could not be read for: {accounts}'**
+  String reminderInboxAccountsUnavailable(String accounts);
+
+  /// No description provided for @reminderInboxDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {time}'**
+  String reminderInboxDue(String time);
+
+  /// No description provided for @reminderInboxRemoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The reminder could not be removed.'**
+  String get reminderInboxRemoveFailed;
 }
 
 class _AppLocalizationsDelegate

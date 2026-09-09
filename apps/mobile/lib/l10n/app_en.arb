@@ -1211,6 +1211,11 @@
       }
     }
   },
+  "roomDetailsUnbindAction": "Keep this conversation",
+  "roomDetailsUnbindHint": "Detach it from the event it was made for, so it stays afterwards",
+  "roomDetailsUnbindConfirm": "The conversation will stay after the event it belongs to is gone. This cannot be undone from here.",
+  "roomDetailsUnbindDone": "The conversation now stands on its own",
+  "roomDetailsUnbindKeptAsPhoneRoom": "The conversation is kept, as a permanent phone room",
   "roomDetailsListableLabel": "Who can find this conversation",
   "@roomDetailsListableLabel": {
     "description": "Opens the discovery scope of an open conversation."
@@ -1804,5 +1809,25 @@
   "openConversationsPasswordLabel": "Conversation password",
   "openConversationsJoined": "You joined the conversation.",
   "newConversationErrorUnavailable": "This conversation is no longer open.",
-  "newConversationErrorPasswordRejected": "The conversation password is wrong."
+  "newConversationErrorPasswordRejected": "The conversation password is wrong.",
+  "reminderInboxTitle": "Reminders",
+  "reminderInboxEmpty": "No reminders are pending.",
+  "reminderInboxUnavailable": "Reminders could not be read.",
+  "reminderInboxAccountsUnavailable": "Reminders could not be read for: {accounts}",
+  "@reminderInboxAccountsUnavailable": {
+    "placeholders": {
+      "accounts": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderInboxDue": "Due {time}",
+  "@reminderInboxDue": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderInboxRemoveFailed": "The reminder could not be removed."
 }

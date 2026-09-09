@@ -994,6 +994,11 @@
   "roomDetailsMeetingFailed": "Schůzku se nepodařilo naplánovat.",
   "roomDetailsMeetingAmbiguous": "Odpověď nedorazila. Než to zkusíte znovu, podívejte se do kalendáře — druhý pokus by všechny pozval podruhé.",
   "roomDetailsMeetingDurationMinutes": "{minutes, plural, =1{1 minuta} few{{minutes} minuty} other{{minutes} minut}}",
+  "roomDetailsUnbindAction": "Zachovat konverzaci",
+  "roomDetailsUnbindHint": "Odpojí ji od události, pro kterou vznikla, takže zůstane i potom",
+  "roomDetailsUnbindConfirm": "Konverzace zůstane i poté, co událost, ke které patří, zmizí. Odsud to nejde vzít zpět.",
+  "roomDetailsUnbindDone": "Konverzace teď stojí samostatně",
+  "roomDetailsUnbindKeptAsPhoneRoom": "Konverzace je zachována jako trvalá telefonní místnost",
   "roomDetailsListableLabel": "Kdo konverzaci najde",
   "roomDetailsListableParticipants": "Jen její účastníci",
   "roomDetailsListableRegular": "Kdokoli s účtem",
@@ -1277,5 +1282,25 @@
   "openConversationsPasswordLabel": "Heslo konverzace",
   "openConversationsJoined": "Připojili jste se ke konverzaci.",
   "newConversationErrorUnavailable": "Tato konverzace už není otevřená.",
-  "newConversationErrorPasswordRejected": "Heslo konverzace nesouhlasí."
+  "newConversationErrorPasswordRejected": "Heslo konverzace nesouhlasí.",
+  "reminderInboxTitle": "Připomínky",
+  "reminderInboxEmpty": "Nemáte naplánovanou žádnou připomínku.",
+  "reminderInboxUnavailable": "Připomínky se nepodařilo načíst.",
+  "reminderInboxAccountsUnavailable": "Nepodařilo se načíst připomínky účtů: {accounts}",
+  "@reminderInboxAccountsUnavailable": {
+    "placeholders": {
+      "accounts": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderInboxDue": "Termín {time}",
+  "@reminderInboxDue": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "reminderInboxRemoveFailed": "Připomínku se nepodařilo odebrat."
 }
