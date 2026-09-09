@@ -3842,11 +3842,17 @@ abstract class AppLocalizations {
   /// **'Call ended.'**
   String get callScreenEnded;
 
-  /// No description provided for @callScreenExpand.
+  /// Tooltip of the button that opens one call tile full size.
   ///
   /// In en, this message translates to:
-  /// **'Expand video'**
-  String get callScreenExpand;
+  /// **'Expand {name}\'s video'**
+  String callScreenExpand(String name);
+
+  /// Tooltip of the button that returns an expanded call tile to the grid.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get callScreenCollapse;
 
   /// No description provided for @callBannerCameraOn.
   ///

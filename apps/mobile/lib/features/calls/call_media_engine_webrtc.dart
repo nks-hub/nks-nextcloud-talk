@@ -277,6 +277,10 @@ CallMediaError _cameraError(Object error) {
 }
 
 /// The camera stream with a mirrored preview of it.
+rtc.RTCVideoViewObjectFit _fit(bool contain) => contain
+    ? rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
+    : rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
+
 final class _WebRtcLocalVideo implements CallLocalVideo {
   _WebRtcLocalVideo._(this.stream, this._renderer);
 
@@ -294,11 +298,8 @@ final class _WebRtcLocalVideo implements CallLocalVideo {
   rtc.MediaStreamTrack get track => stream.getVideoTracks().first;
 
   @override
-  Widget buildPreview(BuildContext context) => rtc.RTCVideoView(
-    _renderer,
-    mirror: true,
-    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-  );
+  Widget buildPreview(BuildContext context, {bool contain = false}) =>
+      rtc.RTCVideoView(_renderer, mirror: true, objectFit: _fit(contain));
 
   @override
   Future<void> dispose() async {
@@ -369,10 +370,8 @@ final class _WebRtcRemoteVideo implements CallRemoteVideo {
   bool _disposed = false;
 
   @override
-  Widget build(BuildContext context) => rtc.RTCVideoView(
-    _renderer,
-    objectFit: rtc.RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-  );
+  Widget build(BuildContext context, {bool contain = false}) =>
+      rtc.RTCVideoView(_renderer, objectFit: _fit(contain));
 
   @override
   Future<void> dispose() async {

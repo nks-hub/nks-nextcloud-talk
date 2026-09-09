@@ -163,7 +163,8 @@ final class _FakeVideo implements CallLocalVideo {
   bool disposed = false;
 
   @override
-  Widget buildPreview(BuildContext context) => const SizedBox.shrink();
+  Widget buildPreview(BuildContext context, {bool contain = false}) =>
+      const SizedBox.shrink();
 
   @override
   Future<void> dispose() async => disposed = true;
@@ -176,7 +177,8 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
   String? get videoTrackId => null;
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget build(BuildContext context, {bool contain = false}) =>
+      const SizedBox.shrink();
 
   @override
   Future<void> dispose() async => disposed = true;

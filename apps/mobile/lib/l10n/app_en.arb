@@ -744,7 +744,19 @@
   "callBannerOpenCallView": "Open the call view",
   "callScreenTitle": "Call ({count})",
   "callScreenEnded": "Call ended.",
-  "callScreenExpand": "Expand video",
+  "callScreenExpand": "Expand {name}'s video",
+  "@callScreenExpand": {
+    "description": "Tooltip of the button that opens one call tile full size.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "callScreenCollapse": "Exit full screen",
+  "@callScreenCollapse": {
+    "description": "Tooltip of the button that returns an expanded call tile to the grid."
+  },
   "@callScreenTitle": {
     "placeholders": {
       "count": {

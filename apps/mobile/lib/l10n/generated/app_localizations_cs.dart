@@ -2097,7 +2097,12 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callScreenEnded => 'Hovor skončil.';
 
   @override
-  String get callScreenExpand => 'Zvětšit video';
+  String callScreenExpand(String name) {
+    return 'Zvětšit video – $name';
+  }
+
+  @override
+  String get callScreenCollapse => 'Zmenšit video';
 
   @override
   String get callBannerCameraOn => 'Zapnout kameru';

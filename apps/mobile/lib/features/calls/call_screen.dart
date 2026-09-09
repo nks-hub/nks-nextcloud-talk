@@ -120,7 +120,12 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
     setState(() => _expandedTile = id);
   }
 
-  Widget _expandable(String id, Widget tile, AppLocalizations strings) => Stack(
+  Widget _expandable(
+    String id,
+    Widget tile,
+    AppLocalizations strings,
+    String name,
+  ) => Stack(
     fit: StackFit.expand,
     children: [
       GestureDetector(onTap: () => _expand(id), child: tile),
@@ -129,7 +134,9 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         right: 4,
         child: IconButton.filledTonal(
           key: Key('call-expand-$id'),
-          tooltip: strings.callScreenExpand,
+          // Named, because a grid of five identically labelled buttons tells
+          // a screen reader nothing about which video it would open.
+          tooltip: strings.callScreenExpand(name),
           constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           onPressed: () => _expand(id),
           icon: const Icon(Icons.fullscreen_rounded),
@@ -231,34 +238,56 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       _windowTrackId = windowTrack;
       unawaited(_pictureInPicture.setVideoTrack(windowTrack));
     }
-    final participantTiles = <String, Widget>{
-      'self': _SelfTile(media: media, strings: strings),
-      for (final peer in media.participants)
-        'peer-${peer.peerId}': _PeerTile(
-          peer: peer,
-          names: names,
-          strings: strings,
-        ),
-    };
-    final tiles = participantTiles.values.toList(growable: false);
     // A shared screen is worth the whole width; the participants share the
     // space below it.
     final sharing = media.participants
         .where((peer) => peer.screen != null)
         .toList(growable: false);
-    final screenTiles = <String, Widget>{
-      for (final peer in sharing)
-        'screen-${peer.peerId}': _Tile(
-          name: strings.callScreenSharedBy(_PeerTile.nameOf(peer, names)),
-          initial: '',
-          video: peer.screen!.build(context),
-          muted: false,
-          handRaised: false,
-          subtitle: null,
-        ),
+    // Identity, not list position: a participant who leaves or is reordered
+    // must not hand the expansion to somebody else.
+    final peers = <String, CallPeerState>{
+      for (final peer in media.participants) 'peer-${peer.peerId}': peer,
     };
-    final selected =
-        participantTiles[_expandedTile] ?? screenTiles[_expandedTile];
+    final shares = <String, CallPeerState>{
+      for (final peer in sharing) 'screen-${peer.peerId}': peer,
+    };
+    // The grid crops camera tiles to fill them; a shared screen and anything
+    // expanded keep the whole frame instead.
+    Widget? tileOf(String id, {required bool contain}) {
+      if (id == 'self') {
+        return _SelfTile(media: media, strings: strings, contain: contain);
+      }
+      final peer = peers[id];
+      if (peer != null) {
+        return _PeerTile(
+          peer: peer,
+          names: names,
+          strings: strings,
+          contain: contain,
+        );
+      }
+      final share = shares[id];
+      if (share == null) return null;
+      return _Tile(
+        name: strings.callScreenSharedBy(_PeerTile.nameOf(share, names)),
+        initial: '',
+        video: share.screen!.build(context, contain: true),
+        muted: false,
+        handRaised: false,
+        subtitle: null,
+      );
+    }
+
+    String nameOf(String id) => id == 'self'
+        ? strings.callParticipantsYou
+        : _PeerTile.nameOf(peers[id] ?? shares[id]!, names);
+    final tileIds = ['self', ...peers.keys];
+    final tiles = [
+      for (final id in tileIds) tileOf(id, contain: false)!,
+    ];
+    final selected = _expandedTile == null
+        ? null
+        : tileOf(_expandedTile!, contain: true);
     if (_expandedTile != null && selected == null) {
       final missing = _expandedTile;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -275,7 +304,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         backgroundColor: Colors.black,
         body: LayoutBuilder(
           builder: (context, constraints) => GridView.count(
-            key: const Key('call-grid'),
+            key: const PageStorageKey('call-grid'),
             padding: EdgeInsets.all(gap),
             crossAxisCount: columns,
             mainAxisSpacing: gap,
@@ -290,16 +319,23 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
       );
     }
     final grid = CustomScrollView(
-      key: const Key('call-grid'),
+      // Page storage, so collapsing an expanded tile returns to the same
+      // scroll offset rather than jumping back to the first row.
+      key: const PageStorageKey('call-grid'),
       slivers: [
-        for (final entry in screenTiles.entries)
+        for (final peer in sharing)
           SliverToBoxAdapter(
             child: Padding(
-              key: Key('call-screen-shared-${entry.key.substring(7)}'),
+              key: Key('call-screen-shared-${peer.peerId}'),
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: _expandable(entry.key, entry.value, strings),
+                child: _expandable(
+                  'screen-${peer.peerId}',
+                  tileOf('screen-${peer.peerId}', contain: true)!,
+                  strings,
+                  _PeerTile.nameOf(peer, names),
+                ),
               ),
             ),
           ),
@@ -311,8 +347,13 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
             crossAxisSpacing: gap,
             childAspectRatio: 3 / 4,
             children: [
-              for (final entry in participantTiles.entries)
-                _expandable(entry.key, entry.value, strings),
+              for (var i = 0; i < tileIds.length; i++)
+                _expandable(
+                  tileIds[i],
+                  tiles[i],
+                  strings,
+                  nameOf(tileIds[i]),
+                ),
             ],
           ),
         ),
@@ -337,7 +378,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
               if (selected != null)
                 IconButton(
                   key: const Key('call-collapse-tile'),
-                  tooltip: strings.close,
+                  tooltip: strings.callScreenCollapse,
                   constraints: const BoxConstraints(
                     minWidth: 48,
                     minHeight: 48,
@@ -432,10 +473,15 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
 }
 
 final class _SelfTile extends StatelessWidget {
-  const _SelfTile({required this.media, required this.strings});
+  const _SelfTile({
+    required this.media,
+    required this.strings,
+    this.contain = false,
+  });
 
   final CallMediaState media;
   final AppLocalizations strings;
+  final bool contain;
 
   @override
   Widget build(BuildContext context) {
@@ -444,7 +490,7 @@ final class _SelfTile extends StatelessWidget {
       key: const Key('call-tile-self'),
       name: strings.callParticipantsYou,
       initial: '',
-      video: preview?.buildPreview(context),
+      video: preview?.buildPreview(context, contain: contain),
       muted: media.muted,
       handRaised: media.handRaised,
       subtitle: null,
@@ -457,11 +503,13 @@ final class _PeerTile extends StatelessWidget {
     required this.peer,
     required this.names,
     required this.strings,
+    this.contain = false,
   });
 
   final CallPeerState peer;
   final Map<String, String> names;
   final AppLocalizations strings;
+  final bool contain;
 
   static String nameOf(CallPeerState peer, Map<String, String> names) =>
       names['actor:${peer.actorType}:${peer.actorId}'] ??
@@ -474,7 +522,7 @@ final class _PeerTile extends StatelessWidget {
       key: Key('call-tile-${peer.peerId}'),
       name: name,
       initial: name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-      video: peer.video?.build(context),
+      video: peer.video?.build(context, contain: contain),
       muted: peer.audioMuted,
       handRaised: peer.handRaised,
       subtitle: peer.connected ? null : strings.callParticipantConnecting,

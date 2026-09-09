@@ -270,7 +270,7 @@ void main() {
     admission.complete(true);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('call-screen')), findsOneWidget);
-    expect(find.byKey(const Key('call-grid')), findsOneWidget);
+    expect(find.byKey(const PageStorageKey('call-grid')), findsOneWidget);
     expect(controllers.values.single.cameraStarts, 0);
   });
 

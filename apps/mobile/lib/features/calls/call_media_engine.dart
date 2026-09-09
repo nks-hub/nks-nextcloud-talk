@@ -163,7 +163,12 @@ abstract interface class CallLocalAudio {
 /// Only the engine knows the renderer behind it; the UI is handed a widget
 /// and gives the object back with [dispose] when the peer is gone.
 abstract interface class CallRemoteVideo {
-  Widget build(BuildContext context);
+  /// With [contain] the whole frame is kept inside the box and letterboxed;
+  /// without it the frame fills the box and is cropped. A grid tile wants
+  /// the crop — a portrait tile showing a 16:9 camera would otherwise be
+  /// more than half black — while a shared screen and an expanded tile want
+  /// the whole picture.
+  Widget build(BuildContext context, {bool contain = false});
 
   /// The id of the track this shows, as the platform knows it.
   ///
@@ -179,7 +184,8 @@ abstract interface class CallRemoteVideo {
 /// This side's camera: a track to send and a preview to show. Opened once
 /// per call while the camera is on, handed to every peer connection.
 abstract interface class CallLocalVideo {
-  Widget buildPreview(BuildContext context);
+  /// [contain] has the same meaning as on [CallRemoteVideo.build].
+  Widget buildPreview(BuildContext context, {bool contain = false});
 
   Future<void> dispose();
 }

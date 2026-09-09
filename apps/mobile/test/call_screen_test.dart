@@ -39,9 +39,15 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
   @override
   final String? videoTrackId;
 
+  /// Records how each frame was asked to fit, so a regression back to a
+  /// cropped share or a letterboxed grid tile fails here.
+  final fits = <bool>[];
+
   @override
-  Widget build(BuildContext context) =>
-      const ColoredBox(key: Key('fake-remote-video'), color: Colors.green);
+  Widget build(BuildContext context, {bool contain = false}) {
+    fits.add(contain);
+    return const ColoredBox(key: Key('fake-remote-video'), color: Colors.green);
+  }
 
   @override
   Future<void> dispose() async {}
@@ -252,13 +258,16 @@ void main() {
     await _pumpCallScreen(tester);
     await tester.tap(find.byKey(const Key('call-expand-self')));
     await tester.pumpAndSettle();
-    final ink = find
+    // The icon, not the InkWell: `Focus.of` walks up, and the button's own
+    // focus node lives below its InkResponse. Asking from the InkWell would
+    // return the screen's autofocused node and prove nothing.
+    final icon = find
         .descendant(
           of: find.byKey(const Key('call-collapse-tile')),
-          matching: find.byType(InkWell),
+          matching: find.byType(Icon),
         )
         .first;
-    final focus = Focus.of(tester.element(ink));
+    final focus = Focus.of(tester.element(icon));
     focus.requestFocus();
     await tester.pump();
     expect(focus.hasPrimaryFocus, isTrue);
@@ -297,6 +306,21 @@ void main() {
       expect(find.byKey(const Key('call-tile-self')), findsNothing);
       expect(find.byKey(const Key('fake-remote-video')), findsOneWidget);
       expect(find.byKey(const Key('call-screen-leave')), findsOneWidget);
+      // The expansion is the whole call body, not a slightly larger tile:
+      // it spans the full width and everything the controls leave over.
+      final expanded = tester.getRect(
+        find.byKey(const Key('call-expanded-tile')),
+      );
+      final body = tester.getRect(find.byKey(const Key('call-screen')));
+      expect(expanded.width, body.width);
+      expect(
+        expanded.height,
+        greaterThan(
+          body.height -
+              tester.getRect(find.byKey(const Key('call-screen-leave'))).height -
+              120,
+        ),
+      );
       expect(pip.armed, [true]);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
@@ -305,6 +329,26 @@ void main() {
       expect(pip.armed, [true]);
     },
   );
+
+  testWidgets('a grid tile crops, a share and an expansion do not', (
+    tester,
+  ) async {
+    await _pumpCallScreen(tester, screenTrackId: 'screen-track');
+    final media = ProviderScope.containerOf(
+          tester.element(find.byType(CallScreen)),
+        ).read(callJoinControllerProvider(_key)).media;
+    final camera = media.participants.first.video! as _FakeRemoteVideo;
+    final share = media.participants[1].screen! as _FakeRemoteVideo;
+    expect(camera.fits, isNotEmpty);
+    expect(camera.fits, everyElement(isFalse));
+    expect(share.fits, isNotEmpty);
+    expect(share.fits, everyElement(isTrue));
+    camera.fits.clear();
+    await tester.tap(find.byKey(const Key('call-expand-peer-peer-a')));
+    await tester.pumpAndSettle();
+    expect(camera.fits, isNotEmpty);
+    expect(camera.fits, everyElement(isTrue));
+  });
 
   testWidgets('screen expansion closes when that share ends', (tester) async {
     await _pumpCallScreen(tester, screenTrackId: 'screen-track');

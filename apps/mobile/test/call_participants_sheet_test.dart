@@ -23,7 +23,7 @@ final class _FrozenJoinController extends CallJoinController {
 
 final class _FakeLocalVideo implements CallLocalVideo {
   @override
-  Widget buildPreview(BuildContext context) =>
+  Widget buildPreview(BuildContext context, {bool contain = false}) =>
       const ColoredBox(key: Key('fake-local-video'), color: Colors.blue);
 
   @override
@@ -35,7 +35,7 @@ final class _FakeRemoteVideo implements CallRemoteVideo {
   String? get videoTrackId => null;
 
   @override
-  Widget build(BuildContext context) =>
+  Widget build(BuildContext context, {bool contain = false}) =>
       const ColoredBox(key: Key('fake-remote-video'), color: Colors.green);
 
   @override

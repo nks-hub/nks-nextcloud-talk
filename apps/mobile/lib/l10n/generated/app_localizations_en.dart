@@ -2097,7 +2097,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callScreenEnded => 'Call ended.';
 
   @override
-  String get callScreenExpand => 'Expand video';
+  String callScreenExpand(String name) {
+    return 'Expand $name\'s video';
+  }
+
+  @override
+  String get callScreenCollapse => 'Exit full screen';
 
   @override
   String get callBannerCameraOn => 'Turn camera on';
