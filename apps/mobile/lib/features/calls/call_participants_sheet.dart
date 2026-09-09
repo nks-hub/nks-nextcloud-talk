@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +8,10 @@ import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
+import '../chat/media/chat_attachment_exporter.dart';
 import '../rooms/participants_service.dart';
+import '../rooms/room_settings_service.dart';
+import 'call_join_controller.dart';
 import 'call_media_session.dart';
 import 'call_transport_service.dart';
 
@@ -37,18 +42,31 @@ final callParticipantNamesProvider = FutureProvider.autoDispose
 
 /// The audio call's "grid": who is in the call, whether their audio is
 /// connected to us and whether their hand is up. Opened from the banner.
-Future<void> showCallParticipantsSheet(BuildContext context, CallRoomKey key) {
+Future<void> showCallParticipantsSheet(
+  BuildContext context,
+  CallRoomKey key, {
+  ChatAttachmentSystem? exportSystem,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (context) => CallParticipantsSheet(roomKey: key),
+    builder: (context) =>
+        CallParticipantsSheet(roomKey: key, exportSystem: exportSystem),
   );
 }
 
 final class CallParticipantsSheet extends ConsumerWidget {
-  const CallParticipantsSheet({super.key, required this.roomKey});
+  const CallParticipantsSheet({
+    super.key,
+    required this.roomKey,
+    this.exportSystem,
+  });
 
   final CallRoomKey roomKey;
+
+  /// Where an exported attendance file is written. Injected by tests; the
+  /// screen uses the platform picker.
+  final ChatAttachmentSystem? exportSystem;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,6 +117,15 @@ final class CallParticipantsSheet extends ConsumerWidget {
             ),
           for (final peer in media.participants)
             _PeerTile(peer: peer, names: names, strings: strings),
+          // Moderator-only and only where the server advertises
+          // `download-call-participants`. The list above is who this device
+          // has media with; the export is what the server recorded, which is
+          // not the same thing and includes whoever already left.
+          if (join.canDownloadAttendance &&
+              join.phase == CallJoinPhase.joined) ...[
+            const Divider(height: 1),
+            _AttendanceExportTile(roomKey: roomKey, exportSystem: exportSystem),
+          ],
         ],
       ),
     );
@@ -207,5 +234,96 @@ final class _PeerTileState extends State<_PeerTile> {
         ),
       ],
     );
+  }
+}
+
+/// Saves the attendance the server recorded for the running call.
+final class _AttendanceExportTile extends ConsumerStatefulWidget {
+  const _AttendanceExportTile({required this.roomKey, this.exportSystem});
+
+  final CallRoomKey roomKey;
+  final ChatAttachmentSystem? exportSystem;
+
+  @override
+  ConsumerState<_AttendanceExportTile> createState() =>
+      _AttendanceExportTileState();
+}
+
+final class _AttendanceExportTileState
+    extends ConsumerState<_AttendanceExportTile> {
+  bool _running = false;
+  String? _notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final notice = _notice;
+    return ListTile(
+      key: const Key('call-attendance-export'),
+      leading: _running
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.file_download_outlined),
+      title: Text(strings.callAttendanceExportAction),
+      subtitle: Text(notice ?? strings.callAttendanceExportHint),
+      enabled: !_running,
+      onTap: _running ? null : () => unawaited(_export()),
+    );
+  }
+
+  Future<void> _export() async {
+    setState(() {
+      _running = true;
+      _notice = null;
+    });
+    final strings = AppLocalizations.of(context);
+    String? notice;
+    try {
+      final csv = await ref
+          .read(roomSettingsServiceProvider)
+          .downloadCallAttendance(
+            accountId: widget.roomKey.accountId,
+            roomToken: widget.roomKey.roomToken,
+          );
+      final system = widget.exportSystem ?? PlatformChatAttachmentSystem();
+      final result = await system.save(
+        // A byte-order mark so a spreadsheet reads the names as UTF-8; the
+        // participants of this server have accented ones.
+        bytes: Uint8List.fromList([0xef, 0xbb, 0xbf, ...utf8.encode(csv)]),
+        fileName: _fileName(),
+        contentType: 'text/csv',
+      );
+      notice = switch (result) {
+        ChatAttachmentSystemResult.completed =>
+          strings.callAttendanceExportSaved,
+        ChatAttachmentSystemResult.cancelled => null,
+        _ => strings.callAttendanceExportFailed,
+      };
+    } on RoomSettingsException catch (error) {
+      notice = switch (error.code) {
+        RoomSettingsError.preconditionFailed =>
+          strings.callAttendanceExportNoCall,
+        RoomSettingsError.forbidden => strings.callAttendanceExportForbidden,
+        _ => strings.callAttendanceExportFailed,
+      };
+    } on Object {
+      notice = strings.callAttendanceExportFailed;
+    }
+    if (!mounted) return;
+    setState(() {
+      _running = false;
+      _notice = notice;
+    });
+  }
+
+  String _fileName() {
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return 'call-attendance-${widget.roomKey.roomToken}-'
+        '${now.year}${two(now.month)}${two(now.day)}-'
+        '${two(now.hour)}${two(now.minute)}.csv';
   }
 }

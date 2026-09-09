@@ -157,6 +157,127 @@ void main() {
     });
   });
 
+  group('CallAttendanceDownloadRequest', () {
+    CallAttendanceDownloadRequest request() => CallAttendanceDownloadRequest(
+      accountId: AccountId.parse('account-1'),
+      server: ServerBase.parse('https://cloud.example.com'),
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    );
+
+    test('asks the download address for a CSV, not OCS JSON', () {
+      expect(request().uri.path, endsWith('/call/rooma123/download'));
+      expect(request().uri.queryParameters['format'], 'csv');
+      expect(request().headers['Accept'], 'text/csv');
+      expect(request().headers['OCS-APIRequest'], 'true');
+      expect(request().headers.containsKey('Content-Type'), isFalse);
+    });
+
+    test('never renders the room in its description', () {
+      expect(request().toString(), isNot(contains('rooma123')));
+    });
+  });
+
+  group('decodeCallAttendanceDownload', () {
+    CallAttendanceDownloadRequest request() => CallAttendanceDownloadRequest(
+      accountId: AccountId.parse('account-1'),
+      server: ServerBase.parse('https://cloud.example.com'),
+      roomToken: ConversationToken.parse('rooma123', path: r'$.roomToken'),
+    );
+
+    CallAttendanceDownload decode(String body, {int statusCode = 200}) =>
+        decodeCallAttendanceDownload(
+          request: request(),
+          statusCode: statusCode,
+          body: Uint8List.fromList(utf8.encode(body)),
+        );
+
+    test('keeps every recorded attendee, including one who left', () {
+      final download = decode(
+        'name,email,type,identifier\r\n'
+        '"NCloudTalk Test",,users,nctalk-test\r\n'
+        '"NCloudTalk Test 2",,users,nctalk-test2\r\n',
+      );
+
+      expect(download.isSuccess, isTrue);
+      expect(download.csv, contains('nctalk-test2'));
+      expect(download.csv, contains('NCloudTalk Test'));
+    });
+
+    test('an attendee-named formula is exported as text', () {
+      final download = decode(
+        'name,email,type,identifier\r\n'
+        '"=cmd|\' /C calc\'!A0",,users,attacker\r\n',
+      );
+
+      expect(download.csv, contains('\'=cmd|\' /C calc\'!A0'));
+      expect(download.csv, isNot(contains('\n=cmd')));
+    });
+
+    test('every formula leader is neutralised, quoting kept lossless', () {
+      final download = decode(
+        'name,email,type,identifier\r\n'
+        '+one,,users,a\r\n'
+        '-two,,users,b\r\n'
+        '@three,,users,c\r\n'
+        '"say ""hi"", now",,users,d\r\n',
+      );
+
+      final csv = download.csv!;
+      expect(csv, contains("'+one"));
+      expect(csv, contains("'-two"));
+      expect(csv, contains("'@three"));
+      expect(csv, contains('"say ""hi"", now"'));
+    });
+
+    test('a 200 that is not the attendance document is refused', () {
+      expect(
+        () => decode('<!DOCTYPE html><html><body>Error</body></html>'),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
+    test('a body past the cap is refused rather than held', () {
+      expect(
+        () => decodeCallAttendanceDownload(
+          request: request(),
+          statusCode: 200,
+          body: Uint8List(maximumCallAttendanceBytes + 1),
+        ),
+        throwsA(isA<TalkProtocolException>()),
+      );
+    });
+
+    test('no running call reads as no call, not as a failure', () {
+      final download = decode('', statusCode: 400);
+
+      expect(
+        download.classification,
+        CallAttendanceClassification.noCallRunning,
+      );
+      expect(download.csv, isNull);
+      expect(download.isSuccess, isFalse);
+    });
+
+    test('classifies the refusals the endpoint can answer', () {
+      expect(
+        decode('', statusCode: 403).classification,
+        CallAttendanceClassification.forbidden,
+      );
+      expect(
+        decode('', statusCode: 401).classification,
+        CallAttendanceClassification.reauthenticationRequired,
+      );
+      expect(
+        decode('', statusCode: 404).classification,
+        CallAttendanceClassification.roomMissing,
+      );
+      expect(
+        decode('', statusCode: 503).classification,
+        CallAttendanceClassification.serverFailure,
+      );
+    });
+  });
+
   group('call responses', () {
     test('parses bounded peers and identifies the current session', () {
       final request = CallPeersRequest(

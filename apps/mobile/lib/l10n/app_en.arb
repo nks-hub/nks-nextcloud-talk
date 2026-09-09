@@ -201,6 +201,23 @@
   "locationShareFailed": "The location could not be shared.",
   "locationShareAmbiguous": "The server may have received the location. Check the chat before trying again.",
   "locationShared": "Location shared.",
+  "locationPickerMenuAction": "Location on a map",
+  "locationPickerTitle": "Choose a location",
+  "locationPickerUse": "Use this location",
+  "locationPickerName": "Name",
+  "locationPickerLatitude": "Latitude",
+  "locationPickerLongitude": "Longitude",
+  "locationPickerCoordinatesInvalid": "Enter a latitude from -90 to 90 and a longitude from -180 to 180.",
+  "locationPickerCoordinatesZero": "0, 0 is a point in the ocean, not a place. Choose where you mean first.",
+  "locationPickerCurrent": "Use current location",
+  "locationPickerZoomIn": "Zoom in",
+  "locationPickerZoomOut": "Zoom out",
+  "locationPickerLoadMap": "Load the OpenStreetMap background (sends the coordinates shown)",
+  "locationSearchHint": "Search for a place",
+  "locationSearchSubmit": "Search",
+  "locationSearchUnavailable": "The place search is unavailable. Enter coordinates instead.",
+  "locationSearchNoResults": "No place matches that name.",
+  "locationSearchTooFast": "Wait a second before searching again.",
   "outOfOffice": "{user} is out of office and might not respond.",
   "@outOfOffice": {
     "placeholders": {
@@ -817,6 +834,12 @@
   "callScreenSharedBy": "{name} is sharing their screen",
   "callBannerShareScreen": "Share your screen",
   "callBannerStopSharing": "Stop sharing your screen",
+  "callAttendanceExportAction": "Export attendance",
+  "callAttendanceExportHint": "Everyone the server recorded in this call, including those who already left.",
+  "callAttendanceExportSaved": "Attendance saved",
+  "callAttendanceExportNoCall": "No call is running in this conversation.",
+  "callAttendanceExportForbidden": "Only a moderator can export attendance.",
+  "callAttendanceExportFailed": "The attendance could not be exported.",
   "callBannerStartRecording": "Start recording",
   "callBannerStopRecording": "Stop recording",
   "@callScreenSharedBy": {
@@ -1300,6 +1323,111 @@
   "roomDetailsClearHistoryRefreshFailed": "Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.",
   "@roomDetailsClearHistoryRefreshFailed": {
     "description": "Success message shown when the destructive request succeeded but its follow-up refresh failed."
+  },
+  "roomDetailsEmailInvitationsAction": "Invite by e-mail from a CSV file",
+  "@roomDetailsEmailInvitationsAction": {
+    "description": "Moderator action that uploads a CSV of e-mail addresses as conversation invitations."
+  },
+  "roomDetailsEmailInvitationsFileTypeLabel": "CSV file",
+  "@roomDetailsEmailInvitationsFileTypeLabel": {
+    "description": "Label of the file type group offered by the CSV file picker."
+  },
+  "roomDetailsEmailInvitationsFileTooLarge": "This file is larger than {limit} kB. Split the list and import it in parts.",
+  "@roomDetailsEmailInvitationsFileTooLarge": {
+    "description": "Refusal shown before uploading when the chosen CSV exceeds the client-side size bound.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "roomDetailsEmailInvitationsFileUnreadable": "This file could not be read.",
+  "@roomDetailsEmailInvitationsFileUnreadable": {
+    "description": "Error shown when the chosen file cannot be read from the device."
+  },
+  "roomDetailsEmailInvitationsPreviewTitle": "Import preview",
+  "@roomDetailsEmailInvitationsPreviewTitle": {
+    "description": "Title of the dialog showing what a CSV import would do."
+  },
+  "roomDetailsEmailInvitationsPreviewNothingSent": "Nothing has been sent yet. This is only a preview of what the server found in the file.",
+  "@roomDetailsEmailInvitationsPreviewNothingSent": {
+    "description": "Statement that the preview is side-effect free."
+  },
+  "roomDetailsEmailInvitationsPreviewInvites": "{count, plural, =0{No new address to invite} =1{1 address will be invited} other{{count} addresses will be invited}}",
+  "@roomDetailsEmailInvitationsPreviewInvites": {
+    "description": "How many addresses the server would invite.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomDetailsEmailInvitationsPreviewDuplicates": "{count, plural, =0{No duplicate} =1{1 address is already invited or repeated} other{{count} addresses are already invited or repeated}}",
+  "@roomDetailsEmailInvitationsPreviewDuplicates": {
+    "description": "How many addresses the server would skip as duplicates.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomDetailsEmailInvitationsSendConfirm": "Send invitations",
+  "@roomDetailsEmailInvitationsSendConfirm": {
+    "description": "Button that turns the preview into a real send."
+  },
+  "roomDetailsEmailInvitationsSent": "{count, plural, =1{1 invitation was sent.} other{{count} invitations were sent.}}",
+  "@roomDetailsEmailInvitationsSent": {
+    "description": "Confirmation shown after invitations really went out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "roomDetailsEmailInvitationsInvalidRows": "The server refused the file and imported nothing. Invalid lines: {lines}.",
+  "@roomDetailsEmailInvitationsInvalidRows": {
+    "description": "Error listing the CSV line numbers the server rejected.",
+    "placeholders": {
+      "lines": {
+        "type": "String"
+      }
+    }
+  },
+  "roomDetailsEmailInvitationsFileRejected": "The server could not read this file. The first line must be a header containing an \"email\" column.",
+  "@roomDetailsEmailInvitationsFileRejected": {
+    "description": "Error shown when the server refused the file itself rather than individual rows."
+  },
+  "roomDetailsEmailInvitationsUncertain": "The connection dropped while the invitations were being sent, so it is not known whether they went out. Check the participant list before trying again — nothing was repeated automatically.",
+  "@roomDetailsEmailInvitationsUncertain": {
+    "description": "Error shown when a real send ended without a usable answer."
+  },
+  "roomDetailsResendInvitationsAction": "Resend e-mail invitations",
+  "@roomDetailsResendInvitationsAction": {
+    "description": "Moderator action that mails every e-mail attendee their invitation again."
+  },
+  "roomDetailsResendInvitationsDialogTitle": "Resend e-mail invitations?",
+  "@roomDetailsResendInvitationsDialogTitle": {
+    "description": "Title of the dialog confirming a resend to every e-mail attendee."
+  },
+  "roomDetailsResendInvitationsDialogMessage": "Every e-mail attendee of this conversation receives their invitation again.",
+  "@roomDetailsResendInvitationsDialogMessage": {
+    "description": "Body of the dialog confirming a resend to every e-mail attendee."
+  },
+  "roomDetailsResendInvitationsConfirm": "Resend",
+  "@roomDetailsResendInvitationsConfirm": {
+    "description": "Confirming button of the resend dialog."
+  },
+  "roomDetailsResendInvitationsSent": "The invitations were sent again.",
+  "@roomDetailsResendInvitationsSent": {
+    "description": "Confirmation shown after every e-mail attendee was mailed again."
+  },
+  "roomDetailsResendInvitation": "Resend invitation",
+  "@roomDetailsResendInvitation": {
+    "description": "Participant menu action that mails one e-mail attendee their invitation again."
+  },
+  "roomDetailsResendInvitationSent": "The invitation was sent again.",
+  "@roomDetailsResendInvitationSent": {
+    "description": "Confirmation shown after one e-mail attendee was mailed again."
   },
   "roomDetailsConversationTagsAction": "Conversation tags",
   "@roomDetailsConversationTagsAction": {

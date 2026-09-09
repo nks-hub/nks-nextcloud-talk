@@ -82,6 +82,57 @@ final class CallPeersRequest extends CallRestRequest {
   String toString() => 'CallPeersRequest(sensitive: <redacted>)';
 }
 
+/// Downloads who the server has recorded in the call that is running now.
+///
+/// `GET /ocs/v2.php/apps/spreed/api/v4/call/{token}/download?format=csv`,
+/// requires the server's `download-call-participants` capability and moderator
+/// authority. Measured against the reference instance on 9 September 2026:
+/// `400` when no call is running — before it starts and again once it ends —
+/// and `200` with a CSV while it runs. Somebody who joined and left is still
+/// in that CSV, which is the point: it is attendance, not presence.
+///
+/// Deliberately not a [CallRestRequest]: it joins nothing and mutates nothing,
+/// so it carries no call session, and it answers with a document rather than
+/// OCS JSON — its reader has to treat the body as bytes.
+final class CallAttendanceDownloadRequest {
+  CallAttendanceDownloadRequest({
+    required this.accountId,
+    required this.server,
+    required this.roomToken,
+    this.userAgent = callRestContractUserAgent,
+  }) {
+    if (userAgent.isEmpty ||
+        userAgent.length > 256 ||
+        userAgent.codeUnits.any((unit) => unit < 0x20 || unit > 0x7e)) {
+      protocolFailure(
+        TalkProtocolErrorCode.invalidCallRequest,
+        r'$.headers.userAgent',
+      );
+    }
+  }
+
+  final AccountId accountId;
+  final ServerBase server;
+  final ConversationToken roomToken;
+  final String userAgent;
+
+  Map<String, String> get queryParameters => const {'format': 'csv'};
+
+  Map<String, String> get headers => UnmodifiableMapView({
+    'Accept': 'text/csv',
+    'OCS-APIRequest': 'true',
+    'User-Agent': userAgent,
+  });
+
+  Uri get uri => server.uri.replace(
+    path: '${server.basePath}$callRestV4Path/${roomToken.value}/download',
+    queryParameters: queryParameters,
+  );
+
+  @override
+  String toString() => 'CallAttendanceDownloadRequest(sensitive: <redacted>)';
+}
+
 final class JoinCallRequest extends CallRestRequest {
   JoinCallRequest({
     required super.context,

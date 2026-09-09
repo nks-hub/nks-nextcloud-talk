@@ -622,6 +622,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get locationShared => 'Location shared.';
 
   @override
+  String get locationPickerMenuAction => 'Location on a map';
+
+  @override
+  String get locationPickerTitle => 'Choose a location';
+
+  @override
+  String get locationPickerUse => 'Use this location';
+
+  @override
+  String get locationPickerName => 'Name';
+
+  @override
+  String get locationPickerLatitude => 'Latitude';
+
+  @override
+  String get locationPickerLongitude => 'Longitude';
+
+  @override
+  String get locationPickerCoordinatesInvalid =>
+      'Enter a latitude from -90 to 90 and a longitude from -180 to 180.';
+
+  @override
+  String get locationPickerCoordinatesZero =>
+      '0, 0 is a point in the ocean, not a place. Choose where you mean first.';
+
+  @override
+  String get locationPickerCurrent => 'Use current location';
+
+  @override
+  String get locationPickerZoomIn => 'Zoom in';
+
+  @override
+  String get locationPickerZoomOut => 'Zoom out';
+
+  @override
+  String get locationPickerLoadMap =>
+      'Load the OpenStreetMap background (sends the coordinates shown)';
+
+  @override
+  String get locationSearchHint => 'Search for a place';
+
+  @override
+  String get locationSearchSubmit => 'Search';
+
+  @override
+  String get locationSearchUnavailable =>
+      'The place search is unavailable. Enter coordinates instead.';
+
+  @override
+  String get locationSearchNoResults => 'No place matches that name.';
+
+  @override
+  String get locationSearchTooFast => 'Wait a second before searching again.';
+
+  @override
   String outOfOffice(String user) {
     return '$user is out of office and might not respond.';
   }
@@ -2212,6 +2267,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get callBannerStopSharing => 'Stop sharing your screen';
 
   @override
+  String get callAttendanceExportAction => 'Export attendance';
+
+  @override
+  String get callAttendanceExportHint =>
+      'Everyone the server recorded in this call, including those who already left.';
+
+  @override
+  String get callAttendanceExportSaved => 'Attendance saved';
+
+  @override
+  String get callAttendanceExportNoCall =>
+      'No call is running in this conversation.';
+
+  @override
+  String get callAttendanceExportForbidden =>
+      'Only a moderator can export attendance.';
+
+  @override
+  String get callAttendanceExportFailed =>
+      'The attendance could not be exported.';
+
+  @override
   String get callBannerStartRecording => 'Start recording';
 
   @override
@@ -2919,6 +2996,105 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get roomDetailsClearHistoryRefreshFailed =>
       'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.';
+
+  @override
+  String get roomDetailsEmailInvitationsAction =>
+      'Invite by e-mail from a CSV file';
+
+  @override
+  String get roomDetailsEmailInvitationsFileTypeLabel => 'CSV file';
+
+  @override
+  String roomDetailsEmailInvitationsFileTooLarge(int limit) {
+    return 'This file is larger than $limit kB. Split the list and import it in parts.';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsFileUnreadable =>
+      'This file could not be read.';
+
+  @override
+  String get roomDetailsEmailInvitationsPreviewTitle => 'Import preview';
+
+  @override
+  String get roomDetailsEmailInvitationsPreviewNothingSent =>
+      'Nothing has been sent yet. This is only a preview of what the server found in the file.';
+
+  @override
+  String roomDetailsEmailInvitationsPreviewInvites(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count addresses will be invited',
+      one: '1 address will be invited',
+      zero: 'No new address to invite',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roomDetailsEmailInvitationsPreviewDuplicates(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count addresses are already invited or repeated',
+      one: '1 address is already invited or repeated',
+      zero: 'No duplicate',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsSendConfirm => 'Send invitations';
+
+  @override
+  String roomDetailsEmailInvitationsSent(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count invitations were sent.',
+      one: '1 invitation was sent.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roomDetailsEmailInvitationsInvalidRows(String lines) {
+    return 'The server refused the file and imported nothing. Invalid lines: $lines.';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsFileRejected =>
+      'The server could not read this file. The first line must be a header containing an \"email\" column.';
+
+  @override
+  String get roomDetailsEmailInvitationsUncertain =>
+      'The connection dropped while the invitations were being sent, so it is not known whether they went out. Check the participant list before trying again — nothing was repeated automatically.';
+
+  @override
+  String get roomDetailsResendInvitationsAction => 'Resend e-mail invitations';
+
+  @override
+  String get roomDetailsResendInvitationsDialogTitle =>
+      'Resend e-mail invitations?';
+
+  @override
+  String get roomDetailsResendInvitationsDialogMessage =>
+      'Every e-mail attendee of this conversation receives their invitation again.';
+
+  @override
+  String get roomDetailsResendInvitationsConfirm => 'Resend';
+
+  @override
+  String get roomDetailsResendInvitationsSent =>
+      'The invitations were sent again.';
+
+  @override
+  String get roomDetailsResendInvitation => 'Resend invitation';
+
+  @override
+  String get roomDetailsResendInvitationSent =>
+      'The invitation was sent again.';
 
   @override
   String get roomDetailsConversationTagsAction => 'Conversation tags';

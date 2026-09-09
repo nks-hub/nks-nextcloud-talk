@@ -110,6 +110,37 @@ mixin _NextcloudApiCall on _HttpNextcloudApiBase {
     );
   }
 
+  /// Downloads the attendance of the call running in this room.
+  ///
+  /// Moderator-only on the server and gated by `download-call-participants`;
+  /// the caller decides whether to offer the action at all. The answer is a
+  /// CSV document rather than OCS JSON, so it does not go through
+  /// [_sendCallRestRequest].
+  Future<CallAttendanceDownload> downloadCallAttendance({
+    required CallAttendanceDownloadRequest attendanceRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('GET', attendanceRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...attendanceRequest.headers,
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _callRestAllowedStatusCodes,
+      maximumBytes: maximumCallAttendanceBytes,
+      sessionAccountId: attendanceRequest.accountId,
+      sessionServer: attendanceRequest.server,
+    );
+    return decodeCallAttendanceDownload(
+      request: attendanceRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   Future<CallRestResponse> _sendCallRestRequest(
     CallRestRequest callRequest, {
     required String loginName,

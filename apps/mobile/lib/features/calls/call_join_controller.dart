@@ -23,6 +23,9 @@ enum CallJoinPhase { idle, joining, joined, leaving, failed }
 /// way `breakout-rooms-v1` gates the breakout-rooms control.
 const String callRecordingCapability = 'recording-v1';
 
+/// The Talk capability that gates downloading the running call's attendance.
+const String callAttendanceCapability = 'download-call-participants';
+
 /// What a participant may publish into a call, as the room's permissions say.
 /// Everything is allowed until the room says otherwise, so a room that could
 /// not be read behaves as it always did.
@@ -54,6 +57,7 @@ final class CallModeratorState {
     this.publishing = const CallPublishingRights(),
     this.canManageRecording = false,
     this.recordingActive = false,
+    this.canDownloadAttendance = false,
   });
 
   final CallPublishingRights publishing;
@@ -70,6 +74,11 @@ final class CallModeratorState {
   /// rather than polled, since nothing else in this screen re-reads the room
   /// while a call is joined.
   final bool recordingActive;
+
+  /// A moderator, on a server that advertises [callAttendanceCapability]. Same
+  /// rule as [canManageRecording]: a participant without it must not be shown
+  /// the control, because the server would refuse the download anyway.
+  final bool canDownloadAttendance;
 }
 
 final class CallJoinState {
@@ -82,6 +91,7 @@ final class CallJoinState {
     this.publishing = const CallPublishingRights(),
     this.canManageRecording = false,
     this.recordingActive = false,
+    this.canDownloadAttendance = false,
   });
 
   final CallJoinPhase phase;
@@ -104,6 +114,9 @@ final class CallJoinState {
 
   /// See [CallModeratorState.recordingActive].
   final bool recordingActive;
+
+  /// See [CallModeratorState.canDownloadAttendance].
+  final bool canDownloadAttendance;
 
   bool get isBusy =>
       phase == CallJoinPhase.joining || phase == CallJoinPhase.leaving;
@@ -199,14 +212,16 @@ base class CallJoinController
       );
       final policy = CallRoomPolicy.fromConversation(room);
       final account = await accounts.getAccount(arg.accountId);
-      final canManageRecording =
-          policy.isModerator &&
-          account != null &&
-          talkFeaturesOf(account).contains(callRecordingCapability);
+      final features = account == null
+          ? const <String>{}
+          : talkFeaturesOf(account);
       return CallModeratorState(
         publishing: CallPublishingRights.fromPolicy(policy),
-        canManageRecording: canManageRecording,
+        canManageRecording:
+            policy.isModerator && features.contains(callRecordingCapability),
         recordingActive: room.callRecording != 0,
+        canDownloadAttendance:
+            policy.isModerator && features.contains(callAttendanceCapability),
       );
     } on Object {
       return const CallModeratorState();
@@ -372,6 +387,7 @@ base class CallJoinController
         publishing: _moderator.publishing,
         canManageRecording: _moderator.canManageRecording,
         recordingActive: _moderator.recordingActive,
+        canDownloadAttendance: _moderator.canDownloadAttendance,
       );
       unawaited(_applyProximity(media));
       if (media.phase == CallMediaPhase.failed) {
@@ -489,6 +505,7 @@ base class CallJoinController
       publishing: _moderator.publishing,
       canManageRecording: _moderator.canManageRecording,
       recordingActive: active,
+      canDownloadAttendance: _moderator.canDownloadAttendance,
     );
     state = CallJoinState(
       phase: state.phase,
@@ -499,6 +516,7 @@ base class CallJoinController
       publishing: _moderator.publishing,
       canManageRecording: _moderator.canManageRecording,
       recordingActive: active,
+      canDownloadAttendance: _moderator.canDownloadAttendance,
     );
   }
 
@@ -618,6 +636,7 @@ base class CallJoinController
       publishing: state.publishing,
       canManageRecording: state.canManageRecording,
       recordingActive: state.recordingActive,
+      canDownloadAttendance: state.canDownloadAttendance,
     );
   }
 

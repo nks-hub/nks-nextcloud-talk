@@ -1184,6 +1184,108 @@ abstract class AppLocalizations {
   /// **'Location shared.'**
   String get locationShared;
 
+  /// No description provided for @locationPickerMenuAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Location on a map'**
+  String get locationPickerMenuAction;
+
+  /// No description provided for @locationPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a location'**
+  String get locationPickerTitle;
+
+  /// No description provided for @locationPickerUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this location'**
+  String get locationPickerUse;
+
+  /// No description provided for @locationPickerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get locationPickerName;
+
+  /// No description provided for @locationPickerLatitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude'**
+  String get locationPickerLatitude;
+
+  /// No description provided for @locationPickerLongitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude'**
+  String get locationPickerLongitude;
+
+  /// No description provided for @locationPickerCoordinatesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a latitude from -90 to 90 and a longitude from -180 to 180.'**
+  String get locationPickerCoordinatesInvalid;
+
+  /// No description provided for @locationPickerCoordinatesZero.
+  ///
+  /// In en, this message translates to:
+  /// **'0, 0 is a point in the ocean, not a place. Choose where you mean first.'**
+  String get locationPickerCoordinatesZero;
+
+  /// No description provided for @locationPickerCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Use current location'**
+  String get locationPickerCurrent;
+
+  /// No description provided for @locationPickerZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom in'**
+  String get locationPickerZoomIn;
+
+  /// No description provided for @locationPickerZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom out'**
+  String get locationPickerZoomOut;
+
+  /// No description provided for @locationPickerLoadMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Load the OpenStreetMap background (sends the coordinates shown)'**
+  String get locationPickerLoadMap;
+
+  /// No description provided for @locationSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for a place'**
+  String get locationSearchHint;
+
+  /// No description provided for @locationSearchSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get locationSearchSubmit;
+
+  /// No description provided for @locationSearchUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The place search is unavailable. Enter coordinates instead.'**
+  String get locationSearchUnavailable;
+
+  /// No description provided for @locationSearchNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No place matches that name.'**
+  String get locationSearchNoResults;
+
+  /// No description provided for @locationSearchTooFast.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait a second before searching again.'**
+  String get locationSearchTooFast;
+
   /// No description provided for @outOfOffice.
   ///
   /// In en, this message translates to:
@@ -4040,6 +4142,42 @@ abstract class AppLocalizations {
   /// **'Stop sharing your screen'**
   String get callBannerStopSharing;
 
+  /// No description provided for @callAttendanceExportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Export attendance'**
+  String get callAttendanceExportAction;
+
+  /// No description provided for @callAttendanceExportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone the server recorded in this call, including those who already left.'**
+  String get callAttendanceExportHint;
+
+  /// No description provided for @callAttendanceExportSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Attendance saved'**
+  String get callAttendanceExportSaved;
+
+  /// No description provided for @callAttendanceExportNoCall.
+  ///
+  /// In en, this message translates to:
+  /// **'No call is running in this conversation.'**
+  String get callAttendanceExportNoCall;
+
+  /// No description provided for @callAttendanceExportForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Only a moderator can export attendance.'**
+  String get callAttendanceExportForbidden;
+
+  /// No description provided for @callAttendanceExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attendance could not be exported.'**
+  String get callAttendanceExportFailed;
+
   /// No description provided for @callBannerStartRecording.
   ///
   /// In en, this message translates to:
@@ -5287,6 +5425,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Conversation history was cleared, but the latest conversation state could not be loaded yet. Reopen the conversation to refresh it.'**
   String get roomDetailsClearHistoryRefreshFailed;
+
+  /// Moderator action that uploads a CSV of e-mail addresses as conversation invitations.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite by e-mail from a CSV file'**
+  String get roomDetailsEmailInvitationsAction;
+
+  /// Label of the file type group offered by the CSV file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'CSV file'**
+  String get roomDetailsEmailInvitationsFileTypeLabel;
+
+  /// Refusal shown before uploading when the chosen CSV exceeds the client-side size bound.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is larger than {limit} kB. Split the list and import it in parts.'**
+  String roomDetailsEmailInvitationsFileTooLarge(int limit);
+
+  /// Error shown when the chosen file cannot be read from the device.
+  ///
+  /// In en, this message translates to:
+  /// **'This file could not be read.'**
+  String get roomDetailsEmailInvitationsFileUnreadable;
+
+  /// Title of the dialog showing what a CSV import would do.
+  ///
+  /// In en, this message translates to:
+  /// **'Import preview'**
+  String get roomDetailsEmailInvitationsPreviewTitle;
+
+  /// Statement that the preview is side-effect free.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has been sent yet. This is only a preview of what the server found in the file.'**
+  String get roomDetailsEmailInvitationsPreviewNothingSent;
+
+  /// How many addresses the server would invite.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No new address to invite} =1{1 address will be invited} other{{count} addresses will be invited}}'**
+  String roomDetailsEmailInvitationsPreviewInvites(int count);
+
+  /// How many addresses the server would skip as duplicates.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No duplicate} =1{1 address is already invited or repeated} other{{count} addresses are already invited or repeated}}'**
+  String roomDetailsEmailInvitationsPreviewDuplicates(int count);
+
+  /// Button that turns the preview into a real send.
+  ///
+  /// In en, this message translates to:
+  /// **'Send invitations'**
+  String get roomDetailsEmailInvitationsSendConfirm;
+
+  /// Confirmation shown after invitations really went out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 invitation was sent.} other{{count} invitations were sent.}}'**
+  String roomDetailsEmailInvitationsSent(int count);
+
+  /// Error listing the CSV line numbers the server rejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused the file and imported nothing. Invalid lines: {lines}.'**
+  String roomDetailsEmailInvitationsInvalidRows(String lines);
+
+  /// Error shown when the server refused the file itself rather than individual rows.
+  ///
+  /// In en, this message translates to:
+  /// **'The server could not read this file. The first line must be a header containing an \"email\" column.'**
+  String get roomDetailsEmailInvitationsFileRejected;
+
+  /// Error shown when a real send ended without a usable answer.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection dropped while the invitations were being sent, so it is not known whether they went out. Check the participant list before trying again — nothing was repeated automatically.'**
+  String get roomDetailsEmailInvitationsUncertain;
+
+  /// Moderator action that mails every e-mail attendee their invitation again.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend e-mail invitations'**
+  String get roomDetailsResendInvitationsAction;
+
+  /// Title of the dialog confirming a resend to every e-mail attendee.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend e-mail invitations?'**
+  String get roomDetailsResendInvitationsDialogTitle;
+
+  /// Body of the dialog confirming a resend to every e-mail attendee.
+  ///
+  /// In en, this message translates to:
+  /// **'Every e-mail attendee of this conversation receives their invitation again.'**
+  String get roomDetailsResendInvitationsDialogMessage;
+
+  /// Confirming button of the resend dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend'**
+  String get roomDetailsResendInvitationsConfirm;
+
+  /// Confirmation shown after every e-mail attendee was mailed again.
+  ///
+  /// In en, this message translates to:
+  /// **'The invitations were sent again.'**
+  String get roomDetailsResendInvitationsSent;
+
+  /// Participant menu action that mails one e-mail attendee their invitation again.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend invitation'**
+  String get roomDetailsResendInvitation;
+
+  /// Confirmation shown after one e-mail attendee was mailed again.
+  ///
+  /// In en, this message translates to:
+  /// **'The invitation was sent again.'**
+  String get roomDetailsResendInvitationSent;
 
   /// Action that manages this participant's tags for a conversation.
   ///

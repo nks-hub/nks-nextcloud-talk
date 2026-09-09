@@ -625,6 +625,62 @@ class AppLocalizationsCs extends AppLocalizations {
   String get locationShared => 'Poloha byla sdílena.';
 
   @override
+  String get locationPickerMenuAction => 'Poloha na mapě';
+
+  @override
+  String get locationPickerTitle => 'Vyberte místo';
+
+  @override
+  String get locationPickerUse => 'Použít toto místo';
+
+  @override
+  String get locationPickerName => 'Název';
+
+  @override
+  String get locationPickerLatitude => 'Zeměpisná šířka';
+
+  @override
+  String get locationPickerLongitude => 'Zeměpisná délka';
+
+  @override
+  String get locationPickerCoordinatesInvalid =>
+      'Zadejte šířku od -90 do 90 a délku od -180 do 180.';
+
+  @override
+  String get locationPickerCoordinatesZero =>
+      'Souřadnice 0, 0 je bod v oceánu, ne místo. Nejdřív vyberte konkrétní bod.';
+
+  @override
+  String get locationPickerCurrent => 'Použít aktuální polohu';
+
+  @override
+  String get locationPickerZoomIn => 'Přiblížit';
+
+  @override
+  String get locationPickerZoomOut => 'Oddálit';
+
+  @override
+  String get locationPickerLoadMap =>
+      'Načíst podklad OpenStreetMap (odešle zobrazené souřadnice)';
+
+  @override
+  String get locationSearchHint => 'Najít místo';
+
+  @override
+  String get locationSearchSubmit => 'Hledat';
+
+  @override
+  String get locationSearchUnavailable =>
+      'Vyhledávání míst není dostupné. Zadejte souřadnice ručně.';
+
+  @override
+  String get locationSearchNoResults => 'Tomuto názvu neodpovídá žádné místo.';
+
+  @override
+  String get locationSearchTooFast =>
+      'Než budete hledat znovu, chvíli počkejte.';
+
+  @override
   String outOfOffice(String user) {
     return '$user je mimo kancelář a nemusí odpovědět.';
   }
@@ -2211,6 +2267,27 @@ class AppLocalizationsCs extends AppLocalizations {
   String get callBannerStopSharing => 'Ukončit sdílení obrazovky';
 
   @override
+  String get callAttendanceExportAction => 'Exportovat účast';
+
+  @override
+  String get callAttendanceExportHint =>
+      'Všichni, které server v tomto hovoru zaznamenal, včetně těch, kdo už odešli.';
+
+  @override
+  String get callAttendanceExportSaved => 'Účast uložena';
+
+  @override
+  String get callAttendanceExportNoCall =>
+      'V této konverzaci neběží žádný hovor.';
+
+  @override
+  String get callAttendanceExportForbidden =>
+      'Účast může exportovat jen moderátor.';
+
+  @override
+  String get callAttendanceExportFailed => 'Účast se nepodařilo exportovat.';
+
+  @override
   String get callBannerStartRecording => 'Spustit nahrávání';
 
   @override
@@ -2919,6 +2996,108 @@ class AppLocalizationsCs extends AppLocalizations {
   @override
   String get roomDetailsClearHistoryRefreshFailed =>
       'Historie konverzace byla vymazána, ale aktuální stav se zatím nepodařilo načíst. Pro obnovení konverzaci znovu otevřete.';
+
+  @override
+  String get roomDetailsEmailInvitationsAction =>
+      'Pozvat e-mailem ze souboru CSV';
+
+  @override
+  String get roomDetailsEmailInvitationsFileTypeLabel => 'Soubor CSV';
+
+  @override
+  String roomDetailsEmailInvitationsFileTooLarge(int limit) {
+    return 'Tento soubor je větší než $limit kB. Rozdělte seznam a importujte ho po částech.';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsFileUnreadable =>
+      'Tento soubor se nepodařilo přečíst.';
+
+  @override
+  String get roomDetailsEmailInvitationsPreviewTitle => 'Náhled importu';
+
+  @override
+  String get roomDetailsEmailInvitationsPreviewNothingSent =>
+      'Zatím se nic neodeslalo. Toto je pouze náhled toho, co server v souboru našel.';
+
+  @override
+  String roomDetailsEmailInvitationsPreviewInvites(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Bude pozváno $count adres',
+      few: 'Budou pozvány $count adresy',
+      one: 'Bude pozvána 1 adresa',
+      zero: 'Žádná nová adresa k pozvání',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roomDetailsEmailInvitationsPreviewDuplicates(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count adres je už pozvaných nebo se opakuje',
+      few: '$count adresy jsou už pozvané nebo se opakují',
+      one: '1 adresa je už pozvaná nebo se opakuje',
+      zero: 'Žádný duplikát',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsSendConfirm => 'Odeslat pozvánky';
+
+  @override
+  String roomDetailsEmailInvitationsSent(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Bylo odesláno $count pozvánek.',
+      few: 'Byly odeslány $count pozvánky.',
+      one: 'Byla odeslána 1 pozvánka.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String roomDetailsEmailInvitationsInvalidRows(String lines) {
+    return 'Server soubor odmítl a nic neimportoval. Neplatné řádky: $lines.';
+  }
+
+  @override
+  String get roomDetailsEmailInvitationsFileRejected =>
+      'Server tento soubor nepřečetl. První řádek musí být hlavička se sloupcem „email“.';
+
+  @override
+  String get roomDetailsEmailInvitationsUncertain =>
+      'Spojení se přerušilo během odesílání pozvánek, takže není jisté, zda odešly. Než to zkusíte znovu, zkontrolujte seznam účastníků — nic se automaticky neopakovalo.';
+
+  @override
+  String get roomDetailsResendInvitationsAction =>
+      'Znovu odeslat e-mailové pozvánky';
+
+  @override
+  String get roomDetailsResendInvitationsDialogTitle =>
+      'Odeslat e-mailové pozvánky znovu?';
+
+  @override
+  String get roomDetailsResendInvitationsDialogMessage =>
+      'Každý e-mailový účastník této konverzace dostane svou pozvánku znovu.';
+
+  @override
+  String get roomDetailsResendInvitationsConfirm => 'Odeslat znovu';
+
+  @override
+  String get roomDetailsResendInvitationsSent =>
+      'Pozvánky byly odeslány znovu.';
+
+  @override
+  String get roomDetailsResendInvitation => 'Znovu odeslat pozvánku';
+
+  @override
+  String get roomDetailsResendInvitationSent => 'Pozvánka byla odeslána znovu.';
 
   @override
   String get roomDetailsConversationTagsAction => 'Štítky konverzace';

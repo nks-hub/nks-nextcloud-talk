@@ -283,3 +283,199 @@ String? _optionalErrorCode(Uint8List body) {
     return null;
   }
 }
+
+/// The largest attendance document this client will read. The server writes
+/// one row per attendee of the running call, so a megabyte is far past any
+/// real meeting and still small enough to hold in memory.
+const int maximumCallAttendanceBytes = 1024 * 1024;
+
+/// The header Talk writes for `call/{token}/download?format=csv`. A `200`
+/// whose first line is anything else is not an attendance document — the
+/// reference server has been observed answering `200 text/html` with an error
+/// page for other endpoints, and such a body must not be offered as a export.
+const String callAttendanceCsvHeader = 'name,email,type,identifier';
+
+enum CallAttendanceClassification {
+  confirmed,
+
+  /// No call is running in this room. Talk answers `400` both before a call
+  /// starts and again once it ends; there is no historical attendance.
+  noCallRunning,
+  reauthenticationRequired,
+  forbidden,
+  roomMissing,
+  rateLimited,
+  serverFailure,
+}
+
+/// Who the server recorded in the call that is running now.
+///
+/// [csv] is the server's document with spreadsheet formulas neutralised — see
+/// [neutraliseCallAttendanceCsv]. Names are attendee data and are never part
+/// of [toString].
+final class CallAttendanceDownload {
+  const CallAttendanceDownload._({
+    required this.request,
+    required this.statusCode,
+    required this.classification,
+    required this.csv,
+  });
+
+  final CallAttendanceDownloadRequest request;
+  final int statusCode;
+  final CallAttendanceClassification classification;
+  final String? csv;
+
+  bool get isSuccess =>
+      classification == CallAttendanceClassification.confirmed;
+
+  @override
+  String toString() =>
+      'CallAttendanceDownload(statusCode: $statusCode, '
+      'classification: ${classification.name}, sensitive: <redacted>)';
+}
+
+CallAttendanceDownload decodeCallAttendanceDownload({
+  required CallAttendanceDownloadRequest request,
+  required int statusCode,
+  required Uint8List body,
+}) {
+  if (statusCode == 200) {
+    if (body.length > maximumCallAttendanceBytes) {
+      protocolFailure(TalkProtocolErrorCode.invalidCallResponse, r'$.body');
+    }
+    final String text;
+    try {
+      text = utf8.decode(body);
+    } on FormatException {
+      return protocolFailure(
+        TalkProtocolErrorCode.invalidCallResponse,
+        r'$.body',
+      );
+    }
+    final firstBreak = text.indexOf('\n');
+    final header = (firstBreak < 0 ? text : text.substring(0, firstBreak))
+        .trimRight();
+    if (header != callAttendanceCsvHeader) {
+      protocolFailure(TalkProtocolErrorCode.invalidCallResponse, r'$.body');
+    }
+    return CallAttendanceDownload._(
+      request: request,
+      statusCode: statusCode,
+      classification: CallAttendanceClassification.confirmed,
+      csv: neutraliseCallAttendanceCsv(text),
+    );
+  }
+
+  final classification = switch (statusCode) {
+    400 => CallAttendanceClassification.noCallRunning,
+    401 => CallAttendanceClassification.reauthenticationRequired,
+    403 => CallAttendanceClassification.forbidden,
+    404 => CallAttendanceClassification.roomMissing,
+    429 => CallAttendanceClassification.rateLimited,
+    >= 500 && <= 599 => CallAttendanceClassification.serverFailure,
+    _ => protocolFailure(
+      TalkProtocolErrorCode.unsupportedHttpStatus,
+      r'$.statusCode',
+    ),
+  };
+  return CallAttendanceDownload._(
+    request: request,
+    statusCode: statusCode,
+    classification: classification,
+    csv: null,
+  );
+}
+
+/// Rewrites [csv] so no cell is read as a formula when the file is opened in
+/// a spreadsheet.
+///
+/// A display name is attendee-controlled text. `=cmd|...`, `+`, `-` and `@`
+/// at the start of a cell make Excel and LibreOffice evaluate it, so each such
+/// cell is prefixed with an apostrophe, which those programs read as "this is
+/// text". The prefix is visible in the exported file: an altered cell is the
+/// price of not shipping an executable one.
+String neutraliseCallAttendanceCsv(String csv) {
+  final rows = _parseCsvRows(csv);
+  return rows.map((row) => row.map(_neutraliseCell).join(',')).join('\r\n');
+}
+
+const Set<String> _formulaLeaders = {'=', '+', '-', '@', '\t', '\r'};
+
+String _neutraliseCell(String cell) {
+  final value = cell.isNotEmpty && _formulaLeaders.contains(cell[0])
+      ? "'$cell"
+      : cell;
+  if (value.isEmpty) {
+    return value;
+  }
+  final needsQuotes =
+      value.contains(',') ||
+      value.contains('"') ||
+      value.contains('\n') ||
+      value.contains('\r') ||
+      value != value.trim();
+  if (!needsQuotes) {
+    return value;
+  }
+  return '"${value.replaceAll('"', '""')}"';
+}
+
+/// Minimal RFC 4180 reader: quoted cells may hold commas, line breaks and
+/// doubled quotes. Enough for the document Talk writes, and it has to be a
+/// reader rather than a search-and-replace because a cell's first character
+/// is only knowable once the quoting is resolved.
+List<List<String>> _parseCsvRows(String csv) {
+  final rows = <List<String>>[];
+  var row = <String>[];
+  final cell = StringBuffer();
+  var quoted = false;
+  var index = 0;
+  while (index < csv.length) {
+    final character = csv[index];
+    if (quoted) {
+      if (character == '"') {
+        if (index + 1 < csv.length && csv[index + 1] == '"') {
+          cell.write('"');
+          index += 2;
+          continue;
+        }
+        quoted = false;
+        index++;
+        continue;
+      }
+      cell.write(character);
+      index++;
+      continue;
+    }
+    switch (character) {
+      case '"':
+        quoted = true;
+        index++;
+      case ',':
+        row.add(cell.toString());
+        cell.clear();
+        index++;
+      case '\r':
+      case '\n':
+        row.add(cell.toString());
+        cell.clear();
+        rows.add(row);
+        row = <String>[];
+        index +=
+            character == '\r' &&
+                index + 1 < csv.length &&
+                csv[index + 1] == '\n'
+            ? 2
+            : 1;
+      default:
+        cell.write(character);
+        index++;
+    }
+  }
+  if (cell.isNotEmpty || row.isNotEmpty) {
+    row.add(cell.toString());
+    rows.add(row);
+  }
+  return rows;
+}
