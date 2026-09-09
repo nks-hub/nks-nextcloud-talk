@@ -26,6 +26,7 @@ import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
 import 'media/chat_attachment_opener.dart';
 import 'media/chat_attachment_exporter.dart';
+import 'media/text_attachment_viewer.dart';
 
 part 'chat_message_attachment_content.dart';
 part 'chat_message_image_content.dart';

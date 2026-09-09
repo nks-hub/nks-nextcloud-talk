@@ -65,28 +65,44 @@ final class _ChatAttachment extends ConsumerWidget {
               openAppSettings: () => ref.read(appSettingsOpenerProvider).open(),
             ),
           );
+    void openExternally() => unawaited(
+      _openDownloadedAttachment(
+        context,
+        ref,
+        account: account,
+        uri: originalUri!,
+        fileName: name,
+        contentType: mimeType!,
+        expectedBytes: _attachmentExpectedBytes(parameter),
+        repairUri: () => _repairedAttachmentUri(
+          ref,
+          account: account,
+          roomToken: roomToken,
+          messageId: messageId,
+          index: index,
+          failedUri: originalUri,
+        ),
+      ),
+    );
+    // Text and Markdown are read in place; everything else still goes to the
+    // platform's own handler, which is also what a device without a text app
+    // used to fall back to and no longer needs to.
     final VoidCallback? openFile =
         originalUri == null || mimeType == null || voiceUri != null
         ? null
-        : () => unawaited(
-            _openDownloadedAttachment(
+        : isReadableText(mimeType)
+        ? () => unawaited(
+            showTextAttachmentViewer(
               context,
-              ref,
               account: account,
               uri: originalUri,
               fileName: name,
               contentType: mimeType,
-              expectedBytes: _attachmentExpectedBytes(parameter),
-              repairUri: () => _repairedAttachmentUri(
-                ref,
-                account: account,
-                roomToken: roomToken,
-                messageId: messageId,
-                index: index,
-                failedUri: originalUri,
-              ),
+              repository: ref.read(chatMediaRepositoryProvider),
+              onOpenExternally: openExternally,
             ),
-          );
+          )
+        : openExternally;
     final openAttachment = openImage ?? openFile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

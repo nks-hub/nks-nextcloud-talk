@@ -571,6 +571,7 @@
   "profileStatusIconLabel": "Status emoji",
   "profileStatusIconHelp": "Use a single emoji supported by your server.",
   "profileStatusMessageLabel": "Status message",
+  "textAttachmentTruncated": "Only the beginning is shown. Open the file to read the rest.",
   "messagePinUntilTitle": "Pin until",
   "messagePinUntilForever": "Until someone unpins it",
   "messagePinUntilHour": "For an hour",

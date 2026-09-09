@@ -1631,6 +1631,10 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusMessageLabel => 'Zpráva stavu';
 
   @override
+  String get textAttachmentTruncated =>
+      'Zobrazen je jen začátek. Zbytek si přečtete v otevřeném souboru.';
+
+  @override
   String get messagePinUntilTitle => 'Připnout do';
 
   @override

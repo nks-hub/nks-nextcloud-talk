@@ -3008,6 +3008,12 @@ abstract class AppLocalizations {
   /// **'Status message'**
   String get profileStatusMessageLabel;
 
+  /// No description provided for @textAttachmentTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the beginning is shown. Open the file to read the rest.'**
+  String get textAttachmentTruncated;
+
   /// No description provided for @messagePinUntilTitle.
   ///
   /// In en, this message translates to:

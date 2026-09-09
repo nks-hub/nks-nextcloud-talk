@@ -1632,6 +1632,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusMessageLabel => 'Status message';
 
   @override
+  String get textAttachmentTruncated =>
+      'Only the beginning is shown. Open the file to read the rest.';
+
+  @override
   String get messagePinUntilTitle => 'Pin until';
 
   @override

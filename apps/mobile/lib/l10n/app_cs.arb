@@ -557,6 +557,7 @@
   "profileStatusIconLabel": "Emoji stavu",
   "profileStatusIconHelp": "Použijte jedno emoji podporované serverem.",
   "profileStatusMessageLabel": "Zpráva stavu",
+  "textAttachmentTruncated": "Zobrazen je jen začátek. Zbytek si přečtete v otevřeném souboru.",
   "messagePinUntilTitle": "Připnout do",
   "messagePinUntilForever": "Dokud to někdo neodepne",
   "messagePinUntilHour": "Na hodinu",
