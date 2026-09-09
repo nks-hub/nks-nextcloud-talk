@@ -67,6 +67,30 @@ void main() {
     expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
   });
 
+  testWidgets('a size the server refuses falls back to the chat preview', (
+    tester,
+  ) async {
+    final asked = <Uri>[];
+    final repository = _repository((request) async {
+      asked.add(request.url);
+      if (request.url == _previewUri) {
+        return http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+      }
+      return _imageResponse();
+    });
+
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+
+    expect(asked, [_previewUri, _smallerPreviewUri]);
+    expect(
+      find.byKey(const Key('authenticated-image-fullscreen')),
+      findsOneWidget,
+    );
+    expect(find.text('The image could not be loaded.'), findsNothing);
+  });
+
   testWidgets('Escape closes the picture and leaves the chat behind', (
     tester,
   ) async {
@@ -122,10 +146,9 @@ void main() {
   testWidgets('replaces a failed load with the image after retry', (
     tester,
   ) async {
-    var requestCount = 0;
+    var failing = true;
     final repository = _repository((_) async {
-      requestCount++;
-      if (requestCount == 1) {
+      if (failing) {
         return http.StreamedResponse(const Stream<List<int>>.empty(), 503);
       }
       return _imageResponse();
@@ -136,6 +159,7 @@ void main() {
     await _pumpRouteAndFuture(tester);
 
     expect(find.byKey(const Key('authenticated-image-retry')), findsOneWidget);
+    failing = false;
     await tester.tap(find.byKey(const Key('authenticated-image-retry')));
     await tester.pump();
     await tester.runAsync(
@@ -143,7 +167,6 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(requestCount, 2);
     expect(
       find.byKey(const Key('authenticated-image-fullscreen')),
       findsOneWidget,
@@ -417,6 +440,7 @@ final class _ViewerLauncher extends StatelessWidget {
             context,
             account: _account,
             previewUri: _previewUri,
+            smallerPreviewUri: _smallerPreviewUri,
             originalUri: _originalUri,
             originalContentType: 'image/png',
             imageName: imageName,
@@ -479,7 +503,13 @@ ChatMediaRepository _repository(
 ) {
   final vault = MemoryCredentialVault()
     ..values[_account.id] = 'fixture-app-password';
-  return ChatMediaRepository(vault, client: _StreamingClient(handler));
+  // No real waiting between the repository's own retries: these tests are
+  // about the viewer, not about how long a server takes to make a preview.
+  return ChatMediaRepository(
+    vault,
+    client: _StreamingClient(handler),
+    wait: (_) async {},
+  );
 }
 
 http.StreamedResponse _imageResponse() => http.StreamedResponse(
@@ -526,6 +556,11 @@ const StoredAccount _account = StoredAccount(
 final Uri _previewUri = Uri.parse(
   'https://cloud.example.invalid/index.php/core/preview'
   '?fileId=42&x=2048&y=2048&a=0',
+);
+
+final Uri _smallerPreviewUri = Uri.parse(
+  'https://cloud.example.invalid/index.php/core/preview'
+  '?fileId=42&x=1024&y=1024&a=0',
 );
 
 final Uri _originalUri = Uri.parse(

@@ -16,6 +16,7 @@ Future<void> showAuthenticatedImageViewer(
   BuildContext context, {
   required StoredAccount account,
   required Uri previewUri,
+  Uri? smallerPreviewUri,
   required Uri originalUri,
   required String originalContentType,
   required String imageName,
@@ -30,6 +31,7 @@ Future<void> showAuthenticatedImageViewer(
       builder: (_) => AuthenticatedImageViewer(
         account: account,
         previewUri: previewUri,
+        smallerPreviewUri: smallerPreviewUri,
         originalUri: originalUri,
         originalContentType: originalContentType,
         imageName: imageName,
@@ -46,6 +48,7 @@ final class AuthenticatedImageViewer extends StatefulWidget {
     super.key,
     required this.account,
     required this.previewUri,
+    this.smallerPreviewUri,
     required this.originalUri,
     required this.originalContentType,
     required this.imageName,
@@ -56,6 +59,12 @@ final class AuthenticatedImageViewer extends StatefulWidget {
 
   final StoredAccount account;
   final Uri previewUri;
+
+  /// The address the chat bubble already uses. A server can hold a preview of
+  /// one size and refuse another — the reference instance serves 1024 and
+  /// answers 404 for 2048 on the same file — and a smaller picture beats an
+  /// error message, so it is asked for when the large one is not there.
+  final Uri? smallerPreviewUri;
   final Uri originalUri;
   final String originalContentType;
   final String imageName;
@@ -114,6 +123,13 @@ final class _AuthenticatedImageViewerState
         account: widget.account,
         uri: widget.previewUri,
       );
+      final smaller = widget.smallerPreviewUri;
+      if (image == null && smaller != null && smaller != widget.previewUri) {
+        image = await widget.repository.loadPreview(
+          account: widget.account,
+          uri: smaller,
+        );
+      }
       return image;
     } finally {
       if (mounted) {

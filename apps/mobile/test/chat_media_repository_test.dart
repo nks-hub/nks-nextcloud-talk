@@ -54,6 +54,93 @@ void main() {
     },
   );
 
+  test('a preview the server has not made yet is asked for again', () async {
+    final statuses = <int>[500, 503, 200];
+    final waited = <Duration>[];
+    final vault = MemoryCredentialVault()
+      ..values[_account.id] = 'fixture-app-password';
+    final repository = ChatMediaRepository(
+      vault,
+      wait: (delay) async => waited.add(delay),
+      client: _StreamingClient((request) async {
+        final status = statuses.removeAt(0);
+        return http.StreamedResponse(
+          Stream<List<int>>.value(status == 200 ? _pngSignature : const []),
+          status,
+          headers: status == 200
+              ? const <String, String>{'content-type': 'image/png'}
+              : const <String, String>{},
+        );
+      }),
+    );
+    addTearDown(repository.close);
+
+    final image = await repository.loadPreview(
+      account: _account,
+      uri: _previewUri,
+    );
+
+    expect(image, isNotNull, reason: 'the third answer carried the picture');
+    expect(statuses, isEmpty);
+    expect(waited, const [Duration(seconds: 1), Duration(seconds: 3)]);
+  });
+
+  test('a size the server does not have fails at once', () async {
+    var requests = 0;
+    final waited = <Duration>[];
+    final vault = MemoryCredentialVault()
+      ..values[_account.id] = 'fixture-app-password';
+    final repository = ChatMediaRepository(
+      vault,
+      wait: (delay) async => waited.add(delay),
+      client: _StreamingClient((request) async {
+        requests++;
+        return http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+      }),
+    );
+    addTearDown(repository.close);
+
+    expect(
+      await repository.loadPreview(account: _account, uri: _previewUri),
+      isNull,
+    );
+    expect(requests, 1, reason: '404 is an answer, not a delay');
+    expect(waited, isEmpty);
+  });
+
+  test('a refusal about this request is not retried', () async {
+    var requests = 0;
+    final waited = <Duration>[];
+    final vault = MemoryCredentialVault()
+      ..values[_account.id] = 'fixture-app-password';
+    final repository = ChatMediaRepository(
+      vault,
+      wait: (delay) async => waited.add(delay),
+      client: _StreamingClient((request) async {
+        requests++;
+        return http.StreamedResponse(
+          Stream<List<int>>.value(_pngSignature),
+          200,
+          headers: const <String, String>{'content-type': 'text/html'},
+        );
+      }),
+    );
+    addTearDown(repository.close);
+
+    await expectLater(
+      repository.loadPreview(account: _account, uri: _previewUri),
+      throwsA(
+        isA<ChatMediaRepositoryException>().having(
+          (error) => error.code,
+          'code',
+          ChatMediaRepositoryError.invalidResponse,
+        ),
+      ),
+    );
+    expect(requests, 1);
+    expect(waited, isEmpty);
+  });
+
   test('loads an account-scoped preview with bounded authorization', () async {
     late http.BaseRequest captured;
     final vault = MemoryCredentialVault()

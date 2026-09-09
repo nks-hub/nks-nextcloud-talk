@@ -57,6 +57,7 @@ final class _ChatAttachment extends ConsumerWidget {
               context,
               account: account,
               previewUri: fullScreenPreviewUri,
+              smallerPreviewUri: previewUri,
               originalUri: originalUri,
               originalContentType: mimeType,
               imageName: name,

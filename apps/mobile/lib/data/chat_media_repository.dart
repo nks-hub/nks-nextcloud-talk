@@ -66,8 +66,15 @@ final class ChatMediaRepository {
     this._credentials, {
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 20),
+    this.previewRetries = const [
+      Duration(seconds: 1),
+      Duration(seconds: 3),
+      Duration(seconds: 6),
+    ],
+    Future<void> Function(Duration)? wait,
   }) : _client = client ?? http.Client(),
-       _ownsClient = client == null;
+       _ownsClient = client == null,
+       _wait = wait ?? Future<void>.delayed;
 
   static const int _maximumPreviewBytes = 8 * 1024 * 1024;
   static const int _maximumVoiceBytes = 32 * 1024 * 1024;
@@ -77,6 +84,11 @@ final class ChatMediaRepository {
   final http.Client _client;
   final bool _ownsClient;
   final Duration requestTimeout;
+
+  /// How long to wait before asking again for a preview the server has not
+  /// produced yet. One entry per extra attempt.
+  final List<Duration> previewRetries;
+  final Future<void> Function(Duration) _wait;
 
   /// Materialises a voice message inside [directory] so a platform player can
   /// open it. The bytes never leave the account origin and the response is
@@ -184,6 +196,18 @@ final class ChatMediaRepository {
     return ChatVoiceFile(path: file.path, contentType: contentType);
   }
 
+  /// A picture somebody just posted has no preview on the server yet. Measured
+  /// against the reference instance on 9 September 2026: the endpoint answers
+  /// 500 for the first seconds after the share and 200 afterwards. Asking once
+  /// turned that into a permanent "could not be loaded" on the receiving side,
+  /// which is what people actually saw, so those attempts are repeated here
+  /// before any caller is told the picture is broken.
+  ///
+  /// Only that kind of failure waits. A 404 is the server saying it has no
+  /// preview of this size at all — the same instance serves 1024 and refuses
+  /// 2048 for the same file — and repeating it would only delay the caller's
+  /// own fallback. A bad address, a missing credential and an oversized or
+  /// non-image response are about the request, so they fail immediately too.
   Future<ChatMediaImage?> loadPreview({
     required StoredAccount account,
     required Uri uri,
@@ -194,7 +218,17 @@ final class ChatMediaRepository {
         ChatMediaRepositoryError.invalidUri,
       );
     }
-    return _loadImage(account: account, uri: uri);
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await _loadImage(account: account, uri: uri);
+      } on ChatMediaRepositoryException catch (failure) {
+        if (attempt == previewRetries.length ||
+            failure.code != ChatMediaRepositoryError.unavailable) {
+          rethrow;
+        }
+      }
+      await _wait(previewRetries[attempt]);
+    }
   }
 
   /// Downloads the preview image Nextcloud generated for a link reference.

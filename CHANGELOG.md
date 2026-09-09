@@ -20,6 +20,16 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A picture somebody just sent no longer arrives as an empty box on the
+  other side. The server answers the preview request with an error for the
+  first seconds after a share, and that one answer used to stand until the
+  reader pressed retry; it is now repeated for a few seconds first.
+
+- Opening a picture full size falls back to the size the chat already shows
+  when the server has no larger preview of it. Tall screenshots opened to an
+  error message before, even though the same picture was visible in the
+  conversation behind it.
+
 - Escape closes an opened picture on the desktop and returns to the chat,
   the same action the close button takes. The conversation and the window
   stay where they were.
