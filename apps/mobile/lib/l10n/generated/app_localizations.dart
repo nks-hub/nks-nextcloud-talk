@@ -3008,6 +3008,24 @@ abstract class AppLocalizations {
   /// **'Status message'**
   String get profileStatusMessageLabel;
 
+  /// Asks the launcher to keep a shortcut to this conversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to the home screen'**
+  String get pinConversationToLauncher;
+
+  /// No description provided for @pinConversationRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'The launcher was asked to pin it.'**
+  String get pinConversationRequested;
+
+  /// No description provided for @pinConversationRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'This launcher did not take the shortcut.'**
+  String get pinConversationRefused;
+
   /// No description provided for @profileAbsenceTitle.
   ///
   /// In en, this message translates to:

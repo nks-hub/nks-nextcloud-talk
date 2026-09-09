@@ -1632,6 +1632,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusMessageLabel => 'Status message';
 
   @override
+  String get pinConversationToLauncher => 'Pin to the home screen';
+
+  @override
+  String get pinConversationRequested => 'The launcher was asked to pin it.';
+
+  @override
+  String get pinConversationRefused =>
+      'This launcher did not take the shortcut.';
+
+  @override
   String get profileAbsenceTitle => 'Absence';
 
   @override

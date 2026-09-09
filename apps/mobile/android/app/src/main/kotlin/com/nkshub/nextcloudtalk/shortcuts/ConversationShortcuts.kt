@@ -25,12 +25,49 @@ import io.flutter.plugin.common.MethodChannel
 class ConversationShortcuts(private val context: Context) : MethodChannel.MethodCallHandler {
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-        if (call.method != "publish") {
-            result.notImplemented()
-            return
+        when (call.method) {
+            "publish" -> {
+                val entries = call.argument<List<Map<String, Any?>>>("shortcuts") ?: emptyList()
+                result.success(publish(entries))
+            }
+            "pinSupported" -> result.success(pinSupported())
+            "requestPin" -> {
+                val entry = call.argument<Map<String, Any?>>("shortcut")
+                result.success(entry != null && requestPin(entry))
+            }
+            else -> result.notImplemented()
         }
-        val entries = call.argument<List<Map<String, Any?>>>("shortcuts") ?: emptyList()
-        result.success(publish(entries))
+    }
+
+    /**
+     * Whether this launcher takes pinned shortcuts at all.
+     *
+     * Android 8 added the request; a launcher is still free to say no, and
+     * several do. Asking first keeps an action that cannot work off the menu
+     * instead of failing after it is chosen.
+     */
+    private fun pinSupported(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return false
+        }
+        val manager = context.getSystemService(ShortcutManager::class.java) ?: return false
+        return runCatching { manager.isRequestPinShortcutSupported }.getOrDefault(false)
+    }
+
+    /**
+     * Asks the launcher to pin one conversation.
+     *
+     * `true` means the request reached the launcher, which then asks the
+     * person: it is never proof that a pin exists. Nothing here writes to the
+     * dynamic set, so a pinned conversation survives the recent list churning.
+     */
+    private fun requestPin(entry: Map<String, Any?>): Boolean {
+        if (!pinSupported()) {
+            return false
+        }
+        val manager = context.getSystemService(ShortcutManager::class.java) ?: return false
+        val info = shortcut(entry) ?: return false
+        return runCatching { manager.requestPinShortcut(info, null) }.getOrDefault(false)
     }
 
     /** Replaces the whole dynamic set and reports how many shortcuts stuck. */

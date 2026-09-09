@@ -53,6 +53,34 @@ final class ConversationShortcut {
 /// but ranking has to stop somewhere and four is what a long press shows.
 const kMaxConversationShortcuts = 4;
 
+/// One conversation as a launcher shortcut, or `null` when its account's
+/// stored server address no longer parses.
+///
+/// The same shape the ranked list emits, so a pinned conversation and a recent
+/// one open through exactly the same link and the same account resolution.
+ConversationShortcut? conversationShortcutFor({
+  required StoredAccount account,
+  required CachedConversation room,
+}) {
+  if (room.token.isEmpty) {
+    return null;
+  }
+  final ServerBase server;
+  try {
+    server = ServerBase.parse(account.serverUrl);
+  } on TalkProtocolException {
+    return null;
+  }
+  final label = room.displayName.trim();
+  return ConversationShortcut(
+    id: '${account.id}|${room.token}',
+    label: label.isEmpty ? room.token : label,
+    uri: server.uri.replace(
+      path: '${server.basePath}/index.php/call/${room.token}',
+    ),
+  );
+}
+
 /// Ranks the conversations of every signed-in account by last activity and
 /// turns the busiest ones into launcher shortcuts.
 ///
@@ -118,6 +146,38 @@ final class ConversationShortcutPublisher {
       return;
     } on PlatformException {
       return;
+    }
+  }
+
+  /// Whether this launcher takes a pinned shortcut at all.
+  ///
+  /// False on every platform without the channel and on a launcher that
+  /// refuses pins, so the action can be left out rather than offered and then
+  /// failing.
+  Future<bool> pinSupported() async {
+    try {
+      return await _channel.invokeMethod<bool>('pinSupported') ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Asks the launcher to pin one conversation.
+  ///
+  /// `true` only means the launcher was asked; whether a pin appears is the
+  /// person's answer to its own dialog, which no app can read.
+  Future<bool> requestPin(ConversationShortcut shortcut) async {
+    try {
+      return await _channel.invokeMethod<bool>('requestPin', <String, Object?>{
+            'shortcut': shortcut.toMap(),
+          }) ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
     }
   }
 }

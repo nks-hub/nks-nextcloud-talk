@@ -16,6 +16,7 @@ import 'conversation_shell.dart';
 import '../threads/thread_management_screen.dart';
 import 'conversation_avatar_widget.dart';
 import 'conversation_header_actions.dart';
+import 'conversation_pin_action.dart';
 import 'conversation_absence.dart';
 import 'conversation_upcoming_event.dart';
 
@@ -464,6 +465,12 @@ List<ConversationHeaderAction> _headerActions(
               ),
             ),
           ),
+    ),
+    ...conversationPinActions(
+      context,
+      ref,
+      account: account,
+      conversation: conversation,
     ),
     ...pollDraftActions(
       context,

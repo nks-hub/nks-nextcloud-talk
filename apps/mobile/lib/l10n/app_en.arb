@@ -571,6 +571,12 @@
   "profileStatusIconLabel": "Status emoji",
   "profileStatusIconHelp": "Use a single emoji supported by your server.",
   "profileStatusMessageLabel": "Status message",
+  "pinConversationToLauncher": "Pin to the home screen",
+  "@pinConversationToLauncher": {
+    "description": "Asks the launcher to keep a shortcut to this conversation."
+  },
+  "pinConversationRequested": "The launcher was asked to pin it.",
+  "pinConversationRefused": "This launcher did not take the shortcut.",
   "profileAbsenceTitle": "Absence",
   "profileAbsenceNone": "No absence is set.",
   "profileAbsenceRange": "{first} to {last}",

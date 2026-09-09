@@ -1631,6 +1631,15 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusMessageLabel => 'Zpráva stavu';
 
   @override
+  String get pinConversationToLauncher => 'Připnout na plochu';
+
+  @override
+  String get pinConversationRequested => 'Launcher dostal žádost o připnutí.';
+
+  @override
+  String get pinConversationRefused => 'Tenhle launcher zástupce nepřijal.';
+
+  @override
   String get profileAbsenceTitle => 'Nepřítomnost';
 
   @override
