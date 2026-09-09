@@ -160,6 +160,26 @@ final callJoinControllerProvider =
       CallRoomKey
     >(CallJoinController.new);
 
+/// The system call lifecycle on Android. A joined call is registered with
+/// Telecom, so the phone knows a call is up: a headset's hang-up button lands
+/// here, and an incoming cellular call is arbitrated against the Talk call
+/// rather than dropped on top of it.
+///
+/// Off Android this answers "no system call lifecycle" — iOS has CallKit,
+/// which is [callKitChannelProvider] — and a call runs as it always did.
+final callTelecomProvider = Provider<CallTelecom>((ref) {
+  // `Platform`, not `defaultTargetPlatform`: this builds a channel and claims
+  // its handler, which a test host has no binding for. Same reason
+  // [callKitChannelProvider] asks the same way.
+  if (!Platform.isAndroid) {
+    return const NoCallTelecom();
+  }
+  final telecom = AndroidCallTelecom();
+  ref.onDispose(telecom.dispose);
+  bindSystemCallActions(ref, telecom);
+  return telecom;
+});
+
 /// The system call screen on iOS: a VoIP push rings it while the app is not
 /// running, and this turns what the user pressed there into the same join and
 /// leave the in-app banner performs.
@@ -179,24 +199,25 @@ final callKitChannelProvider = Provider<CallKitChannel?>((ref) {
   final channel = CallKitChannel(onVoipToken: registration.installVoipToken);
   ref.onDispose(channel.dispose);
   unawaited(channel.checkLaunchVoipToken());
-  bindCallKitActions(ref, channel);
+  bindSystemCallActions(ref, channel);
   return channel;
 });
 
-/// Routes native answers through the same capability gate as in-app calls.
-void bindCallKitActions(Ref ref, CallKitChannel channel) {
+/// Routes what the platform's own call screen decided through the same join
+/// and leave an in-app call uses — CallKit on iOS, Telecom on Android.
+void bindSystemCallActions(Ref ref, SystemCallScreen<SystemCallRing> channel) {
   var disposed = false;
-  final rings = <CallRoomKey, CallKitRing>{};
+  final rings = <CallRoomKey, SystemCallRing>{};
   final listeners = <CallRoomKey, ProviderSubscription<CallJoinState>>{};
 
-  void release(CallRoomKey key, CallKitRing ring) {
+  void release(CallRoomKey key, SystemCallRing ring) {
     if (disposed || !identical(rings[key], ring)) return;
     rings.remove(key);
     listeners.remove(key)?.close();
     unawaited(channel.endCall(ring.callId));
   }
 
-  Future<void> answer(CallKitRing ring) async {
+  Future<void> answer(SystemCallRing ring) async {
     final key = (accountId: ring.accountId, roomToken: ring.roomToken);
     rings[key] = ring;
     listeners.remove(key)?.close();

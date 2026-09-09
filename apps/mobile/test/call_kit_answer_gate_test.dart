@@ -29,7 +29,9 @@ void main() {
           nativeCalls.add(call);
           return null;
         });
-    final binding = Provider<void>((ref) => bindCallKitActions(ref, channel));
+    final binding = Provider<void>(
+      (ref) => bindSystemCallActions(ref, channel),
+    );
     container = ProviderContainer(
       overrides: [callJoinControllerProvider.overrideWith(() => controller)],
     );

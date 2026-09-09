@@ -447,6 +447,7 @@ final class _ForegroundJoinFixture {
     CallForegroundService foreground,
     CallMediaEngine engine, {
     bool holdSettings = false,
+    CallTelecom telecom = const NoCallTelecom(),
   }) async {
     final rest = await _CallHarness.create(
       onCall: (request, _) async => _ocsResponse(
@@ -479,6 +480,7 @@ final class _ForegroundJoinFixture {
         callSignalingCoordinatorProvider.overrideWithValue(coordinator),
         callMediaEngineProvider.overrideWithValue(engine),
         callForegroundServiceProvider.overrideWithValue(foreground),
+        callTelecomProvider.overrideWithValue(telecom),
         callAudioInterruptionsProvider.overrideWithValue(
           const SilentCallAudioInterruptions(),
         ),

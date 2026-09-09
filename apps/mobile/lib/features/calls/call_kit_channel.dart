@@ -4,19 +4,24 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'call_system_screen.dart';
+
 /// The call a ring in the system's call UI stands for.
-final class CallKitRing {
+final class CallKitRing implements SystemCallRing {
   const CallKitRing({
     required this.accountId,
     required this.roomToken,
     required this.callId,
   });
 
+  @override
   final String accountId;
+  @override
   final String roomToken;
 
   /// The UUID CallKit knows this call by. Handing it back to [CallKitChannel.
   /// endCall] is what takes the system's call screen down.
+  @override
   final String callId;
 
   static CallKitRing? fromMap(Map<Object?, Object?> map) {
@@ -53,7 +58,7 @@ final class CallKitRing {
 ///
 /// Every platform but iOS answers `MissingPluginException`, which this
 /// treats as "no CallKit here" rather than as a failure.
-final class CallKitChannel {
+final class CallKitChannel implements SystemCallScreen<CallKitRing> {
   CallKitChannel({MethodChannel? channel, void Function(String)? onVoipToken})
     : _channel = channel ?? const MethodChannel(channelName),
       _onVoipToken = onVoipToken {
@@ -70,10 +75,12 @@ final class CallKitChannel {
       StreamController<CallKitRing?>.broadcast();
 
   /// The user accepted a ringing call; the room is theirs to join.
+  @override
   Stream<CallKitRing> get answered => _answered.stream;
 
   /// The user declined a ringing call, or ended a joined one from the system
   /// UI. Null when the system reset its provider and no single call is meant.
+  @override
   Stream<CallKitRing?> get ended => _ended.stream;
 
   /// Collects the token that arrived before this side existed. Safe to call
@@ -94,6 +101,7 @@ final class CallKitChannel {
 
   /// Takes the system call screen down for [callId] — the call ended
   /// somewhere else, or this side left it.
+  @override
   Future<void> endCall(String callId) async {
     try {
       await _channel.invokeMethod<void>('endCall', <String, Object?>{

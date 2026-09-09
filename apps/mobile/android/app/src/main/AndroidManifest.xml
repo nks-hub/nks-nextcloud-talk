@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Registering this app's own calls with the system Telecom stack, so a
+         Talk call is a call the phone knows about: a headset hang-up reaches
+         the app and an incoming cellular call is arbitrated against it rather
+         than landing on top of it. A normal permission, granted at install
+         time; the self-managed phone account behind it is registered at
+         runtime and only from API 26 up. -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Live preview for reading a Nextcloud login QR code during onboarding.
          Nothing else in the app opens the camera: a photo attachment is taken
@@ -193,6 +200,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Builds the connection Telecom asks for when a Talk call starts.
+             Exported because the system binds it from outside the app, and
+             guarded by BIND_TELECOM_CONNECTION_SERVICE, which only the system
+             holds. Nothing binds it until a self-managed phone account has
+             been registered, so it stays inert below API 26. -->
+        <service
+            android:name="com.nkshub.nextcloudtalk.calls.CallTelecomConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService"/>
+            </intent-filter>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

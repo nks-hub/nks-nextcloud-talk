@@ -15,6 +15,7 @@ import 'call_signaling_session.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
 import 'call_proximity.dart';
+import 'call_telecom.dart';
 import 'call_transport_service.dart';
 
 enum CallJoinPhase { idle, joining, joined, leaving, failed }
@@ -144,6 +145,10 @@ base class CallJoinController
   bool _joinedServer = false;
   bool _disposed = false;
   ({CallForegroundService service, String owner})? _foregroundCall;
+
+  /// The system's own record of this call, once Telecom accepted one. Held
+  /// rather than read again on teardown, where reading a provider throws.
+  ({CallTelecom telecom, String callId})? _telecomCall;
   int _cameraEpoch = 0;
   bool _enablingCamera = false;
   CallMediaError? _cameraError;
@@ -399,6 +404,47 @@ base class CallJoinController
       return;
     }
     ref.invalidate(callLifecycleStatusProvider(arg));
+    await _startTelecomCall();
+  }
+
+  /// Puts the joined call into the system's own call lifecycle.
+  ///
+  /// After the media session rather than before it, so what the system is told
+  /// about is a call that exists. Every refusal is ordinary — an Android older
+  /// than the self-managed API, a ROM without Telecom, a platform failure —
+  /// and leaves the call exactly as it was: this must never fail a join.
+  Future<void> _startTelecomCall() async {
+    try {
+      // A container already going away has no platform left to tell.
+      final telecom = ref.read(callTelecomProvider);
+      final call = await telecom.startOutgoing(
+        accountId: arg.accountId,
+        roomToken: arg.roomToken,
+      );
+      if (call == null) {
+        return;
+      }
+      if (_disposed || _session == null) {
+        // The call ended while the system was being told about it.
+        await telecom.endCall(call.callId);
+        return;
+      }
+      _telecomCall = (telecom: telecom, callId: call.callId);
+    } on Object {
+      // The system's opinion of the call is not the call.
+    }
+  }
+
+  /// Takes the system's record of the call down. Runs from the teardown, so a
+  /// platform that fails here must not stop the call from ending.
+  Future<void> _endTelecomCall() async {
+    final call = _telecomCall;
+    _telecomCall = null;
+    try {
+      await call?.telecom.endCall(call.callId);
+    } on Object {
+      // Detaching the activity's channel also releases what it still holds.
+    }
   }
 
   Future<CallSignalingSession?> _reacquireSignaling(
@@ -751,6 +797,7 @@ base class CallJoinController
   Future<void> _performTeardown({required bool leaveServer}) async {
     _hold(false);
     await _releaseProximity();
+    await _endTelecomCall();
     _cameraEpoch++;
     _enablingCamera = false;
     _cameraError = null;

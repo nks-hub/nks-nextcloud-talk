@@ -19,6 +19,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.nkshub.nextcloudtalk.calls.CallPictureInPicture
 import com.nkshub.nextcloudtalk.calls.CallProximityLock
+import com.nkshub.nextcloudtalk.calls.CallTelecom
 import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
 import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
@@ -48,6 +49,7 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var callAudioFocusChannel: EventChannel? = null
     private var callProximityChannel: MethodChannel? = null
     private var callProximity: CallProximityLock? = null
+    private var callTelecom: CallTelecom? = null
     private var callPictureInPicture: CallPictureInPicture? = null
     private var screenShareChannel: MethodChannel? = null
     private var callForegroundMethodChannel: MethodChannel? = null
@@ -232,6 +234,18 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         proximityChannel.setMethodCallHandler(proximity)
         callProximityChannel = proximityChannel
         callProximity = proximity
+
+        // Puts a joined call into the system's own call lifecycle. Detached
+        // below, which also takes down any call record the system still holds.
+        callTelecom?.detach()
+        val telecom = CallTelecom(applicationContext)
+        telecom.attach(
+            MethodChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                CallTelecom.CHANNEL_NAME,
+            ),
+        )
+        callTelecom = telecom
 
         callPictureInPicture?.detach()
         val pictureInPicture = CallPictureInPicture(this)
@@ -442,6 +456,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         callProximityChannel = null
         callProximity?.release()
         callProximity = null
+        callTelecom?.detach()
+        callTelecom = null
         callPictureInPicture?.detach()
         callPictureInPicture = null
         screenShareChannel?.setMethodCallHandler(null)

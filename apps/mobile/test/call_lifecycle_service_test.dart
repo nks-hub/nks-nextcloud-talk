@@ -16,6 +16,7 @@ import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
 import 'package:nextcloudtalk/features/calls/call_foreground_service.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_signaling_session.dart';
+import 'package:nextcloudtalk/features/calls/call_telecom.dart';
 import 'package:nextcloudtalk/features/chat/chat_room_signaling.dart';
 import 'package:nextcloudtalk/features/calls/call_lifecycle_service.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
@@ -27,12 +28,14 @@ part 'call_lifecycle_room_session_test.part.dart';
 part 'call_lifecycle_stale_session_test.part.dart';
 part 'call_join_session_rebind_test.part.dart';
 part 'call_foreground_lifecycle_test.part.dart';
+part 'call_telecom_lifecycle_test.part.dart';
 
 void main() {
   _registerCallLifecycleRoomSessionTests();
   _registerCallLifecycleStaleSessionTests();
   _registerCallJoinSessionRebindTests();
   _registerCallForegroundLifecycleTests();
+  _registerCallTelecomLifecycleTests();
 
   test('refuses required E2EE before activating or joining the call', () async {
     final harness = await _CallHarness.create();
