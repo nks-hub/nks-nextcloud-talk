@@ -90,16 +90,13 @@ final class _BotTile extends StatelessWidget {
     return ListTile(
       key: Key('bot-admin-row-${bot.id}'),
       isThreeLine: true,
-      leading: Icon(
-        switch (bot.state) {
-          // A switched-off app is not a bot that is breaking, so it does not
-          // get the failure icon.
-          BotState.unavailable => Icons.extension_off_outlined,
-          _ when bot.isFailing => Icons.error_outline_rounded,
-          _ => Icons.smart_toy_outlined,
-        },
-        color: bot.isFailing ? scheme.error : scheme.outline,
-      ),
+      leading: Icon(switch (bot.state) {
+        // A switched-off app is not a bot that is breaking, so it does not
+        // get the failure icon.
+        BotState.unavailable => Icons.extension_off_outlined,
+        _ when bot.isFailing => Icons.error_outline_rounded,
+        _ => Icons.smart_toy_outlined,
+      }, color: bot.isFailing ? scheme.error : scheme.outline),
       title: Text(bot.name),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
