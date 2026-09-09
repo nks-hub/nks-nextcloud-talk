@@ -14,6 +14,7 @@ import 'call_foreground_service.dart';
 import 'call_signaling_session.dart';
 import 'call_media_engine.dart';
 import 'call_media_session.dart';
+import 'call_proximity.dart';
 import 'call_transport_service.dart';
 
 enum CallJoinPhase { idle, joining, joined, leaving, failed }
@@ -171,6 +172,11 @@ base class CallJoinController
   }
 
   var _moderator = const CallModeratorState();
+
+  /// Held while the call wants the screen to follow the proximity sensor.
+  /// Read once and kept, because the release runs from a teardown where
+  /// reading a provider is no longer allowed.
+  CallProximityHold? _proximity;
 
   /// What the room says this participant may publish and manage.
   ///
@@ -367,6 +373,7 @@ base class CallJoinController
         canManageRecording: _moderator.canManageRecording,
         recordingActive: _moderator.recordingActive,
       );
+      unawaited(_applyProximity(media));
       if (media.phase == CallMediaPhase.failed) {
         unawaited(_abandonFailedCall(session));
       }
@@ -683,8 +690,48 @@ base class CallJoinController
     }
   }
 
+  /// Follows the call's own state: the screen is handed to the sensor while
+  /// this side is on the earpiece with no picture in the call, and given back
+  /// on every other route, on a failure and on teardown.
+  ///
+  /// From the moment the call is live, not from the moment somebody answers.
+  /// A phone is held to the ear while it is still ringing out, and a call
+  /// waiting alone in the room is exactly the one nobody is looking at.
+  Future<void> _applyProximity(CallMediaState media) async {
+    final hold = _proximity ??= CallProximityHold(
+      ref.read(callProximityScreenProvider),
+    );
+    await hold.apply(
+      wanted:
+          media.phase != CallMediaPhase.idle &&
+          media.phase != CallMediaPhase.failed &&
+          callWantsProximityBlanking(
+            joined: true,
+            onEarpiece:
+                !media.speakerphone &&
+                (media.audioRoute?.kind ?? CallAudioRouteKind.earpiece) ==
+                    CallAudioRouteKind.earpiece,
+            cameraOn: media.cameraOn,
+            screenSharing: media.screenSharing,
+            receivingVideo: media.participants.any(
+              (peer) => peer.video != null,
+            ),
+          ),
+    );
+    if (_disposed) {
+      await hold.release();
+    }
+  }
+
+  Future<void> _releaseProximity() async {
+    final hold = _proximity;
+    _proximity = null;
+    await hold?.release();
+  }
+
   Future<void> _performTeardown({required bool leaveServer}) async {
     _hold(false);
+    await _releaseProximity();
     _cameraEpoch++;
     _enablingCamera = false;
     _cameraError = null;

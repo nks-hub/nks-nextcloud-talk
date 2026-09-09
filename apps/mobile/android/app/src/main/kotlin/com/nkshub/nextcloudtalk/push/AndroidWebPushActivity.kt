@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.nkshub.nextcloudtalk.calls.CallPictureInPicture
+import com.nkshub.nextcloudtalk.calls.CallProximityLock
 import com.nkshub.nextcloudtalk.calls.ScreenShareChannel
 import com.nkshub.nextcloudtalk.calls.ScreenShareService
 import com.nkshub.nextcloudtalk.attachments.ChatAttachmentSaver
@@ -45,6 +46,8 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
     private var backgroundDrainChannel: MethodChannel? = null
     private var shortcutChannel: MethodChannel? = null
     private var callAudioFocusChannel: EventChannel? = null
+    private var callProximityChannel: MethodChannel? = null
+    private var callProximity: CallProximityLock? = null
     private var callPictureInPicture: CallPictureInPicture? = null
     private var screenShareChannel: MethodChannel? = null
     private var callForegroundMethodChannel: MethodChannel? = null
@@ -218,6 +221,17 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         )
         audioFocus.setStreamHandler(CallAudioFocus(applicationContext))
         callAudioFocusChannel = audioFocus
+
+        // The screen is blanked by the platform while the lock is held; the
+        // activity releases it below so it cannot outlive the call.
+        val proximity = CallProximityLock(applicationContext)
+        val proximityChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            CallProximityLock.CHANNEL_NAME,
+        )
+        proximityChannel.setMethodCallHandler(proximity)
+        callProximityChannel = proximityChannel
+        callProximity = proximity
 
         callPictureInPicture?.detach()
         val pictureInPicture = CallPictureInPicture(this)
@@ -424,6 +438,10 @@ class AndroidWebPushActivity : FlutterFragmentActivity() {
         shortcutChannel = null
         callAudioFocusChannel?.setStreamHandler(null)
         callAudioFocusChannel = null
+        callProximityChannel?.setMethodCallHandler(null)
+        callProximityChannel = null
+        callProximity?.release()
+        callProximity = null
         callPictureInPicture?.detach()
         callPictureInPicture = null
         screenShareChannel?.setMethodCallHandler(null)
