@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Any participant tile or shared screen in a call opens full size in the call
+  view. Back, Escape and a visible button return to the grid, the expanded
+  frame is never cropped, and grid tiles keep filling their own space. A
+  participant who leaves, or a share that ends, closes its expansion; the
+  scroll position of the grid survives the round trip.
+
 - Starting or accepting a call opens the participant grid after admission.
   Late completion cannot replace a newer route or activate its camera.
   Covered or ended call views do not arm picture-in-picture. An ended pinned
