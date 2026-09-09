@@ -13,24 +13,33 @@ import '../rooms/participants_service.dart';
 import '../rooms/room_settings_service.dart';
 import 'call_join_controller.dart';
 import 'call_media_session.dart';
+import 'call_ring_service.dart';
 import 'call_transport_service.dart';
 
-/// Display names for the call's participants, keyed the way the signalling
-/// identifies them (`actor:<type>:<id>`). One request per opening of the
-/// sheet; a failure leaves the ids on screen rather than an error.
-final callParticipantNamesProvider = FutureProvider.autoDispose
-    .family<Map<String, String>, CallRoomKey>((ref, key) async {
-      final List<Participant> participants;
+/// The room's participants as the server lists them. One request per opening
+/// of the sheet; a failure leaves the sheet without names and without the
+/// absent list rather than showing an error over a running call.
+final callRoomParticipantsProvider = FutureProvider.autoDispose
+    .family<List<Participant>, CallRoomKey>((ref, key) async {
       try {
-        participants = await ref
+        return await ref
             .watch(participantsServiceProvider)
             .fetchParticipants(
               accountId: key.accountId,
               roomToken: key.roomToken,
             );
       } on Object {
-        return const <String, String>{};
+        return const <Participant>[];
       }
+    });
+
+/// Display names keyed the way the signalling identifies a peer
+/// (`actor:<type>:<id>`).
+final callParticipantNamesProvider = FutureProvider.autoDispose
+    .family<Map<String, String>, CallRoomKey>((ref, key) async {
+      final participants = await ref.watch(
+        callRoomParticipantsProvider(key).future,
+      );
       return <String, String>{
         for (final participant in participants)
           if (participant.displayName.trim().isNotEmpty)
@@ -39,6 +48,52 @@ final callParticipantNamesProvider = FutureProvider.autoDispose
                 .trim(),
       };
     });
+
+/// Everybody in the room this call's own account could ring, before the
+/// live call state is taken into account.
+///
+/// The account is the room key's, not whichever the shell has selected: a
+/// call can be running in an account that is not on screen, and comparing
+/// against the wrong login name would offer to ring the person holding the
+/// phone.
+final callRingCandidatesProvider = FutureProvider.autoDispose
+    .family<List<Participant>, CallRoomKey>((ref, key) async {
+      final participants = await ref.watch(
+        callRoomParticipantsProvider(key).future,
+      );
+      final account = await ref
+          .watch(accountRepositoryProvider)
+          .getAccount(key.accountId);
+      return callRingCandidates(
+        participants: participants,
+        peers: const <CallPeerState>[],
+        selfActorId: account?.loginName,
+      );
+    });
+
+/// Who the sheet offers to ring: a participant of the room who is not in the
+/// call, is not this device, and is a real person the server can notify.
+///
+/// The server itself does not police this — measured, it answers `200` for an
+/// attendee already in the call and even for a caller who has not joined — so
+/// the decision of who is worth ringing is made here.
+List<Participant> callRingCandidates({
+  required List<Participant> participants,
+  required Iterable<CallPeerState> peers,
+  required String? selfActorId,
+}) {
+  final inCall = <String>{
+    for (final peer in peers) '${peer.actorType}:${peer.actorId}',
+  };
+  return <Participant>[
+    for (final participant in participants)
+      if (participant.inCall == 0 &&
+          participant.actorType == 'users' &&
+          participant.actorId != selfActorId &&
+          !inCall.contains('${participant.actorType}:${participant.actorId}'))
+        participant,
+  ];
+}
 
 /// The audio call's "grid": who is in the call, whether their audio is
 /// connected to us and whether their hand is up. Opened from the banner.
@@ -76,6 +131,15 @@ final class CallParticipantsSheet extends ConsumerWidget {
         ref.watch(callParticipantNamesProvider(roomKey)).valueOrNull ??
         const <String, String>{};
     final media = join.media;
+    // The provider answers who is in the room; the peers change with every
+    // frame of the call, so that half is applied here.
+    final absent = callRingCandidates(
+      participants:
+          ref.watch(callRingCandidatesProvider(roomKey)).valueOrNull ??
+          const <Participant>[],
+      peers: media.participants,
+      selfActorId: null,
+    );
     return SafeArea(
       child: ListView(
         key: const Key('call-participants'),
@@ -117,6 +181,21 @@ final class CallParticipantsSheet extends ConsumerWidget {
             ),
           for (final peer in media.participants)
             _PeerTile(peer: peer, names: names, strings: strings),
+          // Everybody in the room who has not joined. Ringing exists for
+          // exactly this: the call is running and they are not in it.
+          if (absent.isNotEmpty && join.phase == CallJoinPhase.joined) ...[
+            const Divider(height: 1),
+            ListTile(
+              key: const Key('call-ring-absent'),
+              dense: true,
+              title: Text(
+                strings.callRingAbsentTitle,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            for (final participant in absent)
+              _AbsentTile(roomKey: roomKey, participant: participant),
+          ],
           // Moderator-only and only where the server advertises
           // `download-call-participants`. The list above is who this device
           // has media with; the export is what the server recorded, which is
@@ -325,5 +404,82 @@ final class _AttendanceExportTileState
     return 'call-attendance-${widget.roomKey.roomToken}-'
         '${now.year}${two(now.month)}${two(now.day)}-'
         '${two(now.hour)}${two(now.minute)}.csv';
+  }
+}
+
+/// One participant of the room who is not in the call, with the ring action.
+final class _AbsentTile extends ConsumerStatefulWidget {
+  const _AbsentTile({required this.roomKey, required this.participant});
+
+  final CallRoomKey roomKey;
+  final Participant participant;
+
+  @override
+  ConsumerState<_AbsentTile> createState() => _AbsentTileState();
+}
+
+final class _AbsentTileState extends ConsumerState<_AbsentTile> {
+  bool _ringing = false;
+  String? _notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
+    final name = widget.participant.displayName.trim().isEmpty
+        ? widget.participant.actorId
+        : widget.participant.displayName.trim();
+    return ListTile(
+      key: Key('call-ring-${widget.participant.attendeeId}'),
+      leading: CircleAvatar(
+        child: Text(name.isEmpty ? '?' : name[0].toUpperCase()),
+      ),
+      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: _notice == null ? null : Text(_notice!),
+      trailing: _ringing
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : IconButton(
+              key: Key('call-ring-button-${widget.participant.attendeeId}'),
+              tooltip: strings.callRingAction,
+              icon: const Icon(Icons.notifications_active_outlined),
+              onPressed: () => unawaited(_ring(name)),
+            ),
+    );
+  }
+
+  Future<void> _ring(String name) async {
+    if (_ringing) {
+      return;
+    }
+    setState(() => _ringing = true);
+    final strings = AppLocalizations.of(context);
+    String message;
+    try {
+      await ref
+          .read(callRingServiceProvider)
+          .ring(
+            accountId: widget.roomKey.accountId,
+            roomToken: widget.roomKey.roomToken,
+            attendeeId: widget.participant.attendeeId,
+          );
+      message = strings.callRingSent(name);
+    } on CallRingException catch (error) {
+      message = error.code == CallRingError.noCallRunning
+          ? strings.callRingNoCall
+          : strings.callRingFailed(name);
+    } on Object {
+      message = strings.callRingFailed(name);
+    }
+    if (!mounted) return;
+    // Written into the row, not into a snack bar: this sheet covers the bottom
+    // of the screen, so a snack bar appears behind it and the person who
+    // pressed the button never learns what happened. Found on a real phone.
+    setState(() {
+      _ringing = false;
+      _notice = message;
+    });
   }
 }

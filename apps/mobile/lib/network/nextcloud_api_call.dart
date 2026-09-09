@@ -38,6 +38,22 @@ mixin _NextcloudApiCall on _HttpNextcloudApiBase {
     abortTrigger: abortTrigger,
   );
 
+  /// Rings one attendee into the call running in a room.
+  ///
+  /// Not part of the join/leave lifecycle: it changes nothing about this
+  /// client's own membership, so it carries no session generation.
+  Future<CallRestResponse> ringAttendee({
+    required RingAttendeeRequest ringRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) => _sendCallRestRequest(
+    ringRequest,
+    loginName: loginName,
+    appPassword: appPassword,
+    abortTrigger: abortTrigger,
+  );
+
   Future<CallRestResponse> joinCall({
     required JoinCallRequest joinRequest,
     required String loginName,

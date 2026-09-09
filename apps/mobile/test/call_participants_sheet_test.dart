@@ -10,6 +10,7 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/data/account_repository.dart';
 import 'package:nextcloudtalk/features/chat/media/chat_attachment_exporter.dart';
 import 'package:nextcloudtalk/network/nextcloud_api.dart';
+import 'package:talk_protocol/talk_protocol.dart';
 import 'package:nextcloudtalk/features/calls/call_join_controller.dart';
 import 'package:nextcloudtalk/features/calls/call_media_engine.dart';
 import 'package:nextcloudtalk/features/calls/call_media_session.dart';
@@ -278,6 +279,12 @@ Future<_RecordingExportSystem> _pumpAttendanceSheet(
           () => _FrozenJoinController(state),
         ),
         callParticipantNamesProvider.overrideWith((ref, key) async => const {}),
+        // The room listing has its own tests; leaving the real one in would
+        // put a second request, and its timeout timer, into a test about the
+        // export.
+        callRingCandidatesProvider.overrideWith(
+          (ref, key) async => const <Participant>[],
+        ),
       ],
       child: localizedTestApp(
         home: Scaffold(
@@ -304,9 +311,19 @@ Future<_RecordingExportSystem> _pumpAttendanceSheet(
 /// which runs on the test's fake clock, so the tap is driven on the real one
 /// and the result is rendered afterwards.
 Future<void> _tapExport(WidgetTester tester) async {
+  // The export talks to a real HTTP client and a real database, neither of
+  // which runs on the test's fake clock. The wait is until the row stops
+  // showing progress rather than a fixed delay: a request still in flight
+  // when the tree goes away leaves its timeout timer behind, and the test
+  // then fails for a reason that has nothing to do with the export.
   await tester.runAsync(() async {
     await tester.tap(find.byKey(const Key('call-attendance-export')));
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    for (var attempt = 0; attempt < 100; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+        return;
+      }
+    }
   });
   await tester.pumpAndSettle();
 }
@@ -335,9 +352,13 @@ void _attendanceTests() {
 
     await _tapExport(tester);
 
-    expect(requests, hasLength(1));
-    expect(requests.single, contains('/api/v4/call/rooma123/download'));
-    expect(requests.single, contains('format=csv'));
+    // The sheet also lists the room's participants, for the names and for who
+    // is not in the call; the export is the one that matters here.
+    final download = requests
+        .where((request) => request.contains('/call/rooma123/download'))
+        .toList();
+    expect(download, hasLength(1));
+    expect(download.single, contains('format=csv'));
     expect(find.text('Attendance saved'), findsOneWidget);
     expect(system.savedContentType, 'text/csv');
     expect(system.savedName, startsWith('call-attendance-rooma123-'));

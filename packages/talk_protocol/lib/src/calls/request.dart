@@ -5,6 +5,8 @@ import '../protocol_exception.dart';
 import '../server_base.dart';
 import 'models.dart';
 
+part 'request_ring.dart';
+
 const String callRestContractUserAgent =
     'com.nkshub.nextcloudtalk call-rest-contract/0.1';
 const String callRestV4Path = '/ocs/v2.php/apps/spreed/api/v4/call';

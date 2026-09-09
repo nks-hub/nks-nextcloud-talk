@@ -81,6 +81,35 @@ void main() {
     },
   );
 
+  test('a second join while one is running never opens a second call', () async {
+    // The desktop case behind this: a window that comes back from being
+    // minimised rebuilds the screen, and a rebuild that joined again would
+    // put two sessions of the same account into one call.
+    final engine = _RecordingEngine();
+    final lease = Completer<ChatRoomSignalingLease>();
+    final container = ProviderContainer(
+      overrides: [
+        callMediaEngineProvider.overrideWithValue(engine),
+        chatRoomSignalingProvider.overrideWith((ref, key) => lease.future),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(
+      callJoinControllerProvider(_key).notifier,
+    );
+
+    final first = controller.join();
+    // While the first join is still waiting for its signalling lease.
+    final second = controller.join();
+    expect(container.read(callHeldRoomsProvider), {_key});
+    lease.complete(const ChatRoomSignalingLease.unavailable());
+    await first;
+    await second;
+
+    expect(engine.microphoneOpens, 0);
+    expect(container.read(callHeldRoomsProvider), isEmpty);
+  });
+
   test(
     'a room held by a call wants its session while the window is inactive',
     () {
