@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:nextcloudtalk/data/app_database.dart';
@@ -65,6 +65,22 @@ void main() {
     await tester.tap(find.byKey(const Key('authenticated-image-close')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
+  });
+
+  testWidgets('Escape closes the picture and leaves the chat behind', (
+    tester,
+  ) async {
+    final repository = _repository((request) async => _imageResponse());
+    await tester.pumpWidget(_app(repository: repository));
+    await tester.tap(find.byKey(const Key('open-synthetic-image')));
+    await _pumpRouteAndFuture(tester);
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('authenticated-image-viewer')), findsNothing);
+    expect(find.byKey(const Key('open-synthetic-image')), findsOneWidget);
   });
 
   testWidgets('button zoom keeps the picture centred in the viewport', (

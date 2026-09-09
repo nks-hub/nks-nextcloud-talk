@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../data/app_database.dart';
 import '../../../data/chat_media_repository.dart';
@@ -269,6 +270,19 @@ final class _AuthenticatedImageViewerState
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
+    // A desktop expects Escape to close a picture. `maybePop` is the same
+    // action the visible close button takes, so it leaves the chat and the
+    // window alone and only removes this route.
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () =>
+            unawaited(Navigator.of(context).maybePop()),
+      },
+      child: Focus(autofocus: true, child: _viewer(context, strings)),
+    );
+  }
+
+  Widget _viewer(BuildContext context, AppLocalizations strings) {
     return Scaffold(
       key: const Key('authenticated-image-viewer'),
       backgroundColor: Colors.black,

@@ -20,6 +20,10 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Escape closes an opened picture on the desktop and returns to the chat,
+  the same action the close button takes. The conversation and the window
+  stay where they were.
+
 - A call with few participants now fills the view. The tiles take whatever
   a shared screen and the controls leave over instead of sitting in the top
   third of a black screen; once a tile would become too small to read, the
