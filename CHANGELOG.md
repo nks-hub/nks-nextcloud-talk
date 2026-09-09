@@ -18,7 +18,27 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased
+## 1.0.0 (66) — 9 September 2026
+
+The first release that carries a 1.0 number. It is not a rewrite: it is the
+point at which the client covers the conversation, call, attachment and
+notification surface it set out to cover, on Android, iOS, macOS and Windows,
+and the version number stops being provisional. From here the numbering is
+ordinary — patches and minors, and the build number always goes up.
+
+- An Android call is now a call the phone knows about. While a call is joined
+  the system holds a record of it, so a headset's hang-up button ends the call,
+  another calling app is told the line is busy, and an incoming telephone call
+  is arbitrated against the Talk call instead of landing on top of it — the
+  Talk call is asked to wait rather than dropped. Hanging up in the system's
+  own call UI leaves the call on the server as well, so no seat is left behind.
+  A phone too old for the interface, or one whose manufacturer refuses it,
+  makes and ends calls exactly as before.
+
+- Somebody who has not joined the call can be rung from the participant list.
+  The list now names who is in the room but not in the call, and one tap asks
+  the server to notify them. Only real accounts are offered, never yourself
+  and never anyone already in the call.
 
 - A conversation made for an event or an instant meeting can be kept, so it
   outlives what created it. The action asks first and appears only where the
@@ -265,6 +285,20 @@ to them. Only what is documented from App Store Connect is stated for them.
   earlier one that is still unresolved. A message the application refuses to
   take is put back into the field with the reason; one it has taken is delivered
   by the queue, survives a restart and is never sent twice.
+
+- An administrator can see the health of every bot installed on the server.
+  The new entry in Settings appears only where the server publishes the list,
+  and a row names the bot, whether it is switched on, the host its webhook
+  points at and — only when the server has actually counted a failure — how
+  many there were, when the last one was and the reason the server recorded.
+  A bot that has never failed shows no error area at all. An account that is
+  not an administrator of its server is told exactly that instead of being
+  shown a failure, because that is the server working as designed. The full
+  webhook address never leaves the decoder, only its host: the address can
+  carry a token, and this screen is meant to be readable out loud. A bot whose
+  providing app has been switched off reads as exactly that, with the reason the
+  server gives, rather than as a bot that is failing — the server invents a
+  failure count for it — and rather than breaking the list it appears in.
 
 ## 0.1.0 (65) — 7 September 2026
 

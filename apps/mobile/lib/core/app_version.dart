@@ -8,7 +8,7 @@
 ///
 /// Known limitation: a build that overrides `--build-name` or `--build-number`
 /// on the command line still reports the pubspec value here.
-const appVersionName = '0.1.0';
+const appVersionName = '1.0.0';
 
 /// Build number part of the pubspec `version:` field. See [appVersionName].
-const appBuildNumber = '65';
+const appBuildNumber = '66';
