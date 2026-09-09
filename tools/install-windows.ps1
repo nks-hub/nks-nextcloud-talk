@@ -25,8 +25,23 @@
     Where the app should live. Defaults to the copy already installed, so
     repeat runs stay in place; falls back to Program Files on a first install.
 
+.PARAMETER SearchRoot
+    Where to look for copies already on this machine. Defaults to Program Files
+    and the per-user locations.
+
+.PARAMETER StartMenuShortcut
+    The shortcut whose target names the installation to keep. Defaults to the
+    one this script writes in the current user's Start Menu.
+
+.PARAMETER DetectOnly
+    Report the copies found and the destination that would be used, then stop
+    without deleting, copying or repointing anything.
+
 .EXAMPLE
     .\install-windows.ps1 -SourceDirectory C:\build\Release
+
+.EXAMPLE
+    .\install-windows.ps1 -SourceDirectory C:\build\Release -DetectOnly
 #>
 [CmdletBinding()]
 param(
@@ -34,6 +49,12 @@ param(
     [string]$SourceDirectory,
 
     [string]$Destination,
+
+    [string[]]$SearchRoot,
+
+    [string]$StartMenuShortcut,
+
+    [switch]$DetectOnly,
 
     [switch]$SkipLaunch
 )
@@ -50,38 +71,97 @@ $sourceVersion = (Get-Item -LiteralPath $sourceExe).VersionInfo.FileVersion
 $sourceFull = (Resolve-Path -LiteralPath $SourceDirectory).ProviderPath.TrimEnd([char]92)
 Write-Host "Installing $exeName $sourceVersion"
 
+# A backup of an installation is a byte-for-byte copy of it, executable
+# included, so no test on the files can tell the two apart - only the path can.
+# On 9 September 2026 a run without -Destination chose
+# `%LOCALAPPDATA%\NKS Talk Backups\<stamp>\installed-build-62`, which sorts
+# before `Programs\NKS Talk`, deleted the real program folder as an older copy
+# and left the Start Menu shortcut pointing into the backup tree.
+function Test-BackupPath {
+    param([string]$Path)
+    return $Path -match '(?i)[\\/][^\\/]*(backup|installed-build)[^\\/]*([\\/]|$)'
+}
+
+# What the removal below is allowed to delete. A lone executable is not an
+# installation either: the whole directory is removed, so a wrong guess
+# destroys whatever it was pointed at.
+function Test-InstallationDirectory {
+    param([string]$Directory)
+    if (-not $Directory) { return $false }
+    if (Test-BackupPath $Directory) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $Directory $exeName))) { return $false }
+    return Test-Path -LiteralPath (Join-Path $Directory 'data\flutter_assets')
+}
+
 # Every copy already on this machine, so none is left behind to be opened by
 # mistake. Program Files and the per-user locations are searched rather than
 # the whole drive: a full scan takes minutes and finds build outputs too.
-$searchRoots = @(
-    $env:ProgramFiles,
-    ${env:ProgramFiles(x86)},
-    $env:LOCALAPPDATA,
-    (Join-Path $env:SystemDrive 'nctalk')
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
-
-$existing = @()
-foreach ($root in $searchRoots) {
-    $existing += Get-ChildItem -LiteralPath $root -Recurse -Filter $exeName `
-        -ErrorAction SilentlyContinue -Force |
-        Select-Object -ExpandProperty FullName
-}
-# The staged build itself often sits under one of those roots, and it is not
-# an installed copy: the first run of this script picked its own source as the
+# The staged build itself often sits under one of those roots and is not an
+# installed copy: the first run of this script picked its own source as the
 # destination and then emptied it before copying. Excluded explicitly.
 # Wrapped in @() because a pipeline that yields one item is not an array, and
 # StrictMode refuses `.Count` on a bare object.
-$existing = @($existing |
-    Where-Object { (Split-Path -Parent $_).TrimEnd([char]92) -ne $sourceFull } |
-    Sort-Object -Unique)
+function Find-Installation {
+    param([string[]]$Roots)
+    $found = @()
+    foreach ($root in $Roots) {
+        $found += Get-ChildItem -LiteralPath $root -Recurse -Filter $exeName `
+            -ErrorAction SilentlyContinue -Force |
+            Select-Object -ExpandProperty FullName
+    }
+    return @($found |
+        ForEach-Object { (Split-Path -Parent $_).TrimEnd([char]92) } |
+        Where-Object { $_ -ne $sourceFull -and (Test-InstallationDirectory $_) } |
+        Sort-Object -Unique)
+}
+
+if (-not $SearchRoot) {
+    $SearchRoot = @(
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)},
+        $env:LOCALAPPDATA,
+        (Join-Path $env:SystemDrive 'nctalk')
+    )
+}
+$SearchRoot = @($SearchRoot | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+
+# The shortcut is the best evidence of where the app really lives, because it
+# is the thing the person clicks. It is still put through the same test: a
+# shortcut already repointed into a backup tree must not drag the install back
+# in there.
+$shell = New-Object -ComObject WScript.Shell
+$startMenu = [Environment]::GetFolderPath('StartMenu')
+if (-not $PSBoundParameters.ContainsKey('StartMenuShortcut')) {
+    $StartMenuShortcut = if ($startMenu) { Join-Path $startMenu 'Programs\NKS Talk.lnk' } else { $null }
+}
+$shortcutInstallation = $null
+if ($StartMenuShortcut -and (Test-Path -LiteralPath $StartMenuShortcut)) {
+    $shortcutTarget = $shell.CreateShortcut($StartMenuShortcut).TargetPath
+    if ($shortcutTarget) {
+        $candidate = (Split-Path -Parent $shortcutTarget).TrimEnd([char]92)
+        if ($candidate -ne $sourceFull -and (Test-InstallationDirectory $candidate)) {
+            $shortcutInstallation = $candidate
+        }
+    }
+}
+
+# Wrapped again at the call site: a function that returns one item returns it
+# bare, and StrictMode refuses `.Count` on a bare object.
+$existing = @(Find-Installation -Roots $SearchRoot)
+if ($shortcutInstallation -and $existing -notcontains $shortcutInstallation) {
+    $existing = @($shortcutInstallation) + $existing
+}
 
 if (-not $Destination) {
-    $Destination = if ($existing.Count -gt 0) {
-        Split-Path -Parent $existing[0]
+    $Destination = if ($shortcutInstallation) {
+        $shortcutInstallation
+    } elseif ($existing.Count -gt 0) {
+        $existing[0]
     } else {
         Join-Path $env:ProgramFiles 'NKS Talk'
     }
 }
+$Destination = $Destination.TrimEnd([char]92)
 $destinationExe = Join-Path $Destination $exeName
 $destinationResolved = Resolve-Path -LiteralPath $Destination -ErrorAction SilentlyContinue
 if ($destinationResolved -and $destinationResolved.ProviderPath.TrimEnd([char]92) -eq $sourceFull) {
@@ -89,10 +169,15 @@ if ($destinationResolved -and $destinationResolved.ProviderPath.TrimEnd([char]92
 }
 Write-Host "Destination: $Destination"
 
-foreach ($path in $existing) {
-    if ((Split-Path -Parent $path) -ne $Destination) {
-        Write-Host "Removing an older copy: $path"
+foreach ($directory in $existing) {
+    if ($directory -ne $Destination) {
+        Write-Host "Removing an older copy: $directory"
     }
+}
+
+if ($DetectOnly) {
+    Write-Host 'Detection only - nothing was changed.'
+    return
 }
 
 # A running instance holds its own executable open, so it has to stop before
@@ -104,9 +189,10 @@ foreach ($process in @(Get-Process -Name 'nextcloudtalk' -ErrorAction SilentlyCo
 }
 Start-Sleep -Seconds 2
 
-foreach ($path in $existing) {
-    $directory = Split-Path -Parent $path
-    if ($directory -ne $Destination) {
+foreach ($directory in $existing) {
+    # Tested again immediately before the delete rather than trusted from the
+    # search: this is the line that removed the real program folder.
+    if ($directory -ne $Destination -and (Test-InstallationDirectory $directory)) {
         Remove-Item -LiteralPath $directory -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -188,13 +274,10 @@ public static class NksAumid {
 # returns an empty string rather than failing - which turned into a Join-Path
 # error AFTER the files were already copied, leaving a half-done install.
 # Measured on a machine where the relay client runs as SYSTEM.
-$shell = New-Object -ComObject WScript.Shell
-$startMenu = [Environment]::GetFolderPath('StartMenu')
 $desktop = [Environment]::GetFolderPath('Desktop')
-$startMenuShortcut = if ($startMenu) { Join-Path $startMenu 'Programs\NKS Talk.lnk' } else { $null }
 $shortcuts = @(
     $(if ($desktop) { Join-Path $desktop 'NKS Talk.lnk' }),
-    $startMenuShortcut
+    $StartMenuShortcut
 ) | Where-Object { $_ }
 foreach ($shortcutPath in $shortcuts) {
     $shortcut = $shell.CreateShortcut($shortcutPath)
@@ -202,8 +285,8 @@ foreach ($shortcutPath in $shortcuts) {
     $shortcut.WorkingDirectory = $Destination
     $shortcut.Save()
 }
-if ($startMenuShortcut) {
-    Set-AppUserModelId -ShortcutPath $startMenuShortcut -AppId 'com.nkshub.nextcloudtalk'
+if ($StartMenuShortcut) {
+    Set-AppUserModelId -ShortcutPath $StartMenuShortcut -AppId 'com.nkshub.nextcloudtalk'
     Write-Host 'AppUserModelID set on the Start Menu shortcut'
 } else {
     # Without a Start Menu shortcut Windows has nowhere to read the
@@ -223,15 +306,7 @@ Set-ItemProperty -Path "$protocolRoot\DefaultIcon" -Name '(default)' -Value "`"$
 New-Item -Path "$protocolRoot\shell\open\command" -Force | Out-Null
 Set-ItemProperty -Path "$protocolRoot\shell\open\command" -Name '(default)' -Value "`"$destinationExe`" `"%1`""
 
-$remaining = @()
-foreach ($root in $searchRoots) {
-    $remaining += Get-ChildItem -LiteralPath $root -Recurse -Filter $exeName `
-        -ErrorAction SilentlyContinue -Force |
-        Select-Object -ExpandProperty FullName
-}
-$remaining = @($remaining |
-    Where-Object { (Split-Path -Parent $_).TrimEnd([char]92) -ne $sourceFull } |
-    Sort-Object -Unique)
+$remaining = @(Find-Installation -Roots $SearchRoot)
 if ($remaining.Count -ne 1) {
     throw "Expected exactly one installed copy, found $($remaining.Count): $($remaining -join ', ')"
 }
