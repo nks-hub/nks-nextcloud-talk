@@ -363,6 +363,128 @@ final class RichChatReminder {
   String toString() => 'RichChatReminder(<redacted>)';
 }
 
+/// One entry of `GET v1/chat/upcoming-reminders`, the account-wide list of
+/// reminders this user still has pending.
+///
+/// The shape has nothing in common with [RichChatReminder], which answers the
+/// per-message routes: the deadline is `reminderTimestamp` rather than
+/// `timestamp`, the room is `roomToken` rather than `token`, there is no
+/// `userId`, and the reminded message travels with it as author plus text.
+///
+/// Measured against Nextcloud 34.0.1 / Talk 24.0.2 on 9 September 2026,
+/// `messageParameters` came back as an empty JSON **list**, not an object, so
+/// a decoder that insists on a map rejects every real answer. Both encodings
+/// are accepted here and a list is read as "no parameters", which is the only
+/// thing an empty PHP array can mean once OCS has rendered it.
+final class RichChatUpcomingReminder {
+  const RichChatUpcomingReminder._({
+    required this.reminderTimestamp,
+    required this.roomToken,
+    required this.messageId,
+    required this.actorType,
+    required this.actorId,
+    required this.actorDisplayName,
+    required this.message,
+    required this.messageParameters,
+    required this.wire,
+  });
+
+  factory RichChatUpcomingReminder.fromJson(Object? json) {
+    final value = _frozenObject(json, r'$.ocs.data[]');
+    return RichChatUpcomingReminder._(
+      reminderTimestamp: _integer(
+        value['reminderTimestamp'],
+        r'$.ocs.data[].reminderTimestamp',
+        minimum: 0,
+      ),
+      roomToken: ConversationToken.parse(
+        value['roomToken'],
+        path: r'$.ocs.data[].roomToken',
+        code: TalkProtocolErrorCode.invalidRichChatResponse,
+      ),
+      messageId: _integer(
+        value['messageId'],
+        r'$.ocs.data[].messageId',
+        minimum: 1,
+      ),
+      actorType: _string(
+        value['actorType'],
+        r'$.ocs.data[].actorType',
+        minimum: 1,
+        maximum: 128,
+      ),
+      actorId: _string(
+        value['actorId'],
+        r'$.ocs.data[].actorId',
+        minimum: 1,
+        maximum: 4096,
+      ),
+      actorDisplayName: _string(
+        value['actorDisplayName'],
+        r'$.ocs.data[].actorDisplayName',
+        maximum: 4096,
+      ),
+      message: _string(
+        value['message'],
+        r'$.ocs.data[].message',
+        maximum: 32768,
+      ),
+      messageParameters: _upcomingReminderParameters(
+        value['messageParameters'],
+      ),
+      wire: value,
+    );
+  }
+
+  /// Unix timestamp in seconds at which the reminder fires.
+  final int reminderTimestamp;
+  final ConversationToken roomToken;
+  final int messageId;
+  final String actorType;
+  final String actorId;
+  final String actorDisplayName;
+  final String message;
+  final Map<String, ChatRichObjectParameter> messageParameters;
+  final Map<String, Object?> wire;
+
+  /// [message] with its `{placeholder}` tokens replaced by the parameter names
+  /// the server sent, the way the conversation list builds its own preview.
+  ///
+  /// A token with no parameter behind it is left alone rather than dropped: the
+  /// row exists to remind somebody of a message, and silently deleting part of
+  /// that message would misrepresent it.
+  String get preview {
+    final expanded = message.replaceAllMapped(_placeholderToken, (match) {
+      final parameter = messageParameters[match.group(1)];
+      final replacement = parameter?.name ?? parameter?.id;
+      return replacement == null || replacement.isEmpty
+          ? match.group(0)!
+          : replacement;
+    });
+    return expanded.replaceAll(_whitespaceRun, ' ').trim();
+  }
+
+  @override
+  String toString() => 'RichChatUpcomingReminder(<redacted>)';
+}
+
+final RegExp _placeholderToken = RegExp(r'\{([A-Za-z0-9_.-]+)\}');
+final RegExp _whitespaceRun = RegExp(r'\s+');
+
+Map<String, ChatRichObjectParameter> _upcomingReminderParameters(
+  Object? value,
+) {
+  if (value == null || (value is List && value.isEmpty)) {
+    return const <String, ChatRichObjectParameter>{};
+  }
+  final raw = _frozenObject(value, r'$.ocs.data[].messageParameters');
+  final parameters = <String, ChatRichObjectParameter>{};
+  for (final entry in raw.entries) {
+    parameters[entry.key] = ChatRichObjectParameter.fromJson(entry.value);
+  }
+  return Map.unmodifiable(parameters);
+}
+
 final class RichChatScheduledMessage {
   const RichChatScheduledMessage._({
     required this.scheduleId,

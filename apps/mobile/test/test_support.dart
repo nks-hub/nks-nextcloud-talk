@@ -59,9 +59,11 @@ Widget localizedTestApp({
   ThemeData? theme,
   Locale locale = const Locale('en'),
   double textScale = 1,
+  List<NavigatorObserver> navigatorObservers = const <NavigatorObserver>[],
 }) {
   return MaterialApp(
     locale: locale,
+    navigatorObservers: navigatorObservers,
     theme: theme ?? AppTheme.light(),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,

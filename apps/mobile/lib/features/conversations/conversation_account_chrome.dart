@@ -88,6 +88,17 @@ final class _AccountRail extends StatelessWidget {
                   icon: const Icon(Icons.add_rounded),
                 ),
                 const SizedBox(height: 8),
+                // The rail replaces the account menu once there is more than
+                // one account, so anything the menu carries has to be here
+                // too - and the reminder inbox is at its most useful exactly
+                // when several accounts are signed in.
+                IconButton(
+                  key: const Key('open-reminder-inbox'),
+                  onPressed: () => openReminderInbox(context),
+                  tooltip: strings.reminderInboxTitle,
+                  icon: const Icon(Icons.alarm_outlined),
+                ),
+                const SizedBox(height: 8),
                 IconButton(
                   key: const Key('open-settings'),
                   onPressed: () => _openSettings(context),
@@ -114,6 +125,7 @@ final class _AccountMenu extends StatelessWidget {
 
   static const _addKey = '__add_account__';
   static const _settingsKey = '__settings__';
+  static const _remindersKey = '__reminders__';
 
   final StoredAccount selected;
   final List<StoredAccount> accounts;
@@ -133,6 +145,7 @@ final class _AccountMenu extends StatelessWidget {
       onSelected: (value) => switch (value) {
         _addKey => onAdd(),
         _settingsKey => _openSettings(context),
+        _remindersKey => openReminderInbox(context),
         _ => onSelect(value),
       },
       itemBuilder: (context) => [
@@ -154,6 +167,15 @@ final class _AccountMenu extends StatelessWidget {
             ),
           ),
         const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          key: const Key('open-reminder-inbox'),
+          value: _remindersKey,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.alarm_outlined),
+            title: Text(strings.reminderInboxTitle),
+          ),
+        ),
         PopupMenuItem<String>(
           value: _addKey,
           child: ListTile(

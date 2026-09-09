@@ -26,10 +26,12 @@ final class RichChatResponse {
     required this.reactionAggregate,
     required this.messageMutation,
     required this.reminder,
+    required Iterable<RichChatUpcomingReminder> upcomingReminders,
     required Iterable<RichChatScheduledMessage> scheduledMessages,
     required this.rawData,
   }) : mentions = List.unmodifiable(mentions),
        threads = List.unmodifiable(threads),
+       upcomingReminders = List.unmodifiable(upcomingReminders),
        scheduledMessages = List.unmodifiable(scheduledMessages);
 
   final RichChatRequest request;
@@ -40,6 +42,10 @@ final class RichChatResponse {
   final RichChatReactionAggregate? reactionAggregate;
   final ChatMessage? messageMutation;
   final RichChatReminder? reminder;
+
+  /// This account's pending reminders across every conversation, newest last
+  /// in whatever order the server sent them.
+  final List<RichChatUpcomingReminder> upcomingReminders;
   final List<RichChatScheduledMessage> scheduledMessages;
   final Object? rawData;
 
@@ -141,6 +147,7 @@ RichChatResponse _decodeRichChatResponse({
       reactionAggregate: null,
       messageMutation: null,
       reminder: null,
+      upcomingReminders: const [],
       scheduledMessages: const [],
       rawData: data,
     );
@@ -156,6 +163,7 @@ RichChatResponse _decodeRichChatResponse({
     reactionAggregate: parsed.reactionAggregate,
     messageMutation: parsed.messageMutation,
     reminder: parsed.reminder,
+    upcomingReminders: parsed.upcomingReminders,
     scheduledMessages: parsed.scheduledMessages,
     rawData: data,
   );
@@ -261,6 +269,13 @@ _ParsedSuccess _parseSuccess(RichChatRequest request, Object? data) {
         _responseFailure(r'$.ocs.data');
       }
       return _ParsedSuccess(reminder: reminder);
+    case RichChatOperation.getUpcomingReminders:
+      final values = _list(data, r'$.ocs.data', maximum: 10000);
+      final reminders = values
+          .map(RichChatUpcomingReminder.fromJson)
+          .toList(growable: false);
+      _validateUpcomingReminderIdentities(reminders);
+      return _ParsedSuccess(upcomingReminders: reminders);
     case RichChatOperation.getScheduledChatMessages:
       final roomToken = request.roomToken;
       if (roomToken == null) {
@@ -312,6 +327,20 @@ void _validateThreadBinding(
         (expectedThreadId != null && thread.threadId != expectedThreadId) ||
         !identities.add((thread.roomToken, thread.threadId))) {
       _responseFailure(r'$.ocs.data.thread');
+    }
+  }
+}
+
+/// A reminder is held per user, room and message, so one account's own list
+/// cannot name the same message twice. Two accounts colliding on the same
+/// token and message ID is normal and is not this function's business.
+void _validateUpcomingReminderIdentities(
+  Iterable<RichChatUpcomingReminder> reminders,
+) {
+  final identities = <(Object, int)>{};
+  for (final reminder in reminders) {
+    if (!identities.add((reminder.roomToken, reminder.messageId))) {
+      _responseFailure(r'$.ocs.data[].messageId');
     }
   }
 }
@@ -374,6 +403,7 @@ final class _ParsedSuccess {
     this.reactionAggregate,
     this.messageMutation,
     this.reminder,
+    this.upcomingReminders = const [],
     this.scheduledMessages = const [],
   });
 
@@ -382,6 +412,7 @@ final class _ParsedSuccess {
   final RichChatReactionAggregate? reactionAggregate;
   final ChatMessage? messageMutation;
   final RichChatReminder? reminder;
+  final Iterable<RichChatUpcomingReminder> upcomingReminders;
   final Iterable<RichChatScheduledMessage> scheduledMessages;
 }
 

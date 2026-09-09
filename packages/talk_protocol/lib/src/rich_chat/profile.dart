@@ -20,6 +20,7 @@ final class RichChatCapabilityProfile {
     required this.pin,
     required this.hidePinned,
     required this.reminders,
+    required this.upcomingReminders,
     required this.scheduled,
     required this.translation,
     required this.silentSend,
@@ -81,6 +82,11 @@ final class RichChatCapabilityProfile {
       pin: pinned && moderator,
       hidePinned: pinned,
       reminders: base && global.contains('remind-me-later'),
+      // A separate feature from `remind-me-later`, and separately gated: a
+      // server can accept per-message reminders without offering the
+      // account-wide list of them. Measured on Nextcloud 34.0.1 / Talk 24.0.2,
+      // which announces both.
+      upcomingReminders: base && global.contains('upcoming-reminders'),
       scheduled: base && local.contains('scheduled-messages') && !federated,
       translation: translationAvailable,
       silentSend: base && global.contains('silent-send'),
@@ -107,6 +113,9 @@ final class RichChatCapabilityProfile {
   final bool pin;
   final bool hidePinned;
   final bool reminders;
+
+  /// Whether this account may read its own pending reminders across rooms.
+  final bool upcomingReminders;
   final bool scheduled;
   final bool translation;
   final bool silentSend;

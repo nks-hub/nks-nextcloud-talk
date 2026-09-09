@@ -138,6 +138,8 @@ void main() {
           case RichChatOperation.getChatReminder:
           case RichChatOperation.setChatReminder:
             expect(response.reminder, isNotNull);
+          case RichChatOperation.getUpcomingReminders:
+            expect(response.upcomingReminders, isNotEmpty);
           case RichChatOperation.getScheduledChatMessages:
           case RichChatOperation.scheduleChatMessage:
           case RichChatOperation.editScheduledChatMessage:
@@ -462,6 +464,12 @@ RichChatRequest _responseRequest(String id, Map<String, Object?> testCase) {
       limit: 100,
       offset: 0,
     ),
+    RichChatOperation.getUpcomingReminders => RichChatRequest.upcomingReminders(
+      accountId: accountId,
+      requestId: requestId,
+      server: server,
+      profile: _fullProfile(),
+    ),
     RichChatOperation.getThread => RichChatRequest.getThread(
       accountId: accountId,
       requestId: requestId,
@@ -653,6 +661,7 @@ RichChatCapabilityProfile _fullProfile() =>
         'delete-messages',
         'pinned-messages',
         'remind-me-later',
+        'upcoming-reminders',
       ],
       talkLocalFeatures: <Object?>['scheduled-messages'],
       federated: false,

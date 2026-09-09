@@ -19,6 +19,7 @@ import '../onboarding/onboarding_screen.dart';
 import '../push/android_web_push_bridge.dart';
 import '../push/apple_push_channel.dart' show ApplePushNotificationOpen;
 import '../push/windows_notification.dart' show WindowsNotificationOpen;
+import '../reminders/reminder_inbox.dart' show openReminderInbox;
 import '../../core/talk_features.dart';
 import '../rooms/room_details_screen.dart';
 import '../search/message_search_screen.dart';

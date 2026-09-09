@@ -2285,6 +2285,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'The camera could not be started. The call continues without video.';
 
   @override
+  String get callRingAbsentTitle => 'Not in the call';
+
+  @override
+  String get callRingAction => 'Ring';
+
+  @override
+  String callRingSent(String name) {
+    return '$name was rung';
+  }
+
+  @override
+  String get callRingNoCall => 'The call has ended.';
+
+  @override
+  String callRingFailed(String name) {
+    return '$name could not be rung.';
+  }
+
+  @override
   String callParticipantsTitle(int count) {
     return 'In the call ($count)';
   }

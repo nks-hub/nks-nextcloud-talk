@@ -98,7 +98,11 @@ RichChatMergeResult planRichChatMerge(
 
   return switch (request.operation) {
     RichChatOperation.getMentionSuggestions ||
-    RichChatOperation.hidePinnedChatMessage => _unchanged,
+    RichChatOperation.hidePinnedChatMessage ||
+    // Account-wide and read-only: the entries name rooms this snapshot may
+    // never have opened, and per-room reminder state stays whatever the
+    // per-message routes put there.
+    RichChatOperation.getUpcomingReminders => _unchanged,
     RichChatOperation.getRecentThreads ||
     RichChatOperation.getSubscribedThreads ||
     RichChatOperation.getThread ||

@@ -337,6 +337,59 @@ final class ChatMessageActionsService {
     await _send(accountId: accountId, context: context, request: request);
   }
 
+  /// Reads every reminder this account still has pending, across all of its
+  /// conversations.
+  ///
+  /// Account-wide, so no conversation has to be cached for it to answer. The
+  /// entries carry their own room token, and only account plus token plus
+  /// message ID identify one: two accounts routinely hold reminders on the
+  /// same token and message ID, which is not a collision but two different
+  /// reminders.
+  Future<List<RichChatUpcomingReminder>> listUpcomingReminders({
+    required String accountId,
+  }) async {
+    final context = await _resolve(accountId: accountId);
+    final request = _buildRequest(
+      () => RichChatRequest.upcomingReminders(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        profile: context.profile,
+      ),
+    );
+    final response = await _send(
+      accountId: accountId,
+      context: context,
+      request: request,
+    );
+    return response.upcomingReminders;
+  }
+
+  /// Removes a reminder listed by [listUpcomingReminders].
+  ///
+  /// Same route as [deleteReminder] and same protocol request; it only differs
+  /// in not insisting that the conversation be cached, because a listed
+  /// reminder has to be removable whether or not this device has ever opened
+  /// the room it points at.
+  Future<void> deleteUpcomingReminder({
+    required String accountId,
+    required String roomToken,
+    required int messageId,
+  }) async {
+    final context = await _resolve(accountId: accountId);
+    final request = _buildRequest(
+      () => RichChatRequest.deleteReminder(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+      ),
+    );
+    await _send(accountId: accountId, context: context, request: request);
+  }
+
   /// Hands [message] to the server to deliver at [sendAt], a Unix timestamp
   /// in seconds.
   ///
@@ -592,9 +645,17 @@ final class ChatMessageActionsService {
     }
   }
 
+  /// Resolves the account, its credentials and the capability profile that
+  /// gates an action.
+  ///
+  /// A null [roomToken] resolves the account alone, for the routes that are
+  /// account-wide rather than room-scoped. Those must not require the room to
+  /// be cached: the account-wide reminder list names rooms this device may
+  /// never have opened, and refusing to act on one of them would leave a
+  /// listed reminder impossible to remove.
   Future<_MessageActionContext> _resolve({
     required String accountId,
-    required String roomToken,
+    String? roomToken,
   }) async {
     final account = await _accounts.getAccount(accountId);
     if (account == null) {
@@ -602,14 +663,19 @@ final class ChatMessageActionsService {
         ChatMessageActionError.accountMissing,
       );
     }
-    final conversation = await _chat.getConversation(
-      accountId: accountId,
-      roomToken: roomToken,
-    );
-    if (conversation == null) {
-      throw const ChatMessageActionException(
-        ChatMessageActionError.conversationMissing,
+    final CachedConversation? conversation;
+    if (roomToken == null) {
+      conversation = null;
+    } else {
+      conversation = await _chat.getConversation(
+        accountId: accountId,
+        roomToken: roomToken,
       );
+      if (conversation == null) {
+        throw const ChatMessageActionException(
+          ChatMessageActionError.conversationMissing,
+        );
+      }
     }
     final appPassword = await _credentials.readAppPassword(accountId);
     if (appPassword == null || appPassword.isEmpty) {
@@ -618,10 +684,12 @@ final class ChatMessageActionsService {
       );
     }
     final ServerBase server;
-    final ConversationRoom room;
+    final ConversationRoom? room;
     try {
       server = ServerBase.parse(account.serverUrl);
-      room = ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
+      room = conversation == null
+          ? null
+          : ConversationRoom.fromJson(jsonDecode(conversation.rawJson));
     } on TalkProtocolException {
       throw const ChatMessageActionException(
         ChatMessageActionError.invalidResponse,
@@ -689,13 +757,13 @@ final class ChatMessageActionsService {
       talkLocalFeatures = spreed['features-local'] ?? const <Object?>[];
       translationAvailable = capabilities.chatTranslationAvailable;
     }
-    final role = participantRoleFor(room.participantType);
+    final role = room == null ? null : participantRoleFor(room.participantType);
     final RichChatCapabilityProfile profile;
     try {
       profile = RichChatCapabilityProfile.fromTalkFeatures(
         talkFeatures: talkFeatures,
         talkLocalFeatures: talkLocalFeatures,
-        federated: room.isFederated,
+        federated: room?.isFederated ?? false,
         moderator:
             role == ParticipantRole.owner ||
             role == ParticipantRole.moderator ||
@@ -704,7 +772,7 @@ final class ChatMessageActionsService {
         // override: `attendeePermissions` is 0 whenever no override is
         // set, which is the normal case and would gate away every
         // permission-guarded action, reactions included.
-        participantPermissions: room.permissions,
+        participantPermissions: room?.permissions ?? 0,
         translationAvailable: translationAvailable,
       );
     } on TalkProtocolException {
@@ -717,7 +785,7 @@ final class ChatMessageActionsService {
       server: server,
       appPassword: appPassword,
       profile: profile,
-      readOnly: room.readOnly != 0,
+      readOnly: (room?.readOnly ?? 0) != 0,
     );
   }
 }

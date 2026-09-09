@@ -2285,6 +2285,25 @@ class AppLocalizationsCs extends AppLocalizations {
       'Kameru se nepodařilo spustit. Hovor pokračuje bez videa.';
 
   @override
+  String get callRingAbsentTitle => 'Není v hovoru';
+
+  @override
+  String get callRingAction => 'Zazvonit';
+
+  @override
+  String callRingSent(String name) {
+    return 'Na účastníka $name bylo zazvoněno';
+  }
+
+  @override
+  String get callRingNoCall => 'Hovor už skončil.';
+
+  @override
+  String callRingFailed(String name) {
+    return 'Na účastníka $name se nepodařilo zazvonit.';
+  }
+
+  @override
   String callParticipantsTitle(int count) {
     return 'V hovoru ($count)';
   }

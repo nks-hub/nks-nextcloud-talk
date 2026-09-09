@@ -834,6 +834,25 @@
   "callBannerCameraOff": "Turn camera off",
   "callBannerCameraDenied": "Camera access was not granted. The call continues without video.",
   "callBannerCameraUnavailable": "The camera could not be started. The call continues without video.",
+  "callRingAbsentTitle": "Not in the call",
+  "callRingAction": "Ring",
+  "callRingSent": "{name} was rung",
+  "callRingNoCall": "The call has ended.",
+  "callRingFailed": "{name} could not be rung.",
+  "@callRingSent": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@callRingFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "callParticipantsTitle": "In the call ({count})",
   "@callParticipantsTitle": {
     "placeholders": {

@@ -4184,6 +4184,36 @@ abstract class AppLocalizations {
   /// **'The camera could not be started. The call continues without video.'**
   String get callBannerCameraUnavailable;
 
+  /// No description provided for @callRingAbsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in the call'**
+  String get callRingAbsentTitle;
+
+  /// No description provided for @callRingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Ring'**
+  String get callRingAction;
+
+  /// No description provided for @callRingSent.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was rung'**
+  String callRingSent(String name);
+
+  /// No description provided for @callRingNoCall.
+  ///
+  /// In en, this message translates to:
+  /// **'The call has ended.'**
+  String get callRingNoCall;
+
+  /// No description provided for @callRingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} could not be rung.'**
+  String callRingFailed(String name);
+
   /// No description provided for @callParticipantsTitle.
   ///
   /// In en, this message translates to:

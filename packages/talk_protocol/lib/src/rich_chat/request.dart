@@ -31,6 +31,7 @@ enum RichChatOperation {
   getChatReminder,
   setChatReminder,
   deleteChatReminder,
+  getUpcomingReminders,
   getScheduledChatMessages,
   scheduleChatMessage,
   editScheduledChatMessage,
@@ -589,6 +590,41 @@ final class RichChatRequest {
     method: RichChatHttpMethod.delete,
     userAgent: userAgent,
   );
+
+  /// `GET /ocs/v2.php/apps/spreed/api/v1/chat/upcoming-reminders`.
+  ///
+  /// Evidence: spreed `f2958bb` `lib/Controller/ChatController.php`
+  /// `getUpcomingReminders`, OpenAPI operation `chat-get-upcoming-reminders`,
+  /// capability `upcoming-reminders`. Measured against Nextcloud 34.0.1 /
+  /// Talk 24.0.2 on 9 September 2026: `200` with a JSON list, empty when
+  /// nothing is pending.
+  ///
+  /// Account-scoped, not room-scoped, exactly like [subscribedThreads]: the
+  /// answer spans every conversation this account takes part in, so the entries
+  /// carry their own room token and only account plus token plus message ID
+  /// identify one of them.
+  factory RichChatRequest.upcomingReminders({
+    required AccountId accountId,
+    required ChatRequestId requestId,
+    required ServerBase server,
+    required RichChatCapabilityProfile profile,
+    String userAgent = richChatContractUserAgent,
+  }) {
+    _requireCapability(
+      profile.upcomingReminders,
+      r'$.capabilities.upcoming-reminders',
+    );
+    return RichChatRequest._wire(
+      accountId: accountId,
+      requestId: requestId,
+      server: server,
+      profile: profile,
+      operation: RichChatOperation.getUpcomingReminders,
+      method: RichChatHttpMethod.get,
+      path: '$_chatPath/upcoming-reminders',
+      userAgent: userAgent,
+    );
+  }
 
   /// `GET /ocs/v2.php/apps/spreed/api/v1/chat/{token}/schedule`.
   ///
