@@ -243,18 +243,12 @@ final _switch = find.byKey(const Key('settings-update-check'));
 /// [WidgetTester.pump] with a real, tiny [Future.delayed] each round — the
 /// real event loop needs an actual turn for the installer download's real
 /// dart:io work (a temp directory, a file write) to make progress at all.
-Future<void> _pumpUntilFound(WidgetTester tester, Key key) async {
-  for (var attempt = 0; attempt < 200; attempt++) {
-    await tester.pump(const Duration(milliseconds: 10));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+Future<void> _pumpUntilFound(WidgetTester tester, Key key) =>
+    pumpUntilCondition(
+      tester,
+      () => find.byKey(key).evaluate().isNotEmpty,
+      reason: '$key never appeared',
     );
-    if (find.byKey(key).evaluate().isNotEmpty) {
-      return;
-    }
-  }
-  fail('${key.toString()} did not appear in time');
-}
 
 const _installerName = 'NKS-Talk-0.1.0-63-windows-x64-setup.exe';
 

@@ -143,18 +143,12 @@ Future<void> _pickAttachmentSource(
   }
 }
 
-Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
-  for (var attempt = 0; attempt < 200; attempt++) {
-    await tester.pump();
-    if (condition()) {
-      return;
-    }
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) =>
+    pumpUntilCondition(
+      tester,
+      condition,
+      reason: 'the media composer never reached the expected state',
     );
-  }
-  fail('Timed out while waiting for the media composer state.');
-}
 
 final class _RecordingBridge {
   _RecordingBridge({AttachmentCapabilityProfile? profile})

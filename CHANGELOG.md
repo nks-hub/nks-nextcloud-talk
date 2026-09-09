@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Widget tests that wait for real work wait on a clock, not on a count. Two of
+  them failed intermittently in a loaded run and passed alone, because two
+  hundred five-millisecond waits is a budget of one second and one second is
+  not enough while a build is running. A stuck test still fails, and now says
+  how long it waited.
 - The conversation name has room in the chat header. Next to the back
   affordance, the avatar and the call controls it was shown at the app bar's
   own title size, which on a phone left eleven characters of it - a room called

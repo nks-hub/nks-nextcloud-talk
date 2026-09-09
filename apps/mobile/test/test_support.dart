@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/data/credential_vault.dart';
@@ -162,4 +163,32 @@ Map<String, Object?> capabilitiesJson({
 
 Object? readFixtureJson(String relativePath) {
   return jsonDecode(File('../../contracts/$relativePath').readAsStringSync());
+}
+
+/// Pumps until [condition] holds, giving up on a real-time deadline.
+///
+/// A fixed number of five-millisecond waits is a budget of about one second,
+/// and one second is not enough on a machine that is also running a build or
+/// the rest of the suite - which is how two of these turned into intermittent
+/// failures whose message blamed the feature under test. The deadline is
+/// generous on purpose: a test that is genuinely stuck still fails, but a slow
+/// machine is given the time it needs rather than a verdict.
+Future<void> pumpUntilCondition(
+  WidgetTester tester,
+  bool Function() condition, {
+  String reason = 'the condition was never reached',
+  Duration timeout = const Duration(seconds: 30),
+  Duration step = const Duration(milliseconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    await tester.pump();
+    if (condition()) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out after ${timeout.inSeconds}s: $reason');
+    }
+    await tester.runAsync(() => Future<void>.delayed(step));
+  }
 }
