@@ -1632,6 +1632,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusMessageLabel => 'Status message';
 
   @override
+  String get messagePinUntilTitle => 'Pin until';
+
+  @override
+  String get messagePinUntilForever => 'Until someone unpins it';
+
+  @override
+  String get messagePinUntilHour => 'For an hour';
+
+  @override
+  String get messagePinUntilTomorrow => 'Until tomorrow morning';
+
+  @override
+  String get messagePinUntilWeek => 'For a week';
+
+  @override
+  String get messagePinExpiryInThePast => 'That moment has already passed.';
+
+  @override
   String get pinConversationToLauncher => 'Pin to the home screen';
 
   @override

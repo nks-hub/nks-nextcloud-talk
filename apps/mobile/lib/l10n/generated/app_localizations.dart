@@ -3008,6 +3008,42 @@ abstract class AppLocalizations {
   /// **'Status message'**
   String get profileStatusMessageLabel;
 
+  /// No description provided for @messagePinUntilTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin until'**
+  String get messagePinUntilTitle;
+
+  /// No description provided for @messagePinUntilForever.
+  ///
+  /// In en, this message translates to:
+  /// **'Until someone unpins it'**
+  String get messagePinUntilForever;
+
+  /// No description provided for @messagePinUntilHour.
+  ///
+  /// In en, this message translates to:
+  /// **'For an hour'**
+  String get messagePinUntilHour;
+
+  /// No description provided for @messagePinUntilTomorrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Until tomorrow morning'**
+  String get messagePinUntilTomorrow;
+
+  /// No description provided for @messagePinUntilWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'For a week'**
+  String get messagePinUntilWeek;
+
+  /// No description provided for @messagePinExpiryInThePast.
+  ///
+  /// In en, this message translates to:
+  /// **'That moment has already passed.'**
+  String get messagePinExpiryInThePast;
+
   /// Asks the launcher to keep a shortcut to this conversation.
   ///
   /// In en, this message translates to:

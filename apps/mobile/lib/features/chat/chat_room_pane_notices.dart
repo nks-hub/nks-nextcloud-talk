@@ -85,6 +85,8 @@ String _messageActionErrorMessage(
     ChatMessageActionError.network => strings.chatUnavailable,
     ChatMessageActionError.accountMissing ||
     ChatMessageActionError.conversationMissing ||
+    ChatMessageActionError.expiryInThePast =>
+      strings.messagePinExpiryInThePast,
     ChatMessageActionError.invalidResponse => strings.chatInvalidResponse,
   };
 }

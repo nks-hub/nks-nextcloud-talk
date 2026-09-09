@@ -16,8 +16,13 @@ late MemoryCredentialVault vault;
 late StoredAccount account;
 late List<String> requestLog;
 
+/// Bodies of the pin requests, so a test can read the expiry that was
+/// actually sent rather than only that something was sent.
+late List<String> pinBodies;
+
 Future<void> setUpPinReminderScheduleHarness() async {
   requestLog = <String>[];
+  pinBodies = <String>[];
   database = openTestDatabase();
   accounts = AccountRepository(database);
   vault = MemoryCredentialVault()..values['account-a'] = 'fixture-password';
@@ -193,6 +198,9 @@ HttpNextcloudApi buildApi({
           path.contains('/reminder') ||
           path.contains('/schedule')) {
         requestLog.add('${request.method} $path');
+        if (path.endsWith('/pin')) {
+          pinBodies.add(request.body);
+        }
         if (onRichChat != null) {
           return onRichChat(request);
         }

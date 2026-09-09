@@ -1631,6 +1631,24 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusMessageLabel => 'Zpráva stavu';
 
   @override
+  String get messagePinUntilTitle => 'Připnout do';
+
+  @override
+  String get messagePinUntilForever => 'Dokud to někdo neodepne';
+
+  @override
+  String get messagePinUntilHour => 'Na hodinu';
+
+  @override
+  String get messagePinUntilTomorrow => 'Do zítřejšího rána';
+
+  @override
+  String get messagePinUntilWeek => 'Na týden';
+
+  @override
+  String get messagePinExpiryInThePast => 'Ten okamžik už minul.';
+
+  @override
   String get pinConversationToLauncher => 'Připnout na plochu';
 
   @override

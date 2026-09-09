@@ -571,6 +571,12 @@
   "profileStatusIconLabel": "Status emoji",
   "profileStatusIconHelp": "Use a single emoji supported by your server.",
   "profileStatusMessageLabel": "Status message",
+  "messagePinUntilTitle": "Pin until",
+  "messagePinUntilForever": "Until someone unpins it",
+  "messagePinUntilHour": "For an hour",
+  "messagePinUntilTomorrow": "Until tomorrow morning",
+  "messagePinUntilWeek": "For a week",
+  "messagePinExpiryInThePast": "That moment has already passed.",
   "pinConversationToLauncher": "Pin to the home screen",
   "@pinConversationToLauncher": {
     "description": "Asks the launcher to keep a shortcut to this conversation."

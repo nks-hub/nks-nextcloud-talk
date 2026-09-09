@@ -131,7 +131,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
                   title: Text(strings.messageActionPin),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
-                    unawaited(_pinMessage(message));
+                    unawaited(_pinMessageWithExpiry(message));
                   },
                 ),
               if (canPin && isPinned)
@@ -396,7 +396,57 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
   /// appears once the conversation row carries the new `lastPinnedId`. The
   /// refresh below is what fetches that row; without it the pin would be
   /// invisible until the next scheduled conversation sync.
-  Future<void> _pinMessage(CachedChatMessage message) async {
+  /// Asks how long the pin should last, then pins.
+  ///
+  /// Talk stores an expiry the server enforces, so this is a real choice and
+  /// not a local reminder. Dismissing the sheet pins nothing: a pin replaces
+  /// whatever the conversation had pinned before, which is not something to
+  /// do by accident.
+  Future<void> _pinMessageWithExpiry(CachedChatMessage message) async {
+    final strings = AppLocalizations.of(context);
+    final now = DateTime.now();
+    final choices = <(String, DateTime?)>[
+      (strings.messagePinUntilForever, null),
+      (strings.messagePinUntilHour, now.add(const Duration(hours: 1))),
+      (
+        strings.messagePinUntilTomorrow,
+        DateTime(now.year, now.month, now.day + 1, 8),
+      ),
+      (strings.messagePinUntilWeek, now.add(const Duration(days: 7))),
+    ];
+    final chosen = await showModalBottomSheet<(String, DateTime?)>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                strings.messagePinUntilTitle,
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            for (final choice in choices)
+              ListTile(
+                key: Key('message-pin-until-${choices.indexOf(choice)}'),
+                leading: const Icon(Icons.push_pin_outlined),
+                title: Text(choice.$1),
+                onTap: () => Navigator.of(sheetContext).pop(choice),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) {
+      return;
+    }
+    await _pinMessage(message, until: chosen.$2);
+  }
+
+  Future<void> _pinMessage(
+    CachedChatMessage message, {
+    DateTime? until,
+  }) async {
     final targetKey = _key;
     try {
       await ref
@@ -405,6 +455,7 @@ extension _ChatRoomPaneActions on _ChatRoomPaneState {
             accountId: targetKey.accountId,
             roomToken: targetKey.roomToken,
             messageId: message.messageId,
+            until: until,
           );
     } on ChatMessageActionException catch (error) {
       _showActionError(error.code);

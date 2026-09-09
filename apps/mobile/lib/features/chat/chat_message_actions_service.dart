@@ -25,6 +25,10 @@ enum ChatMessageActionError {
   serviceUnavailable,
   invalidResponse,
   network,
+
+  /// A moment that has already passed. The server would refuse it too,
+  /// but saying so without a round trip is both faster and clearer.
+  expiryInThePast,
 }
 
 final class ChatMessageActionException implements Exception {
@@ -175,29 +179,47 @@ final class ChatMessageActionsService {
     ),
   );
 
-  /// Pins [messageId] for the whole conversation, without an expiry.
+  /// Pins [messageId] for the whole conversation, until [until] or until
+  /// somebody unpins it.
   ///
-  /// `pinUntil: 0` is the wire value for "until someone unpins it"; a timed
-  /// pin would need a future timestamp instead. Talk keeps at most one pin
-  /// per conversation, so pinning replaces whatever was pinned before.
+  /// `pinUntil: 0` is the wire value for "until someone unpins it"; anything
+  /// else has to be in the future, which the request itself checks against the
+  /// [now] it is given. Talk keeps at most one pin per conversation, so
+  /// pinning replaces whatever was pinned before.
+  ///
+  /// The expiry is the server's to enforce. This clock only decides whether
+  /// the request is worth sending, so a device running behind cannot turn a
+  /// chosen moment into a pin that the server refuses without explanation.
   Future<void> pinMessage({
     required String accountId,
     required String roomToken,
     required int messageId,
-  }) => _mutateMessage(
-    accountId: accountId,
-    roomToken: roomToken,
-    build: (context) => RichChatRequest.pinMessage(
-      accountId: AccountId.parse(accountId),
-      requestId: ChatRequestId.parse(_uuid.v4()),
-      server: context.server,
-      roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
-      profile: context.profile,
-      messageId: messageId,
-      pinUntil: 0,
-      now: DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
-    ),
-  );
+    DateTime? until,
+  }) {
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    final pinUntil = until == null
+        ? 0
+        : until.toUtc().millisecondsSinceEpoch ~/ 1000;
+    if (pinUntil != 0 && pinUntil <= now) {
+      throw const ChatMessageActionException(
+        ChatMessageActionError.expiryInThePast,
+      );
+    }
+    return _mutateMessage(
+      accountId: accountId,
+      roomToken: roomToken,
+      build: (context) => RichChatRequest.pinMessage(
+        accountId: AccountId.parse(accountId),
+        requestId: ChatRequestId.parse(_uuid.v4()),
+        server: context.server,
+        roomToken: ConversationToken.parse(roomToken, path: r'$.roomToken'),
+        profile: context.profile,
+        messageId: messageId,
+        pinUntil: pinUntil,
+        now: now,
+      ),
+    );
+  }
 
   Future<void> unpinMessage({
     required String accountId,

@@ -167,6 +167,11 @@ void main() {
       expect(find.byKey(const Key('message-action-unpin')), findsNothing);
 
       await tester.tap(find.byKey(const Key('message-action-pin')));
+      await settle(tester);
+      // Pinning replaces whatever the conversation had pinned, so it asks how
+      // long first instead of doing it on one tap.
+      expect(find.byKey(const Key('message-pin-until-0')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('message-pin-until-0')));
       await flush(tester);
       await pumpUntil(
         tester,
@@ -177,7 +182,88 @@ void main() {
         requestLog,
         contains('POST /ocs/v2.php/apps/spreed/api/v1/chat/rooma123/10/pin'),
       );
+      expect(
+        pinBodies.single,
+        contains('pinUntil=0'),
+        reason: '0 is the wire value for "until someone unpins it"',
+      );
       expect(find.byKey(const Key('chat-pin-success')), findsOneWidget);
+
+      await teardownTree(tester);
+    });
+
+    testWidgets('a chosen expiry reaches the server as a future second', (
+      tester,
+    ) async {
+      final conversation = await insertRoom(participantType: 2);
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            onRichChat: (request) =>
+                http.Response(jsonEncode(_pinResponse()), 200),
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      final before = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-pin')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-pin-until-1')));
+      await flush(tester);
+      await pumpUntil(
+        tester,
+        () => find.byKey(const Key('chat-pin-success')).evaluate().isNotEmpty,
+      );
+
+      final sent = int.parse(
+        RegExp(r'pinUntil=(\d+)').firstMatch(pinBodies.single)!.group(1)!,
+      );
+      expect(sent, greaterThan(before));
+      expect(
+        sent - before,
+        inInclusiveRange(3595, 3605),
+        reason: 'the hour choice is an hour from now, in whole seconds',
+      );
+
+      await teardownTree(tester);
+    });
+
+    testWidgets('dismissing the expiry sheet pins nothing', (tester) async {
+      final conversation = await insertRoom(participantType: 2);
+      await insertMessage();
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(
+            onRichChat: (request) =>
+                http.Response(jsonEncode(_pinResponse()), 200),
+          ),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      await tester.longPress(find.byKey(const Key('chat-message-target-10')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('message-action-pin')));
+      await settle(tester);
+      Navigator.of(
+        tester.element(find.byKey(const Key('message-pin-until-0'))),
+      ).pop();
+      await settle(tester);
+
+      expect(pinBodies, isEmpty);
+      expect(find.byKey(const Key('chat-pin-success')), findsNothing);
 
       await teardownTree(tester);
     });
