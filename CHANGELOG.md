@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Starting or accepting a call opens the participant grid after admission.
+  Late completion cannot replace a newer route or activate its camera.
+  Covered or ended call views do not arm picture-in-picture. An ended pinned
+  call shows a private end card until the window is expanded or closed,
+  instead of revealing the chat underneath.
+
 - Calls reacquire a live signaling session after permission dialogs. Ended
   sessions cannot be reused just because their Talk session ID still matches;
   terminal signaling stops media instead of leaving it waiting indefinitely.
