@@ -20,6 +20,55 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Local diagnostics now report the push path the device is actually set to,
+  instead of always reporting the Web Push one. On a device registering
+  through the proxy that state is legitimately empty, and the screen read it
+  as a broken registration. It now shows the stage, what a retry is heading
+  for, the last error class, whether the device has been given a push token at
+  all and whether a step is in flight — and says plainly when the proxy is
+  selected but nothing is registering. No token, key or address is shown.
+
+- On Android the screen now blanks while the phone is at the ear during a
+  call, and comes back when it is moved away, the way a telephone call does.
+  It applies only to a call on the earpiece with no picture in it; the
+  loudspeaker, a headset, a camera or a shared screen all keep the display on,
+  and a device without a proximity sensor is unaffected.
+
+- A location can be picked on a map instead of only being read from the
+  device. The new entry in the attachment menu opens a picker where a point is
+  chosen by tapping or dragging the map, by typing coordinates or by searching
+  for a place by name, and it can be given the name the conversation will show.
+  Only the "use current location" button asks for location permission, so a
+  refused or switched-off GPS still leaves every other way of picking working.
+  The map background is fetched from OpenStreetMap only once it is asked for,
+  because fetching it tells them which point is being looked at, and the picker
+  works without it. The coordinates 0, 0 are refused instead of sent, and
+  closing the picker sends nothing.
+
+- A moderator can export who the server recorded in the call that is running,
+  including anyone who has already left it, straight from the participant
+  list. The file is written as a spreadsheet-safe CSV: a name that starts like
+  a formula is exported as text, and accented names stay readable.
+
+- A moderator can invite people to a conversation from a CSV file of e-mail
+  addresses. The file is always shown as a preview first — how many would be
+  invited, how many are duplicates, and a plain statement that nothing has
+  been sent yet — and only a second, deliberate tap really sends the
+  invitations. A file with a bad row is refused whole and names the lines, a
+  file bigger than 512 kB is refused before anything is uploaded, and a send
+  whose connection dropped is reported as uncertain rather than repeated.
+  Invitations can also be sent again, to everybody who was invited by e-mail
+  or to one of them from their own menu entry.
+
+- The Windows install script no longer mistakes a backup of the app for the
+  app. It used to pick whichever copy sorted first, which on a machine with a
+  backup folder meant installing into the backup, deleting the real program
+  folder and leaving the Start Menu pointing at nothing that starts. It now
+  keeps the place the Start Menu shortcut already names, ignores anything
+  sitting in a backup directory, and checks a folder really is an installation
+  before deleting it. `-DetectOnly` says where it would install without
+  touching anything.
+
 - A text or Markdown attachment opens inside the app instead of being
   handed to another one, with its markup left as text rather than
   interpreted. A very long file shows its beginning and says so, an
@@ -182,6 +231,14 @@ to them. Only what is documented from App Store Connect is stated for them.
   announcements. Navigation and ownership regressions pass, as do 2,298 Flutter
   tests with five skips, full analysis and a Windows debug build. Real call
   continuity and the remaining idle compatibility checks are still open.
+
+- The message field is free again as soon as a message has been written down,
+  instead of staying disabled until the server has answered. The next line can
+  be typed and sent while the previous one is still on its way, and the queue
+  keeps the order it was typed in, so a later message cannot appear before an
+  earlier one that is still unresolved. A message the application refuses to
+  take is put back into the field with the reason; one it has taken is delivered
+  by the queue, survives a restart and is never sent twice.
 
 ## 0.1.0 (65) — 7 September 2026
 
