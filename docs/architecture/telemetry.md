@@ -12,8 +12,17 @@ Rybbit host are internal addresses and this repository is public.
 
 ```sh
 cp apps/mobile/telemetry.env.example apps/mobile/telemetry.env
+python3 tool/push_gateway_gate.py --origin <gateway origin> defines \
+  --define-file apps/mobile/telemetry.env
 flutter build apk --dart-define-from-file=telemetry.env
+python3 tool/push_gateway_gate.py --origin <gateway origin> artifact \
+  apps/mobile/build/app/outputs/flutter-apk/app-release.apk
 ```
+
+The gate calls belong to a distributable build, not to a local one. The same
+file carries `PUSH_GATEWAY_ORIGIN`, and a build that lacks it registers for
+push nowhere without failing anything; `tool/push_gateway_gate.py` refuses
+that build instead, before and after it is produced.
 
 `telemetry.env` is in `.gitignore`. A build without that file gets empty values
 and then **no SDK is initialized at all**: `TelemetryConfig` in

@@ -40,6 +40,8 @@ AX root stayed `NKS Talk`; Safari did not launch.
 flutter config --no-enable-swift-package-manager
 flutter clean
 flutter pub get
+python3 tool/push_gateway_gate.py --origin <gateway origin> defines \
+  --define-file apps/mobile/telemetry.env
 flutter build ios --release --no-codesign --build-number <build> \
   --dart-define-from-file=telemetry.env
 
@@ -55,9 +57,19 @@ xcodebuild -exportArchive -archivePath <archive> \
   -exportOptionsPlist <plist with method=app-store-connect> \
   -exportPath <out> -allowProvisioningUpdates <key as above>
 
+python3 tool/push_gateway_gate.py --origin <gateway origin> artifact \
+  "<out>/NKS Talk.ipa"
+
 xcrun altool --upload-app -t ios -f "<out>/NKS Talk.ipa" \
   --apiKey <id> --apiIssuer <issuer>
 ```
+
+The two gate calls are not decoration. A `telemetry.env` can carry every
+telemetry value and no `PUSH_GATEWAY_ORIGIN`, and nothing fails: the build
+compiles and registers for push nowhere, so the mistake first shows up as
+devices that never ring. The first call reads what the build is about to be
+given; the second reads the compiled Dart inside the artefact, where a define
+that never reached the compiler cannot hide.
 
 All of it has to run as a signed-in user, not as root:
 `launchctl asuser <uid> sudo -u <user> <script>`.
