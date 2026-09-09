@@ -3008,6 +3008,78 @@ abstract class AppLocalizations {
   /// **'Status message'**
   String get profileStatusMessageLabel;
 
+  /// No description provided for @profileAbsenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Absence'**
+  String get profileAbsenceTitle;
+
+  /// No description provided for @profileAbsenceNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No absence is set.'**
+  String get profileAbsenceNone;
+
+  /// Both days of an absence, inclusive.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} to {last}'**
+  String profileAbsenceRange(String first, String last);
+
+  /// No description provided for @profileAbsenceReplacement.
+  ///
+  /// In en, this message translates to:
+  /// **'Standing in: {name}'**
+  String profileAbsenceReplacement(String name);
+
+  /// No description provided for @profileAbsenceSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set absence'**
+  String get profileAbsenceSet;
+
+  /// No description provided for @profileAbsenceEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit absence'**
+  String get profileAbsenceEdit;
+
+  /// No description provided for @profileAbsenceClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear absence'**
+  String get profileAbsenceClear;
+
+  /// No description provided for @profileAbsenceDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get profileAbsenceDays;
+
+  /// No description provided for @profileAbsenceStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Short status'**
+  String get profileAbsenceStatusLabel;
+
+  /// No description provided for @profileAbsenceMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get profileAbsenceMessageLabel;
+
+  /// No description provided for @profileAbsenceReplacementLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Colleague standing in (account name)'**
+  String get profileAbsenceReplacementLabel;
+
+  /// No description provided for @profileAbsenceInvalidRange.
+  ///
+  /// In en, this message translates to:
+  /// **'The last day cannot be before the first.'**
+  String get profileAbsenceInvalidRange;
+
   /// No description provided for @profileStatusSave.
   ///
   /// In en, this message translates to:

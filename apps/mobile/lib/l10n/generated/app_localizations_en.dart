@@ -1632,6 +1632,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileStatusMessageLabel => 'Status message';
 
   @override
+  String get profileAbsenceTitle => 'Absence';
+
+  @override
+  String get profileAbsenceNone => 'No absence is set.';
+
+  @override
+  String profileAbsenceRange(String first, String last) {
+    return '$first to $last';
+  }
+
+  @override
+  String profileAbsenceReplacement(String name) {
+    return 'Standing in: $name';
+  }
+
+  @override
+  String get profileAbsenceSet => 'Set absence';
+
+  @override
+  String get profileAbsenceEdit => 'Edit absence';
+
+  @override
+  String get profileAbsenceClear => 'Clear absence';
+
+  @override
+  String get profileAbsenceDays => 'Days';
+
+  @override
+  String get profileAbsenceStatusLabel => 'Short status';
+
+  @override
+  String get profileAbsenceMessageLabel => 'Message';
+
+  @override
+  String get profileAbsenceReplacementLabel =>
+      'Colleague standing in (account name)';
+
+  @override
+  String get profileAbsenceInvalidRange =>
+      'The last day cannot be before the first.';
+
+  @override
   String get profileStatusSave => 'Save status';
 
   @override

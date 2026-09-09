@@ -1631,6 +1631,48 @@ class AppLocalizationsCs extends AppLocalizations {
   String get profileStatusMessageLabel => 'Zpráva stavu';
 
   @override
+  String get profileAbsenceTitle => 'Nepřítomnost';
+
+  @override
+  String get profileAbsenceNone => 'Nepřítomnost není nastavená.';
+
+  @override
+  String profileAbsenceRange(String first, String last) {
+    return '$first až $last';
+  }
+
+  @override
+  String profileAbsenceReplacement(String name) {
+    return 'Zastupuje: $name';
+  }
+
+  @override
+  String get profileAbsenceSet => 'Nastavit nepřítomnost';
+
+  @override
+  String get profileAbsenceEdit => 'Upravit nepřítomnost';
+
+  @override
+  String get profileAbsenceClear => 'Zrušit nepřítomnost';
+
+  @override
+  String get profileAbsenceDays => 'Dny';
+
+  @override
+  String get profileAbsenceStatusLabel => 'Krátký stav';
+
+  @override
+  String get profileAbsenceMessageLabel => 'Zpráva';
+
+  @override
+  String get profileAbsenceReplacementLabel =>
+      'Zastupující kolega (jméno účtu)';
+
+  @override
+  String get profileAbsenceInvalidRange =>
+      'Poslední den nemůže být před prvním.';
+
+  @override
   String get profileStatusSave => 'Uložit stav';
 
   @override

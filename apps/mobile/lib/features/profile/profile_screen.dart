@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_providers.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../network/nextcloud_api.dart';
+import 'profile_absence_section.dart';
 import 'profile_models.dart';
 
 final class ProfileScreen extends ConsumerStatefulWidget {
@@ -98,6 +99,73 @@ final class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  Future<void> _editAbsence() async {
+    final snapshot = _snapshot;
+    if (snapshot == null || _submitting) {
+      return;
+    }
+    final draft = await showAbsenceEditor(
+      context,
+      current: snapshot.absence,
+      replacementSupported: snapshot.absenceCapability.replacementSupported,
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+    await _submitAbsence(
+      () async => ref
+          .read(profileServiceProvider)
+          .setAbsence(
+            accountId: widget.accountId,
+            firstDay: draft.firstDay,
+            lastDay: draft.lastDay,
+            status: draft.status,
+            message: draft.message,
+            replacementUserId: draft.replacementUserId,
+          ),
+    );
+  }
+
+  Future<void> _clearAbsence() async {
+    await _submitAbsence(() async {
+      await ref.read(profileServiceProvider).clearAbsence(widget.accountId);
+      return null;
+    });
+  }
+
+  /// The absence actions do not answer with a status, so they cannot reuse
+  /// [_submit]; what they share is the busy flag, the snapshot update and the
+  /// same failure message.
+  Future<void> _submitAbsence(Future<OwnOutOfOffice?> Function() action) async {
+    if (_submitting || _snapshot == null) {
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      final absence = await action();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _snapshot = _snapshot!.withAbsence(absence);
+        _submitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).profileStatusSaved),
+        ),
+      );
+    } on OwnProfileException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_errorMessage(context, error.code))),
+      );
+    }
+  }
+
   Future<void> _submit(
     Future<OwnUserStatusResponse> Function() action, {
     bool synchronizeFields = false,
@@ -154,6 +222,8 @@ final class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onStatusType: _setStatusType,
             onSaveMessage: _saveMessage,
             onClearMessage: _clearMessage,
+            onEditAbsence: _editAbsence,
+            onClearAbsence: _clearAbsence,
           ),
           _ => _ProfileFailure(
             message: _errorMessage(context, _error),
@@ -176,6 +246,8 @@ final class _ProfileContent extends StatelessWidget {
     required this.onStatusType,
     required this.onSaveMessage,
     required this.onClearMessage,
+    required this.onEditAbsence,
+    required this.onClearAbsence,
   });
 
   final OwnProfileSnapshot snapshot;
@@ -187,6 +259,8 @@ final class _ProfileContent extends StatelessWidget {
   final ValueChanged<OwnUserStatusType> onStatusType;
   final VoidCallback onSaveMessage;
   final VoidCallback onClearMessage;
+  final VoidCallback onEditAbsence;
+  final VoidCallback onClearAbsence;
 
   @override
   Widget build(BuildContext context) {
@@ -320,6 +394,13 @@ final class _ProfileContent extends StatelessWidget {
             ],
           ),
         ],
+        const SizedBox(height: 16),
+        ProfileAbsenceSection(
+          snapshot: snapshot,
+          submitting: submitting,
+          onEdit: onEditAbsence,
+          onClear: onClearAbsence,
+        ),
       ],
     );
   }

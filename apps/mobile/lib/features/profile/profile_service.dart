@@ -15,7 +15,18 @@ final class ProfileService {
 
   Future<OwnProfileSnapshot> load(String accountId) async {
     final context = await _context(accountId);
-    final capability = await _statusCapability(context);
+    final read = await _call(
+      () => _api.getAuthenticatedCapabilitiesWithSource(
+        server: context.server,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+        forceRefresh: true,
+      ),
+    );
+    final capability = ProfileStatusCapability.fromSnapshot(read.snapshot);
+    final absenceCapability = ProfileAbsenceCapability.fromSnapshot(
+      read.snapshot,
+    );
     final profile = await _call(
       () => _api.getOwnProfile(
         server: context.server,
@@ -38,6 +49,18 @@ final class ProfileService {
       status = loadedStatus;
     }
 
+    OwnOutOfOffice? absence;
+    if (absenceCapability.supported) {
+      absence = await _call(
+        () => _api.getOwnOutOfOffice(
+          server: context.server,
+          loginName: context.account.loginName,
+          appPassword: context.appPassword,
+          userId: context.account.loginName,
+        ),
+      );
+    }
+
     return OwnProfileSnapshot(
       accountId: accountId,
       serverUrl: context.account.serverUrl,
@@ -45,7 +68,79 @@ final class ProfileService {
       profile: profile,
       statusCapability: capability,
       status: status,
+      absenceCapability: absenceCapability,
+      absence: absence,
     );
+  }
+
+  /// Stores this account's own absence. Both days are inclusive.
+  ///
+  /// The range is checked here as well as by the server: a last day before the
+  /// first is a mistake worth naming immediately rather than a round trip that
+  /// comes back `400`. A replacement is dropped where the server does not
+  /// support one, instead of being sent and silently ignored.
+  Future<OwnOutOfOffice> setAbsence({
+    required String accountId,
+    required DateTime firstDay,
+    required DateTime lastDay,
+    required String status,
+    required String message,
+    String? replacementUserId,
+  }) async {
+    if (lastDay.isBefore(firstDay)) {
+      throw const OwnProfileException(OwnProfileError.invalidInput);
+    }
+    final context = await _absenceContext(accountId);
+    final replacement =
+        context.capability.replacementSupported &&
+            (replacementUserId?.isNotEmpty ?? false)
+        ? replacementUserId
+        : null;
+    final stored = await _call(
+      () => _api.setOwnOutOfOffice(
+        server: context.base.server,
+        loginName: context.base.account.loginName,
+        appPassword: context.base.appPassword,
+        userId: context.base.account.loginName,
+        firstDay: firstDay,
+        lastDay: lastDay,
+        status: status,
+        message: message,
+        replacementUserId: replacement,
+      ),
+    );
+    _requireIdentity(context.base, stored.userId);
+    return stored;
+  }
+
+  /// Removes this account's own absence. The server answers the same whether
+  /// or not one was set, so this is safe to call from a stale screen.
+  Future<void> clearAbsence(String accountId) async {
+    final context = await _absenceContext(accountId);
+    await _call(
+      () => _api.clearOwnOutOfOffice(
+        server: context.base.server,
+        loginName: context.base.account.loginName,
+        appPassword: context.base.appPassword,
+        userId: context.base.account.loginName,
+      ),
+    );
+  }
+
+  Future<_ProfileAbsenceContext> _absenceContext(String accountId) async {
+    final context = await _context(accountId);
+    final read = await _call(
+      () => _api.getAuthenticatedCapabilitiesWithSource(
+        server: context.server,
+        loginName: context.account.loginName,
+        appPassword: context.appPassword,
+      ),
+    );
+    final capability = ProfileAbsenceCapability.fromSnapshot(read.snapshot);
+    if (!capability.supported) {
+      throw const OwnProfileException(OwnProfileError.unsupported);
+    }
+    return _ProfileAbsenceContext(base: context, capability: capability);
   }
 
   Future<OwnUserStatusResponse> setStatusType({
@@ -191,6 +286,13 @@ final class _ProfileContext {
   final StoredAccount account;
   final String appPassword;
   final ServerBase server;
+}
+
+final class _ProfileAbsenceContext {
+  const _ProfileAbsenceContext({required this.base, required this.capability});
+
+  final _ProfileContext base;
+  final ProfileAbsenceCapability capability;
 }
 
 final class _ProfileStatusContext {

@@ -43,6 +43,8 @@ final class OwnProfileSnapshot {
     required this.profile,
     required this.statusCapability,
     required this.status,
+    required this.absenceCapability,
+    required this.absence,
   });
 
   final String accountId;
@@ -51,6 +53,10 @@ final class OwnProfileSnapshot {
   final OwnProfileResponse profile;
   final ProfileStatusCapability statusCapability;
   final OwnUserStatusResponse? status;
+  final ProfileAbsenceCapability absenceCapability;
+
+  /// What the server holds for this account, or `null` for no absence at all.
+  final OwnOutOfOffice? absence;
 
   OwnProfileSnapshot withStatus(OwnUserStatusResponse nextStatus) {
     return OwnProfileSnapshot(
@@ -60,8 +66,53 @@ final class OwnProfileSnapshot {
       profile: profile,
       statusCapability: statusCapability,
       status: nextStatus,
+      absenceCapability: absenceCapability,
+      absence: absence,
     );
   }
+
+  OwnProfileSnapshot withAbsence(OwnOutOfOffice? nextAbsence) {
+    return OwnProfileSnapshot(
+      accountId: accountId,
+      serverUrl: serverUrl,
+      loginName: loginName,
+      profile: profile,
+      statusCapability: statusCapability,
+      status: status,
+      absenceCapability: absenceCapability,
+      absence: nextAbsence,
+    );
+  }
+}
+
+/// What the server's DAV app allows for an absence.
+///
+/// `absence-supported` is the feature itself; `absence-replacement` is the
+/// colleague field, which older servers store but do not accept. Both are
+/// read from the same authenticated capability document the status uses, so
+/// no extra round trip pays for them.
+final class ProfileAbsenceCapability {
+  const ProfileAbsenceCapability({
+    required this.supported,
+    required this.replacementSupported,
+  });
+
+  factory ProfileAbsenceCapability.fromSnapshot(CapabilitySnapshot snapshot) {
+    final dav = snapshot.capabilities['dav'];
+    if (dav is! Map<String, Object?>) {
+      return const ProfileAbsenceCapability(
+        supported: false,
+        replacementSupported: false,
+      );
+    }
+    return ProfileAbsenceCapability(
+      supported: dav['absence-supported'] == true,
+      replacementSupported: dav['absence-replacement'] == true,
+    );
+  }
+
+  final bool supported;
+  final bool replacementSupported;
 }
 
 enum OwnProfileError {

@@ -69,6 +69,90 @@ final class ActiveRoomSessionActivation {
   final ActiveRoomSessionLease? lease;
 }
 
+/// This account's own absence, as the DAV app stores it.
+///
+/// Not the same shape as [CurrentOutOfOffice]: the peer endpoint answers with
+/// epoch seconds and a short message, while the record a user edits carries
+/// inclusive `YYYY-MM-DD` days. Measured against the reference instance on
+/// 9 September 2026, which returns exactly these fields.
+final class OwnOutOfOffice {
+  const OwnOutOfOffice._({
+    required this.userId,
+    required this.firstDay,
+    required this.lastDay,
+    required this.status,
+    required this.message,
+    required this.replacementUserId,
+    required this.replacementUserDisplayName,
+  });
+
+  factory OwnOutOfOffice.fromOcsJson(
+    Object? json, {
+    required String expectedUserId,
+  }) {
+    final data = _ocsDataObject(json);
+    final userId = _boundedString(data['userId'], 4096);
+    final firstDay = _absenceDay(data['firstDay']);
+    final lastDay = _absenceDay(data['lastDay']);
+    if (userId != expectedUserId || lastDay.isBefore(firstDay)) {
+      throw const NextcloudApiException(NextcloudApiError.invalidJson);
+    }
+    return OwnOutOfOffice._(
+      userId: userId,
+      firstDay: firstDay,
+      lastDay: lastDay,
+      status: _boundedString(data['status'], 4096, allowEmpty: true),
+      message: _boundedString(data['message'], 4096, allowEmpty: true),
+      replacementUserId: _optionalBoundedString(
+        data['replacementUserId'],
+        4096,
+      ),
+      replacementUserDisplayName: _optionalBoundedString(
+        data['replacementUserDisplayName'],
+        4096,
+      ),
+    );
+  }
+
+  final String userId;
+
+  /// Both days are inclusive, which is why a single-day absence has the same
+  /// first and last day rather than an empty range.
+  final DateTime firstDay;
+  final DateTime lastDay;
+  final String status;
+  final String message;
+  final String? replacementUserId;
+  final String? replacementUserDisplayName;
+}
+
+/// An inclusive absence day, `YYYY-MM-DD` as the server writes it.
+///
+/// Parsed as a plain calendar date rather than an instant: the server means
+/// the day in the user's own calendar, so turning it into UTC midnight and
+/// back would move it across a time zone.
+DateTime _absenceDay(Object? value) {
+  final text = _boundedString(value, 32);
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(text);
+  if (match == null) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    throw const NextcloudApiException(NextcloudApiError.invalidJson);
+  }
+  return parsed;
+}
+
+/// `YYYY-MM-DD` for the wire, from a local calendar date.
+String absenceDayText(DateTime day) =>
+    '${day.year.toString().padLeft(4, '0')}-'
+    '${day.month.toString().padLeft(2, '0')}-'
+    '${day.day.toString().padLeft(2, '0')}';
+
 final class CurrentOutOfOffice {
   const CurrentOutOfOffice._({
     required this.id,

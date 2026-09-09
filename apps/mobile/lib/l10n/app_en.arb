@@ -571,6 +571,30 @@
   "profileStatusIconLabel": "Status emoji",
   "profileStatusIconHelp": "Use a single emoji supported by your server.",
   "profileStatusMessageLabel": "Status message",
+  "profileAbsenceTitle": "Absence",
+  "profileAbsenceNone": "No absence is set.",
+  "profileAbsenceRange": "{first} to {last}",
+  "@profileAbsenceRange": {
+    "description": "Both days of an absence, inclusive.",
+    "placeholders": {
+      "first": {"type": "String"},
+      "last": {"type": "String"}
+    }
+  },
+  "profileAbsenceReplacement": "Standing in: {name}",
+  "@profileAbsenceReplacement": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "profileAbsenceSet": "Set absence",
+  "profileAbsenceEdit": "Edit absence",
+  "profileAbsenceClear": "Clear absence",
+  "profileAbsenceDays": "Days",
+  "profileAbsenceStatusLabel": "Short status",
+  "profileAbsenceMessageLabel": "Message",
+  "profileAbsenceReplacementLabel": "Colleague standing in (account name)",
+  "profileAbsenceInvalidRange": "The last day cannot be before the first.",
   "profileStatusSave": "Save status",
   "profileStatusClear": "Clear message",
   "profileStatusExpiryLabel": "Clear status",

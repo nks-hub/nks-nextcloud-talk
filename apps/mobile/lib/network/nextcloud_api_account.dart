@@ -100,6 +100,119 @@ mixin _NextcloudApiAccount on _HttpNextcloudApiBase {
     return CurrentOutOfOffice.fromOcsJson(payload.json, expectedUserId: userId);
   }
 
+  Uri _ownAbsenceUri(ServerBase server, String userId) => server.uri.replace(
+    pathSegments: <String>[
+      ...server.uri.pathSegments,
+      'ocs',
+      'v2.php',
+      'apps',
+      'dav',
+      'api',
+      'v1',
+      'outOfOffice',
+      userId,
+    ],
+    queryParameters: const <String, String>{'format': 'json'},
+  );
+
+  /// This account's own absence, or `null` when it has none.
+  ///
+  /// `GET /ocs/v2.php/apps/dav/api/v1/outOfOffice/{userId}`. Measured against
+  /// the reference instance: `404` when nothing is set, `200` with the record
+  /// otherwise.
+  Future<OwnOutOfOffice?> getOwnOutOfOffice({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String userId,
+    Future<void>? abortTrigger,
+  }) async {
+    final payload = await _sendJson(
+      _authenticatedOcsRequest(
+        'GET',
+        _ownAbsenceUri(server, userId),
+        loginName: loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      ),
+      allowedStatusCodes: const <int>{200, 404},
+      maximumBytes: 64 * 1024,
+      parseBodyForStatusCodes: const <int>{200},
+    );
+    if (payload.statusCode == 404) {
+      return null;
+    }
+    return OwnOutOfOffice.fromOcsJson(payload.json, expectedUserId: userId);
+  }
+
+  /// Sets or replaces this account's own absence and returns what was stored.
+  ///
+  /// `POST` to the same address, form-encoded. Both days are inclusive. The
+  /// server validates the range itself and answers `400` with
+  /// `data.error: "firstDay"` for a last day before the first — measured, not
+  /// assumed — so a rejected range is reported rather than silently adjusted.
+  /// [replacementUserId] belongs only to a server with the DAV capability
+  /// `absence-replacement`, which the caller gates on.
+  Future<OwnOutOfOffice> setOwnOutOfOffice({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String userId,
+    required DateTime firstDay,
+    required DateTime lastDay,
+    required String status,
+    required String message,
+    String? replacementUserId,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _authenticatedOcsRequest(
+      'POST',
+      _ownAbsenceUri(server, userId),
+      loginName: loginName,
+      appPassword: appPassword,
+      abortTrigger: abortTrigger,
+    );
+    request
+      ..headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      ..bodyFields = <String, String>{
+        'firstDay': absenceDayText(firstDay),
+        'lastDay': absenceDayText(lastDay),
+        'status': status,
+        'message': message,
+        if (replacementUserId case final String replacement)
+          'replacementUserId': replacement,
+      };
+    final payload = await _sendJson(
+      request,
+      allowedStatusCodes: const <int>{200},
+      maximumBytes: 64 * 1024,
+    );
+    return OwnOutOfOffice.fromOcsJson(payload.json, expectedUserId: userId);
+  }
+
+  /// Clears this account's own absence. `DELETE` to the same address; the
+  /// server answers `200` whether or not one was set.
+  Future<void> clearOwnOutOfOffice({
+    required ServerBase server,
+    required String loginName,
+    required String appPassword,
+    required String userId,
+    Future<void>? abortTrigger,
+  }) async {
+    await _sendJson(
+      _authenticatedOcsRequest(
+        'DELETE',
+        _ownAbsenceUri(server, userId),
+        loginName: loginName,
+        appPassword: appPassword,
+        abortTrigger: abortTrigger,
+      ),
+      allowedStatusCodes: const <int>{200},
+      maximumBytes: 64 * 1024,
+      parseBodyForStatusCodes: const <int>{},
+    );
+  }
+
   Future<ServerStatus> getServerStatus(ServerBase server) async {
     final payload = await _sendJson(
       http.Request('GET', server.statusUri),

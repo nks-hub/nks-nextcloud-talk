@@ -184,6 +184,96 @@ void main() {
       hasLength(1),
     );
   });
+
+  testWidgets('a server without absences offers none', (tester) async {
+    final server = _ProfileServer(supportsBusy: true);
+    final fixture = (await tester.runAsync(() => _Fixture.create(server)))!;
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await fixture.dispose();
+    });
+
+    await tester.pumpWidget(fixture.profileApp());
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    expect(find.byKey(const Key('profile-absence')), findsNothing);
+  });
+
+  testWidgets('an absence is set, read back and cleared', (tester) async {
+    final server = _ProfileServer(supportsBusy: true, absence: true);
+    final fixture = (await tester.runAsync(() => _Fixture.create(server)))!;
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await fixture.dispose();
+    });
+
+    await tester.pumpWidget(fixture.profileApp());
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-absence-edit')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('profile-absence-none')), findsOneWidget);
+    expect(find.byKey(const Key('profile-absence-clear')), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const Key('profile-absence-edit')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('profile-absence-edit')));
+    await tester.pump();
+    await _settleRealAsync(tester);
+    expect(find.byKey(const Key('profile-absence-dialog')), findsOneWidget);
+    // The replacement field is offered because this server reports it.
+    expect(
+      find.byKey(const Key('profile-absence-replacement-field')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const Key('profile-absence-status-field')),
+      'Away',
+    );
+    await tester.enterText(
+      find.byKey(const Key('profile-absence-message-field')),
+      'Back soon.',
+    );
+    await tester.tap(find.byKey(const Key('profile-absence-save')));
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    final sent = server.absenceSent!;
+    expect(sent['status'], 'Away');
+    expect(sent['message'], 'Back soon.');
+    expect(sent['firstDay'], matches(r'^\d{4}-\d{2}-\d{2}$'));
+    expect(sent['lastDay'], sent['firstDay']);
+    expect(sent.containsKey('replacementUserId'), isFalse,
+        reason: 'an empty colleague field is not a colleague');
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('profile-absence-clear')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('profile-absence-range')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('profile-absence-status'))).data,
+      'Away',
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('profile-absence-clear')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('profile-absence-clear')));
+    await tester.pump();
+    await _settleRealAsync(tester);
+
+    expect(server.absenceDeleted, 1);
+    expect(find.byKey(const Key('profile-absence-none')), findsOneWidget);
+    expect(find.byKey(const Key('profile-absence-clear')), findsNothing);
+  });
 }
 
 Future<void> _settleRealAsync(WidgetTester tester, {int rounds = 16}) async {
@@ -265,9 +355,15 @@ final class _Fixture {
 }
 
 final class _ProfileServer {
-  _ProfileServer({required this.supportsBusy});
+  _ProfileServer({required this.supportsBusy, this.absence = false});
 
   final bool supportsBusy;
+
+  /// Whether the DAV app offers absences at all, matching `absence-supported`.
+  final bool absence;
+  Map<String, String>? absenceSent;
+  var absenceDeleted = 0;
+  Map<String, Object?>? storedAbsence;
   final List<http.Request> requests = [];
   var status = 'online';
   String? message = 'Focusing';
@@ -278,7 +374,45 @@ final class _ProfileServer {
     requests.add(request);
     final path = request.url.path;
     if (path.endsWith('/cloud/capabilities')) {
-      return _jsonResponse(_capabilities(supportsBusy: supportsBusy));
+      return _jsonResponse(
+        _capabilities(supportsBusy: supportsBusy, absence: absence),
+      );
+    }
+    if (path.contains('/dav/api/v1/outOfOffice/')) {
+      if (request.method == 'DELETE') {
+        absenceDeleted++;
+        storedAbsence = null;
+        return _ocsResponse(null);
+      }
+      if (request.method == 'POST') {
+        final fields = Uri.splitQueryString(request.body);
+        absenceSent = fields;
+        storedAbsence = <String, Object?>{
+          'id': 1,
+          'userId': 'alice',
+          'firstDay': fields['firstDay'],
+          'lastDay': fields['lastDay'],
+          'status': fields['status'] ?? '',
+          'message': fields['message'] ?? '',
+          'replacementUserId': fields['replacementUserId'],
+          'replacementUserDisplayName': fields['replacementUserId'],
+        };
+        return _ocsResponse(storedAbsence);
+      }
+      final stored = storedAbsence;
+      if (stored == null) {
+        return http.Response(
+          jsonEncode({
+            'ocs': {
+              'meta': {'status': 'failure', 'statuscode': 404, 'message': ''},
+              'data': null,
+            },
+          }),
+          404,
+          headers: const {'content-type': 'application/json'},
+        );
+      }
+      return _ocsResponse(stored);
     }
     if (path.endsWith('/cloud/user')) {
       return _ocsResponse({
@@ -321,7 +455,10 @@ final class _ProfileServer {
   };
 }
 
-Map<String, Object?> _capabilities({required bool supportsBusy}) {
+Map<String, Object?> _capabilities({
+  required bool supportsBusy,
+  required bool absence,
+}) {
   return <String, Object?>{
     'ocs': {
       'meta': {'status': 'ok', 'statuscode': 200, 'message': 'OK'},
@@ -344,6 +481,8 @@ Map<String, Object?> _capabilities({required bool supportsBusy}) {
             'supports_emoji': true,
             'supports_busy': supportsBusy,
           },
+          if (absence)
+            'dav': {'absence-supported': true, 'absence-replacement': true},
         },
       },
     },
