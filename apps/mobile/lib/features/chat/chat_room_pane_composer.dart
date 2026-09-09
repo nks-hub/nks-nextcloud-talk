@@ -164,6 +164,64 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
     }
   }
 
+  /// Shares a place chosen on the map, which needs no location permission.
+  Future<void> _pickLocationOnMap() async {
+    if (_sending || _isReadOnlyNow()) {
+      return;
+    }
+    final targetKey = _key;
+    final threadId = _currentThreadContext?.networkThreadId;
+    if (targetKey.threadId != null && threadId == null) {
+      return;
+    }
+    final generation = ++_sendGeneration;
+    final strings = AppLocalizations.of(context);
+    _update(() => _sending = true);
+    try {
+      final picked = await Navigator.of(context).push<LocationPickerResult>(
+        MaterialPageRoute<LocationPickerResult>(
+          settings: const RouteSettings(name: '/chat/location-picker'),
+          builder: (_) => const LocationPickerScreen(),
+        ),
+      );
+      if (picked == null || !_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      await ref
+          .read(locationShareServiceProvider)
+          .share(
+            accountId: targetKey.accountId,
+            roomToken: targetKey.roomToken,
+            position: SharedPosition(picked.latitude, picked.longitude),
+            name: picked.name,
+            threadId: threadId,
+          );
+      if (!_isCurrentSendScope(targetKey, generation)) {
+        return;
+      }
+      await _sync();
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(strings.locationShared);
+      }
+    } on LocationShareException catch (error) {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(
+          error.code == LocationShareError.ambiguous
+              ? strings.locationShareAmbiguous
+              : strings.locationShareFailed,
+        );
+      }
+    } on Object {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _showLocationSnackBar(strings.locationShareFailed);
+      }
+    } finally {
+      if (_isCurrentSendScope(targetKey, generation)) {
+        _update(() => _sending = false);
+      }
+    }
+  }
+
   Future<void> _pickRemoteFile() async {
     if (_sending || _isReadOnlyNow()) {
       return;

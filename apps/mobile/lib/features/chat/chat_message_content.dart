@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +20,7 @@ import '../../platform/media/voice_platform_adapters.dart';
 import '../../platform/media/voice_transcription.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'emoji_only_message.dart';
+import 'location_map.dart';
 import 'poll_dialog.dart';
 import 'composer/giphy.dart';
 import 'media/authenticated_image_viewer.dart';
@@ -35,8 +35,6 @@ part 'chat_message_giphy_content.dart';
 part 'chat_message_reference_content.dart';
 part 'chat_message_rich_content.dart';
 part 'chat_location_preview.dart';
-
-typedef LocationTileClientFactory = http.Client Function(String accountId);
 
 http.Client _createLocationTileClient(String accountId) => http.Client();
 

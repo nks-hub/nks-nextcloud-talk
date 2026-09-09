@@ -144,6 +144,10 @@ final currentLocationSourceProvider = Provider<CurrentLocationSource>((ref) {
   return GeolocatorCurrentLocationSource();
 });
 
+final placeSearchSourceProvider = Provider<PlaceSearchSource>((ref) {
+  return NominatimPlaceSearch();
+});
+
 final appSettingsOpenerProvider = Provider<AppSettingsOpener>((ref) {
   return const GeolocatorAppSettingsOpener();
 });

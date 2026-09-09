@@ -46,6 +46,7 @@ import 'features/chat/chat_message_content.dart';
 import 'features/chat/message_translation_service.dart';
 import 'features/chat/references/reference_resolver.dart';
 import 'features/chat/location_share_service.dart';
+import 'features/chat/place_search_service.dart';
 import 'features/chat/poll_service.dart';
 import 'features/chat/remote_file_share_service.dart';
 import 'features/chat/chat_service.dart';

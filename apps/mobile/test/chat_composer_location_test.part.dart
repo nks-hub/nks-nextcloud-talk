@@ -287,6 +287,111 @@ void _registerLocationComposerTests() {
     );
     await _unmountComposer(tester);
   });
+
+  testWidgets('the map picker shares a place chosen without a position', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, harness);
+    final sender = _FakeLocationSender();
+    await tester.pumpWidget(
+      harness.app(
+        wrapInScaffold: true,
+        overrides: <Override>[
+          locationShareServiceProvider.overrideWithValue(sender),
+        ],
+      ),
+    );
+    await _openMapPicker(tester);
+    await _enterPickedPoint(
+      tester,
+      latitude: '48.8584',
+      longitude: '2.2945',
+      name: 'Eiffel Tower',
+    );
+    await tester.tap(find.byKey(const Key('location-picker-confirm')));
+    await _pumpUntil(tester, () => sender.positions.isNotEmpty);
+
+    expect(sender.positions.single.latitude, 48.8584);
+    expect(sender.positions.single.longitude, 2.2945);
+    expect(sender.names, <String>['Eiffel Tower']);
+    expect(sender.accountIds, <String>[harness.account.id]);
+    expect(sender.roomTokens, <String>[harness.conversation.token]);
+    expect(sender.threadIds, <int?>[null]);
+    await _unmountComposer(tester);
+  });
+
+  testWidgets('a cancelled map picker sends nothing', (tester) async {
+    final harness = (await tester.runAsync(_ComposerHarness.create))!;
+    _addHarnessTearDown(tester, harness);
+    final sender = _FakeLocationSender();
+    await tester.pumpWidget(
+      harness.app(
+        wrapInScaffold: true,
+        overrides: <Override>[
+          locationShareServiceProvider.overrideWithValue(sender),
+        ],
+      ),
+    );
+    await _openMapPicker(tester);
+    await _enterPickedPoint(
+      tester,
+      latitude: '48.8584',
+      longitude: '2.2945',
+      name: 'Eiffel Tower',
+    );
+    await tester.tap(find.byKey(const Key('location-picker-cancel')));
+    await _pumpTransition(tester);
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(sender.positions, isEmpty);
+    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+    await _unmountComposer(tester);
+  });
+}
+
+Future<void> _openMapPicker(WidgetTester tester) async {
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('pick-image-attachment')).evaluate().isNotEmpty,
+  );
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 100)),
+  );
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('pick-image-attachment')));
+  await _pumpTransition(tester);
+  // The sheet holds more actions than a short screen shows, and it scrolls
+  // for exactly that reason; the map entry is the last of them.
+  await tester.ensureVisible(find.byKey(const Key('pick-location-on-map')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('pick-location-on-map')));
+  await _pumpTransition(tester);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byKey(const Key('location-picker-confirm')).evaluate().isNotEmpty,
+  );
+}
+
+Future<void> _enterPickedPoint(
+  WidgetTester tester, {
+  required String latitude,
+  required String longitude,
+  required String name,
+}) async {
+  await tester.enterText(
+    find.byKey(const Key('location-picker-latitude')),
+    latitude,
+  );
+  await tester.enterText(
+    find.byKey(const Key('location-picker-longitude')),
+    longitude,
+  );
+  await tester.enterText(find.byKey(const Key('location-picker-name')), name);
+  // Focusing a field scrolls the picker body; the tap that follows has to
+  // wait for that scroll to end.
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 Future<void> _openLocationConfirmation(WidgetTester tester) async {
@@ -382,6 +487,9 @@ final class _FakeLocationSender implements LocationShareSender {
   final LocationShareException? error;
   final List<SharedPosition> positions = [];
   final List<int?> threadIds = [];
+  final List<String> names = [];
+  final List<String> accountIds = [];
+  final List<String> roomTokens = [];
 
   @override
   Future<ChatMessage> share({
@@ -396,6 +504,9 @@ final class _FakeLocationSender implements LocationShareSender {
     }
     positions.add(position);
     threadIds.add(threadId);
+    names.add(name);
+    accountIds.add(accountId);
+    roomTokens.add(roomToken);
     return ChatMessage.fromJson({
       'id': 900,
       'token': roomToken,

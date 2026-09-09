@@ -69,6 +69,18 @@ extension _ChatRoomPaneAttachmentMenu on _ChatRoomPaneState {
             ? null
             : () => unawaited(_shareCurrentLocation()),
       ),
+    if (actionsProfile?.geoLocation ?? false)
+      AttachmentMenuAction(
+        key: const Key('pick-location-on-map'),
+        icon: const Icon(Icons.map_outlined),
+        label: strings.locationPickerMenuAction,
+        onSelected:
+            _sending ||
+                (widget.threadId != null &&
+                    _currentThreadContext?.isNamed != true)
+            ? null
+            : () => unawaited(_pickLocationOnMap()),
+      ),
     if (pollAvailable?.isLoading ?? false)
       AttachmentMenuAction(
         key: const Key('create-poll-checking'),

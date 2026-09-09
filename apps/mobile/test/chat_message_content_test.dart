@@ -10,6 +10,7 @@ import 'package:nextcloudtalk/data/chat_media_repository.dart';
 import 'package:nextcloudtalk/platform/media/voice_platform_adapters.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/chat/chat_message_content.dart';
+import 'package:nextcloudtalk/features/chat/location_map.dart';
 import 'package:nextcloudtalk/features/chat/poll_service.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
