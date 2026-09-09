@@ -55,6 +55,7 @@ String _moderationActionLabel(
     ParticipantAction.promote => strings.roomDetailsPromoteModerator,
     ParticipantAction.demote => strings.roomDetailsDemoteModerator,
     ParticipantAction.remove => strings.roomDetailsRemoveParticipant,
+    ParticipantAction.resendInvitation => strings.roomDetailsResendInvitation,
     ParticipantAction.ban => strings.roomDetailsBanParticipant,
   };
 }
@@ -223,7 +224,8 @@ ConversationRoom? _parseCachedRoom(CachedConversation conversation) {
 
 String _listableScopeLabel(AppLocalizations strings, RoomListableScope scope) {
   return switch (scope) {
-    RoomListableScope.participantsOnly => strings.roomDetailsListableParticipants,
+    RoomListableScope.participantsOnly =>
+      strings.roomDetailsListableParticipants,
     RoomListableScope.regularUsers => strings.roomDetailsListableRegular,
     RoomListableScope.everyone => strings.roomDetailsListableEveryone,
   };

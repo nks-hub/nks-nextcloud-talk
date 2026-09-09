@@ -8,6 +8,10 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
   late bool _callNotificationsEnabled;
   bool _busy = false;
 
+  void _setBusy(bool value) {
+    setState(() => _busy = value);
+  }
+
   late Set<String> _talkFeatures;
 
   @override
@@ -991,7 +995,13 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
         _canBan &&
         moderation.contains(ParticipantAction.remove) &&
         bannedActorTypeFor(participant.actorType) != null;
-    return [...moderation, if (bannable) ParticipantAction.ban];
+    // Only an attendee invited by e-mail has an invitation to send again; the
+    // server accepts the call for any attendee id but mails nobody else.
+    return [
+      ...moderation,
+      if (_isEmailAttendee(participant)) ParticipantAction.resendInvitation,
+      if (bannable) ParticipantAction.ban,
+    ];
   }
 
   Future<void> _runParticipantAction(
@@ -1001,10 +1011,14 @@ mixin _RoomDetailsStateLogic on ConsumerState<RoomDetailsScreen> {
     if (action == ParticipantAction.ban) {
       return _ban(participant);
     }
+    if (action == ParticipantAction.resendInvitation) {
+      return _resendInvitationTo(participant);
+    }
     return _moderate(participant, switch (action) {
       ParticipantAction.promote => ParticipantModerationAction.promote,
       ParticipantAction.demote => ParticipantModerationAction.demote,
       ParticipantAction.remove ||
+      ParticipantAction.resendInvitation ||
       ParticipantAction.ban => ParticipantModerationAction.remove,
     });
   }

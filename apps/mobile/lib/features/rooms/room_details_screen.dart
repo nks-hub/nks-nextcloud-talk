@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mime/mime.dart';
@@ -30,6 +32,7 @@ part 'room_details_breakout.part.dart';
 part 'room_details_breakout_widgets.part.dart';
 part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
+part 'room_details_email_invitations.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
 part 'room_details_public.part.dart';
@@ -72,7 +75,12 @@ const String _sensitiveCapability = 'sensitive-conversations';
 const String _sharedItemsCapability = 'rich-object-list-media';
 const String _federatedSharedItemsCapability = 'federated-shared-items';
 const String _botsCapability = 'bots-v1';
+const String _emailCsvImportCapability = 'email-csv-import';
 const int _classifiedRoomAttribute = 4;
+
+/// Talk's actor type for an attendee invited by e-mail address. Only these
+/// have an invitation that can be resent.
+const String _emailActorType = 'emails';
 
 /// The emoji the avatar picker offers. Talk accepts any single emoji; this is
 /// a short, keyboard-free shortlist rather than a full picker.
@@ -96,7 +104,7 @@ const List<String> _avatarEmoji = <String>[
 /// What a moderator can do to one attendee from the participant menu: the
 /// three participant-moderation endpoints plus a ban, which is a different
 /// API but belongs in the same place.
-enum ParticipantAction { promote, demote, remove, ban }
+enum ParticipantAction { promote, demote, remove, resendInvitation, ban }
 
 /// Conversation details: room metadata, the moderator-gated settings
 /// actions (rename, description, notification level, favorite, avatar,
@@ -110,6 +118,7 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
     required this.conversation,
     this.linkSharer = const PlatformGuestLinkSharer(),
     this.imagePicker = const PlatformAttachmentSelectionBackend(),
+    this.csvPicker = pickInvitationCsvFromPlatform,
     this.onClose,
   });
 
@@ -127,6 +136,9 @@ final class RoomDetailsScreen extends ConsumerStatefulWidget {
   /// The gallery picker, which is a platform channel; replaced in tests.
   final ImageSelectionBackend imagePicker;
 
+  /// Opens the system file picker for the invitation CSV.
+  final PickInvitationCsv csvPicker;
+
   @override
   ConsumerState<RoomDetailsScreen> createState() => _RoomDetailsScreenState();
 }
@@ -139,10 +151,6 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
         _RoomSipStateLogic,
         _RoomImportanceSensitivityStateLogic,
         _RoomBotsStateLogic {
-  void _setBusy(bool value) {
-    setState(() => _busy = value);
-  }
-
   void _setAuthoritativeRoom(ConversationRoom room) {
     setState(() => _room = room);
   }
@@ -469,6 +477,13 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               ),
               onTap: _busy ? null : _changeListableScope,
             ),
+          if (_canImportEmailInvitations)
+            ListTile(
+              key: const Key('room-details-email-invitations'),
+              leading: const Icon(Icons.attach_email_outlined),
+              title: Text(strings.roomDetailsEmailInvitationsAction),
+              onTap: _busy ? null : _importEmailInvitations,
+            ),
           if (_canManageBots) _buildBotsSection(context),
           if (_canBan)
             ListTile(
@@ -562,6 +577,13 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
               }
               return Column(
                 children: [
+                  if (_canResendEmailInvitations(participants))
+                    ListTile(
+                      key: const Key('room-details-resend-invitations'),
+                      leading: const Icon(Icons.forward_to_inbox_outlined),
+                      title: Text(strings.roomDetailsResendInvitationsAction),
+                      onTap: _busy ? null : _resendAllEmailInvitations,
+                    ),
                   for (final participant in participants)
                     _ParticipantTile(
                       account: widget.account,

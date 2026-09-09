@@ -15,6 +15,7 @@ part 'response_call_notifications.dart';
 part 'response_clear_history.dart';
 part 'response_importance_sensitivity.dart';
 part 'response_message_expiration.dart';
+part 'response_email_invitations.dart';
 
 const TalkProtocolErrorCode _responseCode =
     TalkProtocolErrorCode.invalidRoomSettingsResponse;

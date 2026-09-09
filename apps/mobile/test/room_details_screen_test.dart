@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' hide isNull;
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,7 @@ part 'room_details_background_test.part.dart';
 part 'room_details_call_notifications_test.part.dart';
 part 'room_details_clear_history_test.part.dart';
 part 'room_details_conversation_tags_test.part.dart';
+part 'room_details_email_invitations_test.part.dart';
 part 'room_details_importance_sensitivity_test.part.dart';
 part 'room_details_message_expiration_test.part.dart';
 part 'room_details_overview_moderation_test.part.dart';
@@ -95,6 +97,7 @@ void main() {
   _registerCallNotificationTests();
   _registerClearHistoryTests();
   _registerConversationTagsTests();
+  _registerEmailInvitationTests();
   _registerImportanceSensitivityTests();
   _registerMessageExpirationTests();
   _registerSipInfoTests();
@@ -158,6 +161,7 @@ Future<void> openDetails(
   required CachedConversation forConversation,
   required http.Client client,
   GuestLinkSharer? sharer,
+  PickInvitationCsv? csvPicker,
   List<Override> overrides = const [],
   double height = 2600,
   double textScale = 1,
@@ -174,6 +178,7 @@ Future<void> openDetails(
         account: forAccount,
         conversation: forConversation,
         linkSharer: sharer ?? _RecordingLinkSharer(),
+        csvPicker: csvPicker ?? _noCsvSelected,
       ),
       client: client,
       overrides: overrides,

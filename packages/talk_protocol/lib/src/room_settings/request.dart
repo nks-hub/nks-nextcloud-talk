@@ -15,6 +15,7 @@ part 'request_clear_history.dart';
 part 'request_importance_sensitivity.dart';
 part 'request_message_expiration.dart';
 part 'request_breakout_rooms.dart';
+part 'request_email_invitations.dart';
 
 const String roomSettingsContractUserAgent =
     'com.nkshub.nextcloudtalk room-settings-contract/0.1';

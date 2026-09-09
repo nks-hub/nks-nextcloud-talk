@@ -773,6 +773,67 @@ mixin _NextcloudApiRooms on _HttpNextcloudApiBase {
     );
   }
 
+  /// Uploads a CSV of e-mail addresses as conversation invitations.
+  /// Moderator-only on the server and gated by `email-csv-import`. The
+  /// request's own `testRun` decides whether this previews or really sends;
+  /// the decoder cross-checks the answer against it.
+  Future<ImportEmailInvitationsResponse> importEmailInvitations({
+    required ImportEmailInvitationsRequest importRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', importRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...importRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      })
+      ..bodyBytes = importRequest.multipartBody;
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+      timeout: const Duration(seconds: 60),
+    );
+    return decodeImportEmailInvitationsResponse(
+      request: importRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
+  /// Mails the invitation again to one e-mail attendee, or to all of them.
+  /// Moderator-only on the server. Never retried by the caller: the effect is
+  /// an e-mail leaving the server.
+  Future<ResendEmailInvitationsResponse> resendEmailInvitations({
+    required ResendEmailInvitationsRequest resendRequest,
+    required String loginName,
+    required String appPassword,
+    Future<void>? abortTrigger,
+  }) async {
+    final request = _request('POST', resendRequest.uri, abortTrigger)
+      ..headers.addAll({
+        ...resendRequest.headers,
+        'Accept': 'application/json',
+        'Authorization': _basicAuthorization(loginName, appPassword),
+      });
+    final body = resendRequest.formBody;
+    if (body != null) {
+      request.bodyFields = body;
+    }
+    final payload = await _sendBody(
+      request,
+      allowedStatusCodes: _roomAdministrationAllowedStatusCodes,
+      maximumBytes: _roomSettingsMaximumBytes,
+    );
+    return decodeResendEmailInvitationsResponse(
+      request: resendRequest,
+      statusCode: payload.statusCode,
+      body: payload.body,
+    );
+  }
+
   /// Reads every ban on a conversation. Moderator-only on the server.
   Future<RoomBanResponse> listBans({
     required ListBansRequest listRequest,
