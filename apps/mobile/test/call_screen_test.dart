@@ -79,6 +79,7 @@ CallJoinState _joined({
   String? videoTrackId,
   String? screenTrackId,
   bool canManageRecording = false,
+  int extraPeers = 0,
 }) => CallJoinState(
   phase: CallJoinPhase.joined,
   publishing: publishing,
@@ -111,6 +112,15 @@ CallJoinState _joined({
             ? null
             : _FakeRemoteVideo(videoTrackId: screenTrackId),
       ),
+      for (var i = 0; i < extraPeers; i++)
+        CallPeerState(
+          peerId: 'peer-extra-$i',
+          actorType: 'users',
+          actorId: 'extra$i',
+          connected: true,
+          handRaised: false,
+          since: DateTime(2026, 9, 5),
+        ),
     ],
   ),
 );
@@ -122,6 +132,7 @@ Future<_FakePictureInPicture> _pumpCallScreen(
   String? videoTrackId,
   String? screenTrackId,
   bool canManageRecording = false,
+  int extraPeers = 0,
 }) async {
   // A phone-sized surface: on the default test window the third tile of
   // the grid is below the fold and is not built at all.
@@ -139,6 +150,7 @@ Future<_FakePictureInPicture> _pumpCallScreen(
               videoTrackId: videoTrackId,
               screenTrackId: screenTrackId,
               canManageRecording: canManageRecording,
+              extraPeers: extraPeers,
             ),
           ),
         ),
@@ -449,6 +461,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CallScreen, skipOffstage: false), findsNothing);
     expect(find.text('Chat'), findsOneWidget);
+  });
+
+  testWidgets('a few participants fill the call body instead of a black gap', (
+    tester,
+  ) async {
+    await _pumpCallScreen(tester);
+    final grid = tester.getRect(find.byKey(const PageStorageKey('call-grid')));
+    final bottom = tester
+        .getRect(find.byKey(const Key('call-tile-peer-b')))
+        .bottom;
+    // Three tiles in two columns: the second row has to reach the bottom of
+    // the grid, give or take its padding, not stop a third of the way down.
+    expect(bottom, greaterThan(grid.bottom - 24));
+    expect(bottom, lessThanOrEqualTo(grid.bottom));
+  });
+
+  testWidgets('too many participants keep a readable tile and scroll', (
+    tester,
+  ) async {
+    // A real phone, not the tall test window: twelve tiles cannot share
+    // 411 x 891 dp and still be worth looking at.
+    await _pumpCallScreen(tester, extraPeers: 10, devicePixelRatio: 2.625);
+    final tile = tester.getRect(find.byKey(const Key('call-tile-peer-a')));
+    expect(tile.height, greaterThanOrEqualTo(140));
+    // Below the floor the grid keeps its fixed shape, so the last row sits
+    // past the bottom of the body and is only reachable by scrolling.
+    expect(find.byKey(const Key('call-tile-peer-extra-9')), findsNothing);
+    await tester.drag(
+      find.byKey(const PageStorageKey('call-grid')),
+      const Offset(0, -2000),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('call-tile-peer-extra-9')), findsOneWidget);
   });
 
   testWidgets('the call screen shows one tile per participant and the controls', (

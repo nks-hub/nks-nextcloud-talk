@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A call with few participants now fills the view. The tiles take whatever
+  a shared screen and the controls leave over instead of sitting in the top
+  third of a black screen; once a tile would become too small to read, the
+  grid keeps its shape and scrolls as before.
+
 - Any participant tile or shared screen in a call opens full size in the call
   view. Back, Escape and a visible button return to the grid, the expanded
   frame is never cropped, and grid tiles keep filling their own space. A

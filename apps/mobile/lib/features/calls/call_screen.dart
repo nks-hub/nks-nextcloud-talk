@@ -13,6 +13,10 @@ import 'call_participants_sheet.dart';
 import 'call_picture_in_picture.dart';
 import 'call_transport_service.dart';
 
+/// Below this a tile is too small to read a name in, so the grid keeps its
+/// fixed shape and scrolls rather than squeezing everyone onto one screen.
+const double _minimumTileHeight = 140;
+
 /// Presents an admitted call while its initiating view still owns navigation.
 Future<void> joinCallAndPresent(
   BuildContext context,
@@ -318,46 +322,62 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         ),
       );
     }
-    final grid = CustomScrollView(
-      // Page storage, so collapsing an expanded tile returns to the same
-      // scroll offset rather than jumping back to the first row.
-      key: const PageStorageKey('call-grid'),
-      slivers: [
-        for (final peer in sharing)
-          SliverToBoxAdapter(
-            child: Padding(
-              key: Key('call-screen-shared-${peer.peerId}'),
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: _expandable(
-                  'screen-${peer.peerId}',
-                  tileOf('screen-${peer.peerId}', contain: true)!,
-                  strings,
-                  _PeerTile.nameOf(peer, names),
+    final rows = (tiles.length + columns - 1) ~/ columns;
+    final grid = LayoutBuilder(
+      builder: (context, constraints) {
+        // Whatever the shared screen and the padding leave over belongs to
+        // the participants: two people on a phone used to sit in a third of
+        // the view with the rest black. Below a legible tile height the grid
+        // goes back to a fixed shape and scrolls instead of shrinking faces.
+        final shareHeight = sharing.isEmpty
+            ? 0.0
+            : sharing.length * ((constraints.maxWidth - 16) * 9 / 16 + 8);
+        final tileHeight =
+            (constraints.maxHeight - shareHeight - gap * (rows + 1)) / rows;
+        final tileWidth = (constraints.maxWidth - gap * (columns + 1)) / columns;
+        final fills = tileHeight >= _minimumTileHeight;
+        return CustomScrollView(
+          // Page storage, so collapsing an expanded tile returns to the same
+          // scroll offset rather than jumping back to the first row.
+          key: const PageStorageKey('call-grid'),
+          slivers: [
+            for (final peer in sharing)
+              SliverToBoxAdapter(
+                child: Padding(
+                  key: Key('call-screen-shared-${peer.peerId}'),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: _expandable(
+                      'screen-${peer.peerId}',
+                      tileOf('screen-${peer.peerId}', contain: true)!,
+                      strings,
+                      _PeerTile.nameOf(peer, names),
+                    ),
+                  ),
                 ),
               ),
+            SliverPadding(
+              padding: EdgeInsets.all(gap),
+              sliver: SliverGrid.count(
+                crossAxisCount: columns,
+                mainAxisSpacing: gap,
+                crossAxisSpacing: gap,
+                childAspectRatio: fills ? tileWidth / tileHeight : 3 / 4,
+                children: [
+                  for (var i = 0; i < tileIds.length; i++)
+                    _expandable(
+                      tileIds[i],
+                      tiles[i],
+                      strings,
+                      nameOf(tileIds[i]),
+                    ),
+                ],
+              ),
             ),
-          ),
-        SliverPadding(
-          padding: EdgeInsets.all(gap),
-          sliver: SliverGrid.count(
-            crossAxisCount: columns,
-            mainAxisSpacing: gap,
-            crossAxisSpacing: gap,
-            childAspectRatio: 3 / 4,
-            children: [
-              for (var i = 0; i < tileIds.length; i++)
-                _expandable(
-                  tileIds[i],
-                  tiles[i],
-                  strings,
-                  nameOf(tileIds[i]),
-                ),
-            ],
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
     return CallbackShortcuts(
       bindings: {
