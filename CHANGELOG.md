@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A conversation can be pinned to the Android home screen from its own
+  menu, where until now only the four most recent ones appeared by
+  themselves. The action is offered only where the launcher accepts
+  pins, and a pinned conversation is not affected by the recent list
+  changing.
+
 - Your own absence can be set, edited and cleared from the profile,
   where until now only somebody else's was visible. Both days are
   inclusive, and a colleague standing in is offered only where the
