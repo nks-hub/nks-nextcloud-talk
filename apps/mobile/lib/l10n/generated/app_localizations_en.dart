@@ -2908,6 +2908,68 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server has not provided your PIN yet.';
 
   @override
+  String get roomDetailsMeetingAction => 'Schedule a meeting';
+
+  @override
+  String get roomDetailsMeetingHint =>
+      'Writes an event and invites the participants';
+
+  @override
+  String get roomDetailsMeetingCalendarLabel => 'Calendar';
+
+  @override
+  String get roomDetailsMeetingTitleLabel => 'Title';
+
+  @override
+  String get roomDetailsMeetingStartLabel => 'Starts';
+
+  @override
+  String get roomDetailsMeetingDurationLabel => 'Lasts';
+
+  @override
+  String get roomDetailsMeetingConfirm => 'Schedule';
+
+  @override
+  String get roomDetailsMeetingScheduled => 'The meeting is in the calendar';
+
+  @override
+  String get roomDetailsMeetingNoCalendars =>
+      'This account has no calendar to write to.';
+
+  @override
+  String get roomDetailsMeetingCalendarRefused =>
+      'That calendar would not take the meeting. Try another one.';
+
+  @override
+  String get roomDetailsMeetingNoEmail =>
+      'Your account has no e-mail address, so nobody can be invited.';
+
+  @override
+  String get roomDetailsMeetingStartInThePast => 'Pick a moment in the future.';
+
+  @override
+  String get roomDetailsMeetingEndBeforeStart =>
+      'The meeting has to end after it starts.';
+
+  @override
+  String get roomDetailsMeetingFailed => 'The meeting could not be scheduled.';
+
+  @override
+  String get roomDetailsMeetingAmbiguous =>
+      'The answer never arrived. Check the calendar before scheduling again — a second attempt would invite everybody twice.';
+
+  @override
+  String roomDetailsMeetingDurationMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get roomDetailsListableLabel => 'Who can find this conversation';
 
   @override

@@ -1188,6 +1188,29 @@
   "roomDetailsSipMeetingId": "Meeting ID",
   "roomDetailsSipPersonalPin": "Your PIN",
   "roomDetailsSipPinUnavailable": "The server has not provided your PIN yet.",
+  "roomDetailsMeetingAction": "Schedule a meeting",
+  "roomDetailsMeetingHint": "Writes an event and invites the participants",
+  "roomDetailsMeetingCalendarLabel": "Calendar",
+  "roomDetailsMeetingTitleLabel": "Title",
+  "roomDetailsMeetingStartLabel": "Starts",
+  "roomDetailsMeetingDurationLabel": "Lasts",
+  "roomDetailsMeetingConfirm": "Schedule",
+  "roomDetailsMeetingScheduled": "The meeting is in the calendar",
+  "roomDetailsMeetingNoCalendars": "This account has no calendar to write to.",
+  "roomDetailsMeetingCalendarRefused": "That calendar would not take the meeting. Try another one.",
+  "roomDetailsMeetingNoEmail": "Your account has no e-mail address, so nobody can be invited.",
+  "roomDetailsMeetingStartInThePast": "Pick a moment in the future.",
+  "roomDetailsMeetingEndBeforeStart": "The meeting has to end after it starts.",
+  "roomDetailsMeetingFailed": "The meeting could not be scheduled.",
+  "roomDetailsMeetingAmbiguous": "The answer never arrived. Check the calendar before scheduling again — a second attempt would invite everybody twice.",
+  "roomDetailsMeetingDurationMinutes": "{minutes, plural, =1{1 minute} other{{minutes} minutes}}",
+  "@roomDetailsMeetingDurationMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
   "roomDetailsListableLabel": "Who can find this conversation",
   "@roomDetailsListableLabel": {
     "description": "Opens the discovery scope of an open conversation."

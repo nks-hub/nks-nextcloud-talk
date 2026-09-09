@@ -5270,6 +5270,102 @@ abstract class AppLocalizations {
   /// **'The server has not provided your PIN yet.'**
   String get roomDetailsSipPinUnavailable;
 
+  /// No description provided for @roomDetailsMeetingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule a meeting'**
+  String get roomDetailsMeetingAction;
+
+  /// No description provided for @roomDetailsMeetingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Writes an event and invites the participants'**
+  String get roomDetailsMeetingHint;
+
+  /// No description provided for @roomDetailsMeetingCalendarLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar'**
+  String get roomDetailsMeetingCalendarLabel;
+
+  /// No description provided for @roomDetailsMeetingTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get roomDetailsMeetingTitleLabel;
+
+  /// No description provided for @roomDetailsMeetingStartLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get roomDetailsMeetingStartLabel;
+
+  /// No description provided for @roomDetailsMeetingDurationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lasts'**
+  String get roomDetailsMeetingDurationLabel;
+
+  /// No description provided for @roomDetailsMeetingConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get roomDetailsMeetingConfirm;
+
+  /// No description provided for @roomDetailsMeetingScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'The meeting is in the calendar'**
+  String get roomDetailsMeetingScheduled;
+
+  /// No description provided for @roomDetailsMeetingNoCalendars.
+  ///
+  /// In en, this message translates to:
+  /// **'This account has no calendar to write to.'**
+  String get roomDetailsMeetingNoCalendars;
+
+  /// No description provided for @roomDetailsMeetingCalendarRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'That calendar would not take the meeting. Try another one.'**
+  String get roomDetailsMeetingCalendarRefused;
+
+  /// No description provided for @roomDetailsMeetingNoEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account has no e-mail address, so nobody can be invited.'**
+  String get roomDetailsMeetingNoEmail;
+
+  /// No description provided for @roomDetailsMeetingStartInThePast.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a moment in the future.'**
+  String get roomDetailsMeetingStartInThePast;
+
+  /// No description provided for @roomDetailsMeetingEndBeforeStart.
+  ///
+  /// In en, this message translates to:
+  /// **'The meeting has to end after it starts.'**
+  String get roomDetailsMeetingEndBeforeStart;
+
+  /// No description provided for @roomDetailsMeetingFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The meeting could not be scheduled.'**
+  String get roomDetailsMeetingFailed;
+
+  /// No description provided for @roomDetailsMeetingAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'The answer never arrived. Check the calendar before scheduling again — a second attempt would invite everybody twice.'**
+  String get roomDetailsMeetingAmbiguous;
+
+  /// No description provided for @roomDetailsMeetingDurationMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{1 minute} other{{minutes} minutes}}'**
+  String roomDetailsMeetingDurationMinutes(int minutes);
+
   /// Opens the discovery scope of an open conversation.
   ///
   /// In en, this message translates to:

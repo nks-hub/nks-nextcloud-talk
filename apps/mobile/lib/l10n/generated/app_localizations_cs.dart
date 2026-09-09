@@ -2906,6 +2906,69 @@ class AppLocalizationsCs extends AppLocalizations {
   String get roomDetailsSipPinUnavailable => 'Server zatím váš PIN neposkytl.';
 
   @override
+  String get roomDetailsMeetingAction => 'Naplánovat schůzku';
+
+  @override
+  String get roomDetailsMeetingHint => 'Založí událost a pozve účastníky';
+
+  @override
+  String get roomDetailsMeetingCalendarLabel => 'Kalendář';
+
+  @override
+  String get roomDetailsMeetingTitleLabel => 'Název';
+
+  @override
+  String get roomDetailsMeetingStartLabel => 'Začátek';
+
+  @override
+  String get roomDetailsMeetingDurationLabel => 'Trvání';
+
+  @override
+  String get roomDetailsMeetingConfirm => 'Naplánovat';
+
+  @override
+  String get roomDetailsMeetingScheduled => 'Schůzka je v kalendáři';
+
+  @override
+  String get roomDetailsMeetingNoCalendars =>
+      'Tento účet nemá kalendář, kam zapsat.';
+
+  @override
+  String get roomDetailsMeetingCalendarRefused =>
+      'Tento kalendář schůzku nepřijal. Zkuste jiný.';
+
+  @override
+  String get roomDetailsMeetingNoEmail =>
+      'Váš účet nemá e-mailovou adresu, takže nelze nikoho pozvat.';
+
+  @override
+  String get roomDetailsMeetingStartInThePast =>
+      'Zvolte okamžik v budoucnosti.';
+
+  @override
+  String get roomDetailsMeetingEndBeforeStart =>
+      'Schůzka musí skončit až po začátku.';
+
+  @override
+  String get roomDetailsMeetingFailed => 'Schůzku se nepodařilo naplánovat.';
+
+  @override
+  String get roomDetailsMeetingAmbiguous =>
+      'Odpověď nedorazila. Než to zkusíte znovu, podívejte se do kalendáře — druhý pokus by všechny pozval podruhé.';
+
+  @override
+  String roomDetailsMeetingDurationMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutes minut',
+      few: '$minutes minuty',
+      one: '1 minuta',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get roomDetailsListableLabel => 'Kdo konverzaci najde';
 
   @override

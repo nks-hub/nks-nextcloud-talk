@@ -33,6 +33,7 @@ part 'room_details_breakout_widgets.part.dart';
 part 'room_details_clear_history.part.dart';
 part 'room_details_conversation_tags.part.dart';
 part 'room_details_email_invitations.part.dart';
+part 'room_details_meeting.part.dart';
 part 'room_details_importance_sensitivity.part.dart';
 part 'room_details_message_expiration.part.dart';
 part 'room_details_public.part.dart';
@@ -76,6 +77,7 @@ const String _sharedItemsCapability = 'rich-object-list-media';
 const String _federatedSharedItemsCapability = 'federated-shared-items';
 const String _botsCapability = 'bots-v1';
 const String _emailCsvImportCapability = 'email-csv-import';
+const String _scheduleMeetingCapability = 'schedule-meeting';
 const int _classifiedRoomAttribute = 4;
 
 /// Talk's actor type for an attendee invited by e-mail address. Only these
@@ -476,6 +478,14 @@ final class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
                 key: const Key('room-details-listable-subtitle'),
               ),
               onTap: _busy ? null : _changeListableScope,
+            ),
+          if (_canScheduleMeeting)
+            ListTile(
+              key: const Key('room-details-meeting'),
+              leading: const Icon(Icons.event_available_outlined),
+              title: Text(strings.roomDetailsMeetingAction),
+              subtitle: Text(strings.roomDetailsMeetingHint),
+              onTap: _busy ? null : () => unawaited(_scheduleMeeting()),
             ),
           if (_canImportEmailInvitations)
             ListTile(

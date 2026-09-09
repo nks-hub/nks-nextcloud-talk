@@ -22,6 +22,7 @@ part 'room_settings_sip.part.dart';
 part 'room_settings_breakout.part.dart';
 part 'room_settings_recording.part.dart';
 part 'room_settings_call_attendance.part.dart';
+part 'room_settings_meeting.part.dart';
 part 'room_settings_public.part.dart';
 part 'room_settings_access_context.part.dart';
 part 'room_settings_permissions.part.dart';
