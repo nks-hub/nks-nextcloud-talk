@@ -20,6 +20,24 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A conversation made for an event or an instant meeting can be kept, so it
+  outlives what created it. The action asks first and appears only where the
+  server would accept it. A temporary phone conversation is kept as a
+  permanent phone one rather than becoming an ordinary conversation, and the
+  app says which of the two happened instead of guessing.
+
+- Every reminder still waiting on you is now in one list, across all the
+  accounts that are signed in. The entry in the conversation-list menu opens
+  it; a row says when the reminder is due, which conversation it points at, who
+  wrote the message and what it said, and the account it belongs to as soon as
+  there is more than one. Tapping a row opens that message in that account's
+  conversation, and a row can drop its reminder without opening anything. The
+  accounts are asked a few at a time rather than all at once, and one account
+  that cannot answer — signed out, or a server that is down — costs only its
+  own rows: the list shows the others and names the one it could not read.
+  Two accounts holding a reminder on the same message is an ordinary thing on
+  the same server, and the two rows stay apart from each other.
+
 - A meeting can be scheduled from a conversation. Pick one of your calendars,
   a moment and how long it lasts, and the server writes the event, puts the
   conversation's call address into it and invites the participants. A moment
