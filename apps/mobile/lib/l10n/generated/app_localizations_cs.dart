@@ -3792,4 +3792,63 @@ class AppLocalizationsCs extends AppLocalizations {
 
   @override
   String get reminderInboxRemoveFailed => 'Připomínku se nepodařilo odebrat.';
+
+  @override
+  String get settingsBotsSection => 'Boti';
+
+  @override
+  String get settingsOpenBotAdmin => 'Nainstalovaní boti';
+
+  @override
+  String get settingsOpenBotAdminSubtitle => 'Stav všech botů na tomto serveru';
+
+  @override
+  String get botAdminEmpty => 'Na tomto serveru není nainstalovaný žádný bot.';
+
+  @override
+  String get botAdminNotAdministrator =>
+      'Tento účet není správcem tohoto serveru.';
+
+  @override
+  String get botAdminUnsupported => 'Tento server seznam botů nenabízí.';
+
+  @override
+  String get botAdminUnavailable => 'Seznam botů se nepodařilo načíst.';
+
+  @override
+  String get botAdminStateNoSetup => 'Není nastavený v žádné konverzaci';
+
+  @override
+  String get botAdminStateUnavailable =>
+      'Nedostupný, jeho aplikace není zapnutá';
+
+  @override
+  String botAdminWebhookHost(String host) {
+    return 'Host webhooku: $host';
+  }
+
+  @override
+  String get botAdminWebhookHostUnknown => 'Adresu webhooku nelze přečíst';
+
+  @override
+  String botAdminFailures(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selhání',
+      few: '$count selhání',
+      one: '1 selhání',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String botAdminLastFailure(String time) {
+    return 'Poslední selhání $time';
+  }
+
+  @override
+  String botAdminTruncated(int count) {
+    return 'Zobrazeno je jen prvních $count botů.';
+  }
 }

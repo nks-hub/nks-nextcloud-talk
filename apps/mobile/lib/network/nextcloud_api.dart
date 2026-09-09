@@ -11,6 +11,7 @@ import '../core/app_version.dart';
 
 part 'nextcloud_api_account.dart';
 part 'nextcloud_api_active_room.dart';
+part 'nextcloud_api_bots.dart';
 part 'nextcloud_api_call.dart';
 part 'nextcloud_api_chat.dart';
 part 'nextcloud_api_cookies.dart';
@@ -453,6 +454,7 @@ final class HttpNextcloudApi extends _HttpNextcloudApiBase
     with
         _NextcloudApiAccount,
         _NextcloudApiActiveRoom,
+        _NextcloudApiBots,
         _NextcloudApiRooms,
         _NextcloudApiChat,
         _NextcloudApiFederation,

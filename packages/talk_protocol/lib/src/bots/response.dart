@@ -13,7 +13,13 @@ const int _botsMaximumJsonNodes = 60000;
 const TalkProtocolErrorCode _responseCode =
     TalkProtocolErrorCode.invalidBotsResponse;
 
-enum BotState { disabled, enabled, noSetup }
+/// The four states Talk stores for a bot.
+///
+/// [unavailable] is only ever reachable through the administrator list: Talk
+/// synthesizes it there for a bot provided by an app that is no longer enabled.
+/// The per-conversation list a moderator reads is bounded to the first three,
+/// which is why its parser still rejects anything above `2`.
+enum BotState { disabled, enabled, noSetup, unavailable }
 
 final class TalkBot {
   const TalkBot._({

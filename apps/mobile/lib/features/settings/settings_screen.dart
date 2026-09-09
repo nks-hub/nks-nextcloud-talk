@@ -9,6 +9,8 @@ import '../../features/push/android_push_transport.dart';
 import '../../features/push/android_web_push_bridge.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../platform/desktop_autostart.dart';
+import '../bots/bot_admin_screen.dart';
+import '../bots/bot_admin_service.dart';
 import '../diagnostics/diagnostics_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
@@ -36,6 +38,9 @@ final class SettingsScreen extends ConsumerWidget {
     final desktopAutostart = ref.watch(desktopAutostartHostProvider)
         ? ref.watch(desktopAutostartStateProvider)
         : null;
+    final botAdminAccount = _selectedAccount(
+      accounts.valueOrNull ?? const <StoredAccount>[],
+    );
 
     // Removing the last account leaves this screen with nothing to manage,
     // while the shell underneath has already switched to onboarding. Close
@@ -117,6 +122,25 @@ final class SettingsScreen extends ConsumerWidget {
               loading: () => const SizedBox(height: 24),
               error: (_, _) => const SizedBox.shrink(),
             ),
+            // Server-wide bot health, and therefore only where the server
+            // publishes the route at all. Whether this account may actually
+            // read it is a separate question the server answers with 403, and
+            // the screen says so; the capability cannot tell us that here.
+            if (botAdminAccount != null &&
+                ref
+                        .watch(botAdminSupportedProvider(botAdminAccount.id))
+                        .valueOrNull ==
+                    true) ...[
+              const Divider(height: 1),
+              _SectionHeader(strings.settingsBotsSection),
+              ListTile(
+                key: const Key('settings-open-bot-admin'),
+                leading: const Icon(Icons.smart_toy_outlined),
+                title: Text(strings.settingsOpenBotAdmin),
+                subtitle: Text(strings.settingsOpenBotAdminSubtitle),
+                onTap: () => _openBotAdmin(context, botAdminAccount.id),
+              ),
+            ],
             // Android is the only platform with two push paths to choose
             // between; the bridge is null everywhere else.
             if (androidPushPlatform != null) ...[
@@ -413,6 +437,15 @@ final class SettingsScreen extends ConsumerWidget {
       MaterialPageRoute<void>(
         settings: const RouteSettings(name: '/settings/profile'),
         builder: (_) => ProfileScreen(accountId: accountId),
+      ),
+    );
+  }
+
+  void _openBotAdmin(BuildContext context, String accountId) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: '/settings/bots'),
+        builder: (_) => BotAdminScreen(accountId: accountId),
       ),
     );
   }

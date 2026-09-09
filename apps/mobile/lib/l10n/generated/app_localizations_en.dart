@@ -3786,4 +3786,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reminderInboxRemoveFailed => 'The reminder could not be removed.';
+
+  @override
+  String get settingsBotsSection => 'Bots';
+
+  @override
+  String get settingsOpenBotAdmin => 'Installed bots';
+
+  @override
+  String get settingsOpenBotAdminSubtitle =>
+      'Health of every bot on this server';
+
+  @override
+  String get botAdminEmpty => 'No bots are installed on this server.';
+
+  @override
+  String get botAdminNotAdministrator =>
+      'This account is not an administrator of this server.';
+
+  @override
+  String get botAdminUnsupported => 'This server does not offer the bot list.';
+
+  @override
+  String get botAdminUnavailable => 'The bot list could not be read.';
+
+  @override
+  String get botAdminStateNoSetup => 'Not set up in any conversation';
+
+  @override
+  String get botAdminStateUnavailable => 'Unavailable, its app is not enabled';
+
+  @override
+  String botAdminWebhookHost(String host) {
+    return 'Webhook host: $host';
+  }
+
+  @override
+  String get botAdminWebhookHostUnknown => 'The webhook address cannot be read';
+
+  @override
+  String botAdminFailures(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failures',
+      one: '1 failure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String botAdminLastFailure(String time) {
+    return 'Last failure $time';
+  }
+
+  @override
+  String botAdminTruncated(int count) {
+    return 'Only the first $count bots are shown.';
+  }
 }

@@ -1848,5 +1848,47 @@
       }
     }
   },
-  "reminderInboxRemoveFailed": "The reminder could not be removed."
+  "reminderInboxRemoveFailed": "The reminder could not be removed.",
+  "settingsBotsSection": "Bots",
+  "settingsOpenBotAdmin": "Installed bots",
+  "settingsOpenBotAdminSubtitle": "Health of every bot on this server",
+  "botAdminEmpty": "No bots are installed on this server.",
+  "botAdminNotAdministrator": "This account is not an administrator of this server.",
+  "botAdminUnsupported": "This server does not offer the bot list.",
+  "botAdminUnavailable": "The bot list could not be read.",
+  "botAdminStateNoSetup": "Not set up in any conversation",
+  "botAdminStateUnavailable": "Unavailable, its app is not enabled",
+  "botAdminWebhookHost": "Webhook host: {host}",
+  "@botAdminWebhookHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "botAdminWebhookHostUnknown": "The webhook address cannot be read",
+  "botAdminFailures": "{count, plural, =1{1 failure} other{{count} failures}}",
+  "@botAdminFailures": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "botAdminLastFailure": "Last failure {time}",
+  "@botAdminLastFailure": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "botAdminTruncated": "Only the first {count} bots are shown.",
+  "@botAdminTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

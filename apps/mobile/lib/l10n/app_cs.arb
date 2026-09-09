@@ -1307,5 +1307,47 @@
       }
     }
   },
-  "reminderInboxRemoveFailed": "Připomínku se nepodařilo odebrat."
+  "reminderInboxRemoveFailed": "Připomínku se nepodařilo odebrat.",
+  "settingsBotsSection": "Boti",
+  "settingsOpenBotAdmin": "Nainstalovaní boti",
+  "settingsOpenBotAdminSubtitle": "Stav všech botů na tomto serveru",
+  "botAdminEmpty": "Na tomto serveru není nainstalovaný žádný bot.",
+  "botAdminNotAdministrator": "Tento účet není správcem tohoto serveru.",
+  "botAdminUnsupported": "Tento server seznam botů nenabízí.",
+  "botAdminUnavailable": "Seznam botů se nepodařilo načíst.",
+  "botAdminStateNoSetup": "Není nastavený v žádné konverzaci",
+  "botAdminStateUnavailable": "Nedostupný, jeho aplikace není zapnutá",
+  "botAdminWebhookHost": "Host webhooku: {host}",
+  "@botAdminWebhookHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "botAdminWebhookHostUnknown": "Adresu webhooku nelze přečíst",
+  "botAdminFailures": "{count, plural, =1{1 selhání} few{{count} selhání} other{{count} selhání}}",
+  "@botAdminFailures": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "botAdminLastFailure": "Poslední selhání {time}",
+  "@botAdminLastFailure": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "botAdminTruncated": "Zobrazeno je jen prvních {count} botů.",
+  "@botAdminTruncated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

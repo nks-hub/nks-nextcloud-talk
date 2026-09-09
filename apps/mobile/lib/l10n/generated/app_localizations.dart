@@ -6745,6 +6745,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The reminder could not be removed.'**
   String get reminderInboxRemoveFailed;
+
+  /// No description provided for @settingsBotsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Bots'**
+  String get settingsBotsSection;
+
+  /// No description provided for @settingsOpenBotAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed bots'**
+  String get settingsOpenBotAdmin;
+
+  /// No description provided for @settingsOpenBotAdminSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Health of every bot on this server'**
+  String get settingsOpenBotAdminSubtitle;
+
+  /// No description provided for @botAdminEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No bots are installed on this server.'**
+  String get botAdminEmpty;
+
+  /// No description provided for @botAdminNotAdministrator.
+  ///
+  /// In en, this message translates to:
+  /// **'This account is not an administrator of this server.'**
+  String get botAdminNotAdministrator;
+
+  /// No description provided for @botAdminUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not offer the bot list.'**
+  String get botAdminUnsupported;
+
+  /// No description provided for @botAdminUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The bot list could not be read.'**
+  String get botAdminUnavailable;
+
+  /// No description provided for @botAdminStateNoSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set up in any conversation'**
+  String get botAdminStateNoSetup;
+
+  /// No description provided for @botAdminStateUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable, its app is not enabled'**
+  String get botAdminStateUnavailable;
+
+  /// No description provided for @botAdminWebhookHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Webhook host: {host}'**
+  String botAdminWebhookHost(String host);
+
+  /// No description provided for @botAdminWebhookHostUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The webhook address cannot be read'**
+  String get botAdminWebhookHostUnknown;
+
+  /// No description provided for @botAdminFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 failure} other{{count} failures}}'**
+  String botAdminFailures(int count);
+
+  /// No description provided for @botAdminLastFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Last failure {time}'**
+  String botAdminLastFailure(String time);
+
+  /// No description provided for @botAdminTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the first {count} bots are shown.'**
+  String botAdminTruncated(int count);
 }
 
 class _AppLocalizationsDelegate
