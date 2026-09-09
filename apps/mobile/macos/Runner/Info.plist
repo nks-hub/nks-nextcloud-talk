@@ -39,6 +39,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>NKS Talk needs camera access to send your video in a call.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NKS Talk needs microphone access to record voice messages.</string>
 	<key>NSLocationUsageDescription</key>

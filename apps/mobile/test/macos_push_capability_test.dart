@@ -111,6 +111,25 @@ void main() {
     expect(lock, contains('PODFILE CHECKSUM: $podfileChecksum'));
   });
 
+  test('macOS may open the camera for a video call', () {
+    // A call screen offers the camera on every desktop platform, so a macOS
+    // build without the sandbox entitlement and the usage string cannot turn
+    // it on at all - build 66 shipped exactly that way.
+    final info = read('$runner${separator}Info.plist');
+    expect(info, contains('<key>NSCameraUsageDescription</key>'));
+    for (final name in const [
+      'DebugProfile.entitlements',
+      'Release.entitlements',
+    ]) {
+      final contents = read('$runner$separator$name');
+      expect(
+        contents,
+        contains('<key>com.apple.security.device.camera</key>'),
+        reason: '$name cannot publish video without the camera entitlement',
+      );
+    }
+  });
+
   test('macOS save picker may write to a user-selected destination', () {
     for (final name in const [
       'DebugProfile.entitlements',

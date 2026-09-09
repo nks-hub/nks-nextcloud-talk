@@ -18,6 +18,14 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
+## Unreleased
+
+- The macOS build may open the camera in a call. Its sandbox carried the
+  microphone entitlement but not `com.apple.security.device.camera`, and
+  `Info.plist` had no `NSCameraUsageDescription`, while the call screen offers
+  the camera on every platform without a guard. A macOS tester on 1.0.0 (66)
+  therefore had audio only, and the entitlement lands with the next build.
+
 ## 1.0.0 (66) — 9 September 2026
 
 The first release that carries a 1.0 number. It is not a rewrite: it is the
