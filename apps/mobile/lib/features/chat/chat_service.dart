@@ -381,8 +381,8 @@ final class ChatService {
           // be known before it can be admitted, so this one send does wait.
           prepared = await _serializeRoom<_PreparedChat>(
             key,
-            () async => (await _resolveAndSynchronizePrepared(prepared))
-                .prepared,
+            () async =>
+                (await _resolveAndSynchronizePrepared(prepared)).prepared,
           );
         }
         final effectiveReplyTo =
@@ -440,10 +440,7 @@ final class ChatService {
   /// the deliveries of earlier admissions. A failure is recorded on the room
   /// and on the operation exactly as a drain's would be, and the next wake
   /// picks the rows up again.
-  Future<void> _deliverPending(
-    _PreparedChat prepared, {
-    int? threadId,
-  }) async {
+  Future<void> _deliverPending(_PreparedChat prepared, {int? threadId}) async {
     final accountId = prepared.account.id;
     final roomToken = prepared.room.token.value;
     try {
