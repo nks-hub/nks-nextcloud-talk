@@ -20,6 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A test that could hang for ten silent minutes now says where it stopped. One
+  wait in the jump-to-message tests ran on the real clock with no bound, so a
+  stalled database or network call behind it took the whole run down without a
+  word; it is bounded and speaks now. Nothing in the application changed.
+
 - Sharing from the desktop was watched arriving on a second device for the
   first time. Pick a monitor in a call and the other side sees that monitor,
   live; stop it, pick a single window instead, and the other side sees that
