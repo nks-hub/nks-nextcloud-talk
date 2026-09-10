@@ -32,7 +32,11 @@ void main() {
       );
     });
 
-    test('leaves Enter inside a mention to the suggestion list', () {
+    test('a message that ends in a mention still sends', () {
+      // This asserted the opposite until 10 September 2026, on the grounds
+      // that Enter belonged to the suggestion list. The list never handled a
+      // key — it is a row of chips with `onTap` — so Enter went nowhere and
+      // typing "Ahoj @petr" then Enter inserted a blank line on a desktop.
       expect(
         composerEnterAction(
           text: 'ahoj @pet',
@@ -40,7 +44,7 @@ void main() {
           shiftPressed: false,
           sending: false,
         ),
-        ComposerEnterAction.insertNewline,
+        ComposerEnterAction.send,
       );
     });
 

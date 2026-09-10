@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-import 'mention_suggestions.dart';
 
 enum ComposerInsertionMode { inline, separatedToken }
 
@@ -37,11 +36,13 @@ ComposerEnterAction composerEnterAction({
   if (shiftPressed) {
     return ComposerEnterAction.insertNewline;
   }
-  // The suggestion list is open over an `@mention` token and Enter belongs to
-  // it, not to sending a half-typed name.
-  if (caret >= 0 && extractMentionQuery(text, caret) != null) {
-    return ComposerEnterAction.insertNewline;
-  }
+  // A caret inside an `@mention` token used to hand Enter to the suggestion
+  // list. The list has no keyboard handling at all — it is a row of chips
+  // with `onTap` — so nothing received it: on a desktop, typing "Ahoj @petr"
+  // and pressing Enter inserted a blank line and sent nothing, and a mention
+  // is the most ordinary way for a message to end. Enter sends; the list is
+  // still there to be clicked while the message is being written.
+
   if (sending || (text.trim().isEmpty && !hasAttachment)) {
     return ComposerEnterAction.swallow;
   }
