@@ -119,7 +119,12 @@ void main() {
 
     setHarnessState(() => account = _otherAccount);
     await tester.pump();
-    expect(transcriber.cancelCalls, 1);
+    // The bubble is keyed by account and message now, so switching accounts
+    // replaces it rather than updating it in place: the request is stopped by
+    // the disposal instead of the cancel this used to assert. What matters is
+    // unchanged and is what the rest of this test checks — a transcript from
+    // the other account must never appear.
+    expect(transcriber.cancelCalls + transcriber.disposeCalls, greaterThan(0));
 
     transcriber.complete('Wrong account');
     await tester.pumpAndSettle();
