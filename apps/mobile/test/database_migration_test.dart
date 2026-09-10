@@ -14,6 +14,51 @@ import 'package:talk_protocol/talk_protocol.dart';
 import 'test_support.dart';
 
 void main() {
+  test('an interrupted first start can be opened again', () async {
+    // The state this recovers is real: the database taken off the iOS
+    // simulator that would not start on 7 September had all fifteen tables,
+    // one index, no rows and `user_version` 0 - a first run killed after the
+    // schema was created and before the version was written. Drift reads that
+    // zero as "new database" and runs onCreate, whose `createAll` makes the
+    // indexes WITHOUT `IF NOT EXISTS`, so the open died on "index ... already
+    // exists" - and would have died the same way on every later version. The
+    // application could never open its own database again.
+    final file = File(
+      '${Directory.systemTemp.path}/nks-interrupted-'
+      '${DateTime.now().microsecondsSinceEpoch}.sqlite',
+    );
+    addTearDown(() {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    });
+
+    final created = AppDatabase.forTesting(NativeDatabase(file));
+    await created.customStatement('SELECT 1');
+    final tables = await created
+        .customSelect(
+          "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table'",
+        )
+        .getSingle();
+    expect(tables.read<int>('c'), greaterThan(10));
+    // Exactly what an interrupted start leaves: the schema, without its
+    // version.
+    await created.customStatement('PRAGMA user_version = 0');
+    await created.close();
+
+    final reopened = AppDatabase.forTesting(NativeDatabase(file));
+    addTearDown(reopened.close);
+    await expectLater(reopened.select(reopened.accounts).get(), completes);
+    final version = await reopened
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    expect(
+      version.data.values.first,
+      greaterThan(0),
+      reason: 'the recovered database should carry its version afterwards',
+    );
+  });
+
   test('schema v1 to v15 preserves its account and conversation', () async {
     final fixture =
         readFixtureJson(

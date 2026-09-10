@@ -663,7 +663,35 @@ final class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (migrator) => migrator.createAll(),
+    // NOT `createAll()`. A `user_version` of zero means "new database" to
+    // drift, so this runs for an interrupted first start as well - a database
+    // that already has every table and index but never got its version
+    // written. `createAll` creates the tables with `IF NOT EXISTS` and the
+    // `@TableIndex` indexes WITHOUT it, so that database died here on "index
+    // cached_chat_messages_attachment_confirmation already exists" and could
+    // never be opened again, by this build or any later one. Measured on the
+    // database taken off the iOS simulator that would not start on
+    // 7 September. Creating each entity only when it is absent recovers that
+    // state and is identical to `createAll` on a genuinely empty file.
+    onCreate: (migrator) async {
+      // One question, then the ordinary path for the ordinary case: a brand
+      // new file has nothing in `sqlite_master` and gets the plain
+      // `createAll`, exactly as before. Only a file that already holds
+      // something takes the slower route below.
+      final existing = await customSelect(
+        'SELECT name FROM sqlite_master',
+      ).get();
+      if (existing.isEmpty) {
+        await migrator.createAll();
+        return;
+      }
+      final present = existing.map((row) => row.read<String>('name')).toSet();
+      for (final entity in allSchemaEntities) {
+        if (!present.contains(entity.entityName)) {
+          await migrator.create(entity);
+        }
+      }
+    },
     onUpgrade: (migrator, from, to) async {
       if (from > to) {
         throw StateError(
@@ -676,10 +704,10 @@ final class AppDatabase extends _$AppDatabase {
           cachedConversations,
           cachedConversations.readOnly,
         );
-        await migrator.createTable(chatCapabilities);
-        await migrator.createTable(chatScopes);
-        await migrator.createTable(cachedChatMessages);
-        await migrator.createTable(textSendOperations);
+        await _createTableIfMissing(migrator, chatCapabilities);
+        await _createTableIfMissing(migrator, chatScopes);
+        await _createTableIfMissing(migrator, cachedChatMessages);
+        await _createTableIfMissing(migrator, textSendOperations);
       }
       if (from < 3) {
         await _addColumnIfMissing(
@@ -712,7 +740,7 @@ final class AppDatabase extends _$AppDatabase {
           cachedConversations,
           cachedConversations.isCustomAvatar,
         );
-        await migrator.createTable(conversationAvatars);
+        await _createTableIfMissing(migrator, conversationAvatars);
         await customStatement('''
           UPDATE cached_conversations
           SET room_type = CASE
@@ -760,8 +788,8 @@ final class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 6) {
-        await migrator.createTable(attachmentRuntimeAccounts);
-        await migrator.createTable(attachmentJobs);
+        await _createTableIfMissing(migrator, attachmentRuntimeAccounts);
+        await _createTableIfMissing(migrator, attachmentJobs);
       }
       if (from < 7) {
         await customStatement(
@@ -772,7 +800,7 @@ final class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 9) {
-        await migrator.createTable(chatDrafts);
+        await _createTableIfMissing(migrator, chatDrafts);
       }
       if (from < 10) {
         await _addColumnIfMissing(
@@ -790,10 +818,10 @@ final class AppDatabase extends _$AppDatabase {
         ''');
       }
       if (from < 11) {
-        await migrator.createTable(callSessions);
+        await _createTableIfMissing(migrator, callSessions);
       }
       if (from < 12) {
-        await migrator.createTable(callLifecycleSessions);
+        await _createTableIfMissing(migrator, callLifecycleSessions);
       }
       if (from < 8) {
         await _addColumnIfMissing(
@@ -852,7 +880,7 @@ final class AppDatabase extends _$AppDatabase {
         ''');
       }
       if (from < 14) {
-        await migrator.createTable(cachedThreads);
+        await _createTableIfMissing(migrator, cachedThreads);
       }
       if (from < 15) {
         // Reactions and deletion notices arrive as system messages carrying
@@ -908,10 +936,10 @@ final class AppDatabase extends _$AppDatabase {
         );
       }
       if (from < 17) {
-        await migrator.createTable(accountThemes);
+        await _createTableIfMissing(migrator, accountThemes);
       }
       if (from < 18) {
-        await migrator.createTable(certificatePins);
+        await _createTableIfMissing(migrator, certificatePins);
       }
     },
     beforeOpen: (_) async {
@@ -938,6 +966,31 @@ final class AppDatabase extends _$AppDatabase {
   /// migration in a transaction would prevent that half state, but it does
   /// nothing for databases already stuck in it, so replay-safety is what
   /// buys the fix back.
+  /// Creates [table] unless it is already there.
+  ///
+  /// `Migrator.createTable` is only half idempotent: the table itself is a
+  /// `CREATE TABLE IF NOT EXISTS`, but the indexes drift declares on it with
+  /// `@TableIndex` are not, so replaying a step over a table that exists dies
+  /// with "index ... already exists" and takes the whole open with it.
+  /// MEASURED, not deduced: the database off the iOS simulator that could not
+  /// start on 7 September has all fifteen tables, `user_version` 0 and no
+  /// rows, and opening it through this class failed on exactly that index.
+  /// A database in that state - an interrupted first run - could never be
+  /// opened again by any later version. The index steps that follow already
+  /// use `IF NOT EXISTS`, so skipping a table that exists is enough.
+  Future<void> _createTableIfMissing(
+    Migrator migrator,
+    TableInfo<Table, dynamic> table,
+  ) async {
+    final existing = await customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable.withString(table.actualTableName)],
+    ).getSingleOrNull();
+    if (existing == null) {
+      await migrator.createTable(table);
+    }
+  }
+
   Future<void> _addColumnIfMissing(
     Migrator migrator,
     TableInfo<Table, dynamic> table,
