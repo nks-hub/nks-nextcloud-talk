@@ -5,14 +5,25 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.attributes.Attribute
 import org.gradle.api.tasks.PathSensitivity
 
+// A build installed beside the real app, see `applicationId` below.
+val isCandidate = project.findProperty("candidate") == "true"
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    // Reads app/google-services.json, which is gitignored. Without that file
-    // the build fails loudly rather than producing an app that silently has
-    // no FCM.
-    id("com.google.gms.google-services")
+}
+
+// Reads app/google-services.json, which is gitignored. Without that file the
+// build fails loudly rather than producing an app that silently has no FCM.
+//
+// Skipped for a candidate build: that package is not registered with Firebase
+// and never will be, so the plugin would refuse the build outright. The app
+// then runs without FCM, which is a state it already handles — a server
+// without push does the same thing — and push itself is tested on the real
+// package.
+if (!isCandidate) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 // Release signing is driven by android/key.properties, which is gitignored and
@@ -69,7 +80,18 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.nkshub.nextcloudtalk"
+        // `-Pcandidate=true` builds the same app under its own package, so a
+        // build under test can be installed beside the one somebody is
+        // actually using — a phone with a signed-in account must not have to
+        // be wiped to try a release candidate. Google Services keeps working:
+        // the FCM sender is read from the same google-services.json, and a
+        // package it does not name simply gets no push, which is exactly what
+        // a side-by-side build should get.
+        applicationId = if (isCandidate) {
+            "com.nkshub.nextcloudtalk.candidate"
+        } else {
+            "com.nkshub.nextcloudtalk"
+        }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
