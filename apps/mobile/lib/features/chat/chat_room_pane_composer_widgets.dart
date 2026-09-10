@@ -403,8 +403,12 @@ final class _ChatComposer extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
           child: readOnly
-              ? SizedBox(
-                  height: 48,
+              ? ConstrainedBox(
+                  // A floor, not a ceiling: this line says why the composer is
+                  // gone, and the Czech lobby sentence needs about seven lines
+                  // at 200 % text on a phone. A fixed 48 clipped all but the
+                  // first, which left the person locked out with no reason.
+                  constraints: const BoxConstraints(minHeight: 48),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
 import '../../app_providers.dart';
+import '../../core/desktop_metrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'new_conversation_service.dart';
 import 'conversation_creation_dialog.dart';
@@ -244,65 +245,72 @@ final class _NewConversationScreenState
     final strings = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(strings.newConversationTitle)),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              autofocus: true,
-              enabled: !_creating,
-              decoration: InputDecoration(
-                labelText: strings.newConversationSearchLabel,
-                prefixIcon: const Icon(Icons.search),
+      // Capped like settings and the room details: a picker stretched across
+      // a desktop window puts its label at one edge and its control at the
+      // other. SafeArea keeps the list clear of the gesture bar.
+      body: ContentColumn(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  enabled: !_creating,
+                  decoration: InputDecoration(
+                    labelText: strings.newConversationSearchLabel,
+                    prefixIcon: const Icon(Icons.search),
+                  ),
+                  onChanged: _onSearchChanged,
+                  onSubmitted: (value) {
+                    _debounce?.cancel();
+                    final term = value.trim();
+                    if (term.isNotEmpty) {
+                      _runSearch(term);
+                    }
+                  },
+                ),
               ),
-              onChanged: _onSearchChanged,
-              onSubmitted: (value) {
-                _debounce?.cancel();
-                final term = value.trim();
-                if (term.isNotEmpty) {
-                  _runSearch(term);
-                }
-              },
-            ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('create-empty-group-conversation'),
+                      onPressed: _creating
+                          ? null
+                          : () => _createStandaloneConversation(
+                              StandaloneConversationType.group,
+                            ),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: Text(strings.newConversationCreateGroupAction),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('create-public-conversation'),
+                      onPressed: _creating
+                          ? null
+                          : () => _createStandaloneConversation(
+                              StandaloneConversationType.public,
+                            ),
+                      icon: const Icon(Icons.public_outlined),
+                      label: Text(strings.newConversationCreatePublicAction),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('browse-open-conversations'),
+                      onPressed: _creating ? null : _browseOpenConversations,
+                      icon: const Icon(Icons.travel_explore_outlined),
+                      label: Text(strings.openConversations),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: _buildBody(context)),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  key: const Key('create-empty-group-conversation'),
-                  onPressed: _creating
-                      ? null
-                      : () => _createStandaloneConversation(
-                          StandaloneConversationType.group,
-                        ),
-                  icon: const Icon(Icons.group_add_outlined),
-                  label: Text(strings.newConversationCreateGroupAction),
-                ),
-                OutlinedButton.icon(
-                  key: const Key('create-public-conversation'),
-                  onPressed: _creating
-                      ? null
-                      : () => _createStandaloneConversation(
-                          StandaloneConversationType.public,
-                        ),
-                  icon: const Icon(Icons.public_outlined),
-                  label: Text(strings.newConversationCreatePublicAction),
-                ),
-                OutlinedButton.icon(
-                  key: const Key('browse-open-conversations'),
-                  onPressed: _creating ? null : _browseOpenConversations,
-                  icon: const Icon(Icons.travel_explore_outlined),
-                  label: Text(strings.openConversations),
-                ),
-              ],
-            ),
-          ),
-          Expanded(child: _buildBody(context)),
-        ],
+        ),
       ),
     );
   }

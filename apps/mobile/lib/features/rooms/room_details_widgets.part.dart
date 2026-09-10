@@ -129,7 +129,16 @@ final class _ParticipantTile extends StatelessWidget {
             Icon(
               Icons.circle,
               size: 10,
-              color: online ? Colors.green : scheme.outline,
+              // The same pair the conversation list uses, which is picked per
+              // brightness: Material green on a light surface is about 2.3:1
+              // and a status dot has to clear 3:1 like any other meaningful
+              // shape.
+              color: online
+                  ? presenceColor(
+                      ConversationPresenceKind.online,
+                      Theme.of(context).brightness,
+                    )
+                  : scheme.outline,
               semanticLabel: online
                   ? strings.presenceOnline
                   : participant.status,

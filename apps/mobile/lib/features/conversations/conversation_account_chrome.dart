@@ -25,7 +25,7 @@ final class _AccountRail extends StatelessWidget {
     final strings = AppLocalizations.of(context);
     return SizedBox(
       key: const Key('account-rail'),
-      width: 88,
+      width: kAccountRailWidth,
       child: Column(
         children: [
           const Padding(

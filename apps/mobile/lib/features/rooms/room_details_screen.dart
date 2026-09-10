@@ -18,6 +18,8 @@ import '../chat/chat_participant_avatar.dart';
 import '../chat/chat_background_surface.dart';
 import '../chat/chat_background_theme.dart';
 import '../conversations/conversation_avatar_widget.dart';
+import '../conversations/conversation_presence.dart'
+    show ConversationPresenceKind, presenceColor;
 import '../shareditems/shared_items_screen.dart';
 import 'bots_service.dart';
 import 'conversation_tags_service.dart';

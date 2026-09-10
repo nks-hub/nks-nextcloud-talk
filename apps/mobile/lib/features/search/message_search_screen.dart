@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../core/desktop_metrics.dart';
 import '../../l10n/generated/app_localizations.dart';
 import 'message_search_service.dart';
 
@@ -110,41 +111,48 @@ class _MessageSearchScreenState extends State<MessageSearchScreen> {
               : strings.searchMessagesInConversation(widget.roomName!),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              key: const Key('message-search-field'),
-              controller: _controller,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onChanged: _onQueryChanged,
-              decoration: InputDecoration(
-                hintText: strings.searchMessagesHint,
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _controller,
-                  builder: (context, value, _) {
-                    if (value.text.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      tooltip: strings.searchMessagesClear,
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _controller.clear();
-                        _onQueryChanged('');
+      // Capped and inset like the other full-screen routes: a search field
+      // stretched across a 1920 px window reads as a blown-up phone screen,
+      // and the results ran under the gesture bar.
+      body: ContentColumn(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  key: const Key('message-search-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  onChanged: _onQueryChanged,
+                  decoration: InputDecoration(
+                    hintText: strings.searchMessagesHint,
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _controller,
+                      builder: (context, value, _) {
+                        if (value.text.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return IconButton(
+                          tooltip: strings.searchMessagesClear,
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _controller.clear();
+                            _onQueryChanged('');
+                          },
+                        );
                       },
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
-            ),
+              Expanded(child: _buildBody(context, strings)),
+            ],
           ),
-          Expanded(child: _buildBody(context, strings)),
-        ],
+        ),
       ),
     );
   }

@@ -42,29 +42,58 @@ final class FederationInvitationStrip extends StatelessWidget {
           onTap: () => _showSheet(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                Icon(Icons.hub_rounded, color: scheme.onTertiaryContainer),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    strings.federationInvitationsCount(invitations.length),
-                    style: TextStyle(color: scheme.onTertiaryContainer),
-                  ),
-                ),
-                TextButton(
-                  key: const Key('federation-invitations-show'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: scheme.onTertiaryContainer,
-                  ),
-                  onPressed: () => _showSheet(context),
-                  child: Text(strings.federationInvitationsShow),
-                ),
-              ],
-            ),
+            child: _layout(context, scheme, strings),
           ),
         ),
       ),
+    );
+  }
+
+  /// Icon, count and action, stacked once the text is too big for one line.
+  ///
+  /// The same threshold the sync notice above it uses, and for the same
+  /// reason: the action keeps its intrinsic width, so on a 240 px list pane at
+  /// 200 % text the count was left about 14 px and broke one letter per line.
+  Widget _layout(
+    BuildContext context,
+    ColorScheme scheme,
+    AppLocalizations strings,
+  ) {
+    final icon = Icon(Icons.hub_rounded, color: scheme.onTertiaryContainer);
+    final text = Text(
+      strings.federationInvitationsCount(invitations.length),
+      style: TextStyle(color: scheme.onTertiaryContainer),
+    );
+    final action = TextButton(
+      key: const Key('federation-invitations-show'),
+      style: TextButton.styleFrom(foregroundColor: scheme.onTertiaryContainer),
+      onPressed: () => _showSheet(context),
+      child: Text(strings.federationInvitationsShow),
+    );
+    if (MediaQuery.textScalerOf(context).scale(16) > 21) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              icon,
+              const SizedBox(width: 10),
+              Expanded(child: text),
+            ],
+          ),
+          Align(alignment: Alignment.centerLeft, child: action),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        icon,
+        const SizedBox(width: 10),
+        Expanded(child: text),
+        action,
+      ],
     );
   }
 

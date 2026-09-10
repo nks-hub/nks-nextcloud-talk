@@ -286,9 +286,7 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
         ? strings.callParticipantsYou
         : _PeerTile.nameOf(peers[id] ?? shares[id]!, names);
     final tileIds = ['self', ...peers.keys];
-    final tiles = [
-      for (final id in tileIds) tileOf(id, contain: false)!,
-    ];
+    final tiles = [for (final id in tileIds) tileOf(id, contain: false)!];
     final selected = _expandedTile == null
         ? null
         : tileOf(_expandedTile!, contain: true);
@@ -334,7 +332,8 @@ final class _CallScreenState extends ConsumerState<CallScreen> {
             : sharing.length * ((constraints.maxWidth - 16) * 9 / 16 + 8);
         final tileHeight =
             (constraints.maxHeight - shareHeight - gap * (rows + 1)) / rows;
-        final tileWidth = (constraints.maxWidth - gap * (columns + 1)) / columns;
+        final tileWidth =
+            (constraints.maxWidth - gap * (columns + 1)) / columns;
         final fills = tileHeight >= _minimumTileHeight;
         return CustomScrollView(
           // Page storage, so collapsing an expanded tile returns to the same
@@ -570,13 +569,16 @@ final class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(color: scheme.surfaceContainerHighest),
+          // Dark on purpose in both themes: the name and the icons painted
+          // over this tile are white, and on the light scheme's own container
+          // colour that reads at about 1.2:1. The rest of the call screen is
+          // black anyway, so the tile was the one place that drifted.
+          const ColoredBox(color: Color(0xFF1C1B1F)),
           if (video != null)
             video!
           else
