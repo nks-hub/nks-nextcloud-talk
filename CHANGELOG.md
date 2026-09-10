@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: after a minimized window came back, the message box stayed dead until
+  it was clicked. The app did ask for the box every time; what stopped it was
+  its own caution. While a window is away the system holds no focus at all, and
+  the app read the system putting the focus back as somebody else having
+  claimed it. A dialog or another editor still keeps what it has. Found by
+  minimizing a real window rather than by reading the code.
+
 - A call on the desktop keeps going while the window is minimized, and this is
   now measured rather than reasoned about. A real call was started from the
   Windows client, the window was minimized for seventy-five seconds through the
