@@ -5,6 +5,8 @@ import 'package:nextcloudtalk/app_providers.dart';
 import 'package:nextcloudtalk/core/app_theme.dart';
 import 'package:nextcloudtalk/data/app_database.dart';
 import 'package:nextcloudtalk/features/conversations/conversation_shell.dart';
+import 'package:nextcloudtalk/features/conversations/list_pane_preference.dart'
+    show kMinListPaneWidth;
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 
 import 'test_support.dart';
@@ -65,10 +67,15 @@ final class _Harness extends StatefulWidget {
   const _Harness({
     this.initialToken,
     this.conversations = const [_conversation],
+    this.listWidth,
   });
 
   final String? initialToken;
   final List<CachedConversation> conversations;
+
+  /// The width a splitter drag would have stored, so a list wider than the
+  /// window can pay for can be pumped the way it comes back from disk.
+  final double? listWidth;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -115,6 +122,9 @@ final class _HarnessState extends State<_Harness> {
       detailsOpen: _detailsOpen,
       onOpenDetails: () => setState(() => _detailsOpen = true),
       onCloseDetails: () => setState(() => _detailsOpen = false),
+      listWidth: widget.listWidth,
+      onResizeList: widget.listWidth == null ? null : (_) {},
+      onResizeListEnd: widget.listWidth == null ? null : () {},
     );
   }
 }
@@ -130,6 +140,7 @@ void main() {
     String? token,
     List<CachedConversation> conversations = const [_conversation],
     TargetPlatform? platform,
+    double? listWidth,
   }) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -137,7 +148,11 @@ void main() {
       ProviderScope(
         overrides: [appDatabaseProvider.overrideWithValue(database)],
         child: localizedTestApp(
-          home: _Harness(initialToken: token, conversations: conversations),
+          home: _Harness(
+            initialToken: token,
+            conversations: conversations,
+            listWidth: listWidth,
+          ),
           theme: platform == null
               ? null
               : AppTheme.light().copyWith(platform: platform),
@@ -370,6 +385,62 @@ void main() {
     expect(await panelWidth(1400), closeTo(378, 0.5));
     // Above the upper knee the ceiling holds instead of growing forever.
     expect(await panelWidth(2200), 500);
+  });
+
+  testWidgets('a window too narrow for three panes opens details as a page', (
+    tester,
+  ) async {
+    // The reported shape: a tablet in landscape, or a desktop window dragged
+    // half way. The panel used to open anyway and leave the conversation
+    // 128 px wide, which overflowed its own header — the whole point of the
+    // details is to sit BESIDE something that is still readable.
+    tester.view.physicalSize = const Size(800, 900);
+    await pump(tester, token: _conversation.token);
+    final before = tester
+        .getSize(find.byKey(const Key('conversation-detail-pane')))
+        .width;
+
+    await tester.tap(find.byKey(const Key('open-room-details')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('room-details-panel')), findsNothing);
+    expect(
+      find.byKey(const Key('room-details-screen')),
+      findsOneWidget,
+      reason: 'the button has to do something: a page when a panel cannot fit',
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('conversation-detail-pane'))).width,
+      before,
+      reason: 'the conversation keeps its width instead of paying for a panel',
+    );
+    expect(tester.takeException(), isNull);
+
+    await settle(tester);
+  });
+
+  testWidgets('a list wider than the window can pay for gives the width back', (
+    tester,
+  ) async {
+    // A width dragged on a big monitor comes back on a small one, and used to
+    // be obeyed to the pixel: at 720 a stored 520 left 191 px of conversation
+    // and its header overflowed by 11.
+    tester.view.physicalSize = const Size(720, 900);
+    await pump(tester, token: _conversation.token, listWidth: 520);
+
+    final list = tester
+        .getSize(find.byKey(const Key('conversation-list-pane')))
+        .width;
+    final chat = tester
+        .getSize(find.byKey(const Key('conversation-detail-pane')))
+        .width;
+    expect(list, lessThan(520));
+    expect(list, greaterThanOrEqualTo(kMinListPaneWidth));
+    expect(chat, greaterThan(360), reason: 'wider than the narrowest phone');
+    expect(tester.takeException(), isNull);
+
+    await settle(tester);
   });
 
   testWidgets('the details open beside the conversation, not over it', (

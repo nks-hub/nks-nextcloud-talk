@@ -31,6 +31,7 @@ import 'federation_invitation_service.dart';
 import 'federation_invitation_strip.dart';
 import 'conversation_presence.dart';
 import 'conversation_sync_service.dart';
+import 'list_pane_preference.dart' show kMinListPaneWidth;
 import 'unread_badge.dart';
 
 part 'conversation_account_chrome.dart';

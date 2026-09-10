@@ -4,6 +4,16 @@ part of 'conversation_shell.dart';
 /// conversation moves onto the navigator instead.
 const double kExpandedShellBreakpoint = 720;
 
+/// Narrowest the conversation pane may be squeezed to beside the list.
+///
+/// Measured rather than picked: its header starts overflowing just under
+/// 200 px, and anything under a phone's own 360 px stops showing a message
+/// bubble and its avatar side by side. The floor is what the list and the
+/// details panel have to leave behind — the list gives up width first, and
+/// the details open as a page instead of a panel when the window cannot pay
+/// for all three.
+const double kMinConversationWidth = 400;
+
 final class ConversationWorkspace extends StatelessWidget {
   const ConversationWorkspace({
     super.key,
@@ -499,7 +509,6 @@ final class _ExpandedShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context);
     return Scaffold(
       key: const Key('conversation-shell-expanded'),
       body: SafeArea(
@@ -520,151 +529,211 @@ final class _ExpandedShell extends StatelessWidget {
               ),
               const VerticalDivider(),
             ],
-            if (!listCollapsed)
-              SizedBox(
-                key: const Key('conversation-list-pane'),
-                width: listWidth ?? context.listPaneWidth,
-                child: Column(
-                  children: [
-                    ConstrainedBox(
-                      key: const Key('conversation-list-header'),
-                      constraints: BoxConstraints(
-                        minHeight: context.paneHeaderHeight,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
-                        child: Row(
-                          children: [
-                            // Takes the rail's place when the rail is gone, so
-                            // switching accounts, adding one and reaching
-                            // settings never depend on a pane that is not drawn.
-                            if (accounts.length <= 1) ...[
-                              _AccountMenu(
-                                selected: account,
-                                accounts: accounts,
-                                unreadByAccount: unreadByAccount,
-                                onSelect: onSelectAccount,
-                                onAdd: onAddAccount,
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            // No visible title: the pane is 300 px wide and
-                            // already carries the account avatar plus three
-                            // actions, so the word wrapped mid-syllable
-                            // ("Konverzac / e"). The pane needs no label to be
-                            // recognised, but a screen reader still gets one.
-                            Expanded(
-                              child: Semantics(
-                                header: true,
-                                label: strings.conversations,
-                                child: const SizedBox.shrink(),
-                              ),
-                            ),
-                            IconButton(
-                              key: const Key('open-new-conversation'),
-                              onPressed: () => _openNewConversation(
-                                context,
-                                account.id,
-                                onRefresh,
-                                onCreated: onOpenCreatedConversation,
-                              ),
-                              tooltip: strings.newConversationTitle,
-                              icon: const Icon(
-                                Icons.chat_bubble_outline_rounded,
-                              ),
-                            ),
-                            if (talkFeaturesOf(
-                              account,
-                            ).contains('unified-search'))
-                              IconButton(
-                                key: const Key('open-message-search'),
-                                onPressed: () =>
-                                    openMessageSearch(context, account.id),
-                                tooltip: strings.searchMessagesTooltip,
-                                icon: const Icon(Icons.search),
-                              ),
-                            IconButton(
-                              onPressed: syncing ? null : onRefresh,
-                              tooltip: strings.refresh,
-                              icon: const Icon(Icons.refresh_rounded),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (syncing) const LinearProgressIndicator(minHeight: 3),
-                    if (account.lastSyncError != null)
-                      _SyncNotice(
-                        errorCode: account.lastSyncError!,
-                        onReauthenticate: onReauthenticate,
-                      ),
-                    if (onDecideFederationInvitation != null)
-                      FederationInvitationStrip(
-                        invitations: federationInvitations,
-                        onDecide: onDecideFederationInvitation!,
-                      ),
-                    const Divider(),
-                    Expanded(
-                      child: ConversationListView(
-                        account: account,
-                        conversations: conversations,
-                        loading: loading,
-                        onRefresh: onRefresh,
-                        onSelect: onSelectConversation,
-                        selectedToken: selectedConversation?.token,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (!listCollapsed)
-              _ListPaneSplitter(
-                width: listWidth ?? context.listPaneWidth,
-                onResize: onResizeList,
-                onResizeEnd: onResizeListEnd,
-              ),
+            // Everything the panes have to share is measured here, past the
+            // rail, so none of the arithmetic below has to know whether the
+            // rail is drawn or how wide its divider is.
             Expanded(
-              key: const Key('conversation-detail-pane'),
-              child: selectedConversation == null
-                  ? const _SelectConversationPlaceholder()
-                  : DesktopAttachmentDrop(
-                      child: PresenceChatRoomPane(
-                        account: account,
-                        conversation: selectedConversation!,
-                        onOpenDetails: onOpenDetails,
-                        onToggleList: onToggleList,
-                        listCollapsed: listCollapsed,
-                      ),
-                    ),
-            ),
-            if (detailsOpen && selectedConversation != null) ...[
-              const VerticalDivider(),
-              SizedBox(
-                // `clamp(300px, 27vw, 500px)`, which is what Nextcloud's own
-                // sidebar uses.
-                width:
-                    MediaQuery.sizeOf(
-                      context,
-                    ).width.clamp(300 / 0.27, 500 / 0.27) *
-                    0.27,
-                child: RoomDetailsScreen(
-                  key: ValueKey((
-                    account.id,
-                    selectedConversation!.token,
-                    account.talkFeaturesJson,
-                  )),
-                  account: account,
-                  conversation: selectedConversation!,
-                  onClose: onCloseDetails,
-                ),
+              child: LayoutBuilder(
+                builder: (context, region) {
+                  final requestedList = listWidth ?? context.listPaneWidth;
+                  final detailsWidth = _detailsPanelWidth(context);
+                  final wantsDetails =
+                      detailsOpen && selectedConversation != null;
+                  // The panel is paid for first. If what is left cannot keep
+                  // the conversation above its floor, the details open as a
+                  // page instead, which is what a narrow window already does.
+                  final listRoomWithDetails =
+                      (region.maxWidth - kMinConversationWidth - detailsWidth)
+                          .clamp(kMinListPaneWidth, double.infinity);
+                  final listWithDetails = requestedList.clamp(
+                    0.0,
+                    listRoomWithDetails,
+                  );
+                  // Asked of the window alone, never of whether the details
+                  // happen to be open: a fit that changed the moment they
+                  // opened would leave the button doing nothing at all.
+                  final detailsFit =
+                      region.maxWidth - listWithDetails - detailsWidth >=
+                      kMinConversationWidth;
+                  final showDetails = wantsDetails && detailsFit;
+                  final listRoom = (region.maxWidth - kMinConversationWidth)
+                      .clamp(kMinListPaneWidth, double.infinity);
+                  // A dragged width is a wish, not a promise: a list restored
+                  // from a wide monitor, or dragged wide before the window
+                  // shrank, used to squeeze the conversation until its own
+                  // header overflowed.
+                  final effectiveListWidth = showDetails
+                      ? listWithDetails
+                      : requestedList.clamp(0.0, listRoom);
+                  return _buildPanes(
+                    context,
+                    listPaneWidth: effectiveListWidth,
+                    detailsWidth: detailsWidth,
+                    showDetails: showDetails,
+                    detailsFit: detailsFit,
+                  );
+                },
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
+
+  /// The list, the conversation and the details, once their widths are known.
+  Widget _buildPanes(
+    BuildContext context, {
+    required double listPaneWidth,
+    required double detailsWidth,
+    required bool showDetails,
+    required bool detailsFit,
+  }) {
+    final strings = AppLocalizations.of(context);
+    return Row(
+      children: [
+        if (!listCollapsed)
+          SizedBox(
+            key: const Key('conversation-list-pane'),
+            width: listPaneWidth,
+            child: Column(
+              children: [
+                ConstrainedBox(
+                  key: const Key('conversation-list-header'),
+                  constraints: BoxConstraints(
+                    minHeight: context.paneHeaderHeight,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 8, 8),
+                    child: Row(
+                      children: [
+                        // Takes the rail's place when the rail is gone, so
+                        // switching accounts, adding one and reaching
+                        // settings never depend on a pane that is not drawn.
+                        if (accounts.length <= 1) ...[
+                          _AccountMenu(
+                            selected: account,
+                            accounts: accounts,
+                            unreadByAccount: unreadByAccount,
+                            onSelect: onSelectAccount,
+                            onAdd: onAddAccount,
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        // No visible title: the pane is 300 px wide and
+                        // already carries the account avatar plus three
+                        // actions, so the word wrapped mid-syllable
+                        // ("Konverzac / e"). The pane needs no label to be
+                        // recognised, but a screen reader still gets one.
+                        Expanded(
+                          child: Semantics(
+                            header: true,
+                            label: strings.conversations,
+                            child: const SizedBox.shrink(),
+                          ),
+                        ),
+                        IconButton(
+                          key: const Key('open-new-conversation'),
+                          onPressed: () => _openNewConversation(
+                            context,
+                            account.id,
+                            onRefresh,
+                            onCreated: onOpenCreatedConversation,
+                          ),
+                          tooltip: strings.newConversationTitle,
+                          icon: const Icon(Icons.chat_bubble_outline_rounded),
+                        ),
+                        if (talkFeaturesOf(account).contains('unified-search'))
+                          IconButton(
+                            key: const Key('open-message-search'),
+                            onPressed: () =>
+                                openMessageSearch(context, account.id),
+                            tooltip: strings.searchMessagesTooltip,
+                            icon: const Icon(Icons.search),
+                          ),
+                        IconButton(
+                          onPressed: syncing ? null : onRefresh,
+                          tooltip: strings.refresh,
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (syncing) const LinearProgressIndicator(minHeight: 3),
+                if (account.lastSyncError != null)
+                  _SyncNotice(
+                    errorCode: account.lastSyncError!,
+                    onReauthenticate: onReauthenticate,
+                  ),
+                if (onDecideFederationInvitation != null)
+                  FederationInvitationStrip(
+                    invitations: federationInvitations,
+                    onDecide: onDecideFederationInvitation!,
+                  ),
+                const Divider(),
+                Expanded(
+                  child: ConversationListView(
+                    account: account,
+                    conversations: conversations,
+                    loading: loading,
+                    onRefresh: onRefresh,
+                    onSelect: onSelectConversation,
+                    selectedToken: selectedConversation?.token,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (!listCollapsed)
+          _ListPaneSplitter(
+            width: listPaneWidth,
+            onResize: onResizeList,
+            onResizeEnd: onResizeListEnd,
+          ),
+        Expanded(
+          key: const Key('conversation-detail-pane'),
+          child: selectedConversation == null
+              ? const _SelectConversationPlaceholder()
+              : DesktopAttachmentDrop(
+                  child: PresenceChatRoomPane(
+                    account: account,
+                    conversation: selectedConversation!,
+                    // Withheld when the panel would not fit, which is the
+                    // pane's own signal to push the details as a page.
+                    onOpenDetails: detailsFit ? onOpenDetails : null,
+                    onToggleList: onToggleList,
+                    listCollapsed: listCollapsed,
+                  ),
+                ),
+        ),
+        if (showDetails) ...[
+          const VerticalDivider(),
+          SizedBox(
+            width: detailsWidth,
+            child: RoomDetailsScreen(
+              key: ValueKey((
+                account.id,
+                selectedConversation!.token,
+                account.talkFeaturesJson,
+              )),
+              account: account,
+              conversation: selectedConversation!,
+              onClose: onCloseDetails,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
+
+/// `clamp(300px, 27vw, 500px)`, the width Nextcloud's own sidebar uses.
+///
+/// The clamp is on the window width before scaling, which is easy to write
+/// backwards: 27 % of a clamped window, not a clamped 27 %.
+double _detailsPanelWidth(BuildContext context) =>
+    MediaQuery.sizeOf(context).width.clamp(300 / 0.27, 500 / 0.27) * 0.27;
 
 final class _SyncNotice extends StatelessWidget {
   const _SyncNotice({required this.errorCode, this.onReauthenticate});
