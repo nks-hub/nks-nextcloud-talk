@@ -20,6 +20,13 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: a phone that lost its network kept saying a call could not be joined
+  long after the network was back - and would not start one. The chat came
+  back, the call did not, because only the chat was woken; the room's call
+  connection stayed the dead one it got while offline. It is rebuilt now when
+  the network returns, and NOT while a call is running, so a moment of bad
+  signal during a call does not end it. Both halves were run on a real phone.
+
 - Fixed: an app whose very first start was interrupted could never open its own
   database again - on that device, for good, and no later version would have
   helped. The first run creates the storage and then writes its version; a
