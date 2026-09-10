@@ -426,15 +426,27 @@ final class _ConversationTile extends StatelessWidget {
                                   ),
                                 ],
                                 const SizedBox(width: 8),
-                                Text(
-                                  _formatActivity(
-                                    context,
-                                    conversation.lastActivity,
+                                // Flexible because the name beside it can
+                                // already shrink and this cannot: at 200 %
+                                // text an absolute date is wider than the
+                                // 240 px the list may be dragged to, and the
+                                // row overflowed by 65 px rather than trim
+                                // the one part of it nobody reads twice.
+                                Flexible(
+                                  child: Text(
+                                    _formatActivity(
+                                      context,
+                                      conversation.lastActivity,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
                                   ),
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                      ),
                                 ),
                               ],
                             ),

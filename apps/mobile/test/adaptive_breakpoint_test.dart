@@ -9,6 +9,7 @@ import 'package:nextcloudtalk/features/conversations/list_pane_preference.dart'
     show kMinListPaneWidth;
 import 'package:nextcloudtalk/features/rooms/room_details_screen.dart';
 
+import 'accessibility_probe.dart' show overflowsWhile;
 import 'test_support.dart';
 
 const _account = StoredAccount(
@@ -385,6 +386,40 @@ void main() {
     expect(await panelWidth(1400), closeTo(378, 0.5));
     // Above the upper knee the ceiling holds instead of growing forever.
     expect(await panelWidth(2200), 500);
+  });
+
+  testWidgets('a conversation row fits the narrowest list at 200 % text', (
+    tester,
+  ) async {
+    // The list may be dragged to 240, and at 200 % text the date beside the
+    // name is wider than what is left: the row overflowed by 65 px. Nothing
+    // on a phone finds this — a phone is one pane wide.
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final overflows = await overflowsWhile(() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(database)],
+          child: localizedTestApp(
+            home: Builder(
+              builder: (context) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: const _Harness(listWidth: kMinListPaneWidth),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    });
+
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+    expect(find.text('Breakpoint room'), findsWidgets);
+
+    await settle(tester);
   });
 
   testWidgets('a window too narrow for three panes opens details as a page', (
