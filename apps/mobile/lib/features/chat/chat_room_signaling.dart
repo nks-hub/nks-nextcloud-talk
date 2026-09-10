@@ -149,6 +149,26 @@ final chatRoomSignalingProvider = FutureProvider.autoDispose
         return const ChatRoomSignalingLease.unavailable();
       }
 
+      // A call in another room of the same account outranks this chat. The
+      // server keeps one active session per account, so asking for a second
+      // one releases the first — and the coordinator's lanes are keyed by
+      // account too, so the call's own lane is shut down with it. Measured
+      // shape of the bug: join a call in room A, go back, open room B, and
+      // the call ends with "the signalling ended". Typing indicators in B are
+      // worth less than the call in A.
+      final callElsewhere = ref.watch(
+        callHeldRoomsProvider.select(
+          (rooms) => rooms.any(
+            (room) =>
+                room.accountId == key.accountId &&
+                room.roomToken != key.roomToken,
+          ),
+        ),
+      );
+      if (callElsewhere) {
+        return const ChatRoomSignalingLease.unavailable();
+      }
+
       final accounts = ref.watch(accountRepositoryProvider);
       final credentials = ref.watch(credentialVaultProvider);
       final api = ref.watch(nextcloudApiProvider);

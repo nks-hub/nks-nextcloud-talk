@@ -113,6 +113,32 @@ void main() {
     },
   );
 
+  test('a call in one room refuses a lease to another room', () async {
+    // The server keeps ONE active session per account and the coordinator's
+    // lanes are keyed by account, so a second room asking for a session
+    // released the call's own and shut its lane down: joining a call in room
+    // A and then opening room B ended the call with "the signalling ended".
+    final container = ProviderContainer(
+      overrides: [windowActiveProvider.overrideWithValue(true)],
+    );
+    addTearDown(container.dispose);
+    container.read(callHeldRoomsProvider.notifier).state = {_key};
+    const other = (accountId: 'account-a', roomToken: 'roomb456');
+    container
+        .read(chatRoomVisibilityProvider.notifier)
+        .setVisible('chat', other);
+
+    expect(
+      container.read(chatRoomSessionWantedProvider(other)),
+      isTrue,
+      reason: 'the visible chat does want one; the call is what outranks it',
+    );
+    final lease = await container.read(chatRoomSignalingProvider(other).future);
+    expect(lease.session, isNull);
+    // The call's own room is unaffected.
+    expect(container.read(chatRoomSessionWantedProvider(_key)), isTrue);
+  });
+
   test('hanging up while the join is in flight still leaves', () async {
     // The CallKit case: a VoIP push rings, the person answers, and hangs up
     // in the system call screen before the several round trips of the join
