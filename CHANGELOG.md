@@ -31,6 +31,11 @@ to them. Only what is documented from App Store Connect is stated for them.
   the name its share was already written to grow with the text size, but
   nothing checked it; at 200 % the header now provably folds its actions into
   the menu instead of squeezing the name out.
+- Picture bubbles fit their picture, confirmed on a phone. A very wide
+  screenshot used to sit in a tall mostly empty bubble and a portrait one in a
+  bubble far wider than itself; both extremes now wrap tightly, and a picture
+  with a caption is laid out exactly like one without, only taller by its
+  caption.
 - Call reactions are covered by tests that actually press the button. Two
   reports said the round control beside Raise hand did nothing; neither could
   be reproduced, and the reason they stayed open is that every test asserted
