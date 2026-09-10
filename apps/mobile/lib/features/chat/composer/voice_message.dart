@@ -114,6 +114,13 @@ enum VoiceMessagePhase {
   error,
 }
 
+/// Shortest recording worth sending.
+///
+/// A tap that starts and stops the recorder produces about 40 ms of valid
+/// audio, which passed a "longer than zero" check and could be sent as a
+/// voice message nobody can hear.
+const Duration minimumVoiceMessage = Duration(milliseconds: 500);
+
 enum VoiceMessageError {
   unsupported,
   permissionDenied,
@@ -540,7 +547,7 @@ final class VoiceMessageController extends ChangeNotifier {
   /// that disappeared is not a reason to delete audio somebody just spoke.
   /// The room is checked separately by the caller and by `submit`.
   bool _recordingIsUsable(VoiceRecording recording) {
-    if (recording.duration <= Duration.zero ||
+    if (recording.duration < minimumVoiceMessage ||
         recording.duration > const Duration(hours: 24)) {
       return false;
     }

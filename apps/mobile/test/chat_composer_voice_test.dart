@@ -55,6 +55,22 @@ void main() {
       },
     );
 
+    test('a tap that starts and stops sends nothing', () async {
+      // About 40 ms of valid audio: long enough to pass a "longer than zero"
+      // check, far too short for anybody to hear a word of it.
+      final fixture = _VoiceFixture(
+        recording: _recording(duration: const Duration(milliseconds: 40)),
+      );
+      addTearDown(fixture.close);
+
+      expect(await fixture.controller.start(), isTrue);
+      expect(await fixture.controller.stop(), isFalse);
+
+      expect(fixture.controller.state.phase, VoiceMessagePhase.error);
+      expect(fixture.controller.state.draft, isNull);
+      expect(fixture.recorder.discarded, hasLength(1));
+    });
+
     test('a recording survives losing the room it was meant for', () async {
       // Reported shape: record a voice reply and, while it runs, somebody
       // deletes the message being replied to. The resolver then answers with
@@ -332,7 +348,10 @@ AttachmentCapabilityProfile _attachmentProfile({
   );
 }
 
-VoiceRecording _recording({String mimeType = 'audio/wav'}) => VoiceRecording(
+VoiceRecording _recording({
+  String mimeType = 'audio/wav',
+  Duration duration = const Duration(seconds: 3),
+}) => VoiceRecording(
   source: PreparedAttachmentSource(
     handle: AttachmentSourceHandle.parse('app-private://voice-fixture.wav'),
     ownership: AttachmentSourceOwnership.appOwnedCopy,
@@ -341,7 +360,7 @@ VoiceRecording _recording({String mimeType = 'audio/wav'}) => VoiceRecording(
     mimeType: mimeType,
     displayName: 'voice-fixture.wav',
   ),
-  duration: const Duration(seconds: 3),
+  duration: duration,
 );
 
 final class _VoiceFixture {

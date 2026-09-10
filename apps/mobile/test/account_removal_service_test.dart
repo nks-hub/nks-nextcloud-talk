@@ -169,7 +169,10 @@ void main() {
       ).removeAccount('account-a');
 
       expect(outcome.pushRegistrationRevoked, isFalse);
-      expect(outcome.appPasswordRevoked, isFalse);
+      // The password itself was revoked — the server answered — and that is
+      // now what this field says. It used to fold the proxy result in and
+      // sent the person off to revoke a password that no longer existed.
+      expect(outcome.appPasswordRevoked, isTrue);
       expect(await accounts.getAccount('account-a'), isNull);
       expect(await vault.readAppPassword('account-a'), isNull);
     },

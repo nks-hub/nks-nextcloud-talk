@@ -351,6 +351,11 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
 
   @override
   void dispose() {
+    // Before the timer below is cancelled. Leaving a room within half a
+    // second of typing threw the text away: the debounce had not fired yet
+    // and the disposal only cancelled it. The write is safe to outlive this
+    // widget — it goes to the database under the room's own key.
+    unawaited(_flushDraft(_key, _composer.text));
     _visibilityGeneration++;
     final visibility = _roomVisibility;
     scheduleMicrotask(() => visibility?.setVisible(_visibilityOwner, null));

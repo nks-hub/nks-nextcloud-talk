@@ -127,6 +127,7 @@ final class AccountRemovalService {
         : await _bestEffortResult(() => _revokePush(accountId));
 
     var appPasswordRevoked = false;
+    var webPushLeftBehind = false;
     if (appPassword != null && appPassword.isNotEmpty) {
       final server = ServerBase.parse(account.serverUrl);
       // Push registration first: revoking the password takes away the only
@@ -143,8 +144,14 @@ final class AccountRemovalService {
         loginName: account.loginName,
         appPassword: appPassword,
       );
-      appPasswordRevoked =
-          pushRegistrationRevoked && webPushRevoked && passwordRevoked;
+      // Only what the password itself did. Folding the push results in here
+      // told the person to go and revoke a password the server had already
+      // destroyed, whenever the unrelated push cleanup was the part that
+      // failed — and push has its own field on the outcome for exactly that.
+      appPasswordRevoked = passwordRevoked;
+      if (!webPushRevoked) {
+        webPushLeftBehind = true;
+      }
     }
 
     // From here on nothing may be skipped, whatever the server did.
@@ -179,7 +186,7 @@ final class AccountRemovalService {
 
     return AccountRemovalOutcome(
       accountExisted: true,
-      pushRegistrationRevoked: pushRegistrationRevoked,
+      pushRegistrationRevoked: pushRegistrationRevoked && !webPushLeftBehind,
       appPasswordRevoked: appPasswordRevoked,
     );
   }

@@ -129,6 +129,39 @@ void _registerChatRoomPaneDesktopInputTests() {
   }, variant: TargetPlatformVariant.desktop());
 
   testWidgets(
+    'leaving straight after typing still keeps the draft',
+    (tester) async {
+      // The draft is written half a second after the last keystroke, and
+      // leaving the room only cancelled that timer: typing and pressing back
+      // in the same breath lost the text.
+      await pumpRoom(tester);
+      await tester.tap(find.byKey(const Key('chat-composer')));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('chat-composer')),
+        'rozepsany text',
+      );
+      await tester.pump();
+
+      // Gone before the debounce could fire.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+      // The write is started by the disposal and not awaited by it, so it
+      // needs a turn of the loop before the row is there.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(
+        await ChatRepository(
+          database,
+        ).readDraft(accountId: 'account-a', roomToken: 'rooma123'),
+        'rozepsany text',
+      );
+    },
+    variant: TargetPlatformVariant.desktop(),
+  );
+
+  testWidgets(
     'Enter in the composer stays a message, not a menu',
     (tester) async {
       await pumpRoom(tester);
