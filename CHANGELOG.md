@@ -18,7 +18,7 @@ to TestFlight. Their content cannot be broken down item by item: at that time
 the build number was not raised by a commit, so no boundary in the history leads
 to them. Only what is documented from App Store Connect is stated for them.
 
-## Unreleased
+## 1.0.1 (67) — 10 September 2026
 
 - A pin with an end shows its end. Pinning already asked how long the message
   should stay up; now the banner says "Pinned until" that moment instead of
