@@ -27,6 +27,7 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
   ) async {
     try {
       await binding.wakeAfterConnectivity();
+      _rebuildSignalingAfterConnectivity();
       await _observeAuthoritativeIncomingMessages(generation);
       if (_isForegroundLifecycleState(WidgetsBinding.instance.lifecycleState)) {
         _setSyncSuccess(generation);
@@ -36,6 +37,34 @@ extension _ChatRoomPaneSync on _ChatRoomPaneState {
     } on Object catch (error) {
       _setSyncError(generation, error);
     }
+  }
+
+  /// Gives the room's signalling a second chance when the network returns.
+  ///
+  /// The chat's own binding is woken above, which is why messages come back.
+  /// The signalling lease is a future that already resolved, and nothing
+  /// replaced it, so everything under it kept the dead one: MEASURED on a
+  /// handset, a call refused while offline went on being refused for minutes
+  /// after the network returned, with the server reporting no call at all.
+  ///
+  /// NOT while a call holds the room. That same lease is the live call's own
+  /// lane, and replacing it would end the call on a blip. Both halves were run
+  /// on the handset: with no call the refusal cleared within forty seconds,
+  /// and with a call joined the network was taken away and given back and the
+  /// call was still there - the server still listing the participant with a
+  /// fresh ping.
+  void _rebuildSignalingAfterConnectivity() {
+    if (!mounted) {
+      return;
+    }
+    final room = (
+      accountId: widget.account.id,
+      roomToken: widget.conversation.token,
+    );
+    if (ref.read(callHeldRoomsProvider).contains(room)) {
+      return;
+    }
+    ref.invalidate(chatRoomSignalingProvider(room));
   }
 
   Future<void> _restartLiveSync() async {
