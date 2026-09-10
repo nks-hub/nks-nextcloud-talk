@@ -376,6 +376,7 @@ final class _ChatComposer extends ConsumerWidget {
     final action = composerEnterAction(
       text: value.text,
       caret: value.selection.baseOffset,
+      composing: value.composing,
       shiftPressed: HardwareKeyboard.instance.isShiftPressed,
       sending: sending,
       hasAttachment: hasAttachment(),

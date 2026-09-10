@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 import 'package:uuid/uuid.dart';
 
+import 'composer_text_editing.dart' show composerMaximumCharacters;
+
 import '../../../network/nextcloud_api.dart';
 
 /// The token that must precede a mention query in the composer text.
@@ -97,6 +99,13 @@ bool insertMentionSuggestion(
     match.end,
     insertion,
   );
+  // The only insertion path that did not check the server's limit — the
+  // field's own formatters do not apply when the value is set in code, so a
+  // long name pasted into an already long message pushed the text past what
+  // the server accepts and the send failed at the end.
+  if (text.length > composerMaximumCharacters) {
+    return false;
+  }
   controller.value = TextEditingValue(
     text: text,
     selection: TextSelection.collapsed(offset: match.start + insertion.length),

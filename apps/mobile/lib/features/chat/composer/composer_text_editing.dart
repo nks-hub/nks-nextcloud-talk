@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-
 enum ComposerInsertionMode { inline, separatedToken }
 
 /// What a bare Enter pressed in the composer should do.
@@ -31,9 +30,18 @@ ComposerEnterAction composerEnterAction({
   /// the text as its caption, so Enter sends it even with the field empty —
   /// reported on 5 September 2026, when only the Send button did.
   bool hasAttachment = false,
+
+  /// The range the input method is still composing, if any. On Windows and
+  /// macOS a Chinese or Japanese IME uses Enter to accept the candidate it is
+  /// showing; the key never reaches the field's own handler, so without this
+  /// the half-typed candidate was sent as a message instead of accepted.
+  TextRange composing = TextRange.empty,
 }) {
   // Shift+Enter is the line break, on every platform that sends on Enter.
   if (shiftPressed) {
+    return ComposerEnterAction.insertNewline;
+  }
+  if (composing.isValid && !composing.isCollapsed) {
     return ComposerEnterAction.insertNewline;
   }
   // A caret inside an `@mention` token used to hand Enter to the suggestion
@@ -49,11 +57,14 @@ ComposerEnterAction composerEnterAction({
   return ComposerEnterAction.send;
 }
 
+/// What the server accepts in one message.
+const int composerMaximumCharacters = 32000;
+
 bool insertComposerText(
   TextEditingController controller,
   String text, {
   ComposerInsertionMode mode = ComposerInsertionMode.inline,
-  int maximumCharacters = 32000,
+  int maximumCharacters = composerMaximumCharacters,
 }) {
   if (text.isEmpty || maximumCharacters < 1) {
     return false;

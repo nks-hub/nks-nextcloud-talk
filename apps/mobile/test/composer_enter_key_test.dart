@@ -32,6 +32,33 @@ void main() {
       );
     });
 
+    test('a candidate the input method is still composing is not sent', () {
+      // Windows and macOS give an IME the Enter key to accept the candidate
+      // it is showing. The key reaches this handler first, so without the
+      // composing range a half-typed Chinese or Japanese word went out as a
+      // message instead of being accepted.
+      expect(
+        composerEnterAction(
+          text: 'nihao',
+          caret: 5,
+          shiftPressed: false,
+          sending: false,
+          composing: const TextRange(start: 0, end: 5),
+        ),
+        ComposerEnterAction.insertNewline,
+      );
+      expect(
+        composerEnterAction(
+          text: 'nihao',
+          caret: 5,
+          shiftPressed: false,
+          sending: false,
+          composing: TextRange.empty,
+        ),
+        ComposerEnterAction.send,
+      );
+    });
+
     test('a message that ends in a mention still sends', () {
       // This asserted the opposite until 10 September 2026, on the grounds
       // that Enter belonged to the suggestion list. The list never handled a
