@@ -102,8 +102,16 @@ final class _AppHome extends ConsumerWidget {
       data: (items) =>
           items.isEmpty ? const OnboardingScreen() : const ConversationShell(),
       loading: () => const _StartupScreen(),
-      error: (_, _) =>
-          _StartupFailure(onRetry: () => ref.invalidate(accountsProvider)),
+      error: (_, _) => _StartupFailure(
+        onRetry: () {
+          // The database is what failed — a migration, or the schema check
+          // that runs when it is opened. Rebuilding only the account stream
+          // reopens the same broken instance, so Retry could never do
+          // anything at all.
+          ref.invalidate(appDatabaseProvider);
+          ref.invalidate(accountsProvider);
+        },
+      ),
     );
   }
 }

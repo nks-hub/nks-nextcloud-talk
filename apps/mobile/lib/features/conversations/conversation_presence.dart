@@ -233,6 +233,7 @@ final class PresenceChatRoomScreen extends ConsumerWidget {
               ...conversationHeaderActions(
                 _headerActions(context, ref, account, current),
                 width: box.maxWidth,
+                actionExtent: actionExtentOf(context),
                 titleFloor: conversationTitleFloor(
                   context,
                   avatarExtent: avatarRadius * 2,
@@ -374,6 +375,7 @@ final class PresenceChatRoomPane extends ConsumerWidget {
                     onOpenDetails: onOpenDetails,
                   ),
                   width: box.maxWidth - leadingExtent,
+                  actionExtent: actionExtentOf(context),
                   titleFloor: conversationTitleFloor(
                     context,
                     avatarExtent: avatarExtent,

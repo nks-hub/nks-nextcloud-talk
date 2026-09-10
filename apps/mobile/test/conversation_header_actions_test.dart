@@ -22,13 +22,20 @@ void main() {
   setUp(tapped.clear);
 
   Widget host(List<Widget> children) => MaterialApp(
-    home: Scaffold(appBar: AppBar(title: Row(children: children))),
+    home: Scaffold(
+      appBar: AppBar(title: Row(children: children)),
+    ),
   );
 
   testWidgets('a wide header shows every action as an icon', (tester) async {
     await tester.pumpWidget(
       host(
-        conversationHeaderActions(actions(), width: 700, titleFloor: 142),
+        conversationHeaderActions(
+          actions(),
+          width: 700,
+          titleFloor: 142,
+          actionExtent: kMinInteractiveDimension,
+        ),
       ),
     );
 
@@ -43,7 +50,12 @@ void main() {
     // the title area.
     await tester.pumpWidget(
       host(
-        conversationHeaderActions(actions(), width: 355, titleFloor: 142),
+        conversationHeaderActions(
+          actions(),
+          width: 355,
+          titleFloor: 142,
+          actionExtent: kMinInteractiveDimension,
+        ),
       ),
     );
 
@@ -103,7 +115,14 @@ void main() {
     // The floor at 200 %: the avatar, its gap and twice the name's share.
     const floor = 36 + 10 + 168.0;
     await tester.pumpWidget(
-      host(conversationHeaderActions(actions(), width: 355, titleFloor: floor)),
+      host(
+        conversationHeaderActions(
+          actions(),
+          width: 355,
+          titleFloor: floor,
+          actionExtent: kMinInteractiveDimension,
+        ),
+      ),
     );
 
     // Two slots, so one icon and the overflow - and the name keeps 259 of the
@@ -121,7 +140,14 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      host(conversationHeaderActions(actions(), width: 150, titleFloor: 142)),
+      host(
+        conversationHeaderActions(
+          actions(),
+          width: 150,
+          titleFloor: 142,
+          actionExtent: kMinInteractiveDimension,
+        ),
+      ),
     );
 
     // The overflow button is itself an `IconButton`, so what proves nothing

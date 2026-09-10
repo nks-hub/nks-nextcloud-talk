@@ -53,6 +53,12 @@ class BackgroundDrainSchedule {
   }
 }
 
+/// How long one headless drain may take before the wake is rescheduled.
+///
+/// Shorter than the window Android and iOS give a background job, so the app
+/// gets to say "try again" rather than being killed mid-drain.
+const Duration backgroundDrainDeadline = Duration(seconds: 25);
+
 /// Runs one drain in the headless isolate the platform started, then reports
 /// the outcome so the job can be finished or rescheduled.
 ///
@@ -65,7 +71,11 @@ Future<void> runBackgroundDrainIsolate({
 }) async {
   var retry = false;
   try {
-    await drain();
+    // Bounded, because the drain reaches the network three times and a socket
+    // that never answers would leave the platform waiting for a result that
+    // never comes: the job then dies on the system's own watchdog instead of
+    // being rescheduled, which is the one outcome that loses the wake.
+    await drain().timeout(backgroundDrainDeadline);
   } on Object {
     retry = true;
   }

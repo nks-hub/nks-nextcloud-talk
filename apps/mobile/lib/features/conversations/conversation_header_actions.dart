@@ -39,8 +39,16 @@ final class ConversationHeaderAction {
   final VoidCallback? onPressed;
 }
 
-/// What one icon button takes across, which is [IconButton]'s own minimum.
-const double _actionExtent = kMinInteractiveDimension;
+/// What one icon button takes across.
+///
+/// Not [kMinInteractiveDimension] everywhere: the desktop theme sizes an icon
+/// button by its padding to 36, so reserving 48 there overstated every action
+/// by a quarter and pushed one or two of them into the overflow menu before
+/// the header was anywhere near full.
+double actionExtentOf(BuildContext context) =>
+    Theme.of(context).visualDensity.vertical < 0
+    ? 36.0
+    : kMinInteractiveDimension;
 
 /// Width the avatar and the name keep before any action gets a slot.
 ///
@@ -50,8 +58,7 @@ double conversationTitleFloor(
   BuildContext context, {
   required double avatarExtent,
   required double gap,
-}) =>
-    avatarExtent + gap + MediaQuery.textScalerOf(context).scale(84);
+}) => avatarExtent + gap + MediaQuery.textScalerOf(context).scale(84);
 
 /// Lays [actions] out for a header [width] logical pixels wide, after
 /// [titleFloor] of it has been reserved for the avatar and the name.
@@ -62,8 +69,9 @@ List<Widget> conversationHeaderActions(
   List<ConversationHeaderAction> actions, {
   required double width,
   required double titleFloor,
+  required double actionExtent,
 }) {
-  final slots = ((width - titleFloor) / _actionExtent).floor();
+  final slots = ((width - titleFloor) / actionExtent).floor();
   if (slots >= actions.length) {
     return [for (final action in actions) _HeaderActionButton(action: action)];
   }

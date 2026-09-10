@@ -156,6 +156,7 @@ final class _Header extends ConsumerWidget {
       ),
       width: 500,
       titleFloor: 100,
+      actionExtent: kMinInteractiveDimension,
     ),
   );
 }
