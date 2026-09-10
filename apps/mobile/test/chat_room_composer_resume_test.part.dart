@@ -223,6 +223,44 @@ void _registerResumeFocusTests() {
     },
   );
 
+  testWidgets('window return ignores a scope tidying up the focus', (
+    tester,
+  ) async {
+    // A window that is away loses the focus entirely, and the manager puts it
+    // back on a SCOPE when the window returns - measured on a real Windows
+    // minimize: the root scope holds the primary focus when `resumed` arrives
+    // and the route's scope holds it one frame later. That is not a person
+    // choosing a different focus, and treating it as one left the composer
+    // dead until it was clicked. A scope that does NOT contain the composer -
+    // a dialog's, a covering route's - still stops the restore; those are the
+    // two tests below.
+    final roomScope = FocusScopeNode(debugLabel: 'Room scope');
+    addTearDown(roomScope.dispose);
+    await pumpRoom(
+      tester,
+      desktop: true,
+      wrapRoom: (pane) => FocusScope(node: roomScope, child: pane),
+    );
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    expect(composerHasFocus(tester), isFalse);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    // The scope takes the primary focus between the resume and the frame that
+    // acts on it, exactly as the window's return does it.
+    roomScope.requestFocus();
+    await tester.pump();
+    await tester.pump();
+
+    expect(composerHasFocus(tester), isTrue);
+    await settle(tester);
+  });
+
   testWidgets('window return leaves a dialog in control of focus', (
     tester,
   ) async {

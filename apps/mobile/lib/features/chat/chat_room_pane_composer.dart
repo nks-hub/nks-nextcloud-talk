@@ -23,7 +23,20 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
         return;
       }
       focusManager.applyFocusChangesIfNeeded();
-      if (focusManager.primaryFocus != focusAtResume) return;
+      // Somebody choosing a different focus between the resume and this frame
+      // keeps it. A SCOPE holding the primary focus is not somebody: while the
+      // window is away the manager drops focus to the root scope and puts it
+      // back on the route's scope when the window returns, which is not a
+      // choice and used to block every restore where nothing had been focused.
+      // Measured on a real Windows minimize/restore: root scope at resume,
+      // navigator scope one frame later. A scope that does not contain the
+      // composer - a dialog's, a covering route's - is still a hard stop.
+      final focusNow = focusManager.primaryFocus;
+      if (focusNow != focusAtResume &&
+          !(focusNow is FocusScopeNode &&
+              focusNow.descendants.contains(_composerFocusNode))) {
+        return;
+      }
       final focusedContext = focusManager.primaryFocus?.context;
       if (focusedContext != null &&
           (focusedContext.widget is EditableText ||
