@@ -14,6 +14,7 @@ import '../../../platform/media/desktop_attachment_source.dart';
 import '../../../platform/media/durable_attachment_source_store.dart';
 import '../../../platform/media/image_attachment_picker.dart';
 import '../../../platform/media/voice_platform_adapters.dart';
+import '../../calls/call_audio_interruptions.dart';
 import '../attachment_service.dart';
 import '../media/image_attachment_upload_controller.dart';
 import '../media/image_attachment_upload_panel.dart';
@@ -209,6 +210,7 @@ final class ChatMediaComposer extends StatefulWidget {
     this.contactSelectionBackend = const PlatformContactSelectionBackend(),
     this.createVoiceCaptureBackend,
     this.voiceClock = const SystemVoiceRecordingClock(),
+    this.audioInterruptions,
     this.createVoicePlaybackBackend,
   }) : assert(leadingAction == null || !showAttachmentButton);
 
@@ -253,6 +255,10 @@ final class ChatMediaComposer extends StatefulWidget {
   /// one for the same reason: a widget test starts and stops a recording in
   /// the same millisecond, which is nothing like what a finger does.
   final VoiceRecordingClock voiceClock;
+
+  /// Where the platform says it has taken the microphone away, so a recording
+  /// can pause for an incoming telephone call instead of recording it.
+  final CallAudioInterruptions? audioInterruptions;
   final CreateVoicePlaybackBackend? createVoicePlaybackBackend;
 
   @override
@@ -480,6 +486,7 @@ final class _ChatMediaComposerState extends State<ChatMediaComposer> {
         replyTo: initialMetadata.replyTo,
         threadId: initialMetadata.threadId,
       ),
+      audioInterruptions: widget.audioInterruptions,
       submissionContextResolver: () {
         final metadata = _metadataFor(AttachmentMessageKind.voice);
         if (metadata == null || !widget.capabilityProfile.supports(metadata)) {

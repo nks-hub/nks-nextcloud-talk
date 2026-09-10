@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nextcloudtalk/features/calls/call_audio_interruptions.dart';
 import 'package:nextcloudtalk/features/chat/composer/voice_message.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
@@ -52,6 +53,27 @@ void main() {
         );
         expect(fixture.controller.state.draft?.source.mimeType, 'audio/wav');
         expect(fixture.recorder.discarded, isEmpty);
+      },
+    );
+
+    test(
+      'a telephone call pauses the recording instead of joining it',
+      () async {
+        // Android reports the focus loss and the recorder used to carry on:
+        // the ringing counted into the length, and a stop that then failed
+        // deleted everything said before it.
+        final interruptions =
+            StreamController<CallAudioInterruption>.broadcast();
+        addTearDown(interruptions.close);
+        final fixture = _VoiceFixture(interruptions: interruptions.stream);
+        addTearDown(fixture.close);
+
+        expect(await fixture.controller.start(), isTrue);
+        interruptions.add(CallAudioInterruption.began);
+        await pumpEventQueue();
+
+        expect(fixture.controller.state.phase, VoiceMessagePhase.paused);
+        expect(fixture.recorder.pauses, 1);
       },
     );
 
@@ -375,6 +397,7 @@ final class _VoiceFixture {
     bool controlledSubmit = false,
     VoiceAttachmentContext submissionContext = const VoiceAttachmentContext(),
     VoiceAttachmentContext? Function()? submissionContextResolver,
+    Stream<CallAudioInterruption>? interruptions,
     void Function(int)? onReplyDurablyAccepted,
   }) : permission = permission ?? _FakePermission(permissionStatus),
        recorder = _FakeRecorder(recording ?? _recording()),
@@ -391,6 +414,9 @@ final class _VoiceFixture {
       submitter: submitter,
       submissionContext: submissionContext,
       submissionContextResolver: submissionContextResolver,
+      audioInterruptions: interruptions == null
+          ? null
+          : _StreamInterruptions(interruptions),
       onReplyDurablyAccepted: onReplyDurablyAccepted,
     );
   }
@@ -420,6 +446,13 @@ class _FakePermission implements MicrophonePermissionGateway {
     requests++;
     return status;
   }
+}
+
+final class _StreamInterruptions implements CallAudioInterruptions {
+  const _StreamInterruptions(this.events);
+
+  @override
+  final Stream<CallAudioInterruption> events;
 }
 
 final class _ControlledPermission extends _FakePermission {

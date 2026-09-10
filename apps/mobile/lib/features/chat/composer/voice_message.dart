@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:talk_protocol/talk_protocol.dart';
 
+import '../../calls/call_audio_interruptions.dart';
+
 enum MicrophonePermissionStatus { granted, denied, permanentlyDenied }
 
 abstract interface class MicrophonePermissionGateway {
@@ -155,8 +157,21 @@ final class VoiceMessageController extends ChangeNotifier {
     required this.submitter,
     required this.submissionContext,
     this.submissionContextResolver,
+    CallAudioInterruptions? audioInterruptions,
     this.onReplyDurablyAccepted,
-  });
+  }) {
+    // The platform takes the microphone away for an incoming telephone call
+    // and says so; without listening, the recording ran on with the ringing
+    // counted into its length, and a stop that then failed threw the whole
+    // thing away. Pausing keeps what was said up to that point.
+    _interruptions = audioInterruptions?.events.listen((event) {
+      if (event == CallAudioInterruption.began) {
+        unawaited(pauseRecording());
+      }
+    }, onError: (Object _, StackTrace _) {});
+  }
+
+  StreamSubscription<CallAudioInterruption>? _interruptions;
 
   final AttachmentCapabilityProfile capabilityProfile;
   final MicrophonePermissionGateway permissionGateway;
@@ -519,6 +534,7 @@ final class VoiceMessageController extends ChangeNotifier {
 
   Future<void> _close() async {
     _closed = true;
+    await _bestEffort(() async => _interruptions?.cancel());
     ++_operationGeneration;
     ++_playGeneration;
     final phase = _state.phase;

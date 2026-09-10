@@ -894,6 +894,10 @@ extension _ChatRoomPaneComposer on _ChatRoomPaneState {
               prepare: value.resolver.resolve,
               service: value.service,
             ),
+            // The same source the call uses: the platform says when it has
+            // taken the microphone for a telephone call, and a recording that
+            // does not hear it records the ringing.
+            audioInterruptions: ref.read(callAudioInterruptionsProvider),
             leadingAction: leadingAction,
             idleActions: idleActions,
             trailingActions: trailingActions,
