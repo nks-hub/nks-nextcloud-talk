@@ -758,6 +758,13 @@ final class _SyncNotice extends StatelessWidget {
     final icon = Icon(Icons.cloud_off_rounded, color: scheme.onErrorContainer);
     final text = Text(
       message,
+      // The list pane is a column with the conversations flexing under this
+      // notice, so a banner that grows eats the list: at 200 % text in a
+      // 240 px pane it stood 263 px tall and overflowed itself by 24 px on a
+      // 480 px window, leaving the conversations 140 px. The screen reader
+      // still gets the whole sentence, and the action below it never moves.
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
       style: TextStyle(color: scheme.onErrorContainer),
     );
     final action = canReauthenticate
@@ -817,8 +824,11 @@ final class _SelectConversationPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    // Scrollable so it can be taller than the window without overflowing: at
+    // 200 % text on a 480 px tall window the icon and the two lines needed
+    // 148 px more than the pane had. It still centres whenever it fits.
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

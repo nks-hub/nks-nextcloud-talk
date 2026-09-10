@@ -42,6 +42,17 @@ const _conversation = CachedConversation(
   rawJson: '{}',
 );
 
+const _accountNeedingSignIn = StoredAccount(
+  id: 'breakpoint-account',
+  serverUrl: 'https://cloud.example.invalid',
+  loginName: 'breakpoint-user',
+  serverProductName: 'Nextcloud',
+  talkFeaturesJson: '["avatar"]',
+  selected: true,
+  createdAtMillis: 1767225600000,
+  lastSyncError: 'reauthenticationRequired',
+);
+
 const _secondConversation = CachedConversation(
   accountId: 'breakpoint-account',
   token: 'secondbreakpoint',
@@ -386,6 +397,62 @@ void main() {
     expect(await panelWidth(1400), closeTo(378, 0.5));
     // Above the upper knee the ceiling holds instead of growing forever.
     expect(await panelWidth(2200), 500);
+  });
+
+  testWidgets('a short window at 200 % text keeps both panes intact', (
+    tester,
+  ) async {
+    // A desktop window dragged short, with a sync error on the account and a
+    // narrow list. Two things overflowed: the notice grew until the list had
+    // 140 px left, and the "select a conversation" placeholder needed 148 px
+    // more than the pane was tall.
+    tester.view.physicalSize = const Size(900, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final overflows = await overflowsWhile(() async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [appDatabaseProvider.overrideWithValue(database)],
+          child: localizedTestApp(
+            home: Builder(
+              builder: (context) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: const TextScaler.linear(2)),
+                child: ConversationWorkspace(
+                  account: _accountNeedingSignIn,
+                  accounts: const [_accountNeedingSignIn],
+                  conversations: const [],
+                  selectedConversationToken: null,
+                  loading: false,
+                  syncing: false,
+                  onRefresh: () async {},
+                  onReauthenticate: () async {},
+                  onSelectAccount: (_) {},
+                  onAddAccount: () {},
+                  onOpenConversation: (_) {},
+                  onSelectConversation: (_) {},
+                  onCloseConversation: () {},
+                  listWidth: kMinListPaneWidth,
+                  onResizeList: (_) {},
+                  onResizeListEnd: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    });
+
+    expect(overflows, isEmpty, reason: overflows.join(' | '));
+    expect(
+      find.byKey(const Key('reauthenticate-account')),
+      findsOneWidget,
+      reason: 'the way out of the error has to stay reachable',
+    );
+
+    await settle(tester);
   });
 
   testWidgets('the composer survives a sync error at 200 % text', (
