@@ -1,8 +1,10 @@
 import Contacts
+import Intents
 import ContactsUI
 import Flutter
 import Speech
 import UIKit
+import UserNotifications
 import XCTest
 @testable import Runner
 
@@ -894,5 +896,122 @@ private final class ContactPickerPresentingViewController: UIViewController {
   ) {
     lastPresented = viewControllerToPresent
     completion?()
+  }
+}
+
+/// The identity the Notification Service Extension puts on a banner.
+///
+/// Run here rather than in the extension because an extension has no test
+/// target; the store and the intent both live in a file compiled into both, so
+/// what runs here is what the extension runs.
+final class ConversationIdentityTests: XCTestCase {
+  private let store = ConversationIdentityStore(
+    service: "com.nkshub.nextcloudtalk.room-identity.tests",
+    maximumEntries: 3,
+    accessGroup: nil
+  )
+
+  override func setUp() {
+    super.setUp()
+    store.removeAll()
+  }
+
+  override func tearDown() {
+    store.removeAll()
+    super.tearDown()
+  }
+
+  func testARememberedRoomIsReadBackByAccountAndToken() {
+    XCTAssertTrue(
+      store.remember(accountId: "a", roomToken: "hqowhbbz", displayName: "Tym NKS")
+    )
+    XCTAssertEqual(store.displayName(accountId: "a", roomToken: "hqowhbbz"), "Tym NKS")
+  }
+
+  /// Two accounts can hold the same room token, so the account has to be part
+  /// of the key or one server's name would answer for the other's.
+  func testTheSameTokenOnTwoAccountsKeepsTwoNames() {
+    store.remember(accountId: "a", roomToken: "shared", displayName: "On A")
+    store.remember(accountId: "b", roomToken: "shared", displayName: "On B")
+    XCTAssertEqual(store.displayName(accountId: "a", roomToken: "shared"), "On A")
+    XCTAssertEqual(store.displayName(accountId: "b", roomToken: "shared"), "On B")
+  }
+
+  func testReadingDoesNotConsume() {
+    store.remember(accountId: "a", roomToken: "t", displayName: "Room")
+    XCTAssertEqual(store.displayName(accountId: "a", roomToken: "t"), "Room")
+    XCTAssertEqual(store.displayName(accountId: "a", roomToken: "t"), "Room")
+  }
+
+  func testAnUnknownRoomHasNoName() {
+    XCTAssertNil(store.displayName(accountId: "a", roomToken: "never-seen"))
+  }
+
+  func testForgettingRemovesOnlyThatRoom() {
+    store.remember(accountId: "a", roomToken: "one", displayName: "One")
+    store.remember(accountId: "a", roomToken: "two", displayName: "Two")
+    store.forget(accountId: "a", roomToken: "one")
+    XCTAssertNil(store.displayName(accountId: "a", roomToken: "one"))
+    XCTAssertEqual(store.displayName(accountId: "a", roomToken: "two"), "Two")
+  }
+
+  func testEmptyValuesAreRefusedRatherThanStored() {
+    XCTAssertFalse(store.remember(accountId: "", roomToken: "t", displayName: "R"))
+    XCTAssertFalse(store.remember(accountId: "a", roomToken: "", displayName: "R"))
+    XCTAssertFalse(store.remember(accountId: "a", roomToken: "t", displayName: ""))
+    XCTAssertNil(store.displayName(accountId: "a", roomToken: "t"))
+  }
+
+  /// The store is bounded, so a long-lived install cannot fill the Keychain.
+  func testTheStoreStaysWithinItsBound() {
+    for index in 0..<8 {
+      store.remember(accountId: "a", roomToken: "t\(index)", displayName: "R\(index)")
+    }
+    let remaining = (0..<8).filter {
+      store.displayName(accountId: "a", roomToken: "t\($0)") != nil
+    }
+    XCTAssertLessThanOrEqual(remaining.count, 3)
+    XCTAssertFalse(remaining.isEmpty)
+  }
+
+  /// The part that fails silently: `updating(from:)` throws when iOS does not
+  /// consider the intent a message, and the extension would then quietly ship
+  /// an ordinary banner forever. Accepting the intent is therefore the whole
+  /// contract this can check.
+  ///
+  /// Measured on iPhone 16 Pro Max / iOS 18.6: what comes back carries the
+  /// attribution INTERNALLY. `userInfo` is empty, the title is untouched and
+  /// the thread identifier is not the conversation - an earlier version of this
+  /// test asserted one of those and failed while the feature worked. What the
+  /// banner then looks like is not readable from the content object at all; it
+  /// takes a real push to see.
+  func testIOSAcceptsTheIntentAndKeepsTheMessage() throws {
+    let content = UNMutableNotificationContent()
+    content.title = "NKS Talk"
+    content.body = "Ahoj"
+
+    let updated = try XCTUnwrap(
+      communicationNotification(
+        from: content,
+        conversationIdentifier: "a|hqowhbbz",
+        displayName: "Tym NKS",
+        donate: false
+      ),
+      "iOS refused the intent, so no notification would ever be attributed"
+    )
+
+    XCTAssertEqual(updated.body, "Ahoj", "the message text must survive")
+    XCTAssertFalse(updated === content, "the update is a copy, not an edit")
+  }
+
+  func testAnEmptyNameIsNotWorthAnIntent() {
+    XCTAssertNil(
+      communicationNotification(
+        from: UNMutableNotificationContent(),
+        conversationIdentifier: "a|t",
+        displayName: "",
+        donate: false
+      )
+    )
   }
 }

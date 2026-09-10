@@ -107,9 +107,8 @@ final class NotificationService: UNNotificationServiceExtension {
   /// The same content, attributed to the room, or `nil` to keep it as it is.
   ///
   /// Every step is allowed to fail into the ordinary notification: a room the
-  /// app has never cached has no name here, donating can be refused, and
-  /// `updating(from:)` throws when the intent does not describe a message.
-  /// None of those is worth losing the notification over.
+  /// app has never cached has no name here, and iOS refuses an intent it does
+  /// not consider a message. Neither is worth losing the notification over.
   private static func asCommunication(
     _ content: UNNotificationContent,
     accountId: String,
@@ -123,29 +122,14 @@ final class NotificationService: UNNotificationServiceExtension {
     else {
       return nil
     }
-    let handle = INPersonHandle(value: "\(accountId)|\(roomToken)", type: .unknown)
-    let sender = INPerson(
-      personHandle: handle,
-      nameComponents: nil,
-      displayName: name,
-      image: nil,
-      contactIdentifier: nil,
-      customIdentifier: handle.value
+    return communicationNotification(
+      from: content,
+      conversationIdentifier: ConversationIdentityStore.identifier(
+        accountId: accountId,
+        roomToken: roomToken
+      ),
+      displayName: name
     )
-    let intent = INSendMessageIntent(
-      recipients: nil,
-      outgoingMessageType: .outgoingMessageText,
-      content: nil,
-      speakableGroupName: nil,
-      conversationIdentifier: handle.value,
-      serviceName: nil,
-      sender: sender,
-      attachments: nil
-    )
-    let interaction = INInteraction(intent: intent, response: nil)
-    interaction.direction = .incoming
-    interaction.donate(completion: nil)
-    return try? content.updating(from: intent)
   }
 
   override func serviceExtensionTimeWillExpire() {

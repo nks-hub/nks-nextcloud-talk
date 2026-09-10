@@ -1,5 +1,7 @@
 import Foundation
+import Intents
 import Security
+import UserNotifications
 
 /// Hands a decrypted notification route from the Notification Service
 /// Extension to the main app without exposing it in the notification payload
@@ -316,4 +318,50 @@ final class ConversationIdentityStore {
     query = itemQuery(identifier: identifier)
     SecItemDelete(query as CFDictionary)
   }
+}
+
+/// Re-attributes a notification to the conversation it came from.
+///
+/// Lives here rather than in the extension because the extension cannot be
+/// imported by a test target and this file is compiled into both it and the
+/// Runner: the same definition the extension runs is the one `RunnerTests`
+/// exercises on a simulator.
+///
+/// Returns `nil` when iOS refuses the intent - `updating(from:)` throws when it
+/// does not describe a message - so a caller can fall back to the ordinary
+/// notification rather than lose it.
+func communicationNotification(
+  from content: UNNotificationContent,
+  conversationIdentifier: String,
+  displayName: String,
+  donate: Bool = true
+) -> UNNotificationContent? {
+  guard !conversationIdentifier.isEmpty, !displayName.isEmpty else {
+    return nil
+  }
+  let handle = INPersonHandle(value: conversationIdentifier, type: .unknown)
+  let sender = INPerson(
+    personHandle: handle,
+    nameComponents: nil,
+    displayName: displayName,
+    image: nil,
+    contactIdentifier: nil,
+    customIdentifier: conversationIdentifier
+  )
+  let intent = INSendMessageIntent(
+    recipients: nil,
+    outgoingMessageType: .outgoingMessageText,
+    content: nil,
+    speakableGroupName: nil,
+    conversationIdentifier: conversationIdentifier,
+    serviceName: nil,
+    sender: sender,
+    attachments: nil
+  )
+  if donate {
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .incoming
+    interaction.donate(completion: nil)
+  }
+  return try? content.updating(from: intent)
 }
