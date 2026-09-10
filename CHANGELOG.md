@@ -20,6 +20,12 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- A pin with an end shows its end. Pinning already asked how long the message
+  should stay up; now the banner says "Pinned until" that moment instead of
+  just "Pinned message", and a pin whose time has passed disappears by itself
+  rather than waiting for the server to get round to it. Where the server sent
+  no end, nothing changes.
+
 - Fixed: after a minimized window came back, the message box stayed dead until
   it was clicked. The app did ask for the box every time; what stopped it was
   its own caution. While a window is away the system holds no focus at all, and
