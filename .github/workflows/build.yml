@@ -250,9 +250,17 @@ jobs:
       # whether the file it was handed is the upload key. So it is read back.
       - name: Check the APK carries the upload signature
         run: |
+          # `pipefail`, because the exit status of a pipeline is its LAST
+          # command: without it `apksigner | tee` reports whatever `tee` did,
+          # which is always success. A crashed apksigner then left an empty
+          # certs.txt, the debug-key grep found nothing, and this gate — the
+          # one thing that reads the signature back — passed while knowing
+          # nothing at all.
+          set -o pipefail
           APK=apps/mobile/build/app/outputs/flutter-apk/app-release.apk
           APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | sort | tail -1)
           "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
+          test -s certs.txt
           if grep -qi "CN=Android Debug" certs.txt; then
             echo "Signed with the debug key - Play would reject this."
             exit 1
