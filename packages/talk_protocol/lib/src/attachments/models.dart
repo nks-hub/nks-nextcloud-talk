@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../chat/identifiers.dart';
 import '../identifiers.dart';
 import '../protocol_exception.dart';
@@ -253,9 +255,15 @@ bool _validMimeType(String value) {
   ).hasMatch(value);
 }
 
+/// A file name the server will accept.
+///
+/// The length is counted in UTF-8 bytes, which is what the file system behind
+/// WebDAV limits: 200 Czech or Chinese characters pass a 255-unit check and
+/// then fail the upload at the very end, after the whole file went over the
+/// wire, with nothing the person can rename.
 bool _validDisplayName(String value) =>
     value.isNotEmpty &&
-    value.length <= 255 &&
+    utf8.encode(value).length <= 255 &&
     value.trim() == value &&
     value != '.' &&
     value != '..' &&

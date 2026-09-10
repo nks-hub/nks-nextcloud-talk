@@ -376,5 +376,21 @@ final class UpdateInstallerService {
     return utf8.decode(bytes.takeBytes());
   }
 
-  String _assetFileName(Uri uri) => Uri.decodeComponent(uri.pathSegments.last);
+  /// The last path segment, already decoded once by [Uri].
+  ///
+  /// Decoding it a second time turned `%252e%252e%252f` back into `../`, and
+  /// this name is joined onto a temp directory that the failure path deletes
+  /// with its parent. Anything that still looks like a path after the check
+  /// is refused rather than repaired.
+  String _assetFileName(Uri uri) {
+    final name = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
+    if (name.isEmpty ||
+        name == '.' ||
+        name == '..' ||
+        name.contains('/') ||
+        name.contains(r'\')) {
+      throw const FormatException('The update names no usable file.');
+    }
+    return name;
+  }
 }

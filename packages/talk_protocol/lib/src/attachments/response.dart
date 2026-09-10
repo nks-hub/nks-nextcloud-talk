@@ -300,7 +300,14 @@ AttachmentDavResponse decodeAttachmentDavResponse({
       ? AttachmentDavClassification.quotaExceeded
       : statusCode == 403
       ? AttachmentDavClassification.permissionDenied
-      : statusCode == 429 || statusCode >= 500
+      // 423 and 425 are Nextcloud saying "busy with this very file": it locks
+      // the target while it assembles the chunks and answers 425 while the
+      // scan is still running. Treated as deterministic they cost the whole
+      // upload, because a deterministic failure deletes the chunk session.
+      : statusCode == 429 ||
+            statusCode == 423 ||
+            statusCode == 425 ||
+            statusCode >= 500
       ? AttachmentDavClassification.transientFailure
       : AttachmentDavClassification.deterministicFailure;
   return AttachmentDavResponse._(

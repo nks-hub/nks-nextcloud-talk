@@ -123,6 +123,20 @@ void main() {
         ).classification,
         AttachmentDavClassification.reauthenticationRequired,
       );
+      // The server locks the target while it assembles the chunks and scans
+      // the result. Read as deterministic, these two threw away every chunk
+      // already uploaded and asked for the whole file again.
+      for (final busy in <int>[423, 425]) {
+        expect(
+          decodeAttachmentDavResponse(
+            request: request,
+            statusCode: busy,
+            body: Uint8List(0),
+          ).classification,
+          AttachmentDavClassification.transientFailure,
+          reason: 'status $busy means busy, not broken',
+        );
+      }
     });
 
     test('classifies destination precondition failures as collisions', () {

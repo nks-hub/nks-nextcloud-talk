@@ -424,6 +424,20 @@ void main() {
       }
     });
   });
+
+  test('a file name is measured in the bytes the server stores', () {
+    // 200 Czech characters are 200 UTF-16 units and 400 UTF-8 bytes. Counted
+    // the wrong way they passed here and failed at the end of the upload,
+    // after the whole file had gone over the wire.
+    final long = 'ě' * 200;
+    expect(long.length, lessThanOrEqualTo(255));
+    expect(utf8.encode(long).length, greaterThan(255));
+    expect(
+      () => source(name: '$long.jpg'),
+      throwsA(isA<TalkProtocolException>()),
+    );
+    expect(source(name: 'ěščřžýáíé.jpg').displayName, 'ěščřžýáíé.jpg');
+  });
 }
 
 AttachmentRuntimeSnapshot _driveProbe(AttachmentJobDraft operation) {
