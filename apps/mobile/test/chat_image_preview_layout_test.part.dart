@@ -432,6 +432,13 @@ void _registerChatImagePreviewLayoutTests() {
   testWidgets('missing image metadata uses decoded preview dimensions', (
     tester,
   ) async {
+    // The surface is pinned because the assertion below is an absolute width.
+    // Run on a real phone this test used to fail at 392.7 instead of 420 —
+    // the bubble was correctly obeying a 411 dp screen, and only the test
+    // believed everything is 800 dp wide.
+    tester.view.physicalSize = const Size(1600, 1200);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
     final preview = await _solidPreview(tester, 808, 121);
     final wire = _layoutImageWire(80);
     final file = (wire['messageParameters'] as Map)['file'] as Map;
