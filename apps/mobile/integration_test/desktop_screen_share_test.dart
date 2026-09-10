@@ -30,6 +30,8 @@ void main() {
 
   final roomToken = Platform.environment['NKS_CALL_ROOM'];
   final journal = DesktopJournal(Platform.environment['NKS_CALL_JOURNAL']);
+  // Part of a window title that is safe to put in front of other people.
+  final windowMark = Platform.environment['NKS_WINDOW_MARK'] ?? 'share target';
   final joinWait = Duration(
     seconds: int.tryParse(Platform.environment['NKS_JOIN_WAIT'] ?? '') ?? 45,
   );
@@ -64,14 +66,26 @@ void main() {
     await settle(tester, joinWait);
     journal.note('waited for the other side');
 
-    await _share(tester, journal, pickLast: false, stopFirst: false);
+    await _share(
+      tester,
+      journal,
+      pickLast: false,
+      stopFirst: false,
+      windowMark: windowMark,
+    );
     await settle(tester, const Duration(seconds: 60));
     journal.note('screen shared, holding');
 
     // The same control stops a running share, so a second choice needs two
     // presses: one to stop, one to ask again. Learned from a run where the
     // second press found no picker at all.
-    await _share(tester, journal, pickLast: true, stopFirst: true);
+    await _share(
+      tester,
+      journal,
+      pickLast: true,
+      stopFirst: true,
+      windowMark: windowMark,
+    );
     await settle(tester, const Duration(seconds: 60));
     journal.note('window shared, holding');
 
@@ -92,6 +106,7 @@ Future<void> _share(
   DesktopJournal journal, {
   required bool pickLast,
   required bool stopFirst,
+  required String windowMark,
 }) async {
   final button = find.byKey(const Key('call-screen-share-screen'));
   if (stopFirst) {
@@ -133,8 +148,10 @@ Future<void> _share(
 
   // NEVER "just take the last window". The first run of this did, and the
   // machine's last window was somebody's open mailbox, which would have gone
-  // down the wire to everyone in the call. A window is chosen by name, and the
-  // name is this application's own.
+  // down the wire to everyone in the call. The window is chosen BY NAME, and
+  // the name is one the operator opened for this on purpose - `NKS_WINDOW_MARK`.
+  // The application's own window is not offered by the picker, so it cannot
+  // serve as the safe choice.
   var chosen = 0;
   if (pickLast) {
     chosen = -1;
@@ -145,7 +162,7 @@ Future<void> _share(
           .map((element) => (element.widget as Text).data)
           .whereType<String>()
           .join(' ');
-      if (label.contains('NKS Talk')) {
+      if (label.contains(windowMark)) {
         chosen = index;
         break;
       }
@@ -153,7 +170,7 @@ Future<void> _share(
     expect(
       chosen,
       isNot(-1),
-      reason: 'no window of this application was offered to share',
+      reason: 'no window named "$windowMark" was offered to share',
     );
   }
   final key = (found[chosen].widget.key! as ValueKey<String>).value;

@@ -20,11 +20,11 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
-- Sharing a screen from the desktop was watched arriving on a second device for
-  the first time: pick a monitor in a call and the other side sees that monitor,
-  live. Choosing a window INSTEAD of a monitor, after the first share has been
-  stopped, does not reach the other side yet - that is being looked into and no
-  fix is claimed here.
+- Sharing from the desktop was watched arriving on a second device for the
+  first time. Pick a monitor in a call and the other side sees that monitor,
+  live; stop it, pick a single window instead, and the other side sees that
+  window. Nothing changed in the app for this - what changed is that it is now
+  known to work rather than assumed.
 
 ## 1.0.1 (67) — 10 September 2026
 
