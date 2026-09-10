@@ -2,7 +2,12 @@ part of 'chat_room_pane.dart';
 
 extension _ChatRoomPaneTyping on _ChatRoomPaneState {
   void _handleComposerChanged() {
-    _scheduleDraftSave();
+    // A clear this widget did itself is not the person emptying the box. On
+    // a room switch it used to schedule an empty draft under the room being
+    // opened, which then raced the read that restores that room's own text.
+    if (!_suppressDraftSave) {
+      _scheduleDraftSave();
+    }
     _syncTypingActivity(composerChanged: true);
   }
 

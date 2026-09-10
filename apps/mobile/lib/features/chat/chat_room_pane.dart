@@ -242,6 +242,10 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
     );
   }
 
+  /// Set while the pane clears the composer itself, so the clear is not
+  /// mistaken for the person deleting what they wrote.
+  bool _suppressDraftSave = false;
+
   Future<void> _restoreDraft(ChatRoomProviderKey key) async {
     final store = _draftStore;
     if (store == null) {
@@ -278,7 +282,9 @@ final class _ChatRoomPaneState extends ConsumerState<ChatRoomPane>
         threadId: oldWidget.threadId,
       ), _composer.text),
     );
+    _suppressDraftSave = true;
     _composer.clear();
+    _suppressDraftSave = false;
     _replyTo = null;
     _historyGeneration++;
     _loadingOlder = false;
