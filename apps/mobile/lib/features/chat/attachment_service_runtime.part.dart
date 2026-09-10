@@ -635,12 +635,27 @@ mixin _AttachmentServiceRuntime {
         result.outcome != AttachmentRuntimeOutcome.unchanged) {
       metadata = metadata.copyWith(automaticRetryCount: 0, nextAttemptAt: null);
     }
-    await _persistTransition(
-      account: account,
-      job: job,
-      metadata: metadata,
-      updatedAt: _clock().toUtc(),
-    );
+    // Retried, because a local write is not a reason to strand the upload.
+    // `database is locked` while committing a finished upload used to escape
+    // the room lane's own catch — which only knows transport failures — and
+    // the job sat in `finalizing` until the app was restarted, with the
+    // message already on the server. The sibling paths retry the same way.
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await _persistTransition(
+          account: account,
+          job: job,
+          metadata: metadata,
+          updatedAt: _clock().toUtc(),
+        );
+        break;
+      } on Object {
+        if (attempt >= _localPersistenceRetryDelays.length) {
+          rethrow;
+        }
+        await Future<void>.delayed(_localPersistenceRetryDelays[attempt]);
+      }
+    }
     _snapshot = candidate;
     _metadata[key] = metadata;
     _reportUploadIfTerminal(key, job.phase);

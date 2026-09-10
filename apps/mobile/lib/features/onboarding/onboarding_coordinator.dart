@@ -85,6 +85,10 @@ final class ExternalLoginPageLauncher implements LoginPageLauncher {
 
   final Future<bool> Function(Uri) _opener;
 
+  /// How long the launcher waits for the app to come back before it lets the
+  /// caller carry on polling for the login anyway.
+  static const Duration returnTimeout = Duration(minutes: 5);
+
   @override
   Future<bool> open(Uri uri) async {
     if (!_waitsForMobileReturn) {
@@ -97,7 +101,13 @@ final class ExternalLoginPageLauncher implements LoginPageLauncher {
       if (!opened) {
         return false;
       }
-      await returnSignal.returned;
+      // Bounded. This waits for the app to be hidden and then resumed, and a
+      // browser that opens without hiding this app — a split screen, a
+      // custom tab the system draws over us, a launcher that never reports
+      // the transition — never produces that pair. Onboarding then hung with
+      // a Cancel button that could do nothing, because the caller had not
+      // created its cancellation signal yet.
+      await returnSignal.returned.timeout(returnTimeout, onTimeout: () {});
       return true;
     } finally {
       returnSignal.dispose();
