@@ -113,7 +113,8 @@ to them. Only what is documented from App Store Connect is stated for them.
   microphone entitlement but not `com.apple.security.device.camera`, and
   `Info.plist` had no `NSCameraUsageDescription`, while the call screen offers
   the camera on every platform without a guard. A macOS tester on 1.0.0 (66)
-  therefore had audio only, and the entitlement lands with the next build.
+  therefore had audio only; this package carries both, read back from the
+  notarised build itself.
 
 ## 1.0.0 (66) — 9 September 2026
 
