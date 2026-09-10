@@ -59,6 +59,86 @@ void main() {
     );
   });
 
+  test(
+    'an interrupted first start of an older build gains its columns',
+    () async {
+      // The other half of the same accident. Drift reads `user_version` 0 as
+      // "new database", so a first start killed by an OLDER build leaves tables
+      // shaped the way that build knew them — and the recovery branch only
+      // created what was missing entirely, then let drift stamp the current
+      // version on top. Every query naming a column added since failed from
+      // then on, and no later build could ever repair it.
+      final file = File(
+        '${Directory.systemTemp.path}/nks-interrupted-old-'
+        '${DateTime.now().microsecondsSinceEpoch}.sqlite',
+      );
+      addTearDown(() {
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      });
+
+      final created = AppDatabase.forTesting(NativeDatabase(file));
+      await created.customStatement('SELECT 1');
+      // What that older build's table looked like: no `silent`, which schema 16
+      // added, and no version to say so.
+      await created.customStatement('DROP TABLE text_send_operations');
+      await created.customStatement(
+        'CREATE TABLE text_send_operations ('
+        'account_id TEXT NOT NULL, room_token TEXT NOT NULL, '
+        'reference_id TEXT NOT NULL, body TEXT NOT NULL, '
+        'PRIMARY KEY (account_id, room_token, reference_id))',
+      );
+      await created.customStatement('PRAGMA user_version = 0');
+      await created.close();
+
+      final reopened = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(reopened.close);
+      final columns = await reopened
+          .customSelect('PRAGMA table_info(text_send_operations)')
+          .get();
+      expect(
+        columns.map((row) => row.read<String>('name')),
+        contains('silent'),
+        reason:
+            'the recovery has to replay the migrations, not just the tables',
+      );
+    },
+  );
+
+  test('an orphan row is swept, not turned into a locked-out app', () async {
+    // One dangling reference — an interrupted transaction is enough — used to
+    // mean the app could never start again: the open threw, and the only
+    // control on the failure screen reopens the same file. The row is already
+    // unreachable through every query the app makes, so it goes.
+    final file = File(
+      '${Directory.systemTemp.path}/nks-orphan-'
+      '${DateTime.now().microsecondsSinceEpoch}.sqlite',
+    );
+    addTearDown(() {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    });
+
+    final created = AppDatabase.forTesting(NativeDatabase(file));
+    await created.customStatement('SELECT 1');
+    await created.customStatement('PRAGMA foreign_keys = OFF');
+    await created.customStatement(
+      "INSERT INTO cached_conversations (account_id, token, display_name, "
+      "description, last_activity, unread_messages, favorite, raw_json) "
+      "VALUES ('ghost-account', 'ghosttoken', 'Ghost', '', 1, 0, 0, '{}')",
+    );
+    // The version has to move for the check to run at all.
+    await created.customStatement('PRAGMA user_version = 17');
+    await created.close();
+
+    final reopened = AppDatabase.forTesting(NativeDatabase(file));
+    addTearDown(reopened.close);
+    await expectLater(reopened.select(reopened.accounts).get(), completes);
+    expect(await reopened.select(reopened.cachedConversations).get(), isEmpty);
+  });
+
   test('schema v1 to v15 preserves its account and conversation', () async {
     final fixture =
         readFixtureJson(

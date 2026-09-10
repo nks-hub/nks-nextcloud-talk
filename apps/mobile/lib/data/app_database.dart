@@ -681,6 +681,7 @@ final class AppDatabase extends _$AppDatabase {
       final existing = await customSelect(
         'SELECT name FROM sqlite_master',
       ).get();
+      _schemaChanged = true;
       if (existing.isEmpty) {
         await migrator.createAll();
         return;
@@ -691,57 +692,131 @@ final class AppDatabase extends _$AppDatabase {
           await migrator.create(entity);
         }
       }
+      // The tables are there, but nothing says which build wrote them: an
+      // interrupted first start of an OLDER build leaves tables missing the
+      // columns every later migration added, and drift is about to stamp the
+      // current version on them anyway. Replaying the whole chain is the only
+      // honest answer; every step is idempotent.
+      await _upgrade(migrator, 1, schemaVersion);
     },
     onUpgrade: (migrator, from, to) async {
-      if (from > to) {
-        throw StateError(
-          'Database schema version $from is newer than supported $to',
-        );
+      _schemaChanged = true;
+      await _upgrade(migrator, from, to);
+    },
+    beforeOpen: (_) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      // Only after the schema moved. The check is a full scan of every
+      // foreign key in the file, which a phone with a large message cache
+      // pays for on every cold start, and nothing between two opens of the
+      // same schema can create a violation: the pragma above refuses them.
+      if (!_schemaChanged) {
+        return;
       }
-      if (from < 2) {
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.readOnly,
-        );
-        await _createTableIfMissing(migrator, chatCapabilities);
-        await _createTableIfMissing(migrator, chatScopes);
-        await _createTableIfMissing(migrator, cachedChatMessages);
-        await _createTableIfMissing(migrator, textSendOperations);
+      _schemaChanged = false;
+      await _repairForeignKeys();
+    },
+  );
+
+  /// Whether this open created or migrated the schema.
+  bool _schemaChanged = false;
+
+  /// Deletes rows whose parent is gone, rather than refusing to open.
+  ///
+  /// Throwing here was a one-way door: a single orphan — one interrupted
+  /// transaction is enough — meant the app could never start again, on this
+  /// build or any later one, and the only control offered was Retry, which
+  /// reopens the same file and fails the same way. An orphan is already
+  /// unreachable through every query the app makes, so removing it loses
+  /// nothing that was still readable. What must not happen is losing the
+  /// account with it.
+  Future<void> _repairForeignKeys() async {
+    final violations = await customSelect('PRAGMA foreign_key_check').get();
+    if (violations.isEmpty) {
+      return;
+    }
+    for (final violation in violations) {
+      final table = violation.read<String>('table');
+      final rowId = violation.data['rowid'];
+      if (rowId is! int || !_repairableTables.contains(table)) {
+        continue;
       }
-      if (from < 3) {
-        await _addColumnIfMissing(
-          migrator,
-          accounts,
-          accounts.talkFeaturesJson,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.roomType,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.roomName,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.objectType,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.avatarVersion,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.isCustomAvatar,
-        );
-        await _createTableIfMissing(migrator, conversationAvatars);
-        await customStatement('''
+      await customStatement('DELETE FROM "$table" WHERE rowid = ?', [rowId]);
+    }
+    final left = await customSelect('PRAGMA foreign_key_check').get();
+    if (left.isNotEmpty) {
+      // Something the sweep above cannot address. Refusing is still right
+      // here: the alternative is running queries over a graph that lies.
+      throw StateError('Database foreign-key validation failed');
+    }
+  }
+
+  /// Tables whose rows may be deleted to recover from a dangling reference.
+  ///
+  /// Read off the schema rather than listed, so a table added later is
+  /// covered without anyone remembering to come back here. Everything here
+  /// can be asked of the server again; `accounts` is deliberately excluded,
+  /// being the one table nothing else can restore.
+  Set<String> get _repairableTables => allTables
+      .map((table) => table.actualTableName)
+      .where((name) => name != accounts.actualTableName)
+      .toSet();
+
+  /// Every migration step from [from] up to the current schema.
+  ///
+  /// Named rather than inline because the recovery branch of `onCreate` runs
+  /// it too: a database whose tables exist but whose `user_version` was never
+  /// written is not necessarily current, and drift stamps the newest version
+  /// on it as soon as `onCreate` returns. Without replaying these steps a
+  /// table written by an older build keeps that build's columns forever, and
+  /// every query naming a newer one fails from then on. Each step is
+  /// idempotent, so replaying all of them over an already current database
+  /// changes nothing.
+  Future<void> _upgrade(Migrator migrator, int from, int to) async {
+    if (from > to) {
+      throw StateError(
+        'Database schema version $from is newer than supported $to',
+      );
+    }
+    if (from < 2) {
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.readOnly,
+      );
+      await _createTableIfMissing(migrator, chatCapabilities);
+      await _createTableIfMissing(migrator, chatScopes);
+      await _createTableIfMissing(migrator, cachedChatMessages);
+      await _createTableIfMissing(migrator, textSendOperations);
+    }
+    if (from < 3) {
+      await _addColumnIfMissing(migrator, accounts, accounts.talkFeaturesJson);
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.roomType,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.roomName,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.objectType,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.avatarVersion,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.isCustomAvatar,
+      );
+      await _createTableIfMissing(migrator, conversationAvatars);
+      await customStatement('''
           UPDATE cached_conversations
           SET room_type = CASE
                 WHEN json_valid(raw_json)
@@ -769,46 +844,46 @@ final class AppDatabase extends _$AppDatabase {
                 ELSE 0
               END
         ''');
-      }
-      if (from >= 3 && from < 4) {
-        await _addColumnIfMissing(
-          migrator,
-          conversationAvatars,
-          conversationAvatars.isCustomAvatar,
-        );
-      }
-      if (from < 4) {
-        await customStatement('DELETE FROM conversation_avatars');
-      }
-      if (from >= 2 && from < 5) {
-        await _addColumnIfMissing(
-          migrator,
-          textSendOperations,
-          textSendOperations.threadId,
-        );
-      }
-      if (from < 6) {
-        await _createTableIfMissing(migrator, attachmentRuntimeAccounts);
-        await _createTableIfMissing(migrator, attachmentJobs);
-      }
-      if (from < 7) {
-        await customStatement(
-          'CREATE INDEX IF NOT EXISTS '
-          'cached_chat_messages_attachment_confirmation '
-          'ON cached_chat_messages '
-          '(account_id, room_token, reference_id, message_id)',
-        );
-      }
-      if (from < 9) {
-        await _createTableIfMissing(migrator, chatDrafts);
-      }
-      if (from < 10) {
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.isArchived,
-        );
-        await customStatement('''
+    }
+    if (from >= 3 && from < 4) {
+      await _addColumnIfMissing(
+        migrator,
+        conversationAvatars,
+        conversationAvatars.isCustomAvatar,
+      );
+    }
+    if (from < 4) {
+      await customStatement('DELETE FROM conversation_avatars');
+    }
+    if (from >= 2 && from < 5) {
+      await _addColumnIfMissing(
+        migrator,
+        textSendOperations,
+        textSendOperations.threadId,
+      );
+    }
+    if (from < 6) {
+      await _createTableIfMissing(migrator, attachmentRuntimeAccounts);
+      await _createTableIfMissing(migrator, attachmentJobs);
+    }
+    if (from < 7) {
+      await customStatement(
+        'CREATE INDEX IF NOT EXISTS '
+        'cached_chat_messages_attachment_confirmation '
+        'ON cached_chat_messages '
+        '(account_id, room_token, reference_id, message_id)',
+      );
+    }
+    if (from < 9) {
+      await _createTableIfMissing(migrator, chatDrafts);
+    }
+    if (from < 10) {
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.isArchived,
+      );
+      await customStatement('''
           UPDATE cached_conversations
           SET is_archived = CASE
                 WHEN json_valid(raw_json)
@@ -816,37 +891,37 @@ final class AppDatabase extends _$AppDatabase {
                 ELSE 0
               END
         ''');
-      }
-      if (from < 11) {
-        await _createTableIfMissing(migrator, callSessions);
-      }
-      if (from < 12) {
-        await _createTableIfMissing(migrator, callLifecycleSessions);
-      }
-      if (from < 8) {
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.peerStatus,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.peerStatusIcon,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.peerStatusMessage,
-        );
-        await _addColumnIfMissing(
-          migrator,
-          cachedConversations,
-          cachedConversations.peerStatusClearAt,
-        );
-      }
-      if (from < 13) {
-        await customStatement(r'''
+    }
+    if (from < 11) {
+      await _createTableIfMissing(migrator, callSessions);
+    }
+    if (from < 12) {
+      await _createTableIfMissing(migrator, callLifecycleSessions);
+    }
+    if (from < 8) {
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.peerStatus,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.peerStatusIcon,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.peerStatusMessage,
+      );
+      await _addColumnIfMissing(
+        migrator,
+        cachedConversations,
+        cachedConversations.peerStatusClearAt,
+      );
+    }
+    if (from < 13) {
+      await customStatement(r'''
           UPDATE cached_conversations
           SET peer_status = CASE
                 WHEN json_valid(raw_json)
@@ -878,23 +953,23 @@ final class AppDatabase extends _$AppDatabase {
                   ELSE 0
                 END
         ''');
-      }
-      if (from < 14) {
-        await _createTableIfMissing(migrator, cachedThreads);
-      }
-      if (from < 15) {
-        // Reactions and deletion notices arrive as system messages carrying
-        // the thread they belong to. Counting them made a bubble claim "1
-        // reply" the moment somebody reacted, and the wrong number then
-        // survived every later recount because it was reused as a floor.
-        // The projection stopped producing it; this clears what is already
-        // stored.
-        //
-        // Only a count that exactly matches the buggy rule is rewritten, and
-        // only downwards. A root whose number came from the server is left
-        // alone even when the cache holds fewer replies than the server
-        // reported, because the cache is a window, not the truth.
-        await customStatement(r'''
+    }
+    if (from < 14) {
+      await _createTableIfMissing(migrator, cachedThreads);
+    }
+    if (from < 15) {
+      // Reactions and deletion notices arrive as system messages carrying
+      // the thread they belong to. Counting them made a bubble claim "1
+      // reply" the moment somebody reacted, and the wrong number then
+      // survived every later recount because it was reused as a floor.
+      // The projection stopped producing it; this clears what is already
+      // stored.
+      //
+      // Only a count that exactly matches the buggy rule is rewritten, and
+      // only downwards. A root whose number came from the server is left
+      // alone even when the cache holds fewer replies than the server
+      // reported, because the cache is a window, not the truth.
+      await customStatement(r'''
           UPDATE cached_chat_messages AS root
           SET raw_json = json_set(
                 root.raw_json,
@@ -927,29 +1002,21 @@ final class AppDatabase extends _$AppDatabase {
                      AND clean.message_id <> root.thread_id
                      AND clean.system_message = '')
         ''');
-      }
-      if (from < 16) {
-        await _addColumnIfMissing(
-          migrator,
-          textSendOperations,
-          textSendOperations.silent,
-        );
-      }
-      if (from < 17) {
-        await _createTableIfMissing(migrator, accountThemes);
-      }
-      if (from < 18) {
-        await _createTableIfMissing(migrator, certificatePins);
-      }
-    },
-    beforeOpen: (_) async {
-      await customStatement('PRAGMA foreign_keys = ON');
-      final violations = await customSelect('PRAGMA foreign_key_check').get();
-      if (violations.isNotEmpty) {
-        throw StateError('Database foreign-key validation failed');
-      }
-    },
-  );
+    }
+    if (from < 16) {
+      await _addColumnIfMissing(
+        migrator,
+        textSendOperations,
+        textSendOperations.silent,
+      );
+    }
+    if (from < 17) {
+      await _createTableIfMissing(migrator, accountThemes);
+    }
+    if (from < 18) {
+      await _createTableIfMissing(migrator, certificatePins);
+    }
+  }
 
   /// Adds [column] to [table] unless it is already there.
   ///
