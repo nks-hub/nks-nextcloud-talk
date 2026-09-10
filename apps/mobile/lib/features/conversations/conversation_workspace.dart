@@ -11,7 +11,9 @@ const double kExpandedShellBreakpoint = 720;
 /// bubble and its avatar side by side. The floor is what the list and the
 /// details panel have to leave behind — the list gives up width first, and
 /// the details open as a page instead of a panel when the window cannot pay
-/// for all three.
+/// for all three. The splitter and the divider come out of it too, so the
+/// pane lands about 10 px under this on the tightest window that still
+/// draws all three.
 const double kMinConversationWidth = 400;
 
 final class ConversationWorkspace extends StatelessWidget {

@@ -121,6 +121,48 @@ An unreadable preference falls back to "shown". That direction is deliberate: a
 list hidden by mistake looks like lost conversations, one shown by mistake costs
 one click.
 
+**D-044: the conversation has a floor, and the other two panes pay for it.**
+
+The panes were laid out as "list at whatever width it asks for, details at
+whatever the window says, conversation gets the rest". The rest is what
+overflowed. Two ways to reach it, both reported and both reproduced:
+
+- Open the details on a window between the two-pane breakpoint and about
+  1000 px. The panel took its 300 px, and the conversation was left 128 px at
+  760 px of window — its own header overflowed by 74 px.
+- Drag the list wide, then make the window small, or open the app on a smaller
+  screen than the one where the width was stored. A stored 520 px on a 720 px
+  window left 191 px of conversation and overflowed by 11 px.
+
+`kMinConversationWidth` is 400 px: measured, not chosen. The header starts
+overflowing just under 200 px, and under a phone's own 360 px the pane stops
+showing a bubble beside its avatar. Everything else gives that floor up first.
+The list is capped by what the window can spare, never below its own 240 px
+minimum, and the details open as a **page** instead of a panel when all three
+cannot fit — which is what a narrow window has always done with them.
+
+The fit is asked of the window alone, never of whether the details happen to be
+open. A fit that changed the moment they opened would leave the button doing
+nothing at all, which is the same dead end the fold had before it was tied to
+an open conversation.
+
+Measured on the real widget at desktop density, one account, list at its 300 px
+default:
+
+| window | details closed | details open | what the details are |
+| ---: | ---: | ---: | :--- |
+| 720 | 411 | 411 | page |
+| 800 | 491 | 491 | page |
+| 900 | 591 | 591 | page |
+| 1024 | 715 | 414 | panel, 300 wide |
+| 1280 | 971 | 624 | panel, 346 wide |
+| 1440 | 1131 | 741 | panel, 389 wide |
+| 1920 | 1611 | 1110 | panel, 500 wide |
+
+The knee is a 1000 px window: below it the panel cannot be paid for. A 7-inch
+tablet at 901 dp is under it with room to spare, so touch layouts always get
+the page.
+
 ## What deliberately does not change
 
 - **Multi-server stays.** It is the reason this client exists. The only change is
