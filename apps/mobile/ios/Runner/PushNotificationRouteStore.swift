@@ -330,6 +330,11 @@ final class ConversationIdentityStore {
 /// Returns `nil` when iOS refuses the intent - `updating(from:)` throws when it
 /// does not describe a message - so a caller can fall back to the ordinary
 /// notification rather than lose it.
+///
+/// This file is compiled into the macOS Runner as well, where the deployment
+/// target is 11.0 - two versions below `INSendMessageIntent`. An older system
+/// gets `nil` and therefore the ordinary notification, which is the same
+/// answer a refused intent gives.
 func communicationNotification(
   from content: UNNotificationContent,
   conversationIdentifier: String,
@@ -337,6 +342,9 @@ func communicationNotification(
   donate: Bool = true
 ) -> UNNotificationContent? {
   guard !conversationIdentifier.isEmpty, !displayName.isEmpty else {
+    return nil
+  }
+  guard #available(iOS 15.0, macOS 12.0, *) else {
     return nil
   }
   let handle = INPersonHandle(value: conversationIdentifier, type: .unknown)
