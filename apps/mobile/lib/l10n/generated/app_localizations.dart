@@ -5876,6 +5876,12 @@ abstract class AppLocalizations {
   /// **'Pinned message'**
   String get pinnedMessageLabel;
 
+  /// No description provided for @pinnedMessageUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned until {moment}'**
+  String pinnedMessageUntil(String moment);
+
   /// No description provided for @pinnedMessageOpen.
   ///
   /// In en, this message translates to:

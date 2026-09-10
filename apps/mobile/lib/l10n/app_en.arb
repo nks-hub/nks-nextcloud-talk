@@ -1546,6 +1546,14 @@
   "messagePinned": "Message pinned",
   "messageUnpinned": "Message unpinned",
   "pinnedMessageLabel": "Pinned message",
+  "pinnedMessageUntil": "Pinned until {moment}",
+  "@pinnedMessageUntil": {
+    "placeholders": {
+      "moment": {
+        "type": "String"
+      }
+    }
+  },
   "pinnedMessageOpen": "Show pinned message",
   "pinnedMessageHide": "Hide for me",
   "messageActionRemind": "Remind me",

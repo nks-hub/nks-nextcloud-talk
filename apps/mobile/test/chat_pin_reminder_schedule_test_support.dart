@@ -147,6 +147,7 @@ Future<CachedConversation> insertRoom({
 Future<void> insertMessage({
   int messageId = 10,
   String text = 'Cached hello',
+  DateTime? pinnedUntil,
 }) async {
   await database
       .into(database.cachedChatMessages)
@@ -164,7 +165,13 @@ Future<void> insertMessage({
           referenceId: 'fixture-reference-$messageId',
           displayText: text,
           deleted: false,
-          rawJson: jsonEncode(_messageJson(messageId: messageId, text: text)),
+          rawJson: jsonEncode(
+            _messageJson(
+              messageId: messageId,
+              text: text,
+              pinnedUntil: pinnedUntil,
+            ),
+          ),
         ),
       );
 }
@@ -326,6 +333,7 @@ Map<String, Object?> _messageJson({
   required int messageId,
   required String text,
   String systemMessage = '',
+  DateTime? pinnedUntil,
 }) => <String, Object?>{
   'id': messageId,
   'token': 'rooma123',
@@ -344,6 +352,14 @@ Map<String, Object?> _messageJson({
   'reactions': <String, Object?>{},
   'reactionsSelf': <Object?>[],
   'threadId': messageId,
+  // What a server sends about a pin lives on the message, in seconds.
+  if (pinnedUntil != null)
+    'metaData': <String, Object?>{
+      'pinnedActorType': 'users',
+      'pinnedActorId': 'someone-else',
+      'pinnedAt': 1724300000,
+      'pinnedUntil': pinnedUntil.toUtc().millisecondsSinceEpoch ~/ 1000,
+    },
 };
 
 Map<String, Object?> _roomJson({

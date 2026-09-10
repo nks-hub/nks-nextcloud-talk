@@ -129,6 +129,10 @@ final class PinnedMessageBanner extends ConsumerWidget {
         )
         .valueOrNull;
     final preview = _preview(cached, pinned.messageId);
+    final expiry = _expiry(cached, pinned.messageId);
+    if (expiry != null && !expiry.isAfter(DateTime.now().toUtc())) {
+      return const SizedBox.shrink();
+    }
 
     return Material(
       color: scheme.secondaryContainer,
@@ -155,7 +159,12 @@ final class PinnedMessageBanner extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          strings.pinnedMessageLabel,
+                          expiry == null
+                              ? strings.pinnedMessageLabel
+                              : strings.pinnedMessageUntil(
+                                  formatMoment(context, expiry),
+                                ),
+                          key: const Key('chat-pinned-banner-label'),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(color: scheme.onSecondaryContainer),
                         ),
@@ -188,6 +197,45 @@ final class PinnedMessageBanner extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// When the server will unpin this message, if it said so.
+  ///
+  /// Talk keeps the expiry on the MESSAGE - `metaData.pinnedUntil`, seconds -
+  /// while the pin itself is on the room, so it is only knowable once the
+  /// pinned message is in the cache. Measured against a real server on
+  /// 10 September 2026: the field is there, and a background job clears the
+  /// pin within seconds of it. A server whose background jobs do not run
+  /// keeps the pin forever, which is why the banner hides an expired one
+  /// itself rather than waiting to be told.
+  static DateTime? _expiry(List<CachedChatMessage>? messages, int messageId) {
+    if (messages == null) {
+      return null;
+    }
+    for (final message in messages) {
+      if (message.messageId != messageId) {
+        continue;
+      }
+      final Object? decoded;
+      try {
+        decoded = jsonDecode(message.rawJson);
+      } on FormatException {
+        return null;
+      }
+      if (decoded is! Map<String, Object?>) {
+        return null;
+      }
+      final metadata = decoded['metaData'];
+      if (metadata is! Map<String, Object?>) {
+        return null;
+      }
+      final until = metadata['pinnedUntil'];
+      if (until is! int || until <= 0) {
+        return null;
+      }
+      return DateTime.fromMillisecondsSinceEpoch(until * 1000, isUtc: true);
+    }
+    return null;
   }
 
   static String? _preview(List<CachedChatMessage>? messages, int messageId) {

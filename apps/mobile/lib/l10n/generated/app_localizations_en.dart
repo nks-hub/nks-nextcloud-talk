@@ -3291,6 +3291,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pinnedMessageLabel => 'Pinned message';
 
   @override
+  String pinnedMessageUntil(String moment) {
+    return 'Pinned until $moment';
+  }
+
+  @override
   String get pinnedMessageOpen => 'Show pinned message';
 
   @override

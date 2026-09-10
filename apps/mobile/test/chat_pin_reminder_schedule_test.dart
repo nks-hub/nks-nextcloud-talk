@@ -69,6 +69,61 @@ void main() {
       await teardownTree(tester);
     });
 
+    testWidgets('says when a timed pin ends', (tester) async {
+      // The expiry travels on the MESSAGE, not on the room: the room payload
+      // carries only `lastPinnedId`, so until the pinned message itself is
+      // cached there is nothing to show. Measured against a real server on
+      // 10 September 2026 - `metaData.pinnedUntil`, in seconds.
+      final conversation = await insertRoom(lastPinnedId: 10);
+      await insertMessage(
+        pinnedUntil: DateTime.now().toUtc().add(const Duration(hours: 2)),
+      );
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      expect(find.byKey(const Key('chat-pinned-banner')), findsOneWidget);
+      final label = tester.widget<Text>(
+        find.byKey(const Key('chat-pinned-banner-label')),
+      );
+      expect(label.data, startsWith('Pinned until '));
+      expect(find.text('Pinned message'), findsNothing);
+
+      await teardownTree(tester);
+    });
+
+    testWidgets('drops a pin whose time has passed', (tester) async {
+      // The server ends the pin from a background job - within seconds where
+      // one runs, never on an instance where none does. Showing a pin the
+      // conversation no longer has is the worse of the two, so an expiry in
+      // the past hides the banner here rather than waiting to be told.
+      final conversation = await insertRoom(lastPinnedId: 10);
+      await insertMessage(
+        pinnedUntil: DateTime.now().toUtc().subtract(const Duration(minutes: 1)),
+      );
+      await tester.pumpWidget(
+        wrap(
+          api: buildApi(),
+          home: PresenceChatRoomScreen(
+            account: account,
+            conversation: conversation,
+          ),
+        ),
+      );
+      await settle(tester);
+
+      expect(find.byKey(const Key('chat-pinned-banner')), findsNothing);
+
+      await teardownTree(tester);
+    });
+
     testWidgets('stays away when nothing is pinned', (tester) async {
       final conversation = await insertRoom();
       await insertMessage();

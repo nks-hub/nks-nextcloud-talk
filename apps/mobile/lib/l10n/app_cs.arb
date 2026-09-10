@@ -1086,6 +1086,7 @@
   "messagePinned": "Zpráva připnuta",
   "messageUnpinned": "Zpráva odepnuta",
   "pinnedMessageLabel": "Připnutá zpráva",
+  "pinnedMessageUntil": "Připnuto do {moment}",
   "pinnedMessageOpen": "Zobrazit připnutou zprávu",
   "pinnedMessageHide": "Skrýt pro mě",
   "messageActionRemind": "Připomenout",

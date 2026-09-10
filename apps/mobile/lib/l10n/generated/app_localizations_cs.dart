@@ -3295,6 +3295,11 @@ class AppLocalizationsCs extends AppLocalizations {
   String get pinnedMessageLabel => 'Připnutá zpráva';
 
   @override
+  String pinnedMessageUntil(String moment) {
+    return 'Připnuto do $moment';
+  }
+
+  @override
   String get pinnedMessageOpen => 'Zobrazit připnutou zprávu';
 
   @override
