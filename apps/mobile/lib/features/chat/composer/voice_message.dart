@@ -290,10 +290,34 @@ final class VoiceMessageController extends ChangeNotifier {
       }
       return false;
     }
-    if (!_validRecording(recording)) {
+    if (!_recordingIsUsable(recording)) {
       await _bestEffort(() => recorder.discard(recording.source));
       if (_isCurrent(generation)) {
         _setError(VoiceMessageError.invalidRecording);
+      }
+      return false;
+    }
+    if (_resolveSubmissionContext() == null) {
+      // The room this was meant for cannot be resolved right now — the reply
+      // target was deleted while the recording ran, which is the reported
+      // case. The recording itself is fine, so it is kept: throwing away a
+      // finished recording because its destination moved is the one outcome
+      // nobody can undo. `submit` says the same thing again if the context is
+      // still gone, and keeps the draft too.
+      if (_isCurrent(generation)) {
+        _setState(
+          VoiceMessageState(
+            phase: VoiceMessagePhase.error,
+            draft: VoiceMessageDraft(
+              source: recording.source,
+              duration: recording.duration,
+            ),
+            error: VoiceMessageError.invalidRecording,
+          ),
+        );
+        _ownershipTransferred = false;
+      } else {
+        await _bestEffort(() => recorder.discard(recording.source));
       }
       return false;
     }
@@ -510,19 +534,26 @@ final class VoiceMessageController extends ChangeNotifier {
     await _bestEffort(recorder.close);
   }
 
-  bool _validRecording(VoiceRecording recording) {
+  /// Whether the recording is worth keeping at all.
+  ///
+  /// Deliberately says nothing about where it would be sent: a destination
+  /// that disappeared is not a reason to delete audio somebody just spoke.
+  /// The room is checked separately by the caller and by `submit`.
+  bool _recordingIsUsable(VoiceRecording recording) {
     if (recording.duration <= Duration.zero ||
         recording.duration > const Duration(hours: 24)) {
       return false;
     }
     final metadata = _resolveSubmissionContext()?.toMetadata();
-    return metadata != null &&
-        capabilityProfile.supports(metadata) &&
-        metadata.supportsSource(recording.source) &&
-        const <AttachmentSourceOwnership>{
-          AttachmentSourceOwnership.appOwnedCopy,
-          AttachmentSourceOwnership.persistableUri,
-        }.contains(recording.source.ownership);
+    if (metadata != null &&
+        (!capabilityProfile.supports(metadata) ||
+            !metadata.supportsSource(recording.source))) {
+      return false;
+    }
+    return const <AttachmentSourceOwnership>{
+      AttachmentSourceOwnership.appOwnedCopy,
+      AttachmentSourceOwnership.persistableUri,
+    }.contains(recording.source.ownership);
   }
 
   bool _isCurrent(int generation) =>

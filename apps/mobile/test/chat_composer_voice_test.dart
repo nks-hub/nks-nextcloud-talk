@@ -55,6 +55,35 @@ void main() {
       },
     );
 
+    test('a recording survives losing the room it was meant for', () async {
+      // Reported shape: record a voice reply and, while it runs, somebody
+      // deletes the message being replied to. The resolver then answers with
+      // nothing, and the finished recording was deleted on the spot — the one
+      // outcome the person cannot undo.
+      // The target is there when the recording starts and gone when it stops,
+      // which is the only way to reach this: `start` refuses outright when
+      // there is nothing to reply to.
+      var targetAlive = true;
+      final fixture = _VoiceFixture(
+        profile: _attachmentProfile(reply: true),
+        submissionContextResolver: () =>
+            targetAlive ? const VoiceAttachmentContext(replyTo: 42) : null,
+      );
+      addTearDown(fixture.close);
+
+      expect(await fixture.controller.start(), isTrue);
+      targetAlive = false;
+      expect(await fixture.controller.stop(), isFalse);
+
+      expect(fixture.controller.state.phase, VoiceMessagePhase.error);
+      expect(
+        fixture.controller.state.draft,
+        isNotNull,
+        reason: 'the audio is still there and can still be sent somewhere',
+      );
+      expect(fixture.recorder.discarded, isEmpty);
+    });
+
     test(
       'rejects an unsupported recorded MIME and deletes the prepared copy',
       () async {
@@ -326,6 +355,7 @@ final class _VoiceFixture {
     bool controlledPlayback = false,
     bool controlledSubmit = false,
     VoiceAttachmentContext submissionContext = const VoiceAttachmentContext(),
+    VoiceAttachmentContext? Function()? submissionContextResolver,
     void Function(int)? onReplyDurablyAccepted,
   }) : permission = permission ?? _FakePermission(permissionStatus),
        recorder = _FakeRecorder(recording ?? _recording()),
@@ -341,6 +371,7 @@ final class _VoiceFixture {
       previewPlayer: player,
       submitter: submitter,
       submissionContext: submissionContext,
+      submissionContextResolver: submissionContextResolver,
       onReplyDurablyAccepted: onReplyDurablyAccepted,
     );
   }

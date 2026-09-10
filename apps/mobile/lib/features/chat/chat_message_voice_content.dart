@@ -2,6 +2,7 @@ part of 'chat_message_content.dart';
 
 final class _VoiceAttachment extends ConsumerStatefulWidget {
   const _VoiceAttachment({
+    super.key,
     required this.account,
     required this.uri,
     required this.roomToken,

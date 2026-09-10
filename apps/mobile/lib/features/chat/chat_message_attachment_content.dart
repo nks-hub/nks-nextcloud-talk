@@ -109,6 +109,13 @@ final class _ChatAttachment extends ConsumerWidget {
       children: [
         if (voiceUri != null)
           _VoiceAttachment(
+            // Keyed by the message it belongs to. Without it Flutter reuses
+            // the state — player, position and duration — for whatever
+            // message lands in the same slot, so scrolling a list of voice
+            // messages showed one recording's timeline while another one
+            // played. The chat timeline is keyed already; the shared-items
+            // list is where this was seen.
+            key: ValueKey('${account.id}-$messageId-voice'),
             account: account,
             uri: voiceUri,
             roomToken: roomToken,
