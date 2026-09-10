@@ -144,6 +144,9 @@ base class CallJoinController
   CallLifecycleService? _lifecycle;
   bool _joinedServer = false;
   bool _disposed = false;
+
+  /// A hang-up that arrived while the join was still in flight.
+  bool _leaveRequested = false;
   ({CallForegroundService service, String owner})? _foregroundCall;
 
   /// The system's own record of this call, once Telecom accepted one. Held
@@ -237,6 +240,7 @@ base class CallJoinController
     if (state.isBusy || state.phase == CallJoinPhase.joined) {
       return;
     }
+    _leaveRequested = false;
     state = const CallJoinState(phase: CallJoinPhase.joining);
     final teardown = _teardownPending;
     if (teardown != null) await teardown;
@@ -404,6 +408,15 @@ base class CallJoinController
       return;
     }
     ref.invalidate(callLifecycleStatusProvider(arg));
+    if (_leaveRequested) {
+      // Asked to hang up while this was still joining. The state is no longer
+      // busy, so the ordinary path can run — and it must run before the
+      // system is told about a call nobody wants.
+      _leaveRequested = false;
+      state = CallJoinState(phase: CallJoinPhase.joined, media: state.media);
+      await leave();
+      return;
+    }
     await _startTelecomCall();
   }
 
@@ -687,7 +700,16 @@ base class CallJoinController
   }
 
   Future<void> leave() async {
-    if (state.phase == CallJoinPhase.idle || state.isBusy) {
+    if (state.phase == CallJoinPhase.idle) {
+      return;
+    }
+    if (state.isBusy) {
+      // Remembered instead of refused. A join is several round trips with a
+      // 20 s timeout each, and the system call screen can hang up in the
+      // middle of it: the ring is dropped, this was a no-op, and the join
+      // then finished into a live call with an open microphone that no
+      // system UI was left to end. The join checks this before it settles.
+      _leaveRequested = true;
       return;
     }
     state = CallJoinState(phase: CallJoinPhase.leaving, media: state.media);

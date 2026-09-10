@@ -246,6 +246,43 @@ void _registerCallForegroundLifecycleTests() {
     },
   );
 
+  test('a hang-up during the join gives the seat back', () async {
+    // The system call screen can end a call the app is still joining: the
+    // VoIP push rings, the person answers and hangs up during the several
+    // round trips. `leave()` was a no-op while the state was busy, so the
+    // join settled into a live call with an open microphone that the ring,
+    // by then dropped, could no longer end.
+    final ready = Completer<void>();
+    final foreground = _ForegroundCalls(startGate: ready.future);
+    var microphones = 0;
+    final fixture = await _ForegroundJoinFixture.create(
+      foreground,
+      _DelayedMicrophone(() async {
+        microphones++;
+      }),
+    );
+    addTearDown(fixture.close);
+
+    final joining = fixture.controller.join();
+    await foreground.firstStart.future;
+    await fixture.controller.leave();
+    ready.complete();
+    await joining;
+
+    expect(
+      fixture.container
+          .read(callJoinControllerProvider(_ForegroundJoinFixture.key))
+          .phase,
+      CallJoinPhase.idle,
+      reason: 'the hang-up has to win, not the join it interrupted',
+    );
+    expect(foreground.active, isEmpty);
+    expect(fixture.rest.server.callMethods.where((m) => m != 'GET'), [
+      'POST',
+      'DELETE',
+    ]);
+  });
+
   test(
     'failed foreground admission releases REST without opening a microphone',
     () async {
