@@ -20,6 +20,15 @@ to them. Only what is documented from App Store Connect is stated for them.
 
 ## Unreleased
 
+- Fixed: an app whose very first start was interrupted could never open its own
+  database again - on that device, for good, and no later version would have
+  helped. The first run creates the storage and then writes its version; a
+  process killed between the two leaves a complete database that the next start
+  read as brand new and tried to create a second time, failing on something
+  that was already there. Such a database is now adopted instead of refused.
+  Found on the iOS simulator that would not start on 7 September and fixed
+  against that exact file.
+
 - A test that could hang for ten silent minutes now says where it stopped. One
   wait in the jump-to-message tests ran on the real clock with no bound, so a
   stalled database or network call behind it took the whole run down without a
